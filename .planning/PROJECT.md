@@ -19,6 +19,7 @@ A responsive composite terminal pane (movable/resizable floating command prompt 
 - [ ] **Composite Terminal Pane Architecture**: Each terminal unit is a self-contained composite pane consisting of its own PTY output canvas + its own movable/resizable floating command prompt (pinned top, pinned bottom, or free-floating at any vertical offset within that pane's bounds).
 - [ ] **Horizontal & Vertical Pane Splitting**: Composite panes can be split horizontally and vertically into tiled layouts (each split spawns a new composite pane with its own independent floating command prompt and underlying PTY output canvas).
 - [ ] **Z-Order Pane Stacking & Shuffling**: Composite panes can be stacked on top of one another, shuffled top-to-bottom (cycling z-order), or raised selectively to the front via keyboard shortcuts or mouse clicks/selection.
+- [ ] **Persistent Quake/Guake-Style Drop-Down Quick Terminal**: Global/workspace hotkey toggles a persistent, slide-down/pop-over standard terminal pane (Guake/Yakuake style) at the top/center of the window for quick "by the way" (`btw`) commands, keeping its live PTY shell session and state intact when hidden.
 - [ ] **Tmux Support & Integration**: Seamless operation alongside or integrated with `tmux` (e.g., running smoothly inside `tmux` with proper escape sequence/passthrough handling, `tmux` control mode `-CC` backend integration or session/pane synchronization, and conflict-free prefix/keybinding ergonomics).
 - [ ] **Full PTY Shell Wrapper & VT100 Emulation**: Standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd on Windows) with full VT100/ANSI escape sequence parsing and color rendering per composite pane.
 - [ ] **Resizable Multi-Line Command Editor**: Each composite pane's command input box is resizable in height and supports multi-line editing, syntax highlighting, and command history search.
@@ -33,6 +34,10 @@ A responsive composite terminal pane (movable/resizable floating command prompt 
 - [ ] **Configuration File & Live Theme Engine**: Declarative configuration file (TOML primary — Rust standard via `serde`/`toml` — with optional INI/theme file import, following XDG `~/.config/bilterm/config.toml`) for customizing keybindings, floating prompt default position/size, custom status bar segments/icons, cursor styles, border glyph sets, and user-defined color schemes.
 - [ ] **Command Block Separation**: Jump between previous command invocations and their outputs in scrollback within each composite pane.
 - [ ] **Cross-Platform Support**: Linux first (primary target), macOS second, Windows third (ConPTY).
+- [ ] **Rigorous Test Coverage, Architecture Docs & Extensive User Manual**:
+  - **Test Suite & Coverage (`test-driven-development`, `test-coverage`, `gsd-validate-phase`)**: Unit tests, `ratatui::backend::TestBackend` + `insta` snapshot tests for composite panes/z-order occlusion/Turbo Vision borders/3270 cross-hairs, and headless PTY integration tests verifying high coverage across all phases.
+  - **Comprehensive Architecture & ADRs (`docs`, `documentation-and-adrs`, `keeping-docs-in-sync`)**: Living architecture guides, ASCII/Mermaid diagrams, data-flow documentation, and Architecture Decision Records (ADRs) in `docs/architecture/`.
+  - **Extensive User Manual (`writing-user-guides`)**: Complete, multi-chapter user guide (`docs/user-guide/`) covering installation, IBM 3270 & Borland Turbo Vision concepts, composite pane workflows, floating prompt mastery, H/V splits, z-order stacking/shuffling, Guake quick-terminal, `config.toml` & theme customization, Unicode/Nerd Font glyph setups, and `tmux` integration.
 
 ### Out of Scope
 

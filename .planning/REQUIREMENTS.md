@@ -22,12 +22,13 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PANE-04**: User can move, pin (top/bottom), and resize the floating command prompt using all three modalities: keyboard shortcuts, mouse drag-and-drop on the prompt border/titlebar, and `:command` / configuration settings.
 - [ ] **PANE-05**: User can jump between previous command invocations and their corresponding output blocks in scrollback using `OSC 133` semantic prompt markers and submission indexing.
 
-### Window Management: H/V Splits & Z-Order Stacking (`WM`)
+### Window Management: H/V Splits, Z-Order Stacking & Guake Drop-Down (`WM`)
 
 - [ ] **WM-01**: User can split any composite pane horizontally or vertically, spawning a new independent `CompositePane` (each with its own PTY `OutputCanvas` and its own `FloatingCommandPrompt`) in a Binary Split Tree layout.
 - [ ] **WM-02**: User can stack composite panes in z-order (`Vec<PaneId>`), shuffle/rotate the pane stack top-to-bottom or bottom-to-top, and selectively raise any pane to the front via keyboard shortcuts (including window number hotkeys `Alt+1`..`Alt+9` / picker) or mouse clicks.
 - [ ] **WM-03**: User can move, resize, focus/raise, zoom/maximize, and close composite panes via keyboard chords, mouse dragging/clicking on window borders, or in-prompt `:command` execution, with accurate reverse-z-order mouse hit-testing and pane-local SGR (1006) mouse coordinate translation.
 - [ ] **WM-04**: Overlapping floating prompts, stacked composite panes, and drop shadows sanitize 2-column wide Unicode/CJK/Emoji graphemes at occlusion boundaries (`occlude_rect`) so underlying multi-column characters never corrupt border alignment.
+- [ ] **WM-05**: Persistent Guake/Quake-Style Drop-Down Quick Terminal: User can press a dedicated hotkey to toggle a persistent pop-over standard terminal overlay (Guake style) for quick/btw commands that preserves its live PTY session when hidden.
 
 ### Retro Aesthetics, Unicode/Glyphs, Status Bars & Cursors (`UI`)
 
@@ -46,6 +47,12 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **TMUX-01**: Bilterm detects when running inside an outer `tmux` session (`$TMUX`), automatically avoids prefix key collisions, wraps `OSC 52` clipboard sequences in `DCS tmux;` passthrough, and displays outer `tmux` context in the status bar.
 - [ ] **TMUX-02**: User can attach Bilterm to `tmux` sessions/panes via `tmux` CLI / Control Mode (`tmux -CC`) integration so composite panes can be backed by persistent `tmux` sessions.
 - [ ] **PLAT-01**: Full support on **Linux** (primary target, Phase 1+ baseline) and **macOS** (POSIX PTY + slave FD/sysctl termios parity), followed by **Windows** (`ConPTY` pseudo-console support).
+
+### Quality, Architecture Documentation & Extensive User Manual (`QUAL`)
+
+- [ ] **QUAL-01**: Comprehensive automated test suite (unit tests, Ratatui `TestBackend` + `insta` visual snapshot tests for overlays/borders/wide-chars, and headless PTY integration tests) audited with `test-coverage` and `test-driven-development` skills.
+- [ ] **QUAL-02**: Complete technical architecture documentation, ADRs, and Mermaid/ASCII component & data-flow diagrams in `docs/architecture/` built using the `docs` and `documentation-and-adrs` skills.
+- [ ] **QUAL-03**: Extensive multi-chapter User Manual in `docs/user-guide/` (covering quickstart, composite panes, floating prompt controls, H/V splits, z-order stacking/shuffling, Guake drop-down terminal, IBM 3270 & Borland Turbo Vision themes/cursors/status bars, `config.toml` reference, and `tmux` workflows) built using the `writing-user-guides` skill.
 
 ## v2 Requirements
 
@@ -74,34 +81,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PTY-01 | Pending | Pending |
-| PTY-02 | Pending | Pending |
-| PTY-03 | Pending | Pending |
-| PTY-04 | Pending | Pending |
-| PANE-01 | Pending | Pending |
-| PANE-02 | Pending | Pending |
-| PANE-03 | Pending | Pending |
-| PANE-04 | Pending | Pending |
-| PANE-05 | Pending | Pending |
-| WM-01 | Pending | Pending |
-| WM-02 | Pending | Pending |
-| WM-03 | Pending | Pending |
-| WM-04 | Pending | Pending |
-| UI-01 | Pending | Pending |
-| UI-02 | Pending | Pending |
-| UI-03 | Pending | Pending |
-| UI-04 | Pending | Pending |
-| UI-05 | Pending | Pending |
-| CFG-01 | Pending | Pending |
-| TMUX-01 | Pending | Pending |
-| TMUX-02 | Pending | Pending |
-| PLAT-01 | Pending | Pending |
+| PTY-01 | Phase 1 | Pending |
+| PTY-02 | Phase 1 | Pending |
+| PTY-03 | Phase 1 | Pending |
+| PTY-04 | Phase 2 | Pending |
+| PANE-01 | Phase 1 | Pending |
+| PANE-02 | Phase 2 | Pending |
+| PANE-03 | Phase 2 | Pending |
+| PANE-04 | Phase 2 | Pending |
+| PANE-05 | Phase 2 | Pending |
+| WM-01 | Phase 3 | Pending |
+| WM-02 | Phase 3 | Pending |
+| WM-03 | Phase 3 | Pending |
+| WM-04 | Phase 3 | Pending |
+| WM-05 | Phase 3 | Pending |
+| UI-01 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Pending |
+| UI-05 | Phase 4 | Pending |
+| CFG-01 | Phase 4 | Pending |
+| TMUX-01 | Phase 5 | Pending |
+| TMUX-02 | Phase 5 | Pending |
+| PLAT-01 | Phase 5 | Pending |
+| QUAL-01 | Phase 5 | Pending |
+| QUAL-02 | Phase 5 | Pending |
+| QUAL-03 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 22 total
-- Mapped to phases: 0 (awaiting roadmapper)
-- Unmapped: 22
+- v1 requirements: 26 total
+- Mapped to phases: 26
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-10-19 after research synthesis*
+*Last updated: 2026-10-19 after roadmap creation*
