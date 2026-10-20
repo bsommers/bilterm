@@ -1,0 +1,171 @@
+# Stack Research
+
+**Domain:** Terminal Multiplexer, Shell Wrapper & Composite Pane Terminal Emulator (Rust TUI)
+**Researched:** 2026-10-20
+**Confidence:** HIGH
+
+## Recommended Stack
+
+### Core Technologies
+
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **Rust** | `1.86+` (Edition 2024) | Systems language & memory-safe concurrency | Required by `tui-term 0.3.4+` and modern `ratatui 0.30` modular workspace crates; zero-cost abstractions keep multi-pane 60–120 FPS cell buffer compositing under <1ms per frame. |
+| **`ratatui`** | `0.30.2` | Immediate-mode TUI rendering engine & cell buffer compositor | Standard Rust TUI framework. Its immediate-mode intermediate `Buffer` architecture (`frame.buffer_mut()`) allows rendering a pane's PTY canvas first, then rendering `widgets::Clear` + the floating command prompt directly on top, and finally applying post-processing shaders/cell mutations for IBM 3270 cross-hair cursors and z-order window stacking. |
+| **`crossterm`** | `0.29.0` (with `event-stream`) | Cross-platform host terminal manipulation & input events | Pairs directly with `ratatui 0.30`. Provides unified raw mode, SGR mouse drag/click/scroll capture (`EnableMouseCapture`), Kitty keyboard protocol flags (`PushKeyboardEnhancementFlags`), bracketed paste, and Windows Console API / ConPTY host compatibility. |
+| **`portable-pty`** | `0.9.0` | Cross-platform pseudoterminal (PTY) allocation & process management | Maintained by the WezTerm project. Abstracts POSIX `openpty`/`forkpty` on Linux and macOS alongside Windows `ConPTY` behind a single `PtySystem` trait (`MasterPty`, `Child`, `CommandBuilder`), satisfying Bilterm's Linux -> macOS -> Windows priority without platform-ifdef spaghetti. |
+| **`alacritty_terminal`** + **`vte`** | `0.26.0` / `0.15.0` | Primary virtual terminal state machine, ANSI/VT100 parser, scrollback grid & DECSET tracking | Battle-tested terminal emulation core. Unlike simpler screen scrapers, `alacritty_terminal::Term` natively tracks `TermMode::ALT_screen` (DECSET 1049 for auto-hiding the floating prompt during `vim`/`htop`), `TermMode::BRACKETED_PASTE`, mouse reporting modes, semantic OSC 133 shell prompt/command-block markers, and fast ring-buffer scrollback reflow on H/V pane resize. *(See `vt100-ctt` + `tui-term` below for rapid Phase 1 prototyping).* |
+| **`tokio`** | `1.44+` (`full` / `rt-multi-thread`, `sync`, `process`, `io-util`, `time`) | Asynchronous event loop, multi-PTY stream multiplexing & timers | Multiplexes N concurrent PTY reader threads/streams, `crossterm::event::EventStream`, `tmux -CC` control mode stdout streams, and cursor blink ticks (`tokio::select!`) into a single lock-free `mpsc` render loop without frame starvation. |
+
+### Supporting Libraries
+
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| **`vt100-ctt`** + **`tui-term`** | `0.17.1` / `0.3.4` | Drop-in `PseudoTerminal` Ratatui widget & lightweight VT100 screen parser | Use if you want immediate out-of-the-box `PseudoTerminal` widget rendering in Phase 1 before writing a custom `alacritty_terminal::grid::Grid` -> `ratatui::buffer::Buffer` adapter, or as a lightweight reference implementation. (`vt100-ctt` is the active 2025/2026 continuation of the unmaintained upstream `vt100 0.16.2` crate; `atuin-vt100 0.19.1` is also viable). |
+| **`tui-textarea`** (`tui-textarea-2` / `edtui`) | `0.10.x` (for `ratatui 0.30`) | Multi-line command input widget for each pane's floating prompt | Provides multi-line text editing, cursor movement, yank/paste, undo/redo, and line-wrapping inside a bounded `ratatui::layout::Rect` so the floating prompt can dynamically resize vertically without owning the whole terminal screen. |
+| **`tree-sitter`** + **`tree-sitter-bash`** | `0.24+` / `0.23+` | Incremental AST parsing & live shell syntax highlighting | Highlights commands, flags, pipes, strings, and syntax errors in real time inside each pane's floating command editor with sub-millisecond incremental re-parsing on every keystroke. |
+| **`nucleo-matcher`** | `0.3.x` | Lock-free/high-speed fuzzy matching (from Helix editor) | Powers interactive command history search (`Ctrl+R`) inside the floating prompt and quick pane/window switcher overlays. |
+| **`tmux_interface`** + **`nom`** | `0.4.0` (or `1.0`) / `8.0.0` | Tmux CLI command builder & `tmux -CC` control mode protocol parser | `tmux_interface` wraps standard `tmux` CLI invocations (`list-panes`, `split-window`, `send-keys`), while `nom` parses asynchronous `%output %pane_id`, `%layout-change`, and `%window-add` notifications emitted by `tmux -CC` control mode. |
+| **`serde`** + **`toml`** | `1.0+` / `0.8+` | Configuration & layout serialization | Parses `~/.config/bilterm/config.toml` for IBM 3270 phosphor themes (green/amber/monochrome), cursor style defaults, keybindings, and saved composite pane layouts. |
+| **`cassowary`** / `ratatui::layout` | Built-in (`0.30`) | Constraint-based H/V split tree & floating overlay geometry | Built into `ratatui::layout`. Use binary space partitioning (BSP tree of `Direction::Horizontal` / `Direction::Vertical` splits) for tiled panes, and explicit `Rect` intersection/clamping for stacked z-order panes and per-pane floating prompts. |
+| **`color-eyre`** + **`tracing`** + **`tracing-appender`** | `0.6+` / `0.1+` / `0.2+` | Panic hooks (restoring raw mode) & non-blocking file logging | Critical for TUI development: `tracing` must write to a background file (`bilterm.log`) because `stdout`/`stderr` are owned by the alternate screen; `color-eyre` restores terminal state (`DisableMouseCapture`, leave raw mode) before printing crash backtraces. |
+| **`insta`** | `1.42+` | Snapshot testing for `ratatui::backend::TestBackend` | Captures deterministic ASCII/ANSI snapshots of composite panes, floating prompt occlusion, z-order stacking, and IBM 3270 OIA status bars in CI without needing a real TTY. |
+
+### Development Tools
+
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| **`cargo-nextest`** | Fast parallel test runner | Essential for running PTY integration tests (`portable-pty` shell spawning + `TestBackend` snapshot assertions) in isolated processes. |
+| **`tokio-console`** | Async task & channel inspector | Diagnoses backpressure or stalled PTY reader tasks when high-throughput commands (`cat hugefile`, `yes`) flood a pane. |
+| **`vttest`** / **`esctest`** | VT100/ANSI escape sequence compliance suite | Run inside a Bilterm composite pane to verify cursor addressing, alternate screen switching (`DECSET 1049`), and color rendering. |
+
+## Installation
+
+```toml
+# Cargo.toml (Rust 2024 Edition, MSRV 1.86+)
+[package]
+name = "bilterm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86"
+
+[dependencies]
+# Core TUI & Terminal Manipulation
+ratatui = { version = "0.30.2", features = ["all-widgets", "serde"] }
+crossterm = { version = "0.29.0", features = ["event-stream", "serde"] }
+
+# Cross-Platform PTY & Terminal Emulation State Machine
+portable-pty = "0.9.0"
+alacritty_terminal = "0.26.0"
+vte = "0.15.0"
+# Optional rapid-prototyping widget layer:
+tui-term = "0.3.4"
+vt100-ctt = "0.17.1"
+
+# Floating Command Prompt Editor, Syntax Highlighting & Fuzzy History
+tui-textarea = { package = "tui-textarea-2", version = "0.10" }
+tree-sitter = "0.24"
+tree-sitter-bash = "0.23"
+nucleo-matcher = "0.3"
+
+# Async Runtime & Channels
+tokio = { version = "1.44", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "process"] }
+futures = "0.3"
+
+# Tmux Integration & Control Mode Parsing
+tmux_interface = "0.4"
+nom = "8.0"
+
+# Configuration, Error Handling & Diagnostics
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+directories = "6.0"
+color-eyre = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+[dev-dependencies]
+insta = "1.42"
+```
+
+## Architecture & Rationale for Bilterm's Core Mechanics
+
+### 1. Composite Pane Rendering & Floating Overlays (`ratatui 0.30`)
+Bilterm's defining feature is `CompositePane = OutputCanvas + FloatingCommandPrompt + OIA Status Bar`.
+- **Why `ratatui` works best here:** Ratatui renders into an in-memory 2D grid of `Cell` structs (`ratatui::buffer::Buffer`) before diffing and flushing to `crossterm`.
+- **Layering within a Composite Pane:**
+  1. Compute the pane's outer `Rect` (either from the H/V split layout tree or its floating z-order stack bounds).
+  2. Render the PTY `OutputCanvas` across the **full height** of the pane's inner `Rect` (so output scrolls continuously underneath the prompt).
+  3. If the pane's virtual terminal is **not** in `ALT_SCREEN` (DECSET 1049) and the prompt is not manually hidden, compute the floating prompt `Rect` (clamped to the pane's inner bounds at the user's vertical offset: top-pinned 3270 style, free-floating middle, or bottom-pinned).
+  4. Render `ratatui::widgets::Clear` over the floating prompt `Rect` (or dim/tint background cells for translucent glass/phosphor aesthetics), then render the bordered `tui-textarea` prompt widget on top.
+  5. **Z-Order Pane Stacking:** Maintain a `Vec<PaneId>` z-order list. Iterate from bottom-most to top-most active pane, rendering each `CompositePane` into `frame.buffer_mut()`. Clicking inside a pane or pressing the shuffle/raise hotkey reorders the `Vec<PaneId>` in $O(N)$ time.
+
+### 2. IBM 3270 Mainframe Aesthetics & Cross-Hair Cursors
+- Hardware terminal cursors only support a single coordinate and cannot draw a full-row + full-column cross-hair confined to an individual split pane.
+- Using `ratatui::buffer::Buffer`, Bilterm can render a **software cross-hair cursor** per active pane by iterating over all cells in `pane_rect` sharing `cursor_x` (vertical hair) or `cursor_y` (horizontal hair) and mutating their `Style` (e.g., phosphor green underline/dim background tint `#003300` or amber `#331900`), while applying `Modifier::REVERSED` or custom block glyphs (`█`, `▯`, `_`, `▏`) at `(cursor_x, cursor_y)`.
+
+### 3. Virtual Terminal Emulation (`alacritty_terminal` vs `vt100-ctt`)
+- **`alacritty_terminal 0.26` (Recommended Primary):** Gives direct programmatic access to `TermMode` bitflags (`ALT_SCREEN`, `SHOW_CURSOR`, `APP_CURSOR`, mouse modes), damage tracking (only re-rendering changed cells), large scrollback history with line-wrapping reflow on resize, and custom `vte::Perform` hooks to intercept OSC 133 semantic prompt sequences (`\x1b]133;A\x07` through `D`) for **Command Block Separation** (jumping between prior commands in scrollback).
+- **`vt100-ctt 0.17.1` + `tui-term 0.3.4` (Prototyping Alternative):** Extremely simple API (`parser.process(&bytes)`, `parser.screen().alternate_screen()`). Great for a Day-1 spike, but lacks `alacritty_terminal`'s text reflow on horizontal split resize and OSC 133 extensibility. Wrap the terminal emulator behind an internal `TerminalBackend` trait so either can be swapped cleanly.
+
+### 4. Cross-Platform PTY + Async Event Loop (`portable-pty` + `tokio`)
+- `portable-pty` readers (`MasterPty::try_clone_reader()`) use blocking OS reads (particularly on Windows ConPTY pipes and macOS kqueue/dev-ptmx).
+- **Standard Pattern:** Spawn a dedicated `tokio::task::spawn_blocking` reader thread per composite pane that reads 4KB–64KB chunks from `portable-pty` and forwards them over a bounded `tokio::sync::mpsc::channel` to the state coordinator, ensuring bursts of PTY output (`find /`) never block UI input events or panic async runtimes on Windows/macOS.
+
+### 5. Dual-Mode `tmux` Integration
+- **Mode A — Running *inside* `tmux` (`$TMUX` detected):** Query and enable `allow-passthrough on` via `tmux_interface` where needed, forward outer resize/focus events, and default Bilterm's prefix key (e.g., `Ctrl+A` or `Alt+Space` or 3270 `Attn`/`PA1` mapped keys) so `Ctrl+B` passes cleanly to `tmux` (or vice versa).
+- **Mode B — Controlling `tmux` as a backend (`tmux -CC` control mode):** Spawn `tmux -CC new-session` or `attach` via `tokio::process::Command`, parse line-oriented `%output %pane_id <octal-escaped-bytes>` and `%layout-change` events using `nom 8.0`, and pipe each `%pane_id` byte stream into its corresponding Bilterm `CompositePane` VT parser. This gives Bilterm instant `tmux` session persistence across SSH disconnects while retaining Bilterm's local floating command prompt per pane!
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| **`alacritty_terminal 0.26`** | **`vt100-ctt 0.17.1`** + **`tui-term 0.3.4`** | Use `vt100-ctt` + `tui-term` in Phase 1 if you want a 50-line working PTY canvas before implementing custom scrollback reflow and OSC 133 command-block tracking. |
+| **`tui-textarea-2 0.10`** | **`edtui`** (`0.9+`) | Use `edtui` if users specifically want modal Vim-first keybindings inside the floating command prompt out of the box rather than Emacs/Readline-style shell bindings. |
+| **`tree-sitter 0.24`** | **`syntect 5.2+`** | Use `syntect` if you want TextMate grammar highlighting for dozens of languages inside scrollback previews; `tree-sitter-bash` is faster and more accurate for live shell command input. |
+| **`portable-pty 0.9.0`** | **`pty-process 0.5`** / **`rustix-openpty`** | Only if Windows support were dropped permanently. Since Windows (`ConPTY`) is a stated Phase 3 target, `portable-pty` is mandatory. |
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| **`reedline`** or **`rustyline`** | They assume exclusive ownership of the host terminal's raw mode, cursor position, and `stdout` stream. Calling `reedline.read_line()` inside a `ratatui` draw loop corrupts the screen buffer and blocks multi-pane rendering. | **`tui-textarea` (`tui-textarea-2`)** rendered into a `ratatui::layout::Rect` buffer widget, paired with **`tree-sitter-bash`** and **`nucleo-matcher`**. |
+| **Unmaintained `tui-rs`** | Archived in 2023; lacks `Buffer` compositing ergonomics, `Clear` widget fixes, and modern `crossterm` support. | **`ratatui 0.30.2`** |
+| **Unmaintained upstream `vt100` (`0.16.2`)** | Upstream lags on modern CSI/OSC sequences and `ratatui 0.30` trait bounds, causing panics on malformed UTF-8 or modern TUI sequences inside sub-panes. | **`alacritty_terminal 0.26.0`** (or **`vt100-ctt 0.17.1`** if using `tui-term`). |
+| **`termion` or `termwiz` as host backend** | `termion` is Unix-only (breaks Windows target). `termwiz` has weaker integration with third-party `ratatui` widget ecosystems than `crossterm`. | **`crossterm 0.29.0`** |
+| **Direct async `tokio::fs::File` wraps on PTY master FDs** | Fails or deadlocks on macOS (`kqueue` does not poll `/dev/ptmx` identically to Linux `epoll`) and Windows (`ConPTY` uses anonymous/named pipes). | **`portable-pty 0.9.0`** wrapped in dedicated `tokio::task::spawn_blocking` reader loops feeding a bounded `tokio::sync::mpsc` channel. |
+
+## Stack Patterns by Variant
+
+**If running in Standalone Local Multiplexer Mode (Default):**
+- Spawn local shells (`$SHELL` / `pwsh.exe`) via `portable-pty` per `CompositePane`.
+- When user submits a command in the Floating Command Prompt, write `command + "\n"` to that pane's `MasterPty` writer; when the pane enters `ALT_SCREEN` (DECSET 1049) or Raw Passthrough mode, forward keystrokes directly to `MasterPty` and auto-hide the floating prompt.
+
+**If running in `tmux -CC` Control Mode Backend (`bilterm --tmux`):**
+- Replace local `portable-pty` spawning with a single `tokio::process::Command::new("tmux").arg("-CC")` bridge.
+- Route floating command prompt submissions via `tmux send-keys -t %pane_id` and feed `%output %pane_id` streams into the pane's `alacritty_terminal::Term` state machine.
+
+**If running Nested Inside an Active `tmux` Session (`$TMUX` set):**
+- Emit `\x1bPtmux;\x1b...\x1b\\` passthrough sequences when necessary, enable `focus-events` and SGR mouse passthrough, and expose a status indicator in the IBM 3270 Operator Information Area (OIA) bottom bar showing outer `tmux` coexistence state.
+
+## Version Compatibility
+
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| `ratatui@0.30.2` | `crossterm@0.29.0` | `ratatui 0.30` re-exports compatible backend traits for `crossterm 0.29`. Pin both to avoid duplicate `crossterm` versions in `Cargo.lock`. |
+| `tui-term@0.3.4` | `ratatui@0.30.x`, `vt100-ctt@0.17.1` | Requires Rust `1.86.0+` MSRV. |
+| `tui-textarea-2@0.10.x` | `ratatui@0.30.x` | Use `tui-textarea-2` package alias in `Cargo.toml` if upstream `tui-textarea` has not bumped its `ratatui-core 0.30` peer dependency. |
+| `alacritty_terminal@0.26.0` | `vte@0.15.0` | Always use the exact `vte` version re-exported by `alacritty_terminal::vte` to avoid trait version mismatches on `vte::Perform`. |
+
+## Sources
+
+- `crates.io/crates/ratatui` — Verified `0.30.2` modular release and `crossterm 0.29.0` pairing (HIGH confidence)
+- `crates.io/crates/portable-pty` — Verified `0.9.0` WezTerm cross-platform PTY abstraction for Linux/macOS/Windows ConPTY (HIGH confidence)
+- `crates.io/crates/alacritty_terminal` — Verified `0.26.0` release (April 2026) and `TermMode::ALT_SCREEN` / `Grid` capabilities (HIGH confidence)
+- `crates.io/crates/tui-term` & `vt100-ctt` — Verified `tui-term 0.3.4` (MSRV 1.86) and `vt100-ctt 0.17.1` Ratatui widget ecosystem compatibility (HIGH confidence)
+- `crates.io/crates/tui-textarea-2` & `tmux_interface` — Verified `0.10.x` and `0.4.0` versions for multi-line Ratatui input and tmux CLI control (HIGH confidence)
+
+---
+*Stack research for: Bilterm (Rust + Ratatui Composite-Pane Terminal Multiplexer & Shell Wrapper)*
+*Researched: 2026-10-20*
