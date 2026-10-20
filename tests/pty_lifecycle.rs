@@ -37,15 +37,13 @@ async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
     let mut found = false;
 
     while Instant::now() < deadline {
-        if let Ok(Some(ev)) =
+        if let Ok(Some(PtyEvent::Output(bytes))) =
             tokio::time::timeout(Duration::from_millis(100), session.output_rx_mut().recv()).await
         {
-            if let PtyEvent::Output(bytes) = ev {
-                vt.process(&bytes);
-                if vt.screen().contents().contains("BILTERM_PTY_OK_3270") {
-                    found = true;
-                    break;
-                }
+            vt.process(&bytes);
+            if vt.screen().contents().contains("BILTERM_PTY_OK_3270") {
+                found = true;
+                break;
             }
         }
     }

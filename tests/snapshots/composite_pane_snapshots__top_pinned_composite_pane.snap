@@ -1,0 +1,14 @@
+---
+source: tests/composite_pane_snapshots.rs
+expression: rendered
+---
+O╔╣ BILTERM 3270 // CMD [TOP] ╠═══════════════════════════════╗
+O║==> status --all                                            ║
+O╚════════════════════════════════════════════════════════════╝
+OUTPUT_ROW_04: system telemetry nominal
+OUTPUT_ROW_05: system telemetry nominal
+OUTPUT_ROW_06: system telemetry nominal
+OUTPUT_ROW_07: system telemetry nominal
+OUTPUT_ROW_08: system telemetry nominal
+
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:09 C:001

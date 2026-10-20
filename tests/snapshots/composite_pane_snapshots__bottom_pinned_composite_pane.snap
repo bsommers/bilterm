@@ -1,0 +1,14 @@
+---
+source: tests/composite_pane_snapshots.rs
+expression: bottom_rendered
+---
+CANVAS_ROW_01: scrolling underneath
+CANVAS_ROW_02: scrolling underneath
+CANVAS_ROW_03: scrolling underneath
+CANVAS_ROW_04: scrolling underneath
+CANVAS_ROW_05: scrolling underneath
+CANVAS_ROW_06: scrolling underneath
+C╔╣ BILTERM 3270 // CMD [BOT] ╠═══════════════════════════════╗
+C║==> vim Cargo.toml                                          ║
+ ╚════════════════════════════════════════════════════════════╝
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:BOT │ R:09 C:001
