@@ -2,11 +2,11 @@
 
 ## What This Is
 
-Bilterm is a terminal user interface (TUI) shell wrapper and terminal emulator written in Rust using Ratatui. Inspired by classic IBM mainframe terminals (such as the IBM 3270 where the command prompt sits at the top of the screen), Bilterm provides a movable, resizable floating command prompt window that can be pinned to the top or bottom of the viewport or floated freely at any vertical offset while full VT100/ANSI terminal output scrolls seamlessly underneath it.
+Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust using Ratatui. Inspired by classic IBM mainframe terminals (such as the IBM 3270 where the command prompt sits at the top of the screen), Bilterm treats the **floating command prompt + underlying output canvas as a single composite terminal pane**. These composite terminal panes can be split horizontally and vertically, or stacked in z-order (shuffled top-to-bottom or raised selectively via keyboard or mouse), with full `tmux` integration/support.
 
 ## Core Value
 
-A responsive, movable, and resizable floating command prompt pane over a live full-PTY terminal canvas where output scrolls directly underneath the command window without losing compatibility with interactive shells and full-screen TUI applications.
+A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, and integrated seamlessly with `tmux`.
 
 ## Requirements
 
@@ -16,40 +16,46 @@ A responsive, movable, and resizable floating command prompt pane over a live fu
 
 ### Active
 
-- [ ] Full PTY shell wrapper supporting standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd on Windows) with full VT100/ANSI escape sequence parsing and color rendering
-- [ ] Floating command prompt pane that defaults to pinned-top (IBM mainframe style), can be pinned to the bottom, or floated at any vertical offset
-- [ ] Resizable command input pane supporting multi-line command editing, syntax highlighting, and command history search
-- [ ] Transparent/occluding z-order rendering where terminal scrollback and live output span the full terminal height and scroll directly underneath the floating prompt window
-- [ ] Triple-modality positioning and resizing controls: keyboard shortcuts (move up/down, snap top/bottom, resize height), mouse drag-and-drop (border/titlebar move & resize), and in-prompt commands / configuration file settings
-- [ ] Automatic Alternate Screen (DECSET 1049) detection that auto-hides the floating command pane when full-screen TUI apps (`vim`, `htop`, `less`) run, restoring the floating prompt on exit, plus a manual toggle hotkey
-- [ ] Retro IBM 3270 / mainframe aesthetic options including Operator Information Area (OIA) status bar, classic phosphor green / amber / monochrome themes, and configurable cursor/caret styles (cross-hair cursor spanning rows/columns, solid block, hollow/blink block, underscore, vertical bar)
-- [ ] Command block separation and navigation allowing users to jump between previous command invocations and their outputs in scrollback
-- [ ] Cross-platform support targeting Linux first, followed by macOS, and Windows (ConPTY)
+- [ ] **Composite Terminal Pane Architecture**: Each terminal unit is a self-contained composite pane consisting of its own PTY output canvas + its own movable/resizable floating command prompt (pinned top, pinned bottom, or free-floating at any vertical offset within that pane's bounds).
+- [ ] **Horizontal & Vertical Pane Splitting**: Composite panes can be split horizontally and vertically into tiled layouts (each split spawns a new composite pane with its own independent floating command prompt and underlying PTY output canvas).
+- [ ] **Z-Order Pane Stacking & Shuffling**: Composite panes can be stacked on top of one another, shuffled top-to-bottom (cycling z-order), or raised selectively to the front via keyboard shortcuts or mouse clicks/selection.
+- [ ] **Tmux Support & Integration**: Seamless operation alongside or integrated with `tmux` (e.g., running smoothly inside `tmux` with proper escape sequence/passthrough handling, `tmux` control mode `-CC` backend integration or session/pane synchronization, and conflict-free prefix/keybinding ergonomics).
+- [ ] **Full PTY Shell Wrapper & VT100 Emulation**: Standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd on Windows) with full VT100/ANSI escape sequence parsing and color rendering per composite pane.
+- [ ] **Resizable Multi-Line Command Editor**: Each composite pane's command input box is resizable in height and supports multi-line editing, syntax highlighting, and command history search.
+- [ ] **Transparent/Occluding Overlay Rendering**: Within each composite pane, terminal scrollback and live output span the full pane height and scroll directly underneath that pane's floating prompt window.
+- [ ] **Triple-Modality Controls**: Keyboard shortcuts, mouse drag-and-drop (border/titlebar move, resize, focus/raise), and in-prompt commands / configuration settings for both the floating prompt inside a pane and the composite panes themselves.
+- [ ] **Alternate Screen Auto-Hide**: Per-pane DECSET 1049 detection that auto-hides that composite pane's floating command prompt when full-screen TUI apps (`vim`, `htop`, `less`) run inside it, restoring the floating prompt on exit, plus a manual toggle hotkey.
+- [ ] **Retro IBM 3270 / Mainframe Aesthetics & Cursors**: Operator Information Area (OIA) status bar, classic phosphor green / amber / monochrome themes, and configurable cursor/caret styles (cross-hair cursor spanning rows/columns, solid block, hollow/blink block, underscore, vertical bar).
+- [ ] **Command Block Separation**: Jump between previous command invocations and their outputs in scrollback within each composite pane.
+- [ ] **Cross-Platform Support**: Linux first (primary target), macOS second, Windows third (ConPTY).
 
 ### Out of Scope
 
-- Custom GPU-accelerated windowing / font rasterizer (e.g., WGPU/OpenGL GUI window) — v1 runs inside standard host terminals via Ratatui + Crossterm so it works everywhere over SSH or local terminals immediately
-- Built-in web browser or non-terminal rich media rendering — keep focus on crisp TUI mainframe ergonomics and fast PTY execution
+- Custom GPU-accelerated windowing / font rasterizer (e.g., WGPU/OpenGL GUI window) — v1 runs inside standard host terminals via Ratatui + Crossterm so it works everywhere locally, over SSH, and inside `tmux`.
+- Built-in web browser or non-terminal rich media rendering — keep focus on crisp TUI mainframe ergonomics, composite pane tiling/stacking, and fast PTY execution.
 
 ## Context
 
-- **Inspiration**: Classic IBM mainframe terminals (3270 / TSO / ISPF / VM/CMS) where the command entry area is decoupled from scrolling output and commonly positioned at the top of the screen, combined with modern floating window ergonomics.
-- **Technical Ecosystem**: Rust + `ratatui` + `crossterm` for TUI rendering and input handling; `portable-pty` (or `nix`/`pty-process`) for cross-platform PTY management; `vt100` or `alacritty_terminal` (`vte`) for virtual terminal state machine and screen buffer emulation; `tui-textarea` or `reedline`/custom editor widget for multi-line command editing.
+- **Inspiration**: Classic IBM mainframe terminals (3270 / TSO / ISPF / VM/CMS) where the command entry area is decoupled from scrolling output and commonly positioned at the top of the screen, combined with modern tiling/stacking window manager and multiplexer (`tmux` / Zellij) capabilities.
+- **Composite Pane Model**: Unlike standard multiplexers where a pane is just a raw TTY grid, a Bilterm pane is a composite unit (`CompositePane = OutputCanvas + FloatingCommandPrompt + Status/OIA`). Splitting a pane creates a new `CompositePane`. Stacking panes allows overlapping or full-area layers that can be shuffled (rotated in z-order) or selectively raised via keyboard or mouse.
+- **Technical Ecosystem**: Rust + `ratatui` + `crossterm` for TUI rendering and input handling; `portable-pty` for cross-platform PTY management; `vt100` or `alacritty_terminal` (`vte`) for virtual terminal state machine and screen buffer emulation per pane; `tmux` integration (both running inside `tmux` and interacting with `tmux` sessions/panes or `tmux -CC` control mode).
 - **Platform Priority**: Linux is the primary development and verification target (Phase 1+), followed by macOS (POSIX PTY parity), and Windows (ConPTY compatibility).
 
 ## Constraints
 
 - **Tech Stack**: Rust + Ratatui — Required by project vision for fast, zero-cost TUI rendering and cross-platform terminal manipulation.
 - **Platform Priority**: Linux first, macOS second, Windows third — Ensures rapid iteration on POSIX PTY semantics while keeping cross-platform abstractions (`portable-pty`, `crossterm`) clean from day one.
-- **Compatibility**: Must cleanly handle interactive TUI programs (`vim`, `htop`, `ssh`) via Alternate Screen detection and raw input pass-through when the floating command editor is bypassed or auto-hidden.
+- **Compatibility**: Must cleanly handle interactive TUI programs (`vim`, `htop`, `ssh`) per composite pane via Alternate Screen detection, and coexist/integrate cleanly with `tmux`.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Full PTY wrapper + VT100 parser (`portable-pty` + `vt100`/`vte`) | Needed to render underlying shell output inside a Ratatui background layer while compositing the floating command widget on top | — Pending |
-| Full-height background output canvas with occluding/translucent floating overlay | Matches the user's mental model where output scrolls directly underneath the floating command prompt window | — Pending |
-| Auto-hide floating prompt on Alternate Screen (DECSET 1049) + manual toggle | Allows seamless use of `vim`, `htop`, and `less` without the floating command bar intercepting keystrokes meant for full-screen apps | — Pending |
+| Composite Window Pane (`OutputCanvas` + `FloatingPrompt`) as the core layout unit | Allows every split or stacked pane to retain its own independent floating command prompt and scrolling output canvas | — Pending |
+| Tiled (H/V splits) + Stacked (z-order shuffle & selective raise via keyboard/mouse) window management | Gives users both side-by-side comparison and overlapping/deck-style window management in the terminal | — Pending |
+| First-class `tmux` support | Users rely on `tmux` for session persistence and workflows; Bilterm must work seamlessly with `tmux` | — Pending |
+| Full PTY wrapper + VT100 parser (`portable-pty` + `vt100`/`vte`) per composite pane | Needed to render each underlying shell output inside its Ratatui pane rect while compositing the floating command widget on top | — Pending |
+| Auto-hide floating prompt on Alternate Screen (DECSET 1049) + manual toggle per pane | Allows seamless use of `vim`, `htop`, and `less` inside any split/stacked pane without keystroke interception conflicts | — Pending |
 | Support cross-hair cursor + multiple caret styles (block, blink hollow block, underscore) | Authentic IBM 3270 / mainframe terminal feel alongside customizable retro aesthetics | — Pending |
 
 ## Evolution
