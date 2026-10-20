@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Running `sudo`, `ssh`, or interactive sub-REPLs (`python`, `node`, `git add -p`) automatically switches input routing via three-signal detection (`OSC 133` + `tcgetpgrp` + `termios !ECHO`) so passwords are never echoed in cleartext and interactive prompts never deadlock.
   4. Unexpected panics or signals cleanly restore host terminal raw mode, mouse capture, and alternate screen state.
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -43,7 +43,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Three-signal line-discipline detector (`OSC 133` + `tcgetpgrp` + `termios !ECHO`), `CompositePane` zero-`SIGWINCH` geometry, and modal input router
+- [x] 01-02-PLAN.md — Three-signal line-discipline detector (`OSC 133` + `tcgetpgrp` + `termios !ECHO`), `CompositePane` zero-`SIGWINCH` geometry, and modal input router
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -143,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core PTY, VT100 Engine & Single CompositePane Prototype | 1/3 | In Progress|  |
+| 1. Core PTY, VT100 Engine & Single CompositePane Prototype | 2/3 | In Progress|  |
 | 2. Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks | 0/3 | Not started | - |
 | 3. Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal | 0/3 | Not started | - |
 | 4. Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config | 0/3 | Not started | - |

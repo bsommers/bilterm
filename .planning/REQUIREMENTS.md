@@ -11,12 +11,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **PTY-01**: User can spawn and interact with standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd) inside a full PTY with VT100/ANSI/TrueColor rendering and scrollback buffer.
 - [x] **PTY-02**: User can run full-screen Alternate Screen TUI programs (`vim`, `nvim`, `htop`, `less`, `fzf`) via `DECSET 47/1047/1049` detection, automatically hiding the pane's floating prompt and routing raw keystrokes directly to the PTY until exit (plus a manual toggle hotkey).
-- [ ] **PTY-03**: User can safely answer interactive password prompts (`sudo`, `ssh`) and sub-REPLs (`python`, `node`, `git add -p`) via three-signal line-discipline/foreground-process detection (`OSC 133` + `tcgetpgrp` + `termios !ECHO`) without cleartext echo leaks or input deadlocks.
+- [x] **PTY-03**: User can safely answer interactive password prompts (`sudo`, `ssh`) and sub-REPLs (`python`, `node`, `git add -p`) via three-signal line-discipline/foreground-process detection (`OSC 133` + `tcgetpgrp` + `termios !ECHO`) without cleartext echo leaks or input deadlocks.
 - [ ] **PTY-04**: User can copy and paste text seamlessly with bracketed paste (`DECSET 2004`) and `OSC 52` clipboard integration.
 
 ### Composite Window Pane & Floating Command Prompt (`PANE`)
 
-- [ ] **PANE-01**: Each terminal pane operates as a self-contained **Composite Window Pane** (`OutputCanvas` + `FloatingCommandPrompt` + `StatusBar`), where live PTY output and scrollback span 100% of the pane's canvas height and scroll directly underneath the floating command prompt without triggering `SIGWINCH` reflow storms when moving/hiding the prompt.
+- [x] **PANE-01**: Each terminal pane operates as a self-contained **Composite Window Pane** (`OutputCanvas` + `FloatingCommandPrompt` + `StatusBar`), where live PTY output and scrollback span 100% of the pane's canvas height and scroll directly underneath the floating command prompt without triggering `SIGWINCH` reflow storms when moving/hiding the prompt.
 - [ ] **PANE-02**: User can pin a composite pane's floating command prompt to the top of the pane (IBM 3270 mainframe default), pin it to the bottom, or float it freely at any vertical offset within the pane.
 - [ ] **PANE-03**: User can resize the floating command prompt's height and edit multi-line commands with live shell syntax highlighting (`tree-sitter-bash`) and fuzzy command history search (`nucleo-matcher`).
 - [ ] **PANE-04**: User can move, pin (top/bottom), and resize the floating command prompt using all three modalities: keyboard shortcuts, mouse drag-and-drop on the prompt border/titlebar, and `:command` / configuration settings.
@@ -83,9 +83,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | PTY-01 | Phase 1 | Complete |
 | PTY-02 | Phase 1 | Complete |
-| PTY-03 | Phase 1 | Pending |
+| PTY-03 | Phase 1 | Complete |
 | PTY-04 | Phase 2 | Pending |
-| PANE-01 | Phase 1 | Pending |
+| PANE-01 | Phase 1 | Complete |
 | PANE-02 | Phase 2 | Pending |
 | PANE-03 | Phase 2 | Pending |
 | PANE-04 | Phase 2 | Pending |
