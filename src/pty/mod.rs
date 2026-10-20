@@ -1,3 +1,5 @@
+pub mod line_discipline;
+
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
