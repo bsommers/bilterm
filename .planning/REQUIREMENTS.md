@@ -9,8 +9,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### PTY & Virtual Terminal Engine (`PTY`)
 
-- [ ] **PTY-01**: User can spawn and interact with standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd) inside a full PTY with VT100/ANSI/TrueColor rendering and scrollback buffer.
-- [ ] **PTY-02**: User can run full-screen Alternate Screen TUI programs (`vim`, `nvim`, `htop`, `less`, `fzf`) via `DECSET 47/1047/1049` detection, automatically hiding the pane's floating prompt and routing raw keystrokes directly to the PTY until exit (plus a manual toggle hotkey).
+- [x] **PTY-01**: User can spawn and interact with standard shells (`bash`, `zsh`, `fish`, PowerShell/cmd) inside a full PTY with VT100/ANSI/TrueColor rendering and scrollback buffer.
+- [x] **PTY-02**: User can run full-screen Alternate Screen TUI programs (`vim`, `nvim`, `htop`, `less`, `fzf`) via `DECSET 47/1047/1049` detection, automatically hiding the pane's floating prompt and routing raw keystrokes directly to the PTY until exit (plus a manual toggle hotkey).
 - [ ] **PTY-03**: User can safely answer interactive password prompts (`sudo`, `ssh`) and sub-REPLs (`python`, `node`, `git add -p`) via three-signal line-discipline/foreground-process detection (`OSC 133` + `tcgetpgrp` + `termios !ECHO`) without cleartext echo leaks or input deadlocks.
 - [ ] **PTY-04**: User can copy and paste text seamlessly with bracketed paste (`DECSET 2004`) and `OSC 52` clipboard integration.
 
@@ -81,8 +81,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PTY-01 | Phase 1 | Pending |
-| PTY-02 | Phase 1 | Pending |
+| PTY-01 | Phase 1 | Complete |
+| PTY-02 | Phase 1 | Complete |
 | PTY-03 | Phase 1 | Pending |
 | PTY-04 | Phase 2 | Pending |
 | PANE-01 | Phase 1 | Pending |
@@ -109,6 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUAL-03 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 26 total
 - Mapped to phases: 26
 - Unmapped: 0 ✓
