@@ -34,7 +34,7 @@
     "text_mode": false,
     "research_before_questions": false,
     "discuss_mode": "discuss",
-    "skip_discuss": false,
+    "skip_discuss": true,
     "code_review": true,
     "code_review_depth": "standard",
     "code_review_command": null,
@@ -46,7 +46,8 @@
     "post_planning_gaps": true,
     "security_enforcement": true,
     "security_asvs_level": 1,
-    "security_block_on": "high"
+    "security_block_on": "high",
+    "use_worktrees": false
   },
   "ship": {
     "pr_body_sections": [
