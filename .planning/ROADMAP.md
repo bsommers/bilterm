@@ -21,8 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Core PTY, VT100 Engine & Single CompositePane Prototype
-**Goal**: Deliver a working single-pane TUI that spawns a real shell inside a full-height PTY output canvas with an overlaid floating command prompt, zero `SIGWINCH` geometry thrashing, automatic `DECSET 47/1047/1049` alternate-screen prompt hiding, and safe line-discipline (`sudo`/REPL) input routing.
-**Mode**: mvp
+**Goal**: As a terminal user, I want to launch Bilterm into an interactive shell inside a full-height PTY output canvas with an overlaid floating command prompt, automatic `DECSET 47/1047/1049` alternate-screen prompt hiding, and safe `sudo`/REPL input routing, so that terminal output scrolls smoothly underneath the prompt without `SIGWINCH` geometry thrashing or password/TUI corruption.
 **Depends on**: Nothing (first phase)
 **Requirements**: PTY-01, PTY-02, PTY-03, PANE-01
 **UI hint**: yes
@@ -39,8 +38,7 @@ Plans:
 - [ ] 01-03: TBD
 
 ### Phase 2: Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks
-**Goal**: Complete the intra-pane shell wrapper experience with a resizable multi-line syntax-highlighted floating command editor, fuzzy history search, top-pinned (IBM 3270) / bottom-pinned / free-floating positioning across keyboard, mouse, and `:command` modalities, clipboard integration, and semantic command block navigation.
-**Mode**: mvp
+**Goal**: As a terminal user, I want to edit multi-line syntax-highlighted commands, search fuzzy history, position or resize the floating prompt via keyboard/mouse/`:command`, use system clipboards, and jump between `OSC 133` command blocks, so that I can compose and navigate shell commands ergonomically inside any composite pane.
 **Depends on**: Phase 1
 **Requirements**: PTY-04, PANE-02, PANE-03, PANE-04, PANE-05
 **UI hint**: yes
@@ -57,8 +55,7 @@ Plans:
 - [ ] 02-03: TBD
 
 ### Phase 3: Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal
-**Goal**: Enable multi-pane window management where composite panes can be split horizontally/vertically into independent `CompositePane` units, stacked in overlapping z-order decks, shuffled top-to-bottom or raised selectively via keyboard or mouse, complemented by a persistent Guake/Quake-style drop-down quick terminal overlay and wide-character-safe occlusion.
-**Mode**: mvp
+**Goal**: As a terminal multiplexer user, I want to split composite panes horizontally or vertically, stack and shuffle panes in z-order or raise them via keyboard/mouse, and toggle a persistent Guake-style drop-down quick terminal with wide-character-safe occlusion, so that I can manage multiple tiled, stacked, and pop-over terminal workspaces without visual corruption.
 **Depends on**: Phase 2
 **Requirements**: WM-01, WM-02, WM-03, WM-04, WM-05
 **UI hint**: yes
@@ -76,8 +73,7 @@ Plans:
 - [ ] 03-03: TBD
 
 ### Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config
-**Goal**: Layer authentic DOS Borland Turbo Vision windowing chrome, IBM 3270 mainframe themes and cross-hair cursors, rich Unicode/CP437/Powerline/Nerd Font glyph sets, customizable OIA + Function-Key status bars, and a declarative `config.toml` configuration and theme engine onto the compositor.
-**Mode**: mvp
+**Goal**: As a retro-computing enthusiast, I want to customize Borland Turbo Vision window borders/shadows, CGA/VGA and IBM 3270 phosphor palettes, cross-hair cursors, Unicode/CP437/Nerd Font glyph sets, and modular OIA/F-key status bars via `config.toml`, so that Bilterm delivers an authentic mainframe and DOS IDE aesthetic tailored to my workflow.
 **Depends on**: Phase 3
 **Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, CFG-01
 **UI hint**: yes
@@ -95,8 +91,7 @@ Plans:
 - [ ] 04-03: TBD
 
 ### Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation
-**Goal**: Deliver seamless coexistence inside outer `tmux` sessions, persistent session attachment via `tmux -CC` control mode, verified cross-platform operation across Linux, macOS, and Windows (`ConPTY`), a comprehensive automated test and visual snapshot suite, complete architecture/ADR documentation, and an extensive multi-chapter User Manual.
-**Mode**: mvp
+**Goal**: As a power user and developer, I want to run Bilterm seamlessly inside outer `tmux` sessions or attached via `tmux -CC` control mode across Linux, macOS, and Windows backed by comprehensive automated tests, architecture docs, and an extensive User Manual, so that my sessions persist reliably and every capability is verified and documented.
 **Depends on**: Phase 4
 **Requirements**: TMUX-01, TMUX-02, PLAT-01, QUAL-01, QUAL-02, QUAL-03
 **UI hint**: yes
