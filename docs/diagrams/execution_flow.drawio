@@ -1,0 +1,34 @@
+<mxfile host="Electron" version="21.6.8" type="device">
+  <diagram id="bilterm-exec" name="Execution and Input Flow">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="s1" value="1. User Input Event&#10;(Key / Mouse / Paste)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="60" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="2. Global WM Chord Check&#10;(F1 Help, F2/Alt+H Split, F6 Deck, F10 Quake, Alt+P History, Alt+X Crosshair)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="60" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="3. 3-Signal Mode Routing&#10;INPUT: CMD BOX vs. INPUT: RAW PTY" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="660" y="40" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="4a. Command Box Mode&#10;- Tab Completion (:cmds, $PATH, CWD files, $ENV)&#10;- Multi-line Edit &amp; Scroll&#10;- Enter -&gt; HistoryStore + Running Banner + PTY Write" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="440" y="200" width="320" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" value="4b. Raw PTY Mode (ALT SCR / !ECHO LOCK)&#10;- Direct VT100/DECCKM Key Encoding&#10;- Password Keystrokes Protected" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="800" y="200" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s6" value="5. PTY Stream &amp; VT100 State Machine&#10;- 64KB Chunk Batching + sanitize_stream_traps()&#10;- 3-Pass Ratatui Buffer Compositing (60 FPS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="440" y="350" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="f1" edge="1" parent="1" source="s1" target="s2" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="f2" edge="1" parent="1" source="s2" target="s3" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="f3" edge="1" parent="1" source="s3" target="s4" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="f4" edge="1" parent="1" source="s3" target="s5" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="f5" edge="1" parent="1" source="s4" target="s6" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="f6" edge="1" parent="1" source="s5" target="s6" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,86 @@
+================================================================================
+                        BILTERM ASCII ARCHITECTURE SUITE
+================================================================================
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ▓▓▓▓▓▓▓  ▓▓▓▓  ▓▓       ▓▓▓▓▓▓▓▓ ▓▓▓▓▓▓▓  ▓▓▓▓▓▓▓  ▓▓▓    ▓▓▓  [1] Z:3/3 [▲] ║██
+║ ██   ██   ██   ██          ██    ██       ██   ██  ████  ████  ╔═══════════╗ ║██
+║ ███████   ██   ██          ██    █████    ███████  ██ ████ ██  ║ ==> _     ║ ║██
+║ ██   ██   ██   ██          ██    ██       ██  ██   ██  ██  ██  ╚═══════════╝ ║██
+║ ███████  ████  ███████     ██    ███████  ██   ██  ██      ██   ░░░░░░░░░░░░ ║██
+╠══════════════════════════════════════════════════════════════════════════════╣██
+║ 3270-OIA │ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ≣ OUT:0L/0B │ ⌖ R:01 C:001   ║██
+╚══════════════════════════════════════════════════════════════════════════════╝██
+  ████████████████████████████████████████████████████████████████████████████████
+
+
+1. HIGH-LEVEL SYSTEM ARCHITECTURE
+================================================================================
+
+  +--------------------------------------------------------------------------+
+  |                   HOST TERMINAL (crossterm 0.29 / Raw Mode)              |
+  |        Keyboard Events | SGR 1006 Mouse | Bracketed Paste | SIGWINCH     |
+  +------------------------------------+-------------------------------------+
+                                       |
+                                       v
+  +--------------------------------------------------------------------------+
+  |                       TOKIO ASYNC COORDINATOR (src/app.rs)               |
+  |             tokio::select! [ EventStream | PtyEvent rx | 33ms Tick ]     |
+  +-----------------+----------------------------------+---------------------+
+                    |                                  |
+                    v                                  v
+  +-----------------------------------+  +-----------------------------------+
+  |   MODAL INPUT ROUTER (src/input/) |  |   WINDOW MANAGER (src/wm/mod.rs)  |
+  |  - Global WM Chords (F1..F12/Alt) |  |  - SplitTree (H/V Binary BSP)     |
+  |  - Colon Commands (:prompt, etc.) |  |  - ZStack (Overlapping Deck)      |
+  |  - Tab Completion (src/pane/)     |  |  - QuakeQuickTerminal (F10/Alt+`) |
+  |  - History Popup (Alt+P) & Search |  |  - F1 Interactive Help Modal      |
+  +-----------------+-----------------+  +-----------------+-----------------+
+                    |                                      |
+                    +------------------+-------------------+
+                                       |
+                                       v
+  +--------------------------------------------------------------------------+
+  |                     COMPOSITE PANE (src/pane/mod.rs)                     |
+  |                                                                          |
+  |  +--------------------------------------------------------------------+  |
+  |  | FloatingPromptState                                                |  |
+  |  |  - PromptAnchor: Top | Bottom | Floating{y} | SplitTop | SplitBot  |  |
+  |  |  - Width/Height Resize & V/H Scrollbars                            |  |
+  |  |  - Running/Last Command Banner (⟳ RUNNING: / ● LAST CMD:)          |  |
+  |  |  - Tab Completion State & Nucleo Fuzzy History                     |  |
+  |  |  - HistoryStore ($XDG_STATE_HOME/bilterm/history/*.log)            |  |
+  |  +--------------------------------------------------------------------+  |
+  |  | VtParser (src/vt/mod.rs) + 3-Signal Line-Discipline Detector       |  |
+  |  |  - vt100-ctt Grid + Scrollback + OSC 133 Command Blocks            |  |
+  |  |  - DECSET 1049/1047/47 Alt Screen + DECCKM + SGR Mouse + OSC 52    |  |
+  |  |  - sanitize_stream_traps (/dev/random flood immunity)              |  |
+  |  |  - tcgetpgrp + termios !ECHO Password Lock (♦ !ECHO LOCK)          |  |
+  |  +--------------------------------------------------------------------+  |
+  +-----------------+----------------------------------+---------------------+
+                    |                                  |
+                    v                                  v
+  +-----------------------------------+  +-----------------------------------+
+  |  PTY MANAGER (src/pty/mod.rs)     |  |  TMUX BRIDGE (src/tmux/mod.rs)    |
+  |  - portable-pty ($SHELL/ConPTY)   |  |  - Mode A: Outer $TMUX + DCS      |
+  |  - spawn_blocking 64KB Reader     |  |  - Mode B: tmux -CC Control Mode  |
+  +-----------------------------------+  +-----------------------------------+
+
+
+2. COMPOSITE PANE 3-PASS RATATUI BUFFER COMPOSITOR (src/ui/mod.rs)
+================================================================================
+
+  Pass 1: OutputCanvas        Pass 2: Prompt & Shadows     Pass 3: 3270 Cross-Hair
+  +-----------------------+   +-----------------------+   +-----------------------+
+  | $ ls -la              |   | ╔═╣ BILTERM [1] [▲] ╠╗|   | ╔═╣ BILTERM [1] [▲] ╠╗|
+  | drwxr-xr-x src/       |   | ║ ⟳ RUNNING: tail -f ║|   | ║ ⟳ RUNNING:  |     ║|
+  | -rw-r--r-- Cargo.toml |   | ║ ==> echo "hi"      ║|   | ║----==> echo "█"----║|
+  | -rw-r--r-- README.md  |   | ╚════════════════════╝|   | ╚═════════════|══════╝|
+  |                       |   |   ░░░░░░░░░░░░░░░░░░░░|   | drwxr-xr-x src|       |
+  | 3270-OIA | ● READY    |   | 3270-OIA | ● READY    |   | 3270-OIA | ● R|ADY    |
+  +-----------------------+   +-----------------------+   +-----------------------+
+  - Renders VT100 cells       - Runs occlude_rect() to    - Non-destructively tints
+  - Full height in Floating     sanitize split CJK/Emoji    row & col cells (Pane
+    mode; disjoint rect in    - Clears prompt Rect &        or Full-Screen mode)
+    SplitTop/SplitBottom        draws 2x1 DOS shadow      - Draws OIA & F-Key bar
+================================================================================

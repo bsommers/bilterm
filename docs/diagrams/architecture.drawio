@@ -1,0 +1,48 @@
+<mxfile host="Electron" version="21.6.8" type="device">
+  <diagram id="bilterm-arch" name="System Architecture">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="host" value="Host Terminal (crossterm 0.29: Raw Mode, Alt Screen, SGR 1006 Mouse, DECSET 2004)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="30" width="800" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="app" value="Tokio Async Event Loop Coordinator (src/app.rs: tokio::select! 60 FPS Render Loop)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="120" width="800" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="router" value="Modal Input Router (src/input/mod.rs)&#10;- Global WM Chords (F1..F12, Alt+Key)&#10;- Colon Commands (:prompt, :theme, :history)&#10;- Tab Completion &amp; Mouse Hit-Testing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="200" y="210" width="380" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="wm" value="Window Manager (src/wm/mod.rs)&#10;- SplitNode Binary BSP Tree (H/V Splits)&#10;- ZStack Overlapping Deck (Alt+Tab / Alt+1..9)&#10;- QuakeQuickTerminal (F10) &amp; F1 Help Modal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="620" y="210" width="380" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="pane" value="CompositePane (src/pane/mod.rs)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="330" width="800" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="prompt" value="FloatingPromptState&#10;- Top / Bot / Float / SplitTop / SplitBot&#10;- Resizable Width &amp; Height + Scrollbar&#10;- Running Banner + Tab Completion&#10;- HistoryStore &amp; Nucleo Fuzzy Search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="pane">
+          <mxGeometry x="20" y="40" width="360" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="vt" value="VtParser + LineDiscipline (src/vt/ &amp; src/pty/)&#10;- vt100-ctt Grid + Scrollback + OSC 133 Blocks&#10;- DECSET 1049/2004 + SGR Mouse + OSC 52&#10;- sanitize_stream_traps (/dev/random immunity)&#10;- 3-Signal Detector (!ECHO Password Lock)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="pane">
+          <mxGeometry x="420" y="40" width="360" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="comp" value="3-Pass Ratatui Buffer Compositor (src/ui/mod.rs)&#10;Pass 1: OutputCanvas + occlude_rect (CJK/Emoji safety) | Pass 2: Outlines + DOS Drop Shadows + Prompt | Pass 3: IBM 3270 Cross-Hairs + OIA Bar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="540" width="800" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pty" value="PTY Manager (src/pty/mod.rs)&#10;portable-pty ($SHELL / ConPTY) + 64KB Reader Thread" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="200" y="640" width="380" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="tmux" value="Tmux Bridge (src/tmux/mod.rs)&#10;Outer $TMUX DCS Passthrough + tmux -CC Control Mode" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="620" y="640" width="380" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="host" target="app" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dir=both;" />
+        <mxCell id="e2" edge="1" parent="1" source="app" target="router" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" />
+        <mxCell id="e3" edge="1" parent="1" source="app" target="wm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" />
+        <mxCell id="e4" edge="1" parent="1" source="router" target="pane" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" />
+        <mxCell id="e5" edge="1" parent="1" source="wm" target="pane" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" />
+        <mxCell id="e6" edge="1" parent="1" source="pane" target="comp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" />
+        <mxCell id="e7" edge="1" parent="1" source="pane" target="pty" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dir=both;" />
+        <mxCell id="e8" edge="1" parent="1" source="pane" target="tmux" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dir=both;" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

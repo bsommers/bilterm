@@ -1,0 +1,47 @@
+flowchart TB
+    subgraph Host["Host Terminal Environment (crossterm 0.29)"]
+        TTY["Raw Mode + Alternate Screen + SGR 1006 Mouse + DECSET 2004"]
+    end
+
+    subgraph Runtime["Tokio Async Event Loop (src/app.rs)"]
+        Loop["App::run (tokio::select! 60 FPS Render Coordinator)"]
+        Router["Modal Input Router (src/input/mod.rs)"]
+    end
+
+    subgraph WM["Window Manager (src/wm/mod.rs)"]
+        SplitTree["SplitNode Binary BSP Tree (H/V Splits)"]
+        ZStack["ZStack Overlapping Window Deck (Z:1..N)"]
+        Quake["QuakeQuickTerminal Drop-Down (F10 / Alt+`)"]
+        Modals["Borland Modals: F1 Help + Alt+P History Pop-up"]
+    end
+
+    subgraph Pane["CompositePane (src/pane/mod.rs)"]
+        Prompt["FloatingPromptState (Top/Bot/Float/SplitTop/SplitBot)"]
+        Completion["Tab Completion Engine (src/pane/completion.rs)"]
+        HistStore["HistoryStore ($XDG_STATE_HOME/bilterm/history/)"]
+        LineDisc["3-Signal Line-Discipline Detector (src/pty/line_discipline.rs)"]
+        VT["VtParser (vt100-ctt + OSC 133 + sanitize_stream_traps)"]
+    end
+
+    subgraph Compositor["3-Pass Ratatui Buffer Compositor (src/ui/mod.rs)"]
+        Pass1["Pass 1: OutputCanvas + Wide-Char Occlusion (occlude_rect)"]
+        Pass2["Pass 2: Chrome Outlines + DOS Drop Shadows + Prompt Box"]
+        Pass3["Pass 3: IBM 3270 Cross-Hair (Pane/Full-Screen) + OIA Status Bar"]
+    end
+
+    subgraph Backend["Process & Multiplexer Backends"]
+        PTY["portable-pty ($SHELL / ConPTY + 64KB Reader Thread)"]
+        Tmux["TmuxBridge (Outer $TMUX DCS Passthrough + tmux -CC)"]
+    end
+
+    TTY <--> Loop
+    Loop --> Router
+    Router --> WM
+    WM --> Pane
+    Prompt <--> Completion
+    Prompt --> HistStore
+    Pane --> Compositor
+    Compositor --> TTY
+    LineDisc <--> PTY
+    VT <--> PTY
+    Pane <--> Tmux

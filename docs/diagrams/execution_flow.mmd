@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant Host as Host Terminal (crossterm)
+    participant Router as Input Router (src/input/)
+    participant Prompt as FloatingPrompt + Completion
+    participant Hist as HistoryStore (Disk)
+    participant PTY as Child Shell ($SHELL PTY)
+    participant VT as VtParser + LineDiscipline
+    participant UI as 3-Pass Ratatui Compositor
+
+    User->>Host: Press <Tab> in Command Prompt
+    Host->>Router: KeyEvent(Tab)
+    Router->>Prompt: trigger_tab_completion(pane)
+    Prompt-->>Prompt: Scan :commands, $PATH binaries, shell CWD files, $ENV
+    Prompt-->>UI: Update buffer LCP + TAB candidate ribbon
+
+    User->>Host: Press <Enter> to submit command
+    Host->>Router: KeyEvent(Enter)
+    Router->>Prompt: submit_line()
+    Prompt->>Hist: record_command(timestamp, session_id, pane_id, cmd)
+    Prompt->>Prompt: Set running_command banner ("⟳ RUNNING: <cmd>")
+    Router->>PTY: write_all(cmd + "\n")
+
+    loop Non-blocking 64KB Stream Batching
+        PTY->>VT: PtyEvent::Output(bytes)
+        VT->>VT: sanitize_stream_traps() + process(bytes)
+        VT->>VT: Evaluate 3-Signal Line Discipline (DECSET 1049 / OSC 133 / termios ECHO)
+        VT->>UI: Render Pass 1 (Canvas) -> Pass 2 (Prompt + Shadow) -> Pass 3 (Crosshair + OIA)
+        UI->>Host: Flush diffed cell buffer (60 FPS)
+    end

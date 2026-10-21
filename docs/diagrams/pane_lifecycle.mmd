@@ -1,0 +1,22 @@
+stateDiagram-v2
+    [*] --> CmdBoxReady: Spawn $SHELL in CompositePane
+
+    state "INPUT: CMD BOX (● READY)" as CmdBoxReady
+    state "INPUT: CMD BOX (⟳ RUNNING)" as CmdBoxRunning
+    state "INPUT: RAW PTY (▣ ALT SCR)" as AltScreen
+    state "INPUT: RAW PTY (♦ !ECHO LOCK)" as EchoLock
+    state "INPUT: RAW PTY (Manual)" as ManualRaw
+
+    CmdBoxReady --> CmdBoxRunning: Enter submits command ( foreground_subcommand = true )
+    CmdBoxRunning --> CmdBoxReady: OSC 133;D / Foreground job exits to shell prompt
+
+    CmdBoxReady --> AltScreen: DECSET ?1049h / ?1047h / ?47h (vim, htop, less)
+    CmdBoxRunning --> AltScreen: DECSET ?1049h / ?1047h / ?47h
+    AltScreen --> CmdBoxReady: DECRST ?1049l (App exits alternate screen)
+
+    CmdBoxReady --> EchoLock: termios !ECHO && ICANON (sudo, ssh, gpg password)
+    CmdBoxRunning --> EchoLock: termios !ECHO && ICANON
+    EchoLock --> CmdBoxReady: termios ECHO restored
+
+    CmdBoxReady --> ManualRaw: Press F12 / Ctrl+G (:raw)
+    ManualRaw --> CmdBoxReady: Press F12 / Ctrl+G (:raw)

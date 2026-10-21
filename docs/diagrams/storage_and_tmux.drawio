@@ -1,0 +1,29 @@
+<mxfile host="Electron" version="21.6.8" type="device">
+  <diagram id="bilterm-storage-tmux" name="Storage and Tmux Integration">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="cfg" value="Configuration Layer (src/config/mod.rs)&#10;~/.config/bilterm/config.toml &amp; Custom .ini Palettes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="60" width="420" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="hist" value="Persistent Session History (src/pane/history_store.rs)&#10;$XDG_STATE_HOME/bilterm/history/bilterm-history-&lt;session&gt;-pane-&lt;id&gt;.log&#10;+ Temp Script Export (/tmp/bilterm-commands-*.sh) + Rotation (max_files)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="580" y="60" width="500" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="core" value="Bilterm Core Workspace (WindowManager + CompositePanes)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="200" width="980" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="tmux_a" value="Tmux Mode A: Outer $TMUX Coexistence&#10;- Zero Ctrl+B Prefix Collision&#10;- Automatic DCS tmux; Wrapping for OSC 52 Clipboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="340" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="tmux_b" value="Tmux Mode B: tmux -CC Control Mode Bridge&#10;- Unescapes %output %pane_id Octal Streams&#10;- Dispatches Prompt Submissions via send-keys -H" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="620" y="340" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="st1" edge="1" parent="1" source="cfg" target="core" style="edgeStyle=orthogonalEdgeStyle;html=1;" />
+        <mxCell id="st2" edge="1" parent="1" source="core" target="hist" style="edgeStyle=orthogonalEdgeStyle;html=1;dir=both;" />
+        <mxCell id="st3" edge="1" parent="1" source="core" target="tmux_a" style="edgeStyle=orthogonalEdgeStyle;html=1;dir=both;" />
+        <mxCell id="st4" edge="1" parent="1" source="core" target="tmux_b" style="edgeStyle=orthogonalEdgeStyle;html=1;dir=both;" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
