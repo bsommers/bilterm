@@ -1,5 +1,16 @@
 # Chapter 6: Complete Keyboard, Mouse & `:command` Reference
 
+[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 5: tmux Integration](05-tmux-integration.md) | [Chapter 7: Troubleshooting & FAQ →](07-troubleshooting-and-faq.md)
+
+## Table of Contents
+
+- [1. Function Keys & Global Window Manager Shortcuts](#1-function-keys--global-window-manager-shortcuts)
+- [2. Intra-Pane Command Prompt & History Shortcuts](#2-intra-pane-command-prompt--history-shortcuts)
+- [3. Mouse Gestures](#3-mouse-gestures)
+- [4. Retro Aesthetics, Outlines & Theme `:command`s](#4-retro-aesthetics-outlines--theme-commands)
+
+---
+
 ## 1. Function Keys & Global Window Manager Shortcuts
 
 | Keybinding | `:command` | Description |
@@ -74,3 +85,7 @@
 | `:cursor block \| hollow \| underscore \| bar` | Switch software caret shape (`UI-05`) |
 | `:crosshair [on\|off\|full\|pane]` | Toggle or set pane-local vs. full-screen IBM 3270 cross-hairs (`UI-05`) |
 | `:fkeybar [on\|off]` | Toggle bottom Borland DOS Function-Key bar (`UI-03`) |
+
+---
+
+[← Chapter 5: tmux Integration](05-tmux-integration.md) | [User Guide Home](README.md) | [Chapter 7: Troubleshooting & FAQ →](07-troubleshooting-and-faq.md)

@@ -1,9 +1,19 @@
 # Chapter 3: Multi-Pane Window Manager, Z-Order Stacking & Guake Quick Terminal
 
+[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 2: Command Prompt](02-floating-command-prompt.md) | [Chapter 4: Themes & Config →](04-themes-glyphs-and-config.md)
+
+## Table of Contents
+
+- [1. Splitting Composite Panes Horizontally & Vertically (`WM-01`)](#1-splitting-composite-panes-horizontally--vertically-wm-01)
+- [2. Z-Order Window Stacking, Deck Shuffling & Selective Raise (`WM-02`)](#2-z-order-window-stacking-deck-shuffling--selective-raise-wm-02)
+- [3. Persistent Guake / Quake-Style Drop-Down Quick Terminal (`WM-05`)](#3-persistent-guake--quake-style-drop-down-quick-terminal-wm-05)
+
+---
+
 ## 1. Splitting Composite Panes Horizontally & Vertically (`WM-01`)
 
 Every `CompositePane` (complete with its own PTY `OutputCanvas` and its own movable `FloatingCommandPrompt`) can be recursively split:
-- **Horizontal Split (Top / Bottom)**: Press `Alt+H` or run `:split h` (or `:sp`).
+- **Horizontal Split (Top / Bottom)**: Press `F2`, `Alt+H`, or run `:split h` (or `:sp`).
 - **Vertical Split (Left / Right)**: Press `Alt+V` or run `:split v` (or `:vsplit` / `:vs`).
 - **Close Focused Pane**: Press `Alt+W` or run `:close`.
 - **Zoom / Maximize Focused Pane**: Press `F5`, `Alt+Z`, or run `:zoom`.
@@ -24,5 +34,9 @@ Inspired by classic **Borland Turbo Vision (Turbo C / Turbo Pascal)** overlappin
 ## 3. Persistent Guake / Quake-Style Drop-Down Quick Terminal (`WM-05`)
 
 Need to run a quick "by-the-way" command without disrupting your tiled or stacked workspace?
-- Press **`Alt+\``** (Alt+Backtick), **`Ctrl+Space`**, or run **`:quake`** to toggle the top-anchored **Quake Quick Terminal (`[Q] QUAKE QUICK TERM [~]`)**.
-- When hidden, its underlying shell and PTY session remain **100% persistent** in the background — press `Alt+\`` again at any time to slide it back down with your running process and command history intact.
+- Press **`F10`**, **`Alt+\``** (Alt+Backtick), **`Ctrl+Space`**, or run **`:quake`** to toggle the top-anchored **Quake Quick Terminal (`[Q] QUAKE QUICK TERM [~]`)**.
+- When hidden, its underlying shell and PTY session remain **100% persistent** in the background — press `F10` or `Alt+\`` again at any time to slide it back down with your running process and command history intact.
+
+---
+
+[← Chapter 2: Command Prompt](02-floating-command-prompt.md) | [User Guide Home](README.md) | [Chapter 4: Themes & Config →](04-themes-glyphs-and-config.md)

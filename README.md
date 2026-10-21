@@ -42,7 +42,16 @@ cargo clippy --all-targets -- -D warnings
 
 ---
 
-## Documentation
+## Documentation & User Guide
 
-- **[User Manual (`docs/user-guide/index.md`)](docs/user-guide/index.md)** — Complete 6-chapter guide covering getting started, the floating command prompt, multi-pane window management & Z-order stacking, themes/glyphs/config, `tmux` integration, and the full shortcut/`:command` reference.
+- **[User Guide (`docs/user-guide/README.md`)](docs/user-guide/README.md)** — Complete 7-chapter user manual with Getting Started, runnable Examples, Config & CLI Reference, and Troubleshooting/FAQ:
+  1. [Chapter 1: Getting Started & Core Concepts](docs/user-guide/01-getting-started.md)
+  2. [Chapter 2: The Command Prompt, Tab Completion, History & Command Blocks](docs/user-guide/02-floating-command-prompt.md)
+  3. [Chapter 3: Multi-Pane Window Manager, Z-Order Stacking & Guake Quick Terminal](docs/user-guide/03-window-manager-and-z-stack.md)
+  4. [Chapter 4: Retro Mainframe & DOS Aesthetics, Outlines, Drop Shadows, Cross-Hairs & Config](docs/user-guide/04-themes-glyphs-and-config.md)
+  5. [Chapter 5: First-Class `tmux` Integration](docs/user-guide/05-tmux-integration.md)
+  6. [Chapter 6: Complete Keyboard, Mouse & `:command` Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)
+  7. [Chapter 7: Troubleshooting & FAQ](docs/user-guide/07-troubleshooting-and-faq.md)
+- **[Test Coverage & Torture Suite Report (`docs/TEST_COVERAGE.md`)](docs/TEST_COVERAGE.md)** — Line/function/region coverage metrics (`81.83%`) and stress/torture test matrix.
 - **[Architecture Overview & ADRs (`docs/architecture/OVERVIEW.md`)](docs/architecture/OVERVIEW.md)** — System architecture diagrams, module boundaries, and Architecture Decision Records (`ADR-001` through `ADR-005`).
+- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Release history and semantic versioning notes.

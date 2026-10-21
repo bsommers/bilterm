@@ -1,5 +1,17 @@
 # Chapter 2: The Command Prompt, Tab Completion, History & Command Blocks
 
+[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 1: Getting Started](01-getting-started.md) | [Chapter 3: Window Manager →](03-window-manager-and-z-stack.md)
+
+## Table of Contents
+
+- [1. Positioning, Non-Overlapping Split Mode & Resizable Width/Height](#1-positioning-non-overlapping-split-mode--resizable-widthheight)
+- [2. Running / Pending Command Banner](#2-running--pending-command-banner)
+- [3. Scrollable Multi-Line Command Prompt & Live Syntax Highlighting](#3-scrollable-multi-line-command-prompt--live-syntax-highlighting)
+- [4. Command History Pop-up Window, Session Persistence & Temp-File Export](#4-command-history-pop-up-window-session-persistence--temp-file-export)
+- [5. `OSC 133` Command Block Jumping & `OSC 52` Clipboard](#5-osc-133-command-block-jumping--osc-52-clipboard)
+
+---
+
 ## 1. Positioning, Non-Overlapping Split Mode & Resizable Width/Height
 
 Every `CompositePane` includes a dedicated command prompt that can either **float over** the scrolling `OutputCanvas` or **partition the pane with zero overlap**, and can be resized both vertically and horizontally via **keyboard**, **mouse**, or **`:command`**:
@@ -64,3 +76,7 @@ By default (`history_enabled = true`), Bilterm automatically persists every subm
 
 - **Jump to Previous / Next Command Block**: Press `Alt+PageUp` / `Alt+PageDown` (or `:block prev` / `:block next`) to jump directly between prior commands in scrollback.
 - **Yank to System Clipboard (`OSC 52`)**: Run `:yank` to copy the selected command block (or screen contents) via `OSC 52` (`DCS tmux;` wrapped when inside `tmux`).
+
+---
+
+[← Chapter 1: Getting Started](01-getting-started.md) | [User Guide Home](README.md) | [Chapter 3: Window Manager →](03-window-manager-and-z-stack.md)

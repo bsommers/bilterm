@@ -1,5 +1,17 @@
 # Chapter 4: Retro Mainframe & DOS Aesthetics, Outlines, Drop Shadows, Cross-Hairs & Configuration
 
+[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 3: Window Manager](03-window-manager-and-z-stack.md) | [Chapter 5: tmux Integration →](05-tmux-integration.md)
+
+## Table of Contents
+
+- [1. Selectable Window & Pane Border Outlines](#1-selectable-window--pane-border-outlines)
+- [2. Themeable & Selectable DOS Drop Shadows (`UI-01`)](#2-themeable--selectable-dos-drop-shadows-ui-01)
+- [3. How to Turn On Full-Screen vs. Pane-Local Cross-Hair Cursors (`UI-05`)](#3-how-to-turn-on-full-screen-vs-pane-local-cross-hair-cursors-ui-05)
+- [4. Operator Information Area (OIA) Status Bar Icons & Telemetry](#4-operator-information-area-oia-status-bar-icons--telemetry)
+- [5. Declarative Configuration (`~/.config/bilterm/config.toml`) (`CFG-01`)](#5-declarative-configuration-configbiltermconfigtoml-cfg-01)
+
+---
+
 ## 1. Selectable Window & Pane Border Outlines
 
 Customize the border outline style of workspace windows and the command prompt independently or together using `:outline` / `:border` or `config.toml`:
@@ -77,7 +89,7 @@ glyphs = "unicode"
 cursor_style = "blinking-hollow-block"
 window_outline = "double"
 prompt_outline = "rounded"
-shadow_style = "tinted"
+shadow_style = "theme-tinted"
 crosshair_cursor = true
 crosshair_fullscreen = true
 drop_shadows = true
@@ -88,3 +100,7 @@ history_max_files = 25
 default_prompt_anchor = "split-top"
 default_prompt_height = 3
 ```
+
+---
+
+[← Chapter 3: Window Manager](03-window-manager-and-z-stack.md) | [User Guide Home](README.md) | [Chapter 5: tmux Integration →](05-tmux-integration.md)
