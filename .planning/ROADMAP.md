@@ -176,3 +176,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal | 3/3 | Complete    | 2026-10-20 |
 | 4. Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config | 3/3 | Complete    | 2026-10-20 |
 | 5. First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation | 3/3 | Complete    | 2026-10-20 |
+| 6. `v0.2.0` Protocol Hardening, Shell Integration & Canvas Workflows (`FND-01..06`, `VAL-01..04,06`) | Complete | Complete | 2026-10-21 |
+| 7. `v0.2.5` Optimal Tech Stack Blueprint Seam (`GridSnapshot`, `VtWorkerHandle`, `WorkspaceFrameRenderer`, Reflow & Torture Suite) | Complete | Complete | 2026-10-21 |
+| 8. `v0.3.0` IBM 3270 Field Hints, Terminal Inspector & Multi-Session Workspaces (`BEL-01..03`, `FND-07`, `ECO-01..04`) | Complete | Complete | 2026-10-21 |
+| 9. `v0.3.5` Living Documentation & User Guide Synchronization | Complete | Complete | 2026-10-21 |
+| 10. `v0.4.0` Native GPU Windowing Renderer (`GuiWorkspaceRenderer`) & `libghostty-vt` C-ABI Vtable (`GPU-01`, `GHOSTTY-01`) | Complete | Complete | 2026-10-21 |
+| 11. `v0.5.0` Bi-Directional `tmux -CC` Session Daemon & Kitty/Sixel Graphics (`TMUX-03`, `GFX-01`) | Complete | Complete | 2026-10-21 |

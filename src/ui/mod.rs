@@ -221,6 +221,47 @@ fn render_output_canvas(
         }
     }
 
+    // Render Kitty Graphics (APC G) and DEC Sixel (DCS q) placements using TrueColor half-blocks (GFX-01)
+    for gfx in pane.vt.graphic_placements() {
+        let max_r = gfx.rows.max(1);
+        let max_c = gfx.cols.max(1);
+        for dr in 0..max_r {
+            let dst_r = gfx.row.saturating_add(dr);
+            if dst_r >= render_rows {
+                break;
+            }
+            for dc in 0..max_c {
+                let dst_c = gfx.col.saturating_add(dc);
+                if dst_c >= render_cols {
+                    break;
+                }
+                let px_w = usize::from(gfx.pixel_width.max(1));
+                let px_h = usize::from(gfx.pixel_height.max(1));
+                let sample_x = ((usize::from(dc) * px_w) / usize::from(max_c)).min(px_w - 1);
+                let top_y = ((usize::from(dr) * 2 * px_h) / (usize::from(max_r) * 2)).min(px_h - 1);
+                let bot_y = (((usize::from(dr) * 2 + 1) * px_h) / (usize::from(max_r) * 2)).min(px_h - 1);
+                let top_off = (top_y * px_w + sample_x) * 4;
+                let bot_off = (bot_y * px_w + sample_x) * 4;
+                if top_off + 3 < gfx.rgba_bytes.len() && bot_off + 3 < gfx.rgba_bytes.len() {
+                    let tr = gfx.rgba_bytes[top_off];
+                    let tg = gfx.rgba_bytes[top_off + 1];
+                    let tb = gfx.rgba_bytes[top_off + 2];
+                    let br = gfx.rgba_bytes[bot_off];
+                    let bg_g = gfx.rgba_bytes[bot_off + 1];
+                    let bb = gfx.rgba_bytes[bot_off + 2];
+                    if let Some(cell) = buf.cell_mut((canvas.x + dst_c, canvas.y + dst_r)) {
+                        cell.set_symbol("▀");
+                        cell.set_style(
+                            Style::default()
+                                .fg(Color::Rgb(tr, tg, tb))
+                                .bg(Color::Rgb(br, bg_g, bb)),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // Highlight active OutputCanvas search matches (VAL-02)
     if pane.canvas_search.active && !pane.canvas_search.matches.is_empty() {
         for r in 0..render_rows {

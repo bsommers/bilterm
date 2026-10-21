@@ -1,6 +1,6 @@
 [package]
 name = "bilterm"
-version = "0.3.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.86"
 description = "IBM 3270 & Borland Turbo Vision inspired TUI multiplexer and composite-pane shell wrapper"
@@ -10,6 +10,8 @@ license = "MIT"
 default = []
 # Enables the libghostty-vt FFI backend in `src/vt/ghostty_backend.rs` (requires Zig toolchain + libghostty-vt crate)
 ghostty-vt = []
+# Enables the native GPU/GUI windowing surface renderer (`GuiWorkspaceRenderer`)
+gui = []
 
 [dependencies]
 ratatui = "0.30.0"

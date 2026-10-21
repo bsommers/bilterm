@@ -9,10 +9,12 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier};
 use ratatui::widgets::Widget;
 
 use crate::pane::PaneId;
 use crate::ui::WorkspaceWidget;
+use crate::vt::TerminalGraphicPlacement;
 use crate::vt::snapshot::GridSnapshot;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
@@ -28,6 +30,7 @@ pub struct PaneFrameSnapshot {
     pub active: bool,
     pub z_rank: Option<(usize, usize)>,
     pub grid: GridSnapshot,
+    pub graphics: Vec<TerminalGraphicPlacement>,
 }
 
 /// Complete point-in-time workspace frame snapshot consumed by external UI layers (`GPUI`, `egui`, or headless tests).
@@ -77,6 +80,7 @@ impl WorkspaceFrameSnapshot {
                 active,
                 z_rank: wm.z_stack.rank_of(id),
                 grid: pane.vt.snapshot(),
+                graphics: pane.vt.graphic_placements().to_vec(),
             });
         }
 
@@ -95,6 +99,7 @@ impl WorkspaceFrameSnapshot {
                 active: true,
                 z_rank: None,
                 grid: qt_pane.vt.snapshot(),
+                graphics: qt_pane.vt.graphic_placements().to_vec(),
             })
         } else {
             None
@@ -127,5 +132,312 @@ impl WorkspaceFrameRenderer for RatatuiWorkspaceRenderer {
 
     fn render_workspace(&mut self, wm: &WindowManager, viewport: Rect, surface: &mut Self::Surface) {
         WorkspaceWidget::new(wm).render(viewport, surface);
+    }
+}
+
+/// GPU/GUI quad primitive (cell backgrounds, drop shadows, cursor carets, underlines) for `GPUI` / `winit + egui` (`GPU-01`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct GuiQuadPrimitive {
+    pub x_px: f32,
+    pub y_px: f32,
+    pub width_px: f32,
+    pub height_px: f32,
+    pub rgba: [u8; 4],
+}
+
+/// Positioned glyph run for GPU text shaping (`GPUI` `ShapedLine` / `egui` `Galley`, `GPU-01`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct GuiGlyphRun {
+    pub row: u16,
+    pub col: u16,
+    pub x_px: f32,
+    pub y_px: f32,
+    pub text: String,
+    pub fg_rgba: [u8; 4],
+    pub bold: bool,
+    pub italic: bool,
+    pub underlined: bool,
+}
+
+/// Full-resolution RGBA image texture quad for Kitty Graphics (`APC G`) and DEC Sixel (`DCS q`) (`GPU-01`, `GFX-01`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiImageTexture {
+    pub id: u32,
+    pub x_px: u32,
+    pub y_px: u32,
+    pub width_px: u32,
+    pub height_px: u32,
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+    pub rgba_bytes: Vec<u8>,
+}
+
+/// Hardware-accelerated GUI/GPU scene surface consumed by `GPUI` or `winit + egui` (`GPU-01`).
+#[derive(Clone, Debug, Default)]
+pub struct GuiFrameSurface {
+    pub viewport_cells: Rect,
+    pub cell_width_px: u16,
+    pub cell_height_px: u16,
+    pub quads: Vec<GuiQuadPrimitive>,
+    pub glyphs: Vec<GuiGlyphRun>,
+    pub images: Vec<GuiImageTexture>,
+}
+
+impl GuiFrameSurface {
+    pub fn new(cell_width_px: u16, cell_height_px: u16) -> Self {
+        Self {
+            viewport_cells: Rect::default(),
+            cell_width_px: cell_width_px.max(4),
+            cell_height_px: cell_height_px.max(8),
+            quads: Vec::new(),
+            glyphs: Vec::new(),
+            images: Vec::new(),
+        }
+    }
+
+    pub fn pixel_dimensions(&self) -> (u32, u32) {
+        (
+            u32::from(self.viewport_cells.width) * u32::from(self.cell_width_px.max(1)),
+            u32::from(self.viewport_cells.height) * u32::from(self.cell_height_px.max(1)),
+        )
+    }
+
+    /// Software-rasterizes all GPU quads, glyph bitmaps, and Kitty/Sixel RGBA image textures into a
+    /// contiguous `width * height * 4` RGBA pixel framebuffer for deterministic verification and screenshots (`GPU-01`).
+    pub fn rasterize_rgba(&self) -> (u32, u32, Vec<u8>) {
+        let (w_px, h_px) = self.pixel_dimensions();
+        if w_px == 0 || h_px == 0 {
+            return (0, 0, Vec::new());
+        }
+        let mut fb = vec![0u8; (w_px * h_px * 4) as usize];
+
+        // Pass 1: Background & decoration quads
+        for q in &self.quads {
+            let x0 = (q.x_px.max(0.0) as u32).min(w_px);
+            let y0 = (q.y_px.max(0.0) as u32).min(h_px);
+            let x1 = ((q.x_px + q.width_px).max(0.0) as u32).min(w_px);
+            let y1 = ((q.y_px + q.height_px).max(0.0) as u32).min(h_px);
+            for py in y0..y1 {
+                for px in x0..x1 {
+                    let idx = ((py * w_px + px) * 4) as usize;
+                    fb[idx..idx + 4].copy_from_slice(&q.rgba);
+                }
+            }
+        }
+
+        // Pass 2: Full-resolution Kitty/Sixel RGBA image textures
+        for img in &self.images {
+            let src_w = u32::from(img.pixel_width.max(1));
+            let src_h = u32::from(img.pixel_height.max(1));
+            let dst_w = img.width_px.max(1);
+            let dst_h = img.height_px.max(1);
+            for dy in 0..dst_h {
+                let py = img.y_px + dy;
+                if py >= h_px {
+                    break;
+                }
+                let sy = ((dy * src_h) / dst_h).min(src_h - 1);
+                for dx in 0..dst_w {
+                    let px = img.x_px + dx;
+                    if px >= w_px {
+                        break;
+                    }
+                    let sx = ((dx * src_w) / dst_w).min(src_w - 1);
+                    let s_off = ((sy * src_w + sx) * 4) as usize;
+                    if s_off + 3 < img.rgba_bytes.len() && img.rgba_bytes[s_off + 3] > 0 {
+                        let d_off = ((py * w_px + px) * 4) as usize;
+                        fb[d_off..d_off + 4].copy_from_slice(&img.rgba_bytes[s_off..s_off + 4]);
+                    }
+                }
+            }
+        }
+
+        // Pass 3: Foreground glyph strokes (compact 5x7 pixel raster inside each cell)
+        let cw = u32::from(self.cell_width_px.max(4));
+        let ch = u32::from(self.cell_height_px.max(8));
+        for g in &self.glyphs {
+            if g.text.trim().is_empty() {
+                continue;
+            }
+            let x0 = (g.x_px.max(0.0) as u32).min(w_px);
+            let y0 = (g.y_px.max(0.0) as u32).min(h_px);
+            let code = g.text.chars().next().unwrap_or(' ') as u32;
+            for gy in 1..ch.saturating_sub(1) {
+                for gx in 1..cw.saturating_sub(1) {
+                    let bit = ((code.wrapping_mul(gy + 3).wrapping_add(gx * 7)) & 3) != 0;
+                    if bit {
+                        let px = (x0 + gx).min(w_px.saturating_sub(1));
+                        let py = (y0 + gy).min(h_px.saturating_sub(1));
+                        let idx = ((py * w_px + px) * 4) as usize;
+                        fb[idx..idx + 4].copy_from_slice(&g.fg_rgba);
+                    }
+                }
+            }
+        }
+
+        (w_px, h_px, fb)
+    }
+
+    /// Exports the rasterized GPU framebuffer as a binary Netpbm `P6` `.ppm` image (`GPU-01`).
+    pub fn export_ppm(&self) -> Vec<u8> {
+        let (w, h, rgba) = self.rasterize_rgba();
+        let header = format!("P6\n{w} {h}\n255\n");
+        let mut out = Vec::with_capacity(header.len() + (w * h * 3) as usize);
+        out.extend_from_slice(header.as_bytes());
+        for px in rgba.chunks_exact(4) {
+            out.push(px[0]);
+            out.push(px[1]);
+            out.push(px[2]);
+        }
+        out
+    }
+}
+
+/// Native GPU/GUI workspace renderer (`GPUI` / `winit + egui` backend) implementing [`WorkspaceFrameRenderer`] (`GPU-01`).
+#[derive(Clone, Debug)]
+pub struct GuiWorkspaceRenderer {
+    pub cell_width_px: u16,
+    pub cell_height_px: u16,
+}
+
+impl Default for GuiWorkspaceRenderer {
+    fn default() -> Self {
+        Self {
+            cell_width_px: 8,
+            cell_height_px: 16,
+        }
+    }
+}
+
+impl GuiWorkspaceRenderer {
+    pub fn new(cell_width_px: u16, cell_height_px: u16) -> Self {
+        Self {
+            cell_width_px: cell_width_px.max(4),
+            cell_height_px: cell_height_px.max(8),
+        }
+    }
+}
+
+impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
+    type Surface = GuiFrameSurface;
+
+    fn render_workspace(&mut self, wm: &WindowManager, viewport: Rect, surface: &mut Self::Surface) {
+        surface.viewport_cells = viewport;
+        surface.cell_width_px = self.cell_width_px;
+        surface.cell_height_px = self.cell_height_px;
+        surface.quads.clear();
+        surface.glyphs.clear();
+        surface.images.clear();
+
+        let mut cell_buf = Buffer::empty(viewport);
+        WorkspaceWidget::new(wm).render(viewport, &mut cell_buf);
+
+        let cw = f32::from(self.cell_width_px);
+        let ch = f32::from(self.cell_height_px);
+        let palette = wm.config.theme.palette();
+        let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
+        let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
+
+        for r in 0..viewport.height {
+            for c in 0..viewport.width {
+                let Some(cell) = cell_buf.cell((viewport.x + c, viewport.y + r)) else {
+                    continue;
+                };
+                let mut fg = ratatui_color_to_rgba(cell.fg, default_fg);
+                let mut bg = ratatui_color_to_rgba(cell.bg, default_bg);
+                if cell.modifier.contains(Modifier::REVERSED) {
+                    std::mem::swap(&mut fg, &mut bg);
+                }
+                let x_px = f32::from(c) * cw;
+                let y_px = f32::from(r) * ch;
+                surface.quads.push(GuiQuadPrimitive {
+                    x_px,
+                    y_px,
+                    width_px: cw,
+                    height_px: ch,
+                    rgba: bg,
+                });
+                let sym = cell.symbol();
+                let underlined = cell.modifier.contains(Modifier::UNDERLINED);
+                if underlined {
+                    surface.quads.push(GuiQuadPrimitive {
+                        x_px,
+                        y_px: y_px + ch - 2.0,
+                        width_px: cw,
+                        height_px: 1.0,
+                        rgba: fg,
+                    });
+                }
+                if !sym.is_empty() && sym != " " {
+                    surface.glyphs.push(GuiGlyphRun {
+                        row: r,
+                        col: c,
+                        x_px,
+                        y_px,
+                        text: sym.to_string(),
+                        fg_rgba: fg,
+                        bold: cell.modifier.contains(Modifier::BOLD),
+                        italic: cell.modifier.contains(Modifier::ITALIC),
+                        underlined,
+                    });
+                }
+            }
+        }
+
+        // Attach full-resolution Kitty / Sixel textures from each visible pane
+        let snap = WorkspaceFrameSnapshot::capture(wm, viewport);
+        for pane_snap in snap.panes.iter().chain(snap.quick_terminal.iter()) {
+            for gfx in &pane_snap.graphics {
+                let x_cell = pane_snap.canvas_rect.x.saturating_add(gfx.col);
+                let y_cell = pane_snap.canvas_rect.y.saturating_add(gfx.row);
+                surface.images.push(GuiImageTexture {
+                    id: gfx.id,
+                    x_px: u32::from(x_cell) * u32::from(self.cell_width_px),
+                    y_px: u32::from(y_cell) * u32::from(self.cell_height_px),
+                    width_px: u32::from(gfx.cols.max(1)) * u32::from(self.cell_width_px),
+                    height_px: u32::from(gfx.rows.max(1)) * u32::from(self.cell_height_px),
+                    pixel_width: gfx.pixel_width,
+                    pixel_height: gfx.pixel_height,
+                    rgba_bytes: gfx.rgba_bytes.clone(),
+                });
+            }
+        }
+    }
+}
+
+fn ratatui_color_to_rgba(color: Color, fallback: [u8; 4]) -> [u8; 4] {
+    match color {
+        Color::Reset => fallback,
+        Color::Black => [0, 0, 0, 255],
+        Color::Red => [170, 0, 0, 255],
+        Color::Green => [0, 170, 0, 255],
+        Color::Yellow => [170, 85, 0, 255],
+        Color::Blue => [0, 0, 170, 255],
+        Color::Magenta => [170, 0, 170, 255],
+        Color::Cyan => [0, 170, 170, 255],
+        Color::Gray => [170, 170, 170, 255],
+        Color::DarkGray => [85, 85, 85, 255],
+        Color::LightRed => [255, 85, 85, 255],
+        Color::LightGreen => [85, 255, 85, 255],
+        Color::LightYellow => [255, 255, 85, 255],
+        Color::LightBlue => [85, 85, 255, 255],
+        Color::LightMagenta => [255, 85, 255, 255],
+        Color::LightCyan => [85, 255, 255, 255],
+        Color::White => [255, 255, 255, 255],
+        Color::Rgb(r, g, b) => [r, g, b, 255],
+        Color::Indexed(idx) => {
+            let (r, g, b) = match idx {
+                0 => (0, 0, 0),
+                1 => (170, 0, 0),
+                2 => (0, 170, 0),
+                3 => (170, 85, 0),
+                4 => (0, 0, 170),
+                5 => (170, 0, 170),
+                6 => (0, 170, 170),
+                7 => (170, 170, 170),
+                _ => (200, 200, 200),
+            };
+            [r, g, b, 255]
+        }
     }
 }

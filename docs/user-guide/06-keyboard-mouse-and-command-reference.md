@@ -23,8 +23,16 @@
 | `Alt+Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (`WM-02`) |
 | `Alt+1` .. `Alt+9` | `:focus <1..9>` | Selectively raise and focus pane `#1..#9` (`WM-02`) |
 | `Alt+M` | `:layout stack\|tile` | Toggle between Tiled Splits and Overlapping Z-Order Cascade (`WM-02`) |
+| **`F9`** | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (active DECSET modes, Kitty flags, cursor cell `U+XXXX`, CSI/OSC log) (`BEL-01`) |
 | **`F10`** / `Alt+\`` / `Ctrl+Space` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal (`WM-05`) |
 | **`F12`** / `Ctrl+G` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` (`PTY-02`) |
+| `Alt+F` | `:hints` / `:hint` | Toggle QuickSelect 3270 Field Hints (`[a]..[z]`) for URLs, paths, IPv4s, and Git SHAs (`ECO-01`) |
+| `Alt+L` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane (`ECO-04`) |
+| — | `:broadcast [on\|off]` | Toggle Synchronized Multi-Pane Input Broadcast (`📡 BCAST`) across unlocked panes (`ECO-04`) |
+| — | `:menubar [on\|off]` | Toggle interactive Top Borland Turbo Vision Menu Bar (`ECO-03`) |
+| — | `:session save <name>` | Save multi-pane workspace topology and pane metadata to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml` (`ECO-02`) |
+| — | `:session restore <name>` | Restore saved multi-pane workspace session (`ECO-02`) |
+| — | `:session list` | List saved workspace sessions (`ECO-02`) |
 | `Alt+X` | `:crosshair [full\|pane\|off]` | Cycle IBM 3270 Cross-Hair Cursor (Pane-Local -> Full-Screen -> Off) |
 | `Alt+W` | `:close` | Close focused composite pane (`WM-03`) |
 | `Ctrl+Q` | `:quit` / `:q` | Cleanly exit Bilterm |
@@ -54,6 +62,10 @@
 | `Ctrl+Z` | — | Undo last edit in command prompt (`PANE-04`) |
 | `Ctrl+K` / `Ctrl+W` / `Ctrl+Y` | — | Kill to end of line / Kill previous word / Yank killed text |
 | — | `:yank` | Copy focused command block or screen via `OSC 52` clipboard (`PTY-04`) |
+| `Alt+/` | `:search <query>` | Search `OutputCanvas` grid and highlight matches (`VAL-02`) |
+| `Alt+n` / `Alt+N` | `:search next\|prev\|clear` | Jump to next/previous canvas search match or clear search (`VAL-02`) |
+| `Alt+C` | `:copy` | Enter keyboard-driven Vi Copy Mode (`h/j/k/l/w/b/0/$`, `v` char, `V` line, `b`/`Ctrl+V` block, `y`/`Enter` yank) (`VAL-04`) |
+| `Ctrl+LeftClick` | `:links [index]` | Yank explicit `OSC 8` hyperlink or auto-detected URL via `OSC 52` (`VAL-03`) |
 | — | `:clear` | Clear output canvas and reset scrollback |
 
 ---

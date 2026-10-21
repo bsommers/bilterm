@@ -55,10 +55,16 @@ pub enum TmuxControlEvent {
     Output { pane_id: usize, data: Vec<u8> },
     /// `%window-add @<window_id>`
     WindowAdd { window_id: usize },
+    /// `%window-close @<window_id>` or `%unlinked-window-close @<window_id>`
+    WindowClose { window_id: usize },
+    /// `%window-pane-changed @<window_id> %<pane_id>`
+    WindowPaneChanged { window_id: usize, pane_id: usize },
     /// `%layout-change @<window_id> <layout>`
     LayoutChange { window_id: usize, layout: String },
     /// `%session-changed $<session_id> <name>`
     SessionChanged { session_id: usize, name: String },
+    /// `%exit [reason]`
+    Exit { reason: Option<String> },
     /// `%begin <timestamp> <cmd_num> <flags>`
     BeginBlock,
     /// `%end <timestamp> <cmd_num> <flags>`
@@ -92,6 +98,28 @@ pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
         }
     }
 
+    if let Some(rest) = trimmed
+        .strip_prefix("%window-close ")
+        .or_else(|| trimmed.strip_prefix("%unlinked-window-close "))
+    {
+        if let Some(id_str) = rest.trim().strip_prefix('@') {
+            if let Ok(window_id) = id_str.parse::<usize>() {
+                return TmuxControlEvent::WindowClose { window_id };
+            }
+        }
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("%window-pane-changed ") {
+        let mut parts = rest.split_whitespace();
+        if let (Some(win_tok), Some(pane_tok)) = (parts.next(), parts.next())
+            && let (Some(w_str), Some(p_str)) =
+                (win_tok.strip_prefix('@'), pane_tok.strip_prefix('%'))
+            && let (Ok(window_id), Ok(pane_id)) = (w_str.parse::<usize>(), p_str.parse::<usize>())
+        {
+            return TmuxControlEvent::WindowPaneChanged { window_id, pane_id };
+        }
+    }
+
     if let Some(rest) = trimmed.strip_prefix("%layout-change ") {
         let mut parts = rest.splitn(2, ' ');
         if let Some(win_tok) = parts.next() {
@@ -121,6 +149,14 @@ pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
     }
     if trimmed.starts_with("%end ") {
         return TmuxControlEvent::EndBlock;
+    }
+    if trimmed == "%exit" || trimmed.starts_with("%exit ") {
+        let reason = trimmed
+            .strip_prefix("%exit")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned);
+        return TmuxControlEvent::Exit { reason };
     }
 
     TmuxControlEvent::Other(trimmed.to_string())
@@ -169,22 +205,84 @@ pub fn format_split_window(tmux_pane_id: usize, horizontal: bool) -> String {
     format!("split-window {flag} -t %{tmux_pane_id}\n")
 }
 
-/// Bridge synchronizing a `tmux -CC` Control Mode stream with Bilterm's `WindowManager` (`TMUX-02`).
+/// Formats a `tmux -CC` `refresh-client -C <cols>x<rows>` size notification (`TMUX-03`).
+pub fn format_refresh_client_size(cols: u16, rows: u16) -> String {
+    format!("refresh-client -C {}x{}\n", cols.max(1), rows.max(1))
+}
+
+/// Extracts all `%pane_id` integers from a `tmux` layout descriptor string
+/// (e.g. `b25d,160x48,0,0{80x48,0,0,0,79x48,81,0,1}` -> `[0, 1]`, `TMUX-03`).
+pub fn parse_tmux_layout_panes(layout: &str) -> Vec<usize> {
+    let primary = layout.split_whitespace().next().unwrap_or(layout);
+    let mut panes = Vec::new();
+    let tokens: Vec<&str> = primary
+        .split([',', '{', '}', '[', ']'])
+        .filter(|s| !s.is_empty())
+        .collect();
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let tok = tokens[i];
+        if tok.contains('x') && tok.chars().all(|c| c.is_ascii_digit() || c == 'x') {
+            // Next 2 tokens are X and Y, 3rd token is pane_id (unless followed by '{' or '[' container)
+            if i + 3 < tokens.len()
+                && let (Ok(_x), Ok(_y), Ok(pane_id)) = (
+                    tokens[i + 1].parse::<u32>(),
+                    tokens[i + 2].parse::<u32>(),
+                    tokens[i + 3].parse::<usize>(),
+                )
+            {
+                if !panes.contains(&pane_id) {
+                    panes.push(pane_id);
+                }
+                i += 4;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    panes
+}
+
+/// Bridge synchronizing a bi-directional `tmux -CC` Control Mode stream with Bilterm's `WindowManager` (`TMUX-02`, `TMUX-03`).
 #[derive(Clone, Debug, Default)]
 pub struct TmuxControlBridge {
     /// Maps `tmux` `%pane_id` -> Bilterm `PaneId`.
     pub tmux_to_bilterm: BTreeMap<usize, PaneId>,
+    /// Reverse map from Bilterm `PaneId` -> `tmux` `%pane_id`.
+    pub bilterm_to_tmux: BTreeMap<PaneId, usize>,
     pub active_session_name: Option<String>,
+    pub outbound_commands: Vec<String>,
+    pub exited: bool,
 }
 
 impl TmuxControlBridge {
     pub fn new() -> Self {
-        let mut map = BTreeMap::new();
-        map.insert(0, 1);
+        let mut t2b = BTreeMap::new();
+        let mut b2t = BTreeMap::new();
+        t2b.insert(0, 1);
+        b2t.insert(1, 0);
         Self {
-            tmux_to_bilterm: map,
+            tmux_to_bilterm: t2b,
+            bilterm_to_tmux: b2t,
             active_session_name: None,
+            outbound_commands: Vec::new(),
+            exited: false,
         }
+    }
+
+    fn ensure_tmux_pane(&mut self, wm: &mut WindowManager, tmux_pane_id: usize) -> PaneId {
+        if let Some(&id) = self.tmux_to_bilterm.get(&tmux_pane_id) {
+            return id;
+        }
+        let new_id = wm.panes.keys().max().copied().unwrap_or(1) + 1;
+        let (rows, cols) = wm.active_pane().vt.size();
+        let mut new_pane = CompositePane::new_headless(new_id, rows + 1, cols);
+        new_pane.title = format!("TMUX %{tmux_pane_id}");
+        wm.panes.insert(new_id, new_pane);
+        wm.z_stack.push(new_id);
+        self.tmux_to_bilterm.insert(tmux_pane_id, new_id);
+        self.bilterm_to_tmux.insert(new_id, tmux_pane_id);
+        new_id
     }
 
     /// Processes a line from `tmux -CC` stdout and updates the corresponding `CompositePane` in `wm`.
@@ -192,28 +290,123 @@ impl TmuxControlBridge {
         let ev = parse_tmux_control_line(line);
         match &ev {
             TmuxControlEvent::Output { pane_id, data } => {
-                let bilterm_id = if let Some(&id) = self.tmux_to_bilterm.get(pane_id) {
-                    id
-                } else {
-                    let new_id = wm.panes.keys().max().copied().unwrap_or(1) + 1;
-                    let (rows, cols) = wm.active_pane().vt.size();
-                    let mut new_pane = CompositePane::new_headless(new_id, rows + 1, cols);
-                    new_pane.title = format!("TMUX %{pane_id}");
-                    wm.panes.insert(new_id, new_pane);
-                    wm.z_stack.push(new_id);
-                    self.tmux_to_bilterm.insert(*pane_id, new_id);
-                    new_id
-                };
+                let bilterm_id = self.ensure_tmux_pane(wm, *pane_id);
                 if let Some(pane) = wm.panes.get_mut(&bilterm_id) {
                     pane.process_pty_output(data);
                 }
             }
+            TmuxControlEvent::LayoutChange { layout, .. } => {
+                for tmux_pane_id in parse_tmux_layout_panes(layout) {
+                    self.ensure_tmux_pane(wm, tmux_pane_id);
+                }
+            }
+            TmuxControlEvent::WindowPaneChanged { pane_id, .. } => {
+                let bilterm_id = self.ensure_tmux_pane(wm, *pane_id);
+                wm.focus_and_raise(bilterm_id);
+            }
             TmuxControlEvent::SessionChanged { name, .. } => {
                 self.active_session_name = Some(name.clone());
+            }
+            TmuxControlEvent::Exit { .. } => {
+                self.exited = true;
             }
             _ => {}
         }
         ev
+    }
+
+    /// Routes a command submitted in Bilterm's `FloatingCommandPrompt` to the mapped `tmux` `%pane_id` (`TMUX-03`).
+    pub fn route_prompt_submission(
+        &mut self,
+        bilterm_pane_id: PaneId,
+        command_line: &str,
+    ) -> Option<String> {
+        let &tmux_id = self.bilterm_to_tmux.get(&bilterm_pane_id)?;
+        let mut payload = command_line.as_bytes().to_vec();
+        if !payload.ends_with(b"\n") {
+            payload.push(b'\n');
+        }
+        let cmd = format_send_keys_hex(tmux_id, &payload);
+        self.outbound_commands.push(cmd.clone());
+        Some(cmd)
+    }
+
+    /// Queues a `split-window` command for the mapped `tmux` `%pane_id` (`TMUX-03`).
+    pub fn queue_split(&mut self, bilterm_pane_id: PaneId, horizontal: bool) -> Option<String> {
+        let &tmux_id = self.bilterm_to_tmux.get(&bilterm_pane_id)?;
+        let cmd = format_split_window(tmux_id, horizontal);
+        self.outbound_commands.push(cmd.clone());
+        Some(cmd)
+    }
+
+    /// Queues a `refresh-client -C <cols>x<rows>` command (`TMUX-03`).
+    pub fn queue_resize_client(&mut self, cols: u16, rows: u16) -> String {
+        let cmd = format_refresh_client_size(cols, rows);
+        self.outbound_commands.push(cmd.clone());
+        cmd
+    }
+
+    /// Drains all queued outbound `tmux -CC` commands to be written to the `tmux -CC` subprocess stdin.
+    pub fn take_outbound_commands(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.outbound_commands)
+    }
+}
+
+/// Live asynchronous `tmux -CC` Control Mode subprocess handle (`TMUX-03`).
+pub struct TmuxControlSubprocess {
+    pub session_name: String,
+    pub cmd_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    pub line_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+}
+
+impl TmuxControlSubprocess {
+    /// Spawns `tmux -CC new-session -A -s <session_name>` with piped stdin/stdout channels.
+    pub fn spawn_attach_or_new(session_name: &str) -> std::io::Result<Self> {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::process::Command;
+
+        let clean_name = if session_name.trim().is_empty() {
+            "bilterm"
+        } else {
+            session_name.trim()
+        };
+        let mut child = Command::new("tmux")
+            .args(["-CC", "new-session", "-A", "-s", clean_name])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+
+        let stdout = child.stdout.take().expect("tmux stdout piped");
+        let mut stdin = child.stdin.take().expect("tmux stdin piped");
+
+        let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (line_tx, line_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+        tokio::spawn(async move {
+            while let Some(cmd) = cmd_rx.recv().await {
+                if stdin.write_all(cmd.as_bytes()).await.is_err() {
+                    break;
+                }
+                let _ = stdin.flush().await;
+            }
+        });
+
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line_tx.send(line).is_err() {
+                    break;
+                }
+            }
+            let _ = child.wait().await;
+        });
+
+        Ok(Self {
+            session_name: clean_name.to_string(),
+            cmd_tx,
+            line_rx,
+        })
     }
 }
 

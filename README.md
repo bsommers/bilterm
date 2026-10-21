@@ -18,8 +18,9 @@
      IBM 3270 MAINFRAME PROMPT  ×  BORLAND TURBO VISION TUI MULTIPLEXER
 ```
 
-![Version](https://img.shields.io/badge/version-v0.1.0-blue)
+![Version](https://img.shields.io/badge/version-v0.5.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange)
+![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-81.83%25-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-cyan)
 
@@ -46,6 +47,12 @@
   - 5 built-in themes (`turbo-blue`, `turbo-cyan`, `ibm-3278-green`, `ibm-3279-amber`, `ibm-mono`), 8 border outlines (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`), 4 DOS drop-shadow styles (`translucent`, `tinted`, `solid`, `none`), 4 glyph packs (`unicode`, `cp437`, `nerd-font`, `ascii`), and **Pane-Local or Full-Screen IBM 3270 Cross-Hair Cursors** (`Alt+X` / `:crosshair full | pane | off`).
 - **First-Class `tmux` Integration**:
   - Outer `$TMUX` coexistence with `DCS tmux;` clipboard passthrough and `tmux -CC` Control Mode synchronization (`src/tmux/mod.rs`).
+- **Modern Terminal Protocols, Canvas Workflows & 3270 Inspector (`v0.2.0`–`v0.3.0`)**:
+  - **Protocol Hardening**: Paste injection sanitization (`sanitize_paste_bytes`) + `[!] UNSAFE PASTE GUARD` modal, `DECSET ?1007` alternate scroll, `DECRPM` mode reporting, Kitty Keyboard Protocol (`CSI > flags u`), dynamic `OSC 4/10/11/12` color queries, `XTGETTCAP` & `DECRQSS`, `DECSET ?2027` Unicode grapheme clusters, `DECSET ?2031` / `CSI ? 996 n` color-scheme DSR notifications, `DECSET ?2048` in-band resize reports, `OSC 9;4` OIA progress bars, and soft-wrapped scrollback reflow on resize.
+  - **Zero-Config Shell Integration & Canvas Workflows**: Automatic `bash`/`zsh`/`fish` `OSC 133` + `OSC 7` injection (`src/pty/shell_integration.rs`) with `✓ 0 [12ms]` / `✗ 1 [45ms]` exit-code/duration badges, `OutputCanvas` search (`Alt+/` / `:search`), `OSC 8` & URL yanking (`Ctrl+Click` / `:links`), Vi Copy Mode + rectangular block selection (`Alt+C` / `:copy`, `Alt+LeftDrag`), and QuickSelect 3270 Field Hints (`Alt+F` / `:hints`) for URLs, paths, IPv4s, and Git SHAs (`[a]..[z]`).
+  - **Multi-Session Workspaces & Diagnostics**: Live 3270 Terminal Inspector (`F9` / `:inspector`), declarative TOML workspace session serialization (`:session save|restore|list`), top Borland Turbo Vision Menu Bar (`:menubar`), Read-Only 3270 Field Lock (`Alt+L` / `:lock`), and Multi-Pane Input Broadcast (`:broadcast`).
+  - **3-Layer Optimal Tech Stack Blueprint Seam & GPU Windowing (`v0.2.5`, `v0.4.0`)**: Renderer-agnostic `GridSnapshot` (`src/vt/snapshot.rs`), dedicated `VtWorkerHandle` thread + `GhosttyCAbiTerminal` / `GhosttyVtEngine` C-ABI adapter (`src/vt/worker.rs`, `src/vt/ghostty_backend.rs`), and `GuiWorkspaceRenderer` + `RatatuiWorkspaceRenderer` (`src/ui/renderer.rs`, `--gui-dump <path.ppm>`).
+  - **Bi-Directional `tmux -CC` Daemon & Terminal Graphics (`v0.5.0`)**: Live `TmuxControlSubprocess` + `TmuxControlBridge` (`%layout-change` multi-pane hydration, `%window-pane-changed`, hex `send-keys` prompt routing, `src/tmux/mod.rs`) plus **Kitty Graphics Protocol (`APC G`)** and **DEC Sixel (`DCS q`)** decoding & TrueColor half-block (`▀`) / GPU RGBA texture rendering.
 
 ---
 
@@ -125,6 +132,15 @@ cargo clippy --all-targets -- -D warnings
 | **Window & Prompt Border Outlines** | — | `:outline [window\|prompt] <double\|solid\|rounded\|thick\|dotted\|dashed\|quadruple\|ascii>` |
 | **Themeable DOS Drop Shadows** | — | `:shadows <translucent\|tinted\|solid\|off>` |
 | **Switch Retro Theme Palette** | — | `:theme turbo-blue \| turbo-cyan \| 3278 \| 3279 \| mono` |
+| **Live 3270 Terminal Inspector Modal** | `F9` | `:inspector` |
+| **QuickSelect 3270 Field Hints (`[a]..[z]`)** | `Alt+F` | `:hints` |
+| **Read-Only Protected 3270 Field Lock** | `Alt+L` | `:lock [on\|off]` |
+| **Multi-Pane Input Broadcast (`📡 BCAST`)** | — | `:broadcast [on\|off]` |
+| **Top Borland Turbo Vision Menu Bar** | — | `:menubar [on\|off]` |
+| **Save / Restore Workspace Session** | — | `:session save <name>` / `:session restore <name>` / `:session list` |
+| **Search Output Canvas Scrollback** | `Alt+/` (`Alt+n` / `Alt+N`) | `:search <query>` / `:search next\|prev\|clear` |
+| **Vi Copy Mode & Block Selection** | `Alt+C` / `Alt+LeftDrag` | `:copy` |
+| **Yank `OSC 8` / Auto-Detected URLs** | `Ctrl+LeftClick` | `:links [index]` |
 | **Clean Quit** | `Ctrl+Q` | `:quit` / `:q` |
 
 ---

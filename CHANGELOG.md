@@ -5,6 +5,32 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.0] - 2026-10-21
+
+### Added
+- **Bi-Directional `tmux -CC` Session Daemon & Layout Topology Bridge (`TMUX-03`, `src/tmux/mod.rs`)**:
+  - `parse_tmux_layout_panes()` parses `tmux` layout strings (`<checksum>,<WxH>,<X>,<Y>{...}[...]`) and automatically hydrates 1:1 local `CompositePane` instances on `%layout-change`.
+  - Handles `%window-pane-changed`, `%window-close` / `%unlinked-window-close`, and `%exit [reason]`, and routes `FloatingCommandPrompt` submissions back to `tmux` via `TmuxControlBridge::route_prompt_submission` (`send-keys -t %<id> -H <hex>`), `queue_split`, and `queue_resize_client`.
+  - `TmuxControlSubprocess::spawn_attach_or_new` spawns `tmux -CC new-session -A -s <session>` with asynchronous `stdin`/`stdout` Tokio channels.
+- **Kitty Graphics Protocol (`APC G`) & DEC Sixel (`DCS q`) Support (`GFX-01`, `src/vt/mod.rs`, `src/ui/mod.rs`, `src/ui/renderer.rs`)**:
+  - Decodes Kitty Graphics Protocol (`\x1b_G<k=v,...>;<base64>\x1b\\`) queries (`a=q` -> `\x1b_Gi=<id>;OK\x1b\\`), RGB/RGBA transmissions & placements (`a=t`, `a=T`, `a=p`), and deletions (`a=d`).
+  - Decodes DEC Sixel (`\x1bP<params>q<sixel>\x1b\\`) raster attributes (`"Pan;Pad;Ph;Pv`), RGB color registers (`#<reg>;2;<r>;<g>;<b>`), RLE repeat (`!<count><char>`), and 6-pixel vertical bands into RGBA pixel buffers.
+  - Renders `TerminalGraphicPlacement` regions onto TUI `OutputCanvas` cells using 24-bit TrueColor Unicode half-blocks (`▀`) and attaches full-resolution `GuiImageTexture` buffers to `GuiFrameSurface` in GPU mode.
+
+## [v0.4.0] - 2026-10-21
+
+### Added
+- **Native GPU/GUI Workspace Renderer & Framebuffer Pipeline (`GPU-01`, `src/ui/renderer.rs`, `src/main.rs`)**:
+  - `GuiWorkspaceRenderer` and `GuiFrameSurface` implement `WorkspaceFrameRenderer` for `GPUI` / `winit + egui` integration, emitting `GuiQuadPrimitive` backgrounds/underlines, `GuiGlyphRun` text runs, `GuiImageTexture` quads, and a deterministic RGBA / Netpbm `P6` `.ppm` software rasterizer (`--gui-dump <path.ppm>`).
+- **`libghostty-vt` C-ABI Vtable & FFI Handle (`GHOSTTY-01`, `src/vt/ghostty_backend.rs`)**:
+  - Added `GhosttyCAbiVtable` (`terminal_new`, `terminal_free`, `terminal_vt_write`, `terminal_resize`) and safe `GhosttyCAbiTerminal` wrapper alongside the `--features ghostty-vt` binding.
+
+## [v0.3.5] - 2026-10-21
+
+### Changed
+- **Living Documentation & User Guide Synchronization (`README.md`, `docs/architecture.md`, `docs/user-guide/`)**:
+  - Synchronized all documentation tables, architecture diagrams, keyboard/mouse/`:command` references (`F9`, `Alt+F`, `Alt+L`, `Alt+/`, `Alt+C`, `:inspector`, `:hints`, `:lock`, `:broadcast`, `:menubar`, `:session`, `:search`, `:links`, `:copy`), and multi-pane session guides with `v0.2.0`–`v0.5.0`.
+
 ## [v0.3.0] - 2026-10-21
 
 ### Added

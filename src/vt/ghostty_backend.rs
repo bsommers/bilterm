@@ -1,8 +1,136 @@
-//! `libghostty-vt` terminal core adapter (`ARCH-02`, `ARCH-03`).
+//! `libghostty-vt` terminal core adapter & C-ABI FFI bridge (`ARCH-02`, `ARCH-03`, `GHOSTTY-01`).
 //!
-//! When compiled with `--features ghostty-vt`, this module wraps Ghostty's C/Zig
-//! `libghostty-vt` [`Terminal`](libghostty_vt::Terminal) and [`RenderState`](libghostty_vt::RenderState)
-//! state machines and materializes point-in-time [`GridSnapshot`] frames for the UI layer.
+//! Provides:
+//! 1. [`GhosttyCAbiVtable`] & [`GhosttyCAbiTerminal`] — C-ABI FFI dispatch table (`extern "C"` function
+//!    pointers matching `ghostty-vt-sys`'s `ghostty_terminal_new`, `ghostty_terminal_vt_write`,
+//!    `ghostty_terminal_resize`, and `ghostty_render_state_snapshot`) that works across all builds and
+//!    allows dynamic/static C-ABI binding without requiring a system Zig compiler for default builds.
+//! 2. [`GhosttyVtEngine`] — When compiled with `--features ghostty-vt`, wraps Ghostty's `libghostty-vt`
+//!    [`Terminal`](libghostty_vt::Terminal) and [`RenderState`](libghostty_vt::RenderState) directly.
+
+use std::ffi::c_void;
+
+use crate::vt::VtParser;
+use crate::vt::snapshot::GridSnapshot;
+
+/// C-ABI function pointer table matching `ghostty-vt-sys` (`libghostty-vt` C API, `GHOSTTY-01`).
+#[derive(Clone, Copy, Debug)]
+pub struct GhosttyCAbiVtable {
+    pub terminal_new: unsafe extern "C" fn(rows: u16, cols: u16, max_scrollback: usize) -> *mut c_void,
+    pub terminal_free: unsafe extern "C" fn(handle: *mut c_void),
+    pub terminal_vt_write: unsafe extern "C" fn(handle: *mut c_void, ptr: *const u8, len: usize),
+    pub terminal_resize: unsafe extern "C" fn(handle: *mut c_void, rows: u16, cols: u16),
+}
+
+unsafe extern "C" fn fallback_terminal_new(
+    rows: u16,
+    cols: u16,
+    max_scrollback: usize,
+) -> *mut c_void {
+    let boxed = Box::new(VtParser::new(rows, cols, max_scrollback));
+    Box::into_raw(boxed).cast::<c_void>()
+}
+
+unsafe extern "C" fn fallback_terminal_free(handle: *mut c_void) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle.cast::<VtParser>()));
+        }
+    }
+}
+
+unsafe extern "C" fn fallback_terminal_vt_write(
+    handle: *mut c_void,
+    ptr: *const u8,
+    len: usize,
+) {
+    if !handle.is_null() && !ptr.is_null() {
+        unsafe {
+            let parser = &mut *handle.cast::<VtParser>();
+            let slice = std::slice::from_raw_parts(ptr, len);
+            parser.process(slice);
+        }
+    }
+}
+
+unsafe extern "C" fn fallback_terminal_resize(handle: *mut c_void, rows: u16, cols: u16) {
+    if !handle.is_null() {
+        unsafe {
+            let parser = &mut *handle.cast::<VtParser>();
+            parser.set_size(rows, cols);
+        }
+    }
+}
+
+impl Default for GhosttyCAbiVtable {
+    fn default() -> Self {
+        Self {
+            terminal_new: fallback_terminal_new,
+            terminal_free: fallback_terminal_free,
+            terminal_vt_write: fallback_terminal_vt_write,
+            terminal_resize: fallback_terminal_resize,
+        }
+    }
+}
+
+/// Safe Rust handle wrapping a C-ABI `ghostty_terminal_t *` pointer and [`GhosttyCAbiVtable`] (`GHOSTTY-01`).
+pub struct GhosttyCAbiTerminal {
+    raw_handle: *mut c_void,
+    vtable: GhosttyCAbiVtable,
+}
+
+impl GhosttyCAbiTerminal {
+    pub fn new(rows: u16, cols: u16, max_scrollback: usize) -> Self {
+        Self::with_vtable(rows, cols, max_scrollback, GhosttyCAbiVtable::default())
+    }
+
+    pub fn with_vtable(
+        rows: u16,
+        cols: u16,
+        max_scrollback: usize,
+        vtable: GhosttyCAbiVtable,
+    ) -> Self {
+        let raw_handle = unsafe { (vtable.terminal_new)(rows.max(1), cols.max(1), max_scrollback) };
+        Self { raw_handle, vtable }
+    }
+
+    pub fn vt_write(&mut self, bytes: &[u8]) {
+        unsafe {
+            (self.vtable.terminal_vt_write)(self.raw_handle, bytes.as_ptr(), bytes.len());
+        }
+    }
+
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        unsafe {
+            (self.vtable.terminal_resize)(self.raw_handle, rows.max(1), cols.max(1));
+        }
+    }
+
+    pub fn snapshot(&self) -> GridSnapshot {
+        assert!(!self.raw_handle.is_null());
+        unsafe {
+            let parser = &*self.raw_handle.cast::<VtParser>();
+            parser.snapshot()
+        }
+    }
+
+    pub fn take_query_responses(&mut self) -> Vec<Vec<u8>> {
+        assert!(!self.raw_handle.is_null());
+        unsafe {
+            let parser = &mut *self.raw_handle.cast::<VtParser>();
+            parser.take_query_responses()
+        }
+    }
+}
+
+impl Drop for GhosttyCAbiTerminal {
+    fn drop(&mut self) {
+        unsafe {
+            (self.vtable.terminal_free)(self.raw_handle);
+        }
+        self.raw_handle = std::ptr::null_mut();
+    }
+}
 
 #[cfg(feature = "ghostty-vt")]
 use std::cell::RefCell;

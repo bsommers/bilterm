@@ -92,6 +92,29 @@ pub struct CanvasHint {
     pub kind: CanvasHintKind,
 }
 
+/// Terminal graphics protocol family (`GFX-01`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GraphicProtocol {
+    /// Kitty Graphics Protocol (`APC G`, `\x1b_G...\x1b\\`).
+    Kitty,
+    /// DEC Sixel Graphics (`DCS q`, `\x1bP...q...\x1b\\`).
+    Sixel,
+}
+
+/// Decoded RGBA image placement anchored to a terminal cell region (`GFX-01`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TerminalGraphicPlacement {
+    pub id: u32,
+    pub protocol: GraphicProtocol,
+    pub row: u16,
+    pub col: u16,
+    pub cols: u16,
+    pub rows: u16,
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+    pub rgba_bytes: Vec<u8>,
+}
+
 /// Virtual terminal state machine wrapping `vt100-ctt` with explicit `DECSET 47/1047/1049`
 /// alternate screen tracking, `DECSET 2004` bracketed paste tracking, `DECSET 1007` alternate scroll,
 /// `DECRPM` mode reporting, Kitty keyboard protocol stacks, `XTGETTCAP`/`DECRQSS`, `OSC 4/10/11/12`
@@ -127,6 +150,8 @@ pub struct VtParser {
     selected_block_index: Option<usize>,
     osc8_links: Vec<Osc8Hyperlink>,
     osc9_progress: Option<Osc9Progress>,
+    graphic_placements: Vec<TerminalGraphicPlacement>,
+    next_graphic_id: u32,
     recent_escape_sequences: Vec<String>,
     pending_osc52: Vec<String>,
     pending_query_responses: Vec<Vec<u8>>,
@@ -176,6 +201,8 @@ impl VtParser {
             selected_block_index: None,
             osc8_links: Vec::new(),
             osc9_progress: None,
+            graphic_placements: Vec::new(),
+            next_graphic_id: 1,
             recent_escape_sequences: Vec::new(),
             pending_osc52: Vec::new(),
             pending_query_responses: Vec::new(),
@@ -513,6 +540,16 @@ impl VtParser {
     /// Returns the active `OSC 9;4` progress indicator state, if any (`BEL-02`).
     pub fn osc9_progress(&self) -> Option<Osc9Progress> {
         self.osc9_progress
+    }
+
+    /// Returns all active Kitty Graphics (`APC G`) and DEC Sixel (`DCS q`) placements on the canvas (`GFX-01`).
+    pub fn graphic_placements(&self) -> &[TerminalGraphicPlacement] {
+        &self.graphic_placements
+    }
+
+    /// Clears all active graphics placements (`GFX-01`).
+    pub fn clear_graphics(&mut self) {
+        self.graphic_placements.clear();
     }
 
     /// Returns the bounded ring buffer of recent CSI/OSC/DCS escape sequences for the 3270 Terminal Inspector (`BEL-01`).
@@ -1153,6 +1190,118 @@ impl VtParser {
             }
         }
 
+        // Track DCS XTGETTCAP (\x1bP+q<hex>\x1b\\), DECRQSS (\x1bP$q<pt>\x1b\\), and DEC Sixel (\x1bP...q...\x1b\\)
+        for (idx, _) in text.match_indices("\x1bP") {
+            let rest = &text[idx + 2..];
+            if let Some(end) = rest.find("\x1b\\").or_else(|| rest.find('\x07')) {
+                let dcs_body = &rest[..end];
+                if !dcs_body.starts_with("+q")
+                    && !dcs_body.starts_with("$q")
+                    && !dcs_body.starts_with("tmux;")
+                    && let Some(q_pos) = dcs_body.find('q')
+                {
+                    let params = &dcs_body[..q_pos];
+                    if params
+                        .chars()
+                        .all(|c| c.is_ascii_digit() || c == ';')
+                    {
+                        let sixel_payload = &dcs_body[q_pos + 1..];
+                        let (cur_row, cur_col) = self.parser.screen().cursor_position();
+                        let id = self.next_graphic_id;
+                        self.next_graphic_id = self.next_graphic_id.wrapping_add(1);
+                        let placement = decode_sixel_placement(id, cur_row, cur_col, sixel_payload);
+                        self.record_escape_sequence(format!(
+                            "DCS Sixel id={id} {}x{}px",
+                            placement.pixel_width, placement.pixel_height
+                        ));
+                        self.graphic_placements.push(placement);
+                    }
+                }
+            }
+        }
+
+        // Track Kitty Graphics Protocol APC sequences: \x1b_G<control>;<base64>(\x1b\\ or \x07) (GFX-01)
+        for (idx, _) in text.match_indices("\x1b_G") {
+            let rest = &text[idx + 3..];
+            if let Some(end) = rest.find("\x1b\\").or_else(|| rest.find('\x07')) {
+                let body = &rest[..end];
+                let (ctrl_str, b64_payload) = body.split_once(';').unwrap_or((body, ""));
+                let mut action = 'T';
+                let mut image_id: Option<u32> = None;
+                let mut format_code: u32 = 32;
+                let mut px_w: u16 = 0;
+                let mut px_h: u16 = 0;
+                let mut cell_c: u16 = 0;
+                let mut cell_r: u16 = 0;
+                let mut quiet: u8 = 0;
+                for kv in ctrl_str.split(',') {
+                    if let Some((k, v)) = kv.split_once('=') {
+                        match k.trim() {
+                            "a" => action = v.chars().next().unwrap_or('T'),
+                            "i" => image_id = v.parse::<u32>().ok(),
+                            "f" => format_code = v.parse::<u32>().unwrap_or(32),
+                            "s" => px_w = v.parse::<u16>().unwrap_or(0),
+                            "v" => px_h = v.parse::<u16>().unwrap_or(0),
+                            "c" => cell_c = v.parse::<u16>().unwrap_or(0),
+                            "r" => cell_r = v.parse::<u16>().unwrap_or(0),
+                            "q" => quiet = v.parse::<u8>().unwrap_or(0),
+                            _ => {}
+                        }
+                    }
+                }
+                let resolved_id = image_id.unwrap_or_else(|| {
+                    let id = self.next_graphic_id;
+                    self.next_graphic_id = self.next_graphic_id.wrapping_add(1);
+                    id
+                });
+                match action {
+                    'q' => {
+                        if quiet < 2 {
+                            self.pending_query_responses
+                                .push(format!("\x1b_Gi={resolved_id};OK\x1b\\").into_bytes());
+                        }
+                        self.record_escape_sequence(format!("APC Kitty Query i={resolved_id}"));
+                    }
+                    'd' => {
+                        if let Some(target_id) = image_id {
+                            self.graphic_placements.retain(|g| g.id != target_id);
+                        } else {
+                            self.graphic_placements.clear();
+                        }
+                        self.record_escape_sequence("APC Kitty Delete");
+                    }
+                    't' | 'T' | 'p' => {
+                        let raw_bytes = base64_decode(b64_payload);
+                        let w = px_w.max(2);
+                        let h = px_h.max(2);
+                        let rgba = expand_kitty_payload_to_rgba(&raw_bytes, format_code, w, h);
+                        let (cur_row, cur_col) = self.parser.screen().cursor_position();
+                        let cols = if cell_c > 0 { cell_c } else { w.div_ceil(8).max(1) };
+                        let rows = if cell_r > 0 { cell_r } else { h.div_ceil(16).max(1) };
+                        self.graphic_placements.push(TerminalGraphicPlacement {
+                            id: resolved_id,
+                            protocol: GraphicProtocol::Kitty,
+                            row: cur_row,
+                            col: cur_col,
+                            cols,
+                            rows,
+                            pixel_width: w,
+                            pixel_height: h,
+                            rgba_bytes: rgba,
+                        });
+                        if image_id.is_some() && quiet == 0 {
+                            self.pending_query_responses
+                                .push(format!("\x1b_Gi={resolved_id};OK\x1b\\").into_bytes());
+                        }
+                        self.record_escape_sequence(format!(
+                            "APC Kitty {action} i={resolved_id} {w}x{h}px"
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         // Track DCS XTGETTCAP (\x1bP+q<hex>\x1b\\) and DECRQSS (\x1bP$q<pt>\x1b\\) (FND-06)
         for (idx, _) in text.match_indices("\x1bP+q") {
             let rest = &text[idx + 4..];
@@ -1575,6 +1724,264 @@ pub fn base64_encode(input: &[u8]) -> String {
     out
 }
 
+/// Pure-Rust RFC 4648 Base64 decoder for Kitty Graphics (`APC G`) payloads (`GFX-01`).
+pub fn base64_decode(input: &str) -> Vec<u8> {
+    fn val(b: u8) -> Option<u8> {
+        match b {
+            b'A'..=b'Z' => Some(b - b'A'),
+            b'a'..=b'z' => Some(b - b'a' + 26),
+            b'0'..=b'9' => Some(b - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let clean: Vec<u8> = input
+        .bytes()
+        .filter(|&b| !b.is_ascii_whitespace() && b != b'=')
+        .filter_map(val)
+        .collect();
+    let mut out = Vec::with_capacity(clean.len() * 3 / 4);
+    for chunk in clean.chunks(4) {
+        if chunk.len() >= 2 {
+            out.push((chunk[0] << 2) | (chunk[1] >> 4));
+        }
+        if chunk.len() >= 3 {
+            out.push((chunk[1] << 4) | (chunk[2] >> 2));
+        }
+        if chunk.len() >= 4 {
+            out.push((chunk[2] << 6) | chunk[3]);
+        }
+    }
+    out
+}
+
+fn strip_apc_and_dcs_envelopes(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut rest = input;
+    while !rest.is_empty() {
+        let next_apc = rest.find("\x1b_");
+        let next_dcs = rest.find("\x1bP");
+        let next_env = match (next_apc, next_dcs) {
+            (Some(a), Some(d)) => Some(a.min(d)),
+            (Some(a), None) => Some(a),
+            (None, Some(d)) => Some(d),
+            (None, None) => None,
+        };
+        if let Some(pos) = next_env {
+            out.push_str(&rest[..pos]);
+            let after_start = &rest[pos + 2..];
+            if let Some(end_st) = after_start.find("\x1b\\") {
+                rest = &after_start[end_st + 2..];
+            } else if let Some(end_bel) = after_start.find('\x07') {
+                rest = &after_start[end_bel + 1..];
+            } else {
+                break;
+            }
+        } else {
+            out.push_str(rest);
+            break;
+        }
+    }
+    out
+}
+
+fn expand_kitty_payload_to_rgba(raw: &[u8], format_code: u32, w: u16, h: u16) -> Vec<u8> {
+    let total_px = usize::from(w) * usize::from(h);
+    let mut rgba = Vec::with_capacity(total_px * 4);
+    match format_code {
+        24 => {
+            for px in raw.chunks(3).take(total_px) {
+                let r = *px.first().unwrap_or(&0);
+                let g = *px.get(1).unwrap_or(&0);
+                let b = *px.get(2).unwrap_or(&0);
+                rgba.extend_from_slice(&[r, g, b, 255]);
+            }
+        }
+        _ => {
+            for px in raw.chunks(4).take(total_px) {
+                let r = *px.first().unwrap_or(&0);
+                let g = *px.get(1).unwrap_or(&0);
+                let b = *px.get(2).unwrap_or(&0);
+                let a = *px.get(3).unwrap_or(&255);
+                rgba.extend_from_slice(&[r, g, b, a]);
+            }
+        }
+    }
+    while rgba.len() < total_px * 4 {
+        rgba.extend_from_slice(&[0, 0xFF, 0x66, 255]);
+    }
+    rgba
+}
+
+fn decode_sixel_placement(
+    id: u32,
+    row: u16,
+    col: u16,
+    payload: &str,
+) -> TerminalGraphicPlacement {
+    let mut palette: [(u8, u8, u8); 16] = [
+        (0, 0, 0),
+        (51, 102, 255),
+        (255, 51, 51),
+        (0, 255, 102),
+        (255, 51, 255),
+        (51, 255, 255),
+        (255, 255, 85),
+        (255, 255, 255),
+        (128, 128, 128),
+        (0, 170, 0),
+        (255, 176, 0),
+        (0, 170, 170),
+        (170, 0, 170),
+        (170, 170, 0),
+        (85, 85, 255),
+        (200, 200, 200),
+    ];
+    let mut active_reg: usize = 3;
+    let mut width_px: u16 = 0;
+    let mut height_px: u16 = 6;
+    let mut bands: Vec<Vec<(u8, u8, u8, u8)>> = vec![Vec::new()];
+    let mut cur_x: usize = 0;
+
+    let bytes = payload.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                // Raster attributes "Pan;Pad;Ph;Pv
+                i += 1;
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b';') {
+                    i += 1;
+                }
+                let attr = &payload[start..i];
+                let nums: Vec<u16> = attr
+                    .split(';')
+                    .filter_map(|s| s.parse::<u16>().ok())
+                    .collect();
+                if nums.len() >= 4 {
+                    width_px = width_px.max(nums[2]);
+                    height_px = height_px.max(nums[3]);
+                }
+            }
+            b'#' => {
+                // Color specifier #<reg> or #<reg>;2;<r>;<g>;<b>
+                i += 1;
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b';') {
+                    i += 1;
+                }
+                let spec = &payload[start..i];
+                let nums: Vec<u16> = spec
+                    .split(';')
+                    .filter_map(|s| s.parse::<u16>().ok())
+                    .collect();
+                if let Some(&reg) = nums.first() {
+                    active_reg = usize::from(reg) % palette.len();
+                    if nums.len() >= 5 && nums[1] == 2 {
+                        let r = ((u32::from(nums[2].min(100)) * 255) / 100) as u8;
+                        let g = ((u32::from(nums[3].min(100)) * 255) / 100) as u8;
+                        let b = ((u32::from(nums[4].min(100)) * 255) / 100) as u8;
+                        palette[active_reg] = (r, g, b);
+                    }
+                }
+            }
+            b'!' => {
+                // RLE repeat !<count><sixel_char>
+                i += 1;
+                let start = i;
+                while i < bytes.len() && bytes[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let count = payload[start..i]
+                    .parse::<usize>()
+                    .unwrap_or(1)
+                    .clamp(1, 512);
+                if i < bytes.len() && (0x3F..=0x7E).contains(&bytes[i]) {
+                    let bits = bytes[i] - 0x3F;
+                    let (r, g, b) = palette[active_reg];
+                    let band = bands.last_mut().expect("band");
+                    for _ in 0..count {
+                        if cur_x >= band.len() {
+                            band.push((r, g, b, bits));
+                        } else if bits != 0 {
+                            band[cur_x] = (r, g, b, bits);
+                        }
+                        cur_x += 1;
+                    }
+                    width_px = width_px.max(cur_x as u16);
+                    i += 1;
+                }
+            }
+            b'$' => {
+                cur_x = 0;
+                i += 1;
+            }
+            b'-' => {
+                cur_x = 0;
+                bands.push(Vec::new());
+                height_px = height_px.max((bands.len() * 6) as u16);
+                i += 1;
+            }
+            0x3F..=0x7E => {
+                let bits = bytes[i] - 0x3F;
+                let (r, g, b) = palette[active_reg];
+                let band = bands.last_mut().expect("band");
+                if cur_x >= band.len() {
+                    band.push((r, g, b, bits));
+                } else if bits != 0 {
+                    band[cur_x] = (r, g, b, bits);
+                }
+                cur_x += 1;
+                width_px = width_px.max(cur_x as u16);
+                i += 1;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+
+    let w = width_px.clamp(1, 512);
+    let h = height_px.clamp(6, 512);
+    let mut rgba = vec![0u8; usize::from(w) * usize::from(h) * 4];
+    for (band_idx, band) in bands.iter().enumerate() {
+        for (x, &(r, g, b, bits)) in band.iter().enumerate() {
+            if x >= usize::from(w) {
+                break;
+            }
+            for bit in 0..6usize {
+                let y = band_idx * 6 + bit;
+                if y >= usize::from(h) {
+                    break;
+                }
+                if (bits & (1 << bit)) != 0 {
+                    let off = (y * usize::from(w) + x) * 4;
+                    rgba[off] = r;
+                    rgba[off + 1] = g;
+                    rgba[off + 2] = b;
+                    rgba[off + 3] = 255;
+                }
+            }
+        }
+    }
+
+    let cols = w.div_ceil(8).max(1);
+    let rows = h.div_ceil(16).max(1);
+    TerminalGraphicPlacement {
+        id,
+        protocol: GraphicProtocol::Sixel,
+        row,
+        col,
+        cols,
+        rows,
+        pixel_width: w,
+        pixel_height: h,
+        rgba_bytes: rgba,
+    }
+}
+
 /// Converts a `vt100_ctt::Cell` into a `ratatui::style::Style` preserving 16-color, 256-color,
 /// and 24-bit TrueColor attributes plus bold, italic, underline, and inverse modifiers.
 pub fn cell_to_ratatui_style(cell: &vt100_ctt::Cell) -> Style {
@@ -1616,13 +2023,20 @@ fn vt_color_to_cell_color(color: vt100_ctt::Color) -> CellColor {
 }
 
 /// Rewrites extended SGR sub-parameters (`4:1..4:5` -> `4`, `4:0` -> `24`, and strips `58;2;r;g;b` / `58:2:...`)
-/// so `vt100_ctt::Parser` applies standard bold/italic/underline/color attributes on the Same CSI sequence.
+/// and strips APC (`\x1b_...`) / DCS (`\x1bP...`) envelopes so `vt100_ctt::Parser` applies standard attributes
+/// without dumping raw Kitty/Sixel graphics payloads onto the character grid.
 fn normalize_extended_sgr_for_vt100(bytes: &[u8]) -> Vec<u8> {
-    let Ok(text) = std::str::from_utf8(bytes) else {
+    let Ok(raw_text) = std::str::from_utf8(bytes) else {
         return bytes.to_vec();
     };
+    let stripped_cow = if raw_text.contains("\x1b_") || raw_text.contains("\x1bP") {
+        std::borrow::Cow::Owned(strip_apc_and_dcs_envelopes(raw_text))
+    } else {
+        std::borrow::Cow::Borrowed(raw_text)
+    };
+    let text = stripped_cow.as_ref();
     if !text.contains("\x1b[") || (!text.contains("4:") && !text.contains("58")) {
-        return bytes.to_vec();
+        return text.as_bytes().to_vec();
     }
     let mut out = String::with_capacity(text.len());
     let mut rest = text;

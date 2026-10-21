@@ -39,4 +39,18 @@ Need to run a quick "by-the-way" command without disrupting your tiled or stacke
 
 ---
 
+## 4. Workspace Session Serialization, Multi-Pane Broadcast & 3270 Field Lock (`ECO-02`..`ECO-04`)
+
+- **Save & Restore Multi-Pane Workspaces (`:session`)**:
+  - `:session save <name>` serializes the active layout (`Tile` vs `Stack`), `SplitTree` ratios, `ZStack` order, pane titles, working directories, `PromptAnchor`, prompt dimensions, read-only locks, and command histories to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml`.
+  - `:session restore <name>` reconstructs the saved workspace layout and panes; `:session list` displays all saved session profiles.
+- **Synchronized Multi-Pane Input Broadcast (`:broadcast [on|off]`)**:
+  - Displays a `📡 BCAST` badge in the OIA status bar and fans out every command submitted in the focused prompt to **all unlocked panes** simultaneously.
+- **Read-Only Protected 3270 Field Lock (`Alt+L` / `:lock [on|off]`)**:
+  - Locks a pane against accidental command submissions or raw keystrokes (`🔒 PROT` badge in OIA) and excludes it from `:broadcast` fan-out while still allowing `:colon` commands.
+- **Top Borland Turbo Vision Menu Bar (`:menubar [on|off]`)**:
+  - Enables a 1-row top pull-down menu bar (`≡ System  Window  Prompt  View  Theme  Tmux  Help`) navigable by mouse click or keyboard arrows.
+
+---
+
 [← Chapter 2: Command Prompt](02-floating-command-prompt.md) | [User Guide Home](README.md) | [Chapter 4: Themes & Config →](04-themes-glyphs-and-config.md)
