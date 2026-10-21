@@ -31,7 +31,7 @@
 ```bash
 cargo test && cargo clippy --all-targets -- -D warnings
 ```
-- **Expected:** 48 passed (9 unit + 39 integration/snapshot across 5 test suites), 0 failed, 0 clippy warnings.
+- **Expected:** 52 passed (31 unit + 21 integration/snapshot across 6 test suites), 0 failed, 0 clippy warnings.
 
 ## 5. Next Steps (Resuming in a Fresh Session)
 1. Read [.planning/STATE.md](file:///home/bill/src/ai/bilterm/.planning/STATE.md), [.planning/CHECKPOINT.md](file:///home/bill/src/ai/bilterm/.planning/CHECKPOINT.md), and [docs/architecture/OVERVIEW.md](file:///home/bill/src/ai/bilterm/docs/architecture/OVERVIEW.md).

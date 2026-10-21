@@ -1,10 +1,14 @@
 pub mod colon_command;
+pub mod completion;
 pub mod fuzzy_history;
 pub mod highlight;
+
+use std::path::PathBuf;
 
 use ratatui::layout::Rect;
 
 use crate::error::Result;
+use crate::pane::completion::{compute_completions, longest_common_prefix, TabCompletionState};
 use crate::pane::fuzzy_history::FuzzyHistorySearchState;
 use crate::pty::line_discipline::{inspect_pty_fd, InputRoutingMode, LineDisciplineState};
 use crate::pty::{PtyConfig, PtyEvent, PtySession};
@@ -55,6 +59,8 @@ pub struct FloatingPromptState {
     redo_stack: Vec<EditorSnapshot>,
     /// Interactive `Ctrl+R` fuzzy history search state (`nucleo-matcher`).
     pub fuzzy_search: FuzzyHistorySearchState,
+    /// Interactive `Tab` / `Shift+Tab` completion state for paths, commands, `$ENV`, and `:colon` commands.
+    pub completion: TabCompletionState,
     /// Manual toggle (`Ctrl+G` / `F12`) allowing the user to hide the floating prompt and
     /// route keystrokes directly to the underlying PTY at any time (`PTY-02`).
     pub manual_raw_override: bool,
@@ -76,6 +82,7 @@ impl Default for FloatingPromptState {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             fuzzy_search: FuzzyHistorySearchState::default(),
+            completion: TabCompletionState::default(),
             manual_raw_override: false,
         }
     }
@@ -91,6 +98,7 @@ impl FloatingPromptState {
     }
 
     fn record_undo(&mut self) {
+        self.completion.clear();
         let snap = self.snapshot();
         if self.undo_stack.last() != Some(&snap) {
             self.undo_stack.push(snap);
@@ -216,6 +224,7 @@ impl FloatingPromptState {
     }
 
     pub fn move_cursor_left(&mut self) {
+        self.completion.clear();
         if self.cursor_col > 0 {
             self.cursor_col -= 1;
         } else if self.cursor_row > 0 {
@@ -226,6 +235,7 @@ impl FloatingPromptState {
     }
 
     pub fn move_cursor_right(&mut self) {
+        self.completion.clear();
         let row_len = self.lines[self.cursor_row].chars().count();
         if self.cursor_col < row_len {
             self.cursor_col += 1;
@@ -238,6 +248,7 @@ impl FloatingPromptState {
 
     /// Moves cursor up one row in multi-line input, or returns `false` if already at row 0.
     pub fn move_cursor_up(&mut self) -> bool {
+        self.completion.clear();
         if self.cursor_row > 0 {
             self.cursor_row -= 1;
             let len = self.lines[self.cursor_row].chars().count();
@@ -251,6 +262,7 @@ impl FloatingPromptState {
 
     /// Moves cursor down one row in multi-line input, or returns `false` if already at the last row.
     pub fn move_cursor_down(&mut self) -> bool {
+        self.completion.clear();
         if self.cursor_row + 1 < self.lines.len() {
             self.cursor_row += 1;
             let len = self.lines[self.cursor_row].chars().count();
@@ -263,16 +275,19 @@ impl FloatingPromptState {
     }
 
     pub fn move_cursor_home(&mut self) {
+        self.completion.clear();
         self.cursor_col = 0;
         self.sync_from_lines();
     }
 
     pub fn move_cursor_end(&mut self) {
+        self.completion.clear();
         self.cursor_col = self.lines[self.cursor_row].chars().count();
         self.sync_from_lines();
     }
 
     pub fn move_word_left(&mut self) {
+        self.completion.clear();
         let chars: Vec<char> = self.lines[self.cursor_row].chars().collect();
         let mut col = self.cursor_col.min(chars.len());
         while col > 0 && chars[col - 1].is_whitespace() {
@@ -286,6 +301,7 @@ impl FloatingPromptState {
     }
 
     pub fn move_word_right(&mut self) {
+        self.completion.clear();
         let chars: Vec<char> = self.lines[self.cursor_row].chars().collect();
         let n = chars.len();
         let mut col = self.cursor_col.min(n);
@@ -340,6 +356,7 @@ impl FloatingPromptState {
     }
 
     pub fn undo(&mut self) -> bool {
+        self.completion.clear();
         let Some(prev) = self.undo_stack.pop() else {
             return false;
         };
@@ -352,6 +369,7 @@ impl FloatingPromptState {
     }
 
     pub fn redo(&mut self) -> bool {
+        self.completion.clear();
         let Some(next) = self.redo_stack.pop() else {
             return false;
         };
@@ -364,6 +382,7 @@ impl FloatingPromptState {
     }
 
     pub fn clear_line(&mut self) {
+        self.completion.clear();
         if !self.input.is_empty() {
             self.record_undo();
             self.yank_buffer = self.input.clone();
@@ -375,6 +394,7 @@ impl FloatingPromptState {
     }
 
     pub fn take_submission(&mut self) -> String {
+        self.completion.clear();
         let full = self.text();
         self.lines = vec![String::new()];
         self.cursor_row = 0;
@@ -420,6 +440,7 @@ impl FloatingPromptState {
 
     /// Opens interactive `Ctrl+R` fuzzy history search (`PANE-04`).
     pub fn open_fuzzy_search(&mut self) {
+        self.completion.clear();
         self.fuzzy_search.active = true;
         self.fuzzy_search.query.clear();
         self.fuzzy_search.selected = 0;
@@ -451,12 +472,113 @@ impl FloatingPromptState {
         self.fuzzy_search.active = false;
     }
 
-    /// Computes the effective prompt height, growing automatically for multi-line commands or active
-    /// `Ctrl+R` fuzzy search while respecting `canvas_height`.
+    /// Triggers or cycles `Tab` / `Shift+Tab` completion at the current cursor position.
+    pub fn complete_tab(&mut self, cwd: &std::path::Path, reverse: bool) -> bool {
+        if self.completion.is_active() {
+            let len = self.completion.candidates.len();
+            if len == 0 {
+                self.completion.clear();
+                return false;
+            }
+            let next_idx = match self.completion.selected {
+                None => {
+                    if reverse {
+                        len - 1
+                    } else {
+                        0
+                    }
+                }
+                Some(curr) => {
+                    if reverse {
+                        (curr + len - 1) % len
+                    } else {
+                        (curr + 1) % len
+                    }
+                }
+            };
+            self.completion.selected = Some(next_idx);
+            let replacement = self.completion.candidates[next_idx].replacement.clone();
+            self.apply_completion_span(replacement);
+            return true;
+        }
+
+        let current_line = self.lines[self.cursor_row].clone();
+        let (token_start, token_end, candidates) =
+            compute_completions(&current_line, self.cursor_col, cwd);
+
+        if candidates.is_empty() {
+            self.completion.clear();
+            return false;
+        }
+
+        let snap = self.snapshot();
+        if self.undo_stack.last() != Some(&snap) {
+            self.undo_stack.push(snap);
+            if self.undo_stack.len() > 100 {
+                self.undo_stack.remove(0);
+            }
+        }
+        self.redo_stack.clear();
+
+        if candidates.len() == 1 {
+            self.completion.token_start = token_start;
+            self.completion.token_end = token_end;
+            let replacement = candidates[0].replacement.clone();
+            self.apply_completion_span(replacement);
+            self.completion.clear();
+            return true;
+        }
+
+        let orig_token: String = current_line
+            .chars()
+            .skip(token_start)
+            .take(token_end.saturating_sub(token_start))
+            .collect();
+        let lcp = longest_common_prefix(&candidates);
+
+        self.completion.active = true;
+        self.completion.token_start = token_start;
+        self.completion.token_end = token_end;
+        self.completion.original_prefix = orig_token.clone();
+        self.completion.candidates = candidates;
+
+        if lcp.chars().count() > orig_token.chars().count() {
+            self.completion.selected = None;
+            self.apply_completion_span(lcp);
+        } else {
+            let first_idx = if reverse {
+                self.completion.candidates.len() - 1
+            } else {
+                0
+            };
+            self.completion.selected = Some(first_idx);
+            let replacement = self.completion.candidates[first_idx].replacement.clone();
+            self.apply_completion_span(replacement);
+        }
+        true
+    }
+
+    fn apply_completion_span(&mut self, replacement: String) {
+        let start_byte =
+            Self::char_to_byte(&self.lines[self.cursor_row], self.completion.token_start);
+        let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], self.completion.token_end);
+        let rep_chars = replacement.chars().count();
+        self.lines[self.cursor_row].replace_range(start_byte..end_byte, &replacement);
+        let new_end = self.completion.token_start + rep_chars;
+        self.completion.token_end = new_end;
+        self.cursor_col = new_end;
+        self.sync_from_lines();
+    }
+
+    /// Computes the effective prompt height, growing automatically for multi-line commands, active
+    /// `Ctrl+R` fuzzy search, or active `Tab` completion candidate bar while respecting `canvas_height`.
     pub fn effective_height(&self, canvas_height: u16) -> u16 {
         let content_rows = if self.fuzzy_search.active {
             // Query line + up to 4 match lines + 2 border rows
             (self.fuzzy_search.matches.len().min(4) as u16 + 3).max(self.height)
+        } else if self.completion.is_active() {
+            // Command lines + 1 completion bar row + 2 border rows
+            (self.lines.len() as u16 + 3).clamp(self.height.max(4), 12)
         } else {
             (self.lines.len() as u16 + 2).clamp(self.height, 12)
         };
@@ -672,26 +794,60 @@ impl CompositePane {
         self.effective_routing_mode() == InputRoutingMode::CommandPrompt
     }
 
+    /// Resolves the live working directory of the child shell process (using `/proc/<pid>/cwd` on Linux,
+    /// falling back to `std::env::current_dir()`).
+    pub fn resolve_cwd(&self) -> PathBuf {
+        #[cfg(target_os = "linux")]
+        if let Some(pty) = &self.pty {
+            if let Some(pid) = pty.child_pid() {
+                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                    return path;
+                }
+            }
+        }
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    /// Triggers or cycles `Tab` / `Shift+Tab` completion inside the floating prompt using the pane's live `cwd`.
+    pub fn complete_prompt_tab(&mut self, reverse: bool) -> bool {
+        let cwd = self.resolve_cwd();
+        self.prompt.complete_tab(&cwd, reverse)
+    }
+
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
         self.vt.process(bytes);
         self.refresh_line_discipline();
     }
 
-    /// Drains any pending events from the live `PtySession`.
+    /// Drains pending events from the live `PtySession` with a bounded per-frame budget so
+    /// high-throughput streams (`tail -f /dev/random`, `yes`) never starve the UI loop.
     pub fn poll_pty_events(&mut self) {
         let events = if let Some(pty) = &mut self.pty {
             pty.drain_events()
         } else {
             Vec::new()
         };
+        let mut coalesced = Vec::new();
         for ev in events {
             match ev {
-                PtyEvent::Output(bytes) => self.process_pty_output(&bytes),
+                PtyEvent::Output(bytes) => {
+                    coalesced.extend_from_slice(&bytes);
+                }
                 PtyEvent::Exited(_) => {
                     self.exited = true;
                 }
             }
+        }
+        if !coalesced.is_empty() {
+            const MAX_BYTES_PER_FRAME: usize = 32_768;
+            if coalesced.len() > MAX_BYTES_PER_FRAME && !self.vt.is_alternate_screen() {
+                let start = coalesced.len() - MAX_BYTES_PER_FRAME;
+                self.vt.process(&coalesced[start..]);
+            } else {
+                self.vt.process(&coalesced);
+            }
+            self.refresh_line_discipline();
         }
     }
 

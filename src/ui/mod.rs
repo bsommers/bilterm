@@ -93,6 +93,32 @@ impl Widget for CompositePaneWidget<'_> {
     }
 }
 
+fn is_safe_terminal_cluster(s: &str, expected_width: usize) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    if unicode_width::UnicodeWidthStr::width(s) != expected_width {
+        return false;
+    }
+    for ch in s.chars() {
+        let code = ch as u32;
+        if ch.is_control()
+            || matches!(
+                code,
+                0x200B..=0x200F
+                    | 0x2028..=0x202F
+                    | 0x2060..=0x206F
+                    | 0xFE00..=0xFE0F
+                    | 0xFEFF
+                    | 0xFFF9..=0xFFFB
+            )
+        {
+            return false;
+        }
+    }
+    true
+}
+
 fn render_output_canvas(
     pane: &CompositePane,
     canvas: Rect,
@@ -107,20 +133,54 @@ fn render_output_canvas(
     let render_cols = canvas.width.min(vt_cols);
 
     for r in 0..render_rows {
+        let mut skip_next_wide_continuation = false;
         for c in 0..render_cols {
             let Some(vt_cell) = screen.cell(r, c) else {
+                skip_next_wide_continuation = false;
                 continue;
             };
             let dst_x = canvas.x + c;
             let dst_y = canvas.y + r;
-            if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                let contents = vt_cell.contents();
+            let style = cell_to_ratatui_style(vt_cell);
+
+            if skip_next_wide_continuation {
+                skip_next_wide_continuation = false;
+                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
+                    dst_cell.set_style(style);
+                }
+                continue;
+            }
+
+            if vt_cell.is_wide_continuation() {
+                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
+                    dst_cell.set_symbol(" ");
+                    dst_cell.set_style(style);
+                }
+                continue;
+            }
+
+            let contents = vt_cell.contents();
+            if vt_cell.is_wide() {
+                // Prevent a 2-column wide glyph at the rightmost column from overflowing/wrapping the host terminal
+                if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2) {
+                    if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
+                        dst_cell.set_symbol(contents);
+                        dst_cell.set_style(style);
+                    }
+                    skip_next_wide_continuation = true;
+                } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
+                    dst_cell.set_symbol(" ");
+                    dst_cell.set_style(style);
+                }
+            } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
                 if contents.is_empty() {
                     dst_cell.set_symbol(" ");
-                } else {
+                } else if is_safe_terminal_cluster(contents, 1) {
                     dst_cell.set_symbol(contents);
+                } else {
+                    dst_cell.set_symbol("·");
                 }
-                dst_cell.set_style(cell_to_ratatui_style(vt_cell));
+                dst_cell.set_style(style);
             }
         }
     }
@@ -237,18 +297,23 @@ fn render_floating_prompt(
         &pane.prompt.lines
     };
 
-    let visible_rows = usize::from(inner.height);
+    let has_completion_bar = pane.prompt.completion.is_active() && inner.height >= 2;
+    let editor_rows = if has_completion_bar {
+        usize::from(inner.height.saturating_sub(1))
+    } else {
+        usize::from(inner.height)
+    };
     let start_row = pane
         .prompt
         .cursor_row
-        .saturating_sub(visible_rows.saturating_sub(1));
+        .saturating_sub(editor_rows.saturating_sub(1));
 
-    let mut rendered_lines = Vec::with_capacity(visible_rows);
+    let mut rendered_lines = Vec::with_capacity(usize::from(inner.height));
     for (rel_idx, line_str) in lines_slice
         .iter()
         .enumerate()
         .skip(start_row)
-        .take(visible_rows)
+        .take(editor_rows)
     {
         let prefix = if rel_idx == 0 {
             glyphs.prompt_prefix
@@ -269,13 +334,18 @@ fn render_floating_prompt(
         rendered_lines.push(Line::from(spans));
     }
 
+    if has_completion_bar {
+        rendered_lines.push(build_completion_bar_line(pane, inner.width, surface_bg));
+    }
+
     Paragraph::new(rendered_lines).render(inner, buf);
 
     // Software cursor + optional IBM 3270 cross-hair cursor ruler
     let prefix_len = 4usize;
     let cursor_vis_row = pane.prompt.cursor_row.saturating_sub(start_row) as u16;
     let cursor_col = (prefix_len + pane.prompt.cursor_col) as u16;
-    let clamped_row = cursor_vis_row.min(inner.height.saturating_sub(1));
+    let max_editor_row = (editor_rows as u16).saturating_sub(1);
+    let clamped_row = cursor_vis_row.min(max_editor_row);
     let clamped_col = cursor_col.min(inner.width.saturating_sub(1));
     let cx = inner.x + clamped_col;
     let cy = inner.y + clamped_row;
@@ -284,6 +354,61 @@ fn render_floating_prompt(
         render_crosshair_cursor(buf, canvas_rect, cx, cy, palette.crosshair_bg);
     }
     render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
+}
+
+fn build_completion_bar_line<'a>(
+    pane: &'a CompositePane,
+    max_width: u16,
+    surface_bg: Color,
+) -> Line<'a> {
+    let mut spans = vec![Span::styled(
+        "TAB: ",
+        Style::default()
+            .fg(Color::Rgb(85, 255, 255))
+            .bg(surface_bg)
+            .add_modifier(Modifier::BOLD),
+    )];
+
+    let selected = pane.prompt.completion.selected;
+    let total = pane.prompt.completion.candidates.len();
+    let start_idx = selected.unwrap_or(0).saturating_sub(2);
+    let mut used_cols = 5usize;
+
+    for (idx, cand) in pane
+        .prompt
+        .completion
+        .candidates
+        .iter()
+        .enumerate()
+        .skip(start_idx)
+    {
+        let label = format!(" {} ", cand.display);
+        let label_w = label.chars().count();
+        if used_cols + label_w + 1 > usize::from(max_width) && idx > start_idx {
+            break;
+        }
+        let style = if selected == Some(idx) {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(255, 255, 85))
+                .add_modifier(Modifier::BOLD)
+        } else if cand.is_dir {
+            Style::default()
+                .fg(Color::Rgb(85, 255, 255))
+                .bg(surface_bg)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White).bg(surface_bg)
+        };
+        spans.push(Span::styled(label, style));
+        spans.push(Span::styled(" ", Style::default().bg(surface_bg)));
+        used_cols += label_w + 1;
+        if idx + 1 >= total {
+            break;
+        }
+    }
+
+    Line::from(spans)
 }
 
 fn render_fuzzy_search_contents(

@@ -177,11 +177,17 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('c') => {
-                // If prompt has text, clear it; if empty, forward SIGINT (0x03) to PTY
-                if !pane.prompt.input.is_empty() {
+                // If a foreground subcommand (e.g. `tail -f /dev/random`) is running or the prompt is empty,
+                // forward SIGINT (0x03) to the PTY; also clear any partial prompt text.
+                let has_fg_sub = pane.line_discipline.has_foreground_subcommand();
+                let prompt_was_empty = pane.prompt.input.is_empty();
+                if !prompt_was_empty {
                     pane.prompt.clear_line();
-                } else if let Some(pty) = &pane.pty {
-                    pty.write_all(&[0x03])?;
+                }
+                if prompt_was_empty || has_fg_sub {
+                    if let Some(pty) = &pane.pty {
+                        pty.write_all(&[0x03])?;
+                    }
                 }
                 return Ok(AppAction::Handled);
             }
@@ -252,6 +258,18 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 payload.push(b'\n');
                 pty.write_all(&payload)?;
             }
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Tab => {
+            pane.complete_prompt_tab(key.modifiers.contains(KeyModifiers::SHIFT));
+            Ok(AppAction::Handled)
+        }
+        KeyCode::BackTab => {
+            pane.complete_prompt_tab(true);
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Esc => {
+            pane.prompt.completion.clear();
             Ok(AppAction::Handled)
         }
         KeyCode::Backspace => {

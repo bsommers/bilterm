@@ -60,7 +60,19 @@ impl VtParser {
 
     /// Processes a chunk of raw PTY output bytes, updating the VT100 grid, `DECSET 47/1047/1049`,
     /// `DECSET 2004`, `OSC 52`, and `OSC 133` semantic prompt markers.
+    ///
+    /// When a raw binary noise stream (such as `tail -f /dev/random` or `cat /dev/urandom`) is
+    /// detected while not in alternate screen mode, stray `0x1b` (`ESC`) and raw C0/C1 control
+    /// bytes are sanitized into visible glyphs so random bytes cannot falsely trigger `DECSET`
+    /// alternate screen mode or lock the VT100 scroll region (`DECSTBM`).
     pub fn process(&mut self, bytes: &[u8]) {
+        if !self.is_alternate_screen() && is_binary_noise_chunk(bytes) {
+            let sanitized = sanitize_binary_noise_chunk(bytes);
+            let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
+            self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
+            self.parser.process(&sanitized);
+            return;
+        }
         self.scan_control_sequences(bytes);
         let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
@@ -264,6 +276,40 @@ impl VtParser {
             }
         }
     }
+}
+
+/// Detects raw binary noise chunks (such as `tail -f /dev/random` or `cat /dev/urandom`) by
+/// checking for invalid UTF-8 combined with raw binary C0 control bytes (`0x00..=0x06`, `0x0E..=0x1A`, `0x1C..=0x1F`).
+fn is_binary_noise_chunk(bytes: &[u8]) -> bool {
+    if bytes.len() < 8 || std::str::from_utf8(bytes).is_ok() {
+        return false;
+    }
+    let binary_ctrl_count = bytes
+        .iter()
+        .filter(|&&b| matches!(b, 0x00..=0x06 | 0x0E..=0x1A | 0x1C..=0x1F))
+        .count();
+    binary_ctrl_count >= 2
+}
+
+/// Converts a raw binary stream chunk into safe printable ASCII + `\r\n` line breaks so
+/// `tail -f /dev/random` scrolls smoothly without triggering bogus VT100 escape sequences.
+fn sanitize_binary_noise_chunk(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + 32);
+    for &b in bytes {
+        match b {
+            b'\n' => {
+                out.push(b'\r');
+                out.push(b'\n');
+            }
+            b'\r' => {}
+            0x20..=0x7E => out.push(b),
+            _ => {
+                // Map non-printable/binary bytes to deterministic visible ASCII characters
+                out.push(b'!' + (b % 94));
+            }
+        }
+    }
+    out
 }
 
 /// Encodes arbitrary UTF-8 text into a standard `OSC 52` clipboard escape sequence (`\x1b]52;c;<base64>\x07`, `PTY-04`).

@@ -131,7 +131,7 @@ impl PtySession {
             .take_writer()
             .map_err(|e| BiltermError::Pty(format!("take_writer failed: {e}")))?;
 
-        let (tx, rx) = mpsc::channel(256);
+        let (tx, rx) = mpsc::channel(32);
         thread::Builder::new()
             .name("bilterm-pty-reader".to_string())
             .spawn(move || {
@@ -242,11 +242,17 @@ impl PtySession {
         &mut self.output_rx
     }
 
-    /// Non-blocking drain of all currently queued `PtyEvent`s.
+    /// Non-blocking drain of queued `PtyEvent`s, bounded to at most 32 chunks (`256 KB`) per
+    /// frame tick so high-throughput streams (`tail -f /dev/random`, `yes`) never starve the
+    /// Tokio UI/input event loop.
     pub fn drain_events(&mut self) -> Vec<PtyEvent> {
+        const MAX_EVENTS_PER_POLL: usize = 32;
         let mut events = Vec::new();
-        while let Ok(ev) = self.output_rx.try_recv() {
-            events.push(ev);
+        while events.len() < MAX_EVENTS_PER_POLL {
+            match self.output_rx.try_recv() {
+                Ok(ev) => events.push(ev),
+                Err(_) => break,
+            }
         }
         events
     }

@@ -51,22 +51,19 @@ impl LineDisciplineState {
     }
 
     /// Evaluates the 3-signal heuristic (`PTY-03`):
-    /// - Signal 1: `osc133_executing` (`OSC 133;C` received without `D` yet)
-    /// - Signal 2: `foreground_pgid != shell_pgid` (when a sub-process is in the foreground AND `!echo_enabled` or `!canonical_mode` or `osc133_executing`)
-    /// - Signal 3: `!echo_enabled` (`sudo`/`ssh` password prompt)
+    /// - Signal 1: `!echo_enabled` (`sudo`/`ssh`/`read -s` password prompt) -> always `RawPtyPassthrough`
+    /// - Signal 2: `foreground_pgid != shell_pgid && !canonical_mode` (interactive raw/cbreak sub-REPL like `python`, `node`, `less`) -> `RawPtyPassthrough`
+    /// - Signal 3: `osc133_executing && !canonical_mode` (raw interactive command under OSC 133) -> `RawPtyPassthrough`
     ///
-    /// Note: Modern shells (`zsh` ZLE, `bash` readline, `fish`) run with `!ICANON` and `!ECHO` while
-    /// waiting for keystrokes at their own prompt (`foreground_pgid == shell_pgid`). Therefore:
-    /// - If `foreground_pgid` is known and differs from `shell_pgid`, any foreground child (`sudo`, `ssh`, `python`, `node`, `less`) triggers `RawPtyPassthrough`.
-    /// - If `foreground_pgid` is unknown (or mocked in unit tests without PGIDs), `!echo_enabled` or `osc133_executing` triggers `RawPtyPassthrough`.
+    /// Crucially, when a foreground subcommand runs in normal cooked mode (`echo_enabled && canonical_mode`,
+    /// such as `tail -f /dev/random`, `ping`, `watch`, `yes`, `cargo build`), `requires_raw_passthrough()`
+    /// returns `false` so the `FloatingCommandPrompt` remains visible and floats smoothly over the
+    /// scrolling `OutputCanvas`.
     pub fn requires_raw_passthrough(&self) -> bool {
-        if self.osc133_executing {
-            return true;
-        }
-        if self.has_foreground_subcommand() {
-            return true;
-        }
         if !self.echo_enabled {
+            return true;
+        }
+        if !self.canonical_mode && (self.has_foreground_subcommand() || self.osc133_executing) {
             return true;
         }
         false
@@ -158,17 +155,30 @@ mod tests {
         assert!(!normal.requires_raw_passthrough());
         assert!(!normal.is_password_prompt());
 
-        // Signal 1: OSC 133;C command executing
+        // Cooked-mode streaming command (e.g. `tail -f /dev/random`, `ping`) keeps floating prompt visible!
+        let cooked_streaming = LineDisciplineState {
+            echo_enabled: true,
+            canonical_mode: true,
+            foreground_pgid: Some(4200),
+            shell_pgid: Some(4100),
+            osc133_executing: true,
+        };
+        assert!(cooked_streaming.has_foreground_subcommand());
+        assert!(!cooked_streaming.requires_raw_passthrough());
+
+        // Signal 1: OSC 133;C command executing in non-canonical/cbreak mode
         let osc_running = LineDisciplineState {
             osc133_executing: true,
+            canonical_mode: false,
             ..Default::default()
         };
         assert!(osc_running.requires_raw_passthrough());
 
-        // Signal 2: Foreground process group differs from shell PGID (e.g. python REPL or ssh)
+        // Signal 2: Foreground process group differs from shell PGID in non-canonical mode (e.g. python REPL)
         let sub_repl = LineDisciplineState {
             foreground_pgid: Some(4200),
             shell_pgid: Some(4100),
+            canonical_mode: false,
             ..Default::default()
         };
         assert!(sub_repl.has_foreground_subcommand());
