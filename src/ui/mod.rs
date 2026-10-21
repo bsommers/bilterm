@@ -1,13 +1,17 @@
+pub mod occlusion;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
 use crate::pane::highlight::tokenize_shell_line;
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::ui::occlusion::occlude_rect;
 use crate::vt::cell_to_ratatui_style;
+use crate::wm::{inset_window_frame, WindowManager, WorkspaceLayoutMode};
 
 /// Ratatui widget rendering a `CompositePane` in 3 immediate-mode passes:
 /// 1. **Pass 1 (`OutputCanvas`)**: Renders the full-height VT100/ANSI/TrueColor screen (`area.height - 1`)
@@ -39,13 +43,107 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 2: Render overlaid FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 3 {
             let prompt_rect = self.pane.prompt_rect(area);
-            Clear.render(prompt_rect, buf);
+            occlude_rect(buf, prompt_rect);
             render_floating_prompt(self.pane, self.active, prompt_rect, buf);
         }
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
         render_oia_status_bar(self.pane, status_rect, buf);
     }
+}
+
+/// Multi-pane workspace compositor (`WM-01..05`) rendering:
+/// 1. Tiled H/V splits (`SplitTree`) or overlapping z-order stacked windows (`ZStack`) in ascending z-order
+/// 2. Borland Turbo Vision window frames (`╔═[1] PANE #1 ═╗` active / `┌─[2] PANE #2 ─┐` inactive)
+/// 3. Top-anchored persistent Guake/Quake-style drop-down `QuickTerminal` overlay (`[Q] QUAKE QUICK TERM [~]`)
+pub struct WorkspaceWidget<'a> {
+    pub wm: &'a WindowManager,
+}
+
+impl<'a> WorkspaceWidget<'a> {
+    pub fn new(wm: &'a WindowManager) -> Self {
+        Self { wm }
+    }
+}
+
+impl Widget for WorkspaceWidget<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        let rects = self.wm.compute_workspace_rects(area);
+        let framed =
+            self.wm.panes.len() > 1 || self.wm.layout_mode == WorkspaceLayoutMode::Stacked;
+        let top_workspace_id = self.wm.z_stack.top();
+        let qt_visible = self.wm.quick_terminal.visible;
+
+        for (id, outer) in rects {
+            let Some(pane) = self.wm.panes.get(&id) else {
+                continue;
+            };
+            let is_active = !qt_visible && top_workspace_id == Some(id);
+            if framed {
+                occlude_rect(buf, outer);
+                let z_badge = self
+                    .wm
+                    .z_stack
+                    .rank_of(id)
+                    .map(|(r, total)| format!("Z:{r}/{total}"))
+                    .unwrap_or_default();
+                render_window_frame(
+                    outer,
+                    &format!("[{id}] {} ({z_badge})", pane.title),
+                    is_active,
+                    buf,
+                );
+                let inner = inset_window_frame(outer);
+                CompositePaneWidget::new(pane, is_active).render(inner, buf);
+            } else {
+                CompositePaneWidget::new(pane, is_active).render(outer, buf);
+            }
+        }
+
+        // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
+        if qt_visible {
+            let qt_outer = self.wm.quick_terminal.overlay_rect(area);
+            occlude_rect(buf, qt_outer);
+            render_window_frame(
+                qt_outer,
+                "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)",
+                true,
+                buf,
+            );
+            let qt_inner = inset_window_frame(qt_outer);
+            CompositePaneWidget::new(&self.wm.quick_terminal.pane, true).render(qt_inner, buf);
+        }
+    }
+}
+
+fn render_window_frame(outer: Rect, title: &str, active: bool, buf: &mut Buffer) {
+    let border_type = if active {
+        BorderType::Double
+    } else {
+        BorderType::Plain
+    };
+    let border_fg = if active {
+        Color::Rgb(255, 255, 85)
+    } else {
+        Color::Cyan
+    };
+    let frame_bg = Color::Rgb(0, 0, 80);
+    let block = Block::default()
+        .title(Span::styled(
+            format!(" {title} "),
+            Style::default()
+                .fg(border_fg)
+                .bg(frame_bg)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .borders(Borders::ALL)
+        .border_type(border_type)
+        .border_style(Style::default().fg(border_fg).bg(frame_bg));
+    block.render(outer, buf);
 }
 
 fn render_output_canvas(pane: &CompositePane, canvas: Rect, buf: &mut Buffer) {

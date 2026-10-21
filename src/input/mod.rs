@@ -2,9 +2,13 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use crate::error::Result;
-use crate::pane::colon_command::{execute_colon_command, parse_colon_command};
+use crate::pane::colon_command::{
+    execute_colon_command, execute_wm_colon_command, parse_colon_command,
+};
 use crate::pane::{CompositePane, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::wm::split_tree::SplitDirection;
+use crate::wm::{encode_sgr_mouse_local, WindowManager};
 
 /// High-level application actions returned by the input router.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -421,6 +425,137 @@ pub fn handle_mouse_event(
     }
 
     Ok(AppAction::Continue)
+}
+
+/// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`).
+pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+    // Global emergency quit: Ctrl+Q
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
+        return Ok(AppAction::Quit);
+    }
+
+    // Global Guake/Quake-style quick terminal drop-down hotkey: Alt+` or Ctrl+Space (WM-05)
+    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('`'))
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char(' '))
+    {
+        wm.toggle_quick_terminal();
+        return Ok(AppAction::Handled);
+    }
+
+    // Borland Turbo Vision function keys: F5 = Zoom, F6 = Next Pane (Deck Shuffle Top-to-Bottom)
+    match key.code {
+        KeyCode::F(5) => {
+            wm.toggle_zoom();
+            return Ok(AppAction::Handled);
+        }
+        KeyCode::F(6) => {
+            wm.shuffle_deck_next();
+            return Ok(AppAction::Handled);
+        }
+        _ => {}
+    }
+
+    // Multi-pane Window Manager Alt-chords
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        match key.code {
+            KeyCode::Char('h') => {
+                wm.split_focused(SplitDirection::Horizontal)?;
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('v') => {
+                wm.split_focused(SplitDirection::Vertical)?;
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('w') => {
+                wm.close_focused_pane();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('z') => {
+                wm.toggle_zoom();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('m') => {
+                wm.toggle_layout_mode();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Tab => {
+                wm.shuffle_deck_next();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::BackTab => {
+                wm.shuffle_deck_prev();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char(d @ '1'..='9') => {
+                let id = (d as u8 - b'0') as usize;
+                wm.focus_and_raise(id);
+                return Ok(AppAction::Handled);
+            }
+            _ => {}
+        }
+    }
+
+    // Intercept Enter on `:split`, `:deck`, `:focus`, `:zoom`, `:close`, `:layout`, `:quake`
+    if key.code == KeyCode::Enter
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+        && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
+        && !wm.active_pane().prompt.fuzzy_search.active
+    {
+        let text = wm.active_pane().prompt.text();
+        if let Some(cmd_res) = parse_colon_command(&text) {
+            let _ = wm.active_pane_mut().prompt.take_submission();
+            match cmd_res {
+                Ok(cmd) => {
+                    if execute_wm_colon_command(wm, cmd) {
+                        return Ok(AppAction::Quit);
+                    }
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message = Some(err);
+                }
+            }
+            return Ok(AppAction::Handled);
+        }
+    }
+
+    handle_key_event(wm.active_pane_mut(), key)
+}
+
+/// Routes a `MouseEvent` across the multi-pane `WindowManager`, hit-testing in reverse z-order,
+/// selectively raising clicked panes (`WM-02`), and translating global coordinates to local SGR 1006 (`WM-03`).
+pub fn handle_wm_mouse_event(
+    wm: &mut WindowManager,
+    mouse: MouseEvent,
+    screen_area: Rect,
+) -> Result<AppAction> {
+    let Some((hit_id, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, screen_area)
+    else {
+        return Ok(AppAction::Continue);
+    };
+
+    if matches!(mouse.kind, MouseEventKind::Down(_)) && hit_id != 0 {
+        wm.focus_and_raise(hit_id);
+    }
+
+    let pane = if hit_id == 0 {
+        &mut wm.quick_terminal.pane
+    } else if let Some(p) = wm.panes.get_mut(&hit_id) {
+        p
+    } else {
+        return Ok(AppAction::Continue);
+    };
+
+    if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+        if let Some(sgr_bytes) = encode_sgr_mouse_local(mouse, inner) {
+            if let Some(pty) = &pane.pty {
+                pty.write_all(&sgr_bytes)?;
+            }
+            return Ok(AppAction::Handled);
+        }
+    }
+
+    handle_mouse_event(pane, mouse, inner)
 }
 
 /// Encodes a `crossterm::event::KeyEvent` into standard VT100/xterm escape sequences for raw PTY passthrough.

@@ -1,0 +1,16 @@
+---
+source: tests/phase3_window_manager.rs
+expression: rendered
+---
+ ╔╣ BILTERM 3270 // CMD [TOP] ╠════════════════════[▲][▼]═╗
+ ║==> echo cjk                                            ║
+ ╚════════════════════════════════════════════════════════╝
+漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字 漢 字
+
+
+
+
+
+
+
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:05 C:001

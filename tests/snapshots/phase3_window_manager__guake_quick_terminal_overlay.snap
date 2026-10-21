@@ -1,0 +1,22 @@
+---
+source: tests/phase3_window_manager.rs
+expression: rendered
+---
+╔ [Q] QUAKE QUICK TERM [~] (Alt+` to hide) ════════════════════════════════════╗
+║ ╔╣ BILTERM 3270 // CMD [TOP] ╠══════════════════════════════════════[▲][▼]═╗ ║
+║ ║==> git status --short                                                    ║ ║
+║ ╚══════════════════════════════════════════════════════════════════════════╝ ║
+║                                                                              ║
+║3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:01 C:001                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+UNDER_PANE_8
+UNDER_PANE_9
+UNDER_PANE_10
+
+
+
+
+
+
+
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:11 C:001

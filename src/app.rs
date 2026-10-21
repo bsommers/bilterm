@@ -8,14 +8,14 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 use crate::error::Result;
-use crate::input::{handle_key_event, handle_mouse_event, handle_paste_event, AppAction};
+use crate::input::{handle_paste_event, handle_wm_key_event, handle_wm_mouse_event, AppAction};
 use crate::pane::CompositePane;
-use crate::pty::{PtyConfig, PtyEvent};
-use crate::ui::CompositePaneWidget;
+use crate::ui::WorkspaceWidget;
+use crate::wm::WindowManager;
 
-/// Top-level Bilterm TUI application state and async event loop coordinator.
+/// Top-level Bilterm TUI application state and async multi-pane event loop coordinator.
 pub struct App {
-    pub pane: CompositePane,
+    pub wm: WindowManager,
     pub should_quit: bool,
     pub last_viewport: Rect,
 }
@@ -23,43 +23,43 @@ pub struct App {
 impl App {
     pub fn new(pane: CompositePane) -> Self {
         let (rows, cols) = pane.vt.size();
+        let wm = WindowManager::from_initial_pane(pane, false);
         Self {
-            pane,
+            wm,
             should_quit: false,
             last_viewport: Rect::new(0, 0, cols, rows + 1),
         }
     }
 
     pub fn spawn_default(rows: u16, cols: u16) -> Result<Self> {
-        let cfg = PtyConfig {
-            rows,
-            cols,
-            ..Default::default()
-        };
-        let pane = CompositePane::spawn(1, cfg)?;
-        Ok(Self::new(pane))
+        let wm = WindowManager::spawn_default(rows, cols)?;
+        Ok(Self {
+            wm,
+            should_quit: false,
+            last_viewport: Rect::new(0, 0, cols, rows),
+        })
     }
 
     /// Runs the main async `tokio::select!` loop multiplexing Crossterm input events,
-    /// PTY output chunks, and line-discipline telemetry ticks.
+    /// multi-PTY output chunks, and line-discipline telemetry ticks.
     pub async fn run(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> Result<()> {
         let mut reader = EventStream::new();
-        let mut tick = tokio::time::interval(Duration::from_millis(50));
+        let mut tick = tokio::time::interval(Duration::from_millis(16));
 
         loop {
             terminal.draw(|frame| {
                 let area = frame.area();
                 self.last_viewport = area;
-                let _ = self.pane.resize_viewport(area);
-                frame.render_widget(CompositePaneWidget::new(&self.pane, true), area);
+                let _ = self.wm.resize_all(area);
+                frame.render_widget(WorkspaceWidget::new(&self.wm), area);
             })?;
 
             self.flush_osc52_to_host()?;
 
-            if self.should_quit || self.pane.has_exited() {
+            if self.should_quit || self.all_panes_exited() {
                 break;
             }
 
@@ -69,27 +69,8 @@ impl App {
                         self.handle_crossterm_event(event)?;
                     }
                 }
-                pty_ev = async {
-                    if let Some(pty) = &mut self.pane.pty {
-                        pty.output_rx_mut().recv().await
-                    } else {
-                        futures::future::pending().await
-                    }
-                } => {
-                    if let Some(ev) = pty_ev {
-                        match ev {
-                            PtyEvent::Output(bytes) => {
-                                self.pane.process_pty_output(&bytes);
-                                self.pane.poll_pty_events();
-                            }
-                            PtyEvent::Exited(_) => {
-                                self.should_quit = true;
-                            }
-                        }
-                    }
-                }
                 _ = tick.tick() => {
-                    self.pane.refresh_line_discipline();
+                    self.poll_all_ptys();
                 }
                 _ = tokio::signal::ctrl_c() => {
                     self.should_quit = true;
@@ -100,16 +81,46 @@ impl App {
         Ok(())
     }
 
+    fn poll_all_ptys(&mut self) {
+        let mut exited_ids = Vec::new();
+        for (&id, pane) in &mut self.wm.panes {
+            pane.poll_pty_events();
+            pane.refresh_line_discipline();
+            if pane.has_exited() {
+                exited_ids.push(id);
+            }
+        }
+        for id in exited_ids {
+            if self.wm.panes.len() > 1 && self.wm.split_tree.remove_leaf(id) {
+                self.wm.panes.remove(&id);
+                self.wm.z_stack.remove(id);
+            }
+        }
+        self.wm.quick_terminal.pane.poll_pty_events();
+        self.wm.quick_terminal.pane.refresh_line_discipline();
+    }
+
+    fn all_panes_exited(&self) -> bool {
+        self.wm.panes.values().all(CompositePane::has_exited)
+    }
+
     fn flush_osc52_to_host(&mut self) -> Result<()> {
         let mut out = io::stdout();
         let mut wrote = false;
-        if let Some(seq) = self.pane.last_osc52_sequence.take() {
-            out.write_all(seq.as_bytes())?;
-            wrote = true;
-        }
-        for seq in self.pane.vt.take_outbound_osc52() {
-            out.write_all(seq.as_bytes())?;
-            wrote = true;
+        for pane in self
+            .wm
+            .panes
+            .values_mut()
+            .chain(std::iter::once(&mut self.wm.quick_terminal.pane))
+        {
+            if let Some(seq) = pane.last_osc52_sequence.take() {
+                out.write_all(seq.as_bytes())?;
+                wrote = true;
+            }
+            for seq in pane.vt.take_outbound_osc52() {
+                out.write_all(seq.as_bytes())?;
+                wrote = true;
+            }
         }
         if wrote {
             out.flush()?;
@@ -120,19 +131,19 @@ impl App {
     pub fn handle_crossterm_event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
-                if handle_key_event(&mut self.pane, key)? == AppAction::Quit {
+                if handle_wm_key_event(&mut self.wm, key)? == AppAction::Quit {
                     self.should_quit = true;
                 }
             }
             Event::Mouse(mouse) => {
-                let _ = handle_mouse_event(&mut self.pane, mouse, self.last_viewport)?;
+                let _ = handle_wm_mouse_event(&mut self.wm, mouse, self.last_viewport)?;
             }
             Event::Paste(text) => {
-                let _ = handle_paste_event(&mut self.pane, &text)?;
+                let _ = handle_paste_event(self.wm.active_pane_mut(), &text)?;
             }
             Event::Resize(cols, rows) => {
                 self.last_viewport = Rect::new(0, 0, cols, rows);
-                let _ = self.pane.resize_viewport(self.last_viewport);
+                let _ = self.wm.resize_all(self.last_viewport);
             }
             _ => {}
         }

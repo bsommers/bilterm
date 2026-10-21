@@ -5,3 +5,4 @@ pub mod pane;
 pub mod pty;
 pub mod ui;
 pub mod vt;
+pub mod wm;

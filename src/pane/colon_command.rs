@@ -1,7 +1,9 @@
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::vt::encode_osc52_clipboard;
+use crate::wm::split_tree::SplitDirection;
+use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
-/// Parsed in-prompt `:command` (`PANE-03`, `PANE-05`, `PTY-04`).
+/// Parsed in-prompt `:command` (`PANE-03`, `PANE-05`, `PTY-04`, `WM-01..05`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ColonCommand {
     PromptTop,
@@ -13,6 +15,15 @@ pub enum ColonCommand {
     Yank,
     Clear,
     RawToggle,
+    SplitHorizontal,
+    SplitVertical,
+    DeckNext,
+    DeckPrev,
+    FocusPane(usize),
+    ZoomToggle,
+    ClosePane,
+    LayoutMode(WorkspaceLayoutMode),
+    QuakeToggle,
     Quit,
 }
 
@@ -48,6 +59,33 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some("next") => Some(Ok(ColonCommand::BlockNext)),
             _ => Some(Err("Usage: :block prev | next".to_string())),
         },
+        "split" | "sp" => match parts.get(1).copied() {
+            Some("h") | Some("horizontal") | None => Some(Ok(ColonCommand::SplitHorizontal)),
+            Some("v") | Some("vertical") => Some(Ok(ColonCommand::SplitVertical)),
+            _ => Some(Err("Usage: :split h | v".to_string())),
+        },
+        "vsplit" | "vs" => Some(Ok(ColonCommand::SplitVertical)),
+        "deck" => match parts.get(1).copied() {
+            Some("prev") => Some(Ok(ColonCommand::DeckPrev)),
+            Some("next") | None => Some(Ok(ColonCommand::DeckNext)),
+            _ => Some(Err("Usage: :deck next | prev".to_string())),
+        },
+        "focus" | "raise" => match parts.get(1).and_then(|s| s.parse::<usize>().ok()) {
+            Some(id) => Some(Ok(ColonCommand::FocusPane(id))),
+            None => Some(Err("Usage: :focus <pane_id>".to_string())),
+        },
+        "zoom" => Some(Ok(ColonCommand::ZoomToggle)),
+        "close" => Some(Ok(ColonCommand::ClosePane)),
+        "layout" => match parts.get(1).copied() {
+            Some("stack") | Some("cascade") => {
+                Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Stacked)))
+            }
+            Some("tile") | Some("tiled") => {
+                Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Tiled)))
+            }
+            _ => Some(Err("Usage: :layout tile | stack".to_string())),
+        },
+        "quake" | "guake" => Some(Ok(ColonCommand::QuakeToggle)),
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
@@ -56,7 +94,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     }
 }
 
-/// Executes a parsed `ColonCommand` against `pane`. Returns `true` if the application should quit.
+/// Executes a parsed `ColonCommand` against a single `pane`. Returns `true` if the application should quit.
 pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> bool {
     match cmd {
         ColonCommand::PromptTop => {
@@ -121,6 +159,50 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             false
         }
         ColonCommand::Quit => true,
+        _ => false,
+    }
+}
+
+/// Executes a parsed `ColonCommand` against the multi-pane `WindowManager`.
+pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bool {
+    match cmd {
+        ColonCommand::SplitHorizontal => {
+            let _ = wm.split_focused(SplitDirection::Horizontal);
+            false
+        }
+        ColonCommand::SplitVertical => {
+            let _ = wm.split_focused(SplitDirection::Vertical);
+            false
+        }
+        ColonCommand::DeckNext => {
+            wm.shuffle_deck_next();
+            false
+        }
+        ColonCommand::DeckPrev => {
+            wm.shuffle_deck_prev();
+            false
+        }
+        ColonCommand::FocusPane(id) => {
+            wm.focus_and_raise(id);
+            false
+        }
+        ColonCommand::ZoomToggle => {
+            wm.toggle_zoom();
+            false
+        }
+        ColonCommand::ClosePane => {
+            wm.close_focused_pane();
+            false
+        }
+        ColonCommand::LayoutMode(mode) => {
+            wm.layout_mode = mode;
+            false
+        }
+        ColonCommand::QuakeToggle => {
+            wm.toggle_quick_terminal();
+            false
+        }
+        other => execute_colon_command(wm.active_pane_mut(), other),
     }
 }
 
