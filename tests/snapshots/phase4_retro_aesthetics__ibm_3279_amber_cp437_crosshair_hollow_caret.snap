@@ -1,0 +1,16 @@
+---
+source: tests/phase4_retro_aesthetics.rs
+expression: rendered
+---
+M╔╣ BILTERM 3270 // CMD [TOP] ╠════════════════════════════════════════[▲][▼]═╗
+T║♦=> submit jcl▯                                                             ║
+ ╚════════════════════════════════════════════════════════════════════════════╝
+
+
+
+
+
+
+
+3270-OIA║ READY ║ INPUT: CMD BOX ║ PIN:TOP ║ R:03 C:001
+ F1 Help  F2 Split  F5 Zoom  F6 Next  F10 Quake  F12 Raw [IBM-3279-AMB]

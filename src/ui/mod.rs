@@ -1,4 +1,9 @@
+pub mod chrome;
+pub mod cursor;
+pub mod glyphs;
 pub mod occlusion;
+pub mod status_bar;
+pub mod theme;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -6,25 +11,44 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 
+use crate::config::BiltermConfig;
 use crate::pane::highlight::tokenize_shell_line;
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::ui::chrome::{render_borland_frame, render_drop_shadow};
+use crate::ui::cursor::{render_caret, render_crosshair_cursor};
+use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
+use crate::ui::status_bar::render_dos_fkey_bar;
+use crate::ui::theme::ThemePalette;
 use crate::vt::cell_to_ratatui_style;
 use crate::wm::{inset_window_frame, WindowManager, WorkspaceLayoutMode};
 
 /// Ratatui widget rendering a `CompositePane` in 3 immediate-mode passes:
 /// 1. **Pass 1 (`OutputCanvas`)**: Renders the full-height VT100/ANSI/TrueColor screen (`area.height - 1`)
-/// 2. **Pass 2 (`FloatingCommandPrompt`)**: If visible, clears `prompt_rect` (`widgets::Clear`) and draws the bordered IBM 3270 / Borland-styled floating command prompt on top
+/// 2. **Pass 2 (`FloatingCommandPrompt`)**: If visible, clears `prompt_rect` (`occlude_rect`), draws optional Borland drop shadow, and renders the floating command prompt + optional IBM 3270 cross-hair cursor on top
 /// 3. **Pass 3 (`OiaStatusBar`)**: Renders the bottom 1-row Operator Information Area (OIA) status bar
 pub struct CompositePaneWidget<'a> {
     pub pane: &'a CompositePane,
     pub active: bool,
+    pub config: Option<&'a BiltermConfig>,
 }
 
 impl<'a> CompositePaneWidget<'a> {
     pub fn new(pane: &'a CompositePane, active: bool) -> Self {
-        Self { pane, active }
+        Self {
+            pane,
+            active,
+            config: None,
+        }
+    }
+
+    pub fn with_config(pane: &'a CompositePane, active: bool, config: &'a BiltermConfig) -> Self {
+        Self {
+            pane,
+            active,
+            config: Some(config),
+        }
     }
 }
 
@@ -34,119 +58,49 @@ impl Widget for CompositePaneWidget<'_> {
             return;
         }
 
+        let default_cfg = BiltermConfig::default();
+        let cfg = self.config.unwrap_or(&default_cfg);
+        let palette = cfg.palette();
+        let glyphs = cfg.glyph_set();
+
         let canvas = self.pane.canvas_rect(area);
         let status_rect = self.pane.status_bar_rect(area);
 
         // Pass 1: Render full-height OutputCanvas from VtParser screen
-        render_output_canvas(self.pane, canvas, buf);
+        render_output_canvas(self.pane, canvas, cfg, &palette, self.active, buf);
 
         // Pass 2: Render overlaid FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 3 {
             let prompt_rect = self.pane.prompt_rect(area);
+            if cfg.drop_shadows {
+                render_drop_shadow(buf, prompt_rect, canvas);
+            }
             occlude_rect(buf, prompt_rect);
-            render_floating_prompt(self.pane, self.active, prompt_rect, buf);
+            render_floating_prompt(
+                self.pane,
+                self.active,
+                prompt_rect,
+                canvas,
+                cfg,
+                &palette,
+                &glyphs,
+                buf,
+            );
         }
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
-        render_oia_status_bar(self.pane, status_rect, buf);
+        render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
     }
 }
 
-/// Multi-pane workspace compositor (`WM-01..05`) rendering:
-/// 1. Tiled H/V splits (`SplitTree`) or overlapping z-order stacked windows (`ZStack`) in ascending z-order
-/// 2. Borland Turbo Vision window frames (`╔═[1] PANE #1 ═╗` active / `┌─[2] PANE #2 ─┐` inactive)
-/// 3. Top-anchored persistent Guake/Quake-style drop-down `QuickTerminal` overlay (`[Q] QUAKE QUICK TERM [~]`)
-pub struct WorkspaceWidget<'a> {
-    pub wm: &'a WindowManager,
-}
-
-impl<'a> WorkspaceWidget<'a> {
-    pub fn new(wm: &'a WindowManager) -> Self {
-        Self { wm }
-    }
-}
-
-impl Widget for WorkspaceWidget<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-
-        let rects = self.wm.compute_workspace_rects(area);
-        let framed =
-            self.wm.panes.len() > 1 || self.wm.layout_mode == WorkspaceLayoutMode::Stacked;
-        let top_workspace_id = self.wm.z_stack.top();
-        let qt_visible = self.wm.quick_terminal.visible;
-
-        for (id, outer) in rects {
-            let Some(pane) = self.wm.panes.get(&id) else {
-                continue;
-            };
-            let is_active = !qt_visible && top_workspace_id == Some(id);
-            if framed {
-                occlude_rect(buf, outer);
-                let z_badge = self
-                    .wm
-                    .z_stack
-                    .rank_of(id)
-                    .map(|(r, total)| format!("Z:{r}/{total}"))
-                    .unwrap_or_default();
-                render_window_frame(
-                    outer,
-                    &format!("[{id}] {} ({z_badge})", pane.title),
-                    is_active,
-                    buf,
-                );
-                let inner = inset_window_frame(outer);
-                CompositePaneWidget::new(pane, is_active).render(inner, buf);
-            } else {
-                CompositePaneWidget::new(pane, is_active).render(outer, buf);
-            }
-        }
-
-        // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
-        if qt_visible {
-            let qt_outer = self.wm.quick_terminal.overlay_rect(area);
-            occlude_rect(buf, qt_outer);
-            render_window_frame(
-                qt_outer,
-                "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)",
-                true,
-                buf,
-            );
-            let qt_inner = inset_window_frame(qt_outer);
-            CompositePaneWidget::new(&self.wm.quick_terminal.pane, true).render(qt_inner, buf);
-        }
-    }
-}
-
-fn render_window_frame(outer: Rect, title: &str, active: bool, buf: &mut Buffer) {
-    let border_type = if active {
-        BorderType::Double
-    } else {
-        BorderType::Plain
-    };
-    let border_fg = if active {
-        Color::Rgb(255, 255, 85)
-    } else {
-        Color::Cyan
-    };
-    let frame_bg = Color::Rgb(0, 0, 80);
-    let block = Block::default()
-        .title(Span::styled(
-            format!(" {title} "),
-            Style::default()
-                .fg(border_fg)
-                .bg(frame_bg)
-                .add_modifier(Modifier::BOLD),
-        ))
-        .borders(Borders::ALL)
-        .border_type(border_type)
-        .border_style(Style::default().fg(border_fg).bg(frame_bg));
-    block.render(outer, buf);
-}
-
-fn render_output_canvas(pane: &CompositePane, canvas: Rect, buf: &mut Buffer) {
+fn render_output_canvas(
+    pane: &CompositePane,
+    canvas: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    active: bool,
+    buf: &mut Buffer,
+) {
     let screen = pane.vt.screen();
     let (vt_rows, vt_cols) = pane.vt.size();
     let render_rows = canvas.height.min(vt_rows);
@@ -178,18 +132,25 @@ fn render_output_canvas(pane: &CompositePane, canvas: Rect, buf: &mut Buffer) {
     {
         let (cur_r, cur_c) = screen.cursor_position();
         if cur_r < canvas.height && cur_c < canvas.width {
-            if let Some(dst_cell) = buf.cell_mut((canvas.x + cur_c, canvas.y + cur_r)) {
-                let style = dst_cell.style().add_modifier(Modifier::REVERSED);
-                dst_cell.set_style(style);
+            let cx = canvas.x + cur_c;
+            let cy = canvas.y + cur_r;
+            if active && cfg.crosshair_cursor {
+                render_crosshair_cursor(buf, canvas, cx, cy, palette.crosshair_bg);
             }
+            render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_floating_prompt(
     pane: &CompositePane,
     active: bool,
     prompt_rect: Rect,
+    canvas_rect: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
     let border_type = if active {
@@ -198,11 +159,11 @@ fn render_floating_prompt(
         BorderType::Plain
     };
     let border_fg = if active {
-        Color::Rgb(0, 255, 102)
+        palette.active_border_fg
     } else {
-        Color::Cyan
+        palette.inactive_border_fg
     };
-    let surface_bg = Color::Rgb(0, 28, 56);
+    let surface_bg = palette.prompt_surface_bg;
 
     let anchor_badge = match pane.prompt.anchor {
         PromptAnchor::Top => "TOP",
@@ -221,7 +182,7 @@ fn render_floating_prompt(
         .title(Span::styled(
             title,
             Style::default()
-                .fg(Color::Rgb(255, 255, 85))
+                .fg(palette.title_fg)
                 .bg(surface_bg)
                 .add_modifier(Modifier::BOLD),
         ))
@@ -237,7 +198,7 @@ fn render_floating_prompt(
     if prompt_rect.width >= 44 {
         let right_edge = prompt_rect.x + prompt_rect.width;
         let pin_x = right_edge.saturating_sub(8);
-        let pin_str = "[▲][▼]";
+        let pin_str = glyphs.pin_top_bottom;
         for (idx, ch) in pin_str.chars().enumerate() {
             let x = pin_x + idx as u16;
             if x < right_edge - 1 {
@@ -266,13 +227,15 @@ fn render_floating_prompt(
 
     // Determine lines to render (handling legacy direct mutation of `pane.prompt.input` in tests)
     let fallback_lines;
-    let lines_slice: &[String] =
-        if pane.prompt.lines.len() == 1 && pane.prompt.lines[0].is_empty() && !pane.prompt.input.is_empty() {
-            fallback_lines = vec![pane.prompt.input.clone()];
-            &fallback_lines
-        } else {
-            &pane.prompt.lines
-        };
+    let lines_slice: &[String] = if pane.prompt.lines.len() == 1
+        && pane.prompt.lines[0].is_empty()
+        && !pane.prompt.input.is_empty()
+    {
+        fallback_lines = vec![pane.prompt.input.clone()];
+        &fallback_lines
+    } else {
+        &pane.prompt.lines
+    };
 
     let visible_rows = usize::from(inner.height);
     let start_row = pane
@@ -287,12 +250,16 @@ fn render_floating_prompt(
         .skip(start_row)
         .take(visible_rows)
     {
-        let prefix = if rel_idx == 0 { "==> " } else { "... " };
+        let prefix = if rel_idx == 0 {
+            glyphs.prompt_prefix
+        } else {
+            glyphs.prompt_continuation
+        };
         let mut spans = Vec::new();
         spans.push(Span::styled(
             prefix,
             Style::default()
-                .fg(Color::Rgb(0, 255, 102))
+                .fg(palette.prompt_prefix_fg)
                 .bg(surface_bg)
                 .add_modifier(Modifier::BOLD),
         ));
@@ -304,15 +271,19 @@ fn render_floating_prompt(
 
     Paragraph::new(rendered_lines).render(inner, buf);
 
-    // Software block cursor inside the floating command prompt
+    // Software cursor + optional IBM 3270 cross-hair cursor ruler
     let prefix_len = 4usize;
     let cursor_vis_row = pane.prompt.cursor_row.saturating_sub(start_row) as u16;
     let cursor_col = (prefix_len + pane.prompt.cursor_col) as u16;
     let clamped_row = cursor_vis_row.min(inner.height.saturating_sub(1));
     let clamped_col = cursor_col.min(inner.width.saturating_sub(1));
-    if let Some(cell) = buf.cell_mut((inner.x + clamped_col, inner.y + clamped_row)) {
-        cell.set_style(cell.style().add_modifier(Modifier::REVERSED));
+    let cx = inner.x + clamped_col;
+    let cy = inner.y + clamped_row;
+
+    if active && cfg.crosshair_cursor {
+        render_crosshair_cursor(buf, canvas_rect, cx, cy, palette.crosshair_bg);
     }
+    render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
 }
 
 fn render_fuzzy_search_contents(
@@ -373,12 +344,134 @@ fn render_fuzzy_search_contents(
     Paragraph::new(lines).render(inner, buf);
 }
 
+/// Multi-pane workspace compositor (`WM-01..05`, `UI-01..05`) rendering:
+/// 1. Tiled H/V splits (`SplitTree`) or overlapping z-order stacked windows (`ZStack`) in ascending z-order
+/// 2. Borland Turbo Vision window frames (`╔═[1] PANE #1 ═╗` active / `┌─[2] PANE #2 ─┐` inactive) and translucent drop shadows
+/// 3. Top-anchored persistent Guake/Quake-style drop-down `QuickTerminal` overlay (`[Q] QUAKE QUICK TERM [~]`)
+/// 4. Optional bottom 1-row Borland DOS Function-Key bar (`F1 Help  F2 SplitH ...`)
+pub struct WorkspaceWidget<'a> {
+    pub wm: &'a WindowManager,
+}
+
+impl<'a> WorkspaceWidget<'a> {
+    pub fn new(wm: &'a WindowManager) -> Self {
+        Self { wm }
+    }
+}
+
+impl Widget for WorkspaceWidget<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        let cfg = &self.wm.config;
+        let palette = cfg.palette();
+        let glyphs = cfg.glyph_set();
+
+        let workspace_area = if cfg.show_dos_fkey_bar && area.height > 2 {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: area.height - 1,
+            }
+        } else {
+            area
+        };
+
+        let rects = self.wm.compute_workspace_rects(workspace_area);
+        let framed =
+            self.wm.panes.len() > 1 || self.wm.layout_mode == WorkspaceLayoutMode::Stacked;
+        let top_workspace_id = self.wm.z_stack.top();
+        let qt_visible = self.wm.quick_terminal.visible;
+
+        for (id, outer) in rects {
+            let Some(pane) = self.wm.panes.get(&id) else {
+                continue;
+            };
+            let is_active = !qt_visible && top_workspace_id == Some(id);
+            if framed {
+                if cfg.drop_shadows && self.wm.layout_mode == WorkspaceLayoutMode::Stacked {
+                    render_drop_shadow(buf, outer, workspace_area);
+                }
+                occlude_rect(buf, outer);
+                let z_badge = self
+                    .wm
+                    .z_stack
+                    .rank_of(id)
+                    .map(|(r, total)| format!("Z:{r}/{total}"))
+                    .unwrap_or_default();
+                render_borland_frame(
+                    outer,
+                    &format!("[{id}] {} ({z_badge})", pane.title),
+                    is_active,
+                    &palette,
+                    &glyphs,
+                    buf,
+                );
+                let inner = inset_window_frame(outer);
+                CompositePaneWidget::with_config(pane, is_active, cfg).render(inner, buf);
+            } else {
+                CompositePaneWidget::with_config(pane, is_active, cfg).render(outer, buf);
+            }
+        }
+
+        // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
+        if qt_visible {
+            let qt_outer = self.wm.quick_terminal.overlay_rect(workspace_area);
+            if cfg.drop_shadows {
+                render_drop_shadow(buf, qt_outer, workspace_area);
+            }
+            occlude_rect(buf, qt_outer);
+            render_borland_frame(
+                qt_outer,
+                "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)",
+                true,
+                &palette,
+                &glyphs,
+                buf,
+            );
+            let qt_inner = inset_window_frame(qt_outer);
+            CompositePaneWidget::with_config(&self.wm.quick_terminal.pane, true, cfg)
+                .render(qt_inner, buf);
+        }
+
+        if cfg.show_dos_fkey_bar && area.height > 2 {
+            let fkey_rect = Rect {
+                x: area.x,
+                y: area.y + area.height - 1,
+                width: area.width,
+                height: 1,
+            };
+            render_dos_fkey_bar(fkey_rect, &palette, buf);
+        }
+    }
+}
+
 pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut Buffer) {
+    render_oia_status_bar_themed(
+        pane,
+        status_rect,
+        &ThemePalette::default(),
+        &GlyphSet::default(),
+        buf,
+    );
+}
+
+pub fn render_oia_status_bar_themed(
+    pane: &CompositePane,
+    status_rect: Rect,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
     if status_rect.width == 0 || status_rect.height == 0 {
         return;
     }
 
-    let oia_bg = Color::Rgb(0, 0, 128);
+    let oia_bg = palette.oia_bg;
+    let sep = glyphs.oia_separator;
     let system_state = if pane.line_discipline.is_password_prompt() {
         (" !ECHO LOCK ", Color::Red)
     } else if pane.vt.is_alternate_screen() {
@@ -413,11 +506,11 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
         Span::styled(
             "3270-OIA",
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(palette.oia_badge_fg)
+                .bg(palette.oia_badge_bg)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("│", Style::default().fg(Color::White).bg(oia_bg)),
+        Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)),
         Span::styled(
             system_state.0,
             Style::default()
@@ -425,7 +518,7 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
                 .bg(oia_bg)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("│", Style::default().fg(Color::White).bg(oia_bg)),
+        Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)),
         Span::styled(
             routing_badge.0,
             Style::default()
@@ -433,7 +526,10 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
                 .bg(oia_bg)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("│ ", Style::default().fg(Color::White).bg(oia_bg)),
+        Span::styled(
+            format!("{sep} "),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ),
         Span::styled(
             anchor_label,
             Style::default().fg(Color::White).bg(oia_bg),
@@ -442,7 +538,10 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
 
     if let Some(block) = pane.vt.selected_command_block() {
         let total = pane.vt.command_blocks().len();
-        spans.push(Span::styled(" │", Style::default().fg(Color::White).bg(oia_bg)));
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
         spans.push(Span::styled(
             format!("BLK {}/{total}", block.index + 1),
             Style::default()
@@ -452,7 +551,10 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
         ));
     }
 
-    spans.push(Span::styled(" │", Style::default().fg(Color::White).bg(oia_bg)));
+    spans.push(Span::styled(
+        format!(" {sep}"),
+        Style::default().fg(Color::White).bg(oia_bg),
+    ));
     spans.push(Span::styled(
         coord_str,
         Style::default().fg(Color::Rgb(255, 255, 85)).bg(oia_bg),
@@ -479,7 +581,7 @@ pub fn buffer_to_snapshot_string(buf: &Buffer) -> String {
         }
         lines.push(row.trim_end().to_string());
     }
-    lines.join("\n")
+     lines.join("\n")
 }
 
 #[cfg(test)]

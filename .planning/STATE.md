@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config
-status: executing
+current_phase: 5
+current_phase_name: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation
+status: planning
 stopped_at: Roadmap created (Phases 1-5 mapped across 26 v1 requirements)
-last_updated: "2026-10-21T00:23:08.607Z"
+last_updated: "2026-10-21T00:33:53.977Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 3 complete, transitioned to Phase 4
+last_activity_desc: Phase 4 complete, transitioned to Phase 5
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 12
+  completed_plans: 12
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 3 — window-manager-h-v-composite-splits-z-order-stacking-shuffling-guake-drop-down-terminal
+**Current focus:** Phase 4 — retro-mainframe-dos-aesthetics-ibm-3270-borland-turbo-vision-chrome-modular-status-bars-glyphs-declarative-config
 
 ## Current Position
 
-Phase: 4 — Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config
+Phase: 5 — First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-10-20 — Phase 3 complete, transitioned to Phase 4
+Status: Ready to plan
+Last activity: 2026-10-20 — Phase 4 complete, transitioned to Phase 5
 
 Progress: [██████████] 100%
 
@@ -38,7 +38,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 9
+- Total plans completed: 12
 - Average duration: 0 min
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Progress: [██████████] 100%
 | 1 | 3 | - | - |
 | 2 | 3 | - | - |
 | 3 | 3 | - | - |
+| 4 | 3 | - | - |
 
 **Recent Trend:**
 

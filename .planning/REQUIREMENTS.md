@@ -32,15 +32,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Retro Aesthetics, Unicode/Glyphs, Status Bars & Cursors (`UI`)
 
-- [ ] **UI-01**: Composite panes and floating prompts render classic **DOS Borland Turbo Vision (Turbo C / Turbo Pascal) windowing chrome**, including double-line active borders (`╔═╗`) vs single-line inactive borders (`┌─┐`), 2-col right / 1-row bottom translucent/shaded character-cell drop shadows, window number badges (`[1]`, `[2]`), and clickable border widgets (`[▪]` close, `[↕]` zoom/maximize, `◢` resize corner).
-- [ ] **UI-02**: User can switch between classic **Borland Turbo C / Turbo Pascal** color schemes (Royal Blue, Cyan, Yellow, White CGA/EGA/VGA palettes), **IBM 3270 Mainframe** themes (3278 Phosphor Green, 3279 Amber, Monochrome), and custom user-defined TrueColor/256-color palettes.
-- [ ] **UI-03**: User can configure rich **Unicode glyphs, dingbats, CP437 retro symbols, Braille/block elements, Powerline dividers, and Nerd Font icons** across window borders, titles, and status bars with strict `unicode-width` alignment.
-- [ ] **UI-04**: User can customize the **Status Bars** (combining the **IBM 3270 Operator Information Area [OIA]** state indicators [`READY`, `X SYSTEM`, `INPUT: CMD BOX` vs `RAW PTY`, row/col coordinates, `[Stack: 1/N]`] and the **Borland DOS Function-Key Bar** [`F1 Help  F5 Zoom  F6 Next...`]) with modular segments, custom icons, and dynamic shell/git/tmux telemetry.
-- [ ] **UI-05**: User can select and customize cursor/caret styles, including the **IBM 3270 full-pane cross-hair cursor** (horizontal row + vertical column ruler assist via non-destructive cell tinting), **solid block**, **blinking hollow block**, **underscore**, and **vertical bar** carets.
+- [x] **UI-01**: Composite panes and floating prompts render classic **DOS Borland Turbo Vision (Turbo C / Turbo Pascal) windowing chrome**, including double-line active borders (`╔═╗`) vs single-line inactive borders (`┌─┐`), 2-col right / 1-row bottom translucent/shaded character-cell drop shadows, window number badges (`[1]`, `[2]`), and clickable border widgets (`[▪]` close, `[↕]` zoom/maximize, `◢` resize corner).
+- [x] **UI-02**: User can switch between classic **Borland Turbo C / Turbo Pascal** color schemes (Royal Blue, Cyan, Yellow, White CGA/EGA/VGA palettes), **IBM 3270 Mainframe** themes (3278 Phosphor Green, 3279 Amber, Monochrome), and custom user-defined TrueColor/256-color palettes.
+- [x] **UI-03**: User can configure rich **Unicode glyphs, dingbats, CP437 retro symbols, Braille/block elements, Powerline dividers, and Nerd Font icons** across window borders, titles, and status bars with strict `unicode-width` alignment.
+- [x] **UI-04**: User can customize the **Status Bars** (combining the **IBM 3270 Operator Information Area [OIA]** state indicators [`READY`, `X SYSTEM`, `INPUT: CMD BOX` vs `RAW PTY`, row/col coordinates, `[Stack: 1/N]`] and the **Borland DOS Function-Key Bar** [`F1 Help  F5 Zoom  F6 Next...`]) with modular segments, custom icons, and dynamic shell/git/tmux telemetry.
+- [x] **UI-05**: User can select and customize cursor/caret styles, including the **IBM 3270 full-pane cross-hair cursor** (horizontal row + vertical column ruler assist via non-destructive cell tinting), **solid block**, **blinking hollow block**, **underscore**, and **vertical bar** carets.
 
 ### Configuration & Theme Engine (`CFG`)
 
-- [ ] **CFG-01**: User can configure Bilterm via a human-friendly configuration file (`~/.config/bilterm/config.toml` primary via `serde`/`toml`, plus support for `.ini`-style theme/config files) covering default prompt position/height, keybindings, status bar segments, Unicode/Nerd Font glyph sets, cursor/cross-hair styles, and custom color themes.
+- [x] **CFG-01**: User can configure Bilterm via a human-friendly configuration file (`~/.config/bilterm/config.toml` primary via `serde`/`toml`, plus support for `.ini`-style theme/config files) covering default prompt position/height, keybindings, status bar segments, Unicode/Nerd Font glyph sets, cursor/cross-hair styles, and custom color themes.
 
 ### Tmux Integration & Cross-Platform Support (`TMUX` & `PLAT`)
 
@@ -95,12 +95,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WM-03 | Phase 3 | Complete |
 | WM-04 | Phase 3 | Complete |
 | WM-05 | Phase 3 | Complete |
-| UI-01 | Phase 4 | Pending |
-| UI-02 | Phase 4 | Pending |
-| UI-03 | Phase 4 | Pending |
-| UI-04 | Phase 4 | Pending |
-| UI-05 | Phase 4 | Pending |
-| CFG-01 | Phase 4 | Pending |
+| UI-01 | Phase 4 | Complete |
+| UI-02 | Phase 4 | Complete |
+| UI-03 | Phase 4 | Complete |
+| UI-04 | Phase 4 | Complete |
+| UI-05 | Phase 4 | Complete |
+| CFG-01 | Phase 4 | Complete |
 | TMUX-01 | Phase 5 | Pending |
 | TMUX-02 | Phase 5 | Pending |
 | PLAT-01 | Phase 5 | Pending |

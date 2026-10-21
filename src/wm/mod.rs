@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
+use crate::config::BiltermConfig;
 use crate::error::Result;
 use crate::pane::{CompositePane, PaneId};
 use crate::pty::PtyConfig;
@@ -33,6 +34,7 @@ pub struct WindowManager {
     pub layout_mode: WorkspaceLayoutMode,
     pub zoomed_pane: Option<PaneId>,
     pub quick_terminal: QuickTerminal,
+    pub config: BiltermConfig,
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
@@ -65,6 +67,7 @@ impl WindowManager {
             layout_mode: WorkspaceLayoutMode::Tiled,
             zoomed_pane: None,
             quick_terminal,
+            config: BiltermConfig::default(),
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),

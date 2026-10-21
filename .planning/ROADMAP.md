@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Core PTY, VT100 Engine & Single CompositePane Prototype** - Single composite pane with full-height PTY output canvas, overlaid floating prompt, alternate-screen auto-hide, and safe password/REPL input routing (completed 2026-10-20)
 - [x] **Phase 2: Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks** - Multi-line syntax-highlighted floating editor, top/bottom/free-floating positioning via keyboard/mouse/command, clipboard integration, and OSC 133 command block jumping (completed 2026-10-20)
 - [x] **Phase 3: Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal** - Binary split tree for H/V composite panes, z-order deck stacking/shuffling/selective raise, persistent Guake-style drop-down quick terminal, multi-pane mouse/keyboard controls, and wide-grapheme boundary occlusion (completed 2026-10-20)
-- [ ] **Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config** - Borland Turbo Vision window frames and drop shadows, IBM 3270 cross-hair cursors and OIA/F-key status bars, Unicode/CP437/Nerd Font glyph sets, and `config.toml` theme engine
+- [x] **Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config** - Borland Turbo Vision window frames and drop shadows, IBM 3270 cross-hair cursors and OIA/F-key status bars, Unicode/CP437/Nerd Font glyph sets, and `config.toml` theme engine (completed 2026-10-20)
 - [ ] **Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation** - Outer `$TMUX` passthrough and collision avoidance, `tmux -CC` control mode session backend, Linux/macOS/Windows (`ConPTY`) parity, comprehensive test/snapshot coverage, architecture docs/ADRs, and extensive User Manual
 
 ## Phase Details
@@ -125,15 +125,15 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Color theme engine (`src/ui/theme.rs`), Unicode/CP437/Nerd Font glyph registry (`src/ui/glyphs.rs`), and TOML/INI config parser (`src/config/mod.rs`)
+- [x] 04-01-PLAN.md — Color theme engine (`src/ui/theme.rs`), Unicode/CP437/Nerd Font glyph registry (`src/ui/glyphs.rs`), and TOML/INI config parser (`src/config/mod.rs`)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md — Borland Turbo Vision chrome & translucent drop shadows (`src/ui/chrome.rs`), IBM 3270 cross-hair cursor ruler (`src/ui/cursor.rs`), and DOS F-Key bar (`src/ui/status_bar.rs`)
+- [x] 04-02-PLAN.md — Borland Turbo Vision chrome & translucent drop shadows (`src/ui/chrome.rs`), IBM 3270 cross-hair cursor ruler (`src/ui/cursor.rs`), and DOS F-Key bar (`src/ui/status_bar.rs`)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-03-PLAN.md — `WindowManager` + `WorkspaceWidget` retro aesthetic integration, runtime `:theme`/`:cursor`/`:crosshair` commands, and Phase 4 `insta` snapshot tests (`tests/phase4_retro_aesthetics.rs`)
+- [x] 04-03-PLAN.md — `WindowManager` + `WorkspaceWidget` retro aesthetic integration, runtime `:theme`/`:cursor`/`:crosshair` commands, and Phase 4 `insta` snapshot tests (`tests/phase4_retro_aesthetics.rs`)
 
 ### Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation
 
@@ -167,5 +167,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Core PTY, VT100 Engine & Single CompositePane Prototype | 3/3 | Complete    | 2026-10-20 |
 | 2. Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks | 3/3 | Complete    | 2026-10-20 |
 | 3. Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal | 3/3 | Complete    | 2026-10-20 |
-| 4. Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config | 0/3 | Not started | - |
+| 4. Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config | 3/3 | Complete    | 2026-10-20 |
 | 5. First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation | 0/3 | Not started | - |

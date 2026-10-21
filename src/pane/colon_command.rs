@@ -1,9 +1,12 @@
 use crate::pane::{CompositePane, PromptAnchor};
+use crate::ui::cursor::CaretStyle;
+use crate::ui::glyphs::GlyphPack;
+use crate::ui::theme::ThemePreset;
 use crate::vt::encode_osc52_clipboard;
 use crate::wm::split_tree::SplitDirection;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
-/// Parsed in-prompt `:command` (`PANE-03`, `PANE-05`, `PTY-04`, `WM-01..05`).
+/// Parsed in-prompt `:command` (`PANE-03`, `PANE-05`, `PTY-04`, `WM-01..05`, `UI-01..05`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ColonCommand {
     PromptTop,
@@ -24,6 +27,12 @@ pub enum ColonCommand {
     ClosePane,
     LayoutMode(WorkspaceLayoutMode),
     QuakeToggle,
+    Theme(ThemePreset),
+    Glyphs(GlyphPack),
+    Cursor(CaretStyle),
+    CrosshairToggle(Option<bool>),
+    ShadowsToggle(Option<bool>),
+    FKeyBarToggle(Option<bool>),
     Quit,
 }
 
@@ -86,6 +95,48 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             _ => Some(Err("Usage: :layout tile | stack".to_string())),
         },
         "quake" | "guake" => Some(Ok(ColonCommand::QuakeToggle)),
+        "theme" => match parts.get(1).and_then(|s| ThemePreset::from_name(s)) {
+            Some(preset) => Some(Ok(ColonCommand::Theme(preset))),
+            None => Some(Err(
+                "Usage: :theme turbo-blue | turbo-cyan | 3278 | 3279 | mono".to_string(),
+            )),
+        },
+        "glyphs" => match parts.get(1).and_then(|s| GlyphPack::from_name(s)) {
+            Some(pack) => Some(Ok(ColonCommand::Glyphs(pack))),
+            None => Some(Err(
+                "Usage: :glyphs unicode | cp437 | nerd-font | ascii".to_string(),
+            )),
+        },
+        "cursor" => match parts.get(1).and_then(|s| CaretStyle::from_name(s)) {
+            Some(style) => Some(Ok(ColonCommand::Cursor(style))),
+            None => Some(Err(
+                "Usage: :cursor block | hollow | underscore | bar".to_string(),
+            )),
+        },
+        "crosshair" => {
+            let arg = match parts.get(1).copied() {
+                Some("on") | Some("true") => Some(true),
+                Some("off") | Some("false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::CrosshairToggle(arg)))
+        }
+        "shadows" => {
+            let arg = match parts.get(1).copied() {
+                Some("on") | Some("true") => Some(true),
+                Some("off") | Some("false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::ShadowsToggle(arg)))
+        }
+        "fkeybar" => {
+            let arg = match parts.get(1).copied() {
+                Some("on") | Some("true") => Some(true),
+                Some("off") | Some("false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::FKeyBarToggle(arg)))
+        }
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
@@ -200,6 +251,31 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::QuakeToggle => {
             wm.toggle_quick_terminal();
+            false
+        }
+        ColonCommand::Theme(preset) => {
+            wm.config.theme = preset;
+            wm.config.custom_palette_override = None;
+            false
+        }
+        ColonCommand::Glyphs(pack) => {
+            wm.config.glyphs = pack;
+            false
+        }
+        ColonCommand::Cursor(style) => {
+            wm.config.cursor_style = style;
+            false
+        }
+        ColonCommand::CrosshairToggle(val) => {
+            wm.config.crosshair_cursor = val.unwrap_or(!wm.config.crosshair_cursor);
+            false
+        }
+        ColonCommand::ShadowsToggle(val) => {
+            wm.config.drop_shadows = val.unwrap_or(!wm.config.drop_shadows);
+            false
+        }
+        ColonCommand::FKeyBarToggle(val) => {
+            wm.config.show_dos_fkey_bar = val.unwrap_or(!wm.config.show_dos_fkey_bar);
             false
         }
         other => execute_colon_command(wm.active_pane_mut(), other),
