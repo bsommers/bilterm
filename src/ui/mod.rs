@@ -2,6 +2,7 @@ pub mod chrome;
 pub mod cursor;
 pub mod glyphs;
 pub mod occlusion;
+pub mod renderer;
 pub mod status_bar;
 pub mod theme;
 

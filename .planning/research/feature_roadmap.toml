@@ -4,9 +4,52 @@
 
 [metadata]
 project = "bilterm"
-current_version = "0.2.0"
-reference_repos = ["https://github.com/ghostty-org/ghostty"]
-ecosystem_references = ["wezterm", "kitty", "alacritty", "zellij", "foot", "warp", "contour", "xterm", "ibm-3270", "dec-vt520"]
+current_version = "0.2.5"
+reference_repos = ["https://github.com/ghostty-org/ghostty", "https://github.com/uzaaft/libghostty-rs"]
+ecosystem_references = ["wezterm", "kitty", "alacritty", "zellij", "foot", "warp", "contour", "xterm", "ibm-3270", "dec-vt520", "gpui", "egui"]
+
+# ==============================================================================
+# TIER 0: OPTIMAL TECH STACK BLUEPRINT (v0.2.5 — IMPLEMENTED)
+# ==============================================================================
+
+[[features]]
+id = "ARCH-01"
+tier = "tier_0_blueprint"
+direction = "ghostty_to_bilterm"
+subsystem = "vt_snapshot"
+title = "Renderer-Agnostic GridSnapshot & CellSnapshot Seam"
+ghostty_ref = "include/ghostty/vt.h (RenderState)"
+bilterm_target_files = ["src/vt/snapshot.rs", "src/vt/mod.rs"]
+target_milestone = "implemented_v0.2.5"
+priority = "completed"
+effort = "medium"
+summary = "Point-in-time GridSnapshot, RowSnapshot, CellSnapshot, and CursorSnapshot decoupling the UI layer from the underlying VT parser."
+
+[[features]]
+id = "ARCH-02"
+tier = "tier_0_blueprint"
+direction = "ghostty_to_bilterm"
+subsystem = "vt_worker"
+title = "Dedicated Emulation Worker Thread Loop (portable-pty -> libghostty-vt / VtParser -> SharedGridSnapshot)"
+ghostty_ref = "libghostty-vt (!Send/!Sync worker thread pattern)"
+bilterm_target_files = ["src/vt/worker.rs", "src/vt/ghostty_backend.rs"]
+target_milestone = "implemented_v0.2.5"
+priority = "completed"
+effort = "medium"
+summary = "Dedicated OS worker thread continuously reading raw bytes from portable-pty, feeding libghostty-vt / VtParser, replying to terminal queries on-thread, and publishing atomic SharedGridSnapshot frames."
+
+[[features]]
+id = "ARCH-03"
+tier = "tier_0_blueprint"
+direction = "ecosystem_to_bilterm"
+subsystem = "ui_rendering"
+title = "Abstract UI & Window Layer Seam (Ratatui TUI + GPUI / egui Native GPU Readiness)"
+ghostty_ref = "GPUI / winit + egui RenderState consumers"
+bilterm_target_files = ["src/ui/renderer.rs", "src/ui/mod.rs"]
+target_milestone = "implemented_v0.2.5"
+priority = "completed"
+effort = "medium"
+summary = "WorkspaceFrameSnapshot and WorkspaceFrameRenderer trait allowing Ratatui, GPUI, or egui to render the multi-pane workspace from pure point-in-time snapshots."
 
 # ==============================================================================
 # TIER 1: CORE, FOUNDATIONAL TERMINAL FEATURES

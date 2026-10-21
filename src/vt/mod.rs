@@ -1,7 +1,16 @@
+pub mod ghostty_backend;
+pub mod snapshot;
+pub mod worker;
+
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ratatui::style::{Color, Modifier, Style};
+
+use crate::vt::snapshot::{
+    CellColor, CellSnapshot, CursorShape, CursorSnapshot, GridSnapshot, RgbTriplet, RowSnapshot,
+    UnderlineKind,
+};
 
 /// Semantic shell integration markers (`OSC 133;A/B/C/D`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +97,13 @@ pub struct VtParser {
     pending_query_responses: Vec<Vec<u8>>,
     total_lines_scrolled: usize,
     total_bytes_processed: usize,
+    generation: u64,
+    active_underline_kind: UnderlineKind,
+    active_underline_color: Option<RgbTriplet>,
+    active_overline: bool,
+    last_styled_underline_kind: UnderlineKind,
+    last_styled_underline_color: Option<RgbTriplet>,
+    primary_stream_log: Vec<u8>,
 }
 
 impl VtParser {
@@ -128,6 +144,13 @@ impl VtParser {
             pending_query_responses: Vec::new(),
             total_lines_scrolled: 0,
             total_bytes_processed: 0,
+            generation: 0,
+            active_underline_kind: UnderlineKind::None,
+            active_underline_color: None,
+            active_overline: false,
+            last_styled_underline_kind: UnderlineKind::None,
+            last_styled_underline_color: None,
+            primary_stream_log: Vec::new(),
         }
     }
 
@@ -139,18 +162,39 @@ impl VtParser {
     /// bytes are sanitized into visible glyphs so random bytes cannot falsely trigger `DECSET`
     /// alternate screen mode or lock the VT100 scroll region (`DECSTBM`).
     pub fn process(&mut self, bytes: &[u8]) {
+        self.generation = self.generation.wrapping_add(1);
         self.total_bytes_processed = self.total_bytes_processed.saturating_add(bytes.len());
         if !self.is_alternate_screen() && is_binary_noise_chunk(bytes) {
             let sanitized = sanitize_binary_noise_chunk(bytes);
             let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
             self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
+            self.append_primary_stream_log(&sanitized);
             self.parser.process(&sanitized);
             return;
         }
+        let was_alt = self.is_alternate_screen();
         let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
-        self.parser.process(bytes);
+        let normalized = normalize_extended_sgr_for_vt100(bytes);
+        self.parser.process(&normalized);
         self.scan_control_sequences(bytes);
+        if !was_alt && !self.is_alternate_screen() {
+            self.append_primary_stream_log(&normalized);
+        }
+    }
+
+    fn append_primary_stream_log(&mut self, bytes: &[u8]) {
+        const MAX_PRIMARY_LOG: usize = 65_536;
+        self.primary_stream_log.extend_from_slice(bytes);
+        if self.primary_stream_log.len() > MAX_PRIMARY_LOG {
+            let excess = self.primary_stream_log.len() - (MAX_PRIMARY_LOG / 2);
+            let cut = self.primary_stream_log[excess..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map(|i| excess + i + 1)
+                .unwrap_or(excess);
+            self.primary_stream_log.drain(..cut);
+        }
     }
 
     /// Total number of output bytes processed by this pane's VT100 parser.
@@ -174,14 +218,139 @@ impl VtParser {
         self.total_lines_scrolled.max(active_line)
     }
 
-    /// Resizes the virtual terminal screen dimensions.
+    /// Resizes the virtual terminal screen dimensions, reflowing soft-wrapped lines on the primary
+    /// screen when horizontal columns change (`FND-08`) and emitting in-band size reports when
+    /// `DECSET ?2048` is active (`VAL-05`).
     pub fn set_size(&mut self, rows: u16, cols: u16) {
         let clamped_rows = rows.max(1);
         let clamped_cols = cols.max(1);
         if (self.rows, self.cols) != (clamped_rows, clamped_cols) {
+            let cols_changed = self.cols != clamped_cols;
             self.rows = clamped_rows;
             self.cols = clamped_cols;
-            self.parser.screen_mut().set_size(clamped_rows, clamped_cols);
+            self.generation = self.generation.wrapping_add(1);
+            if cols_changed
+                && clamped_rows >= 2
+                && clamped_cols >= 4
+                && !self.is_alternate_screen()
+                && !self.primary_stream_log.is_empty()
+            {
+                let mut replayed =
+                    vt100_ctt::Parser::new(clamped_rows, clamped_cols, self.scrollback_capacity);
+                replayed.process(&self.primary_stream_log);
+                self.parser = replayed;
+            } else {
+                self.parser
+                    .screen_mut()
+                    .set_size(clamped_rows.max(2), clamped_cols.max(2));
+            }
+            if self.in_band_size_2048 {
+                self.pending_query_responses.push(
+                    format!("\x1b[48;{clamped_rows};{clamped_cols};0;0t").into_bytes(),
+                );
+            }
+        }
+    }
+
+    /// Returns the most recently set extended SGR underline style (`SGR 4:0..4:5`, `FND-09`).
+    pub fn active_underline_kind(&self) -> UnderlineKind {
+        self.active_underline_kind
+    }
+
+    /// Returns the most recently set extended SGR underline RGB color (`SGR 58;2;r;g;b`, `FND-09`).
+    pub fn active_underline_color(&self) -> Option<RgbTriplet> {
+        self.active_underline_color
+    }
+
+    /// Returns `true` when `SGR 53` overline is currently active (`FND-09`).
+    pub fn is_overline(&self) -> bool {
+        self.active_overline
+    }
+
+    /// Materializes a renderer-agnostic point-in-time [`GridSnapshot`] of the current viewport (`ARCH-01`).
+    pub fn snapshot(&self) -> GridSnapshot {
+        let screen = self.parser.screen();
+        let (rows, cols) = screen.size();
+        let r_max = rows.max(1);
+        let c_max = cols.max(1);
+        let mut grid_rows = Vec::with_capacity(usize::from(r_max));
+
+        for r in 0..r_max {
+            let mut row_cells = Vec::with_capacity(usize::from(c_max));
+            for c in 0..c_max {
+                if let Some(cell) = screen.cell(r, c) {
+                    let width = if cell.is_wide_continuation() {
+                        0
+                    } else if cell.is_wide() {
+                        2
+                    } else {
+                        1
+                    };
+                    let grapheme = if cell.is_wide_continuation() {
+                        String::new()
+                    } else if cell.contents().is_empty() {
+                        " ".to_string()
+                    } else {
+                        cell.contents().to_string()
+                    };
+                    let underline = if cell.underline() {
+                        if self.active_underline_kind.is_underlined() {
+                            self.active_underline_kind
+                        } else if self.last_styled_underline_kind.is_underlined() {
+                            self.last_styled_underline_kind
+                        } else {
+                            UnderlineKind::Single
+                        }
+                    } else {
+                        UnderlineKind::None
+                    };
+                    let ul_color = if cell.underline() {
+                        self.active_underline_color.or(self.last_styled_underline_color)
+                    } else {
+                        None
+                    };
+                    row_cells.push(CellSnapshot {
+                        grapheme,
+                        width,
+                        fg: vt_color_to_cell_color(cell.fgcolor()),
+                        bg: vt_color_to_cell_color(cell.bgcolor()),
+                        underline_color: ul_color,
+                        bold: cell.bold(),
+                        dim: false,
+                        italic: cell.italic(),
+                        underline,
+                        overline: self.active_overline,
+                        inverse: cell.inverse(),
+                        strikethrough: false,
+                    });
+                } else {
+                    row_cells.push(CellSnapshot::default());
+                }
+            }
+            grid_rows.push(RowSnapshot {
+                cells: row_cells,
+                dirty: true,
+                wrapped: false,
+            });
+        }
+
+        let (cur_r, cur_c) = screen.cursor_position();
+        GridSnapshot {
+            rows: r_max,
+            cols: c_max,
+            grid_rows,
+            cursor: CursorSnapshot {
+                row: cur_r,
+                col: cur_c,
+                visible: !screen.hide_cursor(),
+                blinking: false,
+                shape: CursorShape::Block,
+                at_wide_tail: false,
+            },
+            alternate_screen: self.is_alternate_screen(),
+            scrollback_offset: screen.scrollback(),
+            total_scrollback_rows: self.total_lines_scrolled,
+            generation: self.generation,
         }
     }
 
@@ -680,6 +849,15 @@ impl VtParser {
                     };
                     self.pending_query_responses
                         .push(format!("\x1b[{mode};{ps}$y").into_bytes());
+                } else {
+                    // Check for extended SGR sequence: CSI <params> m (FND-09)
+                    let sgr_params: String = rest
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit() || *c == ';' || *c == ':')
+                        .collect();
+                    if rest[sgr_params.len()..].starts_with('m') {
+                        self.apply_extended_sgr(&sgr_params);
+                    }
                 }
             }
         }
@@ -875,6 +1053,81 @@ impl VtParser {
             _ => return 0,
         };
         if is_set { 1 } else { 2 }
+    }
+
+    fn apply_extended_sgr(&mut self, params: &str) {
+        if params.is_empty() {
+            self.active_underline_kind = UnderlineKind::None;
+            self.active_underline_color = None;
+            self.active_overline = false;
+            return;
+        }
+        let tokens: Vec<&str> = params.split(';').collect();
+        let mut idx = 0usize;
+        while idx < tokens.len() {
+            let tok = tokens[idx];
+            if let Some(sub) = tok.strip_prefix("4:") {
+                self.active_underline_kind = match sub {
+                    "0" => UnderlineKind::None,
+                    "1" => UnderlineKind::Single,
+                    "2" => UnderlineKind::Double,
+                    "3" => UnderlineKind::Curly,
+                    "4" => UnderlineKind::Dotted,
+                    "5" => UnderlineKind::Dashed,
+                    _ => UnderlineKind::Single,
+                };
+                if self.active_underline_kind.is_underlined() {
+                    self.last_styled_underline_kind = self.active_underline_kind;
+                }
+            } else if let Some(sub) = tok.strip_prefix("58:2:") {
+                // Colon-separated SGR 58:2::r:g:b or 58:2:r:g:b
+                let nums: Vec<u8> = sub
+                    .split(':')
+                    .filter(|s| !s.is_empty())
+                    .filter_map(|s| s.parse::<u8>().ok())
+                    .collect();
+                if nums.len() >= 3 {
+                    let n = nums.len();
+                    let rgb = RgbTriplet::new(nums[n - 3], nums[n - 2], nums[n - 1]);
+                    self.active_underline_color = Some(rgb);
+                    self.last_styled_underline_color = Some(rgb);
+                }
+            } else if tok == "58" && idx + 4 < tokens.len() && tokens[idx + 1] == "2" {
+                // Semicolon-separated SGR 58;2;r;g;b
+                if let (Ok(r), Ok(g), Ok(b)) = (
+                    tokens[idx + 2].parse::<u8>(),
+                    tokens[idx + 3].parse::<u8>(),
+                    tokens[idx + 4].parse::<u8>(),
+                ) {
+                    let rgb = RgbTriplet::new(r, g, b);
+                    self.active_underline_color = Some(rgb);
+                    self.last_styled_underline_color = Some(rgb);
+                }
+                idx += 4;
+            } else {
+                match tok {
+                    "0" | "" => {
+                        self.active_underline_kind = UnderlineKind::None;
+                        self.active_underline_color = None;
+                        self.active_overline = false;
+                    }
+                    "4" => {
+                        self.active_underline_kind = UnderlineKind::Single;
+                        self.last_styled_underline_kind = UnderlineKind::Single;
+                    }
+                    "21" => {
+                        self.active_underline_kind = UnderlineKind::Double;
+                        self.last_styled_underline_kind = UnderlineKind::Double;
+                    }
+                    "24" => self.active_underline_kind = UnderlineKind::None,
+                    "53" => self.active_overline = true,
+                    "55" => self.active_overline = false,
+                    "59" => self.active_underline_color = None,
+                    _ => {}
+                }
+            }
+            idx += 1;
+        }
     }
 }
 
@@ -1095,6 +1348,67 @@ fn vt_color_to_ratatui(color: vt100_ctt::Color) -> Color {
         vt100_ctt::Color::Idx(idx) => Color::Indexed(idx),
         vt100_ctt::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
     }
+}
+
+fn vt_color_to_cell_color(color: vt100_ctt::Color) -> CellColor {
+    match color {
+        vt100_ctt::Color::Default => CellColor::Default,
+        vt100_ctt::Color::Idx(idx) => CellColor::Indexed(idx),
+        vt100_ctt::Color::Rgb(r, g, b) => CellColor::Rgb(r, g, b),
+    }
+}
+
+/// Rewrites extended SGR sub-parameters (`4:1..4:5` -> `4`, `4:0` -> `24`, and strips `58;2;r;g;b` / `58:2:...`)
+/// so `vt100_ctt::Parser` applies standard bold/italic/underline/color attributes on the Same CSI sequence.
+fn normalize_extended_sgr_for_vt100(bytes: &[u8]) -> Vec<u8> {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return bytes.to_vec();
+    };
+    if !text.contains("\x1b[") || (!text.contains("4:") && !text.contains("58")) {
+        return bytes.to_vec();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(pos) = rest.find("\x1b[") {
+        out.push_str(&rest[..pos]);
+        out.push_str("\x1b[");
+        let after_csi = &rest[pos + 2..];
+        let param_len = after_csi
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ';' || *c == ':')
+            .map(char::len_utf8)
+            .sum::<usize>();
+        if after_csi[param_len..].starts_with('m') {
+            let params = &after_csi[..param_len];
+            let tokens: Vec<&str> = params.split(';').collect();
+            let mut norm_tokens = Vec::with_capacity(tokens.len());
+            let mut idx = 0usize;
+            while idx < tokens.len() {
+                let tok = tokens[idx];
+                if let Some(sub) = tok.strip_prefix("4:") {
+                    if sub == "0" {
+                        norm_tokens.push("24");
+                    } else {
+                        norm_tokens.push("4");
+                    }
+                } else if tok.starts_with("58:") {
+                    // Strip colon-style underline color for vt100-ctt
+                } else if tok == "58" && idx + 4 < tokens.len() && tokens[idx + 1] == "2" {
+                    idx += 4;
+                } else {
+                    norm_tokens.push(tok);
+                }
+                idx += 1;
+            }
+            out.push_str(&norm_tokens.join(";"));
+            out.push('m');
+            rest = &after_csi[param_len + 1..];
+        } else {
+            rest = after_csi;
+        }
+    }
+    out.push_str(rest);
+    out.into_bytes()
 }
 
 #[cfg(test)]

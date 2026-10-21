@@ -5,6 +5,22 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.5] - 2026-10-21
+
+### Added
+- **Renderer-Agnostic `GridSnapshot` & `CellSnapshot` Seam (`ARCH-01`, `src/vt/snapshot.rs`, `src/vt/mod.rs`)**:
+  - Point-in-time `GridSnapshot`, `RowSnapshot`, `CellSnapshot`, `CursorSnapshot`, `UnderlineKind`, and `RgbTriplet` structures that decouple the UI rendering layer (`Ratatui`, `GPUI`, or `winit + egui`) from the underlying virtual terminal state machine.
+- **Dedicated Emulation Worker Thread Pipeline (`ARCH-02`, `src/vt/worker.rs`, `src/vt/ghostty_backend.rs`)**:
+  - `VtWorkerHandle` and `SharedGridSnapshot` spawn a dedicated OS worker thread (`bilterm-vt-worker`) paired with a `portable-pty` reader pipe (`bilterm-pty-pipe`), feeding raw VT/ANSI byte chunks into `libghostty-vt` (`GhosttyVtEngine` behind `--features ghostty-vt`) or `VtParser`, answering terminal queries (`DSR`, `CPR`, `DA1`, `DECRPM`, `OSC 4/10/11/12`, `XTGETTCAP`) directly on the worker thread, and publishing atomic `GridSnapshot` frames to the UI layer.
+- **Abstract UI & Window Layer Renderer Seam (`ARCH-03`, `src/ui/renderer.rs`)**:
+  - `WorkspaceFrameSnapshot`, `PaneFrameSnapshot`, and `WorkspaceFrameRenderer` (`RatatuiWorkspaceRenderer`) allow `Ratatui`, Zed's `GPUI`, or `winit + egui` to render the entire multi-pane workspace (`SplitTree`, `ZStack`, `QuickTerminal`, `FloatingPrompt`, `OiaStatusBar`) from immutable snapshots.
+- **Soft-Wrapped Scrollback Reflow (`FND-08`), Extended SGR Attributes (`FND-09`) & In-Band Size Reports (`VAL-05`, `src/vt/mod.rs`)**:
+  - Reflows soft-wrapped primary-screen lines when horizontal pane columns shrink or expand (`VtParser::set_size`), while leaving Alternate Screen (`?1049`) grids un-reflowed.
+  - Parses extended SGR sub-parameter underlines (`4:0` none, `4:1` single, `4:2` double, `4:3` curly, `4:4` dotted, `4:5` dashed), `SGR 53`/`55` overline, and `SGR 58;2;r;g;b` / `58:2::r:g:b` RGB underline colors.
+  - Emits in-band resize notifications (`CSI 48 ; rows ; cols ; 0 ; 0 t`) when `DECSET ?2048` is enabled.
+- **`vttest` / `esctest` & 17-Session Torture Suite (`tests/vttest_esctest_fuzz_torture.rs`, `tests/vt_worker_and_snapshot_seam.rs`)**:
+  - Added 1-byte/3-byte/7-byte split-boundary escape sequence fuzzing, parameter bomb tests, 16-workspace-pane + 1-Quake-panel simultaneous tiling/stacking/shuffling stress tests, and live `portable-pty` -> `VtWorkerHandle` -> `GridSnapshot` integration tests (74 total tests passing).
+
 ## [v0.2.0] - 2026-10-21
 
 ### Added
