@@ -1,3 +1,4 @@
+pub mod colon_command;
 pub mod fuzzy_history;
 pub mod highlight;
 
