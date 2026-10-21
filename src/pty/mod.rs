@@ -24,13 +24,11 @@ pub struct PtyConfig {
 
 impl Default for PtyConfig {
     fn default() -> Self {
-        let program = std::env::var("SHELL").unwrap_or_else(|_| {
-            if cfg!(windows) {
-                "powershell.exe".to_string()
-            } else {
-                "/bin/sh".to_string()
-            }
-        });
+        let program = default_shell_for_platform(
+            std::env::consts::OS,
+            std::env::var("SHELL").ok().as_deref(),
+            std::env::var("COMSPEC").ok().as_deref(),
+        );
         let mut env = BTreeMap::new();
         env.insert("TERM".to_string(), "xterm-256color".to_string());
         env.insert("COLORTERM".to_string(), "truecolor".to_string());
@@ -42,6 +40,27 @@ impl Default for PtyConfig {
             env,
             cwd: None,
         }
+    }
+}
+
+/// Resolves the default interactive shell across Linux, macOS, and Windows (`PLAT-01`).
+pub fn default_shell_for_platform(
+    os: &str,
+    shell_env: Option<&str>,
+    comspec_env: Option<&str>,
+) -> String {
+    if let Some(sh) = shell_env.filter(|s| !s.trim().is_empty()) {
+        return sh.to_string();
+    }
+    if os.eq_ignore_ascii_case("windows") {
+        if let Some(cs) = comspec_env.filter(|s| !s.trim().is_empty()) {
+            return cs.to_string();
+        }
+        "powershell.exe".to_string()
+    } else if os.eq_ignore_ascii_case("macos") {
+        "/bin/zsh".to_string()
+    } else {
+        "/bin/sh".to_string()
     }
 }
 

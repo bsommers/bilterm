@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks** - Multi-line syntax-highlighted floating editor, top/bottom/free-floating positioning via keyboard/mouse/command, clipboard integration, and OSC 133 command block jumping (completed 2026-10-20)
 - [x] **Phase 3: Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal** - Binary split tree for H/V composite panes, z-order deck stacking/shuffling/selective raise, persistent Guake-style drop-down quick terminal, multi-pane mouse/keyboard controls, and wide-grapheme boundary occlusion (completed 2026-10-20)
 - [x] **Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config** - Borland Turbo Vision window frames and drop shadows, IBM 3270 cross-hair cursors and OIA/F-key status bars, Unicode/CP437/Nerd Font glyph sets, and `config.toml` theme engine (completed 2026-10-20)
-- [ ] **Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation** - Outer `$TMUX` passthrough and collision avoidance, `tmux -CC` control mode session backend, Linux/macOS/Windows (`ConPTY`) parity, comprehensive test/snapshot coverage, architecture docs/ADRs, and extensive User Manual
+- [x] **Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation** - Outer `$TMUX` passthrough and collision avoidance, `tmux -CC` control mode session backend, Linux/macOS/Windows (`ConPTY`) parity, comprehensive test/snapshot coverage, architecture docs/ADRs, and extensive User Manual (completed 2026-10-20)
 
 ## Phase Details
 
@@ -154,15 +154,15 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Outer `$TMUX` detection, `DCS tmux;` passthrough wrapper, and `tmux -CC` control mode parser/bridge (`src/tmux/mod.rs`)
+- [x] 05-01-PLAN.md — Outer `$TMUX` detection, `DCS tmux;` passthrough wrapper, and `tmux -CC` control mode parser/bridge (`src/tmux/mod.rs`)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — Cross-platform Linux/macOS/Windows (`ConPTY`) shell hardening (`src/pty/mod.rs`) and end-to-end test suite (`tests/phase5_tmux_and_platform.rs`)
+- [x] 05-02-PLAN.md — Cross-platform Linux/macOS/Windows (`ConPTY`) shell hardening (`src/pty/mod.rs`) and end-to-end test suite (`tests/phase5_tmux_and_platform.rs`)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-03-PLAN.md — Technical architecture documentation & ADRs (`docs/architecture/`) and extensive multi-chapter User Manual (`docs/user-guide/`, `README.md`)
+- [x] 05-03-PLAN.md — Technical architecture documentation & ADRs (`docs/architecture/`) and extensive multi-chapter User Manual (`docs/user-guide/`, `README.md`)
 
 ## Progress
 
@@ -175,4 +175,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks | 3/3 | Complete    | 2026-10-20 |
 | 3. Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal | 3/3 | Complete    | 2026-10-20 |
 | 4. Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config | 3/3 | Complete    | 2026-10-20 |
-| 5. First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation | 0/3 | Not started | - |
+| 5. First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation | 3/3 | Complete    | 2026-10-20 |

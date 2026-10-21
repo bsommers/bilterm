@@ -44,15 +44,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Tmux Integration & Cross-Platform Support (`TMUX` & `PLAT`)
 
-- [ ] **TMUX-01**: Bilterm detects when running inside an outer `tmux` session (`$TMUX`), automatically avoids prefix key collisions, wraps `OSC 52` clipboard sequences in `DCS tmux;` passthrough, and displays outer `tmux` context in the status bar.
-- [ ] **TMUX-02**: User can attach Bilterm to `tmux` sessions/panes via `tmux` CLI / Control Mode (`tmux -CC`) integration so composite panes can be backed by persistent `tmux` sessions.
-- [ ] **PLAT-01**: Full support on **Linux** (primary target, Phase 1+ baseline) and **macOS** (POSIX PTY + slave FD/sysctl termios parity), followed by **Windows** (`ConPTY` pseudo-console support).
+- [x] **TMUX-01**: Bilterm detects when running inside an outer `tmux` session (`$TMUX`), automatically avoids prefix key collisions, wraps `OSC 52` clipboard sequences in `DCS tmux;` passthrough, and displays outer `tmux` context in the status bar.
+- [x] **TMUX-02**: User can attach Bilterm to `tmux` sessions/panes via `tmux` CLI / Control Mode (`tmux -CC`) integration so composite panes can be backed by persistent `tmux` sessions.
+- [x] **PLAT-01**: Full support on **Linux** (primary target, Phase 1+ baseline) and **macOS** (POSIX PTY + slave FD/sysctl termios parity), followed by **Windows** (`ConPTY` pseudo-console support).
 
 ### Quality, Architecture Documentation & Extensive User Manual (`QUAL`)
 
-- [ ] **QUAL-01**: Comprehensive automated test suite (unit tests, Ratatui `TestBackend` + `insta` visual snapshot tests for overlays/borders/wide-chars, and headless PTY integration tests) audited with `test-coverage` and `test-driven-development` skills.
-- [ ] **QUAL-02**: Complete technical architecture documentation, ADRs, and Mermaid/ASCII component & data-flow diagrams in `docs/architecture/` built using the `docs` and `documentation-and-adrs` skills.
-- [ ] **QUAL-03**: Extensive multi-chapter User Manual in `docs/user-guide/` (covering quickstart, composite panes, floating prompt controls, H/V splits, z-order stacking/shuffling, Guake drop-down terminal, IBM 3270 & Borland Turbo Vision themes/cursors/status bars, `config.toml` reference, and `tmux` workflows) built using the `writing-user-guides` skill.
+- [x] **QUAL-01**: Comprehensive automated test suite (unit tests, Ratatui `TestBackend` + `insta` visual snapshot tests for overlays/borders/wide-chars, and headless PTY integration tests) audited with `test-coverage` and `test-driven-development` skills.
+- [x] **QUAL-02**: Complete technical architecture documentation, ADRs, and Mermaid/ASCII component & data-flow diagrams in `docs/architecture/` built using the `docs` and `documentation-and-adrs` skills.
+- [x] **QUAL-03**: Extensive multi-chapter User Manual in `docs/user-guide/` (covering quickstart, composite panes, floating prompt controls, H/V splits, z-order stacking/shuffling, Guake drop-down terminal, IBM 3270 & Borland Turbo Vision themes/cursors/status bars, `config.toml` reference, and `tmux` workflows) built using the `writing-user-guides` skill.
 
 ## v2 Requirements
 
@@ -101,12 +101,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-04 | Phase 4 | Complete |
 | UI-05 | Phase 4 | Complete |
 | CFG-01 | Phase 4 | Complete |
-| TMUX-01 | Phase 5 | Pending |
-| TMUX-02 | Phase 5 | Pending |
-| PLAT-01 | Phase 5 | Pending |
-| QUAL-01 | Phase 5 | Pending |
-| QUAL-02 | Phase 5 | Pending |
-| QUAL-03 | Phase 5 | Pending |
+| TMUX-01 | Phase 5 | Complete |
+| TMUX-02 | Phase 5 | Complete |
+| PLAT-01 | Phase 5 | Complete |
+| QUAL-01 | Phase 5 | Complete |
+| QUAL-02 | Phase 5 | Complete |
+| QUAL-03 | Phase 5 | Complete |
 
 **Coverage:**
 

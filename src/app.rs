@@ -107,6 +107,7 @@ impl App {
     fn flush_osc52_to_host(&mut self) -> Result<()> {
         let mut out = io::stdout();
         let mut wrote = false;
+        let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
         for pane in self
             .wm
             .panes
@@ -114,11 +115,21 @@ impl App {
             .chain(std::iter::once(&mut self.wm.quick_terminal.pane))
         {
             if let Some(seq) = pane.last_osc52_sequence.take() {
-                out.write_all(seq.as_bytes())?;
+                let wire = if inside_tmux {
+                    crate::tmux::wrap_tmux_dcs_passthrough(&seq)
+                } else {
+                    seq
+                };
+                out.write_all(wire.as_bytes())?;
                 wrote = true;
             }
             for seq in pane.vt.take_outbound_osc52() {
-                out.write_all(seq.as_bytes())?;
+                let wire = if inside_tmux {
+                    crate::tmux::wrap_tmux_dcs_passthrough(&seq)
+                } else {
+                    seq
+                };
+                out.write_all(wire.as_bytes())?;
                 wrote = true;
             }
         }
