@@ -91,13 +91,20 @@ Plans:
   4. User can move, resize, focus/raise, zoom/maximize, and close composite panes via keyboard chords, mouse dragging/clicking on window borders, or `:command` palette commands, while SGR (1006) mouse coordinates are accurately translated to the focused pane's local canvas coordinates.
   5. Overlapping floating prompts, stacked composite panes, drop-down overlays, and drop shadows sanitize 2-column wide Unicode/CJK/Emoji/Nerd Font graphemes at occlusion boundaries (`occlude_rect`) so multi-column characters never shift or corrupt borders.
 
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
+**Wave 1**
 
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
-- [ ] 03-03: TBD
+- [ ] 03-01-PLAN.md — H/V Binary Split Tree (`src/wm/split_tree.rs`), Z-Order Deck Stack Manager (`src/wm/z_stack.rs`), and 2-column wide-grapheme occlusion sanitizer (`src/ui/occlusion.rs`)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Persistent Guake drop-down `QuickTerminal` (`src/wm/quick_terminal.rs`), multi-pane `WindowManager` (`src/wm/mod.rs`), and SGR 1006 local mouse/keyboard/`:command` routing
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — `WorkspaceWidget` multi-pane compositor (`src/ui/mod.rs`), multi-pane `App` loop (`src/app.rs`), and Phase 3 `insta` snapshot tests (`tests/phase3_window_manager.rs`)
 
 ### Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config
 
