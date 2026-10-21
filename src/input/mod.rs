@@ -41,6 +41,11 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return handle_copy_mode_key(pane, key);
     }
 
+    // If QuickSelect 3270 Field Hints mode is active on the OutputCanvas (ECO-01), route keys to it first
+    if pane.hints_mode.active {
+        return handle_hints_mode_key(pane, key);
+    }
+
     // If fuzzy history search is active, route keys to fuzzy search modal first
     if pane.is_prompt_visible() && pane.prompt.fuzzy_search.active {
         return handle_fuzzy_search_key(pane, key);
@@ -80,6 +85,18 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 } else {
                     pane.enter_copy_mode();
                 }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('f') => {
+                if pane.hints_mode.active {
+                    pane.exit_hints_mode();
+                } else {
+                    pane.enter_hints_mode();
+                }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('l') => {
+                pane.toggle_read_only();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('/') => {
@@ -159,6 +176,13 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
     match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => handle_command_prompt_key(pane, key),
         InputRoutingMode::RawPtyPassthrough => {
+            if pane.read_only {
+                pane.status_message = Some(
+                    "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
+                        .to_string(),
+                );
+                return Ok(AppAction::Handled);
+            }
             let bytes = encode_key_to_pty_bytes_full(
                 key,
                 pane.vt.is_application_cursor(),
@@ -173,6 +197,37 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
             Ok(AppAction::Handled)
         }
     }
+}
+
+fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    let len = pane.hints_mode.hints.len();
+    if len == 0 {
+        pane.exit_hints_mode();
+        return Ok(AppAction::Handled);
+    }
+    match key.code {
+        KeyCode::Esc => {
+            pane.exit_hints_mode();
+        }
+        KeyCode::Enter => {
+            let sel = pane.hints_mode.selected.min(len - 1);
+            let _ = pane.accept_hint_index(sel);
+        }
+        KeyCode::Down | KeyCode::Tab => {
+            pane.hints_mode.selected = (pane.hints_mode.selected + 1) % len;
+        }
+        KeyCode::Up | KeyCode::BackTab => {
+            pane.hints_mode.selected = (pane.hints_mode.selected + len - 1) % len;
+        }
+        KeyCode::Backspace => {
+            pane.hints_mode.typed_prefix.pop();
+        }
+        KeyCode::Char(ch) => {
+            let _ = pane.push_hint_char(ch);
+        }
+        _ => {}
+    }
+    Ok(AppAction::Handled)
 }
 
 fn handle_unsafe_paste_modal_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
@@ -442,9 +497,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
 
     match key.code {
         KeyCode::Enter => {
-            let submitted = pane.prompt.take_submission();
+            let current_text = pane.prompt.text();
             // Check for in-prompt :command execution first (PANE-03, PANE-05)
-            if let Some(cmd_res) = parse_colon_command(&submitted) {
+            if let Some(cmd_res) = parse_colon_command(&current_text) {
+                let _ = pane.prompt.take_submission();
                 match cmd_res {
                     Ok(cmd) => {
                         if execute_colon_command(pane, cmd) {
@@ -458,6 +514,15 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 return Ok(AppAction::Handled);
             }
 
+            if pane.read_only {
+                pane.status_message = Some(
+                    "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
+                        .to_string(),
+                );
+                return Ok(AppAction::Handled);
+            }
+
+            let submitted = pane.prompt.take_submission();
             pane.vt.reset_scrollback();
             pane.vt.record_command_submission(submitted.clone());
             let _ = pane.history_store.record_command(&submitted);
@@ -833,6 +898,57 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
+    // If the <F9> Live 3270 Terminal Inspector modal is open, route keys to it first (BEL-01)
+    if wm.inspector_visible {
+        match key.code {
+            KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => {
+                wm.inspector_visible = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                wm.inspector_scroll = wm.inspector_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                wm.inspector_scroll = wm.inspector_scroll.saturating_add(1);
+            }
+            KeyCode::PageUp => {
+                wm.inspector_scroll = wm.inspector_scroll.saturating_sub(6);
+            }
+            KeyCode::PageDown => {
+                wm.inspector_scroll = wm.inspector_scroll.saturating_add(6);
+            }
+            _ => {}
+        }
+        return Ok(AppAction::Handled);
+    }
+
+    // If a top Borland Turbo Vision Menu Bar pull-down is open, route keys to it first (ECO-03)
+    if let Some(cat) = wm.menubar_open_category {
+        match key.code {
+            KeyCode::Esc => {
+                wm.menubar_open_category = None;
+            }
+            KeyCode::Left => {
+                wm.menubar_open_category = Some((cat + 6) % 7);
+                wm.menubar_selected_item = 0;
+            }
+            KeyCode::Right => {
+                wm.menubar_open_category = Some((cat + 1) % 7);
+                wm.menubar_selected_item = 0;
+            }
+            KeyCode::Up => {
+                wm.menubar_selected_item = wm.menubar_selected_item.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                wm.menubar_selected_item = (wm.menubar_selected_item + 1).min(3);
+            }
+            KeyCode::Enter => {
+                return execute_menubar_selection(wm, cat, wm.menubar_selected_item);
+            }
+            _ => {}
+        }
+        return Ok(AppAction::Handled);
+    }
+
     // Global Guake/Quake-style quick terminal drop-down hotkey: Alt+` or Ctrl+Space (WM-05)
     if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('`'))
         || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char(' '))
@@ -841,7 +957,7 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
-    // Borland Turbo Vision function keys: F1 = Help, F2 = Split, F5 = Zoom, F6 = Next Pane, F10 = Quake
+    // Borland Turbo Vision function keys: F1 = Help, F2 = Split, F5 = Zoom, F6 = Next Pane, F9 = Inspector, F10 = Quake
     match key.code {
         KeyCode::F(1) => {
             wm.toggle_help();
@@ -857,6 +973,10 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         }
         KeyCode::F(6) => {
             wm.shuffle_deck_next();
+            return Ok(AppAction::Handled);
+        }
+        KeyCode::F(9) => {
+            wm.toggle_inspector();
             return Ok(AppAction::Handled);
         }
         KeyCode::F(10) => {
@@ -918,13 +1038,14 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         }
     }
 
-    // Intercept Enter on `:split`, `:deck`, `:focus`, `:zoom`, `:close`, `:layout`, `:quake`
+    // Intercept Enter on `:split`, `:deck`, `:focus`, `:zoom`, `:close`, `:layout`, `:quake`, or broadcast submissions
     if key.code == KeyCode::Enter
         && !key.modifiers.contains(KeyModifiers::SHIFT)
         && !key.modifiers.contains(KeyModifiers::ALT)
         && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
         && !wm.active_pane().prompt.fuzzy_search.active
         && !wm.active_pane().copy_mode.active
+        && !wm.active_pane().hints_mode.active
         && wm.active_pane().pending_unsafe_paste.is_none()
     {
         let text = wm.active_pane().prompt.text();
@@ -942,9 +1063,73 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
             }
             return Ok(AppAction::Handled);
         }
+
+        // Synchronized Multi-Pane Input Broadcast (ECO-04): submit command to all non-locked workspace panes
+        if wm.broadcast_input && !wm.active_pane().read_only {
+            let submitted = wm.active_pane_mut().prompt.take_submission();
+            let mut payload = submitted.clone().into_bytes();
+            payload.push(b'\n');
+            for pane in wm.panes.values_mut() {
+                if pane.read_only {
+                    continue;
+                }
+                pane.vt.reset_scrollback();
+                pane.vt.record_command_submission(submitted.clone());
+                let _ = pane.history_store.record_command(&submitted);
+                pane.prompt.running_command = Some(submitted.replace('\n', " ; "));
+                if !submitted.trim().is_empty() && pane.prompt.history.last() != Some(&submitted) {
+                    pane.prompt.history.push(submitted.clone());
+                }
+                if let Some(pty) = &pane.pty {
+                    pty.write_all(&payload)?;
+                }
+            }
+            return Ok(AppAction::Handled);
+        }
     }
 
     handle_key_event(wm.active_pane_mut(), key)
+}
+
+fn execute_menubar_selection(
+    wm: &mut WindowManager,
+    category: usize,
+    item: usize,
+) -> Result<AppAction> {
+    wm.menubar_open_category = None;
+    let cmd_str = match (category, item) {
+        (0, 0) => ":inspector",
+        (0, 1) => ":session save default",
+        (0, 2) => ":session restore default",
+        (0, 3) => ":quit",
+        (1, 0) => ":split h",
+        (1, 1) => ":split v",
+        (1, 2) => ":zoom",
+        (1, 3) => ":layout stack",
+        (2, 0) => ":prompt top",
+        (2, 1) => ":prompt bottom",
+        (2, 2) => ":prompt split",
+        (2, 3) => ":history popup",
+        (3, 0) => ":hints",
+        (3, 1) => ":copy",
+        (3, 2) => ":crosshair",
+        (3, 3) => ":fkeybar",
+        (4, 0) => ":theme turbo-blue",
+        (4, 1) => ":theme turbo-cyan",
+        (4, 2) => ":theme 3278",
+        (4, 3) => ":theme 3279",
+        (5, 0) => ":broadcast",
+        (5, 1) => ":lock",
+        (5, 2) => ":quake",
+        (5, 3) => ":raw",
+        _ => ":help",
+    };
+    if let Some(Ok(cmd)) = parse_colon_command(cmd_str)
+        && execute_wm_colon_command(wm, cmd)
+    {
+        return Ok(AppAction::Quit);
+    }
+    Ok(AppAction::Handled)
 }
 
 /// Routes a `MouseEvent` across the multi-pane `WindowManager`, hit-testing in reverse z-order,
@@ -955,6 +1140,28 @@ pub fn handle_wm_mouse_event(
     mouse: MouseEvent,
     screen_area: Rect,
 ) -> Result<AppAction> {
+    if wm.config.show_top_menubar
+        && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+        && mouse.row == screen_area.y
+    {
+        let rel_col = mouse.column.saturating_sub(screen_area.x);
+        let cat = match rel_col {
+            0..=10 => 0,
+            11..=19 => 1,
+            20..=28 => 2,
+            29..=35 => 3,
+            36..=43 => 4,
+            44..=50 => 5,
+            _ => 6,
+        };
+        if wm.menubar_open_category == Some(cat) {
+            wm.menubar_open_category = None;
+        } else {
+            wm.menubar_open_category = Some(cat);
+            wm.menubar_selected_item = 0;
+        }
+        return Ok(AppAction::Handled);
+    }
     let Some((hit_id, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, screen_area)
     else {
         return Ok(AppAction::Continue);

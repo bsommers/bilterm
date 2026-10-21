@@ -5,6 +5,27 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] - 2026-10-21
+
+### Added
+- **Live 3270 Terminal Inspector Modal (`BEL-01`, `F9` / `:inspector`, `src/vt/mod.rs`, `src/ui/mod.rs`, `src/input/mod.rs`)**:
+  - Real-time Borland Turbo Vision diagnostic overlay inspecting the focused `CompositePane`'s active `DECSET` modes (`?1049`, `?2004`, `?1006`, `?1007`, `?2026`, `?2027`, `?2031`, `?2048`), `DECCKM`/`DECBKM`, Kitty keyboard protocol flags (`CSI > flags u`), cursor coordinates, cell-under-cursor grapheme + `U+XXXX` codepoints, extended SGR underline/overline state, 3-signal line-discipline status, and a bounded 16-entry ring buffer of recent CSI/OSC escape sequences.
+- **`OSC 9;4` OIA Progress Bar Gauge (`BEL-02`, `src/vt/mod.rs`, `src/ui/mod.rs`)**:
+  - Parses ConEmu/Ghostty `\x1b]9;4;<state>;<pct>(\x07|\x1b\\)` progress sequences (`Normal`, `Error`, `Paused`, `Indeterminate`, and reset `0`) and renders a live 8-cell block progress bar (`[████░░░░] 50%`, `![████░░░░] 50%`, `⏸[████░░░░] 50%`, `[▓▓░░░░▓▓] BUSY`) inside the IBM 3270 Operator Information Area (OIA) status bar.
+- **Color Scheme Change Notifications (`BEL-03`, `DECSET ?2031` & `CSI ? 996 n`, `src/vt/mod.rs`, `src/wm/mod.rs`, `src/pane/colon_command.rs`)**:
+  - Replies to `CSI ? 996 n` color-scheme DSR queries with `CSI ? 997 ; 1 n` (dark) or `CSI ? 997 ; 2 n` (light) computed from the active theme background luminance, and automatically dispatches unsolicited `CSI ? 997 ; 1|2 n` notifications to all panes with `DECSET ?2031` enabled whenever `:theme` changes.
+- **Unicode Grapheme Cluster Mode (`FND-07`, `DECSET ?2027`, `src/ui/mod.rs`)**:
+  - Preserves multi-codepoint Zero-Width Joiner (`U+200D`) and Variation Selector-16 (`U+FE0F`) grapheme clusters on the `OutputCanvas` when `DECSET ?2027` is active.
+- **QuickSelect 3270 Field Hints (`ECO-01`, `Alt+F` / `:hints`, `src/vt/mod.rs`, `src/pane/mod.rs`, `src/ui/mod.rs`, `src/input/mod.rs`)**:
+  - Scans the visible `OutputCanvas` for URLs (`https://`, `http://`, `file://`), file paths (`/path`, `./path`, `../path`, `~/path`, `dir/file`), IPv4 addresses (`a.b.c.d[:port]`), and Git commit SHAs (`7..40` hex chars), overlays high-contrast `[a]..[z]` jump badges, and inserts the selected token into the floating command prompt while yanking via `OSC 52`.
+- **Workspace Layout & Session Serialization (`ECO-02`, `:session save <name>` / `:session restore <name>` / `:session list`, `src/wm/mod.rs`, `src/pane/colon_command.rs`)**:
+  - Saves and restores complete multi-pane workspace topologies (`WorkspaceLayoutMode`, `SplitTree`, `ZStack` z-order, zoom state, pane titles, working directories, `PromptAnchor`, prompt dimensions, read-only locks, and command histories) to declarative TOML files in `$XDG_STATE_HOME/bilterm/sessions/<name>.toml`.
+- **Interactive Top Borland Turbo Vision Menu Bar (`ECO-03`, `:menubar [on|off]`, `src/ui/mod.rs`, `src/input/mod.rs`, `src/config/mod.rs`)**:
+  - Optional 1-row top pull-down menu bar (`≡ System  Window  Prompt  View  Theme  Tmux  Help`) with mouse click activation, keyboard arrow navigation, and Borland shadow-framed pull-down menus.
+- **Read-Only Protected 3270 Field Lock & Multi-Pane Input Broadcast (`ECO-04`, `Alt+L` / `:lock` & `:broadcast`, `src/pane/mod.rs`, `src/wm/mod.rs`, `src/input/mod.rs`, `src/ui/mod.rs`)**:
+  - Per-pane Read-Only lock (`Alt+L` / `:lock [on|off]`) displays a `🔒 PROT` OIA badge and blocks accidental shell command submissions or raw PTY keystrokes while still permitting `:colon` commands.
+  - Synchronized Multi-Pane Input Broadcast (`:broadcast [on|off]`) displays a `📡 BCAST` badge and fans out submitted commands to all unlocked workspace panes simultaneously.
+
 ## [v0.2.5] - 2026-10-21
 
 ### Added

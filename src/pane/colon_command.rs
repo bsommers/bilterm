@@ -56,6 +56,14 @@ pub enum ColonCommand {
     SearchOff,
     CopyModeToggle,
     LinksYank,
+    InspectorToggle(Option<bool>),
+    HintsToggle,
+    LockToggle(Option<bool>),
+    BroadcastToggle(Option<bool>),
+    MenuBarToggle(Option<bool>),
+    SessionSave(String),
+    SessionRestore(String),
+    SessionList,
     Quit,
 }
 
@@ -230,6 +238,53 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         },
         "copy" | "vi" => Some(Ok(ColonCommand::CopyModeToggle)),
         "links" | "url" | "urls" => Some(Ok(ColonCommand::LinksYank)),
+        "inspector" | "inspect" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true" | "open") => Some(true),
+                Some("off" | "false" | "close") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::InspectorToggle(arg)))
+        }
+        "hints" | "hint" | "fields" => Some(Ok(ColonCommand::HintsToggle)),
+        "lock" | "readonly" | "prot" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true") => Some(true),
+                Some("off" | "false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::LockToggle(arg)))
+        }
+        "broadcast" | "bcast" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true") => Some(true),
+                Some("off" | "false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::BroadcastToggle(arg)))
+        }
+        "menubar" | "menu" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true") => Some(true),
+                Some("off" | "false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::MenuBarToggle(arg)))
+        }
+        "session" | "workspace" => match parts.get(1).copied() {
+            Some("save") => {
+                let name = parts.get(2).copied().unwrap_or("default").to_string();
+                Some(Ok(ColonCommand::SessionSave(name)))
+            }
+            Some("restore" | "load") => {
+                let name = parts.get(2).copied().unwrap_or("default").to_string();
+                Some(Ok(ColonCommand::SessionRestore(name)))
+            }
+            None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
+            _ => Some(Err(
+                "Usage: :session save [name] | restore [name] | list".to_string(),
+            )),
+        },
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
@@ -401,6 +456,19 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             }
             false
         }
+        ColonCommand::HintsToggle => {
+            if pane.hints_mode.active {
+                pane.exit_hints_mode();
+            } else {
+                pane.enter_hints_mode();
+            }
+            false
+        }
+        ColonCommand::LockToggle(val) => {
+            let next = val.unwrap_or(!pane.read_only);
+            pane.set_read_only(next);
+            false
+        }
         ColonCommand::Quit => true,
         _ => false,
     }
@@ -469,6 +537,61 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::Theme(preset) => {
             wm.config.theme = preset;
             wm.config.custom_palette_override = None;
+            wm.notify_theme_changed();
+            false
+        }
+        ColonCommand::InspectorToggle(val) => {
+            wm.inspector_visible = val.unwrap_or(!wm.inspector_visible);
+            if wm.inspector_visible {
+                wm.inspector_scroll = 0;
+            }
+            false
+        }
+        ColonCommand::BroadcastToggle(val) => {
+            let next = val.unwrap_or(!wm.broadcast_input);
+            wm.set_broadcast_input(next);
+            false
+        }
+        ColonCommand::MenuBarToggle(val) => {
+            wm.config.show_top_menubar = val.unwrap_or(!wm.config.show_top_menubar);
+            if !wm.config.show_top_menubar {
+                wm.menubar_open_category = None;
+            }
+            false
+        }
+        ColonCommand::SessionSave(name) => {
+            match wm.save_session(&name) {
+                Ok(path) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Saved session '{}' to {}", name, path.display()));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Session save error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SessionRestore(name) => {
+            match wm.restore_session(&name) {
+                Ok(count) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Restored session '{name}' ({count} pane(s))"));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Session restore error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SessionList => {
+            let sessions = wm.list_sessions();
+            wm.active_pane_mut().status_message = Some(if sessions.is_empty() {
+                "Saved sessions: (none)".to_string()
+            } else {
+                format!("Saved sessions: {}", sessions.join(", "))
+            });
             false
         }
         ColonCommand::Glyphs(pack) => {

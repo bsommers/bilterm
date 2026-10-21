@@ -1,9 +1,10 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use serde::{Deserialize, Serialize};
 
 use crate::pane::PaneId;
 
 /// Split orientation for tiled `CompositePane` binary splits (`WM-01`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SplitDirection {
     /// Splits a pane into Top (`first`) and Bottom (`second`) composite panes.
     Horizontal,
@@ -12,7 +13,7 @@ pub enum SplitDirection {
 }
 
 /// Recursive Binary Space Partitioning (BSP) tree node for tiled `CompositePane` layout.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SplitNode {
     Leaf(PaneId),
     Split {
@@ -25,7 +26,7 @@ pub enum SplitNode {
 }
 
 /// Binary Split Tree managing tiled H/V `CompositePane` geometry (`WM-01`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SplitTree {
     root: SplitNode,
 }

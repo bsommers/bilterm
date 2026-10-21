@@ -24,7 +24,7 @@ use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::status_bar::render_dos_fkey_bar;
 use crate::ui::theme::ThemePalette;
-use crate::vt::cell_to_ratatui_style;
+use crate::vt::{Osc9Progress, cell_to_ratatui_style};
 use crate::wm::{inset_window_frame, WindowManager, WorkspaceLayoutMode};
 
 /// Ratatui widget rendering a `CompositePane` in 3 immediate-mode passes:
@@ -110,7 +110,7 @@ impl Widget for CompositePaneWidget<'_> {
     }
 }
 
-fn is_safe_terminal_cluster(s: &str, expected_width: usize) -> bool {
+fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: bool) -> bool {
     if s.is_empty() {
         return false;
     }
@@ -119,6 +119,9 @@ fn is_safe_terminal_cluster(s: &str, expected_width: usize) -> bool {
     }
     for ch in s.chars() {
         let code = ch as u32;
+        if grapheme_mode_2027 && matches!(code, 0x200D | 0xFE0F) {
+            continue;
+        }
         if ch.is_control()
             || matches!(
                 code,
@@ -148,6 +151,7 @@ fn render_output_canvas(
     let (vt_rows, vt_cols) = pane.vt.size();
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
+    let grapheme_2027 = pane.vt.is_grapheme_cluster_2027();
 
     for r in 0..render_rows {
         let mut skip_next_wide_continuation = false;
@@ -179,7 +183,7 @@ fn render_output_canvas(
             let contents = vt_cell.contents();
             if vt_cell.is_wide() {
                 // Prevent a 2-column wide glyph at the rightmost column from overflowing/wrapping the host terminal
-                if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2) {
+                if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2, grapheme_2027) {
                     if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
                         dst_cell.set_symbol(contents);
                         dst_cell.set_style(style);
@@ -192,7 +196,7 @@ fn render_output_canvas(
             } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
                 if contents.is_empty() {
                     dst_cell.set_symbol(" ");
-                } else if is_safe_terminal_cluster(contents, 1) {
+                } else if is_safe_terminal_cluster(contents, 1, grapheme_2027) {
                     dst_cell.set_symbol(contents);
                 } else {
                     dst_cell.set_symbol("·");
@@ -266,6 +270,51 @@ fn render_output_canvas(
             cfg.cursor_style,
             Color::Rgb(255, 255, 85),
         );
+    }
+
+    // Render QuickSelect 3270 Field Hints badges ([a], [b], ...) when active (ECO-01)
+    if pane.hints_mode.active && !pane.hints_mode.hints.is_empty() {
+        for (idx, hint) in pane.hints_mode.hints.iter().enumerate() {
+            if hint.row >= render_rows {
+                continue;
+            }
+            let is_sel = idx == pane.hints_mode.selected;
+            let span_fg = if is_sel {
+                Color::Rgb(255, 255, 85)
+            } else {
+                Color::Rgb(85, 255, 255)
+            };
+            for c in hint.start_col..=hint.end_col.min(render_cols.saturating_sub(1)) {
+                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + hint.row)) {
+                    cell.set_style(
+                        cell.style()
+                            .fg(span_fg)
+                            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    );
+                }
+            }
+            let badge = format!("[{}]", hint.label);
+            let badge_bg = if is_sel {
+                Color::Rgb(255, 176, 0)
+            } else {
+                Color::Rgb(255, 255, 85)
+            };
+            for (ch_idx, ch) in badge.chars().enumerate() {
+                let col = hint.start_col.saturating_add(ch_idx as u16);
+                if col < render_cols
+                    && let Some(cell) = buf.cell_mut((canvas.x + col, canvas.y + hint.row))
+                {
+                    let mut sym = [0u8; 4];
+                    cell.set_symbol(ch.encode_utf8(&mut sym));
+                    cell.set_style(
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(badge_bg)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+        }
     }
 
     // When in RawPtyPassthrough and not scrolled back, highlight the live PTY cursor cell
@@ -685,15 +734,13 @@ impl Widget for WorkspaceWidget<'_> {
         let palette = cfg.palette();
         let glyphs = cfg.glyph_set();
 
-        let workspace_area = if cfg.show_dos_fkey_bar && area.height > 2 {
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: area.height - 1,
-            }
-        } else {
-            area
+        let top_offset = u16::from(cfg.show_top_menubar && area.height > 3);
+        let bottom_offset = u16::from(cfg.show_dos_fkey_bar && area.height > 2 + top_offset);
+        let workspace_area = Rect {
+            x: area.x,
+            y: area.y + top_offset,
+            width: area.width,
+            height: area.height.saturating_sub(top_offset + bottom_offset).max(1),
         };
 
         let rects = self.wm.compute_workspace_rects(workspace_area);
@@ -724,9 +771,10 @@ impl Widget for WorkspaceWidget<'_> {
                     .rank_of(id)
                     .map(|(r, total)| format!("Z:{r}/{total}"))
                     .unwrap_or_default();
+                let lock_tag = if pane.read_only { " 🔒" } else { "" };
                 render_borland_frame_styled(
                     outer,
-                    &format!("[{id}] {} ({z_badge})", pane.title),
+                    &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title),
                     is_active,
                     cfg.window_outline,
                     &palette,
@@ -767,7 +815,32 @@ impl Widget for WorkspaceWidget<'_> {
                 .render(qt_inner, buf);
         }
 
-        if cfg.show_dos_fkey_bar && area.height > 2 {
+        // Render optional top 1-row Borland Turbo Vision Menu Bar & active pull-down menu (ECO-03)
+        if top_offset > 0 {
+            let menubar_rect = Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            };
+            render_top_menubar(menubar_rect, self.wm, &palette, buf);
+            if let Some(cat) = self.wm.menubar_open_category
+                && workspace_area.height >= 6
+                && workspace_area.width >= 24
+            {
+                render_menubar_dropdown(
+                    cat,
+                    self.wm.menubar_selected_item,
+                    workspace_area,
+                    cfg,
+                    &palette,
+                    &glyphs,
+                    buf,
+                );
+            }
+        }
+
+        if bottom_offset > 0 {
             let fkey_rect = Rect {
                 x: area.x,
                 y: area.y + area.height - 1,
@@ -775,6 +848,18 @@ impl Widget for WorkspaceWidget<'_> {
                 height: 1,
             };
             render_dos_fkey_bar(fkey_rect, &palette, buf);
+        }
+
+        // Render interactive <F9> Live 3270 Terminal Inspector modal on top of workspace (BEL-01)
+        if self.wm.inspector_visible && workspace_area.width >= 24 && workspace_area.height >= 6 {
+            render_inspector_modal(
+                self.wm,
+                workspace_area,
+                cfg,
+                &palette,
+                &glyphs,
+                buf,
+            );
         }
 
         // Render interactive <F1> Borland Turbo Vision Help Modal on top of the workspace
@@ -1033,6 +1118,13 @@ fn render_help_modal(
         ("Alt+C / :copy", "Toggle Vi Copy Mode (hjkl, v char, V line, b block, y yank)"),
         ("Alt+LeftDrag", "Mouse rectangular block selection on OutputCanvas"),
         ("Ctrl+Click / :links", "Yank URL under mouse or last OSC 8/visible URL via OSC 52"),
+        ("═══ 3270 INSPECTOR, FIELD HINTS & SESSIONS (v0.3.0) ═══", ""),
+        ("F9 / :inspector", "Toggle Live 3270 Terminal Inspector modal"),
+        ("Alt+F / :hints", "QuickSelect 3270 Field Hints (URLs, paths, SHAs, IPs)"),
+        ("Alt+L / :lock [on|off]", "Toggle Read-Only Protected 3270 Field Lock (🔒 PROT)"),
+        (":broadcast [on|off]", "Synchronized Multi-Pane Input Broadcast (📡 BCAST)"),
+        (":session save|restore", "Save or restore named workspace layout & sessions"),
+        (":menubar [on|off]", "Toggle interactive top Borland Turbo Vision Menu Bar"),
         ("═══ THEMES, BORDERS & SHADOWS ═══", ""),
         (":theme <name>", "turbo-blue | turbo-cyan | 3278 | 3279 | mono"),
         (":outline <style>", "double | solid | rounded | thick | dotted | dashed | quadruple | ascii"),
@@ -1077,6 +1169,352 @@ fn render_help_modal(
         .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
         .render(inner, buf);
     Paragraph::new(rendered).render(inner, buf);
+}
+
+const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
+    (
+        "≡ System",
+        &[
+            ("3270 Inspector (F9)", ":inspector"),
+            ("Save Session", ":session save default"),
+            ("Restore Session", ":session restore default"),
+            ("Quit (Ctrl+Q)", ":quit"),
+        ],
+    ),
+    (
+        "Window",
+        &[
+            ("Split Horizontal (F2)", ":split h"),
+            ("Split Vertical (Alt+V)", ":split v"),
+            ("Zoom Toggle (F5)", ":zoom"),
+            ("Stack Windows (Alt+M)", ":layout stack"),
+        ],
+    ),
+    (
+        "Prompt",
+        &[
+            ("Pin Top (Alt+T)", ":prompt top"),
+            ("Pin Bottom (Alt+B)", ":prompt bottom"),
+            ("Split Mode (Alt+S)", ":prompt split"),
+            ("History Popup (Alt+P)", ":history popup"),
+        ],
+    ),
+    (
+        "View",
+        &[
+            ("3270 Field Hints (Alt+F)", ":hints"),
+            ("Vi Copy Mode (Alt+C)", ":copy"),
+            ("Cross-Hair Ruler (Alt+X)", ":crosshair"),
+            ("DOS F-Key Bar", ":fkeybar"),
+        ],
+    ),
+    (
+        "Theme",
+        &[
+            ("Borland Turbo Blue", ":theme turbo-blue"),
+            ("Borland Turbo Cyan", ":theme turbo-cyan"),
+            ("IBM 3278 Phosphor Green", ":theme 3278"),
+            ("IBM 3279 Amber CRT", ":theme 3279"),
+        ],
+    ),
+    (
+        "Tmux",
+        &[
+            ("Broadcast Input", ":broadcast"),
+            ("Read-Only Lock (Alt+L)", ":lock"),
+            ("Quake Terminal (F10)", ":quake"),
+            ("Raw Passthrough (F12)", ":raw"),
+        ],
+    ),
+    (
+        "Help",
+        &[
+            ("Help Reference (F1)", ":help"),
+            ("3270 Inspector (F9)", ":inspector"),
+            ("List Sessions", ":session list"),
+            ("Close Help", ":help"),
+        ],
+    ),
+];
+
+fn render_top_menubar(
+    rect: Rect,
+    wm: &WindowManager,
+    palette: &ThemePalette,
+    buf: &mut Buffer,
+) {
+    if rect.width == 0 || rect.height == 0 {
+        return;
+    }
+    let bar_bg = Color::Rgb(170, 170, 170);
+    let mut spans = Vec::new();
+    for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
+        let is_open = wm.menubar_open_category == Some(idx);
+        let (fg, bg) = if is_open {
+            (Color::White, Color::Rgb(0, 128, 0))
+        } else {
+            (Color::Black, bar_bg)
+        };
+        spans.push(Span::styled(
+            format!(" {title} "),
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+        ));
+    }
+    if wm.broadcast_input {
+        spans.push(Span::styled(
+            " 📡 BCAST ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(255, 176, 0))
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    Block::default()
+        .style(Style::default().fg(Color::Black).bg(bar_bg))
+        .render(rect, buf);
+    let _ = palette;
+    Paragraph::new(Line::from(spans)).render(rect, buf);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_menubar_dropdown(
+    category: usize,
+    selected_item: usize,
+    workspace_area: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let cat_idx = category.min(MENUBAR_CATEGORIES.len() - 1);
+    let (cat_title, items) = MENUBAR_CATEGORIES[cat_idx];
+    let x_off = (cat_idx as u16) * 8;
+    let w = 30u16.min(workspace_area.width);
+    let h = (items.len() as u16 + 2).min(workspace_area.height);
+    let x = (workspace_area.x + x_off).min(workspace_area.x + workspace_area.width.saturating_sub(w));
+    let y = workspace_area.y;
+    let dropdown = Rect::new(x, y, w, h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, dropdown, workspace_area, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, dropdown);
+    render_borland_frame_styled(
+        dropdown,
+        cat_title,
+        true,
+        cfg.window_outline,
+        palette,
+        glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(dropdown);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let mut lines = Vec::with_capacity(items.len());
+    for (idx, &(label, _)) in items.iter().enumerate() {
+        let is_sel = idx == selected_item.min(items.len().saturating_sub(1));
+        let (fg, bg) = if is_sel {
+            (Color::Black, Color::Rgb(0, 255, 102))
+        } else {
+            (Color::White, palette.window_frame_bg)
+        };
+        let prefix = if is_sel { "► " } else { "  " };
+        lines.push(Line::from(Span::styled(
+            format!("{prefix}{label:<width$}", width = usize::from(inner.width.saturating_sub(2))),
+            Style::default().fg(fg).bg(bg).add_modifier(if is_sel {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            }),
+        )));
+    }
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(lines).render(inner, buf);
+}
+
+fn render_inspector_modal(
+    wm: &WindowManager,
+    workspace_area: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let w = workspace_area
+        .width
+        .saturating_sub(4)
+        .clamp(24, 76)
+        .min(workspace_area.width);
+    let h = workspace_area
+        .height
+        .saturating_sub(2)
+        .clamp(6, 20)
+        .min(workspace_area.height);
+    let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
+    let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
+    let modal = Rect::new(x, y, w, h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, modal);
+    render_borland_frame_styled(
+        modal,
+        "[F9] 3270 TERMINAL INSPECTOR (Up/Down Scroll, F9/Esc=Close)",
+        true,
+        cfg.window_outline,
+        palette,
+        glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(modal);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let pane = wm.active_pane();
+    let vt = &pane.vt;
+    let (rows, cols) = vt.size();
+    let (cur_r, cur_c) = vt.screen().cursor_position();
+    let cell_opt = vt.screen().cell(cur_r, cur_c);
+    let cell_grapheme = cell_opt
+        .map(|c| {
+            let s = c.contents();
+            if s.is_empty() { " " } else { s }
+        })
+        .unwrap_or(" ");
+    let codepoints: String = cell_grapheme
+        .chars()
+        .map(|ch| format!("U+{:04X}", ch as u32))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let mut info_rows: Vec<(String, String)> = vec![
+        (
+            "PANE & GRID".to_string(),
+            format!(
+                "Pane #{} ({}) | Grid: {}x{} | Gen: #{} | Out: {}B",
+                pane.id,
+                pane.title,
+                cols,
+                rows,
+                vt.snapshot().generation,
+                vt.total_bytes_processed()
+            ),
+        ),
+        (
+            "DECSET MODES (1)".to_string(),
+            format!(
+                "?1049(Alt):{} ?2004(Paste):{} ?1006(Mouse):{} ?1007(AltScrl):{}",
+                on_off(vt.is_alternate_screen()),
+                on_off(vt.is_bracketed_paste()),
+                on_off(vt.is_mouse_sgr_or_tracking()),
+                on_off(vt.is_mouse_alternate_scroll()),
+            ),
+        ),
+        (
+            "DECSET MODES (2)".to_string(),
+            format!(
+                "?2026(Sync):{} ?2027(Graph):{} ?2031(Theme):{} ?2048(Size):{}",
+                on_off(vt.is_synchronized_output()),
+                on_off(vt.is_grapheme_cluster_2027()),
+                on_off(vt.is_report_color_scheme_2031()),
+                on_off(vt.is_in_band_size_2048()),
+            ),
+        ),
+        (
+            "KEYBOARD & LOCK".to_string(),
+            format!(
+                "DECCKM(?1):{} DECBKM(?67):{} KittyFlags:0x{:02X} ReadOnly:{} Bcast:{}",
+                on_off(vt.is_application_cursor()),
+                on_off(vt.is_backarrow_key_67()),
+                vt.kitty_keyboard_flags(),
+                on_off(pane.read_only),
+                on_off(wm.broadcast_input),
+            ),
+        ),
+        (
+            "CURSOR & CELL".to_string(),
+            format!(
+                "R:{} C:{} | '{}' ({}) | UL:{:?} Overline:{}",
+                cur_r + 1,
+                cur_c + 1,
+                cell_grapheme,
+                codepoints,
+                vt.active_underline_kind(),
+                on_off(vt.is_overline()),
+            ),
+        ),
+        (
+            "LINE DISCIPLINE".to_string(),
+            format!(
+                "Mode:{:?} | ECHO:{} | Subcmd:{} | OSC133:{:?}",
+                pane.effective_routing_mode(),
+                on_off(pane.line_discipline.echo_enabled),
+                on_off(pane.line_discipline.has_foreground_subcommand()),
+                vt.osc133_phase(),
+            ),
+        ),
+        (
+            "OSC 9;4 & LINKS".to_string(),
+            format!(
+                "Progress:{:?} | OSC8 Links:{} | Blocks:{}",
+                vt.osc9_progress(),
+                vt.osc8_links().len(),
+                vt.command_blocks().len(),
+            ),
+        ),
+    ];
+
+    if vt.recent_escape_sequences().is_empty() {
+        info_rows.push((
+            "ESCAPE RING".to_string(),
+            "(No CSI/OSC control sequences recorded yet)".to_string(),
+        ));
+    } else {
+        for (i, seq) in vt.recent_escape_sequences().iter().rev().enumerate() {
+            info_rows.push((format!("ESC[-{i:02}]"), seq.clone()));
+        }
+    }
+
+    let max_scroll = info_rows.len().saturating_sub(usize::from(inner.height));
+    let start = wm.inspector_scroll.min(max_scroll);
+    let mut lines = Vec::with_capacity(usize::from(inner.height));
+    for (k, v) in info_rows
+        .into_iter()
+        .skip(start)
+        .take(usize::from(inner.height))
+    {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!(" {:<16} ", k),
+                Style::default()
+                    .fg(Color::Rgb(255, 255, 85))
+                    .bg(palette.window_frame_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                v,
+                Style::default()
+                    .fg(Color::Rgb(85, 255, 255))
+                    .bg(palette.window_frame_bg),
+            ),
+        ]));
+    }
+
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(lines).render(inner, buf);
+}
+
+fn on_off(b: bool) -> &'static str {
+    if b { "ON" } else { "OFF" }
 }
 
 pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut Buffer) {
@@ -1193,6 +1631,35 @@ pub fn render_oia_status_bar_themed(
         ),
     ];
 
+    if pane.read_only {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            " 🔒 PROT ",
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    if let Some(progress) = pane.vt.osc9_progress() {
+        let (gauge_str, gauge_fg) = format_osc9_gauge(progress);
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            format!(" {gauge_str} "),
+            Style::default()
+                .fg(gauge_fg)
+                .bg(oia_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     if let Some(block) = pane.vt.selected_command_block() {
         let total = pane.vt.command_blocks().len();
         spans.push(Span::styled(
@@ -1228,6 +1695,25 @@ pub fn render_oia_status_bar_themed(
         .style(Style::default().fg(Color::White).bg(oia_bg))
         .render(status_rect, buf);
     Paragraph::new(line).render(status_rect, buf);
+}
+
+fn format_osc9_gauge(progress: Osc9Progress) -> (String, Color) {
+    let build_bar = |pct: u8| -> String {
+        let filled = ((u16::from(pct.min(100)) * 8) / 100) as usize;
+        let empty = 8usize.saturating_sub(filled);
+        format!(
+            "[{}{}] {:>3}%",
+            "█".repeat(filled),
+            "░".repeat(empty),
+            pct.min(100)
+        )
+    };
+    match progress {
+        Osc9Progress::Normal(pct) => (build_bar(pct), Color::Rgb(0, 255, 102)),
+        Osc9Progress::Error(pct) => (format!("!{}", build_bar(pct)), Color::Rgb(255, 85, 85)),
+        Osc9Progress::Paused(pct) => (format!("⏸{}", build_bar(pct)), Color::Rgb(255, 255, 85)),
+        Osc9Progress::Indeterminate => ("[▓▓░░░░▓▓] BUSY".to_string(), Color::Rgb(85, 255, 255)),
+    }
 }
 
 /// Converts a `ratatui::buffer::Buffer` into a deterministic newline-delimited string for snapshot assertions.

@@ -59,10 +59,43 @@ pub struct CanvasSearchMatch {
     pub end_col: u16,
 }
 
+/// ConEmu / Ghostty `OSC 9;4;<state>;<progress>` terminal progress indicator state (`BEL-02`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Osc9Progress {
+    /// `OSC 9;4;1;<pct>` — Normal progress percentage (`0..=100`).
+    Normal(u8),
+    /// `OSC 9;4;2;<pct>` — Error progress state (`0..=100`).
+    Error(u8),
+    /// `OSC 9;4;3` — Indeterminate / pulsing progress indicator.
+    Indeterminate,
+    /// `OSC 9;4;4;<pct>` — Paused progress percentage (`0..=100`).
+    Paused(u8),
+}
+
+/// Classification of an actionable token detected on the `OutputCanvas` by QuickSelect 3270 Field Hints (`ECO-01`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CanvasHintKind {
+    Url,
+    Path,
+    IpAddr,
+    GitSha,
+}
+
+/// Actionable token on the `OutputCanvas` with a short alphabetic jump label (`[a]..[z]`, `ECO-01`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CanvasHint {
+    pub label: String,
+    pub row: u16,
+    pub start_col: u16,
+    pub end_col: u16,
+    pub text: String,
+    pub kind: CanvasHintKind,
+}
+
 /// Virtual terminal state machine wrapping `vt100-ctt` with explicit `DECSET 47/1047/1049`
 /// alternate screen tracking, `DECSET 2004` bracketed paste tracking, `DECSET 1007` alternate scroll,
 /// `DECRPM` mode reporting, Kitty keyboard protocol stacks, `XTGETTCAP`/`DECRQSS`, `OSC 4/10/11/12`
-/// color queries, `OSC 8` hyperlinks, `OSC 52` clipboard passthrough, and `OSC 133` command blocks.
+/// color queries, `OSC 8` hyperlinks, `OSC 9;4` progress bars, `OSC 52` clipboard passthrough, and `OSC 133` command blocks.
 pub struct VtParser {
     parser: vt100_ctt::Parser,
     rows: u16,
@@ -93,6 +126,8 @@ pub struct VtParser {
     last_duration_ms: Option<u64>,
     selected_block_index: Option<usize>,
     osc8_links: Vec<Osc8Hyperlink>,
+    osc9_progress: Option<Osc9Progress>,
+    recent_escape_sequences: Vec<String>,
     pending_osc52: Vec<String>,
     pending_query_responses: Vec<Vec<u8>>,
     total_lines_scrolled: usize,
@@ -140,6 +175,8 @@ impl VtParser {
             last_duration_ms: None,
             selected_block_index: None,
             osc8_links: Vec::new(),
+            osc9_progress: None,
+            recent_escape_sequences: Vec::new(),
             pending_osc52: Vec::new(),
             pending_query_responses: Vec::new(),
             total_lines_scrolled: 0,
@@ -451,6 +488,45 @@ impl VtParser {
         self.theme_cursor_rgb = cursor;
     }
 
+    /// Returns the `CSI ? 997 ; <code > n` color-scheme code (`1` = dark, `2` = light) derived from `theme_bg_rgb` luminance (`BEL-03`).
+    pub fn color_scheme_code(&self) -> u8 {
+        let (r, g, b) = self.theme_bg_rgb;
+        let luma = (299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b)) / 1000;
+        if luma >= 128 { 2 } else { 1 }
+    }
+
+    /// Updates the theme palette and, if `DECSET ?2031` is enabled, queues an unsolicited `CSI ? 997 ; 1|2 n` notification (`BEL-03`).
+    pub fn notify_color_scheme_changed(
+        &mut self,
+        fg: (u8, u8, u8),
+        bg: (u8, u8, u8),
+        cursor: (u8, u8, u8),
+    ) {
+        self.set_theme_colors(fg, bg, cursor);
+        if self.report_color_scheme_2031 {
+            let code = self.color_scheme_code();
+            self.pending_query_responses
+                .push(format!("\x1b[?997;{code}n").into_bytes());
+        }
+    }
+
+    /// Returns the active `OSC 9;4` progress indicator state, if any (`BEL-02`).
+    pub fn osc9_progress(&self) -> Option<Osc9Progress> {
+        self.osc9_progress
+    }
+
+    /// Returns the bounded ring buffer of recent CSI/OSC/DCS escape sequences for the 3270 Terminal Inspector (`BEL-01`).
+    pub fn recent_escape_sequences(&self) -> &[String] {
+        &self.recent_escape_sequences
+    }
+
+    fn record_escape_sequence(&mut self, seq: impl Into<String>) {
+        if self.recent_escape_sequences.len() >= 16 {
+            self.recent_escape_sequences.remove(0);
+        }
+        self.recent_escape_sequences.push(seq.into());
+    }
+
     /// Returns the exit code of the most recently finished command (`OSC 133;D;<exit>`, `VAL-06`).
     pub fn last_exit_code(&self) -> Option<i32> {
         self.last_exit_code
@@ -521,6 +597,83 @@ impl VtParser {
             .into_iter()
             .find(|u| u.row == row && col >= u.start_col && col <= u.end_col)
             .map(|u| u.url)
+    }
+
+    /// Scans the visible `OutputCanvas` grid for actionable tokens (URLs, file paths, IPv4 addresses,
+    /// and Git commit SHAs) and assigns keyboard jump labels (`a`..`z`, `aa`..`az`) (`ECO-01`).
+    pub fn detect_visible_hints(&self) -> Vec<CanvasHint> {
+        let (rows, cols) = self.parser.screen().size();
+        let mut raw_hints: Vec<(u16, u16, u16, String, CanvasHintKind)> = Vec::new();
+
+        for r in 0..rows {
+            let mut row_str = String::with_capacity(usize::from(cols));
+            for c in 0..cols {
+                let ch = self
+                    .parser
+                    .screen()
+                    .cell(r, c)
+                    .map(|cell| cell.contents())
+                    .unwrap_or_default();
+                if ch.is_empty() {
+                    row_str.push(' ');
+                } else {
+                    row_str.push_str(ch);
+                }
+            }
+
+            let mut byte_idx = 0usize;
+            for token in row_str.split_whitespace() {
+                let Some(rel) = row_str[byte_idx..].find(token) else {
+                    continue;
+                };
+                let start_byte = byte_idx + rel;
+                byte_idx = start_byte + token.len();
+
+                let clean = token
+                    .trim_start_matches(['(', '[', '<', '"', '\''])
+                    .trim_end_matches([')', ']', '>', '"', '\'', ',', ';', '.']);
+                if clean.len() < 4 {
+                    continue;
+                }
+                let trim_prefix_bytes = token.find(clean).unwrap_or(0);
+                let clean_start_byte = start_byte + trim_prefix_bytes;
+                let start_col = row_str[..clean_start_byte].chars().count() as u16;
+                let width_cols = clean.chars().count() as u16;
+                let end_col = start_col.saturating_add(width_cols).saturating_sub(1);
+
+                let kind_opt = if clean.starts_with("https://")
+                    || clean.starts_with("http://")
+                    || clean.starts_with("file://")
+                {
+                    Some(CanvasHintKind::Url)
+                } else if is_ipv4_token(clean) {
+                    Some(CanvasHintKind::IpAddr)
+                } else if is_path_token(clean) {
+                    Some(CanvasHintKind::Path)
+                } else if is_git_sha_token(clean) {
+                    Some(CanvasHintKind::GitSha)
+                } else {
+                    None
+                };
+
+                if let Some(kind) = kind_opt {
+                    raw_hints.push((r, start_col, end_col, clean.to_string(), kind));
+                }
+            }
+        }
+
+        raw_hints
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (row, start_col, end_col, text, kind))| CanvasHint {
+                label: hint_index_to_label(idx),
+                row,
+                start_col,
+                end_col,
+                text,
+                kind,
+            })
+            .collect()
     }
 
     /// Searches the currently visible viewport grid for case-insensitive occurrences of `query` (`VAL-02`).
@@ -697,19 +850,25 @@ impl VtParser {
                 if rest.starts_with("1049h") || rest.starts_with("1047h") || rest.starts_with("47h")
                 {
                     self.alt_screen_47_or_1047 = true;
+                    self.record_escape_sequence("CSI ?1049h (AltScreen ON)");
                 } else if rest.starts_with("1049l")
                     || rest.starts_with("1047l")
                     || rest.starts_with("47l")
                 {
                     self.alt_screen_47_or_1047 = false;
+                    self.record_escape_sequence("CSI ?1049l (AltScreen OFF)");
                 } else if rest.starts_with("2004h") {
                     self.bracketed_paste_2004 = true;
+                    self.record_escape_sequence("CSI ?2004h (BracketedPaste ON)");
                 } else if rest.starts_with("2004l") {
                     self.bracketed_paste_2004 = false;
+                    self.record_escape_sequence("CSI ?2004l (BracketedPaste OFF)");
                 } else if rest.starts_with("1h") {
                     self.application_cursor_decckm = true;
+                    self.record_escape_sequence("CSI ?1h (DECCKM ON)");
                 } else if rest.starts_with("1l") {
                     self.application_cursor_decckm = false;
+                    self.record_escape_sequence("CSI ?1l (DECCKM OFF)");
                 } else if rest.starts_with("67h") {
                     self.backarrow_key_67 = true;
                 } else if rest.starts_with("67l") {
@@ -724,37 +883,54 @@ impl VtParser {
                     || rest.starts_with("1006h")
                 {
                     self.mouse_tracking_mode = true;
+                    self.record_escape_sequence("CSI ?1006h (MouseSGR ON)");
                 } else if rest.starts_with("1000l")
                     || rest.starts_with("1002l")
                     || rest.starts_with("1003l")
                     || rest.starts_with("1006l")
                 {
                     self.mouse_tracking_mode = false;
+                    self.record_escape_sequence("CSI ?1006l (MouseSGR OFF)");
                 } else if rest.starts_with("1004h") {
                     self.focus_reporting_1004 = true;
                 } else if rest.starts_with("1004l") {
                     self.focus_reporting_1004 = false;
                 } else if rest.starts_with("2026h") {
                     self.synchronized_output_2026 = true;
+                    self.record_escape_sequence("CSI ?2026h (SyncOutput ON)");
                 } else if rest.starts_with("2026l") {
                     self.synchronized_output_2026 = false;
+                    self.record_escape_sequence("CSI ?2026l (SyncOutput OFF)");
                 } else if rest.starts_with("2027h") {
                     self.grapheme_cluster_2027 = true;
+                    self.record_escape_sequence("CSI ?2027h (GraphemeCluster ON)");
                 } else if rest.starts_with("2027l") {
                     self.grapheme_cluster_2027 = false;
+                    self.record_escape_sequence("CSI ?2027l (GraphemeCluster OFF)");
                 } else if rest.starts_with("2031h") {
                     self.report_color_scheme_2031 = true;
+                    self.record_escape_sequence("CSI ?2031h (ColorSchemeNotify ON)");
                 } else if rest.starts_with("2031l") {
                     self.report_color_scheme_2031 = false;
+                    self.record_escape_sequence("CSI ?2031l (ColorSchemeNotify OFF)");
                 } else if rest.starts_with("2048h") {
                     self.in_band_size_2048 = true;
+                    self.record_escape_sequence("CSI ?2048h (InBandResize ON)");
                 } else if rest.starts_with("2048l") {
                     self.in_band_size_2048 = false;
+                    self.record_escape_sequence("CSI ?2048l (InBandResize OFF)");
+                } else if rest.starts_with("996n") {
+                    // Color scheme DSR query: CSI ? 996 n -> CSI ? 997 ; 1|2 n (BEL-03)
+                    let code = self.color_scheme_code();
+                    self.pending_query_responses
+                        .push(format!("\x1b[?997;{code}n").into_bytes());
+                    self.record_escape_sequence(format!("CSI ?996n -> ?997;{code}n"));
                 } else if rest.starts_with('u') {
                     // Kitty keyboard protocol query: CSI ? u -> CSI ? <flags> u
                     let flags = self.kitty_keyboard_flags();
                     self.pending_query_responses
                         .push(format!("\x1b[?{flags}u").into_bytes());
+                    self.record_escape_sequence(format!("CSI ?u -> ?{flags}u"));
                 } else {
                     // Check for DECRPM private mode query: CSI ? <mode> $ p
                     let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -935,7 +1111,35 @@ impl VtParser {
                         id,
                         uri: uri.to_string(),
                     });
+                    self.record_escape_sequence(format!("OSC 8 {uri}"));
                 }
+            }
+        }
+
+        // Track OSC 9;4 progress bar reports: \x1b]9;4;<state>[;<pct>](\x07 or \x1b\\) (BEL-02)
+        for (idx, _) in text.match_indices("\x1b]9;4;") {
+            let rest = &text[idx + 6..];
+            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
+                let payload = rest[..end].trim();
+                let mut parts = payload.split(';');
+                let state = parts
+                    .next()
+                    .and_then(|s| s.trim().parse::<u8>().ok())
+                    .unwrap_or(0);
+                let pct = parts
+                    .next()
+                    .and_then(|s| s.trim().parse::<u8>().ok())
+                    .unwrap_or(0)
+                    .min(100);
+                self.osc9_progress = match state {
+                    0 => None,
+                    1 => Some(Osc9Progress::Normal(pct)),
+                    2 => Some(Osc9Progress::Error(pct)),
+                    3 => Some(Osc9Progress::Indeterminate),
+                    4 => Some(Osc9Progress::Paused(pct)),
+                    _ => self.osc9_progress,
+                };
+                self.record_escape_sequence(format!("OSC 9;4;{payload}"));
             }
         }
 
@@ -1185,6 +1389,59 @@ fn format_osc_color_reply(code: u8, palette_idx: Option<u8>, (r, g, b): (u8, u8,
         Some(idx) => format!("\x1b]{code};{idx};rgb:{r16:04x}/{g16:04x}/{b16:04x}\x1b\\"),
         None => format!("\x1b]{code};rgb:{r16:04x}/{g16:04x}/{b16:04x}\x1b\\"),
     }
+}
+
+fn hint_index_to_label(idx: usize) -> String {
+    if idx < 26 {
+        ((b'a' + idx as u8) as char).to_string()
+    } else {
+        let first = (b'a' + ((idx / 26 - 1) % 26) as u8) as char;
+        let second = (b'a' + (idx % 26) as u8) as char;
+        format!("{first}{second}")
+    }
+}
+
+fn is_ipv4_token(token: &str) -> bool {
+    let host = token.split(':').next().unwrap_or(token);
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.len() != 4 {
+        return false;
+    }
+    parts.iter().all(|p| !p.is_empty() && p.parse::<u8>().is_ok())
+}
+
+fn is_path_token(token: &str) -> bool {
+    let path_part = token.split(':').next().unwrap_or(token);
+    if path_part.starts_with('/')
+        || path_part.starts_with("./")
+        || path_part.starts_with("../")
+        || path_part.starts_with("~/")
+    {
+        return path_part.len() > 2
+            && path_part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | '~'));
+    }
+    if path_part.contains('/') && path_part.len() >= 4 {
+        let valid_chars = path_part
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-'));
+        let has_alpha = path_part.chars().any(|c| c.is_ascii_alphabetic());
+        return valid_chars && has_alpha;
+    }
+    false
+}
+
+fn is_git_sha_token(token: &str) -> bool {
+    if !(7..=40).contains(&token.len()) {
+        return false;
+    }
+    let all_hex = token.chars().all(|c| c.is_ascii_hexdigit());
+    let has_digit = token.chars().any(|c| c.is_ascii_digit());
+    let has_hex_alpha = token
+        .chars()
+        .any(|c| matches!(c, 'a'..='f' | 'A'..='F'));
+    all_hex && has_digit && has_hex_alpha
 }
 
 fn ansi_256_index_to_rgb(idx: u8) -> (u8, u8, u8) {

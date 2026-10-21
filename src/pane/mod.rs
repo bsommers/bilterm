@@ -7,6 +7,7 @@ pub mod history_store;
 use std::path::PathBuf;
 
 use ratatui::layout::Rect;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::pane::completion::{compute_completions, longest_common_prefix, TabCompletionState};
@@ -14,13 +15,13 @@ use crate::pane::fuzzy_history::FuzzyHistorySearchState;
 use crate::pane::history_store::HistoryStore;
 use crate::pty::line_discipline::{inspect_pty_fd, InputRoutingMode, LineDisciplineState};
 use crate::pty::{PtyConfig, PtyEvent, PtySession};
-use crate::vt::{CanvasSearchMatch, VtParser, encode_osc52_clipboard};
+use crate::vt::{CanvasHint, CanvasSearchMatch, VtParser, encode_osc52_clipboard};
 
 /// Unique identifier for a `CompositePane`.
 pub type PaneId = usize;
 
 /// Vertical docking, floating, or non-overlapping split mode for a pane's command prompt.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PromptAnchor {
     /// Pinned to the top of the pane's output canvas (classic IBM 3270 mainframe default, floating over output).
     Top,
@@ -825,6 +826,15 @@ impl CopyModeState {
     }
 }
 
+/// Keyboard-driven QuickSelect 3270 Field Hints overlay state (`Alt+F` / `:hints`, `ECO-01`).
+#[derive(Clone, Debug, Default)]
+pub struct HintsModeState {
+    pub active: bool,
+    pub hints: Vec<CanvasHint>,
+    pub typed_prefix: String,
+    pub selected: usize,
+}
+
 /// A single composite terminal pane combining:
 /// 1. Full-height `OutputCanvas` (`VtParser` + `PtySession`)
 /// 2. Overlaid `FloatingCommandPrompt` (`FloatingPromptState`)
@@ -842,6 +852,10 @@ pub struct CompositePane {
     pub canvas_search: CanvasSearchState,
     /// Keyboard-driven Vi Copy Mode & rectangular block selection state (`VAL-04`).
     pub copy_mode: CopyModeState,
+    /// Keyboard-driven QuickSelect 3270 Field Hints state (`ECO-01`).
+    pub hints_mode: HintsModeState,
+    /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
+    pub read_only: bool,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
     pub pending_unsafe_paste: Option<String>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
@@ -868,6 +882,8 @@ impl CompositePane {
             mouse_drag: None,
             canvas_search: CanvasSearchState::default(),
             copy_mode: CopyModeState::default(),
+            hints_mode: HintsModeState::default(),
+            read_only: false,
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
@@ -896,6 +912,8 @@ impl CompositePane {
             mouse_drag: None,
             canvas_search: CanvasSearchState::default(),
             copy_mode: CopyModeState::default(),
+            hints_mode: HintsModeState::default(),
+            read_only: false,
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
@@ -1300,6 +1318,93 @@ impl CompositePane {
         self.last_osc52_sequence = Some(seq);
         self.status_message = Some(format!("Yanked {} chars via Copy Mode", text.len()));
         Some(text)
+    }
+
+    /// Scans the visible `OutputCanvas` and opens QuickSelect 3270 Field Hints mode (`Alt+F` / `:hints`, `ECO-01`).
+    pub fn enter_hints_mode(&mut self) {
+        let hints = self.vt.detect_visible_hints();
+        if hints.is_empty() {
+            self.hints_mode.active = false;
+            self.hints_mode.hints.clear();
+            self.hints_mode.typed_prefix.clear();
+            self.status_message = Some("No actionable field hints found on canvas".to_string());
+        } else {
+            let count = hints.len();
+            self.hints_mode.active = true;
+            self.hints_mode.hints = hints;
+            self.hints_mode.typed_prefix.clear();
+            self.hints_mode.selected = 0;
+            self.status_message = Some(format!(
+                "3270 FIELD HINTS: {count} token(s) — type [a..z] to insert+yank, Enter for selected, Esc to cancel"
+            ));
+        }
+    }
+
+    /// Exits QuickSelect 3270 Field Hints mode (`ECO-01`).
+    pub fn exit_hints_mode(&mut self) {
+        self.hints_mode.active = false;
+        self.hints_mode.typed_prefix.clear();
+        self.status_message = Some("Exited 3270 Field Hints".to_string());
+    }
+
+    /// Accepts the hint at `idx`, inserting its text into `prompt` (when not `read_only`) and yanking via `OSC 52` (`ECO-01`).
+    pub fn accept_hint_index(&mut self, idx: usize) -> Option<String> {
+        let hint = self.hints_mode.hints.get(idx)?.clone();
+        self.hints_mode.active = false;
+        self.hints_mode.typed_prefix.clear();
+        self.prompt.yank_buffer = hint.text.clone();
+        self.last_osc52_sequence = Some(encode_osc52_clipboard(&hint.text));
+        if !self.read_only {
+            self.prompt.insert_str(&hint.text);
+        }
+        self.status_message = Some(format!("Selected hint [{}]: {}", hint.label, hint.text));
+        Some(hint.text)
+    }
+
+    /// Processes a typed hint label character (`a`..`z`), immediately accepting on an unambiguous match (`ECO-01`).
+    pub fn push_hint_char(&mut self, ch: char) -> Option<String> {
+        let lower = ch.to_ascii_lowercase();
+        if !lower.is_ascii_lowercase() {
+            return None;
+        }
+        self.hints_mode.typed_prefix.push(lower);
+        let prefix = self.hints_mode.typed_prefix.as_str();
+        let matching_indices: Vec<usize> = self
+            .hints_mode
+            .hints
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| h.label.starts_with(prefix))
+            .map(|(i, _)| i)
+            .collect();
+
+        if matching_indices.is_empty() {
+            self.hints_mode.typed_prefix.clear();
+            return None;
+        }
+        self.hints_mode.selected = matching_indices[0];
+        if matching_indices.len() == 1 && self.hints_mode.hints[matching_indices[0]].label == prefix
+        {
+            return self.accept_hint_index(matching_indices[0]);
+        }
+        None
+    }
+
+    /// Sets or clears the Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
+    pub fn set_read_only(&mut self, locked: bool) {
+        self.read_only = locked;
+        self.status_message = Some(format!(
+            "Pane #{} Read-Only Protection: {}",
+            self.id,
+            if locked { "ON (🔒 PROT)" } else { "OFF" }
+        ));
+    }
+
+    /// Toggles the Read-Only / Protected 3270 Field Lock (`ECO-04`).
+    pub fn toggle_read_only(&mut self) -> bool {
+        let next = !self.read_only;
+        self.set_read_only(next);
+        next
     }
 }
 

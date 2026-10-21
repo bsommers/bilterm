@@ -1,4 +1,5 @@
 use ratatui::layout::Rect;
+use serde::{Deserialize, Serialize};
 
 use crate::pane::PaneId;
 
@@ -6,7 +7,7 @@ use crate::pane::PaneId;
 ///
 /// Stores panes in ascending z-order (`order[0]` is at the bottom of the deck,
 /// `order.last()` is at the top of the deck and holds active focus).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZStack {
     order: Vec<PaneId>,
 }
@@ -15,6 +16,12 @@ impl ZStack {
     pub fn new(initial_pane: PaneId) -> Self {
         Self {
             order: vec![initial_pane],
+        }
+    }
+
+    pub fn from_order(order: Vec<PaneId>) -> Self {
+        Self {
+            order: if order.is_empty() { vec![1] } else { order },
         }
     }
 

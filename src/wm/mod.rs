@@ -3,25 +3,52 @@ pub mod split_tree;
 pub mod z_stack;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
+use ratatui::style::Color;
+use serde::{Deserialize, Serialize};
 
 use crate::config::BiltermConfig;
 use crate::error::Result;
-use crate::pane::{CompositePane, PaneId};
+use crate::pane::{CompositePane, PaneId, PromptAnchor};
 use crate::pty::PtyConfig;
 use crate::wm::quick_terminal::QuickTerminal;
 use crate::wm::split_tree::{SplitDirection, SplitTree};
 use crate::wm::z_stack::ZStack;
 
 /// Workspace window arrangement mode (`WM-01`, `WM-02`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorkspaceLayoutMode {
     /// Non-overlapping H/V binary splits (`SplitTree`).
     Tiled,
     /// Overlapping Borland Turbo Vision z-order stacked/cascaded windows (`ZStack`).
     Stacked,
+}
+
+/// Serialized per-pane metadata inside a `SavedWorkspaceSession` (`ECO-02`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedPaneState {
+    pub id: PaneId,
+    pub title: String,
+    pub cwd: String,
+    pub prompt_anchor: PromptAnchor,
+    pub prompt_height: u16,
+    pub prompt_width_cols: Option<u16>,
+    pub read_only: bool,
+    pub history: Vec<String>,
+}
+
+/// Declarative TOML snapshot of a multi-pane Bilterm workspace (`ECO-02`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedWorkspaceSession {
+    pub name: String,
+    pub layout_mode: WorkspaceLayoutMode,
+    pub split_tree: SplitTree,
+    pub z_order: Vec<PaneId>,
+    pub zoomed_pane: Option<PaneId>,
+    pub panes: Vec<SavedPaneState>,
 }
 
 /// Multi-pane Window Manager coordinating tiled H/V splits, Z-order stacking/shuffling,
@@ -39,6 +66,16 @@ pub struct WindowManager {
     pub help_visible: bool,
     /// Vertical scroll offset inside the `<F1>` Help Modal.
     pub help_scroll: usize,
+    /// Whether the `<F9>` / `:inspector` Live 3270 Terminal Inspector modal is visible (`BEL-01`).
+    pub inspector_visible: bool,
+    /// Vertical scroll offset inside the `<F9>` Terminal Inspector modal (`BEL-01`).
+    pub inspector_scroll: usize,
+    /// Active pull-down category index (`0..7`) when the top Borland Menu Bar is open (`ECO-03`).
+    pub menubar_open_category: Option<usize>,
+    /// Selected menu item row inside the open pull-down menu (`ECO-03`).
+    pub menubar_selected_item: usize,
+    /// Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
+    pub broadcast_input: bool,
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
@@ -74,6 +111,11 @@ impl WindowManager {
             config: BiltermConfig::default(),
             help_visible: false,
             help_scroll: 0,
+            inspector_visible: false,
+            inspector_scroll: 0,
+            menubar_open_category: None,
+            menubar_selected_item: 0,
+            broadcast_input: false,
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),
@@ -86,6 +128,206 @@ impl WindowManager {
         if self.help_visible {
             self.help_scroll = 0;
         }
+    }
+
+    /// Toggles the `<F9>` / `:inspector` Live 3270 Terminal Inspector modal (`BEL-01`).
+    pub fn toggle_inspector(&mut self) {
+        self.inspector_visible = !self.inspector_visible;
+        if self.inspector_visible {
+            self.inspector_scroll = 0;
+        }
+    }
+
+    /// Toggles the top 1-row Borland Turbo Vision Menu Bar (`:menubar`, `ECO-03`).
+    pub fn toggle_menubar(&mut self) {
+        self.config.show_top_menubar = !self.config.show_top_menubar;
+        if !self.config.show_top_menubar {
+            self.menubar_open_category = None;
+        }
+    }
+
+    /// Sets or toggles Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
+    pub fn set_broadcast_input(&mut self, enabled: bool) {
+        self.broadcast_input = enabled;
+        self.active_pane_mut().status_message = Some(format!(
+            "Multi-Pane Input Broadcast: {}",
+            if enabled { "ON (📡 BCAST)" } else { "OFF" }
+        ));
+    }
+
+    /// Propagates the active `ThemePalette` RGB values to all panes and queues unsolicited
+    /// `CSI ? 997 ; 1|2 n` notifications on any pane with `DECSET ?2031` active (`BEL-03`).
+    pub fn notify_theme_changed(&mut self) {
+        let pal = self.config.palette();
+        let to_rgb = |c: Color, fallback: (u8, u8, u8)| match c {
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::Black => (0x00, 0x00, 0x00),
+            Color::White => (0xFF, 0xFF, 0xFF),
+            _ => fallback,
+        };
+        let fg = to_rgb(pal.title_fg, (0xFF, 0xFF, 0xFF));
+        let bg = to_rgb(pal.window_frame_bg, (0x00, 0x00, 0x84));
+        let cur = to_rgb(pal.active_border_fg, (0xFF, 0xFF, 0x55));
+        for pane in self.panes.values_mut() {
+            pane.vt.notify_color_scheme_changed(fg, bg, cur);
+            if let Some(pty) = &pane.pty {
+                for resp in pane.vt.take_query_responses() {
+                    let _ = pty.write_all(&resp);
+                }
+            }
+        }
+        self.quick_terminal
+            .pane
+            .vt
+            .notify_color_scheme_changed(fg, bg, cur);
+    }
+
+    fn resolve_session_dir(&self) -> PathBuf {
+        if let Some(custom) = &self.config.session_dir {
+            return PathBuf::from(custom);
+        }
+        if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
+            return PathBuf::from(xdg).join("bilterm").join("sessions");
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home)
+                .join(".local")
+                .join("state")
+                .join("bilterm")
+                .join("sessions");
+        }
+        std::env::temp_dir().join("bilterm-sessions")
+    }
+
+    /// Captures a `SavedWorkspaceSession` of the current multi-pane workspace (`ECO-02`).
+    pub fn snapshot_session(&self, name: &str) -> SavedWorkspaceSession {
+        let panes = self
+            .panes
+            .values()
+            .map(|p| SavedPaneState {
+                id: p.id,
+                title: p.title.clone(),
+                cwd: p.resolve_cwd().to_string_lossy().into_owned(),
+                prompt_anchor: p.prompt.anchor,
+                prompt_height: p.prompt.height,
+                prompt_width_cols: p.prompt.width_cols,
+                read_only: p.read_only,
+                history: p.prompt.history.clone(),
+            })
+            .collect();
+        SavedWorkspaceSession {
+            name: name.to_string(),
+            layout_mode: self.layout_mode,
+            split_tree: self.split_tree.clone(),
+            z_order: self.z_stack.order().to_vec(),
+            zoomed_pane: self.zoomed_pane,
+            panes,
+        }
+    }
+
+    /// Saves the current workspace layout and pane states to `<session_dir>/<name>.toml` (`:session save <name>`, `ECO-02`).
+    pub fn save_session(&self, name: &str) -> Result<PathBuf> {
+        let safe_name: String = name
+            .trim()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            .collect();
+        let file_stem = if safe_name.is_empty() {
+            "default"
+        } else {
+            &safe_name
+        };
+        let dir = self.resolve_session_dir();
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join(format!("{file_stem}.toml"));
+        let snap = self.snapshot_session(file_stem);
+        let toml_str = toml::to_string_pretty(&snap)
+            .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+        std::fs::write(&path, toml_str)?;
+        Ok(path)
+    }
+
+    /// Restores a previously saved workspace session from `<session_dir>/<name>.toml` (`:session restore <name>`, `ECO-02`).
+    pub fn restore_session(&mut self, name: &str) -> Result<usize> {
+        let safe_name: String = name
+            .trim()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            .collect();
+        let file_stem = if safe_name.is_empty() {
+            "default"
+        } else {
+            &safe_name
+        };
+        let path = self.resolve_session_dir().join(format!("{file_stem}.toml"));
+        let raw = std::fs::read_to_string(&path)?;
+        let saved: SavedWorkspaceSession = toml::from_str(&raw)
+            .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+
+        let (rows, cols) = self.default_size;
+        let mut new_panes = BTreeMap::new();
+        let mut max_id = 1usize;
+        for sp in &saved.panes {
+            max_id = max_id.max(sp.id);
+            let mut pane = if self.headless_mode {
+                CompositePane::new_headless(sp.id, rows, cols)
+            } else {
+                CompositePane::spawn(
+                    sp.id,
+                    PtyConfig {
+                        rows,
+                        cols,
+                        cwd: Some(PathBuf::from(&sp.cwd)),
+                        ..Default::default()
+                    },
+                )
+                .unwrap_or_else(|_| CompositePane::new_headless(sp.id, rows, cols))
+            };
+            pane.title = sp.title.clone();
+            pane.prompt.anchor = sp.prompt_anchor;
+            pane.prompt.height = sp.prompt_height.clamp(3, 12);
+            pane.prompt.width_cols = sp.prompt_width_cols;
+            pane.read_only = sp.read_only;
+            pane.prompt.history = sp.history.clone();
+            new_panes.insert(sp.id, pane);
+        }
+
+        if new_panes.is_empty() {
+            new_panes.insert(1, CompositePane::new_headless(1, rows, cols));
+        }
+
+        let pane_count = new_panes.len();
+        self.panes = new_panes;
+        self.split_tree = saved.split_tree;
+        self.z_stack = ZStack::from_order(saved.z_order);
+        self.layout_mode = saved.layout_mode;
+        self.zoomed_pane = saved.zoomed_pane;
+        self.next_pane_id = max_id + 1;
+        self.sync_history_config();
+        Ok(pane_count)
+    }
+
+    /// Lists all saved workspace session names found in `<session_dir>` (`:session list`, `ECO-02`).
+    pub fn list_sessions(&self) -> Vec<String> {
+        let dir = self.resolve_session_dir();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = entries
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path();
+                if p.extension().and_then(|s| s.to_str()) == Some("toml") {
+                    p.file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(ToOwned::to_owned)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        names.sort();
+        names
     }
 
     /// Propagates `config.history_enabled`, `config.history_max_files`, and `config.history_dir` to all panes.

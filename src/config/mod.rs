@@ -29,12 +29,16 @@ pub struct BiltermConfig {
     pub drop_shadows: bool,
     /// Enables the bottom 1-row Borland DOS Function-Key bar (`UI-03`).
     pub show_dos_fkey_bar: bool,
+    /// Enables the top 1-row Borland Turbo Vision Menu Bar (`≡ System  Window  Prompt  View  Theme  Tmux  Help`, `ECO-03`).
+    pub show_top_menubar: bool,
     /// Enables automatic command history persistence (`true` by default).
     pub history_enabled: bool,
     /// Maximum number of session history files to retain in the history directory (default `25`).
     pub history_max_files: usize,
     /// Optional custom directory path for persisted session command history files.
     pub history_dir: Option<String>,
+    /// Optional custom directory path for saved workspace session layout snapshots (`ECO-02`).
+    pub session_dir: Option<String>,
     /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
     pub default_prompt_anchor: String,
     /// Default floating command prompt height in rows (`3..=12`).
@@ -57,9 +61,11 @@ impl Default for BiltermConfig {
             crosshair_fullscreen: false,
             drop_shadows: false,
             show_dos_fkey_bar: false,
+            show_top_menubar: false,
             history_enabled: true,
             history_max_files: 25,
             history_dir: None,
+            session_dir: None,
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
             custom_palette_override: None,
