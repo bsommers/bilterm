@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write};
 use std::time::Duration;
 
 use crossterm::event::{Event, EventStream, KeyEventKind};
@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 use crate::error::Result;
-use crate::input::{handle_key_event, AppAction};
+use crate::input::{handle_key_event, handle_mouse_event, handle_paste_event, AppAction};
 use crate::pane::CompositePane;
 use crate::pty::{PtyConfig, PtyEvent};
 use crate::ui::CompositePaneWidget;
@@ -17,13 +17,16 @@ use crate::ui::CompositePaneWidget;
 pub struct App {
     pub pane: CompositePane,
     pub should_quit: bool,
+    pub last_viewport: Rect,
 }
 
 impl App {
     pub fn new(pane: CompositePane) -> Self {
+        let (rows, cols) = pane.vt.size();
         Self {
             pane,
             should_quit: false,
+            last_viewport: Rect::new(0, 0, cols, rows + 1),
         }
     }
 
@@ -49,9 +52,12 @@ impl App {
         loop {
             terminal.draw(|frame| {
                 let area = frame.area();
+                self.last_viewport = area;
                 let _ = self.pane.resize_viewport(area);
                 frame.render_widget(CompositePaneWidget::new(&self.pane, true), area);
             })?;
+
+            self.flush_osc52_to_host()?;
 
             if self.should_quit || self.pane.has_exited() {
                 break;
@@ -94,6 +100,23 @@ impl App {
         Ok(())
     }
 
+    fn flush_osc52_to_host(&mut self) -> Result<()> {
+        let mut out = io::stdout();
+        let mut wrote = false;
+        if let Some(seq) = self.pane.last_osc52_sequence.take() {
+            out.write_all(seq.as_bytes())?;
+            wrote = true;
+        }
+        for seq in self.pane.vt.take_outbound_osc52() {
+            out.write_all(seq.as_bytes())?;
+            wrote = true;
+        }
+        if wrote {
+            out.flush()?;
+        }
+        Ok(())
+    }
+
     pub fn handle_crossterm_event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
@@ -101,8 +124,15 @@ impl App {
                     self.should_quit = true;
                 }
             }
+            Event::Mouse(mouse) => {
+                let _ = handle_mouse_event(&mut self.pane, mouse, self.last_viewport)?;
+            }
+            Event::Paste(text) => {
+                let _ = handle_paste_event(&mut self.pane, &text)?;
+            }
             Event::Resize(cols, rows) => {
-                let _ = self.pane.resize_viewport(Rect::new(0, 0, cols, rows));
+                self.last_viewport = Rect::new(0, 0, cols, rows);
+                let _ = self.pane.resize_viewport(self.last_viewport);
             }
             _ => {}
         }

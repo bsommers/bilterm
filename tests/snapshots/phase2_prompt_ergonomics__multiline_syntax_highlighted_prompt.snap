@@ -1,0 +1,14 @@
+---
+source: tests/phase2_prompt_ergonomics.rs
+expression: rendered
+---
+$╔╣ BILTERM 3270 // CMD [TOP] ╠════════════════════[▲][▼]═╗
+r║==> git status --short |                                ║
+U║... grep "modified" $USER                               ║
+U╚════════════════════════════════════════════════════════╝
+UNDER_LINE_3
+UNDER_LINE_4
+
+
+
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:07 C:001

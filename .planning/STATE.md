@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 2
-current_phase_name: Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks
-status: executing
+current_phase: 3
+current_phase_name: Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal
+status: planning
 stopped_at: Roadmap created (Phases 1-5 mapped across 26 v1 requirements)
-last_updated: "2026-10-20T23:49:30.459Z"
+last_updated: "2026-10-21T00:06:52.418Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 1 complete, transitioned to Phase 2
+last_activity_desc: Phase 2 complete, transitioned to Phase 3
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 1 — Core PTY, VT100 Engine & Single CompositePane Prototype
+**Current focus:** Phase 2 — floating-prompt-ergonomics-triple-modality-intra-pane-controls-command-blocks
 
 ## Current Position
 
-Phase: 2 — Floating Prompt Ergonomics, Triple-Modality Intra-Pane Controls & Command Blocks
+Phase: 3 — Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-10-20 — Phase 1 complete, transitioned to Phase 2
+Status: Ready to plan
+Last activity: 2026-10-20 — Phase 2 complete, transitioned to Phase 3
 
 Progress: [██████████] 100%
 
@@ -38,7 +38,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 6
 - Average duration: 0 min
 - Total execution time: 0.0 hours
 
@@ -47,6 +47,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 3 | - | - |
+| 2 | 3 | - | - |
 
 **Recent Trend:**
 

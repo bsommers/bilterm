@@ -4,6 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget};
 
+use crate::pane::highlight::tokenize_shell_line;
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::vt::cell_to_ratatui_style;
@@ -134,32 +135,144 @@ fn render_floating_prompt(
     let inner = block.inner(prompt_rect);
     block.render(prompt_rect, buf);
 
+    // Render clickable [▲][▼] pin badges on the top-right border when width >= 44
+    if prompt_rect.width >= 44 {
+        let right_edge = prompt_rect.x + prompt_rect.width;
+        let pin_x = right_edge.saturating_sub(8);
+        let pin_str = "[▲][▼]";
+        for (idx, ch) in pin_str.chars().enumerate() {
+            let x = pin_x + idx as u16;
+            if x < right_edge - 1 {
+                if let Some(cell) = buf.cell_mut((x, prompt_rect.y)) {
+                    let mut sym_buf = [0u8; 4];
+                    cell.set_symbol(ch.encode_utf8(&mut sym_buf));
+                    cell.set_style(
+                        Style::default()
+                            .fg(Color::Rgb(85, 255, 255))
+                            .bg(surface_bg)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+        }
+    }
+
     if inner.width == 0 || inner.height == 0 {
         return;
     }
 
-    let prefix = "==> ";
-    let line = Line::from(vec![
-        Span::styled(
+    if pane.prompt.fuzzy_search.active {
+        render_fuzzy_search_contents(pane, inner, surface_bg, buf);
+        return;
+    }
+
+    // Determine lines to render (handling legacy direct mutation of `pane.prompt.input` in tests)
+    let fallback_lines;
+    let lines_slice: &[String] =
+        if pane.prompt.lines.len() == 1 && pane.prompt.lines[0].is_empty() && !pane.prompt.input.is_empty() {
+            fallback_lines = vec![pane.prompt.input.clone()];
+            &fallback_lines
+        } else {
+            &pane.prompt.lines
+        };
+
+    let visible_rows = usize::from(inner.height);
+    let start_row = pane
+        .prompt
+        .cursor_row
+        .saturating_sub(visible_rows.saturating_sub(1));
+
+    let mut rendered_lines = Vec::with_capacity(visible_rows);
+    for (rel_idx, line_str) in lines_slice
+        .iter()
+        .enumerate()
+        .skip(start_row)
+        .take(visible_rows)
+    {
+        let prefix = if rel_idx == 0 { "==> " } else { "... " };
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
             prefix,
             Style::default()
                 .fg(Color::Rgb(0, 255, 102))
                 .bg(surface_bg)
                 .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            &pane.prompt.input,
-            Style::default().fg(Color::White).bg(surface_bg),
-        ),
-    ]);
-    Paragraph::new(line).render(inner, buf);
+        ));
+        for tok in tokenize_shell_line(line_str) {
+            spans.push(Span::styled(tok.text, tok.kind.style().bg(surface_bg)));
+        }
+        rendered_lines.push(Line::from(spans));
+    }
+
+    Paragraph::new(rendered_lines).render(inner, buf);
 
     // Software block cursor inside the floating command prompt
-    let cursor_col = (prefix.len() + pane.prompt.cursor_char_idx) as u16;
+    let prefix_len = 4usize;
+    let cursor_vis_row = pane.prompt.cursor_row.saturating_sub(start_row) as u16;
+    let cursor_col = (prefix_len + pane.prompt.cursor_col) as u16;
+    let clamped_row = cursor_vis_row.min(inner.height.saturating_sub(1));
     let clamped_col = cursor_col.min(inner.width.saturating_sub(1));
-    if let Some(cell) = buf.cell_mut((inner.x + clamped_col, inner.y)) {
+    if let Some(cell) = buf.cell_mut((inner.x + clamped_col, inner.y + clamped_row)) {
         cell.set_style(cell.style().add_modifier(Modifier::REVERSED));
     }
+}
+
+fn render_fuzzy_search_contents(
+    pane: &CompositePane,
+    inner: Rect,
+    surface_bg: Color,
+    buf: &mut Buffer,
+) {
+    let mut lines = Vec::new();
+    let header = format!("(reverse-i-search)`{}': ", pane.prompt.fuzzy_search.query);
+    lines.push(Line::from(vec![Span::styled(
+        header,
+        Style::default()
+            .fg(Color::Rgb(255, 255, 85))
+            .bg(surface_bg)
+            .add_modifier(Modifier::BOLD),
+    )]));
+
+    let max_matches = usize::from(inner.height.saturating_sub(1));
+    for (idx, item) in pane
+        .prompt
+        .fuzzy_search
+        .matches
+        .iter()
+        .take(max_matches)
+        .enumerate()
+    {
+        let is_selected = idx == pane.prompt.fuzzy_search.selected;
+        let row_bg = if is_selected {
+            Color::Rgb(0, 80, 120)
+        } else {
+            surface_bg
+        };
+        let marker = if is_selected { "> " } else { "  " };
+        let mut spans = vec![Span::styled(
+            marker,
+            Style::default()
+                .fg(Color::Rgb(0, 255, 102))
+                .bg(row_bg)
+                .add_modifier(Modifier::BOLD),
+        )];
+
+        for (char_idx, ch) in item.command.chars().enumerate() {
+            let matched = item.matched_indices.contains(&(char_idx as u32));
+            let style = if matched {
+                Style::default()
+                    .fg(Color::Rgb(255, 255, 85))
+                    .bg(row_bg)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            } else {
+                Style::default().fg(Color::White).bg(row_bg)
+            };
+            spans.push(Span::styled(ch.to_string(), style));
+        }
+        lines.push(Line::from(spans));
+    }
+
+    Paragraph::new(lines).render(inner, buf);
 }
 
 pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut Buffer) {
@@ -198,7 +311,7 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
     let (cur_r, cur_c) = pane.vt.screen().cursor_position();
     let coord_str = format!(" R:{:02} C:{:03} ", cur_r + 1, cur_c + 1);
 
-    let line = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             "3270-OIA",
             Style::default()
@@ -227,12 +340,27 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
             anchor_label,
             Style::default().fg(Color::White).bg(oia_bg),
         ),
-        Span::styled(" │", Style::default().fg(Color::White).bg(oia_bg)),
-        Span::styled(
-            coord_str,
-            Style::default().fg(Color::Rgb(255, 255, 85)).bg(oia_bg),
-        ),
-    ]);
+    ];
+
+    if let Some(block) = pane.vt.selected_command_block() {
+        let total = pane.vt.command_blocks().len();
+        spans.push(Span::styled(" │", Style::default().fg(Color::White).bg(oia_bg)));
+        spans.push(Span::styled(
+            format!("BLK {}/{total}", block.index + 1),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(255, 255, 85))
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    spans.push(Span::styled(" │", Style::default().fg(Color::White).bg(oia_bg)));
+    spans.push(Span::styled(
+        coord_str,
+        Style::default().fg(Color::Rgb(255, 255, 85)).bg(oia_bg),
+    ));
+
+    let line = Line::from(spans);
 
     Block::default()
         .style(Style::default().fg(Color::White).bg(oia_bg))
@@ -264,7 +392,7 @@ mod tests {
     fn renders_composite_pane_with_floating_prompt_and_oia_bar() {
         let mut pane = CompositePane::new_headless(1, 10, 60);
         pane.process_pty_output(b"LINE_0_UNDER_PROMPT\r\nLINE_1_UNDER_PROMPT\r\nLINE_2_UNDER_PROMPT\r\nLINE_3_VISIBLE_BELOW\r\n");
-        pane.prompt.input = "ls -la".to_string();
+        pane.prompt.set_text("ls -la");
 
         let area = Rect::new(0, 0, 60, 10);
         let mut buf = Buffer::empty(area);
@@ -273,6 +401,7 @@ mod tests {
         let rendered = buffer_to_snapshot_string(&buf);
         assert!(rendered.contains("BILTERM 3270 // CMD [TOP]"));
         assert!(rendered.contains("==> ls -la"));
+        assert!(rendered.contains("[▲][▼]"));
         assert!(rendered.contains("LINE_3_VISIBLE_BELOW"));
         assert!(rendered.contains("INPUT: CMD BOX"));
     }

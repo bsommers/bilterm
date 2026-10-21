@@ -2,7 +2,7 @@
 source: tests/composite_pane_snapshots.rs
 expression: rendered
 ---
-O╔╣ BILTERM 3270 // CMD [TOP] ╠═══════════════════════════════╗
+O╔╣ BILTERM 3270 // CMD [TOP] ╠════════════════════════[▲][▼]═╗
 O║==> status --all                                            ║
 O╚════════════════════════════════════════════════════════════╝
 OUTPUT_ROW_04: system telemetry nominal

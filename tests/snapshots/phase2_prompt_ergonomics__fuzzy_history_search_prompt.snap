@@ -1,0 +1,14 @@
+---
+source: tests/phase2_prompt_ergonomics.rs
+expression: rendered
+---
+ ╔╣ BILTERM 3270 // CMD [TOP] ╠════════════════════[▲][▼]═╗
+ ║(reverse-i-search)`ct':                                 ║
+ ║> cargo test --all-targets                              ║
+ ╚════════════════════════════════════════════════════════╝
+
+
+
+
+
+3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:01 C:001
