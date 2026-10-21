@@ -1,0 +1,523 @@
+{
+  "metadata": {
+    "project": "bilterm",
+    "current_version": "0.1.0",
+    "reference_repos": [
+      "https://github.com/ghostty-org/ghostty"
+    ],
+    "ecosystem_references": [
+      "wezterm",
+      "kitty",
+      "alacritty",
+      "zellij",
+      "foot",
+      "warp",
+      "contour",
+      "xterm",
+      "ibm-3270",
+      "dec-vt520"
+    ]
+  },
+  "features": [
+    {
+      "id": "FND-01",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "input_security",
+      "title": "Paste Injection Sanitization & Unsafe Multi-Line Paste Guard",
+      "ghostty_ref": "src/input/paste.zig, src/terminal/paste.zig",
+      "bilterm_target_files": [
+        "src/input/mod.rs",
+        "src/vt/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "small",
+      "summary": "Strip control bytes (NUL, ESC, DEL, VINTR 0x03, VQUIT, VSUSP) from pastes and prompt before unbracketed multi-line paste in RAW PTY mode."
+    },
+    {
+      "id": "FND-02",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Mouse Alternate Scroll (DECSET ?1007)",
+      "ghostty_ref": "src/terminal/modes.zig (mouse_alternate_scroll = 1007)",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "small",
+      "summary": "Translate mouse wheel scroll into Up/Down arrow keys when in Alternate Screen (?1049) without mouse tracking enabled (e.g. less, man, git log)."
+    },
+    {
+      "id": "FND-03",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "DECRPM (CSI ? Pd $ p) Mode State Query Reporting",
+      "ghostty_ref": "src/terminal/modes.zig (Report.encode)",
+      "bilterm_target_files": [
+        "src/vt/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "small",
+      "summary": "Respond to ANSI/DEC mode queries (CSI ? Pd $ p) with CSI ? Pd ; Ps $ y so Neovim, Helix, and Fish detect ?2026, ?2027, and ?2004 support."
+    },
+    {
+      "id": "FND-04",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "input_protocol",
+      "title": "Kitty Keyboard Protocol (CSI > flags u / CSI ? u)",
+      "ghostty_ref": "src/input/key_encode.zig, src/terminal/kitty/key.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "medium",
+      "summary": "Implement per-screen Kitty keyboard progressive enhancement flag stack and CSI-u key encoding for unambiguous modifier chords in RAW PTY mode."
+    },
+    {
+      "id": "FND-05",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Dynamic Palette Queries & Mutations (OSC 4, 10, 11, 12, 104..112)",
+      "ghostty_ref": "src/terminal/osc/parsers/color.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/ui/theme.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "small",
+      "summary": "Reply to OSC 10;? (fg), OSC 11;? (bg), and OSC 4;idx;? queries with rgb:RRRR/GGGG/BBBB from active ThemePalette."
+    },
+    {
+      "id": "FND-06",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "XTGETTCAP (DCS + q) & DECRQSS (DCS $ q) Capability Responders",
+      "ghostty_ref": "src/terminal/dcs.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "medium",
+      "effort": "small",
+      "summary": "Respond to hex-encoded terminfo capability queries (TN, Co, RGB, Smulx, Setulc) and DECRQSS status string queries."
+    },
+    {
+      "id": "FND-07",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Unicode Grapheme Cluster Mode (DECSET ?2027)",
+      "ghostty_ref": "src/terminal/modes.zig (grapheme_cluster = 2027)",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/ui/occlusion.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "medium",
+      "summary": "Support DECSET ?2027 UAX #29 multi-codepoint ZWJ emoji and combiner grapheme clustering."
+    },
+    {
+      "id": "FND-08",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Soft-Wrapped Scrollback Reflow on Horizontal Resize",
+      "ghostty_ref": "src/terminal/PageList.zig, src/terminal/Screen.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "large",
+      "summary": "Track soft-wrap continuation flags per line and reflow wrapped paragraphs when pane width changes."
+    },
+    {
+      "id": "FND-09",
+      "tier": "tier_1_foundational",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "ui_rendering",
+      "title": "Extended SGR Underlines (4:0..4:5), Overline (53) & Underline Color (58;2)",
+      "ghostty_ref": "src/terminal/sgr.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "medium",
+      "summary": "Parse sub-parameter SGR 4:3 curly/dotted/dashed underlines and SGR 58 underline RGB color for LSP diagnostics."
+    },
+    {
+      "id": "BIL-F01",
+      "tier": "tier_1_foundational",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "ui_rendering",
+      "title": "Pure-TTY TUI Multiplexer (Zero GPU/GUI Dependency)",
+      "ghostty_ref": "Requires Metal/OpenGL/GTK4 GUI",
+      "bilterm_target_files": [
+        "src/main.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Runs inside any host terminal, over bare SSH, or inside tmux using Ratatui immediate-mode cell compositing."
+    },
+    {
+      "id": "BIL-F02",
+      "tier": "tier_1_foundational",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "prompt_editor",
+      "title": "Decoupled Composite Terminal Pane (OutputCanvas + FloatingPrompt)",
+      "ghostty_ref": "Single-layer VT screen only",
+      "bilterm_target_files": [
+        "src/pane/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Separates the command prompt editor from the scrolling output canvas with zero SIGWINCH thrashing."
+    },
+    {
+      "id": "BIL-F03",
+      "tier": "tier_1_foundational",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "input_security",
+      "title": "3-Signal Line-Discipline Detector & !ECHO LOCK Password Guard",
+      "ghostty_ref": "No separate command editor",
+      "bilterm_target_files": [
+        "src/pty/line_discipline.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Combines DECSET 1049, OSC 133, and tcgetattr (!ECHO && ICANON) to auto-hide the prompt and protect passwords."
+    },
+    {
+      "id": "BIL-F04",
+      "tier": "tier_1_foundational",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "vt_parser",
+      "title": "Stream-Trap Sanitizer (/dev/random Flood Immunity)",
+      "ghostty_ref": "Raw binary streams can trigger DECSET 1049/DECSTBM",
+      "bilterm_target_files": [
+        "src/vt/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Neutralizes accidental DECSET 47/1047/1049 and DECSTBM sequences during non-raw binary floods."
+    },
+    {
+      "id": "VAL-01",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "shell_integration",
+      "title": "Zero-Config Shell Integration Auto-Injection (bash, zsh, fish)",
+      "ghostty_ref": "src/shell-integration/, src/termio/Exec.zig",
+      "bilterm_target_files": [
+        "src/pty/mod.rs",
+        "src/pty/shell_integration.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "medium",
+      "summary": "Automatically inject OSC 133 (A/B/C/D) and OSC 7 (CWD) hooks into spawned bash/zsh/fish shells without editing user dotfiles."
+    },
+    {
+      "id": "VAL-02",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Output Canvas Scrollback Search & Match Highlighting (:search / Alt+/)",
+      "ghostty_ref": "src/terminal/search/sliding_window.zig, viewport.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/pane/mod.rs",
+        "src/ui/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "medium",
+      "summary": "Search across visible screen and scrollback buffer with cell match highlighting, match count badge, and n/N navigation."
+    },
+    {
+      "id": "VAL-03",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "OSC 8 Explicit Hyperlinks & URL Detection",
+      "ghostty_ref": "src/terminal/hyperlink.zig, src/input/Link.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/ui/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "medium",
+      "effort": "small",
+      "summary": "Parse OSC 8 hyperlinks and auto-detect URLs on the OutputCanvas for Ctrl+Click opening or yanking."
+    },
+    {
+      "id": "VAL-04",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "prompt_editor",
+      "title": "Vi Copy Mode & Rectangular Block Selection (Alt+C / :copy)",
+      "ghostty_ref": "src/terminal/Selection.zig, SelectionGesture.zig ( plus Alacritty/WezTerm Vi mode )",
+      "bilterm_target_files": [
+        "src/pane/mod.rs",
+        "src/input/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "medium",
+      "summary": "Modal Vi cursor navigation (h/j/k/l/w/b/0/$) and character/line/rectangular-block selection on OutputCanvas with OSC 52 and prompt yank."
+    },
+    {
+      "id": "VAL-05",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "In-Band Terminal Size Reports (DECSET ?2048)",
+      "ghostty_ref": "src/terminal/size_report.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/pane/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "small",
+      "summary": "Emit CSI 48 ; rows ; cols ; 0 ; 0 t when DECSET ?2048 is active to eliminate SIGWINCH race conditions."
+    },
+    {
+      "id": "VAL-06",
+      "tier": "tier_2_value_add",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "shell_integration",
+      "title": "Command Exit-Code Badges & Execution Duration Telemetry",
+      "ghostty_ref": "src/terminal/osc/parsers/semantic_prompt.zig (OSC 133;D;<exit>)",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/pane/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "v0.2.0",
+      "priority": "high",
+      "effort": "small",
+      "summary": "Parse exit code from OSC 133;D;<code> and record command duration (e.g. '\u2713 0 [1.2s]' or '\u2717 1 [0.4s]') in the prompt banner and OIA bar."
+    },
+    {
+      "id": "BIL-V01",
+      "tier": "tier_2_value_add",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "prompt_editor",
+      "title": "4-Mode Command Prompt (Top, Bottom, Floating, Non-Overlapping Split) + Resizable Width & Scroll",
+      "ghostty_ref": "None",
+      "bilterm_target_files": [
+        "src/pane/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Supports floating overlay or non-overlapping SplitTop/SplitBottom modes, width/height resize, V/H scrollbars, and RUNNING banner."
+    },
+    {
+      "id": "BIL-V02",
+      "tier": "tier_2_value_add",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "prompt_editor",
+      "title": "Built-In Context-Aware <Tab> Completion Engine + Candidate Ribbon",
+      "ghostty_ref": "None",
+      "bilterm_target_files": [
+        "src/pane/completion.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Completes :colon commands, shell builtins, $PATH executables, $ENV vars, and child CWD paths with LCP and visual candidate cycling."
+    },
+    {
+      "id": "BIL-V03",
+      "tier": "tier_2_value_add",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "multiplexer_wm",
+      "title": "Borland Z-Order Window Stacking & Deck Shuffling (ZStack)",
+      "ghostty_ref": "Tiled splits and tabs only",
+      "bilterm_target_files": [
+        "src/wm/z_stack.rs",
+        "src/wm/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Overlapping window deck with Alt+Tab/F6 top-to-bottom shuffle, Alt+1..9 selective raise, and click-to-focus."
+    },
+    {
+      "id": "BIL-V04",
+      "tier": "tier_2_value_add",
+      "direction": "bilterm_to_ghostty",
+      "subsystem": "prompt_editor",
+      "title": "Per-Session History Persistence, Borland History Pop-up & .sh Export",
+      "ghostty_ref": "None",
+      "bilterm_target_files": [
+        "src/pane/history_store.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "implemented_v0.1.0",
+      "priority": "completed",
+      "effort": "none",
+      "summary": "Logs timestamped commands per session_id and pane_id with file rotation, Alt+P modal dialog, and :history save temp script export."
+    },
+    {
+      "id": "BEL-01",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "ui_rendering",
+      "title": "Built-In Live 3270 Terminal Inspector Modal (F9 / :inspector)",
+      "ghostty_ref": "src/inspector/Inspector.zig",
+      "bilterm_target_files": [
+        "src/wm/mod.rs",
+        "src/ui/mod.rs",
+        "src/vt/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "medium",
+      "summary": "Interactive Borland modal displaying live DECSET mode flags, recent escape sequences, cell style under cursor, and PTY termios flags."
+    },
+    {
+      "id": "BEL-02",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "ui_rendering",
+      "title": "OIA Progress Bar Gauge via OSC 9;4",
+      "ghostty_ref": "src/terminal/osc/parsers/osc9.zig",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/ui/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "small",
+      "summary": "Parse OSC 9;4;<state>;<pct> progress sequences and render a retro [\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591] progress gauge in the 3270-OIA status bar."
+    },
+    {
+      "id": "BEL-03",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "vt_parser",
+      "title": "Color Scheme Change Notifications (DECSET ?2031 / CSI ? 996 n)",
+      "ghostty_ref": "src/terminal/modes.zig (report_color_scheme = 2031)",
+      "bilterm_target_files": [
+        "src/vt/mod.rs",
+        "src/pane/colon_command.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "low",
+      "effort": "small",
+      "summary": "Reply to CSI ? 996 n and emit unsolicited CSI ? 997 ; 1 n when :theme changes palettes while ?2031 is enabled."
+    },
+    {
+      "id": "BEL-04",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ghostty_to_bilterm",
+      "subsystem": "shell_integration",
+      "title": "SSH Environment & Shell Integration Wrapper (ssh-env)",
+      "ghostty_ref": "src/shell-integration/",
+      "bilterm_target_files": [
+        "src/pty/shell_integration.rs"
+      ],
+      "target_milestone": "v1.0.0",
+      "priority": "low",
+      "effort": "medium",
+      "summary": "Optional ssh wrapper in shell integration to propagate TERM=xterm-256color and OSC 133 hooks across remote SSH connections."
+    },
+    {
+      "id": "ECO-01",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ecosystem_to_bilterm",
+      "subsystem": "prompt_editor",
+      "title": "QuickSelect 3270 Field Hints (Alt+F / :hints)",
+      "ghostty_ref": "WezTerm QuickSelect / IBM 3270 Unprotected Tab Fields",
+      "bilterm_target_files": [
+        "src/pane/mod.rs",
+        "src/ui/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "high",
+      "effort": "medium",
+      "summary": "Scan OutputCanvas for URLs, file:line paths, git SHAs, and IPs; overlay [a]..[z] hint badges to insert directly into the command prompt or yank."
+    },
+    {
+      "id": "ECO-02",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ecosystem_to_bilterm",
+      "subsystem": "multiplexer_wm",
+      "title": "Workspace Layout & Session Serialization (:session save / restore)",
+      "ghostty_ref": "Zellij Layouts / WezTerm Workspaces",
+      "bilterm_target_files": [
+        "src/config/mod.rs",
+        "src/wm/mod.rs",
+        "src/pane/colon_command.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "medium",
+      "summary": "Serialize and restore split tree geometry, Z-order stack, pane CWDs (OSC 7), and prompt anchors to TOML session files."
+    },
+    {
+      "id": "ECO-03",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ecosystem_to_bilterm",
+      "subsystem": "ui_rendering",
+      "title": "Interactive Top Borland Turbo Vision Menu Bar (:menubar)",
+      "ghostty_ref": "Borland Turbo C / Turbo Pascal IDE Menu Bar",
+      "bilterm_target_files": [
+        "src/ui/mod.rs",
+        "src/input/mod.rs",
+        "src/wm/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "medium",
+      "summary": "Optional 1-row top pull-down menu bar (File | Window | Prompt | View | Theme | History | Help) navigable via mouse or Alt+Menu keys."
+    },
+    {
+      "id": "ECO-04",
+      "tier": "tier_3_bells_and_whistles",
+      "direction": "ecosystem_to_bilterm",
+      "subsystem": "multiplexer_wm",
+      "title": "Read-Only Pane Lock Mode (:lock / Alt+L) & Broadcast Input (:broadcast)",
+      "ghostty_ref": "Contour Read-Only Mode / tmux synchronize-panes",
+      "bilterm_target_files": [
+        "src/pane/mod.rs",
+        "src/wm/mod.rs",
+        "src/input/mod.rs"
+      ],
+      "target_milestone": "v0.3.0",
+      "priority": "medium",
+      "effort": "small",
+      "summary": "Allow locking individual panes against accidental keystrokes (:lock) or broadcasting prompt commands to all open panes (:broadcast on|off)."
+    }
+  ]
+}

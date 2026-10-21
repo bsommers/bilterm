@@ -1,0 +1,144 @@
+# Bilterm × Ghostty & Open-Source Terminal Ecosystem Feature Map
+
+[← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
+
+This document maps **Bilterm (`v0.1.0`)** against **Ghostty** (inspected directly from [`ghostty-org/ghostty`](https://github.com/ghostty-org/ghostty) in `.tmp/ghostty/src/`) and the broader open-source terminal & multiplexer ecosystem (**WezTerm**, **Kitty**, **Alacritty**, **Zellij**, **Foot**, **Contour**, **Rio**, **Warp**, **tmux**, **xterm**, **DEC VT420/VT520**, and **IBM 3270 / c3270**).
+
+> **Machine-Readable Roadmap Formats**:
+> - **TOML**: [`.planning/research/feature_roadmap.toml`](../.planning/research/feature_roadmap.toml)
+> - **JSON**: [`.planning/research/feature_matrix.json`](../.planning/research/feature_matrix.json)
+
+---
+
+## Table of Contents
+
+1. [Tier 1: Core, Foundational Terminal Features (`Ghostty <-> Bilterm`)](#1-tier-1-core-foundational-terminal-features-ghostty---bilterm)
+   - [1A. Foundational Features Ghostty Has That Bilterm Should Add (`Ghostty -> Bilterm`)](#1a-foundational-features-ghostty-has-that-bilterm-should-add-ghostty---bilterm)
+   - [1B. Foundational Features Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)](#1b-foundational-features-bilterm-has-that-ghostty-lacks-bilterm---ghostty)
+2. [Tier 2: Value-Add Workflow & Ergonomic Features (`Ghostty <-> Bilterm`)](#2-tier-2-value-add-workflow--ergonomic-features-ghostty---bilterm)
+   - [2A. Value-Add Features Ghostty Has That Bilterm Should Add (`Ghostty -> Bilterm`)](#2a-value-add-features-ghostty-has-that-bilterm-should-add-ghostty---bilterm)
+   - [2B. Value-Add Features Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)](#2b-value-add-features-bilterm-has-that-ghostty-lacks-bilterm---ghostty)
+3. [Tier 3: Nice-to-Have Bells & Whistles (`Ghostty <-> Bilterm`)](#3-tier-3-nice-to-have-bells--whistles-ghostty---bilterm)
+   - [3A. Bells & Whistles Ghostty Has That Bilterm Can Add (`Ghostty -> Bilterm`)](#3a-bells--whistles-ghostty-has-that-bilterm-can-add-ghostty---bilterm)
+   - [3B. Bells & Whistles Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)](#3b-bells--whistles-bilterm-has-that-ghostty-lacks-bilterm---ghostty)
+4. [Broader Open-Source Terminal & Hardware Terminal Ecosystem Map](#4-broader-open-source-terminal--hardware-terminal-ecosystem-map)
+   - [4A. Terminal Types & Emulation Standards (`VT100`–`VT520`, `xterm`, `IBM 3270`, `ANSI-BBS`)](#4a-terminal-types--emulation-standards-vt100vt520-xterm-ibm-3270-ansi-bbs)
+   - [4B. Open-Source Terminal & Multiplexer Capabilities (`WezTerm`, `Kitty`, `Zellij`, `Alacritty`, `Foot`, `Warp`, `Contour`)](#4b-open-source-terminal--multiplexer-capabilities-wezterm-kitty-zellij-alacritty-foot-warp-contour)
+5. [Prioritized Bilterm Production Roadmap (`v0.2.0` -> `v0.3.0` -> `v1.0.0`)](#5-prioritized-bilterm-production-roadmap-v020---v030---v100)
+
+---
+
+## 1. Tier 1: Core, Foundational Terminal Features (`Ghostty <-> Bilterm`)
+
+### 1A. Foundational Features Ghostty Has That Bilterm Should Add (`Ghostty -> Bilterm`)
+
+| ID | Feature | Ghostty Implementation (`.tmp/ghostty/src/`) | Current Bilterm `v0.1.0` State | Proposed Bilterm Addition | Target |
+|----|---------|----------------------------------------------|--------------------------------|---------------------------|--------|
+| **`FND-01`** | **Paste Injection Sanitization & Unsafe Multi-Line Paste Guard** | `input/paste.zig` & `terminal/paste.zig`: Strips dangerous control bytes (`NUL`, `BS`, `ENQ`, `EOT`, `ESC`, `DEL`, `VINTR 0x03`, `VQUIT`, `VSUSP`, etc.) on every paste; detects newlines/`sudo` in non-bracketed paste and raises `error.UnsafePaste` confirmation modal. | Frames `DECSET ?2004` (`\x1b[200~..\x1b[201~`) in `src/vt/mod.rs`, but does not strip control bytes or prompt on unsafe unbracketed multi-line pastes. | Add `sanitize_paste_bytes()` and an optional Borland confirmation modal when pasting multi-line commands directly into `INPUT: RAW PTY`. | `v0.2.0` |
+| **`FND-02`** | **Mouse Alternate Scroll (`DECSET ?1007`)** | `terminal/modes.zig` (`mouse_alternate_scroll = 1007`, default `true`): When inside Alternate Screen (`?1049`) and the app has *not* requested mouse tracking (`less`, `man`, `git log`), mouse wheel events emit `Up`/`Down` cursor keys (`\x1bOA`/`\x1bOB`). | Tracks `?1000`/`?1002`/`?1003`/`?1006` and `?1049`, but wheel events on `?1049` without mouse mode scroll local scrollback instead of sending arrow keys. | Add `DECSET ?1007` (default `true`) in `VtParser` so scrolling inside `less`/`man`/`git diff` works out of the box. | `v0.2.0` |
+| **`FND-03`** | **`DECRPM` (`CSI ? Pd $ p`) Mode Query Reporting** | `terminal/modes.zig` (`Report.encode` -> `\x1b[?Pd;Ps$y`): Allows modern TUIs (`neovim`, `fish`, `helix`, `kakoune`) to query whether the terminal supports `?2026` (sync output), `?2027` (grapheme clustering), or `?2004`. | Replies to `DSR 5n`, `CPR 6n`, and `DA1 c`, but ignores `CSI ? Pd $ p` (`DECRPM`) queries. | Implement `DECRPM` request parsing and `\x1b[?<mode>;<state>$y` replies in `VtParser::scan_control_sequences`. | `v0.2.0` |
+| **`FND-04`** | **Kitty Keyboard Protocol (`CSI > flags u` / `CSI ? u`)** | `input/key_encode.zig` & `terminal/kitty/key.zig`: Full progressive enhancement stack (`disambiguate`, `report_events`, `report_alternates`, `report_all`, `report_associated`) with push/pop/query stacks per screen. | Encodes standard Xterm/VT100 + `DECCKM ?1` key sequences in `src/input/mod.rs`. | Add per-screen Kitty keyboard flag stacks (`CSI > flags u`, `CSI < u`, `CSI ? u`) and CSI-u key encoding for `neovim`/`helix`. | `v0.2.0` |
+| **`FND-05`** | **Dynamic Palette Queries (`OSC 4`, `OSC 10`, `OSC 11`, `OSC 12`, `OSC 104..112`)** | `terminal/osc/parsers/color.zig`: Responds to `\x1b]10;?\x07` (foreground RGB query) and `\x1b]11;?\x07` (background RGB query) so CLI tools (`neovim`, `bat`, `delta`, `lipgloss`) auto-detect dark vs. light themes. | Static/configured `ThemePalette` (`src/ui/theme.rs`); does not reply to `OSC 10;?` / `OSC 11;?` queries. | Reply to `OSC 4/10/11/12;?` with the active `ThemePalette`'s `rgb:RRRR/GGGG/BBBB` values via `take_pending_replies()`. | `v0.2.0` |
+| **`FND-06`** | **`XTGETTCAP` (`DCS + q`) & `DECRQSS` (`DCS $ q`) Queries** | `terminal/dcs.zig`: Replies to hex-encoded terminfo capability queries (`TN`, `Co`, `RGB`, `Smulx`, `Setulc`) and `DECRQSS` (`m`, `r`, ` q`). | Ignores `DCS + q` and `DCS $ q`. | Add `XTGETTCAP` and `DECRQSS` responder in `src/vt/mod.rs` so apps discover TrueColor, cursor styles, and underlines without external terminfo issues. | `v0.2.0` |
+| **`FND-07`** | **Unicode Grapheme Cluster Mode (`DECSET ?2027`)** | `terminal/modes.zig` (`grapheme_cluster = 2027`) & `unicode/`: Clusters multi-codepoint ZWJ emojis (`👨‍👩‍👧‍👦`), skin-tone modifiers, and flags into a single cell with accurate width. | Uses `unicode-width` + `occlude_rect` for 2-column CJK/Emoji safety, without full UAX #29 ZWJ grapheme clustering mode `?2027`. | Track `DECSET ?2027` (`DECRPM` reportable) and integrate `unicode-segmentation` for ZWJ sequences. | `v0.2.0` |
+| **`FND-08`** | **Scrollback Reflow on Horizontal Resize** | `terminal/PageList.zig` & `Screen.zig`: Tracks soft-wrapped (`wrap_continuation`) vs. hard-newline rows and reflows wrapped lines when columns expand or shrink. | `vt100-ctt` resizes the grid dimensions, truncating/padding lines rather than reflowing soft-wrapped scrollback paragraphs. | Track soft-wrap flags per row and reflow wrapped scrollback lines on horizontal split or terminal resize. | `v0.3.0` |
+| **`FND-09`** | **Extended SGR Attributes (Curly/Dotted Underlines `4:3`, Overline `53`, Underline Color `58;2`)** | `terminal/sgr.zig`: Supports `SGR 4:0..4:5` (single, double, curly, dotted, dashed underlines), `SGR 58;2;r;g;b` (underline color for compiler/LSP diagnostics), and `SGR 53` (overline). | Supports 24-bit TrueColor fg/bg, bold, dim, italic, underline, blink, inverse, hidden, strikethrough. | Extend cell style mapping in `src/vt/mod.rs` to preserve `SGR 4:x` underline styles and `SGR 58` underline colors into Ratatui `Cell` modifiers. | `v0.3.0` |
+
+---
+
+### 1B. Foundational Features Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)
+
+| ID | Feature | Bilterm Implementation (`src/`) | Ghostty State | Why Bilterm's Approach Is Uniquely Powerful |
+|----|---------|---------------------------------|---------------|---------------------------------------------|
+| **`BIL-F01`** | **Pure-TTY TUI Multiplexer (Runs Over SSH & Inside Any Terminal)** | `src/main.rs`, `src/ui/mod.rs` (`ratatui` + `crossterm` cell compositor): Zero GPU/X11/Wayland/AppKit dependency. | Native GUI application requiring Metal (macOS) or OpenGL/GTK4 (Linux); cannot run headlessly inside an SSH session. | Bilterm runs anywhere — locally, over bare SSH, inside `tmux`, or on headless servers while providing full window management. |
+| **`BIL-F02`** | **Decoupled Composite Terminal Pane (`OutputCanvas` + `FloatingPrompt`)** | `src/pane/mod.rs`, `src/ui/mod.rs`: 3-pass cell compositor where the command prompt floats over (or splits) the PTY output canvas with **zero `SIGWINCH` thrashing**. | Traditional single-layer terminal buffer where the shell prompt is part of the scrolling character grid. | Typing, resizing, or moving your command prompt in Bilterm never interrupts or scrolls away during high-speed streaming output. |
+| **`BIL-F03`** | **3-Signal Line-Discipline Detector & `!ECHO LOCK` Password Guard** | `src/pty/line_discipline.rs`: Combines `DECSET 1049`, `OSC 133`, and `tcgetattr` (`ICANON && !ECHO`) to auto-hide the prompt and display `♦ !ECHO LOCK`. | Relies on the child shell/PTY directly since there is no separate floating command editor. | Guarantees `sudo`/`ssh`/`gpg` passwords are never echoed in cleartext or recorded to history logs while keeping a dedicated command editor for normal commands. |
+| **`BIL-F04`** | **Stream-Trap Sanitizer (`tail -f /dev/random` Immunity)** | `src/vt/mod.rs` (`VtParser::sanitize_stream_traps`): Blocks accidental `DECSET 47/1047/1049` and `DECSTBM` scroll-region locks when the foreground job is not in raw TUI mode. | `cat /dev/urandom` in standard terminals triggers random `DECSET 1049`, `DECSTBM`, charset swaps, and palette corruption requiring manual `reset`. | Bilterm's floating prompt remains 100% visible, usable, and responsive even when a user runs `tail -f /dev/random`. |
+
+---
+
+## 2. Tier 2: Value-Add Workflow & Ergonomic Features (`Ghostty <-> Bilterm`)
+
+### 2A. Value-Add Features Ghostty Has That Bilterm Should Add (`Ghostty -> Bilterm`)
+
+| ID | Feature | Ghostty Implementation (`.tmp/ghostty/src/`) | Current Bilterm `v0.1.0` State | Proposed Bilterm Addition | Target |
+|----|---------|----------------------------------------------|--------------------------------|---------------------------|--------|
+| **`VAL-01`** | **Automatic Shell Integration Injection (`bash`, `zsh`, `fish`, `nushell`, `elvish`)** | `shell-integration/` & `termio/Exec.zig`: Automatically injects `OSC 133` (`A`/`B`/`C`/`D`) and `OSC 7` (CWD) hooks via `ENV`/`ZDOTDIR`/`XDG_DATA_DIRS` on shell spawn without modifying the user's `~/.bashrc` or `~/.zshrc`. | Parses `OSC 133` and `OSC 7` when emitted by the user's shell (plus `/proc/<pid>/cwd` fallback on Linux), but requires user shell config for `OSC 133` markers. | Auto-inject lightweight `OSC 133` + `OSC 7` shell hooks into spawned `bash`, `zsh`, and `fish` PTYs so Command Block Jumping (`Alt+PageUp`/`Down`) works with zero user setup! | `v0.2.0` |
+| **`VAL-02`** | **Scrollback Search with Match Highlighting (`/` or `Ctrl+Shift+F`)** | `terminal/search/sliding_window.zig` & `viewport.zig`: Searches visible screen + scrollback pages, highlights all matches in the viewport, and jumps between matches (`n`/`N`). | Has `Ctrl+R` fuzzy command history search (`src/pane/fuzzy_history.rs`) and `Alt+P` History Pop-up, but no text/regex search across the *output canvas scrollback*. | Add `:search <query>` / `Alt+/` Output Scrollback Search with yellow/magenta cell match highlighting and `n`/`N` match navigation. | `v0.2.0` |
+| **`VAL-03`** | **`OSC 8` Explicit Hyperlinks & Regex URL Hover/Open** | `terminal/hyperlink.zig` & `input/Link.zig`: Parses `\x1b]8;id=..;https://...\x07text\x1b]8;;\x07` and regex URLs on hover (`Ctrl+Click` to open). | Strips/ignores `OSC 8` metadata. | Parse `OSC 8` hyperlinks and detect URLs in `OutputCanvas` (`Ctrl+Click` or `:open-url` to open or yank URL). | `v0.2.0` |
+| **`VAL-04`** | **Mouse Selection & Copy Mode (Linear, Word, Line, Rectangular Block)** | `terminal/Selection.zig` & `SelectionGesture.zig`: Supports double-click word, triple-click line, and `Alt+Drag` rectangular block selection on the output grid. | Supports `:yank` (`OSC 52` copy of command block or full screen), while mouse drags on borders resize/move panes. | Add Canvas Selection + Vi Copy Mode (`Alt+C` / `:copy`, or mouse drag inside canvas with `Shift+Drag` / `Alt+Drag` rectangular block selection -> `OSC 52` yank). | `v0.2.0` |
+| **`VAL-05`** | **In-Band Size Reports (`DECSET ?2048`)** | `terminal/size_report.zig`: Emits `CSI 48 ; rows ; cols ; px_h ; px_w t` in-band in the VT stream when a pane resizes, avoiding async `SIGWINCH` signal races. | Sends `TIOCSWINSZ` (`SIGWINCH`) via `portable-pty` with deduplication (`src/pty/mod.rs`). | Support `DECSET ?2048` in `VtParser` and emit in-band `CSI 48 ; rows ; cols ; 0 ; 0 t` alongside `TIOCSWINSZ` on pane resize. | `v0.3.0` |
+| **`VAL-06`** | **Command Execution Timing, Exit-Code Badges & Long-Job Notifications** | `terminal/osc/parsers/semantic_prompt.zig` (`OSC 133;D;<exit_code>`) & `osc9.zig`: Tracks command duration and exit status (`0` vs non-zero) and alerts when a backgrounded pane finishes a long command. | Tracks `OSC 133` `A/B/C/D` boundaries and shows `⟳ RUNNING:` / `● LAST CMD:` banner in the prompt box. | Capture `<exit_code>` from `OSC 133;D;<code>` and elapsed wall-clock time (`✓ 0 [1.4s]` vs `✗ 127 [0.2s]`) directly in the prompt's `LAST CMD` banner and OIA bar! | `v0.2.0` |
+
+---
+
+### 2B. Value-Add Features Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)
+
+| ID | Feature | Bilterm Implementation (`src/`) | Ghostty State | Why Bilterm's Approach Is Uniquely Powerful |
+|----|---------|---------------------------------|---------------|---------------------------------------------|
+| **`BIL-V01`** | **4-Mode Command Prompt (`Top`, `Bottom`, `Floating`, and Non-Overlapping `SplitTop`/`SplitBottom`)** | `src/pane/mod.rs` (`PromptAnchor`): Instant toggle (`Alt+T`, `Alt+B`, `Alt+S`, mouse drag, `:prompt`) between floating overlay and zero-overlap split panes, with customizable width (`Alt+[`/`]`) and scrollable multi-line viewport. | No built-in command editor widget; relies entirely on the shell's inline readline/zle prompt. | Users get IDE-grade multi-line editing, live syntax highlighting, and a persistent `⟳ RUNNING:` banner in *every* shell (`/bin/sh`, `dash`, `bash`, `zsh`). |
+| **`BIL-V02`** | **Built-In Context-Aware `<Tab>` Completion Engine + Candidate Ribbon** | `src/pane/completion.rs`: Completes `:colon` commands, shell builtins, `$PATH` binaries, `$ENV` vars, and child CWD paths (`OSC 7` + `/proc/<pid>/cwd`) with an interactive `TAB: cand1 [cand2]` ribbon. | Delegates `<Tab>` entirely to the underlying shell's pty stream. | Even inside minimal shells (`/bin/sh`, container shells, remote tools), Bilterm provides rich visual `<Tab>` completion and `:command` discovery. |
+| **`BIL-V03`** | **Borland Z-Order Window Stacking & Deck Shuffling (`ZStack`)** | `src/wm/z_stack.rs` & `src/wm/mod.rs`: Overlapping cascading windows with `Z:1/N` badges, `Alt+Tab`/`F6` top-to-bottom deck shuffle, `Alt+1..9` selective raise, and click-to-raise. | Supports tiled splits and OS tabs, plus a single floating quick-terminal window, but no overlapping Z-order window deck inside a workspace. | Lets users keep 4–9 full-sized terminal windows stacked like cards on an 80×24 or 120×40 screen and flip through them instantly without cramped narrow splits. |
+| **`BIL-V04`** | **Structured Per-Session History Persistence, Pop-up Modal & `.sh` Script Export** | `src/pane/history_store.rs`: Automatically logs `[ISO-8601 | session=<id> | pane=<id>] <cmd>` with file rotation (`history_max_files`), `Alt+P` Borland modal browser, and `:history save` temp `.sh` export. | No terminal-level command history store, modal history browser, or `.sh` session script exporter. | Every command across every split/stacked pane is attributed by timestamp, unique session ID, and pane ID, and can be exported to an executable shell script with one keypress (`s`). |
+
+---
+
+## 3. Tier 3: Nice-to-Have Bells & Whistles (`Ghostty <-> Bilterm`)
+
+### 3A. Bells & Whistles Ghostty Has That Bilterm Can Add (`Ghostty -> Bilterm`)
+
+| ID | Feature | Ghostty Implementation (`.tmp/ghostty/src/`) | Current Bilterm `v0.1.0` State | Proposed Bilterm Addition | Target |
+|----|---------|----------------------------------------------|--------------------------------|---------------------------|--------|
+| **`BEL-01`** | **Built-in Live Terminal Inspector (`Inspector.zig`)** | `inspector/Inspector.zig` & `widgets/`: Real-time overlay showing incoming VT escape sequences, active DECSET modes table, cursor state, keyboard event encoding, and screen cell metadata. | Logs diagnostics to `./bilterm.log` via `tracing`. | Add a Borland **3270 Terminal Inspector Modal (`F9` or `:inspector`)** displaying live DECSET mode flags, recent escape sequences, cell attributes under cursor, and PTY termios flags! | `v0.3.0` |
+| **`BEL-02`** | **Progress Bar Reporting (`OSC 9;4`) & Desktop Notifications (`OSC 9` / `OSC 777`)** | `terminal/osc/parsers/osc9.zig`: Parses `OSC 9;4;<state>;<progress>` (used by `cargo`, `apt`, `osc`, `systemd`) to render a visual progress bar in the window chrome. | Ignores `OSC 9;4`. | Parse `OSC 9;4` in `VtParser` and render a retro `[████░░░░] 52%` progress gauge directly inside the pane's **3270-OIA status bar**! | `v0.3.0` |
+| **`BEL-03`** | **Color Scheme Reporting (`DECSET ?2031` / `CSI ? 996 n`)** | `terminal/modes.zig` (`report_color_scheme = 2031`): Reports dark (`1`) or light (`2`) palette mode via `CSI ? 997 ; 1 n` when themes change. | Does not emit `CSI ? 997 n`. | Emit `CSI ? 997 ; 1 n` (or `2 n`) when `:theme` switches palettes while `DECSET ?2031` is active. | `v0.3.0` |
+| **`BEL-04`** | **SSH Environment & Terminfo Auto-Forwarding (`ssh-env` / `ssh-terminfo`)** | `shell-integration/` & `termio/Exec.zig`: Wraps `ssh` invocations so `TERM=xterm-256color`, `COLORTERM=truecolor`, and shell integration propagate seamlessly to remote hosts. | Spawns local `$SHELL` directly. | Add optional `ssh` wrapper helper in auto-injected shell integration so `OSC 133` and `TERM=xterm-256color` work seamlessly across remote SSH sessions. | `v1.0.0` |
+
+---
+
+### 3B. Bells & Whistles Bilterm Has That Ghostty Lacks (`Bilterm -> Ghostty`)
+
+| ID | Feature | Bilterm Implementation (`src/`) | Ghostty State | Why Bilterm's Approach Is Uniquely Powerful |
+|----|---------|---------------------------------|---------------|---------------------------------------------|
+| **`BIL-B01`** | **Pane-Local & Full-Screen IBM 3270 Cross-Hair Cursor Ruler** | `src/ui/cursor.rs` (`Alt+X`, `:crosshair full \| pane \| off`): Non-destructively tints full row and column cells across the active pane or entire terminal screen. | Standard single-cell cursor (`block`, `bar`, `underline`, `hollow`) or custom GLSL shader. | Gives operators a precision horizontal + vertical alignment ruler across tables, hex dumps, and multi-pane logs in pure character cells. |
+| **`BIL-B02`** | **8 Selectable Box-Drawing Border Outlines & 4 DOS Drop-Shadow Styles** | `src/ui/chrome.rs` (`OutlineStyle`: `double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`; `ShadowStyle`: `translucent`, `tinted`, `solid`, `none`). | Native OS window borders / GTK headerbars. | Authentic Borland Turbo Vision / IBM 3270 visual identity with independent window vs. prompt outlines and non-destructive translucent character-cell drop shadows. |
+| **`BIL-B03`** | **IBM 3270 Operator Information Area (OIA) Telemetry Bar + DOS F-Key Bar** | `src/ui/mod.rs` & `src/ui/glyphs.rs`: Per-pane 3270-OIA bar (`● READY`, `⟳ RUNNING`, `▣ ALT SCR`, `♦ !ECHO LOCK`, `≣ OUT:lines/bytes`, `⌖ R:xx C:xxx`) + bottom `F1 Help .. F12 Raw` bar in 4 glyph packs (`unicode`, `cp437`, `nerd-font`, `ascii`). | Minimal GUI titlebar/tabs without a per-pane mainframe OIA telemetry bar or DOS function-key bar. | Surfaces complete terminal state (input routing, echo lock, output byte/line counters, 1-based cursor coordinates) at a glance on every pane. |
+
+---
+
+## 4. Broader Open-Source Terminal & Hardware Terminal Ecosystem Map
+
+To make Bilterm rock-solid and comprehensive, we also surveyed hardware terminal standards and leading open-source terminals/multiplexers:
+
+### 4A. Terminal Types & Emulation Standards (`VT100`–`VT520`, `xterm`, `IBM 3270`, `ANSI-BBS`)
+
+| Terminal Type / Standard | Signature Capabilities | Bilterm Coverage & Roadmap Opportunity |
+|--------------------------|------------------------|----------------------------------------|
+| **DEC VT100 / VT220 / VT420 / VT520** | `DECCKM` (`?1`), `DECOM` (`?6` origin), `DECAWM` (`?7` autowrap), `DECSTBM` (`\x1b[t;br` top/bottom margins), `DECLRMM`/`DECSLRM` (`?69` left/right margins), `DECSC`/`DECRC` (`ESC 7`/`8` cursor save), `DECSTR` (`\x1b[!p` soft reset), `DECBKM` (`?67` backarrow), `DECRPM` (`?Pd$p` mode report), `DECRQSS` (`DCS $ q`). | **Covered**: `DECCKM`, `DECOM`, `DECAWM`, `DECSTBM` (with flood-trap guard), `DECSC`/`DECRC`, `DSR`/`CPR`/`DA1`.<br>**Add in `v0.2`/`v0.3`**: `DECRPM` mode reporting, `DECBKM ?67`, `DECSTR \x1b[!p` soft terminal reset, and `DECRQSS`. |
+| **Xterm (`xterm-256color` / Direct-Color)** | `?47`/`?1047`/`?1049` Alt Screen, `?1000..1006` SGR Mouse, `?1004` Focus, `?2004` Bracketed Paste, `OSC 0/2` Title, `OSC 4/10/11/12` Dynamic Colors, `OSC 52` Clipboard, `XTWINOPS` (`CSI 18 t` text area size, `CSI 22/23 t` title stack), `XTGETTCAP` (`DCS + q`), `XTSHIFTESCAPE`. | **Covered**: Alt screen, SGR mouse, focus, bracketed paste, `OSC 0/2`, `OSC 52` (+ `DCS tmux;` passthrough).<br>**Add in `v0.2`**: `OSC 4/10/11/12` color query replies, `XTGETTCAP`, and `XTWINOPS` title push/pop stack (`CSI 22/23 t`). |
+| **IBM 3270 / 3278 / 3279 (`c3270` / `x3270`)** | Dedicated command entry area, Operator Information Area (OIA) with system-lock (`X SYSTEM` / `!ECHO LOCK`) and row/column indicator, full-screen cross-hair cursor ruler, 3278 phosphor green & 3279 amber CRT palettes, `Attn`/`PA1`/`PA2`/`Clear` attention keys, structured field navigation (`Tab`/`BackTab`). | **Covered**: Floating/Split Command Entry, 3270-OIA bar, `!ECHO LOCK`, `⌖ R:xx C:xxx`, Pane & Full-Screen Cross-Hairs, `3278`/`3279`/`mono` palettes.<br>**Add in `v0.3`**: Structured Output Field/Token Picker (`Alt+F` to Tab-jump across file paths, IPs, git SHAs, and URLs visible on the `OutputCanvas`, just like 3270 unprotected fields!). |
+| **DOS ANSI.SYS / Avatar / Borland Turbo Vision** | `CP437` box-drawing (`╔═╗`, `╟─╢`), high-intensity CGA/VGA 16-color backgrounds, 2×1 character-cell drop shadows, cascading Z-order windows (`F6` next, `Alt+1..9` window number), top menu bar + bottom `F1..F10` hotkey bar, modal dialog boxes (`F1` Help, `Alt+P` History). | **Covered**: All 5 Borland/IBM themes, 8 border outlines, 4 shadow modes, `CP437` glyph pack, Z-order stack, `F1` Help & `Alt+P` History modals.<br>**Add in `v0.3`**: Optional clickable Top Borland Menu Bar (`File  Window  Prompt  View  Theme  Tmux  Help`) activated via `F10` or mouse click! |
+
+---
+
+### 4B. Open-Source Terminal & Multiplexer Capabilities (`WezTerm`, `Kitty`, `Zellij`, `Alacritty`, `Foot`, `Warp`, `Contour`)
+
+| Open-Source Project | Standout Architectural Features | High-Value Capabilities to Bring into Bilterm |
+|---------------------|---------------------------------|-----------------------------------------------|
+| **WezTerm** *(Rust)* | `portable-pty`, QuickSelect mode (vimium-style hint labels `a`, `s`, `d`, `f` over URLs/paths/hashes), Copy Mode (Vi modal selection), built-in SSH/serial/mux domains, workspace session serialization. | **1. QuickSelect Hint Labels (`Alt+F` / `:hints`)**: Overlay 1–2 letter hint badges over every URL, file:line path, IP address, and git SHA on the `OutputCanvas` to copy or insert directly into the command prompt!<br>**2. Workspace Layout Serialization (`:session save/load`)**. |
+| **Alacritty** *(Rust)* | Vi Mode (`Ctrl+Shift+Space` modal cursor navigation + selection + search over scrollback), regex hints, damage-tracked rendering, scrollback reflow. | **Vi Copy & Scrollback Navigation Mode (`Alt+C` / `:copy`)**: Move a modal cursor across the `OutputCanvas` with `h/j/k/l/w/b/0/$`, press `v`/`V`/`Ctrl+V` to select character/line/block, and `y` to yank into the command prompt or `OSC 52` clipboard. |
+| **Zellij** *(Rust)* | Contextual keybinding status ribbon, stacked panes, floating panes, layout KDL/TOML templates, session resurrection (replaying layout + working directories + command history). | **Workspace Templates & Session Resurrection (`:session save <name>` / `:session restore <name>`)**: Save split tree, Z-order stack, pane working directories (`OSC 7`), and prompt anchors to TOML so workspaces can be restored on startup. |
+| **Warp** *(Rust)* | Block-based command output (each command + output is an addressable unit with exit code, duration, timestamp, copy-output, copy-command, bookmark, and filter). | **Enhanced `OSC 133` Command Block Actions (`:block copy-output`, `:block copy-cmd`, `:block filter`)**: Combined with our `VAL-01` auto-injected `OSC 133` shell hooks, display exit code (`✓ 0` / `✗ 1`) and duration per command block and copy a single block's output with one command. |
+| **Kitty** *(C/Python)* | Kitty Keyboard Protocol (`CSI > u`), `OSC 5522` clipboard protocol, `OSC 99` notifications, Unicode placeholders, `kitten ssh` terminfo propagation. | **Kitty Keyboard Protocol (`CSI > flags u`)** (`FND-04`) so modern editors (`neovim`, `helix`) inside Bilterm panes can distinguish `Ctrl+I` from `Tab` and `Ctrl+Enter` from `Enter`. |
+| **Foot** *(C / Wayland)* | Ultra-fast VT parser, pipelined synchronized updates (`DECSET ?2026`), sixel graphics, `OSC 133` prompt jumping, URL jump labels. | **Frame-Locked Synchronized Output (`DECSET ?2026` Batching)**: Hold canvas buffer swap while `?2026` is set (up to a 33ms timeout) so sub-TUI apps never tear mid-frame. |
+| **Contour** *(C++)* | VT320/VT420/VT520 accuracy, `DECRPM`, `DECSET ?2027` Unicode grapheme clustering, `DECSET ?2031` color-scheme reporting, read-only pane lock mode. | **Read-Only Pane Lock (`:lock` / `Alt+L`)**: Lock a production pane against accidental input while monitoring logs. |
+
+---
+
+## 5. Prioritized Bilterm Production Roadmap (`v0.2.0` -> `v0.3.0` -> `v1.0.0`)
+
+| Milestone | Theme | Included Feature IDs | Key Deliverables |
+|-----------|-------|----------------------|------------------|
+| **`v0.2.0`** | **Core Emulation Hardening, Auto Shell Integration & Copy/Search Ergonomics** | `FND-01`, `FND-02`, `FND-03`, `FND-04`, `FND-05`, `FND-06`, `VAL-01`, `VAL-02`, `VAL-03`, `VAL-04`, `VAL-06` | Paste injection sanitizer + unsafe multi-line guard; `DECSET ?1007` alternate scroll (`less`/`man`); `DECRPM` (`CSI ? Pd $ p`) + `OSC 10/11` + `XTGETTCAP`/`DECRQSS` responders; Kitty keyboard protocol (`CSI > u`); Zero-config `bash`/`zsh`/`fish` `OSC 133`+`OSC 7` hook injection; Command exit-code & duration badges (`✓ 0 [1.2s]`); Scrollback regex/text search (`:search` / `Alt+/`); Vi Copy Mode & rectangular block selection (`Alt+C`); `OSC 8` hyperlinks. |
+| **`v0.3.0`** | **IBM 3270 Field Hints, Terminal Inspector, Reflow & Session Resurrection** | `FND-07`, `FND-08`, `FND-09`, `VAL-05`, `BEL-01`, `BEL-02`, `BEL-03`, `ECO-01` (QuickSelect Hints), `ECO-02` (Session Save/Restore), `ECO-03` (Top Borland Menu Bar), `ECO-04` (Read-Only Pane Lock) | QuickSelect 3270 Field Hints (`Alt+F` labels over paths/URLs/SHAs/IPs to insert into prompt or yank); Built-in **Borland Terminal Inspector Modal (`F9` / `:inspector`)**; `OSC 9;4` progress bar in OIA status bar; Soft-wrapped scrollback reflow on resize; `SGR 4:3` curly underlines & `SGR 58` underline colors; Workspace session save/restore (`:session save/load`); Read-only pane lock (`:lock`); Optional clickable Top Borland Menu Bar. |
+| **`v1.0.0`** | **Production Release, `vttest`/`esctest` Compliance & SSH Integration** | `BEL-04` + Full Compliance Audit | Automated `esctest` / `vttest` compliance harness; `ssh` environment & `OSC 133` wrapper propagation; Cross-platform release packaging (Linux/macOS/Windows binaries). |
