@@ -16,5 +16,5 @@ expression: rendered
 │                                      │║                                      ║
 │                                      │║                                      ║
 │                                      │║                                      ║
-│3270-OIA│ READY │ INPUT: CMD BOX │ PIN│║3270-OIA│ READY │ INPUT: CMD BOX │ PIN║
+│3270-OIA│ ● READY │ INPUT: CMD BOX │ P│║3270-OIA│ ● READY │ INPUT: CMD BOX │ P║
 └──────────────────────────────────────◢╚══════════════════════════════════════◢

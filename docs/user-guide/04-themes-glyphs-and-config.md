@@ -1,41 +1,71 @@
-# Chapter 4: Retro Mainframe & DOS Aesthetics, Themes, Glyphs & Configuration
+# Chapter 4: Retro Mainframe & DOS Aesthetics, Outlines, Drop Shadows, Cross-Hairs & Configuration
 
-## 1. Borland Turbo Vision Chrome & Translucent Drop Shadows (`UI-01`)
+## 1. Selectable Window & Pane Border Outlines
 
-- **Active vs. Inactive Frames**: Active windows render classic Borland double-line borders (`╔═╗`); inactive windows render single-line borders (`┌─┐`), complete with `[1]` window number badges, `[↕]` zoom and `[▪]` close widgets, and a `◢` resize corner.
-- **Translucent Character-Cell Drop Shadows**: Enable via `:shadows on` or `drop_shadows = true` in `config.toml`. Floating prompts, stacked windows, and the Guake overlay cast a **2-column right / 1-row bottom translucent shadow** (`DarkGray` on `Black`) that dims underlying text while keeping the characters beneath legible.
+Customize the border outline style of workspace windows and the command prompt independently or together using `:outline` / `:border` or `config.toml`:
 
----
+| Style Name | Top-Left / Horizontal / Top-Right | Command |
+|------------|-----------------------------------|---------|
+| `double` (Default) | `╔═══╗` | `:outline double` |
+| `solid` | `┌───┐` | `:outline solid` |
+| `rounded` | `╭───╮` | `:outline rounded` |
+| `thick` | `┏━━━┓` | `:outline thick` |
+| `dotted` | `┌┈┈┈┐` | `:outline dotted` |
+| `dashed` | `┌┄┄┄┐` | `:outline dashed` |
+| `quadruple` | `▛▀▀▀▜` | `:outline quadruple` |
+| `ascii` | `+---+` | `:outline ascii` |
 
-## 2. Color Theme Presets (`UI-02`)
-
-Switch themes live at any time via `:theme <name>`:
-- `:theme turbo-blue` — Borland Turbo C / Turbo Pascal Royal Blue + Yellow/Cyan/Green (Default)
-- `:theme turbo-cyan` — Classic Borland Turbo Vision Cyan dialog palette
-- `:theme 3278` (`ibm-3278-green`) — IBM 3278 Model 2 Phosphor Green mainframe palette
-- `:theme 3279` (`ibm-3279-amber`) — IBM 3279 / 3290 Gas-Plasma Amber mainframe palette
-- `:theme mono` (`ibm-mono`) — High-contrast monochrome mainframe palette
-
----
-
-## 3. IBM 3270 Cross-Hair Cursor Ruler & Custom Carets (`UI-05`)
-
-- **Cross-Hair Cursor Ruler**: Run `:crosshair on` to enable a full-pane IBM 3270 horizontal + vertical cross-hair cursor ruler that non-destructively tints the active cursor row and column across the pane.
-- **Caret Shapes**: Switch software caret shapes via `:cursor <style>`:
-  - `:cursor block` — Inverted solid block (`█`)
-  - `:cursor hollow` — Blinking hollow block (`▯`)
-  - `:cursor underscore` — Classic DOS underscore (`_`)
-  - `:cursor bar` — Vertical beam (`▏`)
+Target only windows or only the command prompt via:
+- `:outline window <style>`
+- `:outline prompt <style>`
 
 ---
 
-## 4. Unicode, CP437 & Nerd Font Glyph Packs (`UI-04`)
+## 2. Themeable & Selectable DOS Drop Shadows (`UI-01`)
 
-Switch glyph packs live via `:glyphs <pack>`:
-- `:glyphs unicode` — Standard Unicode box-drawing and geometric dingbats (`[▲][▼]`, `[▪]`, `[↕]`, `◢`, `==> `)
-- `:glyphs cp437` — Classic IBM PC Code Page 437 symbols (`♦=> `, `[■]`, `╬`, `║`)
-- `:glyphs nerd-font` — Powerline & Nerd Font symbols (`❯=> `, ``)
-- `:glyphs ascii` — Pure 7-bit ASCII fallback (`[^][v]`, `[x]`, `[+]`, `/`)
+Floating prompts, stacked windows, the History Pop-up, the `<F1>` Help modal, and the Guake overlay cast a **2-column right / 1-row bottom DOS drop shadow**. Switch shadow modes live via `:shadows <mode>`:
+- `:shadows translucent` — Dims underlying foreground/background cells to `DarkGray` on `Black` without erasing the characters underneath.
+- `:shadows tinted` — Tints underlying cells using the active theme's `shadow_fg` and `shadow_bg` palette colors (customizable in `theme.ini`).
+- `:shadows solid` — Renders classic opaque DOS block shadows (`█`).
+- `:shadows off` / `:shadows none` — Disables drop shadows.
+
+---
+
+## 3. How to Turn On Full-Screen vs. Pane-Local Cross-Hair Cursors (`UI-05`)
+
+Bilterm supports the classic **IBM 3270 horizontal + vertical cross-hair cursor ruler** in two modes:
+
+1. **Keyboard Hotkey (`Alt+X`)**:
+   - Press **`Alt+X`** once: Enables **Pane-Local Cross-Hairs** (horizontal and vertical ruler lines span the active pane's canvas).
+   - Press **`Alt+X`** a second time: Switches to **Full-Screen Cross-Hairs** (horizontal and vertical ruler lines extend edge-to-edge across the entire terminal screen).
+   - Press **`Alt+X`** a third time: Turns cross-hairs **Off**.
+2. **Colon Commands**:
+   - `:crosshair full` (or `:crosshair fullscreen`) — Turn on **full-screen** vertical & horizontal cross-hairs.
+   - `:crosshair pane` (or `:crosshair on`) — Turn on **pane-local** vertical & horizontal cross-hairs.
+   - `:crosshair off` — Turn off cross-hairs.
+3. **`config.toml`**:
+   ```toml
+   crosshair_cursor = true
+   crosshair_fullscreen = true
+   ```
+
+---
+
+## 4. Operator Information Area (OIA) Status Bar Icons & Telemetry
+
+Each composite pane's bottom 1-row **3270-OIA** status bar displays:
+- **System State Icon & Badge**:
+  - `● READY` (Green) — Shell ready at prompt
+  - `⟳ RUNNING` (Cyan) — Foreground command streaming (`tail -f`, build, etc.)
+  - `⇳ SCROLL` (Cyan) — Viewing scrollback history
+  - `▣ ALT SCR` (Yellow) — Full-screen interactive TUI (`vim`, `htop`) active
+  - `♦ !ECHO LOCK` (Red) — Password prompt (`sudo`, `ssh`) detected; floating prompt hidden & protected
+- **Input Routing & Pin Mode**: `INPUT: CMD BOX` vs. `INPUT: RAW PTY`, and `PIN:TOP`, `PIN:BOT`, `PIN:FLT`, `PIN:SPL-T`, or `PIN:SPL-B`.
+- **Accurate `⌖ R:xx C:xxx` Counter**:
+  - In `INPUT: CMD BOX` mode, displays the live 1-based row and column of your command prompt cursor (`R:01 C:001` as you type or move across lines).
+  - In `INPUT: RAW PTY` mode, displays the live 1-based row and column of the underlying VT100 terminal cursor.
+- **Output Length Counter (`≣ OUT:<lines>L/<bytes>`)**:
+  - Tracks total output lines and formatted byte volume processed by the pane (e.g. `≣ OUT:142L/8.4K` or `≣ OUT:12500L/1.2M`).
 
 ---
 
@@ -43,11 +73,18 @@ Switch glyph packs live via `:glyphs <pack>`:
 
 ```toml
 theme = "ibm-3279-amber"
-glyphs = "cp437"
+glyphs = "unicode"
 cursor_style = "blinking-hollow-block"
+window_outline = "double"
+prompt_outline = "rounded"
+shadow_style = "tinted"
 crosshair_cursor = true
+crosshair_fullscreen = true
 drop_shadows = true
 show_dos_fkey_bar = true
-default_prompt_anchor = "top"
+history_enabled = true
+history_max_files = 25
+# history_dir = "/custom/path/to/bilterm-history"
+default_prompt_anchor = "split-top"
 default_prompt_height = 3
 ```

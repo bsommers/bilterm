@@ -9,9 +9,11 @@
 - **Composite Window Pane (`OutputCanvas` + `FloatingCommandPrompt` + `OIA Status Bar`)**:
   - Full-height VT100 / ANSI / 24-bit TrueColor PTY output canvas (`portable-pty` + `vt100-ctt`) that scrolls smoothly underneath an overlaid multi-line command prompt with **zero `SIGWINCH` geometry thrashing** when the prompt moves or hides.
   - Automatic `DECSET 47/1047/1049` alternate-screen auto-hide (`vim`, `nvim`, `htop`, `less`, `fzf`) and three-signal line-discipline detection (`OSC 133` + `tcgetpgrp` + `termios !ECHO`) so `sudo`/`ssh` passwords are never echoed in cleartext.
-- **Triple-Modality Floating Prompt Ergonomics**:
-  - Pin to **Top** (IBM 3270 default), **Bottom**, or **Free-Float** at any vertical row offset via keyboard (`Alt+T`, `Alt+B`, `Alt+Up`/`Down`), mouse drag-and-drop / `[▲][▼]` border badges, or `:prompt top|bottom|float|height`.
-  - Multi-line command editing (`Shift+Enter` / `Alt+Enter`), live shell syntax highlighting, `Ctrl+R` fuzzy history search (`nucleo-matcher`), `DECSET 2004` bracketed paste, `OSC 52` clipboard yank (`:yank`), and `OSC 133` command block scrollback jumping (`Alt+PageUp` / `Alt+PageDown`).
+- **Triple-Modality Command Prompt (Floating or Non-Overlapping Split)**:
+  - Pin to **Top** (IBM 3270 default), **Bottom**, **Free-Float** (`Alt+T`, `Alt+B`, `Alt+Up`/`Down`), or partition into a **Non-Overlapping Split Command & Output Pane** (`Alt+S` / `:prompt split-top | split-bottom`).
+  - **Resizable Width & Height + Scrollable Content**: Resize height (`Alt+Plus`/`Alt+Minus`, bottom border drag, `:prompt height <3..12>`) and width (`Alt+]`/`Alt+[`, left/right/corner border drag, `:prompt width <cols|full>`), with vertical/horizontal scrolling (`Shift+PageUp`/`Shift+PageDown`, mouse wheel) and a live **`⟳ RUNNING:` / `● LAST CMD:` banner** showing the active command (such as `tail -f /dev/null`) after pressing `Enter`.
+  - **Tab Completion, History Pop-up & Session Persistence**: Context-aware `Tab`/`Shift+Tab` completion, `Ctrl+R` fuzzy history search (`nucleo-matcher`), a Borland **Command History Pop-up Window** (`Alt+P` / `:history`), automatic per-session/per-pane history file persistence with rotation (`:history on|off`, `:history max-files <N>`), and temporary script export (`:history save`).
+  - **`<F1>` Interactive Help & Full-Screen Cross-Hairs**: Press **`F1`** (or `:help`) for the scrollable Borland Turbo Vision Help Modal, and **`Alt+X`** (or `:crosshair full | pane | off`) to cycle between Pane-Local and Full-Screen IBM 3270 vertical/horizontal cross-hair cursors.
 - **Multi-Pane Window Manager, Z-Order Stacking & Guake Drop-Down Terminal**:
   - Split any composite pane horizontally (`Alt+H` / `:split h`) or vertically (`Alt+V` / `:split v`).
   - Stack composite panes in z-order (`Alt+M` / `:layout stack`), shuffle the deck top-to-bottom (`Alt+Tab` / `F6`) or bottom-to-top (`Alt+Shift+Tab`), and selectively raise any pane via `Alt+1..9` or mouse click.

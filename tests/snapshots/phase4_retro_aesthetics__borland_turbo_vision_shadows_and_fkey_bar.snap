@@ -15,6 +15,6 @@ expression: rendered
 │   ║                                                                          ║
 │327║                                                                          ║
 └───║                                                                          ║
-    ║3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:01 C:001                   ║
+    ║3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖ R:01 C:026 │ ≣ OUT:0L/0B ║
     ╚══════════════════════════════════════════════════════════════════════════◢
  F1 Help  F2 Split  F5 Zoom  F6 Next  F10 Quake  F12 Raw [TURBO-BLUE]

@@ -52,6 +52,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "split",
             "float ",
             "height ",
+            "width ",
         ],
     ),
     (":split", &["h", "v", "horizontal", "vertical"]),
@@ -62,6 +63,9 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":layout", &["tiled", "stacked"]),
     (":quake", &[]),
     (":guake", &[]),
+    (":help", &[]),
+    (":history", &["popup", "save", "on", "off", "max-files "]),
+    (":hist", &["popup", "save", "on", "off", "max-files "]),
     (
         ":outline",
         &[
@@ -97,7 +101,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     ),
     (":glyphs", &["unicode", "cp437", "nerd-font", "ascii"]),
     (":cursor", &["block", "hollow", "underscore", "bar"]),
-    (":crosshair", &["on", "off"]),
+    (":crosshair", &["on", "off", "full", "pane"]),
     (":fkeybar", &["on", "off"]),
     (":block", &["prev", "next"]),
     (":yank", &[]),

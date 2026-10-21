@@ -451,3 +451,166 @@ fn comprehensive_input_router_completion_and_colon_command_coverage() {
         .unwrap();
     app.flush_osc52_to_host().unwrap();
 }
+
+#[test]
+fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullscreen_crosshairs() {
+    let mut app = App::new(CompositePane::new_headless(1, 24, 80));
+    let area = Rect::new(0, 0, 80, 24);
+
+    // 1. Running command banner stays visible inside the prompt after hitting Enter on "tail -f /dev/null"
+    for ch in "tail -f /dev/null".chars() {
+        app.handle_crossterm_event(Event::Key(KeyEvent::new(
+            KeyCode::Char(ch),
+            KeyModifiers::NONE,
+        )))
+        .unwrap();
+    }
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(
+        app.wm.active_pane().prompt.running_command.as_deref(),
+        Some("tail -f /dev/null")
+    );
+
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&app.wm).render(area, &mut buf);
+    let snap = buffer_to_snapshot_string(&buf);
+    assert!(snap.contains("tail -f /dev/null"));
+
+    // 2. Resizable prompt width via :prompt width 40, Alt+] / Alt+[, and mouse border/corner drag
+    app.wm
+        .active_pane_mut()
+        .prompt
+        .set_text(":prompt width 40");
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.wm.active_pane().prompt_rect(area).width, 40);
+
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Char(']'),
+        KeyModifiers::ALT,
+    )))
+    .unwrap();
+    assert_eq!(app.wm.active_pane().prompt_rect(area).width, 44);
+
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('['),
+        KeyModifiers::ALT,
+    )))
+    .unwrap();
+    assert_eq!(app.wm.active_pane().prompt_rect(area).width, 40);
+
+    // Mouse drag right border of prompt from x = 40 to x = 55 -> width = 55
+    let p_rect = app.wm.active_pane().prompt_rect(area);
+    let right_x = p_rect.x + p_rect.width - 1;
+    for (kind, col) in [
+        (MouseEventKind::Down(MouseButton::Left), right_x),
+        (MouseEventKind::Drag(MouseButton::Left), p_rect.x + 54),
+        (MouseEventKind::Up(MouseButton::Left), p_rect.x + 54),
+    ] {
+        handle_wm_mouse_event(
+            &mut app.wm,
+            MouseEvent {
+                kind,
+                column: col,
+                row: p_rect.y + 1,
+                modifiers: KeyModifiers::NONE,
+            },
+            area,
+        )
+        .unwrap();
+    }
+    assert_eq!(app.wm.active_pane().prompt_rect(area).width, 55);
+
+    // 3. Scrollable multi-line command prompt content (Shift+PageUp / Shift+PageDown & mouse scroll)
+    let multiline = (1..=10)
+        .map(|i| format!("echo line_{i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    app.wm.active_pane_mut().prompt.set_text(&multiline);
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::PageUp,
+        KeyModifiers::SHIFT,
+    )))
+    .unwrap();
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::PageDown,
+        KeyModifiers::SHIFT,
+    )))
+    .unwrap();
+
+    // 4. Command History Pop-up Window (Alt+P / :history), navigation, temp-file save ('s'), and selection
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('p'),
+        KeyModifiers::ALT,
+    )))
+    .unwrap();
+    assert!(app.wm.active_pane().prompt.history_popup_open);
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&app.wm).render(area, &mut buf);
+    assert!(buffer_to_snapshot_string(&buf).contains("COMMAND HISTORY"));
+
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('s'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    let exported = app
+        .wm
+        .active_pane()
+        .history_store
+        .last_exported_temp_path
+        .clone()
+        .expect("exported temp file");
+    assert!(exported.exists());
+    let _ = std::fs::remove_file(exported);
+
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert!(!app.wm.active_pane().prompt.history_popup_open);
+
+    // 5. Full-screen cross-hairs (:crosshair full / Alt+X)
+    app.wm
+        .active_pane_mut()
+        .prompt
+        .set_text(":crosshair full");
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert!(app.wm.config.crosshair_cursor);
+    assert!(app.wm.config.crosshair_fullscreen);
+
+    // 6. <F1> Interactive Help modal toggle and scrolling
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::F(1),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert!(app.wm.help_visible);
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&app.wm).render(area, &mut buf);
+    assert!(buffer_to_snapshot_string(&buf).contains("TURBO VISION HELP"));
+
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::PageDown,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(
+        KeyCode::F(1),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert!(!app.wm.help_visible);
+}

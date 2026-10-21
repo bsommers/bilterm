@@ -46,6 +46,7 @@ pub struct VtParser {
     pending_osc52: Vec<String>,
     pending_query_responses: Vec<Vec<u8>>,
     total_lines_scrolled: usize,
+    total_bytes_processed: usize,
 }
 
 impl VtParser {
@@ -71,6 +72,7 @@ impl VtParser {
             pending_osc52: Vec::new(),
             pending_query_responses: Vec::new(),
             total_lines_scrolled: 0,
+            total_bytes_processed: 0,
         }
     }
 
@@ -82,6 +84,7 @@ impl VtParser {
     /// bytes are sanitized into visible glyphs so random bytes cannot falsely trigger `DECSET`
     /// alternate screen mode or lock the VT100 scroll region (`DECSTBM`).
     pub fn process(&mut self, bytes: &[u8]) {
+        self.total_bytes_processed = self.total_bytes_processed.saturating_add(bytes.len());
         if !self.is_alternate_screen() && is_binary_noise_chunk(bytes) {
             let sanitized = sanitize_binary_noise_chunk(bytes);
             let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
@@ -93,6 +96,27 @@ impl VtParser {
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
         self.parser.process(bytes);
         self.scan_control_sequences(bytes);
+    }
+
+    /// Total number of output bytes processed by this pane's VT100 parser.
+    pub fn total_bytes_processed(&self) -> usize {
+        self.total_bytes_processed
+    }
+
+    /// Total number of newline transitions observed in the output stream.
+    pub fn total_lines_scrolled(&self) -> usize {
+        self.total_lines_scrolled
+    }
+
+    /// Total output line count (lines scrolled + current active cursor row).
+    pub fn output_line_count(&self) -> usize {
+        let (cur_r, cur_c) = self.parser.screen().cursor_position();
+        let active_line = if cur_r > 0 || cur_c > 0 || self.total_bytes_processed > 0 {
+            usize::from(cur_r) + 1
+        } else {
+            0
+        };
+        self.total_lines_scrolled.max(active_line)
     }
 
     /// Resizes the virtual terminal screen dimensions.

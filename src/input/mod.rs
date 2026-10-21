@@ -35,6 +35,11 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return handle_fuzzy_search_key(pane, key);
     }
 
+    // If the Borland Command History Pop-up Window is open, route keys to it first
+    if pane.is_prompt_visible() && pane.prompt.history_popup_open {
+        return handle_history_popup_key(pane, key);
+    }
+
     // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12
     if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
         || key.code == KeyCode::F(12)
@@ -74,6 +79,18 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
             }
             KeyCode::Char('-') => {
                 pane.resize_prompt_height(-1);
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char(']') => {
+                pane.resize_prompt_width(4);
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('[') => {
+                pane.resize_prompt_width(-4);
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('p') => {
+                pane.prompt.toggle_history_popup();
                 return Ok(AppAction::Handled);
             }
             KeyCode::PageUp => {
@@ -168,10 +185,54 @@ fn handle_fuzzy_search_key(pane: &mut CompositePane, key: KeyEvent) -> Result<Ap
     }
 }
 
+fn handle_history_popup_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            pane.prompt.history_popup_open = false;
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Enter => {
+            pane.prompt.accept_history_popup_selection();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            pane.prompt.history_popup_prev();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            pane.prompt.history_popup_next();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('s') => {
+            if let Ok(saved) = pane
+                .history_store
+                .export_to_temp_file(&pane.prompt.history, None)
+            {
+                pane.status_message = Some(format!("Saved history to {}", saved.display()));
+            }
+            Ok(AppAction::Handled)
+        }
+        _ => Ok(AppAction::Handled),
+    }
+}
+
 fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
-    if key.modifiers.contains(KeyModifiers::SHIFT) && key.code == KeyCode::Enter {
-        pane.prompt.insert_newline();
-        return Ok(AppAction::Handled);
+    if key.modifiers.contains(KeyModifiers::SHIFT) {
+        match key.code {
+            KeyCode::Enter => {
+                pane.prompt.insert_newline();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::PageUp => {
+                pane.prompt.scroll_up(2);
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::PageDown => {
+                pane.prompt.scroll_down(2);
+                return Ok(AppAction::Handled);
+            }
+            _ => {}
+        }
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -182,9 +243,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             }
             KeyCode::Char('c') => {
                 // If a foreground subcommand (e.g. `tail -f /dev/random`) is running or the prompt is empty,
-                // forward SIGINT (0x03) to the PTY; also clear any partial prompt text.
+                // forward SIGINT (0x03) to the PTY; also clear any partial prompt text and running banner.
                 let has_fg_sub = pane.line_discipline.has_foreground_subcommand();
                 let prompt_was_empty = pane.prompt.input.is_empty();
+                pane.prompt.running_command = None;
                 if !prompt_was_empty {
                     pane.prompt.clear_line();
                 }
@@ -257,6 +319,7 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
 
             pane.vt.reset_scrollback();
             pane.vt.record_command_submission(submitted.clone());
+            let _ = pane.history_store.record_command(&submitted);
             if let Some(pty) = &pane.pty {
                 let mut payload = submitted.into_bytes();
                 payload.push(b'\n');
@@ -401,17 +464,34 @@ pub fn handle_mouse_event(
                 return Ok(AppAction::Handled);
             }
 
-            // Bottom border of floating prompt: start height resize drag
+            // Bottom border of floating prompt: check bottom-right corner (`◢`) or start height resize drag
             let bottom_y = prompt_rect.y + prompt_rect.height.saturating_sub(1);
+            let right_x = prompt_rect.x + prompt_rect.width.saturating_sub(1);
+            if row == bottom_y && col == right_x {
+                pane.mouse_drag = Some(PromptMouseDrag::ResizePromptCorner);
+                return Ok(AppAction::Handled);
+            }
             if row == bottom_y && col >= prompt_rect.x && col < prompt_rect.x + prompt_rect.width {
                 pane.mouse_drag = Some(PromptMouseDrag::ResizePrompt);
+                return Ok(AppAction::Handled);
+            }
+
+            // Left border of floating prompt: start left width resize drag
+            if col == prompt_rect.x && row > prompt_rect.y && row < bottom_y {
+                pane.mouse_drag = Some(PromptMouseDrag::ResizePromptLeft);
+                return Ok(AppAction::Handled);
+            }
+
+            // Right border of floating prompt: start right width resize drag
+            if col == right_x && row > prompt_rect.y && row < bottom_y {
+                pane.mouse_drag = Some(PromptMouseDrag::ResizePromptRight);
                 return Ok(AppAction::Handled);
             }
         }
         MouseEventKind::Drag(MouseButton::Left) => {
             if let Some(drag) = pane.mouse_drag {
                 match drag {
-                    PromptMouseDrag::MovePrompt { .. } => {
+                    PromptMouseDrag::MovePrompt { grab_x_offset } => {
                         let rel_y = row.saturating_sub(canvas_rect.y);
                         if rel_y == 0 {
                             pane.set_prompt_anchor(PromptAnchor::Top);
@@ -420,11 +500,36 @@ pub fn handle_mouse_event(
                         } else {
                             pane.set_prompt_anchor(PromptAnchor::Floating { y_offset: rel_y });
                         }
+                        if pane.prompt.width_cols.is_some() {
+                            let target_x = col.saturating_sub(grab_x_offset).saturating_sub(canvas_rect.x);
+                            let max_x = canvas_rect.width.saturating_sub(prompt_rect.width);
+                            pane.prompt.x_offset = Some(target_x.min(max_x));
+                        }
                         return Ok(AppAction::Handled);
                     }
                     PromptMouseDrag::ResizePrompt => {
                         let new_height = row.saturating_sub(prompt_rect.y).saturating_add(1);
                         pane.set_prompt_height(new_height.clamp(3, 12));
+                        return Ok(AppAction::Handled);
+                    }
+                    PromptMouseDrag::ResizePromptRight => {
+                        let new_width = col.saturating_sub(prompt_rect.x).saturating_add(1);
+                        pane.set_prompt_width(Some(new_width.clamp(16, canvas_rect.width.max(16))));
+                        return Ok(AppAction::Handled);
+                    }
+                    PromptMouseDrag::ResizePromptLeft => {
+                        let right_edge = prompt_rect.x + prompt_rect.width;
+                        let clamped_col = col.clamp(canvas_rect.x, right_edge.saturating_sub(16));
+                        let new_width = right_edge.saturating_sub(clamped_col).max(16);
+                        pane.prompt.x_offset = Some(clamped_col.saturating_sub(canvas_rect.x));
+                        pane.set_prompt_width(Some(new_width));
+                        return Ok(AppAction::Handled);
+                    }
+                    PromptMouseDrag::ResizePromptCorner => {
+                        let new_height = row.saturating_sub(prompt_rect.y).saturating_add(1);
+                        let new_width = col.saturating_sub(prompt_rect.x).saturating_add(1);
+                        pane.set_prompt_height(new_height.clamp(3, 12));
+                        pane.set_prompt_width(Some(new_width.clamp(16, canvas_rect.width.max(16))));
                         return Ok(AppAction::Handled);
                     }
                 }
@@ -436,11 +541,29 @@ pub fn handle_mouse_event(
             }
         }
         MouseEventKind::ScrollUp => {
-            pane.vt.scroll_up(3);
+            if col >= prompt_rect.x
+                && col < prompt_rect.x + prompt_rect.width
+                && row >= prompt_rect.y
+                && row < prompt_rect.y + prompt_rect.height
+                && pane.prompt.lines.len() > 1
+            {
+                pane.prompt.scroll_up(1);
+            } else {
+                pane.vt.scroll_up(3);
+            }
             return Ok(AppAction::Handled);
         }
         MouseEventKind::ScrollDown => {
-            pane.vt.scroll_down(3);
+            if col >= prompt_rect.x
+                && col < prompt_rect.x + prompt_rect.width
+                && row >= prompt_rect.y
+                && row < prompt_rect.y + prompt_rect.height
+                && pane.prompt.lines.len() > 1
+            {
+                pane.prompt.scroll_down(1);
+            } else {
+                pane.vt.scroll_down(3);
+            }
             return Ok(AppAction::Handled);
         }
         _ => {}
@@ -456,6 +579,29 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Quit);
     }
 
+    // If the <F1> Help modal is open, route keys to it first
+    if wm.help_visible {
+        match key.code {
+            KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => {
+                wm.help_visible = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                wm.help_scroll = wm.help_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                wm.help_scroll = wm.help_scroll.saturating_add(1);
+            }
+            KeyCode::PageUp => {
+                wm.help_scroll = wm.help_scroll.saturating_sub(8);
+            }
+            KeyCode::PageDown => {
+                wm.help_scroll = wm.help_scroll.saturating_add(8);
+            }
+            _ => {}
+        }
+        return Ok(AppAction::Handled);
+    }
+
     // Global Guake/Quake-style quick terminal drop-down hotkey: Alt+` or Ctrl+Space (WM-05)
     if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('`'))
         || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char(' '))
@@ -464,8 +610,16 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
-    // Borland Turbo Vision function keys: F5 = Zoom, F6 = Next Pane (Deck Shuffle Top-to-Bottom)
+    // Borland Turbo Vision function keys: F1 = Help, F2 = Split, F5 = Zoom, F6 = Next Pane, F10 = Quake
     match key.code {
+        KeyCode::F(1) => {
+            wm.toggle_help();
+            return Ok(AppAction::Handled);
+        }
+        KeyCode::F(2) => {
+            wm.split_focused(SplitDirection::Horizontal)?;
+            return Ok(AppAction::Handled);
+        }
         KeyCode::F(5) => {
             wm.toggle_zoom();
             return Ok(AppAction::Handled);
@@ -474,12 +628,28 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
             wm.shuffle_deck_next();
             return Ok(AppAction::Handled);
         }
+        KeyCode::F(10) => {
+            wm.toggle_quick_terminal();
+            return Ok(AppAction::Handled);
+        }
         _ => {}
     }
 
     // Multi-pane Window Manager Alt-chords
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
+            KeyCode::Char('x') => {
+                if !wm.config.crosshair_cursor {
+                    wm.config.crosshair_cursor = true;
+                    wm.config.crosshair_fullscreen = false;
+                } else if !wm.config.crosshair_fullscreen {
+                    wm.config.crosshair_fullscreen = true;
+                } else {
+                    wm.config.crosshair_cursor = false;
+                    wm.config.crosshair_fullscreen = false;
+                }
+                return Ok(AppAction::Handled);
+            }
             KeyCode::Char('h') => {
                 wm.split_focused(SplitDirection::Horizontal)?;
                 return Ok(AppAction::Handled);

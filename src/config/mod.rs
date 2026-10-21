@@ -21,12 +21,20 @@ pub struct BiltermConfig {
     pub prompt_outline: OutlineStyle,
     /// DOS-style drop-shadow mode (`none`, `translucent`, `theme-tinted`, `solid-half-block`).
     pub shadow_style: ShadowStyle,
-    /// Enables the IBM 3270 full-pane cross-hair cursor ruler (`UI-05`).
+    /// Enables the IBM 3270 cross-hair cursor ruler (`UI-05`).
     pub crosshair_cursor: bool,
+    /// When `true`, the IBM 3270 cross-hair cursor spans the entire terminal screen rather than just the active pane.
+    pub crosshair_fullscreen: bool,
     /// Enables Borland Turbo Vision 2-col right / 1-row bottom drop shadows (`UI-01`).
     pub drop_shadows: bool,
     /// Enables the bottom 1-row Borland DOS Function-Key bar (`UI-03`).
     pub show_dos_fkey_bar: bool,
+    /// Enables automatic command history persistence (`true` by default).
+    pub history_enabled: bool,
+    /// Maximum number of session history files to retain in the history directory (default `25`).
+    pub history_max_files: usize,
+    /// Optional custom directory path for persisted session command history files.
+    pub history_dir: Option<String>,
     /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
     pub default_prompt_anchor: String,
     /// Default floating command prompt height in rows (`3..=12`).
@@ -46,8 +54,12 @@ impl Default for BiltermConfig {
             prompt_outline: OutlineStyle::Double,
             shadow_style: ShadowStyle::Translucent,
             crosshair_cursor: false,
+            crosshair_fullscreen: false,
             drop_shadows: false,
             show_dos_fkey_bar: false,
+            history_enabled: true,
+            history_max_files: 25,
+            history_dir: None,
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
             custom_palette_override: None,

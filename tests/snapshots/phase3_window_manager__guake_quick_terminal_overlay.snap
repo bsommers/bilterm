@@ -7,7 +7,7 @@ expression: rendered
 ║ ║==> git status --short                                                    ║ ║
 ║ ╚══════════════════════════════════════════════════════════════════════════╝ ║
 ║                                                                              ║
-║3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:01 C:001                       ║
+║3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖ R:01 C:019 │ ≣ OUT:0L/0B     ║
 ╚══════════════════════════════════════════════════════════════════════════════◢
 UNDER_PANE_8
 UNDER_PANE_9
@@ -19,4 +19,4 @@ UNDER_PANE_10
 
 
 
-3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:11 C:001
+3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖ R:01 C:001 │ ≣ OUT:11L/141B

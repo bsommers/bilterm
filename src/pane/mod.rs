@@ -2,6 +2,7 @@ pub mod colon_command;
 pub mod completion;
 pub mod fuzzy_history;
 pub mod highlight;
+pub mod history_store;
 
 use std::path::PathBuf;
 
@@ -10,6 +11,7 @@ use ratatui::layout::Rect;
 use crate::error::Result;
 use crate::pane::completion::{compute_completions, longest_common_prefix, TabCompletionState};
 use crate::pane::fuzzy_history::FuzzyHistorySearchState;
+use crate::pane::history_store::HistoryStore;
 use crate::pty::line_discipline::{inspect_pty_fd, InputRoutingMode, LineDisciplineState};
 use crate::pty::{PtyConfig, PtyEvent, PtySession};
 use crate::vt::VtParser;
@@ -62,6 +64,20 @@ pub struct FloatingPromptState {
     pub anchor: PromptAnchor,
     /// Minimum/base prompt box height in rows (default `3`, range `3..=12`).
     pub height: u16,
+    /// Optional custom width in columns (`None` = full width minus 1-col margin).
+    pub width_cols: Option<u16>,
+    /// Optional custom horizontal column offset relative to the canvas left edge when `width_cols` is set.
+    pub x_offset: Option<u16>,
+    /// Vertical line scroll offset inside the command prompt editor (`0..lines.len()`).
+    pub scroll_offset: usize,
+    /// Horizontal character scroll offset inside the command prompt editor.
+    pub h_scroll_offset: usize,
+    /// Last submitted command shown on the prompt banner while a foreground command (`tail -f /dev/null`, etc.) is running or pending.
+    pub running_command: Option<String>,
+    /// Whether the interactive Borland-style Command History Pop-up Window is open.
+    pub history_popup_open: bool,
+    /// Selected entry index inside the Command History Pop-up Window (`0..history.len()`).
+    pub history_popup_selected: usize,
     pub history: Vec<String>,
     pub history_index: Option<usize>,
     /// Last killed text (`Ctrl+K`, `Ctrl+U`, `Ctrl+W`) available for `Ctrl+Y` yank.
@@ -87,6 +103,13 @@ impl Default for FloatingPromptState {
             cursor_char_idx: 0,
             anchor: PromptAnchor::Top,
             height: 3,
+            width_cols: None,
+            x_offset: None,
+            scroll_offset: 0,
+            h_scroll_offset: 0,
+            running_command: None,
+            history_popup_open: false,
+            history_popup_selected: 0,
             history: Vec::new(),
             history_index: None,
             yank_buffer: String::new(),
@@ -414,7 +437,11 @@ impl FloatingPromptState {
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.sync_from_lines();
-        if !full.trim().is_empty() && self.history.last() != Some(&full) {
+        let trimmed = full.trim();
+        if !trimmed.is_empty() && !trimmed.starts_with(':') {
+            self.running_command = Some(full.replace('\n', " ; "));
+        }
+        if !trimmed.is_empty() && self.history.last() != Some(&full) {
             self.history.push(full.clone());
         }
         full
@@ -582,18 +609,61 @@ impl FloatingPromptState {
     }
 
     /// Computes the effective prompt height, growing automatically for multi-line commands, active
-    /// `Ctrl+R` fuzzy search, or active `Tab` completion candidate bar while respecting `canvas_height`.
+    /// `Ctrl+R` fuzzy search, active `Tab` completion candidate bar, or active `running_command` banner
+    /// while respecting `canvas_height`.
     pub fn effective_height(&self, canvas_height: u16) -> u16 {
+        let running_extra = u16::from(self.running_command.is_some());
         let content_rows = if self.fuzzy_search.active {
             // Query line + up to 4 match lines + 2 border rows
             (self.fuzzy_search.matches.len().min(4) as u16 + 3).max(self.height)
         } else if self.completion.is_active() {
-            // Command lines + 1 completion bar row + 2 border rows
-            (self.lines.len() as u16 + 3).clamp(self.height.max(4), 12)
+            // Command lines + 1 completion bar row + running banner + 2 border rows
+            (self.lines.len() as u16 + 3 + running_extra).clamp(self.height.max(4), 12)
         } else {
-            (self.lines.len() as u16 + 2).clamp(self.height, 12)
+            (self.lines.len() as u16 + 2 + running_extra).clamp(self.height, 12)
         };
         content_rows.clamp(3, canvas_height.max(1)).min(canvas_height)
+    }
+
+    /// Scrolls the command prompt's multi-line viewport up by `rows`.
+    pub fn scroll_up(&mut self, rows: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(rows);
+    }
+
+    /// Scrolls the command prompt's multi-line viewport down by `rows`.
+    pub fn scroll_down(&mut self, rows: usize) {
+        let max_scroll = self.lines.len().saturating_sub(1);
+        self.scroll_offset = (self.scroll_offset + rows).min(max_scroll);
+    }
+
+    /// Opens or closes the Borland-style Command History Pop-up Window.
+    pub fn toggle_history_popup(&mut self) {
+        self.history_popup_open = !self.history_popup_open;
+        if self.history_popup_open && !self.history.is_empty() {
+            self.history_popup_selected = self.history.len() - 1;
+        }
+    }
+
+    pub fn history_popup_prev(&mut self) {
+        if self.history_popup_selected > 0 {
+            self.history_popup_selected -= 1;
+        }
+    }
+
+    pub fn history_popup_next(&mut self) {
+        if self.history_popup_selected + 1 < self.history.len() {
+            self.history_popup_selected += 1;
+        }
+    }
+
+    pub fn accept_history_popup_selection(&mut self) -> bool {
+        self.history_popup_open = false;
+        if let Some(cmd) = self.history.get(self.history_popup_selected).cloned() {
+            self.set_text(&cmd);
+            true
+        } else {
+            false
+        }
     }
 
     fn char_to_byte(s: &str, char_idx: usize) -> usize {
@@ -607,10 +677,16 @@ impl FloatingPromptState {
 /// Active mouse drag state for moving or resizing a pane's `FloatingCommandPrompt` (`PANE-03`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptMouseDrag {
-    /// Dragging the top border of the floating prompt vertically.
+    /// Dragging the top border of the floating prompt vertically and/or horizontally.
     MovePrompt { grab_x_offset: u16 },
     /// Dragging the bottom border of the floating prompt to resize its height (`3..=12`).
     ResizePrompt,
+    /// Dragging the left border of the floating prompt to resize its width and horizontal offset.
+    ResizePromptLeft,
+    /// Dragging the right border of the floating prompt to resize its width.
+    ResizePromptRight,
+    /// Dragging the bottom-right corner (`◢`) to resize both width and height simultaneously.
+    ResizePromptCorner,
 }
 
 /// A single composite terminal pane combining:
@@ -623,6 +699,7 @@ pub struct CompositePane {
     pub vt: VtParser,
     pub pty: Option<PtySession>,
     pub prompt: FloatingPromptState,
+    pub history_store: HistoryStore,
     pub line_discipline: LineDisciplineState,
     pub mouse_drag: Option<PromptMouseDrag>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
@@ -644,6 +721,7 @@ impl CompositePane {
             vt: VtParser::new(canvas_rows, canvas_cols, 2000),
             pty: None,
             prompt: FloatingPromptState::default(),
+            history_store: HistoryStore::new_headless(id),
             line_discipline: LineDisciplineState::default(),
             mouse_drag: None,
             status_message: None,
@@ -668,6 +746,7 @@ impl CompositePane {
             vt: VtParser::new(canvas_rows, canvas_cols, 5000),
             pty: Some(session),
             prompt: FloatingPromptState::default(),
+            history_store: HistoryStore::new_live(id),
             line_discipline: LineDisciplineState::default(),
             mouse_drag: None,
             status_message: None,
@@ -758,11 +837,23 @@ impl CompositePane {
             PromptAnchor::Bottom | PromptAnchor::SplitBottom => max_y_offset,
             PromptAnchor::Floating { y_offset } => y_offset.min(max_y_offset),
         };
-        let margin_x = if canvas.width > 6 { 1 } else { 0 };
+        let default_margin_x = if canvas.width > 6 { 1 } else { 0 };
+        let default_w = canvas.width.saturating_sub(default_margin_x * 2).max(1);
+        let width = self
+            .prompt
+            .width_cols
+            .map(|w| w.clamp(16.min(canvas.width), canvas.width.max(1)))
+            .unwrap_or(default_w);
+        let max_x_off = canvas.width.saturating_sub(width);
+        let x_off = self
+            .prompt
+            .x_offset
+            .map(|x| x.min(max_x_off))
+            .unwrap_or_else(|| default_margin_x.min(max_x_off));
         Rect {
-            x: canvas.x + margin_x,
+            x: canvas.x + x_off,
             y: canvas.y + y_offset,
-            width: canvas.width.saturating_sub(margin_x * 2).max(1),
+            width,
             height,
         }
     }
@@ -812,6 +903,21 @@ impl CompositePane {
         self.prompt.height = next;
     }
 
+    /// Sets the custom width in columns (`Some(cols)` or `None` for full-width) of the floating command prompt.
+    pub fn set_prompt_width(&mut self, cols: Option<u16>) {
+        let max_w = self.vt.size().1.max(16);
+        self.prompt.width_cols = cols.map(|c| c.clamp(16, max_w));
+    }
+
+    /// Adjusts the floating command prompt width by `delta_cols` (`Alt+[` / `Alt+]`).
+    pub fn resize_prompt_width(&mut self, delta_cols: i16) {
+        let canvas_w = self.vt.size().1.max(16);
+        let default_w = canvas_w.saturating_sub(2).max(16);
+        let current = self.prompt.width_cols.unwrap_or(default_w);
+        let next = (i32::from(current) + i32::from(delta_cols)).clamp(16, i32::from(canvas_w)) as u16;
+        self.prompt.width_cols = Some(next);
+    }
+
     /// Moves the floating prompt vertically by `delta_rows` (switching to `PromptAnchor::Floating`).
     pub fn move_prompt_vertical(&mut self, delta_rows: i16, pane_height: u16) {
         let canvas_h = pane_height.saturating_sub(1).max(1);
@@ -834,15 +940,26 @@ impl CompositePane {
     /// Refreshes three-signal line-discipline telemetry (`OSC 133` + `tcgetpgrp` + `termios !ECHO`).
     pub fn refresh_line_discipline(&mut self) {
         let osc = self.vt.osc133_phase();
+        let osc_finished = matches!(
+            osc,
+            Some(crate::vt::Osc133Phase::CommandFinished(_) | crate::vt::Osc133Phase::PromptStart)
+        );
         #[cfg(unix)]
         if let Some(pty) = &self.pty {
             if let Some(fd) = pty.master_raw_fd() {
+                let prev_sub = self.line_discipline.has_foreground_subcommand();
                 self.line_discipline = inspect_pty_fd(fd, pty.child_pid(), osc);
+                if (prev_sub && !self.line_discipline.has_foreground_subcommand()) || osc_finished {
+                    self.prompt.running_command = None;
+                }
                 return;
             }
         }
         self.line_discipline.osc133_executing =
             matches!(osc, Some(crate::vt::Osc133Phase::CommandExecuted));
+        if osc_finished {
+            self.prompt.running_command = None;
+        }
     }
 
     /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`).

@@ -35,6 +35,10 @@ pub struct WindowManager {
     pub zoomed_pane: Option<PaneId>,
     pub quick_terminal: QuickTerminal,
     pub config: BiltermConfig,
+    /// Whether the interactive `<F1>` Borland Turbo Vision Help Modal is visible.
+    pub help_visible: bool,
+    /// Vertical scroll offset inside the `<F1>` Help Modal.
+    pub help_scroll: usize,
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
@@ -68,10 +72,35 @@ impl WindowManager {
             zoomed_pane: None,
             quick_terminal,
             config: BiltermConfig::default(),
+            help_visible: false,
+            help_scroll: 0,
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),
         }
+    }
+
+    /// Toggles the `<F1>` interactive Help Modal.
+    pub fn toggle_help(&mut self) {
+        self.help_visible = !self.help_visible;
+        if self.help_visible {
+            self.help_scroll = 0;
+        }
+    }
+
+    /// Propagates `config.history_enabled`, `config.history_max_files`, and `config.history_dir` to all panes.
+    pub fn sync_history_config(&mut self) {
+        let enabled = self.config.history_enabled;
+        let max_files = self.config.history_max_files;
+        let dir = self.config.history_dir.clone();
+        for pane in self.panes.values_mut() {
+            pane.history_store
+                .configure(enabled, max_files, dir.as_deref());
+        }
+        self.quick_terminal
+            .pane
+            .history_store
+            .configure(enabled, max_files, dir.as_deref());
     }
 
     pub fn new_headless(rows: u16, cols: u16) -> Self {

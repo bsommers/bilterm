@@ -17,6 +17,7 @@ pub enum ColonCommand {
     PromptSplitToggle,
     PromptFloat(u16),
     PromptHeight(u16),
+    PromptWidth(Option<u16>),
     BlockPrev,
     BlockNext,
     Yank,
@@ -31,6 +32,11 @@ pub enum ColonCommand {
     ClosePane,
     LayoutMode(WorkspaceLayoutMode),
     QuakeToggle,
+    HelpToggle,
+    HistoryPopupToggle,
+    HistorySave(Option<String>),
+    HistoryToggle(Option<bool>),
+    HistoryMaxFiles(usize),
     Theme(ThemePreset),
     Glyphs(GlyphPack),
     Cursor(CaretStyle),
@@ -38,7 +44,10 @@ pub enum ColonCommand {
         window: Option<OutlineStyle>,
         prompt: Option<OutlineStyle>,
     },
-    CrosshairToggle(Option<bool>),
+    CrosshairToggle {
+        enabled: Option<bool>,
+        fullscreen: Option<bool>,
+    },
     Shadows(Option<ShadowStyle>),
     FKeyBarToggle(Option<bool>),
     Quit,
@@ -72,9 +81,35 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(rows) => Some(Ok(ColonCommand::PromptHeight(rows.clamp(3, 12)))),
                 None => Some(Err("Usage: :prompt height <3..12>".to_string())),
             },
+            Some("width") => match parts.get(2).copied() {
+                Some("full" | "auto" | "reset") => Some(Ok(ColonCommand::PromptWidth(None))),
+                Some(s) => match s.parse::<u16>().ok() {
+                    Some(cols) => Some(Ok(ColonCommand::PromptWidth(Some(cols.max(16))))),
+                    None => Some(Err("Usage: :prompt width <16..cols | full>".to_string())),
+                },
+                None => Some(Err("Usage: :prompt width <16..cols | full>".to_string())),
+            },
             _ => Some(Err(
-                "Usage: :prompt top | bottom | split-top | split-bottom | split | float [row] | height <3..12>"
+                "Usage: :prompt top | bottom | split-top | split-bottom | split | float [row] | height <3..12> | width <cols|full>"
                     .to_string(),
+            )),
+        },
+        "help" | "h" | "?" => Some(Ok(ColonCommand::HelpToggle)),
+        "history" | "hist" => match parts.get(1).copied() {
+            None | Some("popup" | "list" | "show") => Some(Ok(ColonCommand::HistoryPopupToggle)),
+            Some("save" | "export") => {
+                let path = parts.get(2).map(|s| (*s).to_string());
+                Some(Ok(ColonCommand::HistorySave(path)))
+            }
+            Some("on" | "enable" | "true") => Some(Ok(ColonCommand::HistoryToggle(Some(true)))),
+            Some("off" | "disable" | "false") => Some(Ok(ColonCommand::HistoryToggle(Some(false)))),
+            Some("toggle") => Some(Ok(ColonCommand::HistoryToggle(None))),
+            Some("max-files" | "files") => match parts.get(2).and_then(|s| s.parse::<usize>().ok()) {
+                Some(n) => Some(Ok(ColonCommand::HistoryMaxFiles(n.max(1)))),
+                None => Some(Err("Usage: :history max-files <count>".to_string())),
+            },
+            _ => Some(Err(
+                "Usage: :history [popup | save [path] | on | off | max-files <N>]".to_string(),
             )),
         },
         "block" => match parts.get(1).copied() {
@@ -154,12 +189,17 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             )),
         },
         "crosshair" => {
-            let arg = match parts.get(1).copied() {
-                Some("on") | Some("true") => Some(true),
-                Some("off") | Some("false") => Some(false),
-                _ => None,
+            let (enabled, fullscreen) = match parts.get(1).copied() {
+                Some("on" | "true") => (Some(true), None),
+                Some("off" | "false") => (Some(false), None),
+                Some("full" | "fullscreen") => (Some(true), Some(true)),
+                Some("pane" | "local") => (Some(true), Some(false)),
+                _ => (None, None),
             };
-            Some(Ok(ColonCommand::CrosshairToggle(arg)))
+            Some(Ok(ColonCommand::CrosshairToggle {
+                enabled,
+                fullscreen,
+            }))
         }
         "shadows" | "shadow" => {
             let arg = parts.get(1).and_then(|s| ShadowStyle::from_name(s));
@@ -217,6 +257,48 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         ColonCommand::PromptHeight(rows) => {
             pane.set_prompt_height(rows);
             pane.status_message = Some(format!("Prompt height set to {rows} rows"));
+            false
+        }
+        ColonCommand::PromptWidth(cols_opt) => {
+            pane.set_prompt_width(cols_opt);
+            pane.status_message = Some(match cols_opt {
+                Some(c) => format!("Prompt width set to {c} cols"),
+                None => "Prompt width reset to full width".to_string(),
+            });
+            false
+        }
+        ColonCommand::HistoryPopupToggle => {
+            pane.prompt.toggle_history_popup();
+            false
+        }
+        ColonCommand::HistorySave(path_opt) => {
+            let custom = path_opt.as_deref().map(std::path::Path::new);
+            match pane
+                .history_store
+                .export_to_temp_file(&pane.prompt.history, custom)
+            {
+                Ok(saved_path) => {
+                    pane.status_message = Some(format!("Saved history to {}", saved_path.display()));
+                }
+                Err(err) => {
+                    pane.status_message = Some(format!("History save error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::HistoryToggle(val) => {
+            let next = val.unwrap_or(!pane.history_store.enabled);
+            pane.history_store.enabled = next;
+            pane.status_message = Some(format!(
+                "Command history persistence: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::HistoryMaxFiles(max_f) => {
+            pane.history_store.max_files = max_f.max(1);
+            let _ = pane.history_store.prune_excess_files();
+            pane.status_message = Some(format!("History max session files: {}", max_f.max(1)));
             false
         }
         ColonCommand::BlockPrev => {
@@ -304,6 +386,27 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.toggle_quick_terminal();
             false
         }
+        ColonCommand::HelpToggle => {
+            wm.toggle_help();
+            false
+        }
+        ColonCommand::HistoryToggle(val) => {
+            let next = val.unwrap_or(!wm.config.history_enabled);
+            wm.config.history_enabled = next;
+            wm.sync_history_config();
+            wm.active_pane_mut().status_message = Some(format!(
+                "Command history persistence: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::HistoryMaxFiles(max_f) => {
+            wm.config.history_max_files = max_f.max(1);
+            wm.sync_history_config();
+            wm.active_pane_mut().status_message =
+                Some(format!("History max session files: {}", max_f.max(1)));
+            false
+        }
         ColonCommand::Theme(preset) => {
             wm.config.theme = preset;
             wm.config.custom_palette_override = None;
@@ -326,8 +429,14 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
-        ColonCommand::CrosshairToggle(val) => {
-            wm.config.crosshair_cursor = val.unwrap_or(!wm.config.crosshair_cursor);
+        ColonCommand::CrosshairToggle {
+            enabled,
+            fullscreen,
+        } => {
+            wm.config.crosshair_cursor = enabled.unwrap_or(!wm.config.crosshair_cursor);
+            if let Some(fs) = fullscreen {
+                wm.config.crosshair_fullscreen = fs;
+            }
             false
         }
         ColonCommand::Shadows(style_opt) => {

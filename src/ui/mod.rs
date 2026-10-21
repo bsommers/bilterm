@@ -92,6 +92,12 @@ impl Widget for CompositePaneWidget<'_> {
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
         render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
+
+        // Pass 4: Render optional Borland-style Command History Pop-up Window if active on this pane
+        if self.pane.is_prompt_visible() && self.pane.prompt.history_popup_open && canvas.height >= 5
+        {
+            render_history_popup(self.pane, canvas, cfg, &palette, &glyphs, buf);
+        }
     }
 }
 
@@ -197,7 +203,12 @@ fn render_output_canvas(
             let cx = canvas.x + cur_c;
             let cy = canvas.y + cur_r;
             if active && cfg.crosshair_cursor {
-                render_crosshair_cursor(buf, canvas, cx, cy, palette.crosshair_bg);
+                let target_rect = if cfg.crosshair_fullscreen {
+                    buf.area
+                } else {
+                    canvas
+                };
+                render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
             }
             render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
         }
@@ -280,6 +291,21 @@ fn render_floating_prompt(
         }
     }
 
+    // Render bottom-right resize corner handle when custom width is active
+    if pane.prompt.width_cols.is_some() && prompt_rect.width >= 16 && prompt_rect.height >= 3 {
+        let rx = prompt_rect.x + prompt_rect.width - 1;
+        let ry = prompt_rect.y + prompt_rect.height - 1;
+        if let Some(cell) = buf.cell_mut((rx, ry)) {
+            cell.set_symbol(glyphs.resize_corner);
+            cell.set_style(
+                Style::default()
+                    .fg(palette.title_fg)
+                    .bg(surface_bg)
+                    .add_modifier(Modifier::BOLD),
+            );
+        }
+    }
+
     if inner.width == 0 || inner.height == 0 {
         return;
     }
@@ -301,18 +327,59 @@ fn render_floating_prompt(
         &pane.prompt.lines
     };
 
-    let has_completion_bar = pane.prompt.completion.is_active() && inner.height >= 2;
-    let editor_rows = if has_completion_bar {
-        usize::from(inner.height.saturating_sub(1))
-    } else {
-        usize::from(inner.height)
-    };
-    let start_row = pane
+    let has_running_banner = pane.prompt.running_command.is_some() && inner.height >= 2;
+    let has_completion_bar = pane.prompt.completion.is_active()
+        && inner.height >= (2 + u16::from(has_running_banner));
+    let reserved_rows = usize::from(has_running_banner) + usize::from(has_completion_bar);
+    let editor_rows = usize::from(inner.height).saturating_sub(reserved_rows).max(1);
+
+    let auto_start_row = pane
         .prompt
         .cursor_row
         .saturating_sub(editor_rows.saturating_sub(1));
+    let max_start_row = lines_slice.len().saturating_sub(editor_rows);
+    let start_row = if pane.prompt.scroll_offset > 0 {
+        pane.prompt.scroll_offset.min(max_start_row)
+    } else {
+        auto_start_row
+    };
+
+    // Horizontal scrolling when a single line exceeds inner.width
+    let prefix_len = 4usize;
+    let avail_text_cols = usize::from(inner.width).saturating_sub(prefix_len).max(1);
+    let h_scroll = if pane.prompt.cursor_col >= avail_text_cols {
+        pane.prompt.cursor_col + 1 - avail_text_cols
+    } else {
+        pane.prompt.h_scroll_offset
+    };
 
     let mut rendered_lines = Vec::with_capacity(usize::from(inner.height));
+    if let Some(run_cmd) = &pane.prompt.running_command {
+        if has_running_banner {
+            let status_tag = if pane.line_discipline.has_foreground_subcommand() {
+                format!("{} RUNNING: ", glyphs.status_run_icon)
+            } else {
+                format!("{} LAST CMD: ", glyphs.status_ready_icon)
+            };
+            rendered_lines.push(Line::from(vec![
+                Span::styled(
+                    status_tag,
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Rgb(255, 255, 85))
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" {run_cmd} "),
+                    Style::default()
+                        .fg(Color::Rgb(85, 255, 255))
+                        .bg(surface_bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
+    }
+
     for (rel_idx, line_str) in lines_slice
         .iter()
         .enumerate()
@@ -324,6 +391,11 @@ fn render_floating_prompt(
         } else {
             glyphs.prompt_continuation
         };
+        let visible_sub: String = if h_scroll > 0 && rel_idx == pane.prompt.cursor_row {
+            line_str.chars().skip(h_scroll).collect()
+        } else {
+            line_str.clone()
+        };
         let mut spans = Vec::new();
         spans.push(Span::styled(
             prefix,
@@ -332,7 +404,7 @@ fn render_floating_prompt(
                 .bg(surface_bg)
                 .add_modifier(Modifier::BOLD),
         ));
-        for tok in tokenize_shell_line(line_str) {
+        for tok in tokenize_shell_line(&visible_sub) {
             spans.push(Span::styled(tok.text, tok.kind.style().bg(surface_bg)));
         }
         rendered_lines.push(Line::from(spans));
@@ -344,18 +416,38 @@ fn render_floating_prompt(
 
     Paragraph::new(rendered_lines).render(inner, buf);
 
+    // Draw vertical scrollbar indicator on right border when lines_slice.len() > editor_rows
+    if lines_slice.len() > editor_rows && inner.height >= 1 {
+        let sb_x = prompt_rect.x + prompt_rect.width.saturating_sub(1);
+        let thumb_rel = (start_row * usize::from(inner.height)) / lines_slice.len().max(1);
+        for r in 0..inner.height {
+            let y = inner.y + r;
+            let sym = if usize::from(r) == thumb_rel { "█" } else { "░" };
+            if let Some(cell) = buf.cell_mut((sb_x, y)) {
+                cell.set_symbol(sym);
+                cell.set_style(Style::default().fg(palette.title_fg).bg(surface_bg));
+            }
+        }
+    }
+
     // Software cursor + optional IBM 3270 cross-hair cursor ruler
-    let prefix_len = 4usize;
+    let banner_offset = u16::from(has_running_banner);
     let cursor_vis_row = pane.prompt.cursor_row.saturating_sub(start_row) as u16;
-    let cursor_col = (prefix_len + pane.prompt.cursor_col) as u16;
+    let vis_col = pane.prompt.cursor_col.saturating_sub(h_scroll);
+    let cursor_col = (prefix_len + vis_col) as u16;
     let max_editor_row = (editor_rows as u16).saturating_sub(1);
-    let clamped_row = cursor_vis_row.min(max_editor_row);
+    let clamped_row = banner_offset + cursor_vis_row.min(max_editor_row);
     let clamped_col = cursor_col.min(inner.width.saturating_sub(1));
     let cx = inner.x + clamped_col;
     let cy = inner.y + clamped_row;
 
     if active && cfg.crosshair_cursor {
-        render_crosshair_cursor(buf, canvas_rect, cx, cy, palette.crosshair_bg);
+        let target_rect = if cfg.crosshair_fullscreen {
+            buf.area
+        } else {
+            canvas_rect
+        };
+        render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
     }
     render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
 }
@@ -589,7 +681,236 @@ impl Widget for WorkspaceWidget<'_> {
             };
             render_dos_fkey_bar(fkey_rect, &palette, buf);
         }
+
+        // Render interactive <F1> Borland Turbo Vision Help Modal on top of the workspace
+        if self.wm.help_visible && workspace_area.width >= 20 && workspace_area.height >= 6 {
+            render_help_modal(
+                self.wm.help_scroll,
+                workspace_area,
+                cfg,
+                &palette,
+                &glyphs,
+                buf,
+            );
+        }
     }
+}
+
+fn render_history_popup(
+    pane: &CompositePane,
+    canvas: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let pop_w = canvas.width.saturating_sub(6).clamp(24, 72).min(canvas.width);
+    let pop_h = canvas.height.saturating_sub(2).clamp(5, 14).min(canvas.height);
+    let pop_x = canvas.x + (canvas.width.saturating_sub(pop_w)) / 2;
+    let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
+    let pop_rect = Rect::new(pop_x, pop_y, pop_w, pop_h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, pop_rect);
+    let persist_tag = if pane.history_store.enabled {
+        "PERSIST:ON"
+    } else {
+        "PERSIST:OFF"
+    };
+    render_borland_frame_styled(
+        pop_rect,
+        &format!(
+            "[H] COMMAND HISTORY ({}) [Enter=Select  s=Save  Esc=Close]",
+            persist_tag
+        ),
+        true,
+        cfg.window_outline,
+        palette,
+        glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(pop_rect);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let mut lines = Vec::new();
+    let header = format!(
+        "Session: {} | Pane #{} | Entries: {}",
+        pane.history_store.session_id,
+        pane.id,
+        pane.prompt.history.len()
+    );
+    lines.push(Line::from(Span::styled(
+        header,
+        Style::default()
+            .fg(Color::Rgb(85, 255, 255))
+            .bg(palette.window_frame_bg)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
+    if pane.prompt.history.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  (No commands recorded in this pane yet)",
+            Style::default()
+                .fg(Color::Yellow)
+                .bg(palette.window_frame_bg),
+        )));
+    } else {
+        let sel = pane
+            .prompt
+            .history_popup_selected
+            .min(pane.prompt.history.len() - 1);
+        let start = sel.saturating_sub(list_rows.saturating_sub(1));
+        for (idx, cmd) in pane
+            .prompt
+            .history
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(list_rows)
+        {
+            let is_sel = idx == sel;
+            let row_bg = if is_sel {
+                palette.active_border_fg
+            } else {
+                palette.window_frame_bg
+            };
+            let row_fg = if is_sel { Color::Black } else { Color::White };
+            let prefix = if is_sel { "►" } else { " " };
+            lines.push(Line::from(Span::styled(
+                format!("{prefix} [{:03}] {}", idx + 1, cmd.replace('\n', " ; ")),
+                Style::default()
+                    .fg(row_fg)
+                    .bg(row_bg)
+                    .add_modifier(if is_sel {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+            )));
+        }
+    }
+
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(lines).render(inner, buf);
+}
+
+fn render_help_modal(
+    scroll: usize,
+    workspace_area: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let w = workspace_area
+        .width
+        .saturating_sub(4)
+        .clamp(20, 78)
+        .min(workspace_area.width);
+    let h = workspace_area
+        .height
+        .saturating_sub(2)
+        .clamp(6, 22)
+        .min(workspace_area.height);
+    let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
+    let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
+    let modal = Rect::new(x, y, w, h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, modal);
+    render_borland_frame_styled(
+        modal,
+        "[F1] BILTERM 3270 // TURBO VISION HELP (Up/Down/PgUp/PgDn, Esc/F1=Close)",
+        true,
+        cfg.window_outline,
+        palette,
+        glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(modal);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    const HELP_LINES: &[(&str, &str)] = &[
+        ("═══ FUNCTION KEYS & GLOBAL HOTKEYS ═══", ""),
+        ("F1 / :help", "Toggle this interactive Help reference window"),
+        ("F2 / Alt+H", "Split focused composite pane horizontally"),
+        ("Alt+V / :vsplit", "Split focused composite pane vertically"),
+        ("F5 / Alt+Z / :zoom", "Toggle maximize/zoom on focused pane"),
+        ("F6 / Alt+Tab", "Shuffle pane deck top-to-bottom (cycle focus)"),
+        ("Alt+Shift+Tab", "Shuffle pane deck bottom-to-top"),
+        ("Alt+1 .. Alt+9", "Selectively raise & focus pane #1..#9"),
+        ("Alt+M / :layout", "Toggle Tiled Splits vs Z-Order Stacked Windows"),
+        ("F10 / Alt+` / Ctrl+Space", "Toggle persistent Guake Quick Terminal"),
+        ("F12 / Ctrl+G / :raw", "Toggle Command Box vs Raw PTY Passthrough"),
+        ("Alt+X / :crosshair", "Cycle IBM 3270 Cross-Hair (Pane -> Full -> Off)"),
+        ("Ctrl+Q / :quit", "Cleanly exit Bilterm"),
+        ("═══ COMMAND PROMPT & HISTORY ═══", ""),
+        ("Alt+T / Alt+B", "Pin floating prompt to Top / Bottom of canvas"),
+        ("Alt+S / :prompt split", "Toggle non-overlapping Split vs Floating prompt"),
+        ("Alt+Up / Alt+Down", "Float prompt vertically row-by-row"),
+        ("Alt+Plus / Alt+Minus", "Increase / decrease command prompt height"),
+        ("Alt+] / Alt+[", "Increase / decrease command prompt width"),
+        ("Shift+PgUp / Shift+PgDn", "Scroll multi-line command prompt content"),
+        ("Tab / Shift+Tab", "Tab-complete paths, commands, $ENV, and :commands"),
+        ("Ctrl+R", "Fuzzy search command history (nucleo-matcher)"),
+        ("Alt+P / :history", "Open Command History Pop-up Window (s = Save tmp)"),
+        (":history save [path]", "Export session commands to a temporary script"),
+        (":history on | off", "Enable or disable disk history persistence"),
+        ("═══ THEMES, BORDERS & SHADOWS ═══", ""),
+        (":theme <name>", "turbo-blue | turbo-cyan | 3278 | 3279 | mono"),
+        (":outline <style>", "double | solid | rounded | thick | dotted | dashed | quadruple | ascii"),
+        (":shadows <style>", "on | off | translucent | tinted | solid"),
+        (":glyphs <pack>", "unicode | cp437 | nerd-font | ascii"),
+        (":cursor <style>", "block | hollow | underscore | bar"),
+        (":crosshair full|pane|off", "Configure full-screen or pane-local cross-hairs"),
+    ];
+
+    let max_scroll = HELP_LINES.len().saturating_sub(usize::from(inner.height));
+    let start = scroll.min(max_scroll);
+    let mut rendered = Vec::with_capacity(usize::from(inner.height));
+    for &(lhs, rhs) in HELP_LINES.iter().skip(start).take(usize::from(inner.height)) {
+        if rhs.is_empty() {
+            rendered.push(Line::from(Span::styled(
+                format!(" {lhs}"),
+                Style::default()
+                    .fg(Color::Rgb(255, 255, 85))
+                    .bg(palette.window_frame_bg)
+                    .add_modifier(Modifier::BOLD),
+            )));
+        } else {
+            rendered.push(Line::from(vec![
+                Span::styled(
+                    format!(" {:<24}", lhs),
+                    Style::default()
+                        .fg(Color::Rgb(85, 255, 255))
+                        .bg(palette.window_frame_bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    rhs,
+                    Style::default()
+                        .fg(Color::White)
+                        .bg(palette.window_frame_bg),
+                ),
+            ]));
+        }
+    }
+
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(rendered).render(inner, buf);
 }
 
 pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut Buffer) {
@@ -616,13 +937,15 @@ pub fn render_oia_status_bar_themed(
     let oia_bg = palette.oia_bg;
     let sep = glyphs.oia_separator;
     let system_state = if pane.line_discipline.is_password_prompt() {
-        (" !ECHO LOCK ", Color::Red)
+        (format!(" {} !ECHO LOCK ", glyphs.status_lock_icon), Color::Red)
     } else if pane.vt.is_alternate_screen() {
-        (" ALT SCR ", Color::Yellow)
+        (format!(" {} ALT SCR ", glyphs.status_alt_icon), Color::Yellow)
     } else if pane.vt.scrollback_offset() > 0 {
-        (" SCROLL ", Color::Cyan)
+        (format!(" {} SCROLL ", glyphs.status_scroll_icon), Color::Cyan)
+    } else if pane.line_discipline.has_foreground_subcommand() {
+        (format!(" {} RUNNING ", glyphs.status_run_icon), Color::Rgb(85, 255, 255))
     } else {
-        (" READY ", Color::Rgb(0, 255, 102))
+        (format!(" {} READY ", glyphs.status_ready_icon), Color::Rgb(0, 255, 102))
     };
 
     let routing_badge = match pane.effective_routing_mode() {
@@ -644,8 +967,31 @@ pub fn render_oia_status_bar_themed(
         }
     };
 
-    let (cur_r, cur_c) = pane.vt.screen().cursor_position();
-    let coord_str = format!(" R:{:02} C:{:03} ", cur_r + 1, cur_c + 1);
+    // Row/Col counter reflects active input focus: editor cursor in CommandPrompt mode, VT100 cursor in RawPtyPassthrough
+    let (disp_r, disp_c) = match pane.effective_routing_mode() {
+        InputRoutingMode::CommandPrompt => (
+            pane.prompt.cursor_row + 1,
+            pane.prompt.cursor_col + 1,
+        ),
+        InputRoutingMode::RawPtyPassthrough => {
+            let (vr, vc) = pane.vt.screen().cursor_position();
+            (usize::from(vr) + 1, usize::from(vc) + 1)
+        }
+    };
+    let coord_str = format!(
+        " {} R:{:02} C:{:03} ",
+        glyphs.cursor_pos_icon, disp_r, disp_c
+    );
+    let out_lines = pane.vt.output_line_count();
+    let out_bytes = pane.vt.total_bytes_processed();
+    let out_bytes_label = if out_bytes >= 1_048_576 {
+        format!("{:.1}M", out_bytes as f64 / 1_048_576.0)
+    } else if out_bytes >= 1024 {
+        format!("{:.1}K", out_bytes as f64 / 1024.0)
+    } else {
+        format!("{out_bytes}B")
+    };
+    let out_str = format!(" {} OUT:{out_lines}L/{out_bytes_label}", glyphs.output_len_icon);
 
     let mut spans = vec![
         Span::styled(
@@ -703,6 +1049,11 @@ pub fn render_oia_status_bar_themed(
     spans.push(Span::styled(
         coord_str,
         Style::default().fg(Color::Rgb(255, 255, 85)).bg(oia_bg),
+    ));
+    spans.push(Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)));
+    spans.push(Span::styled(
+        out_str,
+        Style::default().fg(Color::Rgb(85, 255, 255)).bg(oia_bg),
     ));
 
     let line = Line::from(spans);

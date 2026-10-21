@@ -11,4 +11,4 @@ OUTPUT_ROW_06: system telemetry nominal
 OUTPUT_ROW_07: system telemetry nominal
 OUTPUT_ROW_08: system telemetry nominal
 
-3270-OIA│ READY │ INPUT: CMD BOX │ PIN:TOP │ R:09 C:001
+3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖ R:01 C:001 │ ≣

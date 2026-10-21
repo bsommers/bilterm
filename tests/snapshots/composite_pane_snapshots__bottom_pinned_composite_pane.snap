@@ -11,4 +11,4 @@ CANVAS_ROW_06: scrolling underneath
 C╔╣ BILTERM 3270 // CMD [BOT] ╠════════════════════════[▲][▼]═╗
 C║==> vim Cargo.toml                                          ║
  ╚════════════════════════════════════════════════════════════╝
-3270-OIA│ READY │ INPUT: CMD BOX │ PIN:BOT │ R:09 C:001
+3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:BOT │ ⌖ R:01 C:001 │ ≣
