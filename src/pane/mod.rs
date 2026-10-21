@@ -17,15 +17,26 @@ use crate::vt::VtParser;
 /// Unique identifier for a `CompositePane`.
 pub type PaneId = usize;
 
-/// Vertical docking/floating mode for a pane's `FloatingCommandPrompt`.
+/// Vertical docking, floating, or non-overlapping split mode for a pane's command prompt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptAnchor {
-    /// Pinned to the top of the pane's output canvas (classic IBM 3270 mainframe default).
+    /// Pinned to the top of the pane's output canvas (classic IBM 3270 mainframe default, floating over output).
     Top,
-    /// Pinned to the bottom of the pane's output canvas (above the 1-row OIA status bar).
+    /// Pinned to the bottom of the pane's output canvas (floating over output above the 1-row OIA status bar).
     Bottom,
     /// Free-floating at a vertical row offset relative to the top of the output canvas.
     Floating { y_offset: u16 },
+    /// Non-overlapping split: dedicated command pane at the top, dedicated output canvas below.
+    SplitTop,
+    /// Non-overlapping split: dedicated output canvas at the top, dedicated command pane below.
+    SplitBottom,
+}
+
+impl PromptAnchor {
+    /// Returns `true` when the command pane and output canvas are partitioned with zero overlap.
+    pub fn is_split(self) -> bool {
+        matches!(self, Self::SplitTop | Self::SplitBottom)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -666,13 +677,42 @@ impl CompositePane {
         })
     }
 
-    /// Computes the full-height `OutputCanvas` rectangle (`100%` of pane height minus 1 row for the OIA status bar).
+    /// Computes the `OutputCanvas` rectangle.
+    ///
+    /// - In floating modes (`Top`, `Bottom`, `Floating`) or when the prompt is hidden (`ALT_SCREEN` / `!ECHO`),
+    ///   occupies `100%` of pane height minus 1 row for the OIA status bar.
+    /// - In non-overlapping split modes (`SplitTop`, `SplitBottom`) while the prompt is visible,
+    ///   occupies the dedicated remaining height so there is zero overlap with `prompt_rect`.
     pub fn canvas_rect(&self, pane_area: Rect) -> Rect {
-        Rect {
-            x: pane_area.x,
-            y: pane_area.y,
-            width: pane_area.width,
-            height: pane_area.height.saturating_sub(1).max(1),
+        let usable_h = pane_area.height.saturating_sub(1).max(1);
+        if self.is_prompt_visible() && self.prompt.anchor.is_split() && usable_h >= 4 {
+            let prompt_h = self
+                .prompt
+                .effective_height(usable_h.saturating_sub(1))
+                .min(usable_h.saturating_sub(1));
+            let canvas_h = usable_h.saturating_sub(prompt_h).max(1);
+            match self.prompt.anchor {
+                PromptAnchor::SplitTop => Rect {
+                    x: pane_area.x,
+                    y: pane_area.y + prompt_h,
+                    width: pane_area.width,
+                    height: canvas_h,
+                },
+                PromptAnchor::SplitBottom => Rect {
+                    x: pane_area.x,
+                    y: pane_area.y,
+                    width: pane_area.width,
+                    height: canvas_h,
+                },
+                _ => unreachable!(),
+            }
+        } else {
+            Rect {
+                x: pane_area.x,
+                y: pane_area.y,
+                width: pane_area.width,
+                height: usable_h,
+            }
         }
     }
 
@@ -687,14 +727,35 @@ impl CompositePane {
         }
     }
 
-    /// Computes the clamped overlay rectangle of the `FloatingCommandPrompt` within `canvas_rect`.
+    /// Computes the rectangle of the command prompt (either overlaid in floating modes or
+    /// partitioned with zero overlap in `SplitTop` / `SplitBottom` modes).
     pub fn prompt_rect(&self, pane_area: Rect) -> Rect {
+        let usable_h = pane_area.height.saturating_sub(1).max(1);
+        if self.prompt.anchor.is_split() && usable_h >= 4 {
+            let prompt_h = self
+                .prompt
+                .effective_height(usable_h.saturating_sub(1))
+                .min(usable_h.saturating_sub(1));
+            let canvas_h = usable_h.saturating_sub(prompt_h).max(1);
+            let y = match self.prompt.anchor {
+                PromptAnchor::SplitTop => pane_area.y,
+                PromptAnchor::SplitBottom => pane_area.y + canvas_h,
+                _ => pane_area.y,
+            };
+            return Rect {
+                x: pane_area.x,
+                y,
+                width: pane_area.width.max(1),
+                height: prompt_h,
+            };
+        }
+
         let canvas = self.canvas_rect(pane_area);
         let height = self.prompt.effective_height(canvas.height);
         let max_y_offset = canvas.height.saturating_sub(height);
         let y_offset = match self.prompt.anchor {
-            PromptAnchor::Top => 0,
-            PromptAnchor::Bottom => max_y_offset,
+            PromptAnchor::Top | PromptAnchor::SplitTop => 0,
+            PromptAnchor::Bottom | PromptAnchor::SplitBottom => max_y_offset,
             PromptAnchor::Floating { y_offset } => y_offset.min(max_y_offset),
         };
         let margin_x = if canvas.width > 6 { 1 } else { 0 };
@@ -725,9 +786,19 @@ impl CompositePane {
         Ok(false)
     }
 
-    /// Changes the floating prompt's anchor without resizing the underlying PTY (`zero SIGWINCH`).
+    /// Changes the prompt's anchor (`Top`, `Bottom`, `Floating`, `SplitTop`, or `SplitBottom`).
     pub fn set_prompt_anchor(&mut self, anchor: PromptAnchor) {
         self.prompt.anchor = anchor;
+    }
+
+    /// Toggles the command prompt between floating mode and non-overlapping split mode (`Alt+S` / `:prompt split`).
+    pub fn toggle_split_prompt(&mut self) {
+        self.prompt.anchor = match self.prompt.anchor {
+            PromptAnchor::Top | PromptAnchor::Floating { .. } => PromptAnchor::SplitTop,
+            PromptAnchor::Bottom => PromptAnchor::SplitBottom,
+            PromptAnchor::SplitTop => PromptAnchor::Top,
+            PromptAnchor::SplitBottom => PromptAnchor::Bottom,
+        };
     }
 
     /// Sets the base height (`3..=12` rows) of the floating command prompt without resizing the PTY (`PANE-03`).
@@ -747,8 +818,8 @@ impl CompositePane {
         let eff_h = self.prompt.effective_height(canvas_h);
         let max_y = canvas_h.saturating_sub(eff_h);
         let current_y = match self.prompt.anchor {
-            PromptAnchor::Top => 0,
-            PromptAnchor::Bottom => max_y,
+            PromptAnchor::Top | PromptAnchor::SplitTop => 0,
+            PromptAnchor::Bottom | PromptAnchor::SplitBottom => max_y,
             PromptAnchor::Floating { y_offset } => y_offset.min(max_y),
         };
         let next_y = (i32::from(current_y) + i32::from(delta_rows)).clamp(0, i32::from(max_y)) as u16;
@@ -794,9 +865,12 @@ impl CompositePane {
         self.effective_routing_mode() == InputRoutingMode::CommandPrompt
     }
 
-    /// Resolves the live working directory of the child shell process (using `/proc/<pid>/cwd` on Linux,
-    /// falling back to `std::env::current_dir()`).
+    /// Resolves the live working directory of the child shell process (`OSC 7` reported path first,
+    /// then `/proc/<pid>/cwd` on Linux, falling back to `std::env::current_dir()`).
     pub fn resolve_cwd(&self) -> PathBuf {
+        if let Some(osc7_cwd) = self.vt.reported_cwd() {
+            return osc7_cwd.to_path_buf();
+        }
         #[cfg(target_os = "linux")]
         if let Some(pty) = &self.pty {
             if let Some(pid) = pty.child_pid() {
@@ -817,6 +891,14 @@ impl CompositePane {
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
         self.vt.process(bytes);
+        if let Some(wt) = self.vt.window_title() {
+            self.title = format!("{wt} [#{}]", self.id);
+        }
+        if let Some(pty) = &self.pty {
+            for resp in self.vt.take_query_responses() {
+                let _ = pty.write_all(&resp);
+            }
+        }
         self.refresh_line_discipline();
     }
 
@@ -846,6 +928,14 @@ impl CompositePane {
                 self.vt.process(&coalesced[start..]);
             } else {
                 self.vt.process(&coalesced);
+            }
+            if let Some(wt) = self.vt.window_title() {
+                self.title = format!("{wt} [#{}]", self.id);
+            }
+            if let Some(pty) = &self.pty {
+                for resp in self.vt.take_query_responses() {
+                    let _ = pty.write_all(&resp);
+                }
             }
             self.refresh_line_discipline();
         }

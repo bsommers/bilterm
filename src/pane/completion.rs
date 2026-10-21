@@ -42,7 +42,18 @@ const SHELL_BUILTINS: &[&str] = &[
 ];
 
 const COLON_COMMANDS: &[(&str, &[&str])] = &[
-    (":prompt", &["top", "bottom", "float ", "height "]),
+    (
+        ":prompt",
+        &[
+            "top",
+            "bottom",
+            "split-top",
+            "split-bottom",
+            "split",
+            "float ",
+            "height ",
+        ],
+    ),
     (":split", &["h", "v", "horizontal", "vertical"]),
     (":deck", &["next", "prev"]),
     (":focus", &["1", "2", "3", "4"]),
@@ -51,6 +62,43 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":layout", &["tiled", "stacked"]),
     (":quake", &[]),
     (":guake", &[]),
+    (
+        ":outline",
+        &[
+            "solid",
+            "double",
+            "rounded",
+            "thick",
+            "dotted",
+            "dashed",
+            "quadruple",
+            "ascii",
+            "window ",
+            "prompt ",
+        ],
+    ),
+    (
+        ":border",
+        &[
+            "solid",
+            "double",
+            "rounded",
+            "thick",
+            "dotted",
+            "dashed",
+            "quadruple",
+            "ascii",
+        ],
+    ),
+    (":shadows", &["on", "off", "translucent", "tinted", "solid", "none"]),
+    (
+        ":theme",
+        &["turbo-blue", "turbo-cyan", "ibm-3278-green", "ibm-3279-amber", "ibm-mono"],
+    ),
+    (":glyphs", &["unicode", "cp437", "nerd-font", "ascii"]),
+    (":cursor", &["block", "hollow", "underscore", "bar"]),
+    (":crosshair", &["on", "off"]),
+    (":fkeybar", &["on", "off"]),
     (":block", &["prev", "next"]),
     (":yank", &[]),
     (":clear", &[]),

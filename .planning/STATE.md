@@ -89,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-20 21:17
-Stopped at: Quick task 20261020-tab-completion-and-smooth-floating-prompt complete
+Last session: 2026-10-20 21:44
+Stopped at: Quick task 20261020-split-prompt-borders-shadows-vt-torture-coverage complete
 Resume file: .planning/CHECKPOINT.md
 
 ## Quick Tasks Completed
@@ -98,3 +98,4 @@ Resume file: .planning/CHECKPOINT.md
 | Slug | Date | Status | Summary |
 |------|------|--------|---------|
 | `20261020-tab-completion-and-smooth-floating-prompt` | 2026-10-20 | complete ✓ | Tab completion (`Tab`/`Shift+Tab`) + smooth floating prompt over `tail -f /dev/random` |
+| `20261020-split-prompt-borders-shadows-vt-torture-coverage` | 2026-10-20 | complete ✓ | Non-overlapping split command/output panes (`SplitTop`/`SplitBottom`), 8 outline styles, 4 themeable DOS drop shadows, full VT control sequence compliance, and `cargo llvm-cov` (`81.83%` lines) + torture/stress suite |

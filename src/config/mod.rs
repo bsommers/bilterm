@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::pane::PromptAnchor;
+use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::CaretStyle;
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
@@ -14,13 +15,19 @@ pub struct BiltermConfig {
     pub theme: ThemePreset,
     pub glyphs: GlyphPack,
     pub cursor_style: CaretStyle,
+    /// Outline border style for multi-pane windows (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
+    pub window_outline: OutlineStyle,
+    /// Outline border style for the command prompt pane (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
+    pub prompt_outline: OutlineStyle,
+    /// DOS-style drop-shadow mode (`none`, `translucent`, `theme-tinted`, `solid-half-block`).
+    pub shadow_style: ShadowStyle,
     /// Enables the IBM 3270 full-pane cross-hair cursor ruler (`UI-05`).
     pub crosshair_cursor: bool,
-    /// Enables Borland Turbo Vision 2-col right / 1-row bottom translucent drop shadows (`UI-01`).
+    /// Enables Borland Turbo Vision 2-col right / 1-row bottom drop shadows (`UI-01`).
     pub drop_shadows: bool,
     /// Enables the bottom 1-row Borland DOS Function-Key bar (`UI-03`).
     pub show_dos_fkey_bar: bool,
-    /// Default floating command prompt anchor (`"top"`, `"bottom"`, or `"floating"`).
+    /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
     pub default_prompt_anchor: String,
     /// Default floating command prompt height in rows (`3..=12`).
     pub default_prompt_height: u16,
@@ -35,6 +42,9 @@ impl Default for BiltermConfig {
             theme: ThemePreset::TurboBlue,
             glyphs: GlyphPack::Unicode,
             cursor_style: CaretStyle::SolidBlock,
+            window_outline: OutlineStyle::Double,
+            prompt_outline: OutlineStyle::Double,
+            shadow_style: ShadowStyle::Translucent,
             crosshair_cursor: false,
             drop_shadows: false,
             show_dos_fkey_bar: false,
@@ -76,6 +86,10 @@ impl BiltermConfig {
         match self.default_prompt_anchor.trim().to_ascii_lowercase().as_str() {
             "bottom" | "bot" => PromptAnchor::Bottom,
             "float" | "floating" => PromptAnchor::Floating { y_offset: 4 },
+            "split-top" | "split_top" | "splittop" | "split" => PromptAnchor::SplitTop,
+            "split-bottom" | "split_bottom" | "splitbottom" | "split-bot" => {
+                PromptAnchor::SplitBottom
+            }
             _ => PromptAnchor::Top,
         }
     }
@@ -130,6 +144,16 @@ pub fn parse_ini_theme(ini_text: &str) -> ThemePalette {
             "oia_bg" => {
                 if let Some(c) = parse_hex_color(val) {
                     palette.oia_bg = c;
+                }
+            }
+            "shadow_fg" => {
+                if let Some(c) = parse_hex_color(val) {
+                    palette.shadow_fg = c;
+                }
+            }
+            "shadow_bg" => {
+                if let Some(c) = parse_hex_color(val) {
+                    palette.shadow_bg = c;
                 }
             }
             _ => {}

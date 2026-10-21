@@ -59,6 +59,8 @@ impl ThemePreset {
                 fkey_bar_bg: Color::Rgb(170, 170, 170),
                 fkey_bar_fg: Color::Black,
                 fkey_num_fg: Color::Rgb(170, 0, 0),
+                shadow_fg: Color::DarkGray,
+                shadow_bg: Color::Black,
             },
             Self::TurboCyan => ThemePalette {
                 name: self.label().to_string(),
@@ -75,6 +77,8 @@ impl ThemePreset {
                 fkey_bar_bg: Color::Rgb(0, 128, 128),
                 fkey_bar_fg: Color::Black,
                 fkey_num_fg: Color::Rgb(255, 255, 85),
+                shadow_fg: Color::Rgb(0, 64, 64),
+                shadow_bg: Color::Rgb(0, 16, 16),
             },
             Self::Ibm3278Green => ThemePalette {
                 name: self.label().to_string(),
@@ -91,6 +95,8 @@ impl ThemePreset {
                 fkey_bar_bg: Color::Rgb(0, 40, 0),
                 fkey_bar_fg: Color::Rgb(0, 255, 102),
                 fkey_num_fg: Color::Rgb(255, 255, 85),
+                shadow_fg: Color::Rgb(0, 90, 30),
+                shadow_bg: Color::Rgb(0, 8, 0),
             },
             Self::Ibm3279Amber => ThemePalette {
                 name: self.label().to_string(),
@@ -107,6 +113,8 @@ impl ThemePreset {
                 fkey_bar_bg: Color::Rgb(40, 20, 0),
                 fkey_bar_fg: Color::Rgb(255, 176, 0),
                 fkey_num_fg: Color::Rgb(255, 255, 255),
+                shadow_fg: Color::Rgb(120, 68, 0),
+                shadow_bg: Color::Rgb(10, 4, 0),
             },
             Self::IbmMono => ThemePalette {
                 name: self.label().to_string(),
@@ -123,6 +131,8 @@ impl ThemePreset {
                 fkey_bar_bg: Color::Rgb(40, 40, 40),
                 fkey_bar_fg: Color::White,
                 fkey_num_fg: Color::Gray,
+                shadow_fg: Color::DarkGray,
+                shadow_bg: Color::Black,
             },
         }
     }
@@ -145,6 +155,8 @@ pub struct ThemePalette {
     pub fkey_bar_bg: Color,
     pub fkey_bar_fg: Color,
     pub fkey_num_fg: Color,
+    pub shadow_fg: Color,
+    pub shadow_bg: Color,
 }
 
 impl Default for ThemePalette {

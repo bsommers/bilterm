@@ -54,6 +54,10 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 pane.set_prompt_anchor(PromptAnchor::Bottom);
                 return Ok(AppAction::Handled);
             }
+            KeyCode::Char('s') => {
+                pane.toggle_split_prompt();
+                return Ok(AppAction::Handled);
+            }
             KeyCode::Up => {
                 let h = pane.vt.size().0 + 1;
                 pane.move_prompt_vertical(-1, h);
@@ -105,7 +109,7 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
     match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => handle_command_prompt_key(pane, key),
         InputRoutingMode::RawPtyPassthrough => {
-            let bytes = encode_key_to_pty_bytes(key);
+            let bytes = encode_key_to_pty_bytes_with_modes(key, pane.vt.is_application_cursor());
             if !bytes.is_empty() {
                 if let Some(pty) = &pane.pty {
                     pty.write_all(&bytes)?;
@@ -578,6 +582,11 @@ pub fn handle_wm_mouse_event(
 
 /// Encodes a `crossterm::event::KeyEvent` into standard VT100/xterm escape sequences for raw PTY passthrough.
 pub fn encode_key_to_pty_bytes(key: KeyEvent) -> Vec<u8> {
+    encode_key_to_pty_bytes_with_modes(key, false)
+}
+
+/// Encodes a `crossterm::event::KeyEvent` into VT100/VT220/xterm escape sequences, respecting `DECCKM` (`?1h`) application cursor mode.
+pub fn encode_key_to_pty_bytes_with_modes(key: KeyEvent, application_cursor: bool) -> Vec<u8> {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         if let KeyCode::Char(c) = key.code {
             let lower = c.to_ascii_lowercase();
@@ -604,12 +613,48 @@ pub fn encode_key_to_pty_bytes(key: KeyEvent) -> Vec<u8> {
         KeyCode::Tab => vec![b'\t'],
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Esc => vec![0x1b],
-        KeyCode::Up => b"\x1b[A".to_vec(),
-        KeyCode::Down => b"\x1b[B".to_vec(),
-        KeyCode::Right => b"\x1b[C".to_vec(),
-        KeyCode::Left => b"\x1b[D".to_vec(),
-        KeyCode::Home => b"\x1b[H".to_vec(),
-        KeyCode::End => b"\x1b[F".to_vec(),
+        KeyCode::Up => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOA".to_vec()
+            } else {
+                b"\x1b[A".to_vec()
+            }
+        }
+        KeyCode::Down => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOB".to_vec()
+            } else {
+                b"\x1b[B".to_vec()
+            }
+        }
+        KeyCode::Right => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOC".to_vec()
+            } else {
+                b"\x1b[C".to_vec()
+            }
+        }
+        KeyCode::Left => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOD".to_vec()
+            } else {
+                b"\x1b[D".to_vec()
+            }
+        }
+        KeyCode::Home => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOH".to_vec()
+            } else {
+                b"\x1b[H".to_vec()
+            }
+        }
+        KeyCode::End => {
+            if application_cursor && key.modifiers.is_empty() {
+                b"\x1bOF".to_vec()
+            } else {
+                b"\x1b[F".to_vec()
+            }
+        }
         KeyCode::Delete => b"\x1b[3~".to_vec(),
         KeyCode::PageUp => b"\x1b[5~".to_vec(),
         KeyCode::PageDown => b"\x1b[6~".to_vec(),

@@ -9,13 +9,15 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
 use crate::config::BiltermConfig;
 use crate::pane::highlight::tokenize_shell_line;
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::pty::line_discipline::InputRoutingMode;
-use crate::ui::chrome::{render_borland_frame, render_drop_shadow};
+use crate::ui::chrome::{
+    render_borland_frame_styled, render_drop_shadow_styled, OutlineStyle,
+};
 use crate::ui::cursor::{render_caret, render_crosshair_cursor};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
@@ -69,11 +71,11 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 1: Render full-height OutputCanvas from VtParser screen
         render_output_canvas(self.pane, canvas, cfg, &palette, self.active, buf);
 
-        // Pass 2: Render overlaid FloatingCommandPrompt if visible
-        if self.pane.is_prompt_visible() && canvas.height >= 3 {
+        // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
+        if self.pane.is_prompt_visible() && canvas.height >= 2 {
             let prompt_rect = self.pane.prompt_rect(area);
-            if cfg.drop_shadows {
-                render_drop_shadow(buf, prompt_rect, canvas);
+            if cfg.drop_shadows && !self.pane.prompt.anchor.is_split() {
+                render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
             occlude_rect(buf, prompt_rect);
             render_floating_prompt(
@@ -213,10 +215,10 @@ fn render_floating_prompt(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let border_type = if active {
-        BorderType::Double
+    let effective_outline = if !active && cfg.prompt_outline == OutlineStyle::Double {
+        OutlineStyle::Solid
     } else {
-        BorderType::Plain
+        cfg.prompt_outline
     };
     let border_fg = if active {
         palette.active_border_fg
@@ -228,6 +230,8 @@ fn render_floating_prompt(
     let anchor_badge = match pane.prompt.anchor {
         PromptAnchor::Top => "TOP",
         PromptAnchor::Bottom => "BOT",
+        PromptAnchor::SplitTop => "SPL-T",
+        PromptAnchor::SplitBottom => "SPL-B",
         PromptAnchor::Floating { y_offset } => {
             if y_offset == 0 {
                 "TOP"
@@ -247,7 +251,7 @@ fn render_floating_prompt(
                 .add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
-        .border_type(border_type)
+        .border_set(effective_outline.border_set())
         .border_style(Style::default().fg(border_fg).bg(surface_bg))
         .style(Style::default().fg(Color::White).bg(surface_bg));
 
@@ -518,7 +522,13 @@ impl Widget for WorkspaceWidget<'_> {
             let is_active = !qt_visible && top_workspace_id == Some(id);
             if framed {
                 if cfg.drop_shadows && self.wm.layout_mode == WorkspaceLayoutMode::Stacked {
-                    render_drop_shadow(buf, outer, workspace_area);
+                    render_drop_shadow_styled(
+                        buf,
+                        outer,
+                        workspace_area,
+                        cfg.shadow_style,
+                        &palette,
+                    );
                 }
                 occlude_rect(buf, outer);
                 let z_badge = self
@@ -527,10 +537,11 @@ impl Widget for WorkspaceWidget<'_> {
                     .rank_of(id)
                     .map(|(r, total)| format!("Z:{r}/{total}"))
                     .unwrap_or_default();
-                render_borland_frame(
+                render_borland_frame_styled(
                     outer,
                     &format!("[{id}] {} ({z_badge})", pane.title),
                     is_active,
+                    cfg.window_outline,
                     &palette,
                     &glyphs,
                     buf,
@@ -546,13 +557,20 @@ impl Widget for WorkspaceWidget<'_> {
         if qt_visible {
             let qt_outer = self.wm.quick_terminal.overlay_rect(workspace_area);
             if cfg.drop_shadows {
-                render_drop_shadow(buf, qt_outer, workspace_area);
+                render_drop_shadow_styled(
+                    buf,
+                    qt_outer,
+                    workspace_area,
+                    cfg.shadow_style,
+                    &palette,
+                );
             }
             occlude_rect(buf, qt_outer);
-            render_borland_frame(
+            render_borland_frame_styled(
                 qt_outer,
                 "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)",
                 true,
+                cfg.window_outline,
                 &palette,
                 &glyphs,
                 buf,
@@ -615,6 +633,8 @@ pub fn render_oia_status_bar_themed(
     let anchor_label = match pane.prompt.anchor {
         PromptAnchor::Top => "PIN:TOP",
         PromptAnchor::Bottom => "PIN:BOT",
+        PromptAnchor::SplitTop => "PIN:SPL-T",
+        PromptAnchor::SplitBottom => "PIN:SPL-B",
         PromptAnchor::Floating { y_offset } => {
             if y_offset == 0 {
                 "PIN:TOP"

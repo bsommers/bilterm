@@ -82,7 +82,7 @@ impl App {
         Ok(())
     }
 
-    fn poll_all_ptys(&mut self) {
+    pub fn poll_all_ptys(&mut self) {
         let mut exited_ids = Vec::new();
         for (&id, pane) in &mut self.wm.panes {
             pane.poll_pty_events();
@@ -101,11 +101,11 @@ impl App {
         self.wm.quick_terminal.pane.refresh_line_discipline();
     }
 
-    fn all_panes_exited(&self) -> bool {
+    pub fn all_panes_exited(&self) -> bool {
         self.wm.panes.values().all(CompositePane::has_exited)
     }
 
-    fn flush_osc52_to_host(&mut self) -> Result<()> {
+    pub fn flush_osc52_to_host(&mut self) -> Result<()> {
         let mut out = io::stdout();
         let mut wrote = false;
         let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();

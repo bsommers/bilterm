@@ -1,4 +1,5 @@
 use crate::pane::{CompositePane, PromptAnchor};
+use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::CaretStyle;
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
@@ -11,6 +12,9 @@ use crate::wm::{WindowManager, WorkspaceLayoutMode};
 pub enum ColonCommand {
     PromptTop,
     PromptBottom,
+    PromptSplitTop,
+    PromptSplitBottom,
+    PromptSplitToggle,
     PromptFloat(u16),
     PromptHeight(u16),
     BlockPrev,
@@ -30,8 +34,12 @@ pub enum ColonCommand {
     Theme(ThemePreset),
     Glyphs(GlyphPack),
     Cursor(CaretStyle),
+    Outline {
+        window: Option<OutlineStyle>,
+        prompt: Option<OutlineStyle>,
+    },
     CrosshairToggle(Option<bool>),
-    ShadowsToggle(Option<bool>),
+    Shadows(Option<ShadowStyle>),
     FKeyBarToggle(Option<bool>),
     Quit,
 }
@@ -48,6 +56,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         "prompt" => match parts.get(1).copied() {
             Some("top") => Some(Ok(ColonCommand::PromptTop)),
             Some("bottom") => Some(Ok(ColonCommand::PromptBottom)),
+            Some("split-top") | Some("splittop") => Some(Ok(ColonCommand::PromptSplitTop)),
+            Some("split-bottom") | Some("split-bot") | Some("splitbottom") => {
+                Some(Ok(ColonCommand::PromptSplitBottom))
+            }
+            Some("split") => Some(Ok(ColonCommand::PromptSplitToggle)),
             Some("float") => {
                 let row = parts
                     .get(2)
@@ -60,7 +73,8 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 None => Some(Err("Usage: :prompt height <3..12>".to_string())),
             },
             _ => Some(Err(
-                "Usage: :prompt top | bottom | float [row] | height <3..12>".to_string(),
+                "Usage: :prompt top | bottom | split-top | split-bottom | split | float [row] | height <3..12>"
+                    .to_string(),
             )),
         },
         "block" => match parts.get(1).copied() {
@@ -113,6 +127,32 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 "Usage: :cursor block | hollow | underscore | bar".to_string(),
             )),
         },
+        "outline" | "border" => match (parts.get(1).copied(), parts.get(2).copied()) {
+            (Some("window" | "win"), Some(style_str)) => {
+                OutlineStyle::from_name(style_str)
+                    .map(|s| Ok(ColonCommand::Outline { window: Some(s), prompt: None }))
+                    .or_else(|| Some(Err("Unknown outline style".to_string())))
+            }
+            (Some("prompt" | "cmd"), Some(style_str)) => {
+                OutlineStyle::from_name(style_str)
+                    .map(|s| Ok(ColonCommand::Outline { window: None, prompt: Some(s) }))
+                    .or_else(|| Some(Err("Unknown outline style".to_string())))
+            }
+            (Some(style_str), None) => {
+                OutlineStyle::from_name(style_str)
+                    .map(|s| Ok(ColonCommand::Outline { window: Some(s), prompt: Some(s) }))
+                    .or_else(|| {
+                        Some(Err(
+                            "Usage: :outline [window|prompt] <solid|double|rounded|thick|dotted|dashed|quadruple|ascii>"
+                                .to_string(),
+                        ))
+                    })
+            }
+            _ => Some(Err(
+                "Usage: :outline [window|prompt] <solid|double|rounded|thick|dotted|dashed|quadruple|ascii>"
+                    .to_string(),
+            )),
+        },
         "crosshair" => {
             let arg = match parts.get(1).copied() {
                 Some("on") | Some("true") => Some(true),
@@ -121,13 +161,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::CrosshairToggle(arg)))
         }
-        "shadows" => {
-            let arg = match parts.get(1).copied() {
-                Some("on") | Some("true") => Some(true),
-                Some("off") | Some("false") => Some(false),
-                _ => None,
-            };
-            Some(Ok(ColonCommand::ShadowsToggle(arg)))
+        "shadows" | "shadow" => {
+            let arg = parts.get(1).and_then(|s| ShadowStyle::from_name(s));
+            Some(Ok(ColonCommand::Shadows(arg)))
         }
         "fkeybar" => {
             let arg = match parts.get(1).copied() {
@@ -156,6 +192,21 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         ColonCommand::PromptBottom => {
             pane.set_prompt_anchor(PromptAnchor::Bottom);
             pane.status_message = Some("Prompt pinned to BOTTOM".to_string());
+            false
+        }
+        ColonCommand::PromptSplitTop => {
+            pane.set_prompt_anchor(PromptAnchor::SplitTop);
+            pane.status_message = Some("Prompt split at TOP (non-overlapping)".to_string());
+            false
+        }
+        ColonCommand::PromptSplitBottom => {
+            pane.set_prompt_anchor(PromptAnchor::SplitBottom);
+            pane.status_message = Some("Prompt split at BOTTOM (non-overlapping)".to_string());
+            false
+        }
+        ColonCommand::PromptSplitToggle => {
+            pane.toggle_split_prompt();
+            pane.status_message = Some("Toggled split/floating prompt mode".to_string());
             false
         }
         ColonCommand::PromptFloat(y_offset) => {
@@ -266,12 +317,36 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.config.cursor_style = style;
             false
         }
+        ColonCommand::Outline { window, prompt } => {
+            if let Some(w) = window {
+                wm.config.window_outline = w;
+            }
+            if let Some(p) = prompt {
+                wm.config.prompt_outline = p;
+            }
+            false
+        }
         ColonCommand::CrosshairToggle(val) => {
             wm.config.crosshair_cursor = val.unwrap_or(!wm.config.crosshair_cursor);
             false
         }
-        ColonCommand::ShadowsToggle(val) => {
-            wm.config.drop_shadows = val.unwrap_or(!wm.config.drop_shadows);
+        ColonCommand::Shadows(style_opt) => {
+            match style_opt {
+                Some(ShadowStyle::None) => {
+                    wm.config.shadow_style = ShadowStyle::None;
+                    wm.config.drop_shadows = false;
+                }
+                Some(style) => {
+                    wm.config.shadow_style = style;
+                    wm.config.drop_shadows = true;
+                }
+                None => {
+                    wm.config.drop_shadows = !wm.config.drop_shadows;
+                    if wm.config.drop_shadows && wm.config.shadow_style == ShadowStyle::None {
+                        wm.config.shadow_style = ShadowStyle::Translucent;
+                    }
+                }
+            }
             false
         }
         ColonCommand::FKeyBarToggle(val) => {

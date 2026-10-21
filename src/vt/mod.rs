@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use ratatui::style::{Color, Modifier, Style};
 
 /// Semantic shell integration markers (`OSC 133;A/B/C/D`).
@@ -32,10 +34,17 @@ pub struct VtParser {
     scrollback_capacity: usize,
     alt_screen_47_or_1047: bool,
     bracketed_paste_2004: bool,
+    application_cursor_decckm: bool,
+    mouse_tracking_mode: bool,
+    focus_reporting_1004: bool,
+    synchronized_output_2026: bool,
+    window_title: Option<String>,
+    reported_cwd: Option<PathBuf>,
     osc133_phase: Option<Osc133Phase>,
     command_blocks: Vec<CommandBlockRecord>,
     selected_block_index: Option<usize>,
     pending_osc52: Vec<String>,
+    pending_query_responses: Vec<Vec<u8>>,
     total_lines_scrolled: usize,
 }
 
@@ -50,10 +59,17 @@ impl VtParser {
             scrollback_capacity,
             alt_screen_47_or_1047: false,
             bracketed_paste_2004: false,
+            application_cursor_decckm: false,
+            mouse_tracking_mode: false,
+            focus_reporting_1004: false,
+            synchronized_output_2026: false,
+            window_title: None,
+            reported_cwd: None,
             osc133_phase: None,
             command_blocks: Vec::new(),
             selected_block_index: None,
             pending_osc52: Vec::new(),
+            pending_query_responses: Vec::new(),
             total_lines_scrolled: 0,
         }
     }
@@ -73,10 +89,10 @@ impl VtParser {
             self.parser.process(&sanitized);
             return;
         }
-        self.scan_control_sequences(bytes);
         let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
         self.parser.process(bytes);
+        self.scan_control_sequences(bytes);
     }
 
     /// Resizes the virtual terminal screen dimensions.
@@ -107,6 +123,49 @@ impl VtParser {
     /// Returns `true` when the child program has enabled `DECSET 2004` bracketed paste mode (`\x1b[?2004h`).
     pub fn is_bracketed_paste(&self) -> bool {
         self.parser.screen().bracketed_paste() || self.bracketed_paste_2004
+    }
+
+    /// Returns `true` when `DECCKM` (`\x1b[?1h`) Application Cursor Keys mode is active.
+    pub fn is_application_cursor(&self) -> bool {
+        self.parser.screen().application_cursor() || self.application_cursor_decckm
+    }
+
+    /// Returns `true` when mouse tracking (`DECSET 1000`, `1002`, `1003`, or `1006`) is active.
+    pub fn is_mouse_sgr_or_tracking(&self) -> bool {
+        !matches!(
+            self.parser.screen().mouse_protocol_mode(),
+            vt100_ctt::MouseProtocolMode::None
+        ) || self.mouse_tracking_mode
+    }
+
+    #[allow(non_snake_case)]
+    pub fn is_mouse_SGR_or_tracking(&self) -> bool {
+        self.is_mouse_sgr_or_tracking()
+    }
+
+    /// Returns `true` when `DECSET 1004` focus in/out reporting (`\x1b[?1004h`) is active.
+    pub fn is_focus_reporting(&self) -> bool {
+        self.focus_reporting_1004
+    }
+
+    /// Returns `true` when `DECSET 2026` synchronized output (`\x1b[?2026h`) is active.
+    pub fn is_synchronized_output(&self) -> bool {
+        self.synchronized_output_2026
+    }
+
+    /// Returns the most recently set `OSC 0` / `OSC 2` window title, if any.
+    pub fn window_title(&self) -> Option<&str> {
+        self.window_title.as_deref()
+    }
+
+    /// Returns the most recently reported `OSC 7` working directory (`\x1b]7;file://host/path\x07`), if any.
+    pub fn reported_cwd(&self) -> Option<&Path> {
+        self.reported_cwd.as_deref()
+    }
+
+    /// Takes any pending `DSR` (`CSI 5 n`), `CPR` (`CSI 6 n`), or `DA1` (`CSI c`) terminal query responses.
+    pub fn take_query_responses(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.pending_query_responses)
     }
 
     /// Returns the most recently observed `OSC 133` semantic prompt phase.
@@ -217,7 +276,7 @@ impl VtParser {
     fn scan_control_sequences(&mut self, bytes: &[u8]) {
         let text = String::from_utf8_lossy(bytes);
 
-        // Track DECSET 47 / 1047 / 1049 and DECSET 2004 enter/exit sequences explicitly
+        // Track DECSET private modes (?1, ?47, ?1047, ?1049, ?1000..1006, ?2004, ?2026)
         for (idx, _) in text.match_indices("\x1b[?") {
             let rest = &text[idx + 3..];
             if rest.starts_with("1049h") || rest.starts_with("1047h") || rest.starts_with("47h") {
@@ -231,6 +290,74 @@ impl VtParser {
                 self.bracketed_paste_2004 = true;
             } else if rest.starts_with("2004l") {
                 self.bracketed_paste_2004 = false;
+            } else if rest.starts_with("1h") {
+                self.application_cursor_decckm = true;
+            } else if rest.starts_with("1l") {
+                self.application_cursor_decckm = false;
+            } else if rest.starts_with("1000h")
+                || rest.starts_with("1002h")
+                || rest.starts_with("1003h")
+                || rest.starts_with("1006h")
+            {
+                self.mouse_tracking_mode = true;
+            } else if rest.starts_with("1000l")
+                || rest.starts_with("1002l")
+                || rest.starts_with("1003l")
+                || rest.starts_with("1006l")
+            {
+                self.mouse_tracking_mode = false;
+            } else if rest.starts_with("1004h") {
+                self.focus_reporting_1004 = true;
+            } else if rest.starts_with("1004l") {
+                self.focus_reporting_1004 = false;
+            } else if rest.starts_with("2026h") {
+                self.synchronized_output_2026 = true;
+            } else if rest.starts_with("2026l") {
+                self.synchronized_output_2026 = false;
+            }
+        }
+
+        // Track DSR (CSI 5 n), CPR (CSI 6 n), and Primary DA (CSI c / CSI 0 c) terminal queries
+        for (idx, _) in text.match_indices("\x1b[") {
+            let rest = &text[idx + 2..];
+            if rest.starts_with("5n") {
+                self.pending_query_responses.push(b"\x1b[0n".to_vec());
+            } else if rest.starts_with("6n") {
+                let (r, c) = self.parser.screen().cursor_position();
+                self.pending_query_responses
+                    .push(format!("\x1b[{};{}R", r + 1, c + 1).into_bytes());
+            } else if rest.starts_with('c') || rest.starts_with("0c") {
+                self.pending_query_responses.push(b"\x1b[?62;22c".to_vec());
+            }
+        }
+
+        // Track OSC 0 / OSC 2 window title sequences: \x1b]0;<title>(\x07 or \x1b\\) and \x1b]2;<title>(\x07 or \x1b\\)
+        for prefix in ["\x1b]0;", "\x1b]2;"] {
+            for (idx, _) in text.match_indices(prefix) {
+                let rest = &text[idx + prefix.len()..];
+                if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
+                    self.window_title = Some(rest[..end].to_string());
+                }
+            }
+        }
+
+        // Track OSC 7 working directory sequences: \x1b]7;<file-uri-or-path>(\x07 or \x1b\\)
+        for (idx, _) in text.match_indices("\x1b]7;") {
+            let rest = &text[idx + 4..];
+            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
+                let raw_uri = rest[..end].trim();
+                let path_part = if let Some(after_scheme) = raw_uri.strip_prefix("file://") {
+                    if let Some(slash_idx) = after_scheme.find('/') {
+                        &after_scheme[slash_idx..]
+                    } else {
+                        after_scheme
+                    }
+                } else {
+                    raw_uri
+                };
+                if !path_part.is_empty() {
+                    self.reported_cwd = Some(PathBuf::from(path_part));
+                }
             }
         }
 
