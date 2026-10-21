@@ -98,6 +98,14 @@ impl Widget for CompositePaneWidget<'_> {
         {
             render_history_popup(self.pane, canvas, cfg, &palette, &glyphs, buf);
         }
+
+        // Pass 5: Render unsafe multi-line paste confirmation modal if pending (FND-01)
+        if let Some(pending_paste) = &self.pane.pending_unsafe_paste
+            && canvas.height >= 5
+            && canvas.width >= 24
+        {
+            render_unsafe_paste_modal(pending_paste, canvas, cfg, &palette, buf);
+        }
     }
 }
 
@@ -191,6 +199,72 @@ fn render_output_canvas(
                 dst_cell.set_style(style);
             }
         }
+    }
+
+    // Highlight detected URLs with underline + bright cyan tint (VAL-03)
+    for url in pane.vt.detect_visible_urls() {
+        if url.row < render_rows {
+            for c in url.start_col..=url.end_col.min(render_cols.saturating_sub(1)) {
+                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + url.row)) {
+                    cell.set_style(
+                        cell.style()
+                            .fg(Color::Rgb(85, 255, 255))
+                            .add_modifier(Modifier::UNDERLINED),
+                    );
+                }
+            }
+        }
+    }
+
+    // Highlight active OutputCanvas search matches (VAL-02)
+    if pane.canvas_search.active && !pane.canvas_search.matches.is_empty() {
+        for r in 0..render_rows {
+            for c in 0..render_cols {
+                let (is_match, is_sel) = pane.canvas_search.cell_match_status(r, c);
+                if is_match
+                    && let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r))
+                {
+                    let bg = if is_sel {
+                        Color::Rgb(255, 176, 0)
+                    } else {
+                        Color::Rgb(255, 255, 85)
+                    };
+                    cell.set_style(
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(bg)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+        }
+    }
+
+    // Highlight Vi Copy Mode selection and cursor (VAL-04)
+    if pane.copy_mode.active {
+        for r in 0..render_rows {
+            for c in 0..render_cols {
+                if pane.copy_mode.is_cell_selected(r, c)
+                    && let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r))
+                {
+                    cell.set_style(
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Rgb(85, 255, 255))
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+        }
+        let cr = pane.copy_mode.cursor_row.min(render_rows.saturating_sub(1));
+        let cc = pane.copy_mode.cursor_col.min(render_cols.saturating_sub(1));
+        render_caret(
+            buf,
+            canvas.x + cc,
+            canvas.y + cr,
+            cfg.cursor_style,
+            Color::Rgb(255, 255, 85),
+        );
     }
 
     // When in RawPtyPassthrough and not scrolled back, highlight the live PTY cursor cell
@@ -361,7 +435,7 @@ fn render_floating_prompt(
             } else {
                 format!("{} LAST CMD: ", glyphs.status_ready_icon)
             };
-            rendered_lines.push(Line::from(vec![
+            let mut banner_spans = vec![
                 Span::styled(
                     status_tag,
                     Style::default()
@@ -376,7 +450,27 @@ fn render_floating_prompt(
                         .bg(surface_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
-            ]));
+            ];
+            if let Some(exit_code) = pane.vt.last_exit_code() {
+                let dur_str = pane
+                    .vt
+                    .last_duration_ms()
+                    .map(|ms| format!(" [{ms}ms]"))
+                    .unwrap_or_default();
+                let (badge_txt, badge_fg) = if exit_code == 0 {
+                    (format!(" ✓ 0{dur_str} "), Color::Rgb(0, 255, 102))
+                } else {
+                    (format!(" ✗ {exit_code}{dur_str} "), Color::Rgb(255, 85, 85))
+                };
+                banner_spans.push(Span::styled(
+                    badge_txt,
+                    Style::default()
+                        .fg(badge_fg)
+                        .bg(surface_bg)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            }
+            rendered_lines.push(Line::from(banner_spans));
         }
     }
 
@@ -801,6 +895,71 @@ fn render_history_popup(
     Paragraph::new(lines).render(inner, buf);
 }
 
+fn render_unsafe_paste_modal(
+    pending_paste: &str,
+    canvas: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    buf: &mut Buffer,
+) {
+    let glyphs = cfg.glyph_set();
+    let w = canvas.width.saturating_sub(6).clamp(24, 68).min(canvas.width);
+    let h = canvas.height.saturating_sub(2).clamp(5, 9).min(canvas.height);
+    let x = canvas.x + (canvas.width.saturating_sub(w)) / 2;
+    let y = canvas.y + (canvas.height.saturating_sub(h)) / 2;
+    let modal = Rect::new(x, y, w, h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, modal, canvas, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, modal);
+    render_borland_frame_styled(
+        modal,
+        "[!] UNSAFE PASTE GUARD [y/Enter=Confirm  n/Esc=Cancel]",
+        true,
+        cfg.window_outline,
+        palette,
+        &glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(modal);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let line_count = pending_paste.lines().count().max(1);
+    let preview: String = pending_paste
+        .replace(['\r', '\n'], " ↵ ")
+        .chars()
+        .take(usize::from(inner.width.saturating_sub(2)))
+        .collect();
+    let lines = vec![
+        Line::from(Span::styled(
+            format!(" Multi-line/raw paste ({line_count} lines) into active PTY:"),
+            Style::default()
+                .fg(Color::Rgb(255, 255, 85))
+                .bg(palette.window_frame_bg)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            format!(" {preview}"),
+            Style::default()
+                .fg(Color::Rgb(85, 255, 255))
+                .bg(palette.window_frame_bg),
+        )),
+        Line::from(Span::styled(
+            " Press [y/Enter] to paste or [n/Esc] to abort.",
+            Style::default()
+                .fg(Color::White)
+                .bg(palette.window_frame_bg),
+        )),
+    ];
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(lines).render(inner, buf);
+}
+
 fn render_help_modal(
     scroll: usize,
     workspace_area: Rect,
@@ -867,6 +1026,12 @@ fn render_help_modal(
         ("Alt+P / :history", "Open Command History Pop-up Window (s = Save tmp)"),
         (":history save [path]", "Export session commands to a temporary script"),
         (":history on | off", "Enable or disable disk history persistence"),
+        ("═══ SEARCH, COPY MODE & LINKS (v0.2.0) ═══", ""),
+        ("Alt+/ / :search <query>", "Search OutputCanvas & highlight matches"),
+        ("Alt+n / Alt+N", "Jump to next / previous canvas search match"),
+        ("Alt+C / :copy", "Toggle Vi Copy Mode (hjkl, v char, V line, b block, y yank)"),
+        ("Alt+LeftDrag", "Mouse rectangular block selection on OutputCanvas"),
+        ("Ctrl+Click / :links", "Yank URL under mouse or last OSC 8/visible URL via OSC 52"),
         ("═══ THEMES, BORDERS & SHADOWS ═══", ""),
         (":theme <name>", "turbo-blue | turbo-cyan | 3278 | 3279 | mono"),
         (":outline <style>", "double | solid | rounded | thick | dotted | dashed | quadruple | ascii"),

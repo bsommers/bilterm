@@ -14,7 +14,7 @@ use crate::pane::fuzzy_history::FuzzyHistorySearchState;
 use crate::pane::history_store::HistoryStore;
 use crate::pty::line_discipline::{inspect_pty_fd, InputRoutingMode, LineDisciplineState};
 use crate::pty::{PtyConfig, PtyEvent, PtySession};
-use crate::vt::VtParser;
+use crate::vt::{CanvasSearchMatch, VtParser, encode_osc52_clipboard};
 
 /// Unique identifier for a `CompositePane`.
 pub type PaneId = usize;
@@ -674,7 +674,8 @@ impl FloatingPromptState {
     }
 }
 
-/// Active mouse drag state for moving or resizing a pane's `FloatingCommandPrompt` (`PANE-03`).
+/// Active mouse drag state for moving or resizing a pane's `FloatingCommandPrompt` (`PANE-03`),
+/// or dragging a rectangular/character selection on the `OutputCanvas` (`VAL-04`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptMouseDrag {
     /// Dragging the top border of the floating prompt vertically and/or horizontally.
@@ -687,6 +688,141 @@ pub enum PromptMouseDrag {
     ResizePromptRight,
     /// Dragging the bottom-right corner (`◢`) to resize both width and height simultaneously.
     ResizePromptCorner,
+    /// Dragging a rectangular block selection (`Alt+LeftDrag`) on the `OutputCanvas` (`VAL-04`).
+    CanvasRectSelect,
+}
+
+/// Interactive scrollback search & match highlighting state for the `OutputCanvas` (`VAL-02`).
+#[derive(Clone, Debug, Default)]
+pub struct CanvasSearchState {
+    pub active: bool,
+    pub query: String,
+    pub matches: Vec<CanvasSearchMatch>,
+    pub selected: usize,
+}
+
+impl CanvasSearchState {
+    /// Returns `(is_match, is_selected_match)` for a viewport cell `(row, col)`.
+    pub fn cell_match_status(&self, row: u16, col: u16) -> (bool, bool) {
+        if !self.active || self.matches.is_empty() {
+            return (false, false);
+        }
+        let mut any_match = false;
+        let mut selected_match = false;
+        for (idx, m) in self.matches.iter().enumerate() {
+            if m.row == row && col >= m.start_col && col <= m.end_col {
+                any_match = true;
+                if idx == self.selected {
+                    selected_match = true;
+                    break;
+                }
+            }
+        }
+        (any_match, selected_match)
+    }
+}
+
+/// Selection geometry mode inside Vi Copy Mode (`VAL-04`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CopySelectionKind {
+    #[default]
+    None,
+    /// Standard character-wise stream selection (`v`).
+    Char,
+    /// Full-line selection (`V`).
+    Line,
+    /// Rectangular column/block selection (`Ctrl+V` / `b` or `Alt+LeftDrag`).
+    Block,
+}
+
+/// Keyboard-driven Vi Copy Mode & rectangular block selection state for the `OutputCanvas` (`VAL-04`).
+#[derive(Clone, Debug, Default)]
+pub struct CopyModeState {
+    pub active: bool,
+    pub cursor_row: u16,
+    pub cursor_col: u16,
+    pub anchor: Option<(u16, u16)>,
+    pub selection_kind: CopySelectionKind,
+}
+
+impl CopyModeState {
+    /// Returns `true` if cell `(row, col)` lies inside the current selection (`Char`, `Line`, or `Block`).
+    pub fn is_cell_selected(&self, row: u16, col: u16) -> bool {
+        let Some((ar, ac)) = self.anchor else {
+            return false;
+        };
+        let (cr, cc) = (self.cursor_row, self.cursor_col);
+        match self.selection_kind {
+            CopySelectionKind::None => false,
+            CopySelectionKind::Line => {
+                let min_r = ar.min(cr);
+                let max_r = ar.max(cr);
+                row >= min_r && row <= max_r
+            }
+            CopySelectionKind::Block => {
+                let min_r = ar.min(cr);
+                let max_r = ar.max(cr);
+                let min_c = ac.min(cc);
+                let max_c = ac.max(cc);
+                row >= min_r && row <= max_r && col >= min_c && col <= max_c
+            }
+            CopySelectionKind::Char => {
+                let ((sr, sc), (er, ec)) = if (ar, ac) <= (cr, cc) {
+                    ((ar, ac), (cr, cc))
+                } else {
+                    ((cr, cc), (ar, ac))
+                };
+                if row < sr || row > er {
+                    false
+                } else if sr == er {
+                    col >= sc && col <= ec
+                } else if row == sr {
+                    col >= sc
+                } else if row == er {
+                    col <= ec
+                } else {
+                    true
+                }
+            }
+        }
+    }
+
+    /// Extracts the selected text from `screen` according to `selection_kind` (`VAL-04`).
+    pub fn extract_selected_text(&self, screen: &vt100_ctt::Screen) -> String {
+        let (rows, cols) = screen.size();
+        if rows == 0 || cols == 0 {
+            return String::new();
+        }
+        let (ar, _ac) = self.anchor.unwrap_or((self.cursor_row, self.cursor_col));
+        let (cr, _cc) = (self.cursor_row, self.cursor_col);
+        let min_r = ar.min(cr).min(rows.saturating_sub(1));
+        let max_r = ar.max(cr).min(rows.saturating_sub(1));
+
+        let mut lines_out = Vec::new();
+        for r in min_r..=max_r {
+            let mut line = String::new();
+            for c in 0..cols {
+                let include = if self.anchor.is_some() && self.selection_kind != CopySelectionKind::None {
+                    self.is_cell_selected(r, c)
+                } else {
+                    r == self.cursor_row
+                };
+                if include {
+                    let ch = screen
+                        .cell(r, c)
+                        .map(|cell| cell.contents())
+                        .unwrap_or_default();
+                    if ch.is_empty() {
+                        line.push(' ');
+                    } else {
+                        line.push_str(ch);
+                    }
+                }
+            }
+            lines_out.push(line.trim_end().to_string());
+        }
+        lines_out.join("\n")
+    }
 }
 
 /// A single composite terminal pane combining:
@@ -702,6 +838,12 @@ pub struct CompositePane {
     pub history_store: HistoryStore,
     pub line_discipline: LineDisciplineState,
     pub mouse_drag: Option<PromptMouseDrag>,
+    /// Interactive scrollback search & match highlighting state (`VAL-02`).
+    pub canvas_search: CanvasSearchState,
+    /// Keyboard-driven Vi Copy Mode & rectangular block selection state (`VAL-04`).
+    pub copy_mode: CopyModeState,
+    /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
+    pub pending_unsafe_paste: Option<String>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
     pub status_message: Option<String>,
     /// Last outbound `OSC 52` clipboard escape sequence emitted by `:yank` or child PTY passthrough.
@@ -724,6 +866,9 @@ impl CompositePane {
             history_store: HistoryStore::new_headless(id),
             line_discipline: LineDisciplineState::default(),
             mouse_drag: None,
+            canvas_search: CanvasSearchState::default(),
+            copy_mode: CopyModeState::default(),
+            pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
             last_canvas_size: (canvas_rows, canvas_cols),
@@ -749,6 +894,9 @@ impl CompositePane {
             history_store: HistoryStore::new_live(id),
             line_discipline: LineDisciplineState::default(),
             mouse_drag: None,
+            canvas_search: CanvasSearchState::default(),
+            copy_mode: CopyModeState::default(),
+            pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
             last_canvas_size: (canvas_rows, canvas_cols),
@@ -1060,6 +1208,98 @@ impl CompositePane {
 
     pub fn has_exited(&self) -> bool {
         self.exited
+    }
+
+    /// Executes a case-insensitive search on the visible `OutputCanvas` grid (`VAL-02`).
+    pub fn set_canvas_search(&mut self, query: &str) {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            self.clear_canvas_search();
+            return;
+        }
+        let matches = self.vt.search_canvas(trimmed);
+        self.canvas_search.active = true;
+        self.canvas_search.query = trimmed.to_string();
+        self.canvas_search.matches = matches;
+        self.canvas_search.selected = 0;
+        self.status_message = Some(format!(
+            "Search '{}': {} match(es)",
+            self.canvas_search.query,
+            self.canvas_search.matches.len()
+        ));
+    }
+
+    /// Advances to the next match in `canvas_search` (`VAL-02`).
+    pub fn next_canvas_search_match(&mut self) {
+        if !self.canvas_search.matches.is_empty() {
+            self.canvas_search.selected =
+                (self.canvas_search.selected + 1) % self.canvas_search.matches.len();
+            self.status_message = Some(format!(
+                "Search '{}': {}/{}",
+                self.canvas_search.query,
+                self.canvas_search.selected + 1,
+                self.canvas_search.matches.len()
+            ));
+        }
+    }
+
+    /// Moves to the previous match in `canvas_search` (`VAL-02`).
+    pub fn prev_canvas_search_match(&mut self) {
+        if !self.canvas_search.matches.is_empty() {
+            let n = self.canvas_search.matches.len();
+            self.canvas_search.selected = (self.canvas_search.selected + n - 1) % n;
+            self.status_message = Some(format!(
+                "Search '{}': {}/{}",
+                self.canvas_search.query,
+                self.canvas_search.selected + 1,
+                self.canvas_search.matches.len()
+            ));
+        }
+    }
+
+    /// Clears active `OutputCanvas` search highlighting (`VAL-02`).
+    pub fn clear_canvas_search(&mut self) {
+        self.canvas_search.active = false;
+        self.canvas_search.query.clear();
+        self.canvas_search.matches.clear();
+        self.canvas_search.selected = 0;
+    }
+
+    /// Enters keyboard-driven Vi Copy Mode on the `OutputCanvas` (`Alt+C` / `:copy`, `VAL-04`).
+    pub fn enter_copy_mode(&mut self) {
+        let (r, c) = self.vt.screen().cursor_position();
+        self.copy_mode.active = true;
+        self.copy_mode.cursor_row = r;
+        self.copy_mode.cursor_col = c;
+        self.copy_mode.anchor = None;
+        self.copy_mode.selection_kind = CopySelectionKind::None;
+        self.status_message =
+            Some("COPY MODE: hjkl move | v char | V line | b block | y yank | Esc exit".to_string());
+    }
+
+    /// Exits Vi Copy Mode (`VAL-04`).
+    pub fn exit_copy_mode(&mut self) {
+        self.copy_mode.active = false;
+        self.copy_mode.anchor = None;
+        self.copy_mode.selection_kind = CopySelectionKind::None;
+        self.status_message = Some("Exited Copy Mode".to_string());
+    }
+
+    /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer and `OSC 52` (`VAL-04`).
+    pub fn yank_copy_selection(&mut self) -> Option<String> {
+        let text = self.copy_mode.extract_selected_text(self.vt.screen());
+        self.copy_mode.active = false;
+        self.copy_mode.anchor = None;
+        self.copy_mode.selection_kind = CopySelectionKind::None;
+        if text.is_empty() {
+            self.status_message = Some("Copy Mode: empty selection".to_string());
+            return None;
+        }
+        self.prompt.yank_buffer = text.clone();
+        let seq = encode_osc52_clipboard(&text);
+        self.last_osc52_sequence = Some(seq);
+        self.status_message = Some(format!("Yanked {} chars via Copy Mode", text.len()));
+        Some(text)
     }
 }
 

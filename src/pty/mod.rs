@@ -1,4 +1,5 @@
 pub mod line_discipline;
+pub mod shell_integration;
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -88,7 +89,7 @@ pub struct PtySession {
 
 impl PtySession {
     /// Spawns a new child process inside a native OS pseudoterminal.
-    pub fn spawn(config: PtyConfig) -> Result<Self> {
+    pub fn spawn(mut config: PtyConfig) -> Result<Self> {
         let pty_system = native_pty_system();
         let initial_rows = config.rows.max(1);
         let initial_cols = config.cols.max(1);
@@ -100,6 +101,12 @@ impl PtySession {
                 pixel_height: 0,
             })
             .map_err(|e| BiltermError::Pty(format!("openpty failed: {e}")))?;
+
+        let _ = shell_integration::prepare_shell_integration(
+            &config.program,
+            &mut config.args,
+            &mut config.env,
+        );
 
         let mut cmd = CommandBuilder::new(&config.program);
         for arg in &config.args {

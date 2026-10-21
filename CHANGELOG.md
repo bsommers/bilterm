@@ -5,6 +5,30 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.0] - 2026-10-21
+
+### Added
+- **Paste Injection Sanitization & Unsafe Multi-Line Paste Guard (`FND-01`, `src/vt/mod.rs`, `src/input/mod.rs`, `src/ui/mod.rs`)**:
+  - `sanitize_paste_bytes()` strips dangerous C0/DEL control bytes (`NUL`, `ESC`, `DEL`, `VINTR 0x03`, `VQUIT 0x1C`, `VSUSP 0x1A`, `VWERASE 0x17`, `VLNEXT 0x16`) from all clipboard pastes.
+  - `is_unsafe_paste()` intercepts unbracketed multi-line pastes and embedded `\x1b[201~` bracketed-paste breakout payloads in `INPUT: RAW PTY` mode and opens a Borland Turbo Vision `[!] UNSAFE PASTE GUARD` confirmation modal (`y`/`Enter` to confirm, `n`/`Esc` to abort).
+- **Mouse Alternate Scroll (`DECSET ?1007`, `FND-02`, `src/vt/mod.rs`, `src/input/mod.rs`)**:
+  - Tracks `\x1b[?1007h`/`l` (enabled by default) and translates mouse wheel scroll events on the `OutputCanvas` into `Up`/`Down` arrow keys (`\x1bOA`/`\x1bOB` or `\x1b[A`/`\x1b[B`) when in Alternate Screen (`?1049`) without mouse tracking enabled (`less`, `man`, `git log`).
+- **Modern Terminal Protocol Queries (`DECRPM`, Kitty Keyboard `CSI u`, Dynamic `OSC 4/10/11/12`, `XTGETTCAP` & `DECRQSS`, `FND-03..06`, `src/vt/mod.rs`, `src/input/mod.rs`)**:
+  - `DECRPM` (`CSI ? Pd $ p` & `CSI Pd $ p`) mode state reporting (`CSI ? Pd ; Ps $ y`) for `?1`, `?7`, `?25`, `?47`, `?67`, `?1000..1007`, `?1047`, `?1049`, `?2004`, `?2026`, `?2027`, `?2031`, `?2048`.
+  - Per-screen Kitty Keyboard Protocol flag stacks (`CSI > flags u`, `CSI < count u`, `CSI = flags ; mode u`, `CSI ? u`) and `CSI u` key encoding (`encode_key_to_pty_bytes_full`).
+  - Dynamic palette color query responders for `OSC 4`, `OSC 10` (fg), `OSC 11` (bg), and `OSC 12` (cursor) (`\x1b]10;rgb:RRRR/GGGG/BBBB\x1b\\`).
+  - `XTGETTCAP` (`DCS + q <hex> ST` -> `DCS 1 + r <hex>=<hex> ST` for `TN`, `Co`, `RGB`, `Tc`, `Smulx`, `Setulc`, `Ms`) and `DECRQSS` (`DCS $ q <pt> ST`).
+- **Zero-Config Shell Integration Auto-Injection (`VAL-01`, `src/pty/shell_integration.rs`, `src/pty/mod.rs`)**:
+  - Automatically injects `OSC 133;A/B/C/D;<exit>` and `OSC 7` working directory reporting hooks into interactive `bash` (`--rcfile`), `zsh` (`ZDOTDIR`), and `fish` (`XDG_DATA_DIRS`) sessions without modifying user dotfiles.
+- **Command Exit-Code Badges & Execution Duration Telemetry (`VAL-06`, `src/vt/mod.rs`, `src/ui/mod.rs`)**:
+  - Records per-command execution duration (`duration_ms`) and exit code (`exit_code`) on `CommandBlockRecord` and renders `✓ 0 [12ms]` / `✗ 1 [45ms]` telemetry badges in the floating prompt's `LAST CMD` banner.
+- **Output Canvas Scrollback Search & Match Highlighting (`VAL-02`, `Alt+/` / `:search <query>`, `Alt+n` / `Alt+N`)**:
+  - Case-insensitive search across the `OutputCanvas` grid with bright yellow/amber match cell highlighting and `next`/`prev` navigation.
+- **`OSC 8` Explicit Hyperlinks & URL Auto-Detection (`VAL-03`, `Ctrl+Click` / `:links`)**:
+  - Parses explicit `OSC 8` hyperlinks and auto-detects `https://`, `http://`, and `file://` URLs on the `OutputCanvas` with cyan underline styling and `Ctrl+LeftClick` / `:links` `OSC 52` clipboard yanking.
+- **Vi Copy Mode & Rectangular Block Selection (`VAL-04`, `Alt+C` / `:copy`, `Alt+LeftDrag`)**:
+  - Keyboard-driven Vi Copy Mode (`h/j/k/l/0/$/w/b`, `v` character selection, `V` line selection, `b`/`Ctrl+V` rectangular block selection, `y`/`Enter` yank via `OSC 52` and prompt yank buffer) plus `Alt+LeftDrag` mouse rectangular block selection on the `OutputCanvas`.
+
 ## [v0.1.0] - 2026-10-20
 
 ### Added

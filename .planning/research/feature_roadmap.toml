@@ -4,7 +4,7 @@
 
 [metadata]
 project = "bilterm"
-current_version = "0.1.0"
+current_version = "0.2.0"
 reference_repos = ["https://github.com/ghostty-org/ghostty"]
 ecosystem_references = ["wezterm", "kitty", "alacritty", "zellij", "foot", "warp", "contour", "xterm", "ibm-3270", "dec-vt520"]
 

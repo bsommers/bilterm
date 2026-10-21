@@ -50,6 +50,12 @@ pub enum ColonCommand {
     },
     Shadows(Option<ShadowStyle>),
     FKeyBarToggle(Option<bool>),
+    SearchQuery(String),
+    SearchNext,
+    SearchPrev,
+    SearchOff,
+    CopyModeToggle,
+    LinksYank,
     Quit,
 }
 
@@ -213,6 +219,17 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::FKeyBarToggle(arg)))
         }
+        "search" | "find" => match parts.get(1).copied() {
+            None | Some("off" | "clear") => Some(Ok(ColonCommand::SearchOff)),
+            Some("next" | "n") => Some(Ok(ColonCommand::SearchNext)),
+            Some("prev" | "p") => Some(Ok(ColonCommand::SearchPrev)),
+            Some(_) => {
+                let query = parts[1..].join(" ");
+                Some(Ok(ColonCommand::SearchQuery(query)))
+            }
+        },
+        "copy" | "vi" => Some(Ok(ColonCommand::CopyModeToggle)),
+        "links" | "url" | "urls" => Some(Ok(ColonCommand::LinksYank)),
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
@@ -340,6 +357,48 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         }
         ColonCommand::RawToggle => {
             pane.toggle_manual_raw_override();
+            false
+        }
+        ColonCommand::SearchQuery(query) => {
+            pane.set_canvas_search(&query);
+            false
+        }
+        ColonCommand::SearchNext => {
+            pane.next_canvas_search_match();
+            false
+        }
+        ColonCommand::SearchPrev => {
+            pane.prev_canvas_search_match();
+            false
+        }
+        ColonCommand::SearchOff => {
+            pane.clear_canvas_search();
+            pane.status_message = Some("Cleared canvas search".to_string());
+            false
+        }
+        ColonCommand::CopyModeToggle => {
+            if pane.copy_mode.active {
+                pane.exit_copy_mode();
+            } else {
+                pane.enter_copy_mode();
+            }
+            false
+        }
+        ColonCommand::LinksYank => {
+            let link = pane
+                .vt
+                .detect_visible_urls()
+                .last()
+                .map(|u| u.url.clone())
+                .or_else(|| pane.vt.osc8_links().last().map(|l| l.uri.clone()));
+            if let Some(url) = link {
+                let seq = encode_osc52_clipboard(&url);
+                pane.last_osc52_sequence = Some(seq);
+                pane.prompt.yank_buffer = url.clone();
+                pane.status_message = Some(format!("Yanked URL: {url}"));
+            } else {
+                pane.status_message = Some("No URLs detected on canvas".to_string());
+            }
             false
         }
         ColonCommand::Quit => true,
