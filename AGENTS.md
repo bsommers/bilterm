@@ -162,9 +162,18 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 
 <!-- GSD:skills-start source:skills/ -->
 
-## Project Skills
+## Project Skills & Superpowers Integration
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+Bilterm uses **OpenGSD** (`.planning/`) for milestone/phase orchestration paired with **Superpowers** (`~/.gemini/config/plugins/superpowers/skills/`) and **SWE-Skills** (`~/.gemini/config/plugins/swe-skills/skills/`) for execution discipline:
+
+| Workflow Stage | Primary Skill | Purpose |
+|----------------|---------------|---------|
+| **Ideation & Design** | `brainstorming` + `/gsd-discuss-phase` | Explore user intent, visual layout trade-offs, and ADRs before writing code. |
+| **Planning** | `writing-plans` + `/gsd-plan-phase` | Decompose phases into bite-sized, contract-driven tasks with explicit verification commands. |
+| **Implementation** | `test-driven-development` + `subagent-driven-development` | Write failing unit/integration/snapshot tests (`insta` + `TestBackend`) first, then implement minimal passing Rust code. |
+| **Debugging** | `systematic-debugging` + `/gsd-debug` | Isolate PTY/VT100/termios/layout bugs with deterministic reproduction tests before proposing fixes. |
+| **Quality & Completion** | `verification-before-completion` + `requesting-code-review` | Run `cargo test` and `cargo clippy --all-targets -- -D warnings` with fresh evidence before any commit or release claim. |
+| **Context Compaction** | `compacting-context-safely` | Update `.planning/CHECKPOINT.md` and `.planning/STATE.md` with verified working-tree state before resetting context or ending a session. |
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
