@@ -37,9 +37,9 @@ impl Default for LineDisciplineState {
 }
 
 impl LineDisciplineState {
-    /// Returns `true` when password prompt protection (`!ECHO`) is active.
+    /// Returns `true` when canonical password prompt protection (`ICANON && !ECHO`) is active.
     pub fn is_password_prompt(&self) -> bool {
-        !self.echo_enabled
+        !self.echo_enabled && self.canonical_mode
     }
 
     /// Returns `true` when a foreground child process group different from the shell owns the TTY.
@@ -112,10 +112,14 @@ pub fn inspect_pty_fd(
         _ => false,
     };
 
-    let effective_echo = if shell_owns_tty && !osc133_executing && canonical_mode {
-        echo_enabled
-    } else if shell_owns_tty && !osc133_executing && !canonical_mode {
-        // Interactive shell readline/ZLE disables ICANON and ECHO while waiting at the prompt.
+    let effective_echo = if !canonical_mode {
+        // Interactive shell line editors (Bash Readline, Zsh ZLE, Fish) and raw/cbreak modes
+        // disable ICANON and ECHO simultaneously; only canonical mode with !ECHO (ICANON && !ECHO)
+        // is a genuine password prompt (sudo, ssh, passwd, read -s).
+        true
+    } else if shell_owns_tty && !osc133_executing {
+        // While the top-level shell itself owns the foreground process group and no command is
+        // executing (e.g. during .bashrc / .zshrc initialization), ignore transient stty !ECHO.
         true
     } else {
         echo_enabled

@@ -64,6 +64,14 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return Ok(AppAction::Handled);
     }
 
+    // Global 3-way mode cycle (Floating Prompt -> Fixed Prompt -> Regular Terminal -> Floating Prompt): F4 or Alt+E
+    if key.code == KeyCode::F(4)
+        || (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('e'))
+    {
+        pane.cycle_prompt_mode();
+        return Ok(AppAction::Handled);
+    }
+
     // Intra-pane prompt positioning, height resize, search, copy mode, and OSC 133 command-block jump hotkeys
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
@@ -680,6 +688,16 @@ pub fn handle_mouse_event(
     mouse: MouseEvent,
     viewport: Rect,
 ) -> Result<AppAction> {
+    let status_rect = pane.status_bar_rect(viewport);
+    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+        && mouse.row == status_rect.y
+        && mouse.column >= status_rect.x
+        && mouse.column < status_rect.x + status_rect.width
+    {
+        pane.cycle_prompt_mode();
+        return Ok(AppAction::Handled);
+    }
+
     if !pane.is_prompt_visible() {
         if let Some(scroll_bytes) = encode_alternate_scroll_wheel(pane, mouse.kind) {
             if let Some(pty) = &pane.pty {
@@ -1214,7 +1232,7 @@ fn execute_menubar_selection(
         (2, 0) => ":prompt top",
         (2, 1) => ":prompt bottom",
         (2, 2) => ":prompt split",
-        (2, 3) => ":history popup",
+        (2, 3) => ":mode cycle",
         (3, 0) => ":hints",
         (3, 1) => ":copy",
         (3, 2) => ":crosshair",

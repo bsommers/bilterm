@@ -182,3 +182,100 @@ fn dev_random_binary_flood_with_embedded_escape_traps_never_hides_prompt_or_lock
     );
 }
 
+#[test]
+fn readline_non_canonical_no_echo_never_flashes_prompt_and_three_way_mode_toggle_works() {
+    use bilterm::input::handle_mouse_event;
+    use bilterm::pane::{PromptAnchor, PromptMode};
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+    let mut pane = CompositePane::new_headless(1, 20, 80);
+
+    // 1. Simulate Bash Readline / Zsh ZLE / Oh-My-Bash prompt subshell:
+    // Readline sets !ICANON and !ECHO simultaneously while waiting for input or running prompt hooks.
+    // This MUST NOT be mistaken for a canonical `sudo` password prompt (`ICANON && !ECHO`),
+    // and MUST NOT hide or flash the command prompt!
+    pane.line_discipline = LineDisciplineState {
+        echo_enabled: true, // inspect_pty_fd normalizes !canonical_mode to effective_echo = true
+        canonical_mode: false,
+        foreground_pgid: Some(5001),
+        shell_pgid: Some(5000),
+        osc133_executing: true,
+    };
+    assert!(!pane.line_discipline.is_password_prompt());
+    assert!(pane.is_prompt_visible());
+    assert_eq!(pane.effective_routing_mode(), InputRoutingMode::CommandPrompt);
+
+    //Even if raw LineDisciplineState has echo_enabled = false with canonical_mode = false (Readline/ZLE raw mode),
+    // is_password_prompt() is false because password prompts are canonical (`ICANON && !ECHO`).
+    pane.line_discipline.echo_enabled = false;
+    pane.line_discipline.canonical_mode = false;
+    assert!(!pane.line_discipline.is_password_prompt());
+    assert!(pane.is_prompt_visible());
+
+    // Genuine canonical password prompt (`ICANON && !ECHO`, e.g., `sudo` or `ssh`) DOES hide prompt:
+    pane.line_discipline.echo_enabled = false;
+    pane.line_discipline.canonical_mode = true;
+    assert!(pane.line_discipline.is_password_prompt());
+    assert!(!pane.is_prompt_visible());
+
+    // Restore normal shell state
+    pane.line_discipline = LineDisciplineState::default();
+    assert!(pane.is_prompt_visible());
+    assert_eq!(pane.prompt_mode(), PromptMode::Floating);
+
+    // 2. Test 3-way mode cycle via F4: Floating -> Fixed -> RegularTerminal -> Floating
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::Fixed);
+    assert_eq!(pane.prompt.anchor, PromptAnchor::SplitTop);
+    assert!(pane.is_prompt_visible());
+
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::RegularTerminal);
+    assert!(!pane.is_prompt_visible());
+    assert_eq!(
+        pane.effective_routing_mode(),
+        InputRoutingMode::RawPtyPassthrough
+    );
+
+    // Pressing F4 (or Alt+E) while in RegularTerminal mode restores Floating Prompt!
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::Floating);
+    assert_eq!(pane.prompt.anchor, PromptAnchor::Top);
+    assert!(pane.is_prompt_visible());
+
+    // 3. Test :mode fixed, :mode terminal, :mode float, and OIA status bar click
+    for ch in ":mode fixed".chars() {
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
+    }
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::Fixed);
+
+    // Clicking the bottom OIA status bar (row 19) cycles Fixed -> RegularTerminal -> Floating
+    let viewport = Rect::new(0, 0, 80, 20);
+    handle_mouse_event(
+        &mut pane,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 19,
+            modifiers: KeyModifiers::NONE,
+        },
+        viewport,
+    )
+    .unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::RegularTerminal);
+
+    handle_mouse_event(
+        &mut pane,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 19,
+            modifiers: KeyModifiers::NONE,
+        },
+        viewport,
+    )
+    .unwrap();
+    assert_eq!(pane.prompt_mode(), PromptMode::Floating);
+}
+

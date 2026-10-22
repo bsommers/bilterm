@@ -42,6 +42,17 @@ impl PromptAnchor {
     }
 }
 
+/// High-level user-facing terminal/prompt mode for a `CompositePane`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PromptMode {
+    /// Floating command prompt overlaid on top of the full-height scrolling `OutputCanvas`.
+    Floating,
+    /// Fixed (docked/split) command prompt partitioned with zero overlap above or below the `OutputCanvas`.
+    Fixed,
+    /// Regular terminal mode: command prompt box is hidden and all keystrokes go directly to the shell PTY.
+    RegularTerminal,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct EditorSnapshot {
     lines: Vec<String>,
@@ -1047,19 +1058,83 @@ impl CompositePane {
         Ok(false)
     }
 
-    /// Changes the prompt's anchor (`Top`, `Bottom`, `Floating`, `SplitTop`, or `SplitBottom`).
+    /// Changes the prompt's anchor (`Top`, `Bottom`, `Floating`, `SplitTop`, or `SplitBottom`)
+    /// and ensures the command prompt is visible (exiting Regular Terminal mode if active).
     pub fn set_prompt_anchor(&mut self, anchor: PromptAnchor) {
+        self.prompt.manual_raw_override = false;
         self.prompt.anchor = anchor;
     }
 
-    /// Toggles the command prompt between floating mode and non-overlapping split mode (`Alt+S` / `:prompt split`).
+    /// Toggles the command prompt between floating mode and non-overlapping fixed/split mode (`Alt+S` / `:prompt split`).
     pub fn toggle_split_prompt(&mut self) {
+        self.prompt.manual_raw_override = false;
         self.prompt.anchor = match self.prompt.anchor {
             PromptAnchor::Top | PromptAnchor::Floating { .. } => PromptAnchor::SplitTop,
             PromptAnchor::Bottom => PromptAnchor::SplitBottom,
             PromptAnchor::SplitTop => PromptAnchor::Top,
             PromptAnchor::SplitBottom => PromptAnchor::Bottom,
         };
+    }
+
+    /// Returns the active high-level `PromptMode` (`Floating`, `Fixed`, or `RegularTerminal`).
+    pub fn prompt_mode(&self) -> PromptMode {
+        if self.prompt.manual_raw_override {
+            PromptMode::RegularTerminal
+        } else if self.prompt.anchor.is_split() {
+            PromptMode::Fixed
+        } else {
+            PromptMode::Floating
+        }
+    }
+
+    /// Explicitly switches the pane to `Floating` prompt, `Fixed` (docked/split) prompt, or `RegularTerminal` mode.
+    pub fn set_prompt_mode(&mut self, mode: PromptMode) {
+        match mode {
+            PromptMode::Floating => {
+                self.prompt.manual_raw_override = false;
+                if self.prompt.anchor.is_split() {
+                    self.prompt.anchor = match self.prompt.anchor {
+                        PromptAnchor::SplitBottom => PromptAnchor::Bottom,
+                        _ => PromptAnchor::Top,
+                    };
+                }
+                self.status_message = Some(
+                    "MODE: FLOATING PROMPT — overlays terminal canvas (F4/Alt+E to cycle, F12 for Regular Terminal)"
+                        .to_string(),
+                );
+            }
+            PromptMode::Fixed => {
+                self.prompt.manual_raw_override = false;
+                if !self.prompt.anchor.is_split() {
+                    self.prompt.anchor = match self.prompt.anchor {
+                        PromptAnchor::Bottom => PromptAnchor::SplitBottom,
+                        _ => PromptAnchor::SplitTop,
+                    };
+                }
+                self.status_message = Some(
+                    "MODE: FIXED (DOCKED) PROMPT — zero overlap with terminal output (F4/Alt+E to cycle)"
+                        .to_string(),
+                );
+            }
+            PromptMode::RegularTerminal => {
+                self.prompt.manual_raw_override = true;
+                self.status_message = Some(
+                    "MODE: REGULAR TERMINAL — direct shell input (press F4, Alt+E, or F12/Ctrl+G to restore Command Prompt)"
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    /// Cycles through the 3 terminal modes: `Floating Prompt` -> `Fixed Prompt` -> `Regular Terminal` -> `Floating Prompt` (`F4` / `Alt+E` / `:mode`).
+    pub fn cycle_prompt_mode(&mut self) -> PromptMode {
+        let next = match self.prompt_mode() {
+            PromptMode::Floating => PromptMode::Fixed,
+            PromptMode::Fixed => PromptMode::RegularTerminal,
+            PromptMode::RegularTerminal => PromptMode::Floating,
+        };
+        self.set_prompt_mode(next);
+        next
     }
 
     /// Sets the base height (`3..=12` rows) of the floating command prompt without resizing the PTY (`PANE-03`).
@@ -1135,7 +1210,7 @@ impl CompositePane {
     /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`).
     pub fn effective_routing_mode(&self) -> InputRoutingMode {
         if self.vt.is_alternate_screen()
-            || self.line_discipline.requires_raw_passthrough()
+            || self.line_discipline.is_password_prompt()
             || self.prompt.manual_raw_override
         {
             InputRoutingMode::RawPtyPassthrough

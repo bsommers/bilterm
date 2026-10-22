@@ -47,6 +47,10 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
         &[
             "top",
             "bottom",
+            "fixed",
+            "floating",
+            "terminal",
+            "mode",
             "split-top",
             "split-bottom",
             "split",
@@ -55,6 +59,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "width ",
         ],
     ),
+    (":mode", &["float", "fixed", "terminal", "cycle"]),
     (":split", &["h", "v", "horizontal", "vertical"]),
     (":deck", &["next", "prev"]),
     (":focus", &["1", "2", "3", "4"]),

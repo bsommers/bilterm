@@ -35,29 +35,24 @@ if [ -f "$HOME/.bashrc" ]; then
     source "$HOME/.bashrc"
 fi
 
-__bilterm_executing=""
+__bilterm_prompt_shown=""
 
 __bilterm_precmd() {
     local ret="$?"
-    if [ -n "$__bilterm_executing" ]; then
+    if [ -n "$__bilterm_prompt_shown" ]; then
         printf '\e]133;D;%s\a' "$ret"
-        __bilterm_executing=""
     fi
+    __bilterm_prompt_shown="1"
     printf '\e]7;file://%s%s\a' "${HOSTNAME:-localhost}" "$PWD"
     printf '\e]133;A\a\e]133;B\a'
 }
 
-__bilterm_preexec() {
-    if [ "$BASH_COMMAND" != "__bilterm_precmd" ] && [ -z "$__bilterm_executing" ]; then
-        __bilterm_executing="1"
-        printf '\e]133;C\a'
-    fi
-}
-
-if [[ "$PROMPT_COMMAND" != *"__bilterm_precmd"* ]]; then
-    PROMPT_COMMAND="__bilterm_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    PROMPT_COMMAND+=("__bilterm_precmd")
+elif [[ "$PROMPT_COMMAND" != *"__bilterm_precmd"* ]]; then
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bilterm_precmd"
 fi
-trap '__bilterm_preexec' DEBUG
+PS0='\e]133;C\a'
 "#;
 
 /// Zsh `.zshrc` wrapper script injected via `ZDOTDIR` (`VAL-01`).

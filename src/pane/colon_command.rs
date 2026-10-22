@@ -1,4 +1,4 @@
-use crate::pane::{CompositePane, PromptAnchor};
+use crate::pane::{CompositePane, PromptAnchor, PromptMode};
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::CaretStyle;
@@ -16,6 +16,7 @@ pub enum ColonCommand {
     PromptSplitTop,
     PromptSplitBottom,
     PromptSplitToggle,
+    PromptModeSet(Option<PromptMode>),
     PromptFloat(u16),
     PromptHeight(u16),
     PromptWidth(Option<u16>),
@@ -106,17 +107,27 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         "prompt" => match parts.get(1).copied() {
             Some("top") => Some(Ok(ColonCommand::PromptTop)),
             Some("bottom") => Some(Ok(ColonCommand::PromptBottom)),
-            Some("split-top") | Some("splittop") => Some(Ok(ColonCommand::PromptSplitTop)),
-            Some("split-bottom") | Some("split-bot") | Some("splitbottom") => {
+            Some("split-top") | Some("splittop") | Some("fixed-top") => {
+                Some(Ok(ColonCommand::PromptSplitTop))
+            }
+            Some("split-bottom") | Some("split-bot") | Some("splitbottom") | Some("fixed-bottom") => {
                 Some(Ok(ColonCommand::PromptSplitBottom))
             }
             Some("split") => Some(Ok(ColonCommand::PromptSplitToggle)),
+            Some("fixed" | "docked" | "fix") => {
+                Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::Fixed))))
+            }
+            Some("floating") => Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::Floating)))),
+            Some("terminal" | "regular" | "raw" | "off" | "hide") => {
+                Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::RegularTerminal))))
+            }
+            Some("mode" | "cycle") => Some(Ok(ColonCommand::PromptModeSet(None))),
             Some("float") => {
-                let row = parts
-                    .get(2)
-                    .and_then(|s| s.parse::<u16>().ok())
-                    .unwrap_or(4);
-                Some(Ok(ColonCommand::PromptFloat(row)))
+                if let Some(row) = parts.get(2).and_then(|s| s.parse::<u16>().ok()) {
+                    Some(Ok(ColonCommand::PromptFloat(row)))
+                } else {
+                    Some(Ok(ColonCommand::PromptFloat(4)))
+                }
             }
             Some("height") => match parts.get(2).and_then(|s| s.parse::<u16>().ok()) {
                 Some(rows) => Some(Ok(ColonCommand::PromptHeight(rows.clamp(3, 12)))),
@@ -131,8 +142,23 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 None => Some(Err("Usage: :prompt width <16..cols | full>".to_string())),
             },
             _ => Some(Err(
-                "Usage: :prompt top | bottom | split-top | split-bottom | split | float [row] | height <3..12> | width <cols|full>"
+                "Usage: :prompt top | bottom | fixed | floating | terminal | split-top | split-bottom | split | float [row] | height <3..12> | width <cols|full>"
                     .to_string(),
+            )),
+        },
+        "mode" => match parts.get(1).copied() {
+            None | Some("cycle" | "toggle" | "next") => Some(Ok(ColonCommand::PromptModeSet(None))),
+            Some("float" | "floating") => {
+                Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::Floating))))
+            }
+            Some("fixed" | "fix" | "docked" | "split") => {
+                Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::Fixed))))
+            }
+            Some("terminal" | "term" | "regular" | "raw" | "off") => Some(Ok(
+                ColonCommand::PromptModeSet(Some(PromptMode::RegularTerminal)),
+            )),
+            _ => Some(Err(
+                "Usage: :mode [float | fixed | terminal | cycle]".to_string(),
             )),
         },
         "help" | "h" | "?" => Some(Ok(ColonCommand::HelpToggle)),
@@ -450,6 +476,15 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         ColonCommand::PromptSplitToggle => {
             pane.toggle_split_prompt();
             pane.status_message = Some("Toggled split/floating prompt mode".to_string());
+            false
+        }
+        ColonCommand::PromptModeSet(mode_opt) => {
+            match mode_opt {
+                Some(mode) => pane.set_prompt_mode(mode),
+                None => {
+                    pane.cycle_prompt_mode();
+                }
+            }
             false
         }
         ColonCommand::PromptFloat(y_offset) => {
