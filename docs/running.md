@@ -25,7 +25,7 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.3.0`)
+### CLI Options (`v1.4.0`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer
 bilterm --mcp                                   # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
@@ -35,7 +35,7 @@ bilterm --playbook <playbook.toml>              # Execute a declarative TOML aut
 bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
 bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
 bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
-bilterm --version                               # Print version (bilterm 1.3.0)
+bilterm --version                               # Print version (bilterm 1.4.0)
 bilterm --help                                  # Print CLI usage summary
 ```
 
@@ -120,6 +120,7 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `crt_scanlines` | `bool` | `true`, `false` | `false` |
 | `triggers` | `array of strings` | Case-insensitive output highlight patterns | `[]` |
 | `[keybindings]` | `table` | Custom keychord -> `:command` mappings (e.g. `"Ctrl+T" = ":split v"`) | `{}` |
+| `[remotes.<name>]` | `table` | Named SSH / `herdr`-style remote host profiles (`destination`, `port`, `identity_file`, `tmux_session`, `rpc_endpoint`, `jump_host`) | `{}` |
 
 ---
 

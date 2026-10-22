@@ -854,3 +854,79 @@ unknown_key = #FFFFFF
     );
     let _ = Playbook::from_toml_str("name = \"empty\"\nsteps = []\n").expect("empty playbook");
 }
+
+#[test]
+fn generates_real_workspace_screenshots_for_documentation() {
+    use bilterm::ui::theme::ThemePreset;
+    use std::path::Path;
+
+    let viewport = Rect::new(0, 0, 128, 32);
+    let mut renderer = GuiWorkspaceRenderer::new(9, 18);
+    let mut surface = GuiFrameSurface::new(9, 18);
+
+    // 1. Screenshot 1: Multi-Pane Tiled Workspace + SSH Fleet + Top MenuBar + DOS F-Key Bar (Turbo Blue)
+    let mut plane1 = AutomationControlPlane::new_headless(32, 128);
+    plane1.wm.config.show_top_menubar = true;
+    plane1.wm.config.show_dos_fkey_bar = true;
+    plane1.wm.config.drop_shadows = true;
+    plane1.wm.config.crosshair_cursor = true;
+    plane1.wm.config.triggers = vec!["CRITICAL".to_string(), "READY".to_string()];
+
+    let _ = plane1.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":1,"method":"pane.exec","params":{"pane_id":1,"command":"cargo test --all-targets && bilterm ctl 127.0.0.1:7370 fleet.list"}}"#,
+    );
+    let _ = plane1.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":2,"method":"pane.feed_output","params":{"pane_id":1,"data":"\u001b]133;C\u0007\u001b[1;32m   Compiling\u001b[0m bilterm v1.4.0 (/home/bill/src/ai/bilterm)\r\n\u001b[1;32m    Finished\u001b[0m `release` profile [optimized] target(s) in 1.42s\r\n\u001b[1;36m     Running\u001b[0m 85 tests across 16 test binaries ... \u001b[1;32m85 passed; 0 failed (83.45% coverage)\u001b[0m\r\n\u001b[1;33m[FLEET]\u001b[0m Local #1 READY | SSH prod-db:2222 READY | Endpoint: https://bilterm.dev/api\r\n\u001b]9;4;1;85\u0007\u001b]133;D;0\u0007"}}"#,
+    );
+    if let Some(p1) = plane1.wm.panes.get_mut(&1) {
+        p1.prompt.set_text(":remote exec @prod systemctl status postgresql");
+    }
+
+    let _ = plane1.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":3,"method":"remote.connect_ssh","params":{"target":"admin@prod-db.internal","port":2222,"tags":["prod","db"]}}"#,
+    );
+    let _ = plane1.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":4,"method":"pane.feed_output","params":{"pane_id":2,"data":"\u001b]133;C\u0007\u001b[1;32m● postgresql.service\u001b[0m - PostgreSQL 16 Database Server (prod-db.internal)\r\n   Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)\r\n   Active: \u001b[1;32mactive (running)\u001b[0m since Tue 2026-10-21 20:00:00 UTC; 3h ago\r\n   Status: \"CRITICAL=0 | Connections: 42/500 | Replication: SYNC READY\"\r\n\u001b]9;PostgreSQL Healthy\u0007\u001b]133;D;0\u0007"}}"#,
+    );
+    if let Some(p2) = plane1.wm.panes.get_mut(&2) {
+        p2.prompt.set_text("psql -U admin -c 'SELECT pg_is_in_recovery();'");
+    }
+    plane1.wm.focus_and_raise(1);
+
+    renderer.render_workspace(&plane1.wm, viewport, &mut surface);
+    let svg1 = surface.export_svg(
+        "BILTERM v1.4.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
+    );
+    let svg1_path = Path::new("docs/assets/screenshot-workspace.svg");
+    std::fs::write(svg1_path, &svg1).expect("write screenshot-workspace.svg");
+    assert!(svg1_path.exists());
+
+    // 2. Screenshot 2: IBM 3278 Phosphor Green + Full-Screen Cross-Hair + Live 3270 Terminal Inspector Modal (F9)
+    plane1.wm.config.theme = ThemePreset::Ibm3278Green;
+    plane1.wm.config.crosshair_fullscreen = true;
+    plane1.wm.config.crt_scanlines = true;
+    plane1.wm.inspector_visible = true;
+
+    renderer.render_workspace(&plane1.wm, viewport, &mut surface);
+    let svg2 = surface.export_svg(
+        "BILTERM v1.4.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
+    );
+    let svg2_path = Path::new("docs/assets/screenshot-3278-inspector.svg");
+    std::fs::write(svg2_path, &svg2).expect("write screenshot-3278-inspector.svg");
+    assert!(svg2_path.exists());
+
+    // 3. Screenshot 3: IBM 3279 Amber CRT + Z-Order Stacked Cascade + Fuzzy Command Palette (Ctrl+P)
+    plane1.wm.inspector_visible = false;
+    plane1.wm.config.theme = ThemePreset::Ibm3279Amber;
+    plane1.wm.layout_mode = bilterm::wm::WorkspaceLayoutMode::Stacked;
+    plane1.wm.palette_visible = true;
+    plane1.wm.palette_query = "remote".to_string();
+
+    renderer.render_workspace(&plane1.wm, viewport, &mut surface);
+    let svg3 = surface.export_svg(
+        "BILTERM v1.4.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
+    );
+    let svg3_path = Path::new("docs/assets/screenshot-3279-palette.svg");
+    std::fs::write(svg3_path, &svg3).expect("write screenshot-3279-palette.svg");
+    assert!(svg3_path.exists());
+}

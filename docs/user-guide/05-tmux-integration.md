@@ -31,4 +31,13 @@ Bilterm's `TmuxControlBridge` and `TmuxControlSubprocess` (`src/tmux/mod.rs`) pr
 
 ---
 
+## 3. Mode C: Remote SSH Domains, Persistent Remote `tmux -CC` & `herdr` Fleet Federation (`v1.4.0`)
+
+Bilterm `v1.4.0` extends `tmux` and composite pane multiplexing across remote SSH hosts (`src/remote/mod.rs`):
+- **First-Class SSH Composite Panes (`:ssh [split h|v] <user@host[:port]> [cmd]`)**: Spawns an OpenSSH session with `ServerAliveInterval=15` inside the focused or newly split pane and displays `SSH:<user@host>` in the 3270 OIA status bar while keeping the floating command prompt completely local and zero-latency.
+- **Persistent Remote `tmux -CC` Over SSH (`:ssh-tmux <user@host[:port]> [session]`)**: Launches `ssh -tt <user@host> tmux -CC new-session -A -s <session>` via `TmuxControlSubprocess::spawn_remote_ssh_attach_or_new`, hydrating remote `tmux` panes directly into local Bilterm Composite Panes that survive laptop sleep or network disconnects.
+- **`herdr`-Style Central Fleet Federation (`:remote add|list|connect|exec|disconnect`)**: Connects to remote `bilterm --headless --listen` daemons across your infrastructure and forwards JSON-RPC 2.0 requests (`remote.exec` / `:remote exec <name> <method> [json]`) from a single central Bilterm dashboard.
+
+---
+
 [← Chapter 4: Themes & Config](04-themes-glyphs-and-config.md) | [User Guide Home](README.md) | [Chapter 6: Reference →](06-keyboard-mouse-and-command-reference.md)

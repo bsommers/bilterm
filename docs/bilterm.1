@@ -1,12 +1,24 @@
-.TH BILTERM 1 "2026-10-21" "bilterm 1.0.0" "User Commands"
+.TH BILTERM 1 "2026-10-21" "bilterm 1.4.0" "User Commands"
 .SH NAME
-bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer and composite-pane shell wrapper
+bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer, composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator
 .SH SYNOPSIS
 .B bilterm
 [\fIOPTIONS\fR]
 .SH DESCRIPTION
 \fBbilterm\fR is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing.
 .SH OPTIONS
+.TP
+\fB\-\-mcp\fR
+Run the Model Context Protocol (MCP \fB2024-11-05\fR) JSON-RPC 2.0 server over standard input/output for AI agents.
+.TP
+\fB\-\-headless\fR \fB\-\-listen\fR \fIHOST:PORT|UNIX_SOCKET\fR
+Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane.
+.TP
+\fBctl\fR \fIENDPOINT\fR \fIMETHOD\fR [\fIPARAMS_JSON\fR]
+Send a JSON-RPC 2.0 request to a running Bilterm instance and print the JSON result.
+.TP
+\fB\-\-playbook\fR \fIPATH.toml\fR
+Execute a declarative TOML automation playbook against an embedded workspace and exit.
 .TP
 \fB\-\-gui\-dump\fR \fIPATH.ppm\fR
 Render the workspace via \fBGuiWorkspaceRenderer\fR to a Netpbm P6 \fB.ppm\fR pixel framebuffer.

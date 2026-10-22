@@ -305,6 +305,99 @@ impl GuiFrameSurface {
         }
         out
     }
+
+    /// Exports the rendered workspace as a crisp vector SVG document with monospace typography,
+    /// full 24-bit cell backgrounds, underlines, and optional CRT scanlines.
+    pub fn export_svg(&self, title: &str) -> String {
+        use std::fmt::Write;
+        let ch = f32::from(self.cell_height_px.max(16));
+        let (w_px, h_px) = self.pixel_dimensions();
+        let bezel_pad = 16u32;
+        let header_h = 34u32;
+        let total_w = w_px + bezel_pad * 2;
+        let total_h = h_px + bezel_pad * 2 + header_h;
+
+        let mut svg = String::with_capacity(128 * 1024);
+        let _ = writeln!(
+            svg,
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="{total_h}" viewBox="0 0 {total_w} {total_h}">"##
+        );
+        let _ = writeln!(
+            svg,
+            r##"  <rect x="0" y="0" width="{total_w}" height="{total_h}" rx="10" fill="#090c14" stroke="#2a3550" stroke-width="2"/>"##
+        );
+        // Retro CRT / Borland window header bar
+        let _ = writeln!(
+            svg,
+            r##"  <circle cx="28" cy="24" r="6" fill="#ff5f56"/><circle cx="48" cy="24" r="6" fill="#ffbd2e"/><circle cx="68" cy="24" r="6" fill="#27c93f"/>"##
+        );
+        let esc_title = xml_escape(title);
+        let _ = writeln!(
+            svg,
+            r##"  <text x="{}" y="29" text-anchor="middle" font-family="'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" font-weight="bold" fill="#8be9fd">{esc_title}</text>"##,
+            total_w / 2
+        );
+        let ox = bezel_pad as f32;
+        let oy = (bezel_pad + header_h) as f32;
+
+        // Pass 1: Background & underline quads
+        for q in &self.quads {
+            let [r, g, b, _] = q.rgba;
+            let _ = writeln!(
+                svg,
+                r#"  <rect x="{:.1}" y="{:.1}" width="{:.1}" height="{:.1}" fill="rgb({r},{g},{b})" shape-rendering="crispEdges"/>"#,
+                ox + q.x_px,
+                oy + q.y_px,
+                q.width_px + 0.4,
+                q.height_px + 0.4
+            );
+        }
+
+        // Pass 2: Glyph runs
+        let font_size = (ch * 0.78).round();
+        let baseline_offset = (ch * 0.78).round();
+        for g in &self.glyphs {
+            let [r, gr, b, _] = g.fg_rgba;
+            let weight = if g.bold { "bold" } else { "normal" };
+            let style = if g.italic { "italic" } else { "normal" };
+            let escaped = xml_escape(&g.text);
+            let _ = writeln!(
+                svg,
+                r#"  <text x="{:.1}" y="{:.1}" font-family="'DejaVu Sans Mono','Droid Sans Mono for Powerline',monospace" font-size="{font_size}" font-weight="{weight}" font-style="{style}" fill="rgb({r},{gr},{b})">{escaped}</text>"#,
+                ox + g.x_px + 0.5,
+                oy + g.y_px + baseline_offset
+            );
+        }
+
+        // Pass 3: Optional CRT scanline overlay
+        if self.crt_scanlines {
+            for py in (1..h_px).step_by(2) {
+                let _ = writeln!(
+                    svg,
+                    r#"  <rect x="{ox:.1}" y="{:.1}" width="{w_px}" height="1" fill="rgba(0,0,0,0.24)" shape-rendering="crispEdges"/>"#,
+                    oy + py as f32
+                );
+            }
+        }
+
+        let _ = writeln!(svg, "</svg>");
+        svg
+    }
+}
+
+fn xml_escape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// Native GPU/GUI workspace renderer (`GPUI` / `winit + egui` backend) implementing [`WorkspaceFrameRenderer`] (`GPU-01`).

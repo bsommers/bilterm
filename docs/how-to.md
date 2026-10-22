@@ -11,7 +11,9 @@
 - [Recipe 5: Inspecting & Exporting Session Command History](#recipe-5-inspecting--exporting-session-command-history)
 - [Recipe 6: Customizing Window Outlines, DOS Drop Shadows & Palettes](#recipe-6-customizing-window-outlines-dos-drop-shadows--palettes)
 - [Recipe 7: Fuzzy Command Palette, Output Triggers & Session Recording (`v0.6.0`–`v1.0.0`)](#recipe-7-fuzzy-command-palette-output-triggers--session-recording-v060v100)
-- [Recipe 8: Local Verification & Coverage Gate (CI Conservation)](#recipe-8-local-verification--coverage-gate-ci-conservation)
+- [Recipe 8: Remote SSH Domains & `herdr`-Style Fleet Federation (`v1.4.0`)](#recipe-8-remote-ssh-domains--herdr-style-fleet-federation-v140)
+- [Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`)](#recipe-9-json-rpc-20-automation-api-mcp-server--playbooks-v130)
+- [Recipe 10: Local Verification & Coverage Gate (CI Conservation)](#recipe-10-local-verification--coverage-gate-ci-conservation)
 - [Troubleshooting Matrix](#troubleshooting-matrix)
 
 ---
@@ -125,7 +127,49 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 
 ---
 
-## Recipe 8: Local Verification & Coverage Gate (CI Conservation)
+## Recipe 8: Remote SSH Domains & `herdr`-Style Fleet Federation (`v1.4.0`)
+
+1. **Connect Focused Pane or Split Directly to an SSH Host (`:ssh`)**:
+   ```text
+   ==> :ssh deploy@prod-web-01
+   ==> :ssh split v admin@db-primary:2222
+   ```
+   *(The OIA status bar automatically displays a bright cyan `SSH:deploy@prod-web-01` domain badge).*
+2. **Attach to a Persistent Remote `tmux -CC` Session Over SSH (`:ssh-tmux`)**:
+   ```text
+   ==> :ssh-tmux deploy@prod-web-01 main
+   ```
+   *(Hydrates remote `tmux` panes 1:1 into local Bilterm Composite Panes with local floating command prompts).*
+3. **Centrally Manage Local & Remote Nodes (`herdr`-Style Fleet Federation)**:
+   ```text
+   ==> :remote add prod deploy@prod-web-01 127.0.0.1:7370 main
+   ==> :remote list
+   ==> :remote exec prod workspace.status
+   ==> :remote exec prod command.execute {"command":":split v"}
+   ==> :remote disconnect prod
+   ```
+
+---
+
+## Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`)
+
+1. **Drive a Live or Headless Bilterm Instance via `bilterm ctl`**:
+   ```bash
+   bilterm --headless --listen 127.0.0.1:7370 &
+   bilterm ctl 127.0.0.1:7370 workspace.status
+   bilterm ctl 127.0.0.1:7370 prompt.submit '{"pane_id":1,"command":"uname -a"}'
+   bilterm ctl 127.0.0.1:7370 pane.wait_for '{"pane_id":1,"pattern":"Linux","timeout_ms":2000}'
+   ```
+2. **Expose Bilterm as an AI Agent MCP Server (`bilterm --mcp`)**:
+   Configure your MCP client (Claude Desktop, Cursor, Antigravity) to invoke `bilterm --mcp` over stdio to expose 11 native tools (`bilterm_workspace_status`, `bilterm_pane_read`, `bilterm_prompt_submit`, `bilterm_pane_wait_for`, `bilterm_command_execute`, `bilterm_remote_list`, `bilterm_remote_add`, `bilterm_remote_exec`, etc.).
+3. **Run a Declarative TOML Automation Playbook (`--playbook`)**:
+   ```bash
+   bilterm --playbook deploy-check.toml
+   ```
+
+---
+
+## Recipe 10: Local Verification & Coverage Gate (CI Conservation)
 
 Run the full test, torture, clippy, and coverage suite locally before committing or pushing:
 

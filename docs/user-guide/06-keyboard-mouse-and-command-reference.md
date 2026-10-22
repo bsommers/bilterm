@@ -38,6 +38,13 @@
 | — | `:session save <name>` | Save multi-pane workspace topology and pane metadata to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml` (`ECO-02`) |
 | — | `:session restore <name>` | Restore saved multi-pane workspace session (`ECO-02`) |
 | — | `:session list` | List saved workspace sessions (`ECO-02`) |
+| — | `:ssh [split h\|v] <user@host[:port]> [cmd]` | Connect focused or newly split pane to remote SSH host (or `[remotes.<name>]` profile) (`RMT-01`) |
+| — | `:ssh-tmux <user@host[:port]> [session]` | Attach/spawn persistent remote `tmux -CC` control session over SSH (`RMT-02`) |
+| — | `:remote add <name> <dest> [rpc] [tmux]` | Register a `herdr`-style federated remote node in `FleetRegistry` (`RMT-03`) |
+| — | `:remote list` | List all registered local and remote fleet nodes and connection status (`RMT-03`) |
+| — | `:remote connect <name>` | Connect to a registered remote fleet node (`RMT-03`) |
+| — | `:remote exec <name> <method> [json]` | Execute a JSON-RPC 2.0 method on a remote fleet node (`RMT-03`) |
+| — | `:remote disconnect <name>` | Disconnect a remote fleet node (`RMT-03`) |
 | `Alt+X` | `:crosshair [full\|pane\|off]` | Cycle IBM 3270 Cross-Hair Cursor (Pane-Local -> Full-Screen -> Off) |
 | `Alt+W` | `:close` | Close focused composite pane (`WM-03`) |
 | `Ctrl+Q` | `:quit` / `:q` | Cleanly exit Bilterm |
