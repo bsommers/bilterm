@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-86%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
-  <img src="https://img.shields.io/badge/license-MIT-cyan" alt="License" />
+  <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
 
 **Bilterm** is a terminal user interface (TUI) multiplexer, shell wrapper, terminal emulator, and agent/fleet automation platform written in Rust using [Ratatui](https://ratatui.rs/). Fusing classic **IBM 3270 Mainframe Terminals** (top-pinned floating command prompt over a scrolling PTY output canvas, Operator Information Area status bar, and full-screen cross-hair cursor) with **DOS Borland Turbo Vision** windowing (`╔═╗` double-line borders, character-cell drop shadows, Z-order window cascade decks, and function-key bars), Bilterm treats the **floating command prompt + underlying PTY output canvas as a single composite terminal pane**.
@@ -112,3 +112,4 @@ All detailed engineering guides, user manual chapters, and architecture diagrams
   6. [Complete Keyboard, Mouse & `:command` Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)
   7. [Troubleshooting & FAQ](docs/user-guide/07-troubleshooting-and-faq.md)
 - **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.4.0`).
+- **[License (`LICENSE`)](LICENSE)** — Licensed under the Apache License, Version 2.0 (`Apache-2.0`).
