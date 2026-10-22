@@ -22,9 +22,121 @@ pub enum AppAction {
     Handled,
 }
 
+/// Normalizes macOS `Option+<key>` and `Option+Shift+<key>` Unicode dead-key / symbol characters
+/// (`˙`, `√`, `∫`, `ƒ`, `†`, `ß`, `ç`, `¬`, `π`, `∑`, `Ω`, `µ`, `≈`, `\u{00a0}`, `¡`..`ª`, etc.)
+/// into canonical `KeyModifiers::ALT` (and `KeyModifiers::SHIFT`) `KeyEvent`s so hotkeys and Readline
+/// word bindings work out-of-the-box on macOS even when the host terminal has not enabled "Use Option as Meta".
+pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
+    if !enabled
+        || key.modifiers.contains(KeyModifiers::CONTROL)
+        || key.modifiers.contains(KeyModifiers::ALT)
+    {
+        return key;
+    }
+    let KeyCode::Char(c) = key.code else {
+        return key;
+    };
+    let mapped: Option<(char, KeyModifiers)> = match c {
+        // Option + a..z
+        'å' => Some(('a', KeyModifiers::ALT)),
+        '∫' => Some(('b', KeyModifiers::ALT)),
+        'ç' => Some(('c', KeyModifiers::ALT)),
+        '∂' => Some(('d', KeyModifiers::ALT)),
+        '´' => Some(('e', KeyModifiers::ALT)),
+        'ƒ' => Some(('f', KeyModifiers::ALT)),
+        '©' => Some(('g', KeyModifiers::ALT)),
+        '˙' => Some(('h', KeyModifiers::ALT)),
+        'ˆ' => Some(('i', KeyModifiers::ALT)),
+        '∆' => Some(('j', KeyModifiers::ALT)),
+        '˚' => Some(('k', KeyModifiers::ALT)),
+        '¬' => Some(('l', KeyModifiers::ALT)),
+        'µ' => Some(('m', KeyModifiers::ALT)),
+        '˜' => Some(('n', KeyModifiers::ALT)),
+        'ø' => Some(('o', KeyModifiers::ALT)),
+        'π' => Some(('p', KeyModifiers::ALT)),
+        'œ' => Some(('q', KeyModifiers::ALT)),
+        '®' => Some(('r', KeyModifiers::ALT)),
+        'ß' => Some(('s', KeyModifiers::ALT)),
+        '†' => Some(('t', KeyModifiers::ALT)),
+        '¨' => Some(('u', KeyModifiers::ALT)),
+        '√' => Some(('v', KeyModifiers::ALT)),
+        '∑' => Some(('w', KeyModifiers::ALT)),
+        '≈' => Some(('x', KeyModifiers::ALT)),
+        '¥' => Some(('y', KeyModifiers::ALT)),
+        'Ω' => Some(('z', KeyModifiers::ALT)),
+        // Option + Shift + A..Z
+        'Å' => Some(('A', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'ı' => Some(('B', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ç' => Some(('C', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Î' => Some(('D', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ï' => Some(('F', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '˝' => Some(('G', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ó' => Some(('H', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ô' => Some(('J', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '\u{f8ff}' => Some(('K', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ò' => Some(('L', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Â' => Some(('M', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '¯' => Some(('N', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Ø' => Some(('O', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '∏' => Some(('P', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Œ' => Some(('Q', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '‰' => Some(('R', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Í' => Some(('S', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'ˇ' => Some(('T', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '◊' => Some(('V', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '„' => Some(('W', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '˛' => Some(('X', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        'Á' => Some(('Y', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '¸' => Some(('Z', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        // Option + 1..9, 0
+        '¡' => Some(('1', KeyModifiers::ALT)),
+        '™' => Some(('2', KeyModifiers::ALT)),
+        '£' => Some(('3', KeyModifiers::ALT)),
+        '¢' => Some(('4', KeyModifiers::ALT)),
+        '∞' => Some(('5', KeyModifiers::ALT)),
+        '§' => Some(('6', KeyModifiers::ALT)),
+        '¶' => Some(('7', KeyModifiers::ALT)),
+        '•' => Some(('8', KeyModifiers::ALT)),
+        'ª' => Some(('9', KeyModifiers::ALT)),
+        'º' => Some(('0', KeyModifiers::ALT)),
+        // Option + Space & Punctuation
+        '\u{00a0}' => Some((' ', KeyModifiers::ALT)),
+        '÷' => Some(('/', KeyModifiers::ALT)),
+        '≠' => Some(('=', KeyModifiers::ALT)),
+        '±' => Some(('+', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '–' => Some(('-', KeyModifiers::ALT)),
+        '—' => Some(('-', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '“' => Some(('[', KeyModifiers::ALT)),
+        '”' => Some(('[', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '‘' => Some((']', KeyModifiers::ALT)),
+        '’' => Some((']', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        '¿' => Some(('?', KeyModifiers::ALT | KeyModifiers::SHIFT)),
+        _ => None,
+    };
+    if let Some((ascii_ch, extra_mods)) = mapped {
+        KeyEvent::new(KeyCode::Char(ascii_ch), key.modifiers | extra_mods)
+    } else {
+        key
+    }
+}
+
+/// Checks whether `key` matches the configured Prefix/Leader key chord (e.g. `"Ctrl+X"`, `"Ctrl+A"`).
+pub fn is_leader_key(key: KeyEvent, leader_cfg: &str) -> bool {
+    let target = leader_cfg.trim();
+    if target.is_empty() {
+        return false;
+    }
+    if let Some(chord) = format_key_chord(key) {
+        chord.eq_ignore_ascii_case(target)
+    } else {
+        false
+    }
+}
+
 /// Routes a `crossterm::event::KeyEvent` for the active `CompositePane` (`PTY-02..04`, `PANE-01..05`).
-pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<AppAction> {
     pane.refresh_line_discipline();
+    let key = normalize_macos_option_key(raw_key, true);
 
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
@@ -56,6 +168,23 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return handle_history_popup_key(pane, key);
     }
 
+    // If single-pane Leader key (`Ctrl+X`) is pending, dispatch the leader action
+    if pane.leader_pending {
+        pane.leader_pending = false;
+        pane.status_message = None;
+        return handle_pane_leader_key(pane, key);
+    }
+
+    // Enter single-pane Leader mode on `Ctrl+X`
+    if is_leader_key(key, "Ctrl+X") {
+        pane.leader_pending = true;
+        pane.status_message = Some(
+            "⌨ LEADER [Ctrl+X]: t/b/s/e=Prompt c/[=Copy f=Hints l=Lock /=Search p=Hist g=Raw"
+                .to_string(),
+        );
+        return Ok(AppAction::Handled);
+    }
+
     // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12
     if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
         || key.code == KeyCode::F(12)
@@ -64,30 +193,78 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
         return Ok(AppAction::Handled);
     }
 
-    // Global 3-way mode cycle (Floating Prompt -> Fixed Prompt -> Regular Terminal -> Floating Prompt): F4 or Alt+E
-    if key.code == KeyCode::F(4)
-        || (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('e'))
+    // Global 3-way mode cycle (Floating Prompt -> Fixed Prompt -> Regular Terminal -> Floating Prompt):
+    // Active in CommandPrompt mode and in manual RegularTerminal mode (when not inside a DECSET 1049 ALT_SCREEN app like htop/vim)
+    if !pane.vt.is_alternate_screen()
+        && !pane.line_discipline.is_password_prompt()
+        && (key.code == KeyCode::F(4)
+            || (key.modifiers.contains(KeyModifiers::ALT)
+                && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))))
     {
         pane.cycle_prompt_mode();
         return Ok(AppAction::Handled);
     }
 
-    // Intra-pane prompt positioning, height resize, search, copy mode, and OSC 133 command-block jump hotkeys
+    // When in RawPtyPassthrough (including DECSET 1049 alternate screen apps like vim/htop/emacs),
+    // pass F1..F10 and Alt+<key> directly through to the child PTY instead of intercepting them!
+    if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+        if pane.read_only {
+            pane.status_message = Some(
+                "🔒 PROTECTED: Pane is locked read-only (:lock off or Ctrl+X l to unlock)"
+                    .to_string(),
+            );
+            return Ok(AppAction::Handled);
+        }
+        let bytes = encode_key_to_pty_bytes_full(
+            raw_key,
+            pane.vt.is_application_cursor(),
+            pane.vt.is_backarrow_key_67(),
+            pane.vt.kitty_keyboard_flags(),
+        );
+        if !bytes.is_empty()
+            && let Some(pty) = &pane.pty
+        {
+            pty.write_all(&bytes)?;
+        }
+        return Ok(AppAction::Handled);
+    }
+
+    // F3: QuickSelect 3270 Field Hints (non-colliding function key in CommandPrompt mode)
+    if key.code == KeyCode::F(3) {
+        if pane.hints_mode.active {
+            pane.exit_hints_mode();
+        } else {
+            pane.enter_hints_mode();
+        }
+        return Ok(AppAction::Handled);
+    }
+
+    // Intra-pane prompt positioning, height resize, search, copy mode, Readline word navigation, and OSC 133 command-block jump hotkeys
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
-            KeyCode::Char('t') => {
+            KeyCode::Char('t') | KeyCode::Char('T') => {
                 pane.set_prompt_anchor(PromptAnchor::Top);
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('b') => {
+            KeyCode::Char('B') => {
                 pane.set_prompt_anchor(PromptAnchor::Bottom);
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('s') => {
+            KeyCode::Char('b') => {
+                // On macOS, Option+Left emits ESC b (`Alt+b`), and in Readline `Alt+b` is backward-word.
+                // When editing text in the command prompt, move word left; when empty, pin prompt to bottom.
+                if !pane.prompt.input.is_empty() {
+                    pane.prompt.move_word_left();
+                } else {
+                    pane.set_prompt_anchor(PromptAnchor::Bottom);
+                }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('s') | KeyCode::Char('S') => {
                 pane.toggle_split_prompt();
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('c') => {
+            KeyCode::Char('c') | KeyCode::Char('C') => {
                 if pane.copy_mode.active {
                     pane.exit_copy_mode();
                 } else {
@@ -95,7 +272,7 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 }
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('f') => {
+            KeyCode::Char('F') => {
                 if pane.hints_mode.active {
                     pane.exit_hints_mode();
                 } else {
@@ -103,7 +280,27 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 }
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('l') => {
+            KeyCode::Char('f') => {
+                // On macOS, Option+Right emits ESC f (`Alt+f`), and in Readline `Alt+f` is forward-word.
+                // When editing text in the command prompt, move word right; when empty, open 3270 Field Hints.
+                if !pane.prompt.input.is_empty() {
+                    pane.prompt.move_word_right();
+                } else if pane.hints_mode.active {
+                    pane.exit_hints_mode();
+                } else {
+                    pane.enter_hints_mode();
+                }
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
+                pane.prompt.kill_next_word();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Backspace => {
+                pane.prompt.kill_prev_word();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') => {
                 pane.toggle_read_only();
                 return Ok(AppAction::Handled);
             }
@@ -147,7 +344,7 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 pane.resize_prompt_width(-4);
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('p') => {
+            KeyCode::Char('p') | KeyCode::Char('P') => {
                 pane.prompt.toggle_history_popup();
                 return Ok(AppAction::Handled);
             }
@@ -160,51 +357,119 @@ pub fn handle_key_event(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAc
                 return Ok(AppAction::Handled);
             }
             KeyCode::Left => {
-                if pane.effective_routing_mode() == InputRoutingMode::CommandPrompt {
-                    pane.prompt.move_word_left();
-                    return Ok(AppAction::Handled);
-                }
+                pane.prompt.move_word_left();
+                return Ok(AppAction::Handled);
             }
             KeyCode::Right => {
-                if pane.effective_routing_mode() == InputRoutingMode::CommandPrompt {
-                    pane.prompt.move_word_right();
-                    return Ok(AppAction::Handled);
-                }
+                pane.prompt.move_word_right();
+                return Ok(AppAction::Handled);
             }
             KeyCode::Enter => {
-                if pane.effective_routing_mode() == InputRoutingMode::CommandPrompt {
-                    pane.prompt.insert_newline();
-                    return Ok(AppAction::Handled);
-                }
+                pane.prompt.insert_newline();
+                return Ok(AppAction::Handled);
             }
             _ => {}
         }
     }
 
-    match pane.effective_routing_mode() {
-        InputRoutingMode::CommandPrompt => handle_command_prompt_key(pane, key),
-        InputRoutingMode::RawPtyPassthrough => {
-            if pane.read_only {
-                pane.status_message = Some(
-                    "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
-                        .to_string(),
-                );
-                return Ok(AppAction::Handled);
-            }
-            let bytes = encode_key_to_pty_bytes_full(
-                key,
-                pane.vt.is_application_cursor(),
-                pane.vt.is_backarrow_key_67(),
-                pane.vt.kitty_keyboard_flags(),
-            );
-            if !bytes.is_empty()
-                && let Some(pty) = &pane.pty
-            {
-                pty.write_all(&bytes)?;
-            }
-            Ok(AppAction::Handled)
+    handle_command_prompt_key(pane, key)
+}
+
+fn handle_pane_leader_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && let KeyCode::Char(c) = key.code
+    {
+        if c.eq_ignore_ascii_case(&'q') {
+            return Ok(AppAction::Quit);
         }
+        // Double-tap leader (e.g. Ctrl+X Ctrl+X or Ctrl+A Ctrl+A)
+        if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+            let byte = (c.to_ascii_lowercase() as u8)
+                .wrapping_sub(b'a')
+                .wrapping_add(1);
+            if let Some(pty) = &pane.pty {
+                pty.write_all(&[byte])?;
+            }
+        } else if c.eq_ignore_ascii_case(&'a') {
+            pane.prompt.move_cursor_home();
+        }
+        return Ok(AppAction::Handled);
     }
+
+    match key.code {
+        KeyCode::Esc => {}
+        KeyCode::Char('t') | KeyCode::Char('T') => {
+            pane.set_prompt_anchor(PromptAnchor::Top);
+        }
+        KeyCode::Char('b') | KeyCode::Char('B') => {
+            pane.set_prompt_anchor(PromptAnchor::Bottom);
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            pane.toggle_split_prompt();
+        }
+        KeyCode::Char('e') | KeyCode::Char('m') | KeyCode::F(4) => {
+            pane.cycle_prompt_mode();
+        }
+        KeyCode::Char('g') | KeyCode::F(12) => {
+            pane.toggle_manual_raw_override();
+        }
+        KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('[') => {
+            if pane.copy_mode.active {
+                pane.exit_copy_mode();
+            } else {
+                pane.enter_copy_mode();
+            }
+        }
+        KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::F(3) => {
+            if pane.hints_mode.active {
+                pane.exit_hints_mode();
+            } else {
+                pane.enter_hints_mode();
+            }
+        }
+        KeyCode::Char('l') | KeyCode::Char('L') => {
+            pane.toggle_read_only();
+        }
+        KeyCode::Char('/') => {
+            if pane.is_prompt_visible() {
+                pane.prompt.set_text(":search ");
+            }
+        }
+        KeyCode::Char('n') => {
+            pane.next_canvas_search_match();
+        }
+        KeyCode::Char('N') => {
+            pane.prev_canvas_search_match();
+        }
+        KeyCode::Char('p') | KeyCode::Char('P') | KeyCode::Char('H') => {
+            pane.prompt.toggle_history_popup();
+        }
+        KeyCode::Up => {
+            let h = pane.vt.size().0 + 1;
+            pane.move_prompt_vertical(-1, h);
+        }
+        KeyCode::Down => {
+            let h = pane.vt.size().0 + 1;
+            pane.move_prompt_vertical(1, h);
+        }
+        KeyCode::Char('+') | KeyCode::Char('=') => {
+            pane.resize_prompt_height(1);
+        }
+        KeyCode::Char(']') | KeyCode::Char('}') => {
+            pane.resize_prompt_width(4);
+        }
+        KeyCode::Char('{') => {
+            pane.resize_prompt_width(-4);
+        }
+        KeyCode::PageUp => {
+            pane.vt.jump_to_prev_command_block();
+        }
+        KeyCode::PageDown => {
+            pane.vt.jump_to_next_command_block();
+        }
+        _ => {}
+    }
+    Ok(AppAction::Handled)
 }
 
 fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
@@ -887,7 +1152,9 @@ pub fn handle_mouse_event(
 }
 
 /// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`).
-pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<AppAction> {
+    let key = normalize_macos_option_key(raw_key, wm.config.macos_option_as_alt);
+
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
         return Ok(AppAction::Quit);
@@ -985,41 +1252,6 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
-    // Check user-configured [keybindings] in config.toml first (v0.6.0)
-    if !wm.config.keybindings.is_empty()
-        && let Some(chord) = format_key_chord(key)
-    {
-        let bound_opt = wm
-            .config
-            .keybindings
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(&chord))
-            .map(|(_, v)| v.clone());
-        if let Some(bound_action) = bound_opt {
-            if let Some(Ok(cmd)) = parse_colon_command(&bound_action) {
-                if execute_wm_colon_command(wm, cmd.clone()) {
-                    return Ok(AppAction::Quit);
-                }
-                if execute_colon_command(wm.active_pane_mut(), cmd) {
-                    return Ok(AppAction::Quit);
-                }
-            } else {
-                wm.active_pane_mut().prompt.set_text(&bound_action);
-            }
-            return Ok(AppAction::Handled);
-        }
-    }
-
-    // Global Fuzzy Command Palette hotkey: Ctrl+P (when not in fuzzy history search) or Alt+Space (v0.6.0)
-    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char(' '))
-        || (key.modifiers.contains(KeyModifiers::CONTROL)
-            && key.code == KeyCode::Char('p')
-            && !wm.active_pane().prompt.fuzzy_search.active)
-    {
-        wm.toggle_palette();
-        return Ok(AppAction::Handled);
-    }
-
     // If a top Borland Turbo Vision Menu Bar pull-down is open, route keys to it first (ECO-03)
     if let Some(cat) = wm.menubar_open_category {
         match key.code {
@@ -1048,9 +1280,77 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
-    // Global Guake/Quake-style quick terminal drop-down hotkey: Alt+` or Ctrl+Space (WM-05)
+    // If Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord, dispatch it across WM + Pane
+    if wm.leader_pending {
+        wm.leader_pending = false;
+        wm.active_pane_mut().status_message = None;
+        return handle_wm_leader_key(wm, key);
+    }
+
+    // Check user-configured [keybindings] in config.toml first (v0.6.0)
+    if !wm.config.keybindings.is_empty()
+        && let Some(chord) = format_key_chord(key)
+    {
+        let bound_opt = wm
+            .config
+            .keybindings
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(&chord))
+            .map(|(_, v)| v.clone());
+        if let Some(bound_action) = bound_opt {
+            if let Some(Ok(cmd)) = parse_colon_command(&bound_action) {
+                if execute_wm_colon_command(wm, cmd.clone()) {
+                    return Ok(AppAction::Quit);
+                }
+                if execute_colon_command(wm.active_pane_mut(), cmd) {
+                    return Ok(AppAction::Quit);
+                }
+            } else {
+                wm.active_pane_mut().prompt.set_text(&bound_action);
+            }
+            return Ok(AppAction::Handled);
+        }
+    }
+
+    // Enter Workspace Leader mode when the configured leader key (default `Ctrl+X`) is pressed
+    if is_leader_key(key, &wm.config.leader_key) {
+        wm.leader_pending = true;
+        let leader_label = wm.config.leader_key.clone();
+        wm.active_pane_mut().status_message = Some(format!(
+            "⌨ LEADER [{leader_label}]: -/h=SplitH |/v=SplitV z=Zoom o/n/p=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
+        ));
+        return Ok(AppAction::Handled);
+    }
+
+    // Refresh active pane line discipline before deciding whether F1..F10 / Alt+<key> should pass through to Raw PTY
+    wm.active_pane_mut().refresh_line_discipline();
+    let in_raw_passthrough = wm.active_pane().effective_routing_mode()
+        == InputRoutingMode::RawPtyPassthrough
+        && wm.active_pane().pending_unsafe_paste.is_none()
+        && !wm.active_pane().copy_mode.active
+        && !wm.active_pane().hints_mode.active;
+
+    if in_raw_passthrough {
+        return handle_key_event(wm.active_pane_mut(), raw_key);
+    }
+
+    // Global Fuzzy Command Palette hotkey: Ctrl+P (when not in fuzzy history search) or Alt+Space (v0.6.0)
+    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char(' '))
+        || (key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.code == KeyCode::Char('p')
+            && !wm.active_pane().prompt.fuzzy_search.active)
+    {
+        wm.toggle_palette();
+        return Ok(AppAction::Handled);
+    }
+
+    // Global Guake/Quake-style quick terminal drop-down hotkey: Ctrl+\ (macOS-safe), Alt+`, or Ctrl+Space (WM-05)
     if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('`'))
-        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char(' '))
+        || (key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(
+                key.code,
+                KeyCode::Char(' ') | KeyCode::Char('\\') | KeyCode::Char('\x1c')
+            ))
     {
         wm.toggle_quick_terminal();
         return Ok(AppAction::Handled);
@@ -1088,7 +1388,7 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
     // Multi-pane Window Manager Alt-chords
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
-            KeyCode::Char('x') => {
+            KeyCode::Char('x') | KeyCode::Char('X') => {
                 if !wm.config.crosshair_cursor {
                     wm.config.crosshair_cursor = true;
                     wm.config.crosshair_fullscreen = false;
@@ -1100,23 +1400,23 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
                 }
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('h') => {
+            KeyCode::Char('h') | KeyCode::Char('H') => {
                 wm.split_focused(SplitDirection::Horizontal)?;
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('v') => {
+            KeyCode::Char('v') | KeyCode::Char('V') => {
                 wm.split_focused(SplitDirection::Vertical)?;
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('w') => {
+            KeyCode::Char('w') | KeyCode::Char('W') => {
                 wm.close_focused_pane();
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('z') => {
+            KeyCode::Char('z') | KeyCode::Char('Z') => {
                 wm.toggle_zoom();
                 return Ok(AppAction::Handled);
             }
-            KeyCode::Char('m') => {
+            KeyCode::Char('m') | KeyCode::Char('M') => {
                 wm.toggle_layout_mode();
                 return Ok(AppAction::Handled);
             }
@@ -1188,6 +1488,83 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
     }
 
     handle_key_event(wm.active_pane_mut(), key)
+}
+
+fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && let KeyCode::Char(c) = key.code
+    {
+        if c.eq_ignore_ascii_case(&'q') {
+            return Ok(AppAction::Quit);
+        }
+        return handle_pane_leader_key(wm.active_pane_mut(), key);
+    }
+
+    match key.code {
+        KeyCode::Esc => Ok(AppAction::Handled),
+        KeyCode::Char('-') | KeyCode::Char('h') | KeyCode::F(2) => {
+            wm.split_focused(SplitDirection::Horizontal)?;
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('|') | KeyCode::Char('\\') | KeyCode::Char('v') | KeyCode::Char('V') => {
+            wm.split_focused(SplitDirection::Vertical)?;
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('z') | KeyCode::Char('Z') | KeyCode::F(5) => {
+            wm.toggle_zoom();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('o') | KeyCode::Char('O') | KeyCode::Tab | KeyCode::F(6) => {
+            wm.shuffle_deck_next();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::BackTab => {
+            wm.shuffle_deck_prev();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char(d @ '1'..='9') => {
+            let id = (d as u8 - b'0') as usize;
+            wm.focus_and_raise(id);
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('w') | KeyCode::Char('W') => {
+            wm.close_focused_pane();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('M') => {
+            wm.toggle_layout_mode();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('q') | KeyCode::Char('`') | KeyCode::Char('~') | KeyCode::F(10) => {
+            wm.toggle_quick_terminal();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char(' ') | KeyCode::Char(':') => {
+            wm.toggle_palette();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('?') | KeyCode::F(1) => {
+            wm.toggle_help();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('i') | KeyCode::Char('I') | KeyCode::F(9) => {
+            wm.toggle_inspector();
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('x') | KeyCode::Char('X') => {
+            if !wm.config.crosshair_cursor {
+                wm.config.crosshair_cursor = true;
+                wm.config.crosshair_fullscreen = false;
+            } else if !wm.config.crosshair_fullscreen {
+                wm.config.crosshair_fullscreen = true;
+            } else {
+                wm.config.crosshair_cursor = false;
+                wm.config.crosshair_fullscreen = false;
+            }
+            Ok(AppAction::Handled)
+        }
+        _ => handle_pane_leader_key(wm.active_pane_mut(), key),
+    }
 }
 
 fn format_key_chord(key: KeyEvent) -> Option<String> {
@@ -1661,5 +2038,127 @@ mod tests {
         assert!(!pane.copy_mode.active);
         assert_eq!(pane.prompt.yank_buffer, "1234\n5678");
         assert!(pane.last_osc52_sequence.is_some());
+    }
+
+    #[test]
+    fn macos_option_unicode_normalization_leader_prefix_readline_and_raw_passthrough_work() {
+        let mut wm = WindowManager::new_headless(24, 80);
+
+        // 1. macOS Option+<key> Unicode characters (e.g. Option+V -> '√', Option+H -> '˙', Option+1 -> '¡')
+        //    automatically normalize to Alt+<key> and trigger WM splits & pane focus!
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('√'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.panes.len(), 2);
+
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('¡'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.active_pane_id(), 1);
+
+        // 2. Leader prefix (`Ctrl+X`) works for splits, zoom, copy mode, prompt docking, quake, and help
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        assert!(wm.leader_pending);
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE))
+            .unwrap();
+        assert!(!wm.leader_pending);
+        assert_eq!(wm.zoomed_pane, Some(1));
+
+        // Unzoom via Leader + z
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.zoomed_pane, None);
+
+        // Pin prompt to Bottom via Leader + b
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.active_pane().prompt.anchor, PromptAnchor::Bottom);
+
+        // Toggle Quake terminal via macOS-safe Ctrl+\
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('\\'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        assert!(wm.quick_terminal.visible);
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('\\'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        assert!(!wm.quick_terminal.visible);
+
+        // 3. Readline word navigation (Alt+b / Option+Left, Alt+f / Option+Right, Alt+Backspace, Alt+d)
+        //    in CommandPrompt does NOT move the prompt box or trigger hints when text is present
+        wm.active_pane_mut().set_prompt_anchor(PromptAnchor::Top);
+        wm.active_pane_mut().prompt.set_text("cargo build --release");
+        assert_eq!(wm.active_pane().prompt.cursor_col, 21);
+
+        // Option+Left (`Alt+b` or macOS `'∫'`) moves word left to "--release" (col 12), keeping PromptAnchor::Top!
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('∫'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.active_pane().prompt.cursor_col, 12);
+        assert_eq!(wm.active_pane().prompt.anchor, PromptAnchor::Top);
+
+        // Another Alt+b moves to "build" (col 6)
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(wm.active_pane().prompt.cursor_col, 6);
+
+        // Option+Right (`Alt+f` or macOS `'ƒ'`) moves word right to "--release" (col 12), without entering hints_mode!
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('ƒ'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(wm.active_pane().prompt.cursor_col, 12);
+        assert!(!wm.active_pane().hints_mode.active);
+
+        // Alt+Backspace deletes previous word ("build ")
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Backspace, KeyModifiers::ALT),
+        )
+        .unwrap();
+        assert_eq!(wm.active_pane().prompt.text(), "cargo --release");
+
+        // Alt+d deletes next word ("--release")
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(wm.active_pane().prompt.text(), "cargo ");
+
+        // 4. In RawPtyPassthrough / ALT_SCREEN (e.g. htop, vim, emacs), F1..F10 and Alt+<key> pass through
+        //    to the child app instead of being intercepted by the WM, while Ctrl+X <key> still controls the WM!
+        wm.active_pane_mut().process_pty_output(b"\x1b[?1049h");
+        assert_eq!(
+            wm.active_pane().effective_routing_mode(),
+            InputRoutingMode::RawPtyPassthrough
+        );
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)).unwrap();
+        assert!(!wm.help_visible);
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE)).unwrap();
+        assert!(!wm.quick_terminal.visible);
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('v'), KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(wm.panes.len(), 2);
+
+        // Leader Ctrl+X ? still opens Help even from inside ALT_SCREEN!
+        handle_wm_key_event(
+            &mut wm,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE))
+            .unwrap();
+        assert!(wm.help_visible);
     }
 }

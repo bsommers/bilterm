@@ -47,6 +47,10 @@ pub struct BiltermConfig {
     pub default_prompt_height: u16,
     /// Enables retro CRT phosphor scanline dimming (`:crt [on|off]`, `v0.6.0`).
     pub crt_scanlines: bool,
+    /// Prefix/Leader key chord for Window Manager & Pane commands (`"Ctrl+X"` by default; supports `"Ctrl+A"`, `"Ctrl+B"`, etc.).
+    pub leader_key: String,
+    /// Automatically normalizes macOS `Option+<key>` Unicode symbols (`˙`, `√`, `∫`, `ƒ`, `†`, etc.) into `Alt+<key>` chords (`true` by default).
+    pub macos_option_as_alt: bool,
     /// User-configurable key chord bindings (`"Ctrl+B" = ":split v"`, `v0.6.0`).
     pub keybindings: BTreeMap<String, String>,
     /// Case-insensitive output highlight trigger patterns (`:trigger add <pat>`, `v0.7.0`).
@@ -79,6 +83,8 @@ impl Default for BiltermConfig {
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
             crt_scanlines: false,
+            leader_key: "Ctrl+X".to_string(),
+            macos_option_as_alt: true,
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),

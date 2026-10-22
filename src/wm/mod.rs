@@ -80,6 +80,8 @@ pub struct WindowManager {
     pub menubar_selected_item: usize,
     /// Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
     pub broadcast_input: bool,
+    /// Whether the Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord (`v1.5.0`).
+    pub leader_pending: bool,
     /// Whether the interactive Fuzzy Command Palette modal (`Ctrl+P` / `:palette`) is visible (`v0.6.0`).
     pub palette_visible: bool,
     /// Current search query inside the Fuzzy Command Palette modal (`v0.6.0`).
@@ -128,6 +130,7 @@ impl WindowManager {
             menubar_open_category: None,
             menubar_selected_item: 0,
             broadcast_input: false,
+            leader_pending: false,
             palette_visible: false,
             palette_query: String::new(),
             palette_selected: 0,
@@ -351,28 +354,28 @@ impl WindowManager {
     pub fn filtered_palette_items(&self) -> Vec<(&'static str, &'static str, &'static str)> {
         use nucleo_matcher::{Config, Matcher, Utf32Str};
         const CATALOG: &[(&str, &str, &str)] = &[
-            (":split h", "F2 / Alt+H", "Split focused pane horizontally (Top/Bottom)"),
-            (":split v", "Alt+V", "Split focused pane vertically (Left/Right)"),
-            (":zoom", "F5 / Alt+Z", "Toggle zoom/maximize on focused pane"),
-            (":layout stack", "Alt+M", "Switch workspace to Z-Order Stacked Cascade"),
-            (":layout tile", "Alt+M", "Switch workspace to Tiled Binary Split Tree"),
-            (":deck next", "F6 / Alt+Tab", "Shuffle Z-order window deck top-to-bottom"),
-            (":quake", "F10 / Alt+`", "Toggle persistent Guake drop-down quick terminal"),
-            (":inspector", "F9", "Open Live 3270 Terminal Inspector modal"),
-            (":hints", "Alt+F", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
-            (":copy", "Alt+C", "Enter Vi Copy Mode & Rectangular Block Selection"),
-            (":lock", "Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
+            (":split h", "Ctrl+X - / F2", "Split focused pane horizontally (Top/Bottom)"),
+            (":split v", "Ctrl+X | / Alt+V", "Split focused pane vertically (Left/Right)"),
+            (":zoom", "Ctrl+X z / F5", "Toggle zoom/maximize on focused pane"),
+            (":layout stack", "Ctrl+X M / Alt+M", "Switch workspace to Z-Order Stacked Cascade"),
+            (":layout tile", "Ctrl+X M / Alt+M", "Switch workspace to Tiled Binary Split Tree"),
+            (":deck next", "Ctrl+X o / F6", "Shuffle Z-order window deck top-to-bottom"),
+            (":quake", "Ctrl+X q / Ctrl+\\", "Toggle persistent Guake drop-down quick terminal"),
+            (":inspector", "Ctrl+X i / F9", "Open Live 3270 Terminal Inspector modal"),
+            (":hints", "Ctrl+X f / F3", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
+            (":copy", "Ctrl+X [ / Alt+C", "Enter Vi Copy Mode & Rectangular Block Selection"),
+            (":lock", "Ctrl+X l / Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
             (":broadcast", "—", "Toggle Synchronized Multi-Pane Input Broadcast"),
             (":menubar", "—", "Toggle Top Borland Turbo Vision Menu Bar"),
             (":crt", "—", "Toggle Retro CRT Phosphor Scanline Effect"),
-            (":mode cycle", "F4 / Alt+E", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
-            (":mode fixed", "Alt+S", "Switch to Fixed (Non-Overlapping Docked) Command Prompt"),
-            (":mode float", "Alt+T", "Switch to Floating Command Prompt over Terminal Canvas"),
+            (":mode cycle", "Ctrl+X e / F4", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
+            (":mode fixed", "Ctrl+X s / Alt+S", "Switch to Fixed (Non-Overlapping Docked) Command Prompt"),
+            (":mode float", "Ctrl+X t / Alt+T", "Switch to Floating Command Prompt over Terminal Canvas"),
             (":mode terminal", "F12 / Ctrl+G", "Switch to Regular Terminal (Hide Command Prompt Box)"),
-            (":prompt split-top", "Alt+S", "Non-overlapping Split Command Prompt at Top"),
-            (":prompt top", "Alt+T", "Pin Floating Command Prompt to Top"),
-            (":prompt bottom", "Alt+B", "Pin Floating Command Prompt to Bottom"),
-            (":crosshair full", "Alt+X", "Enable Full-Screen IBM 3270 Cross-Hair Cursor"),
+            (":prompt split-top", "Ctrl+X s / Alt+S", "Non-overlapping Split Command Prompt at Top"),
+            (":prompt top", "Ctrl+X t / Alt+T", "Pin Floating Command Prompt to Top"),
+            (":prompt bottom", "Ctrl+X b / Alt+B", "Pin Floating Command Prompt to Bottom"),
+            (":crosshair full", "Ctrl+X x / Alt+X", "Enable Full-Screen IBM 3270 Cross-Hair Cursor"),
             (":theme turbo-blue", "—", "Switch palette to Borland Turbo Vision Blue"),
             (":theme 3278", "—", "Switch palette to IBM 3278 Phosphor Green"),
             (":theme 3279", "—", "Switch palette to IBM 3279 Amber CRT"),
@@ -382,7 +385,7 @@ impl WindowManager {
             (":record stop", "—", "Stop Asciicast v2 (.cast) terminal recording"),
             (":notifications clear", "—", "Clear OSC 9 / OSC 777 desktop notifications"),
             (":remote list", "—", "List local and remote SSH / tmux-CC fleet sessions"),
-            (":help", "F1", "Open Borland Turbo Vision Quick Reference Help"),
+            (":help", "Ctrl+X ? / F1", "Open Borland Turbo Vision Quick Reference Help"),
             (":quit", "Ctrl+Q", "Cleanly exit Bilterm"),
         ];
         let q = self.palette_query.trim();
@@ -401,7 +404,7 @@ impl WindowManager {
                 matcher.fuzzy_match(hay, needle).map(|score| (score, item))
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|a| std::cmp::Reverse(a.0));
         scored.into_iter().map(|(_, item)| item).collect()
     }
 

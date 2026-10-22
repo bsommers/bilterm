@@ -395,6 +395,29 @@ impl FloatingPromptState {
         self.sync_from_lines();
     }
 
+    /// `Alt+D` / `Alt+Delete`: deletes the word following the cursor and stores it in `yank_buffer`.
+    pub fn kill_next_word(&mut self) {
+        let chars: Vec<char> = self.lines[self.cursor_row].chars().collect();
+        let n = chars.len();
+        let orig_col = self.cursor_col.min(n);
+        if orig_col >= n {
+            return;
+        }
+        self.record_undo();
+        let mut end_col = orig_col;
+        while end_col < n && chars[end_col].is_whitespace() {
+            end_col += 1;
+        }
+        while end_col < n && !chars[end_col].is_whitespace() {
+            end_col += 1;
+        }
+        let start_byte = Self::char_to_byte(&self.lines[self.cursor_row], orig_col);
+        let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], end_col);
+        self.yank_buffer = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        self.lines[self.cursor_row].replace_range(start_byte..end_byte, "");
+        self.sync_from_lines();
+    }
+
     /// `Ctrl+Y`: yanks the last killed text at the cursor.
     pub fn yank(&mut self) {
         let text = self.yank_buffer.clone();
@@ -867,6 +890,8 @@ pub struct CompositePane {
     pub hints_mode: HintsModeState,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     pub read_only: bool,
+    /// Whether the Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord on this pane.
+    pub leader_pending: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
     pub remote_target: Option<String>,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
@@ -897,6 +922,7 @@ impl CompositePane {
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             read_only: false,
+            leader_pending: false,
             remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,
@@ -928,6 +954,7 @@ impl CompositePane {
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             read_only: false,
+            leader_pending: false,
             remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,

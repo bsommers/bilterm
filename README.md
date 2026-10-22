@@ -77,15 +77,15 @@ cargo clippy --all-targets -- -D warnings
 
 | Action | Shortcut | `:command` |
 |--------|----------|------------|
-| **Help / Command Palette / 3270 Inspector** | `F1` / `Ctrl+P` (`Alt+Space`) / `F9` | `:help` / `:palette` / `:inspector` |
-| **Split Horizontal / Split Vertical / Zoom** | `F2` (`Alt+H`) / `Alt+V` / `F5` (`Alt+Z`) | `:split h` / `:split v` / `:zoom` |
-| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `Alt+M` / `F6` (`Alt+Tab`) / `Alt+1..9` | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
-| **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
-| **Cycle Floating / Fixed / Regular Terminal** | `F4` (`Alt+E`) / Click OIA Bar | `:mode [float \| fixed \| terminal \| cycle]` |
-| **Prompt Pin Top / Bottom / Non-Overlapping Split**| `Alt+T` / `Alt+B` / `Alt+S` | `:prompt top \| bottom \| split-top \| split-bottom` |
-| **3270 Field Hints / Vi Copy / Canvas Search** | `Alt+F` / `Alt+C` / `Alt+/` | `:hints` / `:copy` / `:search <query>` |
-| **Read-Only Lock / Multi-Pane Broadcast** | `Alt+L` / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
-| **Theme / Cross-Hairs / CRT Scanlines** | — / `Alt+X` / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
+| **Help / Command Palette / 3270 Inspector** | `F1` (`Ctrl+X ?`) / `Ctrl+P` (`Alt+Space`) / `F9` (`Ctrl+X i`) | `:help` / `:palette` / `:inspector` |
+| **Split Horizontal / Split Vertical / Zoom** | `F2` (`Ctrl+X -` / `Alt+H`) / `Ctrl+X \|` (`Alt+V`) / `F5` (`Ctrl+X z` / `Alt+Z`) | `:split h` / `:split v` / `:zoom` |
+| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `Ctrl+X m` (`Alt+M`) / `F6` (`Ctrl+X Tab`) / `Ctrl+X 1..9` (`Alt+1..9`) | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
+| **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Ctrl+\` / `Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
+| **Cycle Floating / Fixed / Regular Terminal** | `F4` (`Ctrl+X e` / `Alt+E`) / Click OIA Bar | `:mode [float \| fixed \| terminal \| cycle]` |
+| **Prompt Pin Top / Bottom / Non-Overlapping Split**| `Ctrl+X t` (`Alt+T`) / `Ctrl+X b` / `Ctrl+X s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |
+| **3270 Field Hints / Vi Copy / Canvas Search** | `Ctrl+X f` / `Ctrl+X [` (`Alt+C`) / `Ctrl+X /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
+| **Read-Only Lock / Multi-Pane Broadcast** | `Ctrl+X l` (`Alt+L`) / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
+| **Theme / Cross-Hairs / CRT Scanlines** | — / `Ctrl+X x` (`Alt+X`) / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
 | **SSH Pane / Remote `tmux -CC` over SSH** | — | `:ssh <user@host> [port]` / `:ssh-tmux <user@host> [sess]` |
 | **`herdr` Fleet Register / List / Tag Exec** | — | `:remote add <name> <host> [@tags]` / `:remote list` / `:remote exec <@tag\|all> <cmd>` |
 
