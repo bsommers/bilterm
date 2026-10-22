@@ -25,6 +25,16 @@ cargo build --release
 ./target/release/bilterm
 ```
 
+### CLI Options (`v1.0.0`)
+```bash
+bilterm                            # Launch interactive TUI multiplexer
+bilterm --gui-dump <path.ppm>      # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
+bilterm --completions bash|zsh|fish # Generate shell completions for bash, zsh, or fish
+bilterm --man                      # Print roff(7) manual page (docs/bilterm.1)
+bilterm --version                  # Print version (bilterm 1.0.0)
+bilterm --help                     # Print CLI usage summary
+```
+
 ---
 
 ## 2. Shells & Tab Command Completions
@@ -102,6 +112,10 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `history_dir` | `string` (optional) | Directory path | `None` |
 | `default_prompt_anchor` | `string` | `"top"`, `"bottom"`, `"floating"`, `"split-top"`, `"split-bottom"` | `"top"` |
 | `default_prompt_height` | `u16` | `3..=12` | `3` |
+| `show_menu_bar` | `bool` | `true`, `false` | `false` |
+| `crt_scanlines` | `bool` | `true`, `false` | `false` |
+| `triggers` | `array of strings` | Case-insensitive output highlight patterns | `[]` |
+| `[keybindings]` | `table` | Custom keychord -> `:command` mappings (e.g. `"Ctrl+T" = ":split v"`) | `{}` |
 
 ---
 

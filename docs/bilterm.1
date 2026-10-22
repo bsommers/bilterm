@@ -1,0 +1,71 @@
+.TH BILTERM 1 "2026-10-21" "bilterm 1.0.0" "User Commands"
+.SH NAME
+bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer and composite-pane shell wrapper
+.SH SYNOPSIS
+.B bilterm
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+\fBbilterm\fR is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing.
+.SH OPTIONS
+.TP
+\fB\-\-gui\-dump\fR \fIPATH.ppm\fR
+Render the workspace via \fBGuiWorkspaceRenderer\fR to a Netpbm P6 \fB.ppm\fR pixel framebuffer.
+.TP
+\fB\-\-completions\fR \fIbash|zsh|fish\fR
+Print shell completion script for the specified shell to standard output.
+.TP
+\fB\-\-man\fR
+Print this roff manual page to standard output.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version information.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help summary.
+.SH KEYBINDINGS
+.TP
+\fBF1\fR / \fB:help\fR
+Toggle interactive Borland Turbo Vision Help Modal.
+.TP
+\fBCtrl+P\fR / \fBAlt+Space\fR / \fB:palette\fR
+Open interactive Fuzzy Command Palette (\fBnucleo-matcher\fR).
+.TP
+\fBF2\fR (\fBAlt+H\fR) / \fBAlt+V\fR
+Split focused composite pane horizontally or vertically.
+.TP
+\fBF5\fR / \fBAlt+Z\fR
+Toggle zoom/maximize on focused composite pane.
+.TP
+\fBF6\fR (\fBAlt+Tab\fR) / \fBAlt+1..9\fR
+Shuffle Z-order window deck or selectively raise pane #1..#9.
+.TP
+\fBF9\fR / \fB:inspector\fR
+Toggle Live 3270 Terminal Inspector modal.
+.TP
+\fBF10\fR / \fBAlt+\`\fR / \fB:quake\fR
+Toggle persistent Guake/Quake drop-down quick terminal.
+.TP
+\fBF12\fR / \fBCtrl+G\fR / \fB:raw\fR
+Toggle between \fBINPUT: CMD BOX\fR and \fBINPUT: RAW PTY\fR.
+.TP
+\fBAlt+F\fR / \fB:hints\fR
+Activate QuickSelect 3270 Field Hints (\fB[a]..[z]\fR) for URLs, paths, IPv4s, and Git SHAs.
+.TP
+\fBAlt+C\fR / \fB:copy\fR
+Enter keyboard-driven Vi Copy Mode & rectangular block selection.
+.TP
+\fBAlt+L\fR / \fB:lock\fR
+Toggle Read-Only Protected 3270 Field Lock (\fBPROT\fR).
+.TP
+\fBCtrl+Q\fR / \fB:quit\fR
+Cleanly exit Bilterm.
+.SH FILES
+.TP
+\fI~/.config/bilterm/config.toml\fR
+Declarative user configuration file (themes, outlines, shadows, keybindings, triggers).
+.TP
+\fI~/.local/state/bilterm/history/\fR
+Per-session, per-pane timestamped command history logs.
+.TP
+\fI~/.local/state/bilterm/sessions/\fR
+Saved multi-pane workspace session snapshots (\fB:session save|restore|list\fR).

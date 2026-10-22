@@ -921,6 +921,87 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
         return Ok(AppAction::Handled);
     }
 
+    // If the Fuzzy Command Palette modal is open, route keys to it first (v0.6.0)
+    if wm.palette_visible {
+        match key.code {
+            KeyCode::Esc => {
+                wm.palette_visible = false;
+            }
+            KeyCode::Up => {
+                wm.palette_selected = wm.palette_selected.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                let count = wm.filtered_palette_items().len();
+                if count > 0 {
+                    wm.palette_selected = (wm.palette_selected + 1).min(count - 1);
+                }
+            }
+            KeyCode::Backspace => {
+                wm.palette_query.pop();
+                wm.palette_selected = 0;
+            }
+            KeyCode::Enter => {
+                let items = wm.filtered_palette_items();
+                let sel = items
+                    .get(wm.palette_selected)
+                    .or_else(|| items.first())
+                    .map(|&(cmd, _, _)| cmd);
+                wm.palette_visible = false;
+                if let Some(cmd_str) = sel
+                    && let Some(Ok(cmd)) = parse_colon_command(cmd_str)
+                {
+                    if execute_wm_colon_command(wm, cmd.clone()) {
+                        return Ok(AppAction::Quit);
+                    }
+                    if execute_colon_command(wm.active_pane_mut(), cmd) {
+                        return Ok(AppAction::Quit);
+                    }
+                }
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                wm.palette_query.push(c);
+                wm.palette_selected = 0;
+            }
+            _ => {}
+        }
+        return Ok(AppAction::Handled);
+    }
+
+    // Check user-configured [keybindings] in config.toml first (v0.6.0)
+    if !wm.config.keybindings.is_empty()
+        && let Some(chord) = format_key_chord(key)
+    {
+        let bound_opt = wm
+            .config
+            .keybindings
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(&chord))
+            .map(|(_, v)| v.clone());
+        if let Some(bound_action) = bound_opt {
+            if let Some(Ok(cmd)) = parse_colon_command(&bound_action) {
+                if execute_wm_colon_command(wm, cmd.clone()) {
+                    return Ok(AppAction::Quit);
+                }
+                if execute_colon_command(wm.active_pane_mut(), cmd) {
+                    return Ok(AppAction::Quit);
+                }
+            } else {
+                wm.active_pane_mut().prompt.set_text(&bound_action);
+            }
+            return Ok(AppAction::Handled);
+        }
+    }
+
+    // Global Fuzzy Command Palette hotkey: Ctrl+P (when not in fuzzy history search) or Alt+Space (v0.6.0)
+    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char(' '))
+        || (key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.code == KeyCode::Char('p')
+            && !wm.active_pane().prompt.fuzzy_search.active)
+    {
+        wm.toggle_palette();
+        return Ok(AppAction::Handled);
+    }
+
     // If a top Borland Turbo Vision Menu Bar pull-down is open, route keys to it first (ECO-03)
     if let Some(cat) = wm.menubar_open_category {
         match key.code {
@@ -1089,6 +1170,30 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppA
     }
 
     handle_key_event(wm.active_pane_mut(), key)
+}
+
+fn format_key_chord(key: KeyEvent) -> Option<String> {
+    let mut parts = Vec::new();
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        parts.push("Ctrl".to_string());
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        parts.push("Alt".to_string());
+    }
+    if key.modifiers.contains(KeyModifiers::SHIFT) {
+        parts.push("Shift".to_string());
+    }
+    match key.code {
+        KeyCode::Char(' ') => parts.push("Space".to_string()),
+        KeyCode::Char(c) => parts.push(c.to_ascii_uppercase().to_string()),
+        KeyCode::F(n) => parts.push(format!("F{n}")),
+        KeyCode::Tab => parts.push("Tab".to_string()),
+        KeyCode::BackTab => parts.push("BackTab".to_string()),
+        KeyCode::Enter => parts.push("Enter".to_string()),
+        KeyCode::Esc => parts.push("Esc".to_string()),
+        _ => return None,
+    }
+    Some(parts.join("+"))
 }
 
 fn execute_menubar_selection(

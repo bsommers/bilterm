@@ -221,6 +221,35 @@ fn render_output_canvas(
         }
     }
 
+    // Highlight custom output triggers (v0.7.0)
+    for trigger in &cfg.triggers {
+        for m in pane.vt.search_canvas(trigger) {
+            if m.row < render_rows {
+                for c in m.start_col..=m.end_col.min(render_cols.saturating_sub(1)) {
+                    if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + m.row)) {
+                        cell.set_style(
+                            Style::default()
+                                .fg(Color::White)
+                                .bg(Color::Rgb(200, 0, 80))
+                                .add_modifier(Modifier::BOLD),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply CRT phosphor scanline effect on odd rows when enabled (v0.6.0)
+    if cfg.crt_scanlines {
+        for r in (1..render_rows).step_by(2) {
+            for c in 0..render_cols {
+                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r)) {
+                    cell.set_style(cell.style().add_modifier(Modifier::DIM));
+                }
+            }
+        }
+    }
+
     // Render Kitty Graphics (APC G) and DEC Sixel (DCS q) placements using TrueColor half-blocks (GFX-01)
     for gfx in pane.vt.graphic_placements() {
         let max_r = gfx.rows.max(1);
@@ -914,7 +943,73 @@ impl Widget for WorkspaceWidget<'_> {
                 buf,
             );
         }
+
+        // Render interactive Fuzzy Command Palette modal on top of the workspace (v0.6.0)
+        if self.wm.palette_visible && workspace_area.width >= 24 && workspace_area.height >= 6 {
+            render_palette_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
     }
+}
+
+fn render_palette_modal(
+    wm: &WindowManager,
+    canvas: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let pop_w = canvas.width.saturating_sub(4).clamp(24, 76).min(canvas.width);
+    let pop_h = canvas.height.saturating_sub(2).clamp(6, 14).min(canvas.height);
+    let pop_x = canvas.x + (canvas.width.saturating_sub(pop_w)) / 2;
+    let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
+    let pop_rect = Rect::new(pop_x, pop_y, pop_w, pop_h);
+
+    if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, pop_rect);
+    render_borland_frame_styled(
+        pop_rect,
+        "[P] COMMAND PALETTE [Enter=Run  Up/Down=Select  Esc=Close]",
+        true,
+        cfg.window_outline,
+        palette,
+        glyphs,
+        buf,
+    );
+    let inner = inset_window_frame(pop_rect);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let items = wm.filtered_palette_items();
+    let mut lines = Vec::new();
+    lines.push(Line::from(Span::styled(
+        format!("Search > {}_", wm.palette_query),
+        Style::default()
+            .fg(Color::Rgb(255, 255, 85))
+            .bg(palette.window_frame_bg)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
+    let sel = wm.palette_selected.min(items.len().saturating_sub(1));
+    let start = sel.saturating_sub(list_rows.saturating_sub(1));
+    for (idx, (cmd, key, desc)) in items.iter().enumerate().skip(start).take(list_rows) {
+        let is_sel = idx == sel;
+        let bg = if is_sel {
+            palette.active_border_fg
+        } else {
+            palette.window_frame_bg
+        };
+        let fg = if is_sel { Color::Black } else { Color::White };
+        lines.push(Line::from(Span::styled(
+            format!(" {:<20} [{:<10}] {}", cmd, key, desc),
+            Style::default().fg(fg).bg(bg),
+        )));
+    }
+    Paragraph::new(lines).render(inner, buf);
 }
 
 fn render_history_popup(
@@ -1682,6 +1777,34 @@ pub fn render_oia_status_bar_themed(
             Style::default()
                 .fg(Color::White)
                 .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    if pane.vt.is_recording() {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            " ⏺ REC ",
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Rgb(200, 0, 0))
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    if let Some(notif) = pane.vt.notifications().last() {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            format!(" 🔔 {}: {} ", notif.title, notif.body),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(255, 255, 85))
                 .add_modifier(Modifier::BOLD),
         ));
     }

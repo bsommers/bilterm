@@ -64,6 +64,13 @@ pub enum ColonCommand {
     SessionSave(String),
     SessionRestore(String),
     SessionList,
+    CrtToggle(Option<bool>),
+    PaletteToggle,
+    NotificationsClear,
+    TriggerAdd(String),
+    TriggerClear,
+    RecordStart(Option<String>),
+    RecordStop,
     Quit,
 }
 
@@ -285,6 +292,36 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 "Usage: :session save [name] | restore [name] | list".to_string(),
             )),
         },
+        "crt" | "scanlines" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true") => Some(true),
+                Some("off" | "false") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::CrtToggle(arg)))
+        }
+        "palette" | "commands" | "cmd" => Some(Ok(ColonCommand::PaletteToggle)),
+        "notifications" | "notify" | "bell" => Some(Ok(ColonCommand::NotificationsClear)),
+        "trigger" | "triggers" => match parts.get(1).copied() {
+            Some("add") => {
+                let pat = parts.get(2..).map(|s| s.join(" ")).unwrap_or_default();
+                if pat.trim().is_empty() {
+                    Some(Err("Usage: :trigger add <pattern> | clear".to_string()))
+                } else {
+                    Some(Ok(ColonCommand::TriggerAdd(pat)))
+                }
+            }
+            Some("clear" | "off" | "reset") => Some(Ok(ColonCommand::TriggerClear)),
+            _ => Some(Err("Usage: :trigger add <pattern> | clear".to_string())),
+        },
+        "record" | "rec" | "asciinema" => match parts.get(1).copied() {
+            None | Some("start") => {
+                let path = parts.get(2).map(|s| (*s).to_string());
+                Some(Ok(ColonCommand::RecordStart(path)))
+            }
+            Some("stop" | "end") => Some(Ok(ColonCommand::RecordStop)),
+            _ => Some(Err("Usage: :record start [path.cast] | stop".to_string())),
+        },
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
@@ -469,6 +506,37 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             pane.set_read_only(next);
             false
         }
+        ColonCommand::NotificationsClear => {
+            let count = pane.vt.notifications().len();
+            pane.vt.clear_notifications();
+            pane.status_message = Some(format!("Cleared {count} notification(s)"));
+            false
+        }
+        ColonCommand::RecordStart(path_opt) => {
+            let path = path_opt
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::env::temp_dir().join(format!("bilterm-pane-{}.cast", pane.id))
+                });
+            pane.vt.start_recording(path.clone());
+            pane.status_message = Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+            false
+        }
+        ColonCommand::RecordStop => {
+            match pane.vt.stop_recording() {
+                Ok(Some(path)) => {
+                    pane.status_message =
+                        Some(format!("Saved asciicast v2 recording to {}", path.display()));
+                }
+                Ok(None) => {
+                    pane.status_message = Some("No active recording on this pane".to_string());
+                }
+                Err(err) => {
+                    pane.status_message = Some(format!("Recording save error: {err}"));
+                }
+            }
+            false
+        }
         ColonCommand::Quit => true,
         _ => false,
     }
@@ -592,6 +660,36 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             } else {
                 format!("Saved sessions: {}", sessions.join(", "))
             });
+            false
+        }
+        ColonCommand::CrtToggle(val) => {
+            let next = val.unwrap_or(!wm.config.crt_scanlines);
+            wm.config.crt_scanlines = next;
+            wm.active_pane_mut().status_message = Some(format!(
+                "CRT Phosphor Scanlines: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::PaletteToggle => {
+            wm.toggle_palette();
+            false
+        }
+        ColonCommand::TriggerAdd(pat) => {
+            if !wm.config.triggers.contains(&pat) {
+                wm.config.triggers.push(pat.clone());
+            }
+            wm.active_pane_mut().status_message = Some(format!(
+                "Added output highlight trigger '{}' ({} active)",
+                pat,
+                wm.config.triggers.len()
+            ));
+            false
+        }
+        ColonCommand::TriggerClear => {
+            wm.config.triggers.clear();
+            wm.active_pane_mut().status_message =
+                Some("Cleared all output highlight triggers".to_string());
             false
         }
         ColonCommand::Glyphs(pack) => {

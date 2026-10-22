@@ -178,6 +178,7 @@ pub struct GuiFrameSurface {
     pub viewport_cells: Rect,
     pub cell_width_px: u16,
     pub cell_height_px: u16,
+    pub crt_scanlines: bool,
     pub quads: Vec<GuiQuadPrimitive>,
     pub glyphs: Vec<GuiGlyphRun>,
     pub images: Vec<GuiImageTexture>,
@@ -189,6 +190,7 @@ impl GuiFrameSurface {
             viewport_cells: Rect::default(),
             cell_width_px: cell_width_px.max(4),
             cell_height_px: cell_height_px.max(8),
+            crt_scanlines: false,
             quads: Vec::new(),
             glyphs: Vec::new(),
             images: Vec::new(),
@@ -275,6 +277,18 @@ impl GuiFrameSurface {
             }
         }
 
+        // Pass 4: Optional CRT phosphor scanline attenuation on odd pixel rows (v0.6.0)
+        if self.crt_scanlines {
+            for py in (1..h_px).step_by(2) {
+                for px in 0..w_px {
+                    let idx = ((py * w_px + px) * 4) as usize;
+                    fb[idx] = ((u16::from(fb[idx]) * 3) / 4) as u8;
+                    fb[idx + 1] = ((u16::from(fb[idx + 1]) * 3) / 4) as u8;
+                    fb[idx + 2] = ((u16::from(fb[idx + 2]) * 3) / 4) as u8;
+                }
+            }
+        }
+
         (w_px, h_px, fb)
     }
 
@@ -325,6 +339,7 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
         surface.viewport_cells = viewport;
         surface.cell_width_px = self.cell_width_px;
         surface.cell_height_px = self.cell_height_px;
+        surface.crt_scanlines = wm.config.crt_scanlines;
         surface.quads.clear();
         surface.glyphs.clear();
         surface.images.clear();

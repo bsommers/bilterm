@@ -5,6 +5,33 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.0.0] - 2026-10-21
+
+### Added
+- **CLI Shell Completions, Manpage Generator & Nix Flake Packaging (`PKG-01`, `src/main.rs`, `docs/bilterm.1`, `flake.nix`)**:
+  - Added `bilterm --completions bash|zsh|fish` and `bilterm --man` CLI flags alongside the standalone `roff(7)` manual page (`docs/bilterm.1`) and reproducible Nix flake (`flake.nix`).
+  - Promoted crate version to `1.0.0` with full documentation synchronization across `README.md`, `docs/`, and `docs/user-guide/`.
+
+## [v0.7.0] - 2026-10-21
+
+### Added
+- **`OSC 9` / `OSC 777` Desktop Notifications & OIA Bell Telemetry (`NTF-01`, `src/vt/mod.rs`, `src/ui/mod.rs`, `src/pane/colon_command.rs`)**:
+  - Parses iTerm2 `OSC 9;<message>ST` and rxvt-unicode `OSC 777;notify;<title>;<body>ST` notifications alongside `BEL` (`0x07`), displaying a live `🔔 <count>:<title>` badge in the IBM 3270 OIA status bar and clearing via `:notifications clear` (`:notify clear`).
+- **Custom Output Highlight Triggers (`TRG-01`, `src/config/mod.rs`, `src/ui/mod.rs`, `src/pane/colon_command.rs`)**:
+  - Highlights user-defined pattern matches across the `OutputCanvas` in real time via `:trigger add <pattern>`, `:trigger clear`, or `triggers = [...]` in `config.toml`.
+- **Asciicast v2 (`.cast`) Terminal Session Recorder (`REC-01`, `src/vt/mod.rs`, `src/ui/mod.rs`, `src/pane/colon_command.rs`)**:
+  - Records live PTY output streams into standard Asciicast v2 JSONL `.cast` files (`:record start [path]` / `:record stop`) with a live `⏺ REC` indicator in the OIA status bar.
+
+## [v0.6.0] - 2026-10-21
+
+### Added
+- **Interactive Fuzzy Command Palette (`CMD-01`, `Ctrl+P` / `Alt+Space` / `:palette`, `src/wm/mod.rs`, `src/input/mod.rs`, `src/ui/mod.rs`)**:
+  - Borland Turbo Vision modal command palette powered by `nucleo-matcher` that searches and executes all `:colon` commands, switches panes, and applies themes with instant fuzzy filtering.
+- **Custom Keybinding Remapping Engine (`CFG-02`, `src/config/mod.rs`, `src/input/mod.rs`)**:
+  - Supports `[keybindings]` in `~/.config/bilterm/config.toml` (e.g. `"Ctrl+T" = ":split v"`) via `format_key_chord` and `execute_colon_command` dispatch.
+- **Retro CRT Phosphor Scanline Shader (`CRT-01`, `:crt [on|off]`, `src/config/mod.rs`, `src/ui/mod.rs`, `src/ui/renderer.rs`)**:
+  - Optional even-row scanline luminance modulation across both the Ratatui TUI compositor and the native `GuiFrameSurface` RGBA rasterizer.
+
 ## [v0.5.0] - 2026-10-21
 
 ### Added

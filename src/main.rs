@@ -21,11 +21,34 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage: bilterm [OPTIONS]\n\
              Options:\n  \
-               --gui-dump <PATH.ppm>  Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
-               --version, -V          Print version information\n  \
-               --help, -h             Print this help message",
+               --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
+               --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
+               --man                        Print roff manpage (bilterm.1) to stdout\n  \
+               --version, -V                Print version information\n  \
+               --help, -h                   Print this help message",
             env!("CARGO_PKG_VERSION")
         );
+        return Ok(());
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--completions")
+        && let Some(shell) = args.get(pos + 1)
+    {
+        match shell.as_str() {
+            "bash" => println!(
+                "complete -W \"--help --version --gui-dump --completions --man\" bilterm"
+            ),
+            "zsh" => println!(
+                "#compdef bilterm\n_arguments '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]'"
+            ),
+            "fish" => println!(
+                "complete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'"
+            ),
+            _ => eprintln!("Supported shells: bash, zsh, fish"),
+        }
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--man") {
+        print!("{}", include_str!("../docs/bilterm.1"));
         return Ok(());
     }
     if let Some(pos) = args.iter().position(|a| a == "--gui-dump")

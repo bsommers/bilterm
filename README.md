@@ -18,9 +18,9 @@
      IBM 3270 MAINFRAME PROMPT  ×  BORLAND TURBO VISION TUI MULTIPLEXER
 ```
 
-![Version](https://img.shields.io/badge/version-v0.5.0-blue)
+![Version](https://img.shields.io/badge/version-v1.0.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange)
-![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-81.83%25-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-cyan)
 
@@ -53,6 +53,7 @@
   - **Multi-Session Workspaces & Diagnostics**: Live 3270 Terminal Inspector (`F9` / `:inspector`), declarative TOML workspace session serialization (`:session save|restore|list`), top Borland Turbo Vision Menu Bar (`:menubar`), Read-Only 3270 Field Lock (`Alt+L` / `:lock`), and Multi-Pane Input Broadcast (`:broadcast`).
   - **3-Layer Optimal Tech Stack Blueprint Seam & GPU Windowing (`v0.2.5`, `v0.4.0`)**: Renderer-agnostic `GridSnapshot` (`src/vt/snapshot.rs`), dedicated `VtWorkerHandle` thread + `GhosttyCAbiTerminal` / `GhosttyVtEngine` C-ABI adapter (`src/vt/worker.rs`, `src/vt/ghostty_backend.rs`), and `GuiWorkspaceRenderer` + `RatatuiWorkspaceRenderer` (`src/ui/renderer.rs`, `--gui-dump <path.ppm>`).
   - **Bi-Directional `tmux -CC` Daemon & Terminal Graphics (`v0.5.0`)**: Live `TmuxControlSubprocess` + `TmuxControlBridge` (`%layout-change` multi-pane hydration, `%window-pane-changed`, hex `send-keys` prompt routing, `src/tmux/mod.rs`) plus **Kitty Graphics Protocol (`APC G`)** and **DEC Sixel (`DCS q`)** decoding & TrueColor half-block (`▀`) / GPU RGBA texture rendering.
+  - **Fuzzy Command Palette, CRT Scanlines, Notifications, Triggers & Asciinema Recorder (`v0.6.0`–`v1.0.0`)**: Interactive Fuzzy Command Palette (`Ctrl+P` / `Alt+Space` / `:palette`), user-configurable `[keybindings]` in `config.toml`, retro CRT phosphor scanlines (`:crt [on|off]`), `OSC 9` / `OSC 777` OIA notifications (`🔔`, `:notifications clear`), custom output highlight triggers (`:trigger add <pattern>`), `asciinema` v2 `.cast` terminal session recording (`:record start|stop`), CLI shell completions (`--completions bash|zsh|fish`), roff manpage (`--man` / `docs/bilterm.1`), and `flake.nix`.
 
 ---
 
@@ -141,6 +142,11 @@ cargo clippy --all-targets -- -D warnings
 | **Search Output Canvas Scrollback** | `Alt+/` (`Alt+n` / `Alt+N`) | `:search <query>` / `:search next\|prev\|clear` |
 | **Vi Copy Mode & Block Selection** | `Alt+C` / `Alt+LeftDrag` | `:copy` |
 | **Yank `OSC 8` / Auto-Detected URLs** | `Ctrl+LeftClick` | `:links [index]` |
+| **Interactive Fuzzy Command Palette** | `Ctrl+P` / `Alt+Space` | `:palette` |
+| **Toggle Retro CRT Phosphor Scanlines** | — | `:crt [on\|off]` |
+| **Output Highlight Triggers** | — | `:trigger add <pattern>` / `:trigger clear` |
+| **Asciinema v2 `.cast` Session Recorder** | — | `:record start [path.cast]` / `:record stop` |
+| **Clear `OSC 9` / `OSC 777` Notifications** | — | `:notifications clear` |
 | **Clean Quit** | `Ctrl+Q` | `:quit` / `:q` |
 
 ---

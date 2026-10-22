@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,12 @@ pub struct BiltermConfig {
     pub default_prompt_anchor: String,
     /// Default floating command prompt height in rows (`3..=12`).
     pub default_prompt_height: u16,
+    /// Enables retro CRT phosphor scanline dimming (`:crt [on|off]`, `v0.6.0`).
+    pub crt_scanlines: bool,
+    /// User-configurable key chord bindings (`"Ctrl+B" = ":split v"`, `v0.6.0`).
+    pub keybindings: BTreeMap<String, String>,
+    /// Case-insensitive output highlight trigger patterns (`:trigger add <pat>`, `v0.7.0`).
+    pub triggers: Vec<String>,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -68,6 +75,9 @@ impl Default for BiltermConfig {
             session_dir: None,
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
+            crt_scanlines: false,
+            keybindings: BTreeMap::new(),
+            triggers: Vec::new(),
             custom_palette_override: None,
         }
     }

@@ -41,3 +41,13 @@ Because a terminal emulator and shell wrapper mediates between untrusted command
 ### 2.4 Crash-Safe Terminal Restoration (`TerminalRestoreGuard`)
 - **Threat**: If a TUI panics while raw mode, alternate screen, SGR mouse capture, and bracketed paste are enabled, the user's host shell is left unusable.
 - **Mitigation (`src/error.rs`)**: `TerminalRestoreGuard` installs an idempotent `AtomicBool` panic and drop hook that emits `\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[?1049l\x1b[?25h` and disables raw mode before printing any backtrace.
+
+### 2.5 Clipboard Paste Injection & Bracketed-Paste Breakout Defense (`FND-01`)
+- **Threat**: Malicious web pages or terminal payloads copied to the system clipboard may embed hidden C0 control characters (`NUL`, `ESC`, `DEL`, `VINTR 0x03`, `VQUIT 0x1C`, `VSUSP 0x1A`), premature bracketed-paste closing sequences (`\x1b[201~`), or newline-terminated shell commands when pasted into a raw PTY.
+- **Mitigation (`src/vt/mod.rs`, `src/input/mod.rs`, `src/ui/mod.rs`)**:
+  1. `sanitize_paste_bytes()` strips dangerous C0/DEL control bytes from all clipboard pastes before they reach either the floating command editor or the child PTY.
+  2. `is_unsafe_paste()` intercepts unbracketed multi-line pastes and embedded `\x1b[201~` breakout payloads in `INPUT: RAW PTY` mode and opens the Borland Turbo Vision **`[!] UNSAFE PASTE GUARD`** confirmation modal (`y`/`Enter` to confirm, `n`/`Esc` to abort).
+
+### 2.6 Read-Only Protected 3270 Field Lock (`🔒 PROT`, `ECO-04`)
+- **Threat**: Accidental keystrokes or `:broadcast` fan-out into a sensitive production SSH or monitoring pane can disrupt critical jobs.
+- **Mitigation (`src/pane/mod.rs`, `src/input/mod.rs`)**: Pressing **`Alt+L`** or running **`:lock on`** places the pane in Read-Only Protected mode (`🔒 PROT` badge in OIA), blocking all shell submissions and raw PTY keystrokes (and excluding the pane from `:broadcast` fan-out) while still allowing local `:colon` inspection commands.

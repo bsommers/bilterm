@@ -115,6 +115,13 @@ pub struct TerminalGraphicPlacement {
     pub rgba_bytes: Vec<u8>,
 }
 
+/// Desktop / OIA notification emitted via `OSC 9;<msg>` or `OSC 777;notify;<title>;<body>` (`v0.7.0`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TerminalNotification {
+    pub title: String,
+    pub body: String,
+}
+
 /// Virtual terminal state machine wrapping `vt100-ctt` with explicit `DECSET 47/1047/1049`
 /// alternate screen tracking, `DECSET 2004` bracketed paste tracking, `DECSET 1007` alternate scroll,
 /// `DECRPM` mode reporting, Kitty keyboard protocol stacks, `XTGETTCAP`/`DECRQSS`, `OSC 4/10/11/12`
@@ -152,6 +159,11 @@ pub struct VtParser {
     osc9_progress: Option<Osc9Progress>,
     graphic_placements: Vec<TerminalGraphicPlacement>,
     next_graphic_id: u32,
+    notifications: Vec<TerminalNotification>,
+    unread_bell: bool,
+    recording_started_at: Option<Instant>,
+    recording_path: Option<PathBuf>,
+    recording_events: Vec<(f64, String)>,
     recent_escape_sequences: Vec<String>,
     pending_osc52: Vec<String>,
     pending_query_responses: Vec<Vec<u8>>,
@@ -203,6 +215,11 @@ impl VtParser {
             osc9_progress: None,
             graphic_placements: Vec::new(),
             next_graphic_id: 1,
+            notifications: Vec::new(),
+            unread_bell: false,
+            recording_started_at: None,
+            recording_path: None,
+            recording_events: Vec::new(),
             recent_escape_sequences: Vec::new(),
             pending_osc52: Vec::new(),
             pending_query_responses: Vec::new(),
@@ -228,6 +245,11 @@ impl VtParser {
     pub fn process(&mut self, bytes: &[u8]) {
         self.generation = self.generation.wrapping_add(1);
         self.total_bytes_processed = self.total_bytes_processed.saturating_add(bytes.len());
+        if let Some(t0) = self.recording_started_at {
+            let elapsed = t0.elapsed().as_secs_f64();
+            self.recording_events
+                .push((elapsed, String::from_utf8_lossy(bytes).into_owned()));
+        }
         if !self.is_alternate_screen() && is_binary_noise_chunk(bytes) {
             let sanitized = sanitize_binary_noise_chunk(bytes);
             let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
@@ -550,6 +572,57 @@ impl VtParser {
     /// Clears all active graphics placements (`GFX-01`).
     pub fn clear_graphics(&mut self) {
         self.graphic_placements.clear();
+    }
+
+    /// Returns all captured `OSC 9` / `OSC 777` notifications (`v0.7.0`).
+    pub fn notifications(&self) -> &[TerminalNotification] {
+        &self.notifications
+    }
+
+    /// Clears captured notifications and resets the unread bell indicator (`v0.7.0`).
+    pub fn clear_notifications(&mut self) {
+        self.notifications.clear();
+        self.unread_bell = false;
+    }
+
+    /// Returns `true` if a bell or notification is unread (`v0.7.0`).
+    pub fn unread_bell(&self) -> bool {
+        self.unread_bell
+    }
+
+    /// Starts recording terminal output to an asciinema v2 `.cast` file (`v0.7.0`).
+    pub fn start_recording(&mut self, path: PathBuf) {
+        self.recording_started_at = Some(Instant::now());
+        self.recording_path = Some(path);
+        self.recording_events.clear();
+    }
+
+    /// Returns `true` when asciinema v2 `.cast` recording is active (`v0.7.0`).
+    pub fn is_recording(&self) -> bool {
+        self.recording_started_at.is_some()
+    }
+
+    /// Stops recording and writes the asciinema v2 `.cast` file to disk (`v0.7.0`).
+    pub fn stop_recording(&mut self) -> std::io::Result<Option<PathBuf>> {
+        self.recording_started_at = None;
+        let Some(path) = self.recording_path.take() else {
+            return Ok(None);
+        };
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut out = format!(
+            "{{\"version\":2,\"width\":{},\"height\":{},\"timestamp\":1792550000}}\n",
+            self.cols, self.rows
+        );
+        for (elapsed, chunk) in self.recording_events.drain(..) {
+            let escaped = escape_json_string(&chunk);
+            out.push_str(&format!("[{elapsed:.6},\"o\",\"{escaped}\"]\n"));
+        }
+        std::fs::write(&path, out)?;
+        Ok(Some(path))
     }
 
     /// Returns the bounded ring buffer of recent CSI/OSC/DCS escape sequences for the 3270 Terminal Inspector (`BEL-01`).
@@ -1153,6 +1226,37 @@ impl VtParser {
             }
         }
 
+        // Track OSC 9;<msg> notifications (when not OSC 9;4;... progress) and OSC 777;notify;<title>;<body> (v0.7.0)
+        for (idx, _) in text.match_indices("\x1b]9;") {
+            let rest = &text[idx + 4..];
+            if !rest.starts_with("4;")
+                && let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\"))
+            {
+                let msg = rest[..end].trim();
+                if !msg.is_empty() {
+                    self.notifications.push(TerminalNotification {
+                        title: "OSC 9".to_string(),
+                        body: msg.to_string(),
+                    });
+                    self.unread_bell = true;
+                    self.record_escape_sequence(format!("OSC 9 Notify: {msg}"));
+                }
+            }
+        }
+        for (idx, _) in text.match_indices("\x1b]777;notify;") {
+            let rest = &text[idx + 13..];
+            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
+                let payload = &rest[..end];
+                let (title, body) = payload.split_once(';').unwrap_or(("NOTIFY", payload));
+                self.notifications.push(TerminalNotification {
+                    title: title.trim().to_string(),
+                    body: body.trim().to_string(),
+                });
+                self.unread_bell = true;
+                self.record_escape_sequence(format!("OSC 777 Notify: {title}"));
+            }
+        }
+
         // Track OSC 9;4 progress bar reports: \x1b]9;4;<state>[;<pct>](\x07 or \x1b\\) (BEL-02)
         for (idx, _) in text.match_indices("\x1b]9;4;") {
             let rest = &text[idx + 6..];
@@ -1630,6 +1734,22 @@ fn hex_encode_ascii(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
         out.push_str(&format!("{b:02X}"));
+    }
+    out
+}
+
+fn escape_json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
     }
     out
 }

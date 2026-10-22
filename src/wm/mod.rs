@@ -76,6 +76,12 @@ pub struct WindowManager {
     pub menubar_selected_item: usize,
     /// Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
     pub broadcast_input: bool,
+    /// Whether the interactive Fuzzy Command Palette modal (`Ctrl+P` / `:palette`) is visible (`v0.6.0`).
+    pub palette_visible: bool,
+    /// Current search query inside the Fuzzy Command Palette modal (`v0.6.0`).
+    pub palette_query: String,
+    /// Selected item index inside the Fuzzy Command Palette modal (`v0.6.0`).
+    pub palette_selected: usize,
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
@@ -116,6 +122,9 @@ impl WindowManager {
             menubar_open_category: None,
             menubar_selected_item: 0,
             broadcast_input: false,
+            palette_visible: false,
+            palette_query: String::new(),
+            palette_selected: 0,
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),
@@ -153,6 +162,68 @@ impl WindowManager {
             "Multi-Pane Input Broadcast: {}",
             if enabled { "ON (📡 BCAST)" } else { "OFF" }
         ));
+    }
+
+    /// Toggles the interactive Fuzzy Command Palette modal (`Ctrl+P` / `Alt+Space` / `:palette`, `v0.6.0`).
+    pub fn toggle_palette(&mut self) {
+        self.palette_visible = !self.palette_visible;
+        if self.palette_visible {
+            self.palette_query.clear();
+            self.palette_selected = 0;
+        }
+    }
+
+    /// Returns `(colon_cmd, shortcut, description)` entries matching `palette_query` ranked by `nucleo-matcher` (`v0.6.0`).
+    pub fn filtered_palette_items(&self) -> Vec<(&'static str, &'static str, &'static str)> {
+        use nucleo_matcher::{Config, Matcher, Utf32Str};
+        const CATALOG: &[(&str, &str, &str)] = &[
+            (":split h", "F2 / Alt+H", "Split focused pane horizontally (Top/Bottom)"),
+            (":split v", "Alt+V", "Split focused pane vertically (Left/Right)"),
+            (":zoom", "F5 / Alt+Z", "Toggle zoom/maximize on focused pane"),
+            (":layout stack", "Alt+M", "Switch workspace to Z-Order Stacked Cascade"),
+            (":layout tile", "Alt+M", "Switch workspace to Tiled Binary Split Tree"),
+            (":deck next", "F6 / Alt+Tab", "Shuffle Z-order window deck top-to-bottom"),
+            (":quake", "F10 / Alt+`", "Toggle persistent Guake drop-down quick terminal"),
+            (":inspector", "F9", "Open Live 3270 Terminal Inspector modal"),
+            (":hints", "Alt+F", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
+            (":copy", "Alt+C", "Enter Vi Copy Mode & Rectangular Block Selection"),
+            (":lock", "Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
+            (":broadcast", "—", "Toggle Synchronized Multi-Pane Input Broadcast"),
+            (":menubar", "—", "Toggle Top Borland Turbo Vision Menu Bar"),
+            (":crt", "—", "Toggle Retro CRT Phosphor Scanline Effect"),
+            (":prompt split-top", "Alt+S", "Non-overlapping Split Command Prompt at Top"),
+            (":prompt top", "Alt+T", "Pin Floating Command Prompt to Top"),
+            (":prompt bottom", "Alt+B", "Pin Floating Command Prompt to Bottom"),
+            (":crosshair full", "Alt+X", "Enable Full-Screen IBM 3270 Cross-Hair Cursor"),
+            (":theme turbo-blue", "—", "Switch palette to Borland Turbo Vision Blue"),
+            (":theme 3278", "—", "Switch palette to IBM 3278 Phosphor Green"),
+            (":theme 3279", "—", "Switch palette to IBM 3279 Amber CRT"),
+            (":session save default", "—", "Save multi-pane workspace session to TOML"),
+            (":session restore default", "—", "Restore saved multi-pane workspace session"),
+            (":record start", "—", "Start Asciicast v2 (.cast) terminal recording"),
+            (":record stop", "—", "Stop Asciicast v2 (.cast) terminal recording"),
+            (":notifications clear", "—", "Clear OSC 9 / OSC 777 desktop notifications"),
+            (":help", "F1", "Open Borland Turbo Vision Quick Reference Help"),
+            (":quit", "Ctrl+Q", "Cleanly exit Bilterm"),
+        ];
+        let q = self.palette_query.trim();
+        if q.is_empty() {
+            return CATALOG.to_vec();
+        }
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let mut needle_buf = Vec::new();
+        let needle = Utf32Str::new(q, &mut needle_buf);
+        let mut scored: Vec<(u16, (&'static str, &'static str, &'static str))> = CATALOG
+            .iter()
+            .filter_map(|&item| {
+                let combined = format!("{} {} {}", item.0, item.1, item.2);
+                let mut hay_buf = Vec::new();
+                let hay = Utf32Str::new(&combined, &mut hay_buf);
+                matcher.fuzzy_match(hay, needle).map(|score| (score, item))
+            })
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.into_iter().map(|(_, item)| item).collect()
     }
 
     /// Propagates the active `ThemePalette` RGB values to all panes and queues unsolicited

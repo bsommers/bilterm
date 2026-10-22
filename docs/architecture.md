@@ -81,8 +81,8 @@ flowchart TB
 | **Composite Pane & Prompt** | `src/pane/mod.rs`, `src/pane/completion.rs`, `src/pane/history_store.rs`, `src/pane/highlight.rs`, `src/pane/fuzzy_history.rs`, `src/pane/colon_command.rs` | `CompositePane` state, `PromptAnchor` (`Top`, `Bottom`, `Floating`, `SplitTop`, `SplitBottom`), exit-code/duration badges (`✓ 0 [12ms]`), Vi Copy Mode, QuickSelect 3270 Field Hints (`[a]..[z]`), Read-Only Field Lock (`🔒 PROT`), Tab completion, `nucleo-matcher` fuzzy history, and persistent `HistoryStore` |
 | **Window Manager** | `src/wm/mod.rs`, `src/wm/split_tree.rs`, `src/wm/z_stack.rs`, `src/wm/quick_terminal.rs` | Recursive H/V `SplitNode` BSP tree, overlapping `ZStack` window deck, persistent `QuakeQuickTerminal` (`F10`), TOML workspace session serialization (`:session save|restore|list`), Multi-Pane Input Broadcast (`:broadcast`), `F9` 3270 Inspector, and `<F1>` Help modal |
 | **3-Pass UI Compositor & Renderer Seam** | `src/ui/mod.rs`, `src/ui/renderer.rs`, `src/ui/chrome.rs`, `src/ui/cursor.rs`, `src/ui/glyphs.rs`, `src/ui/occlusion.rs`, `src/ui/theme.rs` | Abstract `WorkspaceFrameRenderer` (`RatatuiWorkspaceRenderer` + GPU windowing seam), 3-pass Ratatui buffer compositor, 8 `OutlineStyle` borders, 4 `ShadowStyle` DOS drop shadows, Top Borland Menu Bar, CJK `occlude_rect`, pane/full-screen IBM 3270 cross-hairs, and OIA status bar (`OSC 9;4` progress gauge) |
-| **Configuration** | `src/config/mod.rs` | Declarative `~/.config/bilterm/config.toml` parser and `.ini` palette override loader |
-| **Tmux Bridge** | `src/tmux/mod.rs` | Outer `$TMUX` `DCS tmux;` passthrough wrapper and `tmux -CC` Control Mode protocol parser |
+| **Configuration** | `src/config/mod.rs` | Declarative `~/.config/bilterm/config.toml` parser (`theme`, `glyphs`, `window_outline`, `prompt_outline`, `shadow_style`, `crt_scanlines`, `[keybindings]`, `triggers`) and `.ini` palette override loader |
+| **Tmux Bridge** | `src/tmux/mod.rs` | Outer `$TMUX` `DCS tmux;` passthrough wrapper, `TmuxControlBridge` (`%layout-change` multi-pane hydration, `%window-pane-changed`, hex `send-keys` prompt routing), and live `TmuxControlSubprocess` (`tmux -CC`) |
 
 ---
 

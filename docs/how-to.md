@@ -10,7 +10,8 @@
 - [Recipe 4: Full-Screen vs. Pane-Local IBM 3270 Cross-Hair Cursor](#recipe-4-full-screen-vs-pane-local-ibm-3270-cross-hair-cursor)
 - [Recipe 5: Inspecting & Exporting Session Command History](#recipe-5-inspecting--exporting-session-command-history)
 - [Recipe 6: Customizing Window Outlines, DOS Drop Shadows & Palettes](#recipe-6-customizing-window-outlines-dos-drop-shadows--palettes)
-- [Recipe 7: Local Verification & Coverage Gate (CI Conservation)](#recipe-7-local-verification--coverage-gate-ci-conservation)
+- [Recipe 7: Fuzzy Command Palette, Output Triggers & Session Recording (`v0.6.0`–`v1.0.0`)](#recipe-7-fuzzy-command-palette-output-triggers--session-recording-v060v100)
+- [Recipe 8: Local Verification & Coverage Gate (CI Conservation)](#recipe-8-local-verification--coverage-gate-ci-conservation)
 - [Troubleshooting Matrix](#troubleshooting-matrix)
 
 ---
@@ -105,7 +106,26 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 
 ---
 
-## Recipe 7: Local Verification & Coverage Gate (CI Conservation)
+## Recipe 7: Fuzzy Command Palette, Output Triggers & Session Recording (`v0.6.0`–`v1.0.0`)
+
+1. **Open the Fuzzy Command Palette**:
+   - Press **`Ctrl+P`** or **`Alt+Space`** (or run **`:palette`**) to search all panes, themes, sessions, and `:colon` commands via `nucleo-matcher`.
+2. **Enable Retro CRT Scanlines & Output Highlight Triggers**:
+   ```text
+   ==> :crt on
+   ==> :trigger add ERROR:
+   ==> :trigger add PANIC
+   ```
+3. **Record an Asciicast v2 (`.cast`) Terminal Session**:
+   ```text
+   ==> :record start /tmp/demo.cast
+   ==> echo "Recorded in Asciicast v2 format!"
+   ==> :record stop
+   ```
+
+---
+
+## Recipe 8: Local Verification & Coverage Gate (CI Conservation)
 
 Run the full test, torture, clippy, and coverage suite locally before committing or pushing:
 

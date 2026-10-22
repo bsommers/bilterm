@@ -26,10 +26,15 @@
 | **`F9`** | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (active DECSET modes, Kitty flags, cursor cell `U+XXXX`, CSI/OSC log) (`BEL-01`) |
 | **`F10`** / `Alt+\`` / `Ctrl+Space` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal (`WM-05`) |
 | **`F12`** / `Ctrl+G` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` (`PTY-02`) |
+| **`Ctrl+P`** / `Alt+Space` | `:palette` / `:cmd` | Open interactive Fuzzy Command Palette (`nucleo-matcher`) (`CMD-01`) |
 | `Alt+F` | `:hints` / `:hint` | Toggle QuickSelect 3270 Field Hints (`[a]..[z]`) for URLs, paths, IPv4s, and Git SHAs (`ECO-01`) |
 | `Alt+L` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane (`ECO-04`) |
 | — | `:broadcast [on\|off]` | Toggle Synchronized Multi-Pane Input Broadcast (`📡 BCAST`) across unlocked panes (`ECO-04`) |
 | — | `:menubar [on\|off]` | Toggle interactive Top Borland Turbo Vision Menu Bar (`ECO-03`) |
+| — | `:crt [on\|off]` | Toggle retro CRT phosphor scanline shader (`CRT-01`) |
+| — | `:notifications clear` | Clear `OSC 9` / `OSC 777` desktop notification & bell badge (`🔔`) (`NTF-01`) |
+| — | `:trigger add <pat> \| clear` | Add or clear live output highlight triggers on the `OutputCanvas` (`TRG-01`) |
+| — | `:record start [path] \| stop` | Start or stop Asciicast v2 (`.cast`) terminal session recording (`⏺ REC`) (`REC-01`) |
 | — | `:session save <name>` | Save multi-pane workspace topology and pane metadata to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml` (`ECO-02`) |
 | — | `:session restore <name>` | Restore saved multi-pane workspace session (`ECO-02`) |
 | — | `:session list` | List saved workspace sessions (`ECO-02`) |

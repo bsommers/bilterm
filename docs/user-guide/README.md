@@ -212,6 +212,10 @@ Bilterm loads `~/.config/bilterm/config.toml` (or `$XDG_CONFIG_HOME/bilterm/conf
 | `history_dir` | `string` (optional) | Any directory path | `None` | Custom directory override for persisted session history logs |
 | `default_prompt_anchor` | `string` | `"top"`, `"bottom"`, `"floating"`, `"split-top"`, `"split-bottom"` | `"top"` | Initial command prompt placement for new panes |
 | `default_prompt_height` | `u16` | `3..=12` | `3` | Initial command prompt box height in rows |
+| `show_menu_bar` | `bool` | `true`, `false` | `false` | Shows top 1-row Borland Turbo Vision pull-down menu bar (`ECO-03`) |
+| `crt_scanlines` | `bool` | `true`, `false` | `false` | Enables alternating scanline luminance modulation (`CRT-01`) |
+| `triggers` | `array of strings` | Case-insensitive substring patterns | `[]` | Highlights matching tokens on the `OutputCanvas` (`TRG-01`) |
+| `[keybindings]` | `table` | `"<KeyChord>" = ":<command>"` | `{}` | Custom user keybinding remapping table (`CFG-02`) |
 
 ### INI Theme Palette Override Keys
 

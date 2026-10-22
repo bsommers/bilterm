@@ -19,12 +19,15 @@ When launched inside an existing `tmux` session (`$TMUX` environment variable de
 
 ---
 
-## 2. Mode B: Controlling `tmux` via `tmux -CC` Control Mode (`TMUX-02`)
+## 2. Mode B: Controlling `tmux` via `tmux -CC` Control Mode (`TMUX-02` & `TMUX-03`)
 
-Bilterm's `TmuxControlBridge` parses `tmux -CC` Control Mode notifications:
+Bilterm's `TmuxControlBridge` and `TmuxControlSubprocess` (`src/tmux/mod.rs`) provide a full bi-directional `tmux -CC` Control Mode bridge:
 - **`%output %<pane_id> <octal-escaped-bytes>`**: Unescapes `tmux` octal sequences (`\033`, `\015`, `\012`) and feeds each `%pane_id` stream into its mapped Bilterm `CompositePane` `VtParser`.
-- **`%window-add`, `%layout-change`, `%session-changed`**: Synchronizes `tmux` windows and panes with Bilterm's `WindowManager`.
-- **Hex `send-keys` Dispatch**: Commands submitted from Bilterm's `FloatingCommandPrompt` are formatted via `format_send_keys_hex` (`send-keys -t %<id> -H <hex>`) so every `tmux` pane gains Bilterm's local floating prompt overlay while retaining `tmux` session persistence across disconnects.
+- **`%layout-change` Topology Hydration (`parse_tmux_layout_panes`)**: Parses `tmux` layout strings (`<checksum>,<WxH>,<X>,<Y>{...}[...]`) to extract `%pane_id` geometries and automatically creates 1:1 local `CompositePane` instances on the fly.
+- **`%window-add`, `%window-pane-changed`, `%window-close`, `%session-changed`, `%exit`**: Synchronizes `tmux` windows, focus changes, closures, and session lifecycles with Bilterm's `WindowManager`.
+- **Bi-Directional Command & Split Dispatch**:
+  - Commands submitted from Bilterm's `FloatingCommandPrompt` are routed via `TmuxControlBridge::route_prompt_submission` (`send-keys -t %<id> -H <hex>`).
+  - Local pane splits and client resizes queue `split-window -v/-h -t %<id>` (`queue_split`) and `refresh-client -C <cols>x<rows>` (`queue_resize_client`) to the live `tmux -CC` subprocess (`TmuxControlSubprocess::spawn_attach_or_new`).
 
 ---
 
