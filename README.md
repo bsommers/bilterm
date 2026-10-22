@@ -81,6 +81,7 @@ cargo clippy --all-targets -- -D warnings
 | **Split Horizontal / Split Vertical / Zoom** | `F2` (`Alt+H`) / `Alt+V` / `F5` (`Alt+Z`) | `:split h` / `:split v` / `:zoom` |
 | **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `Alt+M` / `F6` (`Alt+Tab`) / `Alt+1..9` | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
 | **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
+| **Cycle Floating / Fixed / Regular Terminal** | `F4` (`Alt+E`) / Click OIA Bar | `:mode [float \| fixed \| terminal \| cycle]` |
 | **Prompt Pin Top / Bottom / Non-Overlapping Split**| `Alt+T` / `Alt+B` / `Alt+S` | `:prompt top \| bottom \| split-top \| split-bottom` |
 | **3270 Field Hints / Vi Copy / Canvas Search** | `Alt+F` / `Alt+C` / `Alt+/` | `:hints` / `:copy` / `:search <query>` |
 | **Read-Only Lock / Multi-Pane Broadcast** | `Alt+L` / — | `:lock [on\|off]` / `:broadcast [on\|off]` |

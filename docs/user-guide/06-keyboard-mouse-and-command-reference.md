@@ -18,6 +18,7 @@
 | **`F1`** | `:help` / `:?` | Toggle interactive scrollable Borland Turbo Vision Help Modal |
 | **`F2`** / `Alt+H` | `:split h` / `:sp` | Split focused composite pane horizontally (Top / Bottom) (`WM-01`) |
 | `Alt+V` | `:split v` / `:vs` | Split focused composite pane vertically (Left / Right) (`WM-01`) |
+| **`F4`** / `Alt+E` | `:mode [float\|fixed\|terminal\|cycle]` | Cycle between **Floating Prompt**, **Fixed (Docked) Prompt**, and **Regular Terminal** |
 | **`F5`** / `Alt+Z` | `:zoom` | Toggle zoom/maximize on the focused composite pane (`WM-03`) |
 | **`F6`** / `Alt+Tab` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (`WM-02`) |
 | `Alt+Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (`WM-02`) |
