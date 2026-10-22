@@ -1,5 +1,9 @@
 use std::io;
 
+use bilterm::api::{
+    AutomationControlPlane, JsonValue, Playbook, run_headless_tcp_server, run_mcp_stdio_server,
+    send_rpc_request,
+};
 use bilterm::app::App;
 use bilterm::error::TerminalRestoreGuard;
 use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
@@ -19,8 +23,13 @@ async fn main() -> color_eyre::Result<()> {
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
-             Usage: bilterm [OPTIONS]\n\
+             Usage:\n  \
+               bilterm [OPTIONS]\n  \
+               bilterm ctl <ENDPOINT> <METHOD> [JSON_PARAMS]\n\
              Options:\n  \
+               --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
+               --headless --listen <ADDR>   Run headless JSON-RPC 2.0 automation daemon on TCP/Unix socket\n  \
+               --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
                --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
                --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
                --man                        Print roff manpage (bilterm.1) to stdout\n  \
@@ -30,18 +39,55 @@ async fn main() -> color_eyre::Result<()> {
         );
         return Ok(());
     }
+    if args.first().map(String::as_str) == Some("ctl") {
+        let endpoint = args.get(1).map_or("127.0.0.1:7370", String::as_str);
+        let method = args.get(2).map_or("workspace.status", String::as_str);
+        let params = args
+            .get(3)
+            .and_then(|raw| JsonValue::parse(raw))
+            .unwrap_or_else(|| JsonValue::obj([] as [(&str, JsonValue); 0]));
+        let resp = send_rpc_request(endpoint, method, params).await?;
+        println!("{resp}");
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--mcp") {
+        run_mcp_stdio_server(24, 80).await?;
+        return Ok(());
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--playbook")
+        && let Some(pb_path) = args.get(pos + 1)
+    {
+        let raw_toml = std::fs::read_to_string(pb_path)?;
+        let pb = Playbook::from_toml_str(&raw_toml)?;
+        let mut plane = AutomationControlPlane::new_headless(24, 80);
+        let report = plane
+            .run_playbook(&pb)
+            .map_err(|e| color_eyre::eyre::eyre!(e))?;
+        println!(
+            "{{\"playbook\":{:?},\"passed\":{},\"steps_completed\":{}}}",
+            report.name, report.passed, report.steps_completed
+        );
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--headless")
+        && let Some(pos) = args.iter().position(|a| a == "--listen")
+        && let Some(bind_addr) = args.get(pos + 1)
+    {
+        run_headless_tcp_server(bind_addr, 24, 80).await?;
+        return Ok(());
+    }
     if let Some(pos) = args.iter().position(|a| a == "--completions")
         && let Some(shell) = args.get(pos + 1)
     {
         match shell.as_str() {
             "bash" => println!(
-                "complete -W \"--help --version --gui-dump --completions --man\" bilterm"
+                "complete -W \"ctl --mcp --headless --listen --playbook --help --version --gui-dump --completions --man\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]'"
+                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]'"
             ),
             "fish" => println!(
-                "complete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'"
+                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }

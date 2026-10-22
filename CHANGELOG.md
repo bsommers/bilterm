@@ -5,6 +5,25 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.3.0] - 2026-10-21
+
+### Added
+- **Structured Automation Event Subscription Bus & Declarative Robot Playbooks (`AUTO-03`, `src/api/mod.rs`, `src/main.rs`)**:
+  - `AutomationEvent` tracks `command_submitted`, `command_completed` (with `OSC 133;D` exit code and duration), `trigger_matched`, `notification_received` (`OSC 9`/`OSC 777`), `echo_lock_changed`, and `alternate_screen_changed` via `events.poll`.
+  - `Playbook` (`bilterm --playbook <file.toml>` / `playbook.run`) executes declarative multi-step TOML automation playbooks (`colon`, `exec`, `send_keys`, `feed_output`, `assert_screen_contains`, `assert_trigger_fired`, `assert_exit_code`, `export_ppm`).
+
+## [v1.2.0] - 2026-10-21
+
+### Added
+- **Native Model Context Protocol (MCP) Server for AI Agents (`AUTO-02`, `bilterm --mcp`, `src/api/mod.rs`, `src/main.rs`)**:
+  - Zero-wrapper JSON-RPC 2.0 MCP (`2024-11-05`) server over `stdio` exposing `initialize`, `ping`, `tools/list`, and `tools/call` for 6 agent-native tools: `bilterm_workspace_status`, `bilterm_exec_command`, `bilterm_inspect_pane`, `bilterm_send_keys`, `bilterm_colon_command`, and `bilterm_run_playbook`.
+
+## [v1.1.0] - 2026-10-21
+
+### Added
+- **JSON-RPC 2.0 Automation Control Plane, `--headless` Daemon & `bilterm ctl` CLI (`AUTO-01`, `src/api/mod.rs`, `src/main.rs`)**:
+  - `AutomationControlPlane`, `run_headless_tcp_server` (`bilterm --headless --listen <addr>`), and `send_rpc_request` (`bilterm ctl <endpoint> <method> [params]`) exposing 100% of Bilterm's workspace, pane, `:colon` command, key-chord, and snapshot capabilities over JSON-RPC 2.0 with built-in `!ECHO LOCK` and `🔒 PROT` safety guards.
+
 ## [v1.0.0] - 2026-10-21
 
 ### Added

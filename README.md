@@ -18,9 +18,9 @@
      IBM 3270 MAINFRAME PROMPT  ×  BORLAND TURBO VISION TUI MULTIPLEXER
 ```
 
-![Version](https://img.shields.io/badge/version-v1.0.0-blue)
+![Version](https://img.shields.io/badge/version-v1.3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange)
-![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-81.83%25-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-cyan)
 
@@ -54,6 +54,10 @@
   - **3-Layer Optimal Tech Stack Blueprint Seam & GPU Windowing (`v0.2.5`, `v0.4.0`)**: Renderer-agnostic `GridSnapshot` (`src/vt/snapshot.rs`), dedicated `VtWorkerHandle` thread + `GhosttyCAbiTerminal` / `GhosttyVtEngine` C-ABI adapter (`src/vt/worker.rs`, `src/vt/ghostty_backend.rs`), and `GuiWorkspaceRenderer` + `RatatuiWorkspaceRenderer` (`src/ui/renderer.rs`, `--gui-dump <path.ppm>`).
   - **Bi-Directional `tmux -CC` Daemon & Terminal Graphics (`v0.5.0`)**: Live `TmuxControlSubprocess` + `TmuxControlBridge` (`%layout-change` multi-pane hydration, `%window-pane-changed`, hex `send-keys` prompt routing, `src/tmux/mod.rs`) plus **Kitty Graphics Protocol (`APC G`)** and **DEC Sixel (`DCS q`)** decoding & TrueColor half-block (`▀`) / GPU RGBA texture rendering.
   - **Fuzzy Command Palette, CRT Scanlines, Notifications, Triggers & Asciinema Recorder (`v0.6.0`–`v1.0.0`)**: Interactive Fuzzy Command Palette (`Ctrl+P` / `Alt+Space` / `:palette`), user-configurable `[keybindings]` in `config.toml`, retro CRT phosphor scanlines (`:crt [on|off]`), `OSC 9` / `OSC 777` OIA notifications (`🔔`, `:notifications clear`), custom output highlight triggers (`:trigger add <pattern>`), `asciinema` v2 `.cast` terminal session recording (`:record start|stop`), CLI shell completions (`--completions bash|zsh|fish`), roff manpage (`--man` / `docs/bilterm.1`), and `flake.nix`.
+  - **Full Automation Control Plane, Native MCP Server (`--mcp`), `bilterm ctl` CLI & Declarative Playbooks (`v1.1.0`–`v1.3.0`)**:
+    - **JSON-RPC 2.0 Automation Control Plane (`src/api/mod.rs`)**: Headless or live TCP/Unix socket automation server (`bilterm --headless --listen 127.0.0.1:7370`) and scripting CLI (`bilterm ctl <endpoint> <method> [json_params]`) exposing `workspace.status`, `workspace.snapshot`, `pane.exec`, `pane.read`, `pane.send_keys`, `pane.feed_output`, `wm.command`, `events.poll`, and `playbook.run` with `!ECHO LOCK` and `🔒 PROT` safety guards.
+    - **Native Model Context Protocol (MCP) Server (`bilterm --mcp`)**: Zero-wrapper JSON-RPC 2.0 `stdio` MCP server exposing 6 agent-native tools (`bilterm_workspace_status`, `bilterm_exec_command`, `bilterm_inspect_pane`, `bilterm_send_keys`, `bilterm_colon_command`, `bilterm_run_playbook`).
+    - **Structured Event Subscription Bus & Declarative Robot Playbooks (`bilterm --playbook <file.toml>`)**: Emits `command_submitted`, `command_completed`, `trigger_matched`, `notification_received`, `echo_lock_changed`, and `alternate_screen_changed` events and executes multi-step TOML playbooks with screen/trigger/exit-code assertions.
 
 ---
 

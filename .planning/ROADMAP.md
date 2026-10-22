@@ -185,3 +185,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 12. `v0.6.0` Fuzzy Command Palette (`Ctrl+P`), Custom Keybinding Remapping & CRT Scanline Shader (`CMD-01`, `CFG-02`, `CRT-01`) | Complete | Complete | 2026-10-21 |
 | 13. `v0.7.0` `OSC 9`/`777` Notifications, Output Highlight Triggers & Asciicast v2 `.cast` Recorder (`NTF-01`, `TRG-01`, `REC-01`) | Complete | Complete | 2026-10-21 |
 | 14. `v1.0.0` Production Release Packaging (`--completions`, `--man`, `docs/bilterm.1`, `flake.nix` & Full Docs Sync) (`PKG-01`) | Complete | Complete | 2026-10-21 |
+| 15. `v1.1.0` JSON-RPC 2.0 Automation Control Plane, `--headless` Daemon & `bilterm ctl` CLI (`AUTO-01`) | Complete | Complete | 2026-10-21 |
+| 16. `v1.2.0` Native Model Context Protocol (`bilterm --mcp`) Server for AI Agents (`AUTO-02`) | Complete | Complete | 2026-10-21 |
+| 17. `v1.3.0` Structured Automation Event Subscription Bus & Declarative Robot Playbooks (`--playbook`) (`AUTO-03`) | Complete | Complete | 2026-10-21 |

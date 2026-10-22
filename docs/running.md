@@ -25,14 +25,18 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.0.0`)
+### CLI Options (`v1.3.0`)
 ```bash
-bilterm                            # Launch interactive TUI multiplexer
-bilterm --gui-dump <path.ppm>      # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
-bilterm --completions bash|zsh|fish # Generate shell completions for bash, zsh, or fish
-bilterm --man                      # Print roff(7) manual page (docs/bilterm.1)
-bilterm --version                  # Print version (bilterm 1.0.0)
-bilterm --help                     # Print CLI usage summary
+bilterm                                         # Launch interactive TUI multiplexer
+bilterm --mcp                                   # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
+bilterm --headless --listen 127.0.0.1:7370      # Run headless JSON-RPC 2.0 automation daemon
+bilterm ctl 127.0.0.1:7370 workspace.status     # Query or drive a running Bilterm instance via JSON-RPC 2.0
+bilterm --playbook <playbook.toml>              # Execute a declarative TOML automation playbook and exit
+bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
+bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
+bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
+bilterm --version                               # Print version (bilterm 1.3.0)
+bilterm --help                                  # Print CLI usage summary
 ```
 
 ---
