@@ -20,8 +20,8 @@
 
 ![Version](https://img.shields.io/badge/version-v1.4.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange)
-![Tests](https://img.shields.io/badge/tests-90%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-81.83%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-83.45%25-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-cyan)
 
 **Bilterm** is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust using [Ratatui](https://ratatui.rs/). Inspired by classic **IBM 3270 Mainframe Terminals** (where the command entry prompt sits at the top of the screen over a scrolling output canvas with an Operator Information Area status bar and full-screen cross-hair cursor) and **DOS Borland Turbo Vision (Turbo C / Turbo Pascal IDE)** windowing systems (`╔═╗` double-line borders, translucent/tinted character-cell drop shadows, Royal Blue / Cyan / 3278 Phosphor Green / 3279 Amber palettes, window number badges, and DOS Function-Key bars), Bilterm treats the **command prompt + underlying PTY output canvas as a single composite terminal pane**.
