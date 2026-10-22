@@ -5,6 +5,15 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.4.0] - 2026-10-21
+
+### Added
+- **First-Class SSH Domains, Remote `tmux -CC` Persistence & `herdr`-Style Central Fleet Federation (`REM-01`, `src/remote/mod.rs`, `src/wm/mod.rs`, `src/pane/colon_command.rs`, `src/api/mod.rs`, `src/ui/mod.rs`)**:
+  - **SSH Composite Panes (`:ssh <user@host> [port]`)**: Spawns remote SSH sessions inside local Composite Panes with automatic `OSC 133` + `OSC 7` shell-integration bootstrap (`remote_osc133_bootstrap_command`), full local `FloatingCommandPrompt` editing, `!ECHO LOCK` passphrase/sudo protection, and a live `🌐 SSH:<user@host>` badge in the IBM 3270 OIA status bar.
+  - **Remote Persistent `tmux -CC` over SSH (`:ssh-tmux <user@host> [session]`)**: Bridges remote `tmux -CC new-session -A -s <session>` streams over SSH (`build_ssh_tmux_cc_args`) into `TmuxControlBridge`.
+  - **`herdr`-Style Central Fleet Registry & Tag Fan-Out (`FleetRegistry`, `:remote add|list|exec|disconnect`)**: Manages local and remote nodes with `[remotes.<name>]` profiles in `config.toml` and tag-filtered command fan-out (`all`, `local`, `remote`, `@tag`, `<node_id>`).
+  - **JSON-RPC 2.0 & MCP Fleet Tools**: Added `remote.connect_ssh`, `remote.connect_tmux`, `fleet.register`, `fleet.list`, `fleet.exec`, `fleet.disconnect`, and MCP tools `bilterm_remote_connect` and `bilterm_fleet_exec`.
+
 ## [v1.3.0] - 2026-10-21
 
 ### Added

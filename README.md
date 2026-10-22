@@ -18,9 +18,9 @@
      IBM 3270 MAINFRAME PROMPT  ×  BORLAND TURBO VISION TUI MULTIPLEXER
 ```
 
-![Version](https://img.shields.io/badge/version-v1.3.0-blue)
+![Version](https://img.shields.io/badge/version-v1.4.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange)
-![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-90%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-81.83%25-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-cyan)
 
@@ -56,8 +56,12 @@
   - **Fuzzy Command Palette, CRT Scanlines, Notifications, Triggers & Asciinema Recorder (`v0.6.0`–`v1.0.0`)**: Interactive Fuzzy Command Palette (`Ctrl+P` / `Alt+Space` / `:palette`), user-configurable `[keybindings]` in `config.toml`, retro CRT phosphor scanlines (`:crt [on|off]`), `OSC 9` / `OSC 777` OIA notifications (`🔔`, `:notifications clear`), custom output highlight triggers (`:trigger add <pattern>`), `asciinema` v2 `.cast` terminal session recording (`:record start|stop`), CLI shell completions (`--completions bash|zsh|fish`), roff manpage (`--man` / `docs/bilterm.1`), and `flake.nix`.
   - **Full Automation Control Plane, Native MCP Server (`--mcp`), `bilterm ctl` CLI & Declarative Playbooks (`v1.1.0`–`v1.3.0`)**:
     - **JSON-RPC 2.0 Automation Control Plane (`src/api/mod.rs`)**: Headless or live TCP/Unix socket automation server (`bilterm --headless --listen 127.0.0.1:7370`) and scripting CLI (`bilterm ctl <endpoint> <method> [json_params]`) exposing `workspace.status`, `workspace.snapshot`, `pane.exec`, `pane.read`, `pane.send_keys`, `pane.feed_output`, `wm.command`, `events.poll`, and `playbook.run` with `!ECHO LOCK` and `🔒 PROT` safety guards.
-    - **Native Model Context Protocol (MCP) Server (`bilterm --mcp`)**: Zero-wrapper JSON-RPC 2.0 `stdio` MCP server exposing 6 agent-native tools (`bilterm_workspace_status`, `bilterm_exec_command`, `bilterm_inspect_pane`, `bilterm_send_keys`, `bilterm_colon_command`, `bilterm_run_playbook`).
+    - **Native Model Context Protocol (MCP) Server (`bilterm --mcp`)**: Zero-wrapper JSON-RPC 2.0 `stdio` MCP server exposing 8 agent-native tools (`bilterm_workspace_status`, `bilterm_exec_command`, `bilterm_inspect_pane`, `bilterm_send_keys`, `bilterm_colon_command`, `bilterm_run_playbook`, `bilterm_remote_connect`, `bilterm_fleet_exec`).
     - **Structured Event Subscription Bus & Declarative Robot Playbooks (`bilterm --playbook <file.toml>`)**: Emits `command_submitted`, `command_completed`, `trigger_matched`, `notification_received`, `echo_lock_changed`, and `alternate_screen_changed` events and executes multi-step TOML playbooks with screen/trigger/exit-code assertions.
+  - **First-Class SSH Domains, Remote `tmux -CC` Persistence & `herdr`-Style Fleet Federation (`v1.4.0`)**:
+    - **SSH Composite Panes (`:ssh <user@host> [port]`)**: Spawns remote SSH sessions inside local Composite Panes with zero-install remote `OSC 133` + `OSC 7` shell-integration bootstrap, local floating prompt editing, `!ECHO LOCK` passphrase/sudo protection, and a `🌐 SSH:<target>` OIA badge.
+    - **Remote Persistent `tmux -CC` over SSH (`:ssh-tmux <user@host> [session]`)**: Attaches to persistent remote `tmux -CC` sessions over SSH so remote windows survive laptop sleep or network drops.
+    - **`herdr`-Style Central Fleet Registry (`:remote list|add|exec|disconnect`, `[remotes.<name>]`)**: Centrally manages local and remote sessions and fans out commands by selector (`all`, `local`, `remote`, `@tag`, `<node_id>`) via TUI `:remote exec`, JSON-RPC `fleet.exec`, or MCP `bilterm_fleet_exec`.
 
 ---
 

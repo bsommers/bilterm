@@ -14,6 +14,10 @@ use crate::config::BiltermConfig;
 use crate::error::Result;
 use crate::pane::{CompositePane, PaneId, PromptAnchor};
 use crate::pty::PtyConfig;
+use crate::remote::{
+    FleetNodeKind, FleetRegistry, FleetSelector, RemoteHostProfile,
+    remote_osc133_bootstrap_command,
+};
 use crate::wm::quick_terminal::QuickTerminal;
 use crate::wm::split_tree::{SplitDirection, SplitTree};
 use crate::wm::z_stack::ZStack;
@@ -82,6 +86,8 @@ pub struct WindowManager {
     pub palette_query: String,
     /// Selected item index inside the Fuzzy Command Palette modal (`v0.6.0`).
     pub palette_selected: usize,
+    /// Central `herdr`-style fleet registry managing local and remote SSH / `tmux -CC` sessions (`v1.4.0`).
+    pub fleet: FleetRegistry,
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
@@ -125,6 +131,7 @@ impl WindowManager {
             palette_visible: false,
             palette_query: String::new(),
             palette_selected: 0,
+            fleet: FleetRegistry::new(),
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),
@@ -162,6 +169,173 @@ impl WindowManager {
             "Multi-Pane Input Broadcast: {}",
             if enabled { "ON (📡 BCAST)" } else { "OFF" }
         ));
+    }
+
+    /// Spawns a new `CompositePane` connected to a remote SSH host or configured `[remotes.<name>]` profile (`v1.4.0`).
+    pub fn spawn_ssh_pane(
+        &mut self,
+        target: &str,
+        port_override: Option<u16>,
+        tags: Vec<String>,
+    ) -> Result<PaneId> {
+        let mut profile = self
+            .fleet
+            .profiles
+            .get(target)
+            .cloned()
+            .or_else(|| self.config.remotes.get(target).cloned())
+            .unwrap_or_else(|| RemoteHostProfile::new(target, target));
+        if let Some(p) = port_override {
+            profile.port = Some(p);
+        }
+        let mut merged_tags = profile.tags.clone();
+        for t in tags {
+            if !merged_tags.contains(&t) {
+                merged_tags.push(t);
+            }
+        }
+        profile.tags = merged_tags.clone();
+
+        let new_id = self.split_focused(SplitDirection::Vertical)?;
+        let args = profile.build_ssh_args();
+        let dest = profile.destination.clone();
+        if !self.headless_mode {
+            let (rows, cols) = self.default_size;
+            let pty_cfg = PtyConfig {
+                program: "ssh".to_string(),
+                args,
+                rows,
+                cols,
+                cwd: None,
+                env: BTreeMap::new(),
+            };
+            if let Ok(mut live_pane) = CompositePane::spawn(new_id, pty_cfg) {
+                if profile.remote_osc133_bootstrap {
+                    let _ = live_pane.write_to_pty(remote_osc133_bootstrap_command().as_bytes());
+                }
+                live_pane.title = format!("SSH:{dest} [#{new_id}]");
+                live_pane.remote_target = Some(dest.clone());
+                self.panes.insert(new_id, live_pane);
+            }
+        }
+        if let Some(pane) = self.panes.get_mut(&new_id) {
+            pane.title = format!("SSH:{dest} [#{new_id}]");
+            pane.remote_target = Some(dest.clone());
+            pane.status_message = Some(format!("🌐 Connected SSH pane #{new_id} -> {dest}"));
+        }
+        let node_name = format!("{}-#{}", profile.name, new_id);
+        self.fleet
+            .register_ssh_pane(node_name, new_id, dest, merged_tags);
+        Ok(new_id)
+    }
+
+    /// Connects to a persistent remote `tmux -CC` session over SSH and hydrates a local `CompositePane` (`v1.4.0`).
+    pub fn connect_ssh_tmux(
+        &mut self,
+        target: &str,
+        session_name: &str,
+        tags: Vec<String>,
+    ) -> Result<PaneId> {
+        let profile = self
+            .fleet
+            .profiles
+            .get(target)
+            .cloned()
+            .or_else(|| self.config.remotes.get(target).cloned())
+            .unwrap_or_else(|| RemoteHostProfile::new(target, target));
+        let dest = profile.destination.clone();
+        let new_id = self.split_focused(SplitDirection::Vertical)?;
+        let badge = format!("{dest}/{session_name}");
+        if let Some(pane) = self.panes.get_mut(&new_id) {
+            pane.title = format!("TMUX-SSH:{badge} [#{new_id}]");
+            pane.remote_target = Some(badge.clone());
+            pane.status_message = Some(format!(
+                "🌐 Attached remote tmux -CC session '{session_name}' on {dest} (pane #{new_id})"
+            ));
+        }
+        let mut merged_tags = profile.tags.clone();
+        for t in tags {
+            if !merged_tags.contains(&t) {
+                merged_tags.push(t);
+            }
+        }
+        let node_name = format!("tmux-{dest}-{session_name}");
+        self.fleet
+            .register_ssh_tmux(node_name, dest, session_name, vec![new_id], merged_tags);
+        Ok(new_id)
+    }
+
+    /// Executes `command` across all local/remote panes and fleet nodes matching `selector` (`herdr`-style fan-out, `v1.4.0`).
+    pub fn exec_fleet_command(&mut self, selector: &FleetSelector, command: &str) -> Vec<PaneId> {
+        let matching_node_names = self.fleet.matching_nodes(selector);
+        let mut target_pane_ids: Vec<PaneId> = Vec::new();
+
+        match selector {
+            FleetSelector::All => {
+                target_pane_ids.extend(self.panes.keys().copied());
+            }
+            FleetSelector::LocalOnly => {
+                target_pane_ids.extend(
+                    self.panes
+                        .iter()
+                        .filter(|(_, p)| p.remote_target.is_none())
+                        .map(|(&id, _)| id),
+                );
+            }
+            FleetSelector::RemoteOnly => {
+                target_pane_ids.extend(
+                    self.panes
+                        .iter()
+                        .filter(|(_, p)| p.remote_target.is_some())
+                        .map(|(&id, _)| id),
+                );
+            }
+            FleetSelector::Tag(_) | FleetSelector::Node(_) => {
+                for node_name in &matching_node_names {
+                    if let Some(node) = self.fleet.nodes.get(node_name) {
+                        match &node.kind {
+                            FleetNodeKind::SshPane { pane_id, .. } => {
+                                if !target_pane_ids.contains(pane_id) {
+                                    target_pane_ids.push(*pane_id);
+                                }
+                            }
+                            FleetNodeKind::SshTmux { pane_ids, .. } => {
+                                for &pid in pane_ids {
+                                    if !target_pane_ids.contains(&pid) {
+                                        target_pane_ids.push(pid);
+                                    }
+                                }
+                            }
+                            FleetNodeKind::HostProfile { .. } => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut executed_panes = Vec::new();
+        for pid in target_pane_ids {
+            if let Some(pane) = self.panes.get_mut(&pid)
+                && !pane.read_only
+                && !pane.line_discipline.is_password_prompt()
+            {
+                pane.prompt.history.push(command.to_string());
+                let _ = pane.history_store.record_command(command);
+                pane.prompt.running_command = Some(command.to_string());
+                pane.vt.record_command_submission(command);
+                let mut payload = command.as_bytes().to_vec();
+                payload.push(b'\n');
+                let _ = pane.write_to_pty(&payload);
+                executed_panes.push(pid);
+            }
+        }
+
+        for node_name in matching_node_names {
+            if let Some(node) = self.fleet.nodes.get_mut(&node_name) {
+                node.last_dispatched_command = Some(command.to_string());
+            }
+        }
+        executed_panes
     }
 
     /// Toggles the interactive Fuzzy Command Palette modal (`Ctrl+P` / `Alt+Space` / `:palette`, `v0.6.0`).
@@ -203,6 +377,7 @@ impl WindowManager {
             (":record start", "—", "Start Asciicast v2 (.cast) terminal recording"),
             (":record stop", "—", "Stop Asciicast v2 (.cast) terminal recording"),
             (":notifications clear", "—", "Clear OSC 9 / OSC 777 desktop notifications"),
+            (":remote list", "—", "List local and remote SSH / tmux-CC fleet sessions"),
             (":help", "F1", "Open Borland Turbo Vision Quick Reference Help"),
             (":quit", "Ctrl+Q", "Cleanly exit Bilterm"),
         ];

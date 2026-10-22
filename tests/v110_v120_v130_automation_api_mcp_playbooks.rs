@@ -116,7 +116,7 @@ fn v120_mcp_server_protocol_exposes_and_executes_agent_tools() {
         .and_then(|r| r.get("tools"))
         .and_then(JsonValue::as_array)
         .expect("tools array");
-    assert_eq!(tools.len(), 6);
+    assert_eq!(tools.len(), 8);
 
     // 4. tools/call -> bilterm_colon_command (:theme 3278)
     let call_resp = plane
@@ -227,4 +227,96 @@ path = "{}"
     .await
     .expect("TCP RPC client request");
     assert!(client_resp.contains("\"layout_mode\":\"tiled\""));
+}
+
+#[test]
+fn v140_remote_ssh_tmux_and_herdr_fleet_federation_work() {
+    use bilterm::ui::{CompositePaneWidget, buffer_to_snapshot_string};
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::widgets::Widget;
+
+    let mut plane = AutomationControlPlane::new_headless(24, 120);
+
+    // 1. Register a named remote host profile with tags via JSON-RPC fleet.register
+    let reg_resp = plane.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":1,"method":"fleet.register","params":{"name":"prod-db","destination":"admin@db1.prod.internal","tags":["prod","db"]}}"#,
+    );
+    assert!(reg_resp.contains("\"status\":\"registered\""));
+    assert!(reg_resp.contains("\"name\":\"prod-db\""));
+
+    // 2. Spawn an SSH CompositePane using the registered profile via remote.connect_ssh
+    let ssh_resp = plane.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":2,"method":"remote.connect_ssh","params":{"target":"prod-db","port":2222}}"#,
+    );
+    let ssh_json = JsonValue::parse(&ssh_resp).expect("valid ssh JSON");
+    assert_eq!(
+        ssh_json
+            .get("result")
+            .and_then(|r| r.get("pane_id"))
+            .and_then(JsonValue::as_i64),
+        Some(2)
+    );
+    assert_eq!(
+        ssh_json
+            .get("result")
+            .and_then(|r| r.get("status"))
+            .and_then(JsonValue::as_str),
+        Some("connected_ssh")
+    );
+
+    // 3. Connect a remote persistent tmux -CC session over SSH via :ssh-tmux
+    let tmux_resp = plane.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":3,"method":"wm.command","params":{"command":":ssh-tmux ops@jump.internal fleet-main"}}"#,
+    );
+    assert!(tmux_resp.contains("\"status\":\"handled\""));
+
+    // 4. Verify fleet.list reports registered prod-db profile + prod-db-#2 SSH pane + ops@jump.internal tmux-CC node
+    let list_resp =
+        plane.handle_jsonrpc_line(r#"{"jsonrpc":"2.0","id":4,"method":"fleet.list","params":{}}"#);
+    let list_json = JsonValue::parse(&list_resp).expect("valid fleet.list JSON");
+    let nodes = list_json
+        .get("result")
+        .and_then(|r| r.get("nodes"))
+        .and_then(JsonValue::as_array)
+        .expect("nodes array");
+    assert_eq!(nodes.len(), 3);
+
+    // 5. Execute a tag-filtered herdr-style fleet command across @prod nodes
+    let exec_resp = plane.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":5,"method":"fleet.exec","params":{"selector":"@prod","command":"systemctl status postgresql"}}"#,
+    );
+    let exec_json = JsonValue::parse(&exec_resp).expect("valid fleet.exec JSON");
+    let panes_executed = exec_json
+        .get("result")
+        .and_then(|r| r.get("panes"))
+        .and_then(JsonValue::as_array)
+        .expect("panes array");
+    assert_eq!(panes_executed.len(), 1);
+    assert_eq!(panes_executed[0].as_i64(), Some(2));
+    assert_eq!(
+        plane
+            .wm
+            .panes
+            .get(&2)
+            .and_then(|p| p.prompt.running_command.as_deref()),
+        Some("systemctl status postgresql")
+    );
+
+    // 6. Verify OIA status bar renders 🌐 SSH:<target> badge for the SSH pane
+    let pane2 = plane.wm.panes.get(&2).expect("pane 2");
+    let area = Rect::new(0, 0, 140, 10);
+    let mut buf = Buffer::empty(area);
+    CompositePaneWidget::new(pane2, true).render(area, &mut buf);
+    let screen_text = buffer_to_snapshot_string(&buf);
+    assert!(
+        screen_text.contains("SSH:admin@db1.prod.internal"),
+        "expected OIA status bar to display SSH target badge, got:\n{screen_text}"
+    );
+
+    // 7. Disconnect remote node via fleet.disconnect
+    let disc_resp = plane.handle_jsonrpc_line(
+        r#"{"jsonrpc":"2.0","id":6,"method":"fleet.disconnect","params":{"name":"prod-db-#2"}}"#,
+    );
+    assert!(disc_resp.contains("\"removed\":true"));
 }

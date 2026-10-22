@@ -1781,6 +1781,20 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
+    if let Some(remote) = &pane.remote_target {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            format!(" 🌐 SSH:{remote} "),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(85, 255, 255))
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     if pane.vt.is_recording() {
         spans.push(Span::styled(
             format!(" {sep}"),

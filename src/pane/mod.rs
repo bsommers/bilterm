@@ -856,6 +856,8 @@ pub struct CompositePane {
     pub hints_mode: HintsModeState,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     pub read_only: bool,
+    /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
+    pub remote_target: Option<String>,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
     pub pending_unsafe_paste: Option<String>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
@@ -884,6 +886,7 @@ impl CompositePane {
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             read_only: false,
+            remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
@@ -914,6 +917,7 @@ impl CompositePane {
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             read_only: false,
+            remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
@@ -1222,6 +1226,14 @@ impl CompositePane {
             }
             self.refresh_line_discipline();
         }
+    }
+
+    /// Writes raw bytes to the underlying `PtySession` if one is attached (`v1.1.0` / `v1.4.0`).
+    pub fn write_to_pty(&mut self, bytes: &[u8]) -> Result<()> {
+        if let Some(pty) = &self.pty {
+            pty.write_all(bytes)?;
+        }
+        Ok(())
     }
 
     pub fn has_exited(&self) -> bool {

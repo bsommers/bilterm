@@ -4,6 +4,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::pane::PromptAnchor;
+use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::CaretStyle;
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
@@ -50,6 +51,8 @@ pub struct BiltermConfig {
     pub keybindings: BTreeMap<String, String>,
     /// Case-insensitive output highlight trigger patterns (`:trigger add <pat>`, `v0.7.0`).
     pub triggers: Vec<String>,
+    /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
+    pub remotes: BTreeMap<String, RemoteHostProfile>,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -78,6 +81,7 @@ impl Default for BiltermConfig {
             crt_scanlines: false,
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
+            remotes: BTreeMap::new(),
             custom_palette_override: None,
         }
     }

@@ -1,4 +1,5 @@
 use crate::pane::{CompositePane, PromptAnchor};
+use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::CaretStyle;
 use crate::ui::glyphs::GlyphPack;
@@ -71,6 +72,25 @@ pub enum ColonCommand {
     TriggerClear,
     RecordStart(Option<String>),
     RecordStop,
+    SshConnect {
+        target: String,
+        port: Option<u16>,
+    },
+    SshTmuxConnect {
+        target: String,
+        session: String,
+    },
+    RemoteAdd {
+        name: String,
+        destination: String,
+        tags: Vec<String>,
+    },
+    RemoteList,
+    RemoteExec {
+        selector: String,
+        command: String,
+    },
+    RemoteDisconnect(String),
     Quit,
 }
 
@@ -321,6 +341,80 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
             Some("stop" | "end") => Some(Ok(ColonCommand::RecordStop)),
             _ => Some(Err("Usage: :record start [path.cast] | stop".to_string())),
+        },
+        "ssh" => {
+            let Some(&target) = parts.get(1) else {
+                return Some(Err("Usage: :ssh <user@host|profile> [port]".to_string()));
+            };
+            let port = parts.get(2).and_then(|p| p.parse::<u16>().ok());
+            Some(Ok(ColonCommand::SshConnect {
+                target: target.to_string(),
+                port,
+            }))
+        }
+        "ssh-tmux" | "sshtmux" => {
+            let Some(&target) = parts.get(1) else {
+                return Some(Err(
+                    "Usage: :ssh-tmux <user@host|profile> [session]".to_string(),
+                ));
+            };
+            let session = parts.get(2).copied().unwrap_or("bilterm").to_string();
+            Some(Ok(ColonCommand::SshTmuxConnect {
+                target: target.to_string(),
+                session,
+            }))
+        }
+        "remote" | "fleet" | "herdr" => match parts.get(1).copied() {
+            None | Some("list" | "ls") => Some(Ok(ColonCommand::RemoteList)),
+            Some("add" | "register") => {
+                let (Some(&name), Some(&dest)) = (parts.get(2), parts.get(3)) else {
+                    return Some(Err(
+                        "Usage: :remote add <name> <user@host> [@tag1,@tag2]".to_string(),
+                    ));
+                };
+                let tags = parts
+                    .get(4)
+                    .map(|raw| {
+                        raw.split(',')
+                            .map(|t| t.trim().trim_start_matches('@').to_string())
+                            .filter(|t| !t.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(Ok(ColonCommand::RemoteAdd {
+                    name: name.to_string(),
+                    destination: dest.to_string(),
+                    tags,
+                }))
+            }
+            Some("exec" | "run") => {
+                let Some(&selector) = parts.get(2) else {
+                    return Some(Err(
+                        "Usage: :remote exec <all|local|remote|@tag|node> <command>".to_string(),
+                    ));
+                };
+                let cmd_str = parts.get(3..).map(|s| s.join(" ")).unwrap_or_default();
+                if cmd_str.trim().is_empty() {
+                    Some(Err(
+                        "Usage: :remote exec <all|local|remote|@tag|node> <command>".to_string(),
+                    ))
+                } else {
+                    Some(Ok(ColonCommand::RemoteExec {
+                        selector: selector.to_string(),
+                        command: cmd_str,
+                    }))
+                }
+            }
+            Some("disconnect" | "rm" | "remove") => {
+                let Some(&name) = parts.get(2) else {
+                    return Some(Err("Usage: :remote disconnect <name>".to_string()));
+                };
+                Some(Ok(ColonCommand::RemoteDisconnect(name.to_string())))
+            }
+            _ => Some(Err(
+                "Usage: :remote list | add <name> <user@host> [@tags] | exec <selector> <cmd> | disconnect <name>"
+                    .to_string(),
+            )),
         },
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
@@ -690,6 +784,75 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.config.triggers.clear();
             wm.active_pane_mut().status_message =
                 Some("Cleared all output highlight triggers".to_string());
+            false
+        }
+        ColonCommand::SshConnect { target, port } => {
+            match wm.spawn_ssh_pane(&target, port, Vec::new()) {
+                Ok(new_id) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("🌐 Connected SSH pane #{new_id} -> {target}"));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message = Some(format!("SSH connect error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SshTmuxConnect { target, session } => {
+            match wm.connect_ssh_tmux(&target, &session, Vec::new()) {
+                Ok(new_id) => {
+                    wm.active_pane_mut().status_message = Some(format!(
+                        "🌐 Attached remote tmux -CC '{session}' on {target} (pane #{new_id})"
+                    ));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("SSH tmux connect error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::RemoteAdd {
+            name,
+            destination,
+            tags,
+        } => {
+            let mut profile = RemoteHostProfile::new(name.clone(), destination.clone());
+            profile.tags = tags.clone();
+            wm.fleet.register_profile(profile);
+            wm.active_pane_mut().status_message = Some(format!(
+                "Registered remote host '{name}' ({destination}) tags={tags:?}"
+            ));
+            false
+        }
+        ColonCommand::RemoteList => {
+            let names: Vec<String> = wm.fleet.nodes.keys().cloned().collect();
+            wm.active_pane_mut().status_message = Some(if names.is_empty() {
+                "Fleet nodes: (local only)".to_string()
+            } else {
+                format!("Fleet nodes ({}): {}", names.len(), names.join(", "))
+            });
+            false
+        }
+        ColonCommand::RemoteExec { selector, command } => {
+            let sel = FleetSelector::parse(&selector);
+            let panes = wm.exec_fleet_command(&sel, &command);
+            let nodes = wm.fleet.matching_nodes(&sel);
+            wm.active_pane_mut().status_message = Some(format!(
+                "🌐 Fleet exec [{}] -> {} pane(s), {} node(s)",
+                selector,
+                panes.len(),
+                nodes.len()
+            ));
+            false
+        }
+        ColonCommand::RemoteDisconnect(name) => {
+            let removed = wm.fleet.disconnect(&name);
+            wm.active_pane_mut().status_message = Some(if removed {
+                format!("Disconnected remote fleet node '{name}'")
+            } else {
+                format!("Remote fleet node '{name}' not found")
+            });
             false
         }
         ColonCommand::Glyphs(pack) => {

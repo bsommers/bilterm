@@ -17,6 +17,7 @@ use crate::error::{BiltermError, Result};
 use crate::input::handle_wm_key_event;
 use crate::pane::colon_command::{execute_wm_colon_command, parse_colon_command};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use crate::vt::VtParser;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
@@ -577,6 +578,8 @@ impl AutomationControlPlane {
                     "bilterm_send_keys" => Some("pane.send_keys"),
                     "bilterm_colon_command" => Some("wm.command"),
                     "bilterm_run_playbook" => Some("playbook.run"),
+                    "bilterm_remote_connect" => Some("remote.connect_ssh"),
+                    "bilterm_fleet_exec" => Some("fleet.exec"),
                     _ => None,
                 };
                 match mapped_method {
@@ -653,6 +656,22 @@ impl AutomationControlPlane {
                 "bilterm_run_playbook",
                 "Execute a declarative TOML automation playbook against the Bilterm workspace.",
                 &[("toml", "string", "Declarative playbook TOML string")],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_remote_connect",
+                "Spawn a remote SSH or remote tmux -CC CompositePane and register it in Bilterm's central fleet registry.",
+                &[
+                    ("target", "string", "SSH destination (user@host) or configured remote profile name"),
+                    ("tmux_session", "string", "Optional remote tmux -CC session name to attach"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_fleet_exec",
+                "Execute a shell command across local and remote SSH sessions matching a herdr-style selector (all, local, remote, @tag, or node name).",
+                &[
+                    ("selector", "string", "Fleet target selector: all, local, remote, @tag, or node name"),
+                    ("command", "string", "Shell command to fan out across matching sessions"),
+                ],
             ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
@@ -930,6 +949,180 @@ impl AutomationControlPlane {
                             report.events.iter().map(AutomationEvent::to_json).collect(),
                         ),
                     ),
+                ]))
+            }
+            "remote.connect_ssh" => {
+                let target = params
+                    .get("target")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'target' parameter".to_string())?;
+                let port = params
+                    .get("port")
+                    .and_then(JsonValue::as_i64)
+                    .and_then(|p| u16::try_from(p).ok());
+                let tags: Vec<String> = params
+                    .get("tags")
+                    .and_then(JsonValue::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if let Some(tmux_sess) = params.get("tmux_session").and_then(JsonValue::as_str) {
+                    let pane_id = self
+                        .wm
+                        .connect_ssh_tmux(target, tmux_sess, tags)
+                        .map_err(|e| e.to_string())?;
+                    return Ok(JsonValue::obj([
+                        ("status", JsonValue::String("connected_ssh_tmux".to_string())),
+                        ("pane_id", JsonValue::Number(pane_id as i64)),
+                        ("target", JsonValue::String(target.to_string())),
+                        ("tmux_session", JsonValue::String(tmux_sess.to_string())),
+                    ]));
+                }
+                let pane_id = self
+                    .wm
+                    .spawn_ssh_pane(target, port, tags)
+                    .map_err(|e| e.to_string())?;
+                Ok(JsonValue::obj([
+                    ("status", JsonValue::String("connected_ssh".to_string())),
+                    ("pane_id", JsonValue::Number(pane_id as i64)),
+                    ("target", JsonValue::String(target.to_string())),
+                ]))
+            }
+            "remote.connect_tmux" => {
+                let target = params
+                    .get("target")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'target' parameter".to_string())?;
+                let session = params
+                    .get("session")
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or("bilterm");
+                let tags: Vec<String> = params
+                    .get("tags")
+                    .and_then(JsonValue::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(ToString::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let pane_id = self
+                    .wm
+                    .connect_ssh_tmux(target, session, tags)
+                    .map_err(|e| e.to_string())?;
+                Ok(JsonValue::obj([
+                    ("status", JsonValue::String("connected_ssh_tmux".to_string())),
+                    ("pane_id", JsonValue::Number(pane_id as i64)),
+                    ("target", JsonValue::String(target.to_string())),
+                    ("session", JsonValue::String(session.to_string())),
+                ]))
+            }
+            "fleet.register" => {
+                let name = params
+                    .get("name")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'name' parameter".to_string())?;
+                let destination = params
+                    .get("destination")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'destination' parameter".to_string())?;
+                let mut profile = RemoteHostProfile::new(name, destination);
+                if let Some(arr) = params.get("tags").and_then(JsonValue::as_array) {
+                    profile.tags = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(ToString::to_string))
+                        .collect();
+                }
+                if let Some(ep) = params.get("rpc_endpoint").and_then(JsonValue::as_str) {
+                    profile.rpc_endpoint = Some(ep.to_string());
+                }
+                self.wm.fleet.register_profile(profile);
+                Ok(JsonValue::obj([
+                    ("status", JsonValue::String("registered".to_string())),
+                    ("name", JsonValue::String(name.to_string())),
+                    ("node_count", JsonValue::Number(self.wm.fleet.nodes.len() as i64)),
+                ]))
+            }
+            "fleet.list" => {
+                let nodes: Vec<JsonValue> = self
+                    .wm
+                    .fleet
+                    .nodes
+                    .values()
+                    .map(|n| {
+                        JsonValue::obj([
+                            ("name", JsonValue::String(n.name.clone())),
+                            ("connected", JsonValue::Bool(n.connected)),
+                            (
+                                "tags",
+                                JsonValue::Array(
+                                    n.tags.iter().cloned().map(JsonValue::String).collect(),
+                                ),
+                            ),
+                            (
+                                "last_command",
+                                n.last_dispatched_command
+                                    .as_ref()
+                                    .map_or(JsonValue::Null, |c| JsonValue::String(c.clone())),
+                            ),
+                        ])
+                    })
+                    .collect();
+                Ok(JsonValue::obj([("nodes", JsonValue::Array(nodes))]))
+            }
+            "fleet.exec" => {
+                let selector_str = params
+                    .get("selector")
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or("all");
+                let command = params
+                    .get("command")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'command' parameter".to_string())?;
+                let selector = FleetSelector::parse(selector_str);
+                let panes = self.wm.exec_fleet_command(&selector, command);
+                let matched_nodes = self.wm.fleet.matching_nodes(&selector);
+                for &pid in &panes {
+                    self.push_event(AutomationEvent::CommandSubmitted {
+                        pane_id: pid,
+                        command: command.to_string(),
+                    });
+                }
+                Ok(JsonValue::obj([
+                    ("status", JsonValue::String("dispatched".to_string())),
+                    ("selector", JsonValue::String(selector_str.to_string())),
+                    (
+                        "panes",
+                        JsonValue::Array(
+                            panes
+                                .into_iter()
+                                .map(|id| JsonValue::Number(id as i64))
+                                .collect(),
+                        ),
+                    ),
+                    (
+                        "nodes",
+                        JsonValue::Array(
+                            matched_nodes
+                                .into_iter()
+                                .map(JsonValue::String)
+                                .collect(),
+                        ),
+                    ),
+                ]))
+            }
+            "fleet.disconnect" => {
+                let name = params
+                    .get("name")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| "missing 'name' parameter".to_string())?;
+                let removed = self.wm.fleet.disconnect(name);
+                Ok(JsonValue::obj([
+                    ("removed", JsonValue::Bool(removed)),
+                    ("name", JsonValue::String(name.to_string())),
                 ]))
             }
             _ => Err(format!("Method not found: {method}")),
