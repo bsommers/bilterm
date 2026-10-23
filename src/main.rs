@@ -1,8 +1,10 @@
 use std::io;
+use std::path::{Path, PathBuf};
 
 use bilterm::api::{
-    AutomationControlPlane, JsonValue, Playbook, run_headless_tcp_server, run_mcp_stdio_server,
-    send_rpc_request,
+    default_socket_path, load_token_file, run_headless_server, run_mcp_stdio_server_with_plane,
+    send_rpc_request_with_token, validate_listen_config, AutomationControlPlane, JsonValue,
+    ListenEndpoint, Playbook, DEFAULT_TCP_LISTEN,
 };
 use bilterm::app::App;
 use bilterm::config::BiltermConfig;
@@ -10,9 +12,14 @@ use bilterm::error::TerminalRestoreGuard;
 use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use bilterm::wm::WindowManager;
 use crossterm::terminal;
-use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
+use ratatui::Terminal;
+
+fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a String> {
+    let pos = args.iter().position(|a| a == flag)?;
+    args.get(pos + 1)
+}
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -26,10 +33,14 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
-               bilterm ctl <ENDPOINT> <METHOD> [JSON_PARAMS]\n\
+               bilterm ctl [--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n\
              Options:\n  \
                --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
-               --headless --listen <ADDR>   Run headless JSON-RPC 2.0 automation daemon on TCP/Unix socket\n  \
+               --headless                   Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via --listen 127.0.0.1:PORT)\n  \
+               --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
+               --allow-remote               Allow listening on non-loopback TCP addresses (requires --token-file)\n  \
+               --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
+               --snapshot-dir <PATH>        Directory for confined workspace snapshots (default: XDG state dir)\n  \
                --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
                --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
                --session <NAME>             Use named persistent command-history session (overrides history_session)\n  \
@@ -41,19 +52,54 @@ async fn main() -> color_eyre::Result<()> {
         );
         return Ok(());
     }
+
+    let token = if let Some(path_str) = flag_value(&args, "--token-file") {
+        Some(load_token_file(Path::new(path_str))?)
+    } else if let Ok(env_path) = std::env::var("BILTERM_TOKEN_FILE") {
+        Some(load_token_file(Path::new(&env_path))?)
+    } else {
+        None
+    };
+
     if args.first().map(String::as_str) == Some("ctl") {
-        let endpoint = args.get(1).map_or("127.0.0.1:7370", String::as_str);
-        let method = args.get(2).map_or("workspace.status", String::as_str);
-        let params = args
-            .get(3)
+        let mut rest = args[1..].to_vec();
+        let mut ctl_token_path = None;
+        if let Some(pos) = rest.iter().position(|a| a == "--token-file")
+            && pos + 1 < rest.len()
+        {
+            ctl_token_path = Some(rest[pos + 1].clone());
+            rest.remove(pos + 1);
+            rest.remove(pos);
+        }
+        let ctl_token = if let Some(p) = ctl_token_path {
+            Some(load_token_file(Path::new(&p))?)
+        } else if let Ok(env_path) = std::env::var("BILTERM_TOKEN_FILE") {
+            Some(load_token_file(Path::new(&env_path))?)
+        } else {
+            None
+        };
+
+        let default_ep = default_socket_path()
+            .map(|p| format!("unix:{}", p.display()))
+            .unwrap_or_else(|_| DEFAULT_TCP_LISTEN.to_string());
+
+        let endpoint = rest.first().map(String::as_str).unwrap_or(&default_ep);
+        let method = rest.get(1).map_or("workspace.status", String::as_str);
+        let params = rest
+            .get(2)
             .and_then(|raw| JsonValue::parse(raw))
             .unwrap_or_else(|| JsonValue::obj([] as [(&str, JsonValue); 0]));
-        let resp = send_rpc_request(endpoint, method, params).await?;
+        let resp =
+            send_rpc_request_with_token(endpoint, method, params, ctl_token.as_deref()).await?;
         println!("{resp}");
         return Ok(());
     }
     if args.iter().any(|a| a == "--mcp") {
-        run_mcp_stdio_server(24, 80).await?;
+        let mut plane = AutomationControlPlane::new_headless(24, 80);
+        if let Some(snap_dir) = flag_value(&args, "--snapshot-dir") {
+            plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
+        }
+        run_mcp_stdio_server_with_plane(plane).await?;
         return Ok(());
     }
     if let Some(pos) = args.iter().position(|a| a == "--playbook")
@@ -71,11 +117,21 @@ async fn main() -> color_eyre::Result<()> {
         );
         return Ok(());
     }
-    if args.iter().any(|a| a == "--headless")
-        && let Some(pos) = args.iter().position(|a| a == "--listen")
-        && let Some(bind_addr) = args.get(pos + 1)
-    {
-        run_headless_tcp_server(bind_addr, 24, 80).await?;
+    if args.iter().any(|a| a == "--headless") {
+        let listen = flag_value(&args, "--listen").map(String::as_str);
+        let allow_remote = args.iter().any(|a| a == "--allow-remote");
+        let default_unix = default_socket_path().ok();
+        let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
+        let mut plane = AutomationControlPlane::new_headless(24, 80);
+        if let Some(snap_dir) = flag_value(&args, "--snapshot-dir") {
+            plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
+        }
+        let endpoint_display = match &cfg.endpoint {
+            ListenEndpoint::Unix(p) => format!("unix:{}", p.display()),
+            ListenEndpoint::Tcp(addr) => addr.to_string(),
+        };
+        eprintln!("bilterm: JSON-RPC listening on {endpoint_display}");
+        run_headless_server(cfg, plane).await?;
         return Ok(());
     }
     if let Some(pos) = args.iter().position(|a| a == "--completions")
@@ -83,13 +139,13 @@ async fn main() -> color_eyre::Result<()> {
     {
         match shell.as_str() {
             "bash" => println!(
-                "complete -W \"ctl --mcp --headless --listen --playbook --help --version --gui-dump --completions --man --session\" bilterm"
+                "complete -W \"ctl --mcp --headless --listen --allow-remote --token-file --snapshot-dir --playbook --help --version --gui-dump --completions --man --session\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]' '--session[History session name]:name:'"
+                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--allow-remote[Allow remote TCP]' '--token-file[Bearer token file]:file:_files' '--snapshot-dir[Snapshot directory]:dir:_files -/' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]' '--session[History session name]:name:'"
             ),
             "fish" => println!(
-                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'\ncomplete -c bilterm -l session -r -d 'History session name'"
+                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'\ncomplete -c bilterm -l session -r -d 'History session name'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }

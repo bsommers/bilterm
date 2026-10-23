@@ -11,11 +11,20 @@ bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexe
 \fB\-\-mcp\fR
 Run the Model Context Protocol (MCP \fB2024-11-05\fR) JSON-RPC 2.0 server over standard input/output for AI agents.
 .TP
-\fB\-\-headless\fR \fB\-\-listen\fR \fIHOST:PORT|UNIX_SOCKET\fR
-Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane.
+\fB\-\-headless\fR [\fB\-\-listen\fR \fIIP:PORT|localhost:PORT|unix:PATH\fR]
+Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane. Default endpoint is a private Unix domain socket ($XDG_RUNTIME_DIR/bilterm/bilterm.sock or /tmp/bilterm-<uid>/bilterm.sock, mode 0600). TCP listeners are restricted to loopback addresses unless \fB\-\-allow\-remote\fR is specified.
 .TP
-\fBctl\fR \fIENDPOINT\fR \fIMETHOD\fR [\fIPARAMS_JSON\fR]
-Send a JSON-RPC 2.0 request to a running Bilterm instance and print the JSON result.
+\fB\-\-allow\-remote\fR
+Allow binding the JSON-RPC daemon to non-loopback TCP addresses. Requires \fB\-\-token\-file\fR.
+.TP
+\fB\-\-token\-file\fR \fIPATH\fR
+Path to a private file (mode 0600) containing the bearer authentication token for the JSON-RPC control plane. Can also be set via the \fBBILTERM_TOKEN_FILE\fR environment variable.
+.TP
+\fB\-\-snapshot\-dir\fR \fIPATH\fR
+Directory for confined workspace snapshots (defaults to $XDG_STATE_HOME/bilterm/snapshots). Direct RPC and MCP snapshot requests must specify a single file name within this directory.
+.TP
+\fBctl\fR [\fB\-\-token\-file\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
+Send a JSON-RPC 2.0 request to a running Bilterm instance and print the JSON result. Default endpoint is the local private Unix domain socket.
 .TP
 \fB\-\-playbook\fR \fIPATH.toml\fR
 Execute a declarative TOML automation playbook against an embedded workspace and exit.
@@ -81,3 +90,23 @@ Per-session, per-pane timestamped command history logs.
 .TP
 \fI~/.local/state/bilterm/sessions/\fR
 Saved multi-pane workspace session snapshots (\fB:session save|restore|list\fR).
+.SH SECURITY
+Bilterm enforces defense-in-depth across automation and shell integration surfaces:
+.IP \(bu 2
+\fBHeadless Daemon Defaults\fR: Serves on a private 0600 Unix domain socket by default, restricting access to the owning user and verifying peer credentials on every connection.
+.IP \(bu 2
+\fBNetwork Listen Policy\fR: Non-loopback TCP listeners strictly require \fB\-\-allow\-remote\fR and a bearer token loaded from a mode 0600 file. The bearer token is validated via an initial \fBauth.login\fR handshake before any request is processed. Note that \fB\-\-allow\-remote\fR transmits the bearer token in plaintext; an SSH tunnel or VPN is strongly recommended when accessing Bilterm over untrusted networks.
+.IP \(bu 2
+\fBFilesystem Confinement\fR: Direct RPC and MCP workspace snapshots are strictly confined to a single file name within the snapshot directory ($XDG_STATE_HOME/bilterm/snapshots), rejecting directory traversal and refusing to follow planted symlinks. Bilterm-managed temporary files (shell integration rc scripts, command history exports, asciicast recordings, and SSH control paths) reside in per-user private 0700 runtime directories with exclusive 0600 file creation.
+.IP \(bu 2
+\fBSSH Destination Validation\fR: Remote SSH destinations reject options beginning with '\-' to prevent argument injection, and arguments are separated with '\-\-' before destinations.
+.SH ENVIRONMENT
+.TP
+\fBBILTERM_TOKEN_FILE\fR
+Path to a private 0600 file containing the bearer token for JSON-RPC authentication.
+.TP
+\fBXDG_RUNTIME_DIR\fR
+Directory used for Bilterm's private runtime files and default Unix domain socket.
+.TP
+\fBXDG_STATE_HOME\fR
+Base directory for Bilterm state files, history logs, and snapshot outputs.
