@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: security-hardening-of-the-automation-shell-integration-surfa
 status: executing
-stopped_at: Plan 19-01 complete; ready for Wave 2 (19-02, 19-03, 19-04)
+stopped_at: Plan 19-02 complete; executing Wave 2 (19-03, 19-04)
 last_updated: "2026-10-23"
 last_activity: 2026-10-23
-last_activity_desc: Plan 19-01 (secure_fs) complete
+last_activity_desc: Plan 19-02 (ssh hardening) complete
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 22
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
