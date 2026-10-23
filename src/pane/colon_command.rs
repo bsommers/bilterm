@@ -1127,6 +1127,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             destination,
             tags,
         } => {
+            if let Err(e) = crate::remote::validate_destination(&destination) {
+                wm.active_pane_mut().status_message = Some(format!("Remote not added: {e}"));
+                return false;
+            }
             let mut profile = RemoteHostProfile::new(name.clone(), destination.clone());
             profile.tags = tags.clone();
             wm.fleet.register_profile(profile);
@@ -1480,5 +1484,18 @@ mod tests {
         assert!(status.contains(&private_root.display().to_string()));
         assert!(status.contains("recordings"));
         assert!(status.contains(".cast"));
+    }
+
+    #[test]
+    fn remote_add_rejects_option_destination() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let cmd = parse_colon_command(":remote add evil -oProxyCommand=x").unwrap().unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert!(!wm.fleet.nodes.contains_key("evil"));
+        let status = wm.active_pane().status_message.as_deref().unwrap_or("");
+        assert!(
+            status.contains("Remote not added:") && status.contains("invalid SSH destination"),
+            "status: {status}"
+        );
     }
 }

@@ -485,6 +485,59 @@ pub struct AutomationControlPlane {
     pub wm: WindowManager,
     pub events: VecDeque<AutomationEvent>,
     pub viewport: Rect,
+    pub snapshot_dir: Option<PathBuf>,
+}
+
+/// Execution policy determining whether snapshot exports are confined to the designated snapshot dir.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotPolicy {
+    /// Trusted execution (CLI --playbook), where file paths are chosen by local operator.
+    Trusted,
+    /// Confined execution (RPC playbook.run or MCP bilterm_run_playbook), strictly confined to snapshot dir.
+    Confined,
+}
+
+/// Pure helper resolving the default snapshot directory according to the XDG Base Directory specification.
+pub fn default_snapshot_dir_from(
+    xdg_state_home: Option<&std::ffi::OsStr>,
+    home: Option<&std::ffi::OsStr>,
+) -> Option<PathBuf> {
+    if let Some(state) = xdg_state_home
+        && !state.is_empty()
+    {
+        return Some(PathBuf::from(state).join("bilterm").join("snapshots"));
+    }
+    if let Some(h) = home
+        && !h.is_empty()
+    {
+        return Some(
+            PathBuf::from(h)
+                .join(".local")
+                .join("state")
+                .join("bilterm")
+                .join("snapshots"),
+        );
+    }
+    None
+}
+
+/// Validates that a requested snapshot file name is a single file name within the snapshot directory.
+pub fn validate_snapshot_name(name: &str) -> std::result::Result<(), String> {
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains('\0')
+        || name == "."
+        || name == ".."
+    {
+        return Err("ppm_path must be a file name within the snapshot directory".to_string());
+    }
+    let path = Path::new(name);
+    let mut components = path.components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(()),
+        _ => Err("ppm_path must be a file name within the snapshot directory".to_string()),
+    }
 }
 
 impl AutomationControlPlane {
@@ -493,7 +546,134 @@ impl AutomationControlPlane {
             wm,
             events: VecDeque::with_capacity(256),
             viewport,
+            snapshot_dir: None,
         }
+    }
+
+    pub fn with_snapshot_dir(mut self, dir: PathBuf) -> Self {
+        self.snapshot_dir = Some(dir);
+        self
+    }
+
+    fn resolved_snapshot_dir(&self) -> std::result::Result<PathBuf, String> {
+        let dir = if let Some(ref d) = self.snapshot_dir {
+            d.clone()
+        } else if let Some(d) = default_snapshot_dir_from(
+            std::env::var_os("XDG_STATE_HOME").as_deref(),
+            std::env::var_os("HOME").as_deref(),
+        ) {
+            d
+        } else {
+            #[cfg(unix)]
+            {
+                crate::secure_fs::private_runtime_dir()
+                    .map(|p| p.join("snapshots"))
+                    .map_err(|e| format!("failed to resolve private runtime dir: {e}"))?
+            }
+            #[cfg(not(unix))]
+            {
+                std::env::temp_dir().join("bilterm-snapshots")
+            }
+        };
+
+        if !dir.exists() {
+            if let Some(parent) = dir.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            #[cfg(unix)]
+            {
+                crate::secure_fs::ensure_private_dir(&dir).map_err(|e| {
+                    format!(
+                        "failed to create private snapshot directory {}: {e}",
+                        dir.display()
+                    )
+                })?;
+            }
+            #[cfg(not(unix))]
+            {
+                std::fs::create_dir_all(&dir).map_err(|e| {
+                    format!("failed to create snapshot directory {}: {e}", dir.display())
+                })?;
+            }
+        } else {
+            let meta = std::fs::symlink_metadata(&dir).map_err(|e| {
+                format!(
+                    "failed to read metadata for snapshot dir {}: {e}",
+                    dir.display()
+                )
+            })?;
+            if !meta.is_dir() || meta.file_type().is_symlink() {
+                return Err(format!(
+                    "snapshot directory {} is not a directory",
+                    dir.display()
+                ));
+            }
+        }
+
+        std::fs::canonicalize(&dir).map_err(|e| {
+            format!(
+                "failed to canonicalize snapshot directory {}: {e}",
+                dir.display()
+            )
+        })
+    }
+
+    /// Exports a PPM workspace snapshot to a trusted caller-specified path (CLI --playbook).
+    pub fn write_snapshot_trusted(&self, path: &Path) -> std::result::Result<(), String> {
+        let mut renderer = GuiWorkspaceRenderer::default();
+        let mut surface = GuiFrameSurface::new(8, 16);
+        renderer.render_workspace(&self.wm, self.viewport, &mut surface);
+        std::fs::write(path, surface.export_ppm())
+            .map_err(|e| format!("failed to write PPM snapshot: {e}"))
+    }
+
+    /// Exports a PPM workspace snapshot confined to the snapshot directory (RPC/MCP).
+    pub fn write_snapshot_confined(&self, name: &str) -> std::result::Result<PathBuf, String> {
+        validate_snapshot_name(name)?;
+        let dir = self.resolved_snapshot_dir()?;
+        let target = dir.join(name);
+
+        use std::io::Write;
+        #[cfg(unix)]
+        let mut file = crate::secure_fs::private_open_options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&target)
+            .map_err(|e| {
+                format!("ppm_path must be a file name within the snapshot directory: {e}")
+            })?;
+
+        #[cfg(not(unix))]
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&target)
+            .map_err(|e| {
+                format!("ppm_path must be a file name within the snapshot directory: {e}")
+            })?;
+
+        if let Some(parent) = target.parent() {
+            let canonical_parent = std::fs::canonicalize(parent).map_err(|e| {
+                format!("ppm_path must be a file name within the snapshot directory: {e}")
+            })?;
+            if canonical_parent != dir {
+                return Err(
+                    "ppm_path must be a file name within the snapshot directory".to_string(),
+                );
+            }
+        }
+
+        let mut renderer = GuiWorkspaceRenderer::default();
+        let mut surface = GuiFrameSurface::new(8, 16);
+        renderer.render_workspace(&self.wm, self.viewport, &mut surface);
+        file.write_all(&surface.export_ppm())
+            .map_err(|e| format!("failed to write PPM snapshot: {e}"))?;
+        file.flush()
+            .map_err(|e| format!("failed to flush PPM snapshot: {e}"))?;
+
+        Ok(target)
     }
 
     pub fn new_headless(rows: u16, cols: u16) -> Self {
@@ -719,11 +899,7 @@ impl AutomationControlPlane {
             "workspace.status" => Ok(self.workspace_status_json()),
             "workspace.snapshot" => {
                 if let Some(ppm_path) = params.get("ppm_path").and_then(JsonValue::as_str) {
-                    let mut renderer = GuiWorkspaceRenderer::default();
-                    let mut surface = GuiFrameSurface::new(8, 16);
-                    renderer.render_workspace(&self.wm, self.viewport, &mut surface);
-                    std::fs::write(ppm_path, surface.export_ppm())
-                        .map_err(|e| format!("failed to write PPM snapshot: {e}"))?;
+                    self.write_snapshot_confined(ppm_path)?;
                 }
                 Ok(self.workspace_status_json())
             }
@@ -943,7 +1119,7 @@ impl AutomationControlPlane {
                     .and_then(JsonValue::as_str)
                     .ok_or_else(|| "missing 'toml' parameter".to_string())?;
                 let playbook = Playbook::from_toml_str(raw_toml).map_err(|e| e.to_string())?;
-                let report = self.run_playbook(&playbook)?;
+                let report = self.run_playbook_with_policy(&playbook, SnapshotPolicy::Confined)?;
                 Ok(JsonValue::obj([
                     ("name", JsonValue::String(report.name)),
                     ("passed", JsonValue::Bool(report.passed)),
@@ -1037,6 +1213,7 @@ impl AutomationControlPlane {
                     .get("destination")
                     .and_then(JsonValue::as_str)
                     .ok_or_else(|| "missing 'destination' parameter".to_string())?;
+                crate::remote::validate_destination(destination).map_err(|e| e.to_string())?;
                 let mut profile = RemoteHostProfile::new(name, destination);
                 if let Some(arr) = params.get("tags").and_then(JsonValue::as_array) {
                     profile.tags = arr
@@ -1224,10 +1401,11 @@ impl AutomationControlPlane {
         Ok(())
     }
 
-    /// Executes a declarative `Playbook` step-by-step and returns a `PlaybookReport`.
-    pub fn run_playbook(
+    /// Executes a declarative `Playbook` step-by-step with the given `SnapshotPolicy`.
+    pub fn run_playbook_with_policy(
         &mut self,
         playbook: &Playbook,
+        policy: SnapshotPolicy,
     ) -> std::result::Result<PlaybookReport, String> {
         let mut completed = 0;
         for (idx, step) in playbook.steps.iter().enumerate() {
@@ -1321,10 +1499,14 @@ impl AutomationControlPlane {
                         .path
                         .as_deref()
                         .ok_or_else(|| format!("step {step_num}: 'export_ppm' requires 'path'"))?;
-                    self.dispatch_method(
-                        "workspace.snapshot",
-                        &JsonValue::obj([("ppm_path", JsonValue::String(path.to_string()))]),
-                    )?;
+                    match policy {
+                        SnapshotPolicy::Trusted => {
+                            self.write_snapshot_trusted(Path::new(path))?;
+                        }
+                        SnapshotPolicy::Confined => {
+                            self.write_snapshot_confined(path)?;
+                        }
+                    }
                 }
                 other => {
                     return Err(format!("step {step_num}: unknown playbook action '{other}'"));
@@ -1339,6 +1521,14 @@ impl AutomationControlPlane {
             failure_reason: None,
             events: self.events.iter().cloned().collect(),
         })
+    }
+
+    /// Executes a declarative `Playbook` step-by-step with `SnapshotPolicy::Trusted`.
+    pub fn run_playbook(
+        &mut self,
+        playbook: &Playbook,
+    ) -> std::result::Result<PlaybookReport, String> {
+        self.run_playbook_with_policy(playbook, SnapshotPolicy::Trusted)
     }
 
     pub fn workspace_status_json(&self) -> JsonValue {
@@ -1748,11 +1938,11 @@ pub async fn send_rpc_request(endpoint: &str, method: &str, params: JsonValue) -
     send_rpc_request_with_token(endpoint, method, params, None).await
 }
 
-/// Runs the Model Context Protocol (`bilterm --mcp`) JSON-RPC 2.0 server over `stdin`/`stdout`.
-pub async fn run_mcp_stdio_server(rows: u16, cols: u16) -> Result<()> {
+/// Runs the Model Context Protocol (`bilterm --mcp`) JSON-RPC 2.0 server over `stdin`/`stdout`
+/// with the provided `AutomationControlPlane`.
+pub async fn run_mcp_stdio_server_with_plane(mut plane: AutomationControlPlane) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-    let mut plane = AutomationControlPlane::new_headless(rows, cols);
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let mut lines = BufReader::new(stdin).lines();
@@ -1768,6 +1958,11 @@ pub async fn run_mcp_stdio_server(rows: u16, cols: u16) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Runs the Model Context Protocol (`bilterm --mcp`) JSON-RPC 2.0 server over `stdin`/`stdout`.
+pub async fn run_mcp_stdio_server(rows: u16, cols: u16) -> Result<()> {
+    run_mcp_stdio_server_with_plane(AutomationControlPlane::new_headless(rows, cols)).await
 }
 
 /// Maximum length of one JSON-RPC request line; longer lines close the offending connection.
@@ -2601,5 +2796,329 @@ mod tests {
         .await
         .unwrap();
         assert!(resp2.contains("pane_count"));
+    }
+
+    #[test]
+    fn snapshot_name_validation() {
+        for bad in [
+            "",
+            ".",
+            "..",
+            "../x.ppm",
+            "/tmp/x.ppm",
+            "a/../../x.ppm",
+            "sub/x.ppm",
+            "a\\b.ppm",
+            "x\0.ppm",
+        ] {
+            assert!(
+                validate_snapshot_name(bad).is_err(),
+                "expected rejection of '{bad}'"
+            );
+        }
+        for good in ["frame.ppm", "frame-01.ppm"] {
+            assert!(
+                validate_snapshot_name(good).is_ok(),
+                "expected acceptance of '{good}'"
+            );
+        }
+    }
+
+    fn check_no_leaked_file(dir: &Path, bad_name: &str) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    check_no_leaked_file(&p, bad_name);
+                } else {
+                    assert_ne!(
+                        p.file_name().and_then(|n| n.to_str()),
+                        Some(bad_name),
+                        "found leaked file: {}",
+                        p.display()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_confined_rejects_traversal_and_writes_nothing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+
+        for bad in [
+            "../x.ppm",
+            "/tmp/x.ppm",
+            "a/../../x.ppm",
+            "sub/x.ppm",
+            "",
+            ".",
+            "..",
+        ] {
+            let req = JsonValue::obj([
+                ("jsonrpc", JsonValue::String("2.0".to_string())),
+                ("id", JsonValue::Number(1)),
+                ("method", JsonValue::String("workspace.snapshot".to_string())),
+                (
+                    "params",
+                    JsonValue::obj([("ppm_path", JsonValue::String(bad.to_string()))]),
+                ),
+            ])
+            .to_json_string();
+
+            let resp = plane.handle_jsonrpc_line(&req);
+            assert!(
+                resp.contains("ppm_path must be a file name within the snapshot directory"),
+                "bad path '{bad}' response: {resp}"
+            );
+        }
+
+        check_no_leaked_file(temp_dir.path(), "x.ppm");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn snapshot_confined_refuses_planted_symlink() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        std::fs::create_dir_all(&snaps_dir).unwrap();
+
+        let victim = temp_dir.path().join("victim");
+        std::fs::write(&victim, b"keep").unwrap();
+
+        let evil = snaps_dir.join("evil.ppm");
+        std::os::unix::fs::symlink(&victim, &evil).unwrap();
+
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("workspace.snapshot".to_string())),
+            (
+                "params",
+                JsonValue::obj([("ppm_path", JsonValue::String("evil.ppm".to_string()))]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_jsonrpc_line(&req);
+        assert!(
+            resp.contains("ppm_path must be a file name within the snapshot directory")
+                || resp.contains("error"),
+            "response: {resp}"
+        );
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+    }
+
+    #[test]
+    fn snapshot_confined_writes_inside_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("workspace.snapshot".to_string())),
+            (
+                "params",
+                JsonValue::obj([("ppm_path", JsonValue::String("frame.ppm".to_string()))]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_jsonrpc_line(&req);
+        assert!(!resp.contains("error"), "got error response: {resp}");
+
+        let target = snaps_dir.join("frame.ppm");
+        assert!(target.exists());
+        let contents = std::fs::read(&target).unwrap();
+        assert!(contents.starts_with(b"P6\n"), "missing P6 header");
+    }
+
+    #[test]
+    fn snapshot_without_ppm_path_is_status_only() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("workspace.snapshot".to_string())),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_jsonrpc_line(&req);
+        assert!(resp.contains("pane_count"), "got: {resp}");
+        assert!(!snaps_dir.exists());
+    }
+
+    #[test]
+    fn default_snapshot_dir_from_chain() {
+        use std::ffi::OsStr;
+        let s1 = default_snapshot_dir_from(Some(OsStr::new("/s")), None).unwrap();
+        assert_eq!(s1, PathBuf::from("/s/bilterm/snapshots"));
+
+        let s2 = default_snapshot_dir_from(None, Some(OsStr::new("/h"))).unwrap();
+        assert_eq!(s2, PathBuf::from("/h/.local/state/bilterm/snapshots"));
+
+        assert_eq!(default_snapshot_dir_from(None, None), None);
+    }
+
+    #[test]
+    fn mcp_snapshot_path_is_confined() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+
+        let pb_toml = r#"
+name = "escape_test"
+version = "1.0.0"
+[[steps]]
+action = "export_ppm"
+path = "../escape.ppm"
+"#;
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("tools/call".to_string())),
+            (
+                "params",
+                JsonValue::obj([
+                    (
+                        "name",
+                        JsonValue::String("bilterm_run_playbook".to_string()),
+                    ),
+                    (
+                        "arguments",
+                        JsonValue::obj([("toml", JsonValue::String(pb_toml.to_string()))]),
+                    ),
+                ]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_mcp_line(&req).unwrap();
+        assert!(
+            resp.contains("\"isError\":true") || resp.contains("error"),
+            "response: {resp}"
+        );
+        assert!(!temp_dir.path().join("escape.ppm").exists());
+    }
+
+    #[test]
+    fn rpc_playbook_export_is_confined() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let snaps_dir = temp_dir.path().join("snaps");
+        let mut plane = AutomationControlPlane::new_headless(24, 80)
+            .with_snapshot_dir(snaps_dir.clone());
+
+        let abs_path = temp_dir.path().join("abs.ppm");
+        let pb_bad = format!(
+            r#"
+name = "abs_test"
+version = "1.0.0"
+[[steps]]
+action = "export_ppm"
+path = "{}"
+"#,
+            abs_path.display()
+        );
+
+        let req_bad = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("playbook.run".to_string())),
+            ("params", JsonValue::obj([("toml", JsonValue::String(pb_bad))])),
+        ])
+        .to_json_string();
+
+        let resp_bad = plane.handle_jsonrpc_line(&req_bad);
+        assert!(
+            resp_bad.contains("error"),
+            "expected error response: {resp_bad}"
+        );
+        assert!(!abs_path.exists());
+
+        let pb_good = r#"
+name = "good_test"
+version = "1.0.0"
+[[steps]]
+action = "export_ppm"
+path = "pb.ppm"
+"#;
+        let req_good = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(2)),
+            ("method", JsonValue::String("playbook.run".to_string())),
+            (
+                "params",
+                JsonValue::obj([("toml", JsonValue::String(pb_good.to_string()))]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp_good = plane.handle_jsonrpc_line(&req_good);
+        assert!(
+            !resp_good.contains("error"),
+            "expected success: {resp_good}"
+        );
+        assert!(snaps_dir.join("pb.ppm").exists());
+    }
+
+    #[test]
+    fn fleet_register_rejects_option_destination() {
+        let mut plane = AutomationControlPlane::new_headless(24, 80);
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("fleet.register".to_string())),
+            (
+                "params",
+                JsonValue::obj([
+                    ("name", JsonValue::String("bad_node".to_string())),
+                    (
+                        "destination",
+                        JsonValue::String("-oProxyCommand=evil".to_string()),
+                    ),
+                ]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_jsonrpc_line(&req);
+        assert!(resp.contains("error"), "expected error response: {resp}");
+        assert!(!plane.wm.fleet.nodes.contains_key("bad_node"));
+    }
+
+    #[test]
+    fn fleet_register_accepts_valid_destination() {
+        let mut plane = AutomationControlPlane::new_headless(24, 80);
+        let req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(1)),
+            ("method", JsonValue::String("fleet.register".to_string())),
+            (
+                "params",
+                JsonValue::obj([
+                    ("name", JsonValue::String("good_node".to_string())),
+                    (
+                        "destination",
+                        JsonValue::String("ubuntu@10.0.0.42".to_string()),
+                    ),
+                ]),
+            ),
+        ])
+        .to_json_string();
+
+        let resp = plane.handle_jsonrpc_line(&req);
+        assert!(!resp.contains("error"), "expected success: {resp}");
+        assert!(plane.wm.fleet.nodes.contains_key("good_node"));
     }
 }
