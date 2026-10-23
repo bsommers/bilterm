@@ -1338,6 +1338,11 @@ impl CompositePane {
         } else {
             Vec::new()
         };
+        self.ingest_pty_events(events);
+    }
+
+    /// Feeds a batch of drained `PtyEvent`s into the VT state machine in order.
+    pub fn ingest_pty_events(&mut self, events: Vec<PtyEvent>) {
         let mut coalesced = Vec::new();
         for ev in events {
             match ev {
@@ -1350,13 +1355,10 @@ impl CompositePane {
             }
         }
         if !coalesced.is_empty() {
-            const MAX_BYTES_PER_FRAME: usize = 32_768;
-            if coalesced.len() > MAX_BYTES_PER_FRAME && !self.vt.is_alternate_screen() {
-                let start = coalesced.len() - MAX_BYTES_PER_FRAME;
-                self.vt.process(&coalesced[start..]);
-            } else {
-                self.vt.process(&coalesced);
-            }
+            // Every byte must reach the parser in order: truncating the stream splits escape
+            // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
+            // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.vt.process(&coalesced);
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }
@@ -1564,6 +1566,19 @@ impl CompositePane {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_pty_bursts_are_processed_without_dropping_mode_changes() {
+        let mut pane = CompositePane::new_headless(1, 25, 80);
+        // A mode switch at the front of a >256 KB burst must never be discarded.
+        let mut events = vec![PtyEvent::Output(b"\x1b[?1049h".to_vec())];
+        for _ in 0..40 {
+            events.push(PtyEvent::Output(vec![b'x'; 8192]));
+        }
+        pane.ingest_pty_events(events);
+        assert!(pane.vt.is_alternate_screen());
+        assert!(pane.vt.total_bytes_processed() >= 40 * 8192);
+    }
 
     #[test]
     fn moving_or_hiding_prompt_never_resizes_canvas_or_emits_sigwinch() {
