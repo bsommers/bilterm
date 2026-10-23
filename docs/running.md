@@ -34,6 +34,7 @@ bilterm ctl 127.0.0.1:7370 workspace.status     # Query or drive a running Bilte
 bilterm --playbook <playbook.toml>              # Execute a declarative TOML automation playbook and exit
 bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
 bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
+bilterm --session <name>                       # Use (and restore) a named persistent command-history session
 bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
 bilterm --version                               # Print version (bilterm 1.4.0)
 bilterm --help                                  # Print CLI usage summary
@@ -112,8 +113,11 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `crosshair_fullscreen` | `bool` | `true`, `false` | `false` |
 | `show_dos_fkey_bar` | `bool` | `true`, `false` | `false` |
 | `history_enabled` | `bool` | `true`, `false` | `true` |
-| `history_max_files` | `usize` | `1..=10000` | `25` |
+| `history_max_files` | `usize` | `1..=10000` (retained session dirs) | `25` |
 | `history_dir` | `string` (optional) | Directory path | `None` |
+| `history_session` | `string` | Session name (`--session <name>` overrides) | `"default"` |
+| `history_max_entries` | `usize` | Entries kept per session file before compaction | `100000` |
+| `history_load_limit` | `usize` | Prior commands restored into a new pane | `10000` |
 | `default_prompt_anchor` | `string` | `"top"`, `"bottom"`, `"floating"`, `"split-top"`, `"split-bottom"` | `"top"` |
 | `default_prompt_height` | `u16` | `3..=12` | `3` |
 | `show_menu_bar` | `bool` | `true`, `false` | `false` |

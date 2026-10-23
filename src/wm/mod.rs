@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::BiltermConfig;
 use crate::error::Result;
+use crate::pane::history_store::HistorySettings;
 use crate::pane::{CompositePane, PaneId, PromptAnchor};
 use crate::pty::PtyConfig;
 use crate::remote::{
@@ -218,6 +219,7 @@ impl WindowManager {
                 }
                 live_pane.title = format!("SSH:{dest} [#{new_id}]");
                 live_pane.remote_target = Some(dest.clone());
+                Self::attach_history(&mut live_pane, &self.config.history_settings());
                 self.panes.insert(new_id, live_pane);
             }
         }
@@ -555,6 +557,8 @@ impl WindowManager {
             pane.prompt.height = sp.prompt_height.clamp(3, 12);
             pane.prompt.width_cols = sp.prompt_width_cols;
             pane.read_only = sp.read_only;
+            // Configure the store first so the later sync does not overwrite the saved history.
+            Self::attach_history(&mut pane, &self.config.history_settings());
             pane.prompt.history = sp.history.clone();
             new_panes.insert(sp.id, pane);
         }
@@ -597,19 +601,27 @@ impl WindowManager {
         names
     }
 
-    /// Propagates `config.history_enabled`, `config.history_max_files`, and `config.history_dir` to all panes.
+    /// Replaces the active configuration (theme + history persistence settings) at startup or reload.
+    pub fn apply_config(&mut self, config: BiltermConfig) {
+        self.config = config;
+        self.notify_theme_changed();
+        self.sync_history_config();
+    }
+
+    /// Propagates the `history_*` config settings to all panes, reloading prompt history for
+    /// panes whose session file location (dir / session name) changed.
     pub fn sync_history_config(&mut self) {
-        let enabled = self.config.history_enabled;
-        let max_files = self.config.history_max_files;
-        let dir = self.config.history_dir.clone();
+        let settings = self.config.history_settings();
         for pane in self.panes.values_mut() {
-            pane.history_store
-                .configure(enabled, max_files, dir.as_deref());
+            Self::attach_history(pane, &settings);
         }
-        self.quick_terminal
-            .pane
-            .history_store
-            .configure(enabled, max_files, dir.as_deref());
+        Self::attach_history(&mut self.quick_terminal.pane, &settings);
+    }
+
+    fn attach_history(pane: &mut CompositePane, settings: &HistorySettings) {
+        if pane.history_store.apply_settings(settings) {
+            pane.restore_persisted_history();
+        }
     }
 
     pub fn new_headless(rows: u16, cols: u16) -> Self {
@@ -672,7 +684,7 @@ impl WindowManager {
         self.next_pane_id += 1;
 
         let (rows, cols) = self.default_size;
-        let new_pane = if self.headless_mode {
+        let mut new_pane = if self.headless_mode {
             CompositePane::new_headless(new_id, rows, cols)
         } else {
             CompositePane::spawn(
@@ -684,6 +696,7 @@ impl WindowManager {
                 },
             )?
         };
+        Self::attach_history(&mut new_pane, &self.config.history_settings());
 
         self.panes.insert(new_id, new_pane);
         self.split_tree.split_leaf(target_id, new_id, direction);
@@ -879,6 +892,35 @@ pub fn encode_sgr_mouse_local(mouse: MouseEvent, pane_inner: Rect) -> Option<Vec
 mod tests {
     use super::*;
     use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn apply_config_restores_session_history_into_existing_and_split_panes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log = tmp.path().join("sessions/proj/history.log");
+        std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+        std::fs::write(
+            &log,
+            "[2026-01-01T00:00:00Z | session=proj | run=r1 | pane=1] ls\n\
+             [2026-01-01T00:00:01Z | session=proj | run=r1 | pane=1] ls\n\
+             [2026-01-01T00:00:02Z | session=proj | run=r2 | pane=2] echo a\\necho b\n",
+        )
+        .unwrap();
+
+        let mut wm = WindowManager::new_headless(25, 80);
+        assert!(wm.active_pane().prompt.history.is_empty());
+        let cfg = BiltermConfig {
+            history_dir: Some(tmp.path().to_string_lossy().into_owned()),
+            history_session: "proj".to_string(),
+            ..BiltermConfig::default()
+        };
+        wm.apply_config(cfg);
+        let expected = vec!["ls".to_string(), "echo a\necho b".to_string()];
+        assert_eq!(wm.active_pane().prompt.history, expected);
+
+        wm.split_focused(SplitDirection::Vertical).unwrap();
+        assert_eq!(wm.active_pane().prompt.history, expected);
+        assert_eq!(wm.active_pane().history_store.session_file_path, log);
+    }
 
     #[test]
     fn window_manager_splits_stacks_shuffles_raises_and_translates_sgr_mouse() {

@@ -69,8 +69,8 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":quake", &[]),
     (":guake", &[]),
     (":help", &[]),
-    (":history", &["popup", "save", "on", "off", "max-files "]),
-    (":hist", &["popup", "save", "on", "off", "max-files "]),
+    (":history", &["popup", "save", "on", "off", "runs", "max-files "]),
+    (":hist", &["popup", "save", "on", "off", "runs", "max-files "]),
     (
         ":outline",
         &[

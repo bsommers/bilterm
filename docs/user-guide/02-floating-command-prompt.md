@@ -58,17 +58,21 @@ When you submit a command with `Enter` (for example, `tail -f /dev/null` or `tai
 2. **Fuzzy History Search (`Ctrl+R`)**:
    - Opens the inline `nucleo-matcher` reverse-i-search overlay with matched characters highlighted in **Bold Underlined Yellow**.
 
-### Automatic Session Persistence & File Rotation
-By default (`history_enabled = true`), Bilterm automatically persists every submitted command to disk (`$XDG_STATE_HOME/bilterm/history/` or `~/.local/state/bilterm/history/`):
-- Each log file is named `bilterm-history-<session_id>-pane-<pane_id>.log` (where `<session_id>` combines epoch timestamp, PID, and sequence counter).
-- Each line records:
+### Persistent Named Sessions, Run Segments & Compaction
+By default (`history_enabled = true`), Bilterm persists every submitted command to disk (`$XDG_STATE_HOME/bilterm/history/` or `~/.local/state/bilterm/history/`) and **restores it on the next run**:
+- History is grouped into **named sessions** (`history_session = "default"` in config, or `bilterm --session <name>`; names are sanitized to `[A-Za-z0-9._-]`). Every pane of every run of a session appends to one file: `<history_dir>/sessions/<name>/history.log` (directories `0700`, file `0600` on Unix).
+- Each bilterm run is a **segment** identified by its run id (epoch, PID, counter). Each line records:
   ```text
-  [2026-10-20T21:45:00Z | session=1792532700-4120-1 | pane=1] tail -f /dev/null
+  [2026-10-20T21:45:00Z | session=default | run=1792532700-4120-1 | pane=1] tail -f /dev/null
   ```
+  Newlines/backslashes inside a command are escaped (`\n`, `\\`).
+- When a pane opens (or the configured dir/session changes) the newest `history_load_limit` commands (default `10000`, consecutive duplicates collapsed) are loaded, so `Up`/`Down`, `Ctrl+R`, and the pop-up see prior runs.
+- Once a session file grows past `history_max_entries` (default `100000`, with 5% slack) it is compacted to the newest entries via temp file + atomic rename.
 - **Commands & Config Controls**:
   - `:history save [optional/path.sh]` — Save current pane commands out to a temporary file (or custom path) and display the path in the status bar.
   - `:history off` / `:history on` — Toggle command history persistence on or off at runtime.
-  - `:history max-files <N>` — Set the maximum number of retained session history log files (oldest files are automatically pruned).
+  - `:history runs` — Show the session's segment (run) count and the most recent runs in the status bar.
+  - `:history max-files <N>` — Set the maximum number of retained session directories (least-recently-used sessions are pruned; the active one never is).
 
 ---
 

@@ -1,9 +1,13 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::pane::PromptAnchor;
+use crate::pane::history_store::{
+    DEFAULT_HISTORY_LOAD_LIMIT, DEFAULT_HISTORY_MAX_ENTRIES, DEFAULT_HISTORY_SESSION,
+    HistorySettings,
+};
 use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
@@ -61,10 +65,16 @@ pub struct BiltermConfig {
     pub show_top_menubar: bool,
     /// Enables automatic command history persistence (`true` by default).
     pub history_enabled: bool,
-    /// Maximum number of session history files to retain in the history directory (default `25`).
+    /// Maximum number of named history session directories to retain (default `25`).
     pub history_max_files: usize,
     /// Optional custom directory path for persisted session command history files.
     pub history_dir: Option<String>,
+    /// Named persistent history session (`"default"`; overridden by `--session <name>`).
+    pub history_session: String,
+    /// Maximum entries kept in a session history file before compaction (default `100000`).
+    pub history_max_entries: usize,
+    /// Number of most recent session commands restored into a new pane's prompt history (default `10000`).
+    pub history_load_limit: usize,
     /// Optional custom directory path for saved workspace session layout snapshots (`ECO-02`).
     pub session_dir: Option<String>,
     /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
@@ -118,6 +128,9 @@ impl Default for BiltermConfig {
             history_enabled: true,
             history_max_files: 25,
             history_dir: None,
+            history_session: DEFAULT_HISTORY_SESSION.to_string(),
+            history_max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
+            history_load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
             session_dir: None,
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
@@ -144,6 +157,27 @@ impl BiltermConfig {
             .ok()
             .and_then(|s| Self::from_toml_str(&s).ok())
             .unwrap_or_default()
+    }
+
+    /// Resolves the default config path (`$XDG_CONFIG_HOME/bilterm/config.toml` or `~/.config/bilterm/config.toml`).
+    pub fn default_path() -> Option<PathBuf> {
+        if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME").filter(|d| !d.is_empty()) {
+            return Some(PathBuf::from(dir).join("bilterm").join("config.toml"));
+        }
+        std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".config").join("bilterm").join("config.toml"))
+    }
+
+    /// Builds the per-pane history persistence settings.
+    pub fn history_settings(&self) -> HistorySettings {
+        HistorySettings {
+            enabled: self.history_enabled,
+            max_files: self.history_max_files,
+            max_entries: self.history_max_entries,
+            load_limit: self.history_load_limit,
+            dir: self.history_dir.clone(),
+            session: self.history_session.clone(),
+        }
     }
 
     /// Resolves the active `ThemePalette` (applying any INI/custom override if present).
