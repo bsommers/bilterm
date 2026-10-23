@@ -1,7 +1,7 @@
 # Session Checkpoint (Phase 19 planning IN PROGRESS)
 
 **Updated:** `2026-10-23` (Phase 19 `/gsd-plan-phase` session)
-**Branch:** `main` @ `59c65cf` (local, not pushed). Uncommitted: `19-01..07-PLAN.md`, the revised `19-RESEARCH.md`, `19-CONTEXT.md` and `19-VALIDATION.md`, `19-PATTERNS.md`, the ROADMAP plan list, and this file. No background jobs.
+**Branch:** `main` @ `8083618` (local, not pushed). All Phase 19 planning docs committed. No background jobs.
 
 ## 0. Phase 19 planning state (RESUME HERE)
 - **GSD runtime:** GSD is only installed for Gemini. The user chose "Adapt Gemini install":
@@ -19,6 +19,10 @@
   - snapshot dir: "$XDG_STATE_HOME + flag"
   - loopback: "Token optional on loopback"
   - ppm names: "Bare file names only"
+- **Things to tell the user at the end:**
+  - Breaking changes: `ctl` defaults to the Unix socket instead of `127.0.0.1:7370`, and the SSH builders take `control_dir` and return `Result`.
+  - Accepted risk T-19-13: RPC `wm.command` can still write to arbitrary paths via `:record start <path>` and `:history save <path>`. This is out of scope.
+- **Planner contributions file:** the session scratchpad copy is gone. Regenerate it with `node <gsd-tools> loop render-hooks plan:pre --raw`, taking the `activeHooks` entries where kind is contribution and into is planner. This matters only if a revision pass needs it.
 - **Skipped gates (tooling missing):** the UI gate (`ui plan-gate` command doesn't exist; the phase has no UI); the spec-less §A probe was run by the planner.
 - **Next:**
   1. Spawn the plan-checker for iteration 2 of 3 (haiku). The prompt is the same as iteration 1: plans plus ROADMAP, REQUIREMENTS, CONTEXT, RESEARCH and VALIDATION; SEC-R01..04; ASVS L1 block-on-high.
