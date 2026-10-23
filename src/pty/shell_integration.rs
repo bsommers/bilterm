@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+static INTEGRATION_LOCK: Mutex<()> = Mutex::new(());
 
 /// Supported shells for zero-config `OSC 133` + `OSC 7` shell integration (`VAL-01`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +114,17 @@ pub fn prepare_shell_integration(
     args: &mut Vec<String>,
     env: &mut BTreeMap<String, String>,
 ) -> Option<ShellKind> {
+    let base_dir = shell_integration_root_dir().ok()?;
+    prepare_shell_integration_in(&base_dir, program, args, env)
+}
+
+/// Prepares shell integration inside a specific verified base directory.
+pub fn prepare_shell_integration_in(
+    base_dir: &Path,
+    program: &str,
+    args: &mut Vec<String>,
+    env: &mut BTreeMap<String, String>,
+) -> Option<ShellKind> {
     if !args.is_empty() {
         return None;
     }
@@ -119,23 +132,23 @@ pub fn prepare_shell_integration(
         return None;
     }
     let kind = ShellKind::from_program(program)?;
-    let base_dir = shell_integration_root_dir();
+    let _guard = INTEGRATION_LOCK.lock().unwrap();
 
     match kind {
         ShellKind::Bash => {
-            let bash_dir = base_dir.join("bash");
-            fs::create_dir_all(&bash_dir).ok()?;
+            let bash_dir = crate::secure_fs::private_dir_in(base_dir, "bash").ok()?;
             let rcfile_path = bash_dir.join("bilterm.bash");
-            fs::write(&rcfile_path, BASH_INTEGRATION_SCRIPT).ok()?;
+            crate::secure_fs::write_private_file(&rcfile_path, BASH_INTEGRATION_SCRIPT.as_bytes())
+                .ok()?;
             args.push("--rcfile".to_string());
             args.push(rcfile_path.to_string_lossy().into_owned());
             env.insert("BILTERM_SHELL_INTEGRATION".to_string(), "1".to_string());
         }
         ShellKind::Zsh => {
-            let zsh_dir = base_dir.join("zsh");
-            fs::create_dir_all(&zsh_dir).ok()?;
+            let zsh_dir = crate::secure_fs::private_dir_in(base_dir, "zsh").ok()?;
             let zshrc_path = zsh_dir.join(".zshrc");
-            fs::write(&zshrc_path, ZSH_INTEGRATION_SCRIPT).ok()?;
+            crate::secure_fs::write_private_file(&zshrc_path, ZSH_INTEGRATION_SCRIPT.as_bytes())
+                .ok()?;
             if let Some(orig) = env
                 .get("ZDOTDIR")
                 .cloned()
@@ -150,11 +163,18 @@ pub fn prepare_shell_integration(
             env.insert("BILTERM_SHELL_INTEGRATION".to_string(), "1".to_string());
         }
         ShellKind::Fish => {
-            let fish_data_dir = base_dir.join("fish-data");
-            let conf_dir = fish_data_dir.join("fish").join("vendor_conf.d");
-            fs::create_dir_all(&conf_dir).ok()?;
+            let fish_data_dir =
+                crate::secure_fs::private_dir_in(base_dir, "fish-data").ok()?;
+            let fish_dir =
+                crate::secure_fs::private_dir_in(&fish_data_dir, "fish").ok()?;
+            let conf_dir =
+                crate::secure_fs::private_dir_in(&fish_dir, "vendor_conf.d").ok()?;
             let script_path = conf_dir.join("bilterm-shell-integration.fish");
-            fs::write(&script_path, FISH_INTEGRATION_SCRIPT).ok()?;
+            crate::secure_fs::write_private_file(
+                &script_path,
+                FISH_INTEGRATION_SCRIPT.as_bytes(),
+            )
+            .ok()?;
             let existing = env
                 .get("XDG_DATA_DIRS")
                 .cloned()
@@ -170,13 +190,87 @@ pub fn prepare_shell_integration(
     Some(kind)
 }
 
-fn shell_integration_root_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("bilterm-shell-integration-{}", std::process::id()))
+fn shell_integration_root_dir() -> std::io::Result<PathBuf> {
+    let runtime = crate::secure_fs::private_runtime_dir()?;
+    crate::secure_fs::private_dir_in(&runtime, &format!("shell-integration-{}", std::process::id()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn rc_files_are_private() {
+        use std::os::unix::fs::MetadataExt;
+        let mut args = Vec::new();
+        let mut env = BTreeMap::new();
+        let kind = prepare_shell_integration("/bin/bash", &mut args, &mut env);
+        assert_eq!(kind, Some(ShellKind::Bash));
+        let rcfile = PathBuf::from(&args[1]);
+        let private_root = crate::secure_fs::private_runtime_dir().unwrap();
+        assert!(rcfile.starts_with(&private_root));
+
+        let file_md = std::fs::symlink_metadata(&rcfile).unwrap();
+        assert_eq!(file_md.mode() & 0o777, 0o600);
+
+        let parent_md = std::fs::symlink_metadata(rcfile.parent().unwrap()).unwrap();
+        assert_eq!(parent_md.mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn rc_file_rewrite_is_idempotent() {
+        let mut args1 = Vec::new();
+        let mut env1 = BTreeMap::new();
+        assert_eq!(
+            prepare_shell_integration("/bin/bash", &mut args1, &mut env1),
+            Some(ShellKind::Bash)
+        );
+
+        let mut args2 = Vec::new();
+        let mut env2 = BTreeMap::new();
+        assert_eq!(
+            prepare_shell_integration("/bin/bash", &mut args2, &mut env2),
+            Some(ShellKind::Bash)
+        );
+
+        let content = std::fs::read_to_string(&args2[1]).unwrap();
+        assert_eq!(content, BASH_INTEGRATION_SCRIPT);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn planted_rc_symlink_is_not_followed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("isolated-root");
+        crate::secure_fs::ensure_private_dir(&base).unwrap();
+
+        let mut args = Vec::new();
+        let mut env = BTreeMap::new();
+        prepare_shell_integration_in(&base, "/bin/bash", &mut args, &mut env);
+        let rcfile = PathBuf::from(&args[1]);
+
+        let victim = tmp.path().join("victim.txt");
+        use std::io::Write;
+        let mut vf = std::fs::File::create(&victim).unwrap();
+        vf.write_all(b"keep").unwrap();
+
+        // Plant symlink where rcfile was
+        std::fs::remove_file(&rcfile).unwrap();
+        std::os::unix::fs::symlink(&victim, &rcfile).unwrap();
+
+        // Second call should succeed and unlink the planted symlink rather than overwriting victim
+        let mut args2 = Vec::new();
+        let mut env2 = BTreeMap::new();
+        assert_eq!(
+            prepare_shell_integration_in(&base, "/bin/bash", &mut args2, &mut env2),
+            Some(ShellKind::Bash)
+        );
+        assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
+        let rc_md = std::fs::symlink_metadata(&rcfile).unwrap();
+        assert!(!rc_md.file_type().is_symlink());
+        assert!(rc_md.is_file());
+    }
 
     #[test]
     fn detects_bash_zsh_and_fish_and_injects_hooks() {
