@@ -41,15 +41,22 @@ fn unit_exhaustively_covers_remote_profiles_fleet_selectors_and_snapshots() {
     prof.tags = vec!["gpu".to_string(), "prod".to_string()];
     prof.rpc_endpoint = Some("10.0.0.42:7370".to_string());
 
-    let ssh_args = prof.build_ssh_args();
+    let control_dir = std::path::Path::new("/run/user/1000/bilterm");
+    let ssh_args = prof.build_ssh_args(Some(control_dir)).unwrap();
     assert!(ssh_args.contains(&"-tt".to_string()));
     assert!(ssh_args.contains(&"ControlMaster=auto".to_string()));
+    assert!(ssh_args.contains(&format!("ControlPath={}/ssh-%C", control_dir.display())));
     assert!(ssh_args.contains(&"2202".to_string()));
     assert!(ssh_args.contains(&"/home/ubuntu/.ssh/id_ed25519".to_string()));
+    assert_eq!(ssh_args[ssh_args.len() - 2], "--");
     assert_eq!(ssh_args.last().map(String::as_str), Some("ubuntu@10.0.0.42"));
 
-    let tmux_args = prof.build_ssh_tmux_cc_args("prod/main!@#");
+    let tmux_args = prof
+        .build_ssh_tmux_cc_args("prod/main!@#", Some(control_dir))
+        .unwrap();
     assert!(tmux_args.contains(&"-T".to_string()));
+    assert_eq!(tmux_args[tmux_args.len() - 3], "--");
+    assert_eq!(tmux_args[tmux_args.len() - 2], "ubuntu@10.0.0.42");
     assert_eq!(
         tmux_args.last().map(String::as_str),
         Some("tmux -CC new-session -A -s prodmain")
@@ -57,15 +64,21 @@ fn unit_exhaustively_covers_remote_profiles_fleet_selectors_and_snapshots() {
 
     // Empty sanitized session falls back to "bilterm" and control_master=false omits ControlMaster flags
     prof.control_master = false;
-    let minimal_tmux = prof.build_ssh_tmux_cc_args("!!!");
+    let minimal_tmux = prof.build_ssh_tmux_cc_args("!!!", None).unwrap();
     assert!(!minimal_tmux.iter().any(|a| a.contains("ControlMaster")));
     assert_eq!(
         minimal_tmux.last().map(String::as_str),
         Some("tmux -CC new-session -A -s bilterm")
     );
-    let minimal_ssh = prof.build_ssh_args();
+    let minimal_ssh = prof.build_ssh_args(None).unwrap();
     assert!(!minimal_ssh.iter().any(|a| a.contains("ControlMaster")));
     assert!(remote_osc133_bootstrap_command().contains("133;D"));
+
+    // Option injection rejected
+    let mut evil_prof = prof.clone();
+    evil_prof.destination = "-oProxyCommand=evil".to_string();
+    assert!(evil_prof.build_ssh_args(None).is_err());
+    assert!(evil_prof.build_ssh_tmux_cc_args("sess", None).is_err());
 
     // 2. FleetRegistry & FleetSelector (All, LocalOnly, RemoteOnly, Tag, Node by name and destination)
     let mut reg = FleetRegistry::new();
