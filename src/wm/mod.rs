@@ -2,8 +2,9 @@ pub mod quick_terminal;
 pub mod split_tree;
 pub mod z_stack;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
@@ -20,6 +21,9 @@ use crate::remote::{
 };
 use crate::wm::quick_terminal::QuickTerminal;
 use crate::wm::split_tree::{SplitDirection, SplitTree};
+use crate::vt::scrollback::{
+    FixedMemoryProbe, PaneUsage, ScrollbackGovernor, SystemMemoryProbe, format_mib, plan_capacities,
+};
 use crate::wm::z_stack::ZStack;
 
 /// Workspace window arrangement mode (`WM-01`, `WM-02`).
@@ -93,6 +97,8 @@ pub struct WindowManager {
     next_pane_id: PaneId,
     headless_mode: bool,
     default_size: (u16, u16),
+    /// Dynamic scrollback budget governor (`[scrollback]`).
+    pub scrollback: ScrollbackGovernor,
 }
 
 impl WindowManager {
@@ -138,6 +144,11 @@ impl WindowManager {
             next_pane_id: initial_id + 1,
             headless_mode,
             default_size: (screen_rows, cols),
+            scrollback: if headless_mode {
+                ScrollbackGovernor::new(Box::new(FixedMemoryProbe::default()))
+            } else {
+                ScrollbackGovernor::new(Box::new(SystemMemoryProbe))
+            },
         }
     }
 
@@ -602,6 +613,75 @@ impl WindowManager {
         self.config = config;
         self.sync_history_config();
         self.notify_theme_changed();
+        self.rebalance_scrollback(Instant::now());
+    }
+
+    /// Runs [`Self::rebalance_scrollback`] when the periodic interval has elapsed (app tick).
+    pub fn maybe_rebalance_scrollback(&mut self, now: Instant) {
+        if self.scrollback.due(now) {
+            self.rebalance_scrollback(now);
+        }
+    }
+
+    /// Grows nearly-full panes and contracts oversized ones against the global scrollback
+    /// budget and host memory pressure. Panes on the alternate screen are deferred.
+    pub fn rebalance_scrollback(&mut self, now: Instant) {
+        let policy = self.scrollback.begin(&self.config.scrollback, now);
+        let live: BTreeSet<PaneId> = self.panes.keys().copied().chain([0]).collect();
+        self.scrollback.retain_seen(&live);
+        let mut vts: Vec<(PaneId, &mut crate::vt::VtParser)> = self
+            .panes
+            .iter_mut()
+            .map(|(id, pane)| (*id, &mut pane.vt))
+            .chain(std::iter::once((0, &mut self.quick_terminal.pane.vt)))
+            .collect();
+        for (id, vt) in vts.iter_mut() {
+            if vt.is_alternate_screen() || !self.scrollback.mark_seen(*id) {
+                continue;
+            }
+            let initial = policy.initial_capacity(vt.size().1);
+            if vt.scrollback_capacity() != initial && vt.scrollback_used_rows() <= initial {
+                vt.set_scrollback_capacity(initial);
+            }
+        }
+        let usages: Vec<PaneUsage> = vts
+            .iter_mut()
+            .map(|(_, vt)| PaneUsage {
+                used_rows: vt.scrollback_used_rows(),
+                capacity: vt.scrollback_capacity(),
+                cols: vt.size().1,
+            })
+            .collect();
+        for ((_, vt), target) in vts.iter_mut().zip(plan_capacities(&usages, &policy)) {
+            if target != vt.scrollback_capacity() {
+                vt.set_scrollback_capacity(target);
+            }
+        }
+    }
+
+    /// One-line `:scrollback` report for the active pane and the global budget.
+    pub fn scrollback_report(&mut self) -> String {
+        let policy = self
+            .scrollback
+            .last_policy()
+            .unwrap_or_else(|| self.scrollback.begin(&self.config.scrollback, Instant::now()));
+        let total: u64 = self
+            .panes
+            .values_mut()
+            .chain(std::iter::once(&mut self.quick_terminal.pane))
+            .map(|p| p.vt.estimated_scrollback_bytes())
+            .sum();
+        let vt = &mut self.active_pane_mut().vt;
+        let used = vt.scrollback_used_rows();
+        let cap = vt.scrollback_capacity();
+        let bytes = vt.estimated_scrollback_bytes();
+        format!(
+            "Scrollback: {used}/{cap} lines ({}) | all panes {} of {} budget{}",
+            format_mib(bytes),
+            format_mib(total),
+            format_mib(policy.budget_bytes),
+            if policy.memory_pressure { " | LOW MEMORY" } else { "" }
+        )
     }
 
     /// Propagates `config.history_enabled`, `config.history_max_files`, and `config.history_dir` to all panes.
@@ -696,6 +776,7 @@ impl WindowManager {
         self.split_tree.split_leaf(target_id, new_id, direction);
         self.z_stack.push(new_id);
         self.zoomed_pane = None;
+        self.rebalance_scrollback(Instant::now());
         Ok(new_id)
     }
 
@@ -717,6 +798,7 @@ impl WindowManager {
             if self.zoomed_pane == Some(target_id) {
                 self.zoomed_pane = None;
             }
+            self.rebalance_scrollback(Instant::now());
             true
         } else {
             false
@@ -922,5 +1004,77 @@ mod tests {
         .expect("sgr bytes");
         // Pane #2 outer starts at x=40, y=0; inner starts at x=41, y=1 -> local_col = 60 - 41 + 1 = 20, local_row = 5 - 1 + 1 = 5
         assert_eq!(String::from_utf8(sgr).unwrap(), "\x1b[<0;20;5M");
+    }
+
+    fn fill_lines(pane: &mut CompositePane, n: usize) {
+        let mut bytes = Vec::new();
+        for i in 0..n {
+            bytes.extend_from_slice(format!("row {i}\r\n").as_bytes());
+        }
+        pane.process_pty_output(&bytes);
+    }
+
+    #[test]
+    fn scrollback_rebalance_sizes_new_panes_and_doubles_full_ones() {
+        use crate::vt::scrollback::LineLimit;
+        let mut wm = WindowManager::new_headless(25, 80);
+        wm.config.scrollback.initial_lines = 1_000;
+        wm.config.scrollback.min_lines = 500;
+        wm.config.scrollback.max_lines = LineLimit::Fixed(3_000);
+        let now = std::time::Instant::now();
+        wm.rebalance_scrollback(now);
+        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 1_000);
+        assert_eq!(wm.quick_terminal.pane.vt.scrollback_capacity(), 1_000);
+
+        fill_lines(wm.active_pane_mut(), 1_200);
+        assert!(!wm.scrollback.due(now), "throttled within the interval");
+        wm.rebalance_scrollback(now);
+        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 2_000);
+        assert_eq!(wm.quick_terminal.pane.vt.scrollback_capacity(), 1_000, "idle pane untouched");
+        fill_lines(wm.active_pane_mut(), 2_000);
+        wm.rebalance_scrollback(now);
+        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 3_000, "clamped to max_lines");
+        assert!(wm.active_pane_mut().vt.scrollback_used_rows() >= 1_900);
+    }
+
+    #[test]
+    fn scrollback_contracts_under_low_available_memory() {
+        use crate::vt::scrollback::{FixedMemoryProbe, MemoryBudget, MemorySnapshot};
+        let mut wm = WindowManager::new_headless(25, 80);
+        wm.config.scrollback.initial_lines = 1_500;
+        wm.config.scrollback.min_lines = 100;
+        wm.config.scrollback.memory_budget = MemoryBudget::Bytes(4 * 1024 * 1024);
+        let now = std::time::Instant::now();
+        wm.rebalance_scrollback(now);
+        fill_lines(wm.active_pane_mut(), 1_000);
+        wm.rebalance_scrollback(now);
+        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 1_500, "no pressure, no shrink");
+
+        wm.scrollback.set_probe(Box::new(FixedMemoryProbe(MemorySnapshot {
+            total_bytes: Some(16 << 30),
+            available_bytes: Some(512 << 20),
+        })));
+        wm.rebalance_scrollback(now);
+        // Fair share: 4 MiB / 2 panes / (80*32+64) bytes per row = 799 rows.
+        let cap = wm.active_pane().vt.scrollback_capacity();
+        assert_eq!(cap, 799);
+        assert!(wm.active_pane_mut().vt.scrollback_used_rows() <= cap);
+        assert!(wm.active_pane().vt.screen().contents().contains("row 999"));
+    }
+
+    #[test]
+    fn scrollback_colon_command_reports_and_clears() {
+        use crate::pane::colon_command::{execute_wm_colon_command, parse_colon_command};
+        let mut wm = WindowManager::new_headless(25, 80);
+        fill_lines(wm.active_pane_mut(), 300);
+        let cmd = parse_colon_command(":scrollback").unwrap().unwrap();
+        assert!(!execute_wm_colon_command(&mut wm, cmd));
+        let msg = wm.active_pane().status_message.clone().unwrap();
+        assert!(msg.contains("lines") && msg.contains("MiB") && msg.contains("budget"), "{msg}");
+
+        let cmd = parse_colon_command(":scrollback clear").unwrap().unwrap();
+        assert!(!execute_wm_colon_command(&mut wm, cmd));
+        assert_eq!(wm.active_pane_mut().vt.scrollback_used_rows(), 0);
+        assert!(parse_colon_command(":scrollback bogus").unwrap().is_err());
     }
 }
