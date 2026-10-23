@@ -597,6 +597,13 @@ impl WindowManager {
         names
     }
 
+    /// Installs a loaded `BiltermConfig` and propagates history and theme settings to every pane.
+    pub fn apply_config(&mut self, config: BiltermConfig) {
+        self.config = config;
+        self.sync_history_config();
+        self.notify_theme_changed();
+    }
+
     /// Propagates `config.history_enabled`, `config.history_max_files`, and `config.history_dir` to all panes.
     pub fn sync_history_config(&mut self) {
         let enabled = self.config.history_enabled;

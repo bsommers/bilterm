@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -136,6 +136,27 @@ impl BiltermConfig {
     /// Parses a TOML configuration string into `BiltermConfig`.
     pub fn from_toml_str(toml_text: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(toml_text)
+    }
+
+    /// Resolves `$XDG_CONFIG_HOME/bilterm/config.toml`, falling back to `~/.config/bilterm/config.toml`.
+    pub fn default_path() -> Option<PathBuf> {
+        config_path_from_env(
+            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
+            std::env::var_os("HOME").map(PathBuf::from),
+        )
+    }
+
+    /// Loads `BiltermConfig` from `path`: `Ok(None)` if the file does not exist, `Err` if it
+    /// cannot be read or parsed (so callers can surface the problem instead of silently ignoring it).
+    pub fn load(path: &Path) -> std::result::Result<Option<Self>, String> {
+        let raw = match std::fs::read_to_string(path) {
+            Ok(raw) => raw,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
+        };
+        Self::from_toml_str(&raw)
+            .map(Some)
+            .map_err(|e| format!("invalid {}: {e}", path.display()))
     }
 
     /// Loads `BiltermConfig` from `path` if it exists, or returns `BiltermConfig::default()`.
@@ -334,10 +355,46 @@ pub fn parse_ini_theme(ini_text: &str) -> ThemePalette {
     palette
 }
 
+fn config_path_from_env(xdg_config_home: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
+    let base = match xdg_config_home.filter(|p| !p.as_os_str().is_empty()) {
+        Some(xdg) => xdg,
+        None => home?.join(".config"),
+    };
+    Some(base.join("bilterm").join("config.toml"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn resolves_xdg_config_path_with_home_fallback() {
+        assert_eq!(
+            config_path_from_env(Some("/xdg".into()), Some("/home/u".into())),
+            Some(std::path::PathBuf::from("/xdg/bilterm/config.toml"))
+        );
+        assert_eq!(
+            config_path_from_env(Some("".into()), Some("/home/u".into())),
+            Some(std::path::PathBuf::from("/home/u/.config/bilterm/config.toml"))
+        );
+        assert_eq!(config_path_from_env(None, None), None);
+    }
+
+    #[test]
+    fn load_distinguishes_missing_file_from_invalid_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("absent.toml");
+        assert!(BiltermConfig::load(&missing).unwrap().is_none());
+
+        let valid = dir.path().join("valid.toml");
+        std::fs::write(&valid, "leader_key = \"Ctrl+A\"\n").unwrap();
+        assert_eq!(BiltermConfig::load(&valid).unwrap().unwrap().leader_key, "Ctrl+A");
+
+        let invalid = dir.path().join("invalid.toml");
+        std::fs::write(&invalid, "leader_key = [\n").unwrap();
+        assert!(BiltermConfig::load(&invalid).is_err());
+    }
 
     #[test]
     fn parses_toml_config_and_ini_theme_overrides() {

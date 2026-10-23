@@ -5,6 +5,7 @@ use bilterm::api::{
     send_rpc_request,
 };
 use bilterm::app::App;
+use bilterm::config::BiltermConfig;
 use bilterm::error::TerminalRestoreGuard;
 use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use bilterm::wm::WindowManager;
@@ -120,6 +121,17 @@ async fn main() -> color_eyre::Result<()> {
 
     let (cols, rows) = terminal::size().unwrap_or((80, 24));
     let mut app = App::spawn_default(rows, cols)?;
+    if let Some(cfg_path) = BiltermConfig::default_path() {
+        match BiltermConfig::load(&cfg_path) {
+            Ok(Some(cfg)) => app.wm.apply_config(cfg),
+            Ok(None) => {}
+            Err(msg) => {
+                tracing::warn!("{msg}; using built-in defaults");
+                app.wm.active_pane_mut().status_message =
+                    Some(format!("config error: {msg} (using defaults)"));
+            }
+        }
+    }
 
     let host_guard = TerminalRestoreGuard::enter_host_tui()?;
     let backend = CrosstermBackend::new(io::stdout());
