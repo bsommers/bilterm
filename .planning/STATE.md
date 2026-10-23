@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5.0
+milestone: v1.7.0
 milestone_name: milestone
-current_phase: 19
-current_phase_name: security-hardening-of-the-automation-shell-integration-surfa
-status: complete
-stopped_at: Phase 19 execution complete
+current_phase: 20
+current_phase_name: mega-module-decomposition-behaviour-preserving
+status: planned
+stopped_at: Phase 20 planned (5 plans ready for execution)
 last_updated: "2026-10-23"
 last_activity: 2026-10-23
-last_activity_desc: Phase 19 (Security Hardening) complete (7/7 plans)
+last_activity_desc: Released v1.7.0; planned Phase 20 (Mega-Module Decomposition, 5 plans across 3 waves)
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 6
-  total_plans: 22
+  total_plans: 27
   completed_plans: 22
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 19 complete — ready for next milestone/phase
+**Current focus:** Phase 20 — Mega-Module Decomposition (`ARCH-R04`, 5 plans ready to execute)
 
 ## Current Position
 
-Phase: 19 (security-hardening-of-the-automation-shell-integration-surfa) — COMPLETE
-Plan: All 7 plans complete (19-01..19-07)
-Status: Phase 19 Complete
-Last activity: 2026-10-23 — Phase 19 complete (SEC-R01..04)
+Phase: 20 (mega-module-decomposition-behaviour-preserving) — PLANNED
+Plan: 0/5 complete (`20-01-PLAN.md`..`20-05-PLAN.md`)
+Status: Ready to execute (`/gsd-execute-phase 20`)
+Last activity: 2026-10-23 — Released `v1.7.0` and planned Phase 20 (`ARCH-R04`)
 
 Progress: [██████████] 100%
 
