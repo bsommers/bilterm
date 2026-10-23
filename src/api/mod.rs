@@ -7,7 +7,8 @@
 //! 3. **Real-Time Event Subscription Bus & Declarative Robot Playbooks** (`AutomationEvent`, `Playbook`, `bilterm --playbook`)
 
 use std::collections::{BTreeMap, VecDeque};
-use std::path::Path;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
@@ -1401,7 +1402,7 @@ impl AutomationControlPlane {
         ])
     }
 
-    fn error_response(id: JsonValue, code: i64, message: &str) -> JsonValue {
+    pub(crate) fn error_response(id: JsonValue, code: i64, message: &str) -> JsonValue {
         JsonValue::obj([
             ("jsonrpc", JsonValue::String("2.0".to_string())),
             ("id", id),
@@ -1462,11 +1463,239 @@ pub fn parse_key_chord_str(raw: &str) -> Option<KeyEvent> {
     Some(KeyEvent::new(code, modifiers))
 }
 
-/// Sends a single line-delimited JSON-RPC 2.0 request to a TCP (`host:port`) or Unix domain socket path
-/// and returns the JSON-RPC response string (`bilterm ctl`).
-pub async fn send_rpc_request(endpoint: &str, method: &str, params: JsonValue) -> Result<String> {
+/// Listening endpoint for the headless JSON-RPC automation daemon.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListenEndpoint {
+    Unix(PathBuf),
+    Tcp(SocketAddr),
+}
+
+/// Headless JSON-RPC daemon configuration with an optional bearer token.
+///
+/// Formatted output explicitly redacts the secret token to prevent accidental log leaks.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ListenConfig {
+    pub endpoint: ListenEndpoint,
+    pub token: Option<String>,
+}
+
+impl std::fmt::Debug for ListenConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ListenConfig")
+            .field("endpoint", &self.endpoint)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
+/// Default loopback TCP listener endpoint used when no Unix socket path is available.
+pub const DEFAULT_TCP_LISTEN: &str = "127.0.0.1:7370";
+
+/// JSON-RPC 2.0 error code returned when authentication fails or is required before requests.
+pub const RPC_AUTH_ERROR_CODE: i64 = -32001;
+
+/// Conservative maximum byte length for Unix domain socket paths (`sockaddr_un::sun_path`).
+///
+/// POSIX systems specify 104 bytes on macOS / BSD and 108 bytes on Linux, inclusive of the NUL
+/// terminator.
+const MAX_SOCKET_PATH_BYTES: usize = 103;
+
+/// Resolves the default socket path inside `dir`, enforcing the conservative path length limit.
+pub fn socket_path_in(dir: &Path) -> std::io::Result<PathBuf> {
+    let path = dir.join("bilterm.sock");
+    if path.as_os_str().len() >= MAX_SOCKET_PATH_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "default socket path '{}' exceeds Unix socket path length limit ({} bytes); pass --listen unix:PATH with a shorter path",
+                path.display(),
+                MAX_SOCKET_PATH_BYTES
+            ),
+        ));
+    }
+    Ok(path)
+}
+
+/// Returns the default Unix domain socket path in Bilterm's private runtime directory.
+pub fn default_socket_path() -> std::io::Result<PathBuf> {
+    #[cfg(unix)]
+    {
+        let dir = crate::secure_fs::private_runtime_dir()?;
+        socket_path_in(&dir)
+    }
+    #[cfg(not(unix))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "Unix domain sockets not supported on non-Unix platforms",
+        ))
+    }
+}
+
+/// Reads a bearer token from a private 0600 file.
+pub fn load_token_file(path: &Path) -> Result<String> {
+    crate::secure_fs::read_secret_file(path)
+        .map_err(|e| BiltermError::Config(format!("token file {}: {e}", path.display())))
+}
+
+/// Validates and normalizes listen configuration according to security policy (SEC-R01).
+pub fn validate_listen_config(
+    listen: Option<&str>,
+    allow_remote: bool,
+    token: Option<String>,
+    default_unix_path: Option<PathBuf>,
+) -> Result<ListenConfig> {
+    match listen {
+        None => {
+            #[cfg(unix)]
+            {
+                if let Some(path) = default_unix_path {
+                    Ok(ListenConfig {
+                        endpoint: ListenEndpoint::Unix(path),
+                        token,
+                    })
+                } else {
+                    Err(BiltermError::Config(
+                        "default private runtime directory is unavailable; specify --listen unix:PATH"
+                            .to_string(),
+                    ))
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let addr: SocketAddr = DEFAULT_TCP_LISTEN.parse().map_err(|e| {
+                    BiltermError::Config(format!("invalid default listen address: {e}"))
+                })?;
+                if token.is_none() {
+                    return Err(BiltermError::Config(
+                        "default TCP listener requires a bearer token via --token-file (mode 0600)"
+                            .to_string(),
+                    ));
+                }
+                Ok(ListenConfig {
+                    endpoint: ListenEndpoint::Tcp(addr),
+                    token,
+                })
+            }
+        }
+        Some(s) => {
+            let unix_path = s
+                .strip_prefix("unix://")
+                .or_else(|| s.strip_prefix("unix:"))
+                .or_else(|| if s.starts_with('/') { Some(s) } else { None });
+
+            if let Some(path_str) = unix_path {
+                #[cfg(unix)]
+                {
+                    return Ok(ListenConfig {
+                        endpoint: ListenEndpoint::Unix(PathBuf::from(path_str)),
+                        token,
+                    });
+                }
+                #[cfg(not(unix))]
+                {
+                    return Err(BiltermError::Config(
+                        "Unix domain sockets are not supported on non-Unix platforms".to_string(),
+                    ));
+                }
+            }
+
+            let addr: SocketAddr = if let Ok(addr) = s.parse::<SocketAddr>() {
+                addr
+            } else if let Some(port_str) = s.strip_prefix("localhost:") {
+                let port: u16 = port_str.parse().map_err(|_| {
+                    BiltermError::Config(format!("invalid port in listen address: '{s}'"))
+                })?;
+                SocketAddr::from(([127, 0, 0, 1], port))
+            } else {
+                return Err(BiltermError::Config(format!(
+                    "invalid listen address: '{s}' (must be IP:PORT, localhost:PORT, or unix:PATH)"
+                )));
+            };
+
+            if addr.ip().is_loopback() {
+                Ok(ListenConfig {
+                    endpoint: ListenEndpoint::Tcp(addr),
+                    token,
+                })
+            } else {
+                if !allow_remote {
+                    return Err(BiltermError::Config(format!(
+                        "refusing to listen on non-loopback address {addr} without --allow-remote"
+                    )));
+                }
+                if token.is_none() {
+                    return Err(BiltermError::Config(
+                        "--allow-remote requires a bearer token via --token-file (mode 0600)"
+                            .to_string(),
+                    ));
+                }
+                Ok(ListenConfig {
+                    endpoint: ListenEndpoint::Tcp(addr),
+                    token,
+                })
+            }
+        }
+    }
+}
+
+async fn rpc_roundtrip<S>(
+    stream: S,
+    token: Option<&str>,
+    request_line: String,
+) -> Result<String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+    let (rd, mut wr) = tokio::io::split(stream);
+    let mut reader = BufReader::new(rd);
+
+    if let Some(tok) = token {
+        let auth_req = JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", JsonValue::Number(0)),
+            ("method", JsonValue::String("auth.login".to_string())),
+            (
+                "params",
+                JsonValue::obj([("token", JsonValue::String(tok.to_string()))]),
+            ),
+        ])
+        .to_json_string();
+
+        wr.write_all(format!("{auth_req}\n").as_bytes()).await?;
+        wr.flush().await?;
+
+        let mut auth_reply = String::new();
+        reader.read_line(&mut auth_reply).await?;
+        if let Some(parsed) = JsonValue::parse(auth_reply.trim()) {
+            if parsed.get("error").is_some() {
+                return Err(BiltermError::Config("authentication failed".to_string()));
+            }
+        } else {
+            return Err(BiltermError::Config(
+                "authentication failed: invalid server response".to_string(),
+            ));
+        }
+    }
+
+    wr.write_all(format!("{request_line}\n").as_bytes()).await?;
+    wr.flush().await?;
+
+    let mut reply = String::new();
+    reader.read_line(&mut reply).await?;
+    Ok(reply.trim_end_matches(['\r', '\n']).to_string())
+}
+
+/// Sends a single line-delimited JSON-RPC 2.0 request with an optional bearer token
+/// to a TCP (`host:port`) or Unix domain socket path and returns the JSON-RPC response string (`bilterm ctl`).
+pub async fn send_rpc_request_with_token(
+    endpoint: &str,
+    method: &str,
+    params: JsonValue,
+    token: Option<&str>,
+) -> Result<String> {
     let req = JsonValue::obj([
         ("jsonrpc", JsonValue::String("2.0".to_string())),
         ("id", JsonValue::Number(1)),
@@ -1475,23 +1704,34 @@ pub async fn send_rpc_request(endpoint: &str, method: &str, params: JsonValue) -
     ])
     .to_json_string();
 
-    if endpoint.contains(':') && !Path::new(endpoint).exists() {
+    let unix_prefix = endpoint
+        .strip_prefix("unix://")
+        .or_else(|| endpoint.strip_prefix("unix:"));
+
+    if let Some(path) = unix_prefix {
+        #[cfg(unix)]
+        {
+            let stream = tokio::net::UnixStream::connect(path).await?;
+            rpc_roundtrip(stream, token, req).await
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            Err(BiltermError::Config(
+                "Use host:port TCP endpoint on non-Unix platforms".to_string(),
+            ))
+        }
+    } else if endpoint.parse::<SocketAddr>().is_ok()
+        || endpoint.starts_with("localhost:")
+        || (endpoint.contains(':') && !Path::new(endpoint).exists())
+    {
         let stream = tokio::net::TcpStream::connect(endpoint).await?;
-        let (rd, mut wr) = stream.into_split();
-        wr.write_all(format!("{req}\n").as_bytes()).await?;
-        wr.flush().await?;
-        let mut lines = BufReader::new(rd).lines();
-        Ok(lines.next_line().await?.unwrap_or_default())
+        rpc_roundtrip(stream, token, req).await
     } else {
         #[cfg(unix)]
         {
-            let path = endpoint.strip_prefix("unix://").unwrap_or(endpoint);
-            let stream = tokio::net::UnixStream::connect(path).await?;
-            let (rd, mut wr) = stream.into_split();
-            wr.write_all(format!("{req}\n").as_bytes()).await?;
-            wr.flush().await?;
-            let mut lines = BufReader::new(rd).lines();
-            Ok(lines.next_line().await?.unwrap_or_default())
+            let stream = tokio::net::UnixStream::connect(endpoint).await?;
+            rpc_roundtrip(stream, token, req).await
         }
         #[cfg(not(unix))]
         {
@@ -1500,6 +1740,12 @@ pub async fn send_rpc_request(endpoint: &str, method: &str, params: JsonValue) -
             ))
         }
     }
+}
+
+/// Sends a single line-delimited JSON-RPC 2.0 request to a TCP (`host:port`) or Unix domain socket path
+/// and returns the JSON-RPC response string (`bilterm ctl`).
+pub async fn send_rpc_request(endpoint: &str, method: &str, params: JsonValue) -> Result<String> {
+    send_rpc_request_with_token(endpoint, method, params, None).await
 }
 
 /// Runs the Model Context Protocol (`bilterm --mcp`) JSON-RPC 2.0 server over `stdin`/`stdout`.
@@ -1527,30 +1773,154 @@ pub async fn run_mcp_stdio_server(rows: u16, cols: u16) -> Result<()> {
 /// Maximum length of one JSON-RPC request line; longer lines close the offending connection.
 const MAX_RPC_LINE_BYTES: u64 = 1024 * 1024;
 
-/// Runs a headless JSON-RPC 2.0 TCP automation server (`bilterm --headless --listen 127.0.0.1:PORT`).
-pub async fn run_headless_tcp_server(bind_addr: &str, rows: u16, cols: u16) -> Result<()> {
-    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    serve_jsonrpc(listener, AutomationControlPlane::new_headless(rows, cols)).await
+/// Trait abstracting transport listener accept loops for generic JSON-RPC serving.
+trait RpcAcceptor {
+    type Stream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static;
+    fn accept(
+        &self,
+    ) -> impl std::future::Future<Output = std::io::Result<(Self::Stream, String)>> + Send;
 }
 
-/// Serves JSON-RPC over `listener`. Each connection runs in its own task and forwards request
-/// lines to this task, which exclusively owns `plane`; a misbehaving or disconnecting client only
-/// ends its own connection, never the daemon.
+impl RpcAcceptor for tokio::net::TcpListener {
+    type Stream = tokio::net::TcpStream;
+    async fn accept(&self) -> std::io::Result<(Self::Stream, String)> {
+        let (stream, peer) = self.accept().await?;
+        Ok((stream, peer.to_string()))
+    }
+}
+
+#[cfg(unix)]
+impl RpcAcceptor for tokio::net::UnixListener {
+    type Stream = tokio::net::UnixStream;
+    async fn accept(&self) -> std::io::Result<(Self::Stream, String)> {
+        let (stream, _addr) = self.accept().await?;
+        let cred = stream.peer_cred()?;
+        let peer_uid = cred.uid();
+        let my_uid = crate::secure_fs::current_euid();
+        if peer_uid != my_uid {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("peer UID {peer_uid} does not match daemon UID {my_uid}"),
+            ));
+        }
+        Ok((stream, format!("unix:uid={peer_uid}")))
+    }
+}
+
+#[cfg(unix)]
+struct SocketFileGuard(PathBuf);
+
+#[cfg(unix)]
+impl Drop for SocketFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Runs a headless JSON-RPC 2.0 daemon configured according to security policy (SEC-R01).
+pub async fn run_headless_server(config: ListenConfig, plane: AutomationControlPlane) -> Result<()> {
+    let token = config.token.map(std::sync::Arc::from);
+    match config.endpoint {
+        ListenEndpoint::Tcp(addr) => {
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            tracing::info!(endpoint = %addr, "JSON-RPC daemon listening on TCP");
+            serve_jsonrpc_tcp(listener, plane, token).await
+        }
+        #[cfg(unix)]
+        ListenEndpoint::Unix(path) => {
+            use std::os::unix::fs::FileTypeExt;
+            use std::os::unix::fs::PermissionsExt;
+
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+
+            if path.exists() || std::fs::symlink_metadata(&path).is_ok() {
+                match tokio::net::UnixStream::connect(&path).await {
+                    Ok(_) => {
+                        return Err(BiltermError::Config(format!(
+                            "another bilterm daemon is already listening on {}",
+                            path.display()
+                        )));
+                    }
+                    Err(_) => {
+                        let meta = std::fs::symlink_metadata(&path)?;
+                        if !meta.file_type().is_socket() {
+                            return Err(BiltermError::Config(format!(
+                                "refusing to overwrite non-socket file at {}",
+                                path.display()
+                            )));
+                        }
+                        std::fs::remove_file(&path)?;
+                    }
+                }
+            }
+
+            let listener = tokio::net::UnixListener::bind(&path)?;
+            let _guard = SocketFileGuard(path.clone());
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            tracing::info!(endpoint = %path.display(), "JSON-RPC daemon listening on Unix socket");
+            serve_jsonrpc_unix(listener, plane, token).await
+        }
+        #[cfg(not(unix))]
+        ListenEndpoint::Unix(_) => {
+            Err(BiltermError::Config(
+                "Unix domain sockets not supported on non-Unix platforms".to_string(),
+            ))
+        }
+    }
+}
+
+/// Runs a headless JSON-RPC 2.0 TCP automation server (`bilterm --headless --listen 127.0.0.1:PORT`).
+pub async fn run_headless_tcp_server(bind_addr: &str, rows: u16, cols: u16) -> Result<()> {
+    let cfg = validate_listen_config(Some(bind_addr), false, None, None)?;
+    run_headless_server(cfg, AutomationControlPlane::new_headless(rows, cols)).await
+}
+
+/// Serves JSON-RPC over a TCP listener with an optional bearer token gate.
+pub async fn serve_jsonrpc_tcp(
+    listener: tokio::net::TcpListener,
+    plane: AutomationControlPlane,
+    token: Option<std::sync::Arc<str>>,
+) -> Result<()> {
+    serve_loop(listener, plane, token).await
+}
+
+/// Serves JSON-RPC over `listener` without requiring authentication (legacy wrapper).
 pub async fn serve_jsonrpc(
     listener: tokio::net::TcpListener,
+    plane: AutomationControlPlane,
+) -> Result<()> {
+    serve_jsonrpc_tcp(listener, plane, None).await
+}
+
+/// Serves JSON-RPC over a Unix domain socket listener with an optional bearer token gate.
+#[cfg(unix)]
+pub async fn serve_jsonrpc_unix(
+    listener: tokio::net::UnixListener,
+    plane: AutomationControlPlane,
+    token: Option<std::sync::Arc<str>>,
+) -> Result<()> {
+    serve_loop(listener, plane, token).await
+}
+
+async fn serve_loop<A: RpcAcceptor>(
+    acceptor: A,
     mut plane: AutomationControlPlane,
+    token: Option<std::sync::Arc<str>>,
 ) -> Result<()> {
     type RpcRequest = (String, tokio::sync::oneshot::Sender<String>);
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<RpcRequest>(64);
 
     loop {
         tokio::select! {
-            accepted = listener.accept() => {
+            accepted = acceptor.accept() => {
                 match accepted {
                     Ok((stream, peer)) => {
                         let req_tx = req_tx.clone();
+                        let token = token.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = serve_jsonrpc_connection(stream, req_tx).await {
+                            if let Err(e) = serve_jsonrpc_connection(stream, req_tx, token).await {
                                 tracing::warn!(%peer, error = %e, "JSON-RPC connection closed");
                             }
                         });
@@ -1565,15 +1935,21 @@ pub async fn serve_jsonrpc(
     }
 }
 
-async fn serve_jsonrpc_connection(
-    stream: tokio::net::TcpStream,
+async fn serve_jsonrpc_connection<S>(
+    stream: S,
     req_tx: tokio::sync::mpsc::Sender<(String, tokio::sync::oneshot::Sender<String>)>,
-) -> std::io::Result<()> {
+    token: Option<std::sync::Arc<str>>,
+) -> std::io::Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
-    let (rd, mut wr) = stream.into_split();
+    let (rd, mut wr) = tokio::io::split(stream);
     let mut reader = BufReader::new(rd);
     let mut buf = Vec::new();
+    let mut authed = token.is_none();
+
     loop {
         buf.clear();
         let n = (&mut reader)
@@ -1594,6 +1970,96 @@ async fn serve_jsonrpc_connection(
         if trimmed.is_empty() {
             continue;
         }
+
+        let parsed = match JsonValue::parse(trimmed) {
+            Some(val) => val,
+            None => {
+                if !authed {
+                    let err_resp = AutomationControlPlane::error_response(
+                        JsonValue::Null,
+                        RPC_AUTH_ERROR_CODE,
+                        "authentication required: send auth.login first",
+                    )
+                    .to_json_string();
+                    wr.write_all(format!("{err_resp}\n").as_bytes()).await?;
+                    wr.flush().await?;
+                    return Ok(());
+                }
+                let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+                if req_tx.send((trimmed.to_string(), reply_tx)).await.is_err() {
+                    return Ok(());
+                }
+                let Ok(resp) = reply_rx.await else {
+                    return Ok(());
+                };
+                wr.write_all(format!("{resp}\n").as_bytes()).await?;
+                wr.flush().await?;
+                continue;
+            }
+        };
+
+        let req_id = parsed.get("id").cloned().unwrap_or(JsonValue::Null);
+        let method = parsed.get("method").and_then(|m| m.as_str()).unwrap_or("");
+
+        if method == "auth.login" {
+            let client_token = parsed
+                .get("params")
+                .and_then(|p| p.get("token"))
+                .and_then(|t| t.as_str());
+            let success = match (&token, client_token) {
+                (Some(server_token), Some(cand)) => {
+                    crate::secure_fs::constant_time_eq(server_token.as_bytes(), cand.as_bytes())
+                }
+                (None, _) => true,
+                (Some(_), None) => false,
+            };
+
+            if success {
+                authed = true;
+                let resp = JsonValue::obj([
+                    ("jsonrpc", JsonValue::String("2.0".to_string())),
+                    ("id", req_id),
+                    (
+                        "result",
+                        if token.is_some() {
+                            JsonValue::obj([("authenticated", JsonValue::Bool(true))])
+                        } else {
+                            JsonValue::obj([
+                                ("authenticated", JsonValue::Bool(true)),
+                                ("required", JsonValue::Bool(false)),
+                            ])
+                        },
+                    ),
+                ])
+                .to_json_string();
+                wr.write_all(format!("{resp}\n").as_bytes()).await?;
+                wr.flush().await?;
+            } else {
+                let resp = AutomationControlPlane::error_response(
+                    req_id,
+                    RPC_AUTH_ERROR_CODE,
+                    "authentication failed",
+                )
+                .to_json_string();
+                wr.write_all(format!("{resp}\n").as_bytes()).await?;
+                wr.flush().await?;
+                return Ok(());
+            }
+            continue;
+        }
+
+        if !authed {
+            let resp = AutomationControlPlane::error_response(
+                req_id,
+                RPC_AUTH_ERROR_CODE,
+                "authentication required: send auth.login first",
+            )
+            .to_json_string();
+            wr.write_all(format!("{resp}\n").as_bytes()).await?;
+            wr.flush().await?;
+            return Ok(());
+        }
+
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         if req_tx.send((trimmed.to_string(), reply_tx)).await.is_err() {
             return Ok(());
@@ -1661,5 +2127,479 @@ mod tests {
 
         let line = status_roundtrip(addr).await;
         assert!(line.contains("\"id\":7") && line.contains("result"), "{line}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn listen_policy_default_is_unix_socket() {
+        let default_path = PathBuf::from("/tmp/test-bilterm/bilterm.sock");
+        let cfg = validate_listen_config(None, false, None, Some(default_path.clone())).unwrap();
+        assert_eq!(cfg.endpoint, ListenEndpoint::Unix(default_path));
+        assert_eq!(cfg.token, None);
+
+        let err = validate_listen_config(None, false, None, None).unwrap_err();
+        assert!(err.to_string().contains("--listen unix:PATH"));
+    }
+
+    #[test]
+    fn listen_policy_loopback_tcp_without_token_ok() {
+        for addr_str in ["127.0.0.1:7370", "[::1]:7370", "localhost:7370"] {
+            let cfg = validate_listen_config(Some(addr_str), false, None, None).unwrap();
+            match cfg.endpoint {
+                ListenEndpoint::Tcp(addr) => {
+                    assert!(addr.ip().is_loopback(), "expected loopback for {addr_str}");
+                    assert_eq!(addr.port(), 7370);
+                }
+                _ => panic!("expected Tcp endpoint for {addr_str}"),
+            }
+            assert_eq!(cfg.token, None);
+        }
+    }
+
+    #[test]
+    fn listen_policy_non_loopback_requires_allow_remote() {
+        for addr_str in ["0.0.0.0:7370", "192.168.1.5:7370"] {
+            let err = validate_listen_config(Some(addr_str), false, None, None).unwrap_err();
+            assert!(
+                err.to_string().contains("--allow-remote"),
+                "expected --allow-remote error for {addr_str}, got: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn listen_policy_allow_remote_requires_token() {
+        let err = validate_listen_config(Some("0.0.0.0:7370"), true, None, None).unwrap_err();
+        assert!(
+            err.to_string().contains("--token-file"),
+            "expected --token-file error, got: {err}"
+        );
+
+        let cfg = validate_listen_config(
+            Some("0.0.0.0:7370"),
+            true,
+            Some("mysecrettoken".to_string()),
+            None,
+        )
+        .unwrap();
+        match cfg.endpoint {
+            ListenEndpoint::Tcp(addr) => assert_eq!(addr.port(), 7370),
+            _ => panic!("expected Tcp endpoint"),
+        }
+        assert_eq!(cfg.token.as_deref(), Some("mysecrettoken"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn listen_policy_unix_prefixes() {
+        for path_str in [
+            "unix:/tmp/test.sock",
+            "unix:///tmp/test.sock",
+            "/tmp/test.sock",
+        ] {
+            let cfg = validate_listen_config(Some(path_str), false, None, None).unwrap();
+            assert_eq!(
+                cfg.endpoint,
+                ListenEndpoint::Unix(PathBuf::from("/tmp/test.sock")),
+                "mismatch for {path_str}"
+            );
+        }
+    }
+
+    #[test]
+    fn listen_policy_rejects_garbage() {
+        let err = validate_listen_config(Some("not an addr"), false, None, None).unwrap_err();
+        assert!(err.to_string().contains("invalid listen address"));
+    }
+
+    #[test]
+    fn listen_config_debug_redacts_token() {
+        let cfg = ListenConfig {
+            endpoint: ListenEndpoint::Tcp("127.0.0.1:7370".parse().unwrap()),
+            token: Some("supersecrettoken123".to_string()),
+        };
+        let formatted = format!("{cfg:?}");
+        assert!(
+            !formatted.contains("supersecret"),
+            "Debug output leaked token: {formatted}"
+        );
+        assert!(
+            formatted.contains("<redacted>"),
+            "Debug output missing <redacted>: {formatted}"
+        );
+    }
+
+    #[test]
+    fn default_socket_path_rejects_overlong_path() {
+        let long_dir = PathBuf::from(format!("/tmp/{}", "a".repeat(120)));
+        let err = socket_path_in(&long_dir).unwrap_err();
+        assert!(
+            err.to_string().contains("--listen unix:PATH"),
+            "expected hint in error: {err}"
+        );
+
+        let short_dir = PathBuf::from("/tmp/short");
+        let ok = socket_path_in(&short_dir).unwrap();
+        assert!(ok.ends_with("bilterm.sock"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn load_token_file_enforces_private_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let token_path = temp_dir.path().join("token.secret");
+        crate::secure_fs::write_private_file(&token_path, b"0123456789abcdef0123\n").unwrap();
+
+        let loaded = load_token_file(&token_path).unwrap();
+        assert_eq!(loaded, "0123456789abcdef0123");
+
+        // Make file group/world readable: 0644
+        std::fs::set_permissions(&token_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let err = load_token_file(&token_path).unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("600") || err_str.contains("private"),
+            "expected mode 600 complaint: {err_str}"
+        );
+        assert!(
+            !err_str.contains("0123456789abcdef0123"),
+            "token leaked in error message: {err_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bearer_token_gate_rejects_unauthenticated_first_request() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let token = std::sync::Arc::from("0123456789abcdef0123");
+        tokio::spawn(serve_jsonrpc_tcp(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+            Some(token),
+        ));
+
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"workspace.status\"}\n")
+            .await
+            .unwrap();
+
+        let (rd, _) = stream.into_split();
+        let mut lines = BufReader::new(rd).lines();
+        let resp = lines.next_line().await.unwrap().unwrap_or_default();
+        assert!(resp.contains("-32001"), "expected -32001 error, got: {resp}");
+        assert!(
+            !resp.contains("pane_count"),
+            "unauthenticated request reached plane: {resp}"
+        );
+        let next = lines.next_line().await.unwrap();
+        assert!(next.is_none(), "expected connection to be closed");
+    }
+
+    #[tokio::test]
+    async fn bearer_token_gate_rejects_wrong_token() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let token = std::sync::Arc::from("0123456789abcdef0123");
+        tokio::spawn(serve_jsonrpc_tcp(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+            Some(token),
+        ));
+
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"auth.login\",\"params\":{\"token\":\"wrongwrongwrongwrong\"}}\n")
+            .await
+            .unwrap();
+
+        let (rd, _) = stream.into_split();
+        let mut lines = BufReader::new(rd).lines();
+        let resp = lines.next_line().await.unwrap().unwrap_or_default();
+        assert!(resp.contains("-32001"), "expected -32001 error, got: {resp}");
+        assert!(
+            !resp.contains("wrongwrong"),
+            "leaked wrong token in response: {resp}"
+        );
+        assert!(
+            !resp.contains("0123456789abcdef"),
+            "leaked secret token in response: {resp}"
+        );
+        let next = lines.next_line().await.unwrap();
+        assert!(next.is_none(), "expected connection to be closed");
+    }
+
+    #[tokio::test]
+    async fn bearer_token_gate_accepts_correct_token() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let token = std::sync::Arc::from("0123456789abcdef0123");
+        tokio::spawn(serve_jsonrpc_tcp(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+            Some(token),
+        ));
+
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let (rd, mut wr) = stream.into_split();
+        let mut lines = BufReader::new(rd).lines();
+
+        wr.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"auth.login\",\"params\":{\"token\":\"0123456789abcdef0123\"}}\n")
+            .await
+            .unwrap();
+        wr.flush().await.unwrap();
+        let auth_resp = lines.next_line().await.unwrap().unwrap_or_default();
+        assert!(auth_resp.contains("\"authenticated\":true"), "got: {auth_resp}");
+
+        wr.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"workspace.status\"}\n")
+            .await
+            .unwrap();
+        wr.flush().await.unwrap();
+        let status_resp = lines.next_line().await.unwrap().unwrap_or_default();
+        assert!(status_resp.contains("pane_count"), "got: {status_resp}");
+    }
+
+    #[tokio::test]
+    async fn tokenless_server_accepts_auth_login() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(serve_jsonrpc(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+        ));
+
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let (rd, mut wr) = stream.into_split();
+        let mut lines = BufReader::new(rd).lines();
+
+        wr.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"auth.login\",\"params\":{\"token\":\"anytoken\"}}\n")
+            .await
+            .unwrap();
+        wr.flush().await.unwrap();
+        let auth_resp = lines.next_line().await.unwrap().unwrap_or_default();
+        assert!(auth_resp.contains("\"authenticated\":true"), "got: {auth_resp}");
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn unix_socket_server_is_0600_and_roundtrips() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sock_path = temp_dir.path().join("bilterm.sock");
+        let cfg = ListenConfig {
+            endpoint: ListenEndpoint::Unix(sock_path.clone()),
+            token: None,
+        };
+
+        tokio::spawn(run_headless_server(
+            cfg,
+            AutomationControlPlane::new_headless(24, 80),
+        ));
+
+        let mut ready = false;
+        for _ in 0..40 {
+            if sock_path.exists() {
+                ready = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(ready, "socket was not created in time");
+
+        let meta = std::fs::symlink_metadata(&sock_path).unwrap();
+        assert_eq!(
+            meta.permissions().mode() & 0o777,
+            0o600,
+            "socket mode is not 0600"
+        );
+
+        let resp = send_rpc_request(
+            sock_path.to_str().unwrap(),
+            "workspace.status",
+            JsonValue::Null,
+        )
+        .await
+        .unwrap();
+        assert!(resp.contains("pane_count"), "roundtrip response: {resp}");
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn unix_socket_stale_file_is_replaced() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sock_path = temp_dir.path().join("stale.sock");
+        {
+            let _ = std::os::unix::net::UnixListener::bind(&sock_path).unwrap();
+        }
+        assert!(sock_path.exists());
+
+        let cfg = ListenConfig {
+            endpoint: ListenEndpoint::Unix(sock_path.clone()),
+            token: None,
+        };
+
+        tokio::spawn(run_headless_server(
+            cfg,
+            AutomationControlPlane::new_headless(24, 80),
+        ));
+
+        let mut connected = false;
+        for _ in 0..40 {
+            if let Ok(resp) = send_rpc_request(
+                sock_path.to_str().unwrap(),
+                "workspace.status",
+                JsonValue::Null,
+            )
+            .await
+                && resp.contains("pane_count")
+            {
+                connected = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(connected, "failed to start server on stale socket path");
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn unix_socket_live_daemon_is_not_stolen() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sock_path = temp_dir.path().join("live.sock");
+        let cfg1 = ListenConfig {
+            endpoint: ListenEndpoint::Unix(sock_path.clone()),
+            token: None,
+        };
+
+        tokio::spawn(run_headless_server(
+            cfg1,
+            AutomationControlPlane::new_headless(24, 80),
+        ));
+
+        for _ in 0..40 {
+            if sock_path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let cfg2 = ListenConfig {
+            endpoint: ListenEndpoint::Unix(sock_path.clone()),
+            token: None,
+        };
+        let err = run_headless_server(cfg2, AutomationControlPlane::new_headless(24, 80))
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("already listening"),
+            "expected already listening error, got: {err}"
+        );
+
+        let resp = send_rpc_request(
+            sock_path.to_str().unwrap(),
+            "workspace.status",
+            JsonValue::Null,
+        )
+        .await
+        .unwrap();
+        assert!(resp.contains("pane_count"));
+    }
+
+    #[tokio::test]
+    async fn client_authenticates_with_token() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let token = "my-secret-test-token";
+        tokio::spawn(serve_jsonrpc_tcp(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+            Some(std::sync::Arc::from(token)),
+        ));
+
+        let resp = send_rpc_request_with_token(
+            &addr.to_string(),
+            "workspace.status",
+            JsonValue::Null,
+            Some(token),
+        )
+        .await
+        .unwrap();
+        assert!(resp.contains("pane_count"), "got: {resp}");
+    }
+
+    #[tokio::test]
+    async fn client_wrong_token_is_error() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let token = "my-secret-test-token";
+        tokio::spawn(serve_jsonrpc_tcp(
+            listener,
+            AutomationControlPlane::new_headless(24, 80),
+            Some(std::sync::Arc::from(token)),
+        ));
+
+        let err = send_rpc_request_with_token(
+            &addr.to_string(),
+            "workspace.status",
+            JsonValue::Null,
+            Some("wrong-token-abc"),
+        )
+        .await
+        .unwrap_err();
+
+        let err_str = err.to_string();
+        assert!(
+            !err_str.contains("wrong-token-abc"),
+            "leaked submitted token: {err_str}"
+        );
+        assert!(
+            !err_str.contains("my-secret-test-token"),
+            "leaked secret token: {err_str}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn client_unix_prefix_endpoint() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sock_path = temp_dir.path().join("bilterm.sock");
+        let cfg = ListenConfig {
+            endpoint: ListenEndpoint::Unix(sock_path.clone()),
+            token: None,
+        };
+
+        tokio::spawn(run_headless_server(
+            cfg,
+            AutomationControlPlane::new_headless(24, 80),
+        ));
+
+        for _ in 0..40 {
+            if sock_path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let p_str = sock_path.to_str().unwrap();
+        let resp1 = send_rpc_request(
+            &format!("unix:{p_str}"),
+            "workspace.status",
+            JsonValue::Null,
+        )
+        .await
+        .unwrap();
+        assert!(resp1.contains("pane_count"));
+
+        let resp2 = send_rpc_request(
+            &format!("unix://{p_str}"),
+            "workspace.status",
+            JsonValue::Null,
+        )
+        .await
+        .unwrap();
+        assert!(resp2.contains("pane_count"));
     }
 }
