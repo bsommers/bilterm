@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: milestone
 current_phase: 19
-status: planned
-stopped_at: Phase 19 planned (7 plans, 5 waves); plan-checker 3 iterations, 0 blockers; ready for /gsd-execute-phase 19
+current_phase_name: security-hardening-of-the-automation-shell-integration-surfa
+status: executing
+stopped_at: Plan 19-01 complete; ready for Wave 2 (19-02, 19-03, 19-04)
 last_updated: "2026-10-23"
 last_activity: 2026-10-23
-last_activity_desc: Phase 19 security-hardening plans verified and committed
+last_activity_desc: Plan 19-01 (secure_fs) complete
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
-current_phase_name: security-hardening-of-the-automation-shell-integration-surfaces
+  total_plans: 22
+  completed_plans: 16
 ---
 
 # Project State
@@ -23,14 +23,14 @@ current_phase_name: security-hardening-of-the-automation-shell-integration-surfa
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 19 — security hardening of automation & shell-integration surfaces (SEC-R01..04)
+**Current focus:** Phase 19 — security-hardening-of-the-automation-shell-integration-surfa
 
 ## Current Position
 
-Phase: 19
-Plan: 7 plans ready (19-01..19-07, waves 1-5), not started
-Status: Planned — ready to execute
-Last activity: 2026-10-23 — Phase 19 planning complete (checker: 0 blockers after 3 iterations)
+Phase: 19 (security-hardening-of-the-automation-shell-integration-surfa) — EXECUTING
+Plan: Wave 2 (19-02, 19-03, 19-04)
+Status: Executing Phase 19
+Last activity: 2026-10-23 — Plan 19-01 complete
 
 Progress: [██████████] 100%
 
