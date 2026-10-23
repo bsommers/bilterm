@@ -885,13 +885,31 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             false
         }
         ColonCommand::RecordStart(path_opt) => {
-            let path = path_opt
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| {
-                    std::env::temp_dir().join(format!("bilterm-pane-{}.cast", pane.id))
-                });
-            pane.vt.start_recording(path.clone());
-            pane.status_message = Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+            if let Some(p) = path_opt {
+                let path = std::path::PathBuf::from(p);
+                pane.vt.start_recording(path.clone());
+                pane.status_message =
+                    Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+            } else {
+                match crate::secure_fs::private_runtime_dir()
+                    .and_then(|d| crate::secure_fs::private_dir_in(&d, "recordings"))
+                {
+                    Ok(dir) => {
+                        let path = dir.join(format!(
+                            "bilterm-pane-{}-{}.cast",
+                            pane.id,
+                            crate::secure_fs::unique_suffix()
+                        ));
+                        pane.vt.start_recording_private(path.clone());
+                        pane.status_message =
+                            Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+                    }
+                    Err(e) => {
+                        pane.status_message =
+                            Some(format!("⏺ Recording not started: private dir unavailable: {e}"));
+                    }
+                }
+            }
             false
         }
         ColonCommand::RecordStop => {
@@ -1451,5 +1469,16 @@ mod tests {
         assert_eq!(wm.config.focal_zoom_rx, 24);
         assert_eq!(wm.config.focal_zoom_ry, 8);
         assert_eq!(wm.config.focal_zoom_feather_pct, 55);
+    }
+
+    #[test]
+    fn record_start_default_path_is_private() {
+        let mut pane = CompositePane::new_headless(1, 24, 80);
+        execute_colon_command(&mut pane, ColonCommand::RecordStart(None));
+        let status = pane.status_message.unwrap();
+        let private_root = crate::secure_fs::private_runtime_dir().unwrap();
+        assert!(status.contains(&private_root.display().to_string()));
+        assert!(status.contains("recordings"));
+        assert!(status.contains(".cast"));
     }
 }

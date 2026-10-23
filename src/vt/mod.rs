@@ -164,6 +164,7 @@ pub struct VtParser {
     unread_bell: bool,
     recording_started_at: Option<Instant>,
     recording_path: Option<PathBuf>,
+    recording_private: bool,
     recording_events: Vec<(f64, String)>,
     recent_escape_sequences: Vec<String>,
     pending_osc52: Vec<String>,
@@ -223,6 +224,7 @@ impl VtParser {
             unread_bell: false,
             recording_started_at: None,
             recording_path: None,
+            recording_private: false,
             recording_events: Vec::new(),
             recent_escape_sequences: Vec::new(),
             pending_osc52: Vec::new(),
@@ -760,6 +762,15 @@ impl VtParser {
     pub fn start_recording(&mut self, path: PathBuf) {
         self.recording_started_at = Some(Instant::now());
         self.recording_path = Some(path);
+        self.recording_private = false;
+        self.recording_events.clear();
+    }
+
+    /// Starts recording terminal output to an asciinema v2 `.cast` file with private permissions (`v1.7.0`, `SEC-R03`).
+    pub fn start_recording_private(&mut self, path: PathBuf) {
+        self.recording_started_at = Some(Instant::now());
+        self.recording_path = Some(path);
+        self.recording_private = true;
         self.recording_events.clear();
     }
 
@@ -771,10 +782,12 @@ impl VtParser {
     /// Stops recording and writes the asciinema v2 `.cast` file to disk (`v0.7.0`).
     pub fn stop_recording(&mut self) -> std::io::Result<Option<PathBuf>> {
         self.recording_started_at = None;
+        let is_private = std::mem::replace(&mut self.recording_private, false);
         let Some(path) = self.recording_path.take() else {
             return Ok(None);
         };
-        if let Some(parent) = path.parent()
+        if !is_private
+            && let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
             std::fs::create_dir_all(parent)?;
@@ -787,7 +800,14 @@ impl VtParser {
             let escaped = escape_json_string(&chunk);
             out.push_str(&format!("[{elapsed:.6},\"o\",\"{escaped}\"]\n"));
         }
-        std::fs::write(&path, out)?;
+        if is_private {
+            use std::io::Write;
+            let mut file = crate::secure_fs::create_private_file(&path)?;
+            file.write_all(out.as_bytes())?;
+            file.sync_all()?;
+        } else {
+            std::fs::write(&path, out)?;
+        }
         Ok(Some(path))
     }
 
@@ -2652,5 +2672,45 @@ mod tests {
         vt.process(b"\x1b[?1049h");
         assert!(!vt.set_scrollback_capacity(50));
         assert_eq!(vt.scrollback_capacity(), 100);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn private_recording_is_0600_and_exclusive() {
+        use std::os::unix::fs::MetadataExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("a.cast");
+        let mut vt = VtParser::new(24, 80, 100);
+        vt.start_recording_private(a.clone());
+        vt.process(b"hello\r\n");
+        let stopped = vt.stop_recording().unwrap();
+        assert_eq!(stopped, Some(a.clone()));
+        assert_eq!(
+            std::fs::symlink_metadata(&a).unwrap().mode() & 0o777,
+            0o600
+        );
+
+        let b = tmp.path().join("b.cast");
+        std::fs::write(&b, b"existing content").unwrap();
+        vt.start_recording_private(b.clone());
+        vt.process(b"new content\r\n");
+        let err = vt.stop_recording().unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&b).unwrap(), b"existing content");
+    }
+
+    #[test]
+    fn explicit_recording_path_overwrites_as_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let c = tmp.path().join("c.cast");
+        std::fs::write(&c, b"initial").unwrap();
+        let mut vt = VtParser::new(24, 80, 100);
+        vt.start_recording(c.clone());
+        vt.process(b"overwritten\r\n");
+        let stopped = vt.stop_recording().unwrap();
+        assert_eq!(stopped, Some(c.clone()));
+        let contents = std::fs::read_to_string(&c).unwrap();
+        assert!(contents.contains("overwritten"));
+        assert!(!contents.contains("initial"));
     }
 }
