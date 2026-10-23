@@ -1140,7 +1140,7 @@ fn render_history_popup(
     let mut lines = Vec::new();
     let header = format!(
         "Session: {} | Pane #{} | Entries: {}",
-        pane.history_store.session_id,
+        pane.history_store.session_name,
         pane.id,
         pane.prompt.history.len()
     );

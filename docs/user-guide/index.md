@@ -208,7 +208,10 @@ Bilterm loads `~/.config/bilterm/config.toml` (or `$XDG_CONFIG_HOME/bilterm/conf
 | `crosshair_fullscreen` | `bool` | `true`, `false` | `false` | Spans cross-hair across full screen when `true` (pane-local when `false`) |
 | `show_dos_fkey_bar` | `bool` | `true`, `false` | `false` | Shows bottom 1-row Borland DOS `F1 Help ...` bar (`UI-03`) |
 | `history_enabled` | `bool` | `true`, `false` | `true` | Automatically persists submitted commands to session log files |
-| `history_max_files` | `usize` | `1..=10000` | `25` | Max session history files retained before pruning oldest |
+| `history_max_files` | `usize` | `1..=10000` | `25` | Max named session directories retained (least-recently-used pruned, never the active one) |
+| `history_session` | `string` | Session name | `"default"` | Named persistent history session (`--session <name>` overrides) |
+| `history_max_entries` | `usize` | `1..` | `100000` | Entries kept per session file before compaction |
+| `history_load_limit` | `usize` | `0..` | `10000` | Prior session commands restored into each new pane |
 | `history_dir` | `string` (optional) | Any directory path | `None` | Custom directory override for persisted session history logs |
 | `default_prompt_anchor` | `string` | `"top"`, `"bottom"`, `"floating"`, `"split-top"`, `"split-bottom"` | `"top"` | Initial command prompt placement for new panes |
 | `default_prompt_height` | `u16` | `3..=12` | `3` | Initial command prompt box height in rows |
@@ -247,7 +250,7 @@ shadow_bg         = #000000
 | Path | Purpose |
 |------|---------|
 | `~/.config/bilterm/config.toml` | Declarative user configuration file |
-| `~/.local/state/bilterm/history/bilterm-history-<session_id>-pane-<id>.log` | Per-session, per-pane timestamped command history log |
+| `~/.local/state/bilterm/history/sessions/<name>/history.log` | Append-only history of a named session (all panes and runs, `run=` segments) |
 | `/tmp/bilterm-commands-<session_id>-pane-<id>.sh` | Default output path when exporting commands via `:history save` |
 | `./bilterm.log` | Non-blocking background diagnostic log written by `tracing-appender` |
 

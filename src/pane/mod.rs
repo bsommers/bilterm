@@ -941,7 +941,7 @@ impl CompositePane {
 
         let title = format!("{} [#{id}]", pty_config.program);
         let session = PtySession::spawn(pty_config)?;
-        Ok(Self {
+        let mut pane = Self {
             id,
             title,
             vt: VtParser::new(canvas_rows, canvas_cols, 5000),
@@ -961,7 +961,17 @@ impl CompositePane {
             last_osc52_sequence: None,
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
-        })
+        };
+        pane.restore_persisted_history();
+        Ok(pane)
+    }
+
+    /// Replaces the prompt's in-memory history with the newest persisted commands of the
+    /// pane's history session (so Up/Down, `Ctrl+R`, and the history popup see prior runs).
+    pub fn restore_persisted_history(&mut self) {
+        self.prompt.history = self.history_store.load_recent_commands();
+        self.prompt.history_index = None;
+        self.prompt.history_popup_selected = 0;
     }
 
     /// Computes the `OutputCanvas` rectangle.
