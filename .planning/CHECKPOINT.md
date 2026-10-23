@@ -1,4 +1,16 @@
-# Session Checkpoint (Phase 19 planning IN PROGRESS)
+# Session Checkpoint (Phase 19 PLANNED — ready to execute)
+
+**RESUME:** Phase 19 planning is complete. The plan-checker ran 3 of 3 iterations and ended with 0 blockers.
+- Iter-2 warnings were fixed by a planner revision, which also split 19-04 and 19-05 into more tasks.
+- Iter-3 warnings were fixed by hand. Explicit `--listen unix:PATH` does not require a private parent directory; it relies on socket mode 0600 plus the peer-uid check. The `list_sessions` test is now mandatory through a pure helper. ROADMAP and frontmatter were tidied.
+- Two items were deferred as executor guidance:
+  - Per-task verify commands run the full `cargo test` plus clippy (~90s). Executors may scope them to module tests and run the full suite once per wave.
+  - 19-04 has 4 tasks, which is at the threshold. This is acceptable.
+- Next step: `/gsd-execute-phase 19`, using Gemini GSD paths as below.
+
+(Older notes follow.)
+
+# (prior) Phase 19 planning notes
 
 **Updated:** `2026-10-23` (Phase 19 `/gsd-plan-phase` session)
 **Branch:** `main` @ `8083618` (local, not pushed). All Phase 19 planning docs committed. No background jobs.

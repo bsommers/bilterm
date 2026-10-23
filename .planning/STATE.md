@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.5.0
 milestone_name: milestone
-current_phase: 5
-status: completed
-stopped_at: Released v1.5.0 (bfe59ef) with Focal Spotlight, Focal Zoom Lens, Ctrl+X leader prefix, macOS Option normalization, 3-way prompt mode toggle, and sudo !ECHO fix
-last_updated: "2026-10-22T23:22:11-04:00"
-last_activity: 2026-10-22
-last_activity_desc: Released and pushed v1.5.0 (91/91 tests passing)
+current_phase: 19
+status: planned
+stopped_at: Phase 19 planned (7 plans, 5 waves); plan-checker 3 iterations, 0 blockers; ready for /gsd-execute-phase 19
+last_updated: "2026-10-23"
+last_activity: 2026-10-23
+last_activity_desc: Phase 19 security-hardening plans verified and committed
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 15
   completed_plans: 15
-current_phase_name: first-class-tmux-integration-cross-platform-hardening-test-verification-documentation
+current_phase_name: security-hardening-of-the-automation-shell-integration-surfaces
 ---
 
 # Project State
@@ -23,14 +23,14 @@ current_phase_name: first-class-tmux-integration-cross-platform-hardening-test-v
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 5 — first-class-tmux-integration-cross-platform-hardening-test-verification-documentation
+**Current focus:** Phase 19 — security hardening of automation & shell-integration surfaces (SEC-R01..04)
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-10-20 — Phase 5 complete
+Phase: 19
+Plan: 7 plans ready (19-01..19-07, waves 1-5), not started
+Status: Planned — ready to execute
+Last activity: 2026-10-23 — Phase 19 planning complete (checker: 0 blockers after 3 iterations)
 
 Progress: [██████████] 100%
 

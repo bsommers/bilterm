@@ -171,7 +171,7 @@ Plans:
 **Requirements**: SEC-R01..SEC-R04 (`.planning/reviews/ARCHITECTURE_REVIEW_PLAN.md` §5.1)
 **Success Criteria** (what must be TRUE):
 
-  1. `--headless --listen` defaults to a `0600` Unix socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a `0600` file.
+  1. `--headless` with no `--listen` defaults to a `0600` Unix socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a `0600` file.
   2. `workspace.snapshot` `ppm_path` is confined to a designated output directory (path traversal rejected by test).
   3. Shell-integration rc files, history exports, `.cast` recordings, and SSH `ControlPath` live in a per-user `0700` directory (`$XDG_RUNTIME_DIR` or `tempfile` with ownership check, `O_EXCL` writes).
   4. `build_ssh_args` / `build_ssh_tmux_cc_args` reject destinations starting with `-` and emit `--` before the destination.
@@ -185,7 +185,7 @@ Plans:
 - [ ] 19-04-PLAN.md — RPC daemon: listen policy, Unix socket 0600 + peer uid, `auth.login` gate, token-aware client (wave 2)
 - [ ] 19-05-PLAN.md — `ppm_path` confinement + snapshot dir, confined RPC playbooks, destination validation at registration (wave 3)
 - [ ] 19-06-PLAN.md — CLI wiring (`--headless` default socket, `--allow-remote`, `--token-file`, `--snapshot-dir`, `ctl --token-file`), help, completions, man page (wave 4)
-- [ ] 19-07-PLAN.md — README/docs, CHANGELOG security entry, SEC-R01..04 in REQUIREMENTS.md (wave 5)
+- [ ] 19-07-PLAN.md — README/docs, CHANGELOG security entry, mark SEC-R01..04 Complete in REQUIREMENTS.md (defined by 19-01 Task 3) (wave 5)
 
 ### Phase 20: Mega-Module Decomposition (behaviour-preserving)
 
