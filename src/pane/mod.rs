@@ -944,7 +944,11 @@ impl CompositePane {
         let mut pane = Self {
             id,
             title,
-            vt: VtParser::new(canvas_rows, canvas_cols, 5000),
+            vt: VtParser::new(
+                canvas_rows,
+                canvas_cols,
+                crate::vt::scrollback::DEFAULT_INITIAL_LINES,
+            ),
             pty: Some(session),
             prompt: FloatingPromptState::default(),
             history_store: HistoryStore::new_live(id),

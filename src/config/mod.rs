@@ -13,6 +13,7 @@ use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
+use crate::vt::scrollback::ScrollbackConfig;
 
 /// Declarative Bilterm configuration loaded from `~/.config/bilterm/config.toml` (`CFG-01`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +94,8 @@ pub struct BiltermConfig {
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
     pub remotes: BTreeMap<String, RemoteHostProfile>,
+    /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
+    pub scrollback: ScrollbackConfig,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -140,6 +143,7 @@ impl Default for BiltermConfig {
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
+            scrollback: ScrollbackConfig::default(),
             custom_palette_override: None,
         }
     }
@@ -453,5 +457,21 @@ mod tests {
         assert_eq!(pal.name, "CUSTOM-BORLAND");
         assert_eq!(pal.prompt_surface_bg, Color::Rgb(0x11, 0x22, 0x33));
         assert_eq!(pal.active_border_fg, Color::Rgb(0xAA, 0xBB, 0xCC));
+    }
+
+    #[test]
+    fn scrollback_table_is_optional_and_parses_when_present() {
+        let old = BiltermConfig::from_toml_str("theme = \"ibm-mono\"\n").expect("old config");
+        assert_eq!(old.scrollback, ScrollbackConfig::default());
+
+        let cfg = BiltermConfig::from_toml_str(
+            "[scrollback]\nmemory_budget = \"25%\"\nmax_lines = 1000000\nlow_memory_pct = 5\n",
+        )
+        .expect("scrollback config");
+        use crate::vt::scrollback::{LineLimit, MemoryBudget};
+        assert_eq!(cfg.scrollback.memory_budget, MemoryBudget::Percent(25));
+        assert_eq!(cfg.scrollback.max_lines, LineLimit::Fixed(1_000_000));
+        assert_eq!(cfg.scrollback.low_memory_pct, 5);
+        assert_eq!(cfg.scrollback.min_lines, 2_000);
     }
 }

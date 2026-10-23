@@ -25,6 +25,8 @@ pub enum ColonCommand {
     BlockNext,
     Yank,
     Clear,
+    /// `:scrollback` (report) / `:scrollback clear` (free history).
+    Scrollback { clear: bool },
     RawToggle,
     SplitHorizontal,
     SplitVertical,
@@ -655,6 +657,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         },
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
+        "scrollback" | "sb" => match parts.get(1).copied() {
+            None | Some("info" | "status") => Some(Ok(ColonCommand::Scrollback { clear: false })),
+            Some("clear") => Some(Ok(ColonCommand::Scrollback { clear: true })),
+            _ => Some(Err("Usage: :scrollback [clear]".to_string())),
+        },
         "raw" => Some(Ok(ColonCommand::RawToggle)),
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
@@ -958,6 +965,20 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 "Command history persistence: {}",
                 if next { "ON" } else { "OFF" }
             ));
+            false
+        }
+        ColonCommand::Scrollback { clear } => {
+            let note = if clear {
+                if wm.active_pane_mut().vt.clear_scrollback() {
+                    "History cleared. "
+                } else {
+                    "Cannot clear while the alternate screen is active. "
+                }
+            } else {
+                ""
+            };
+            let report = wm.scrollback_report();
+            wm.active_pane_mut().status_message = Some(format!("{note}{report}"));
             false
         }
         ColonCommand::HistoryMaxFiles(max_f) => {

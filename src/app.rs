@@ -99,6 +99,7 @@ impl App {
         }
         self.wm.quick_terminal.pane.poll_pty_events();
         self.wm.quick_terminal.pane.refresh_line_discipline();
+        self.wm.maybe_rebalance_scrollback(std::time::Instant::now());
     }
 
     pub fn all_panes_exited(&self) -> bool {
@@ -156,6 +157,7 @@ impl App {
             Event::Resize(cols, rows) => {
                 self.last_viewport = Rect::new(0, 0, cols, rows);
                 let _ = self.wm.resize_all(self.last_viewport);
+                self.wm.rebalance_scrollback(std::time::Instant::now());
             }
             _ => {}
         }

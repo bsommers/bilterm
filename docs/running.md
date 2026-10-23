@@ -123,6 +123,11 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `show_menu_bar` | `bool` | `true`, `false` | `false` |
 | `crt_scanlines` | `bool` | `true`, `false` | `false` |
 | `triggers` | `array of strings` | Case-insensitive output highlight patterns | `[]` |
+| `[scrollback] memory_budget` | `string` / `int` | `"auto"` (10% of RAM, min 64 MiB), `"<n>%"` of RAM, `"<n>[K/M/G/T]iB"`, or bytes | `"auto"` |
+| `[scrollback] max_lines` | `string` / `int` | `"auto"` (budget-limited) or a fixed per-pane line cap | `"auto"` |
+| `[scrollback] min_lines` | `int` | Floor that contraction never goes below | `2000` |
+| `[scrollback] initial_lines` | `int` | Capacity a new pane starts at before doubling | `10000` |
+| `[scrollback] low_memory_pct` | `u8` | Shrink panes when available RAM falls below this % of total | `10` |
 | `[keybindings]` | `table` | Custom keychord -> `:command` mappings (e.g. `"Ctrl+T" = ":split v"`) | `{}` |
 | `[remotes.<name>]` | `table` | Named SSH / `herdr`-style remote host profiles (`destination`, `port`, `identity_file`, `tmux_session`, `rpc_endpoint`, `jump_host`) | `{}` |
 
