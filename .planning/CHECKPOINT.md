@@ -1,27 +1,31 @@
-# Session Checkpoint (architecture-review P0 fixes)
+# Session Checkpoint (architecture-review follow-ups)
 
 **Updated:** `2026-10-22`
-**Branch:** `fix/architecture-review-p0` (from `main` @ `b480b9e`; uncommitted work)
-**Previous checkpoint (v1.5.0):** see `git show b480b9e:.planning/CHECKPOINT.md`
+**Branch:** `fix/architecture-review-p0` (pushed to origin @ `e018ad7`)
 
 ## 1. User decisions (verbatim)
-- After the architecture review (`.planning/reviews/ARCHITECTURE_REVIEW_PLAN.md`), user said: **"yes. do all 1,2,3"**, meaning:
-  1. Fix the P0 items (P0.1–P0.4), each with a regression test.
-  2. Run a dependency audit.
-  3. Break the P1 items into GSD phases (ROADMAP).
-- Nothing has been committed or pushed. Committing still needs explicit user approval.
+- "1 - yes" → raised MSRV to 1.88 and bumped `time` (done, `e1ea4a1`).
+- "2 - wire-up ghostty-vt feature if it helps or provides some solid footing for future work" → done (`e018ad7`). Needs Rust 1.90+ and Zig 0.15.2; its build script git-clones Ghostty, so the first build needs network.
+- "3 - commit and push" → done. Branch pushed; no PR or merge to main yet.
+- "execute this as autonomously as possible … conserve tokens, pass minimal sufficient context to subagents, compact or clear …"
+- New request: "persistent session-segmented command histories that survive individual session runs" and "massive scrollback buffers … based on system resources (192 GB vs 16 GB) … expand or contract … save RAM when not needed … dynamic, scaled allocations".
 
-## 2. Progress
-- [x] P0.1 PTY truncation removed (`src/pane/mod.rs`: new `ingest_pty_events` seam + test `large_pty_bursts_are_processed_without_dropping_mode_changes`). Red → green verified.
-- [x] P0.2 Config loaded at startup (`BiltermConfig::default_path`/`load`, `WindowManager::apply_config`, errors shown in OIA).
-- [x] P0.3 Soundness: `GhosttyCAbiTerminal::with_vtable` now private + SAFETY invariant. **Open:** `ghostty-vt` feature still doesn't build (needs `libghostty-vt` 0.2.2 dep + Zig; user decision); marked EXPERIMENTAL in Cargo.toml.
-- [x] P0.4 RPC daemon: actor-owned plane, per-connection tasks, 1 MiB line cap, JSON depth 128. Live repro passes.
-- [x] `tokio` → 1.54.1. **Open:** `time` fix (0.3.47) needs MSRV 1.88 > declared 1.86 (user decision).
-- [x] P1 → ROADMAP phases 19–23 (Plans TBD via `/gsd-plan-phase`).
-- Verified: clippy clean, 104 tests passed, 0 failed.
-- [x] Audit run (`cargo audit`): 2 vulns (`time 0.3.45` → `>=0.3.47`; `tokio 1.54.0` → `>=1.54.1`, yanked). Warnings: `lru 0.12.5` (unsound) and `paste` (unmaintained) come via `vt100-ctt → ratatui 0.29`; `lru 0.16.4` (unsound) via `ratatui-core`. `vt100-ctt` duplicates ratatui (0.29 + 0.30).
-- [ ] Apply `cargo update -p time -p tokio`.
-- [ ] P1 → GSD phases 6+ in `.planning/ROADMAP.md`.
+## 2. Done
+- History merged `3dbb528`; scrollback merged `721e8cf`. Both pushed to `origin/fix/architecture-review-p0`; worktrees removed. Verified: clippy clean, 127 tests passed, 0 failed.
 
-## 3. Resume verification command
-`cargo test && cargo clippy --all-targets -- -D warnings && cargo audit`
+## 3. Next steps
+- Optional: open a PR or merge into `main`. Not requested yet.
+- Scrollback follow-ups:
+  - Rebuild runs on the UI thread, so growing or resizing a pane with about 1M lines can stall the UI. Move it to the worker.
+  - Within the 2 s rebalance window a flood can drop the oldest lines.
+  - DECSTBM isn't restored after a rebuild.
+  - The worker and ghostty paths still use fixed capacities.
+  - The 64 KB regression test was never run against the old code to watch it fail.
+
+## 4. Known open items
+- `cargo fmt --check` already failed across the repo before this work started (left as-is).
+- The `zig_0_15` attribute in `flake.nix` hasn't been checked with nix.
+- A palette-indexed underline colour maps to `None` in the Ghostty backend.
+
+- History follow-ups: old per-run log files are not migrated; two processes sharing one session can lose a line during compaction.
+- Main checkout has user-owned uncommitted changes (`docs/README.md`, `docs/launch-presentation-and-pitch-script.md`); don't touch them.
