@@ -37,9 +37,10 @@ impl Default for LineDisciplineState {
 }
 
 impl LineDisciplineState {
-    /// Returns `true` when canonical password prompt protection (`ICANON && !ECHO`) is active.
+    /// Returns `true` when password prompt protection (`!ECHO`, either in canonical `getpass`/`read -s`
+    /// mode or non-canonical `sudo`/`sudo-rs`/`ssh` foreground subcommand mode) is active.
     pub fn is_password_prompt(&self) -> bool {
-        !self.echo_enabled && self.canonical_mode
+        !self.echo_enabled && (self.canonical_mode || self.has_foreground_subcommand())
     }
 
     /// Returns `true` when a foreground child process group different from the shell owns the TTY.
@@ -53,7 +54,7 @@ impl LineDisciplineState {
     /// Evaluates the 3-signal heuristic (`PTY-03`):
     /// - Signal 1: `!echo_enabled` (`sudo`/`ssh`/`read -s` password prompt) -> always `RawPtyPassthrough`
     /// - Signal 2: `foreground_pgid != shell_pgid && !canonical_mode` (interactive raw/cbreak sub-REPL like `python`, `node`, `less`) -> `RawPtyPassthrough`
-    /// - Signal 3: `osc133_executing && !canonical_mode` (raw interactive command under OSC 133) -> `RawPtyPassthrough`
+    /// - Signal 3: `shell_pgid.is_none() && osc133_executing && !canonical_mode` (headless/synthetic raw command under OSC 133) -> `RawPtyPassthrough`
     ///
     /// Crucially, when a foreground subcommand runs in normal cooked mode (`echo_enabled && canonical_mode`,
     /// such as `tail -f /dev/random`, `ping`, `watch`, `yes`, `cargo build`), `requires_raw_passthrough()`
@@ -63,7 +64,10 @@ impl LineDisciplineState {
         if !self.echo_enabled {
             return true;
         }
-        if !self.canonical_mode && (self.has_foreground_subcommand() || self.osc133_executing) {
+        if !self.canonical_mode
+            && (self.has_foreground_subcommand()
+                || (self.shell_pgid.is_none() && self.osc133_executing))
+        {
             return true;
         }
         false
@@ -112,16 +116,23 @@ pub fn inspect_pty_fd(
         _ => false,
     };
 
-    let effective_echo = if !canonical_mode {
-        // Interactive shell line editors (Bash Readline, Zsh ZLE, Fish) and raw/cbreak modes
-        // disable ICANON and ECHO simultaneously; only canonical mode with !ECHO (ICANON && !ECHO)
-        // is a genuine password prompt (sudo, ssh, passwd, read -s).
-        true
-    } else if shell_owns_tty && !osc133_executing {
-        // While the top-level shell itself owns the foreground process group and no command is
-        // executing (e.g. during .bashrc / .zshrc initialization), ignore transient stty !ECHO.
-        true
+    let effective_echo = if shell_owns_tty {
+        if !canonical_mode {
+            // Interactive shell line editors (Bash Readline, Zsh ZLE, Fish) disable ICANON and ECHO
+            // simultaneously while the top-level shell itself owns the foreground process group (fg == sh).
+            true
+        } else if !osc133_executing {
+            // While the top-level shell itself owns the foreground process group and no command is
+            // executing (e.g. during .bashrc / .zshrc initialization), ignore transient stty !ECHO.
+            true
+        } else {
+            // Canonical !ECHO inside the shell while a command is executing (e.g. `read -s` builtin).
+            echo_enabled
+        }
     } else {
+        // A foreground child process (`fg != sh`, such as `sudo`, `sudo-rs`, `ssh`, `su`, `passwd`, `gpg`)
+        // owns the TTY (or `shell_pgid` is None). Respect the actual termios ECHO flag regardless of
+        // whether the child password prompt uses canonical (`getpass`) or non-canonical (`sudo-rs`/`ssh`) mode.
         echo_enabled
     };
 

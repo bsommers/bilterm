@@ -1,7 +1,7 @@
 use crate::pane::{CompositePane, PromptAnchor, PromptMode};
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
-use crate::ui::cursor::CaretStyle;
+use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::vt::encode_osc52_clipboard;
@@ -49,6 +49,26 @@ pub enum ColonCommand {
     CrosshairToggle {
         enabled: Option<bool>,
         fullscreen: Option<bool>,
+    },
+    Spotlight {
+        mode: Option<SpotlightMode>,
+        pixelated: Option<bool>,
+        fullscreen: Option<bool>,
+        rx: Option<u16>,
+        ry: Option<u16>,
+        delta: Option<(i16, i16)>,
+        feather_pct: Option<u8>,
+    },
+    FocalZoom {
+        mode: Option<SpotlightMode>,
+        zoom_pct: Option<u16>,
+        step_pct: Option<i16>,
+        pixelated: Option<bool>,
+        fullscreen: Option<bool>,
+        rx: Option<u16>,
+        ry: Option<u16>,
+        delta_size: Option<(i16, i16)>,
+        feather_pct: Option<u8>,
     },
     Shadows(Option<ShadowStyle>),
     FKeyBarToggle(Option<bool>),
@@ -266,6 +286,194 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some(Ok(ColonCommand::CrosshairToggle {
                 enabled,
                 fullscreen,
+            }))
+        }
+        "spotlight" | "spot" | "focus-light" => {
+            let mut mode = None;
+            let mut pixelated = None;
+            let mut fullscreen = None;
+            let mut rx = None;
+            let mut ry = None;
+            let mut delta = None;
+            let mut feather_pct = None;
+
+            let mut i = 1;
+            while i < parts.len() {
+                match parts[i] {
+                    "off" | "none" | "false" => mode = Some(SpotlightMode::Off),
+                    "circle" | "circular" | "round" | "on" | "true" => {
+                        mode = Some(SpotlightMode::Circle);
+                    }
+                    "ellipse" | "elliptical" | "oval" => mode = Some(SpotlightMode::Ellipse),
+                    "pixel" | "pixelated" | "block" | "blocks" | "cell" => pixelated = Some(true),
+                    "fuzzy" | "smooth" | "soft" => pixelated = Some(false),
+                    "full" | "fullscreen" => fullscreen = Some(true),
+                    "pane" | "local" => fullscreen = Some(false),
+                    "+" | "grow" | "larger" | "bigger" => delta = Some((4, 1)),
+                    "-" | "shrink" | "smaller" => delta = Some((-4, -1)),
+                    "size" | "radius" => {
+                        let Some(rx_val) = parts.get(i + 1).and_then(|s| s.parse::<u16>().ok()) else {
+                            return Some(Err(
+                                "Usage: :spotlight size <rx_cols> [ry_rows]".to_string(),
+                            ));
+                        };
+                        rx = Some(rx_val.clamp(4, 120));
+                        i += 1;
+                        if let Some(ry_val) = parts.get(i + 1).and_then(|s| s.parse::<u16>().ok()) {
+                            ry = Some(ry_val.clamp(2, 60));
+                            i += 1;
+                        }
+                    }
+                    "feather" | "edge" => {
+                        let Some(raw) = parts.get(i + 1) else {
+                            return Some(Err(
+                                "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
+                            ));
+                        };
+                        let pct = if let Ok(f) = raw.parse::<f32>() {
+                            if f <= 1.0 {
+                                (f * 100.0).round() as u8
+                            } else {
+                                f.round() as u8
+                            }
+                        } else {
+                            return Some(Err(
+                                "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
+                            ));
+                        };
+                        feather_pct = Some(pct.clamp(5, 100));
+                        i += 1;
+                    }
+                    other => {
+                        if let Ok(rx_val) = other.parse::<u16>() {
+                            rx = Some(rx_val.clamp(4, 120));
+                            if let Some(ry_val) = parts.get(i + 1).and_then(|s| s.parse::<u16>().ok())
+                            {
+                                ry = Some(ry_val.clamp(2, 60));
+                                i += 1;
+                            }
+                        } else {
+                            return Some(Err(
+                                "Usage: :spotlight [circle|ellipse|off] [fuzzy|pixel] [full|pane] [+|-] [size <rx> [ry]] [feather <pct>]"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                }
+                i += 1;
+            }
+
+            Some(Ok(ColonCommand::Spotlight {
+                mode,
+                pixelated,
+                fullscreen,
+                rx,
+                ry,
+                delta,
+                feather_pct,
+            }))
+        }
+        "focalzoom" | "fzoom" | "lens" | "magnify" => {
+            let mut mode = None;
+            let mut zoom_pct = None;
+            let mut step_pct = None;
+            let mut pixelated = None;
+            let mut fullscreen = None;
+            let mut rx = None;
+            let mut ry = None;
+            let mut delta_size = None;
+            let mut feather_pct = None;
+
+            let mut i = 1;
+            while i < parts.len() {
+                match parts[i] {
+                    "off" | "none" | "false" | "1x" | "1.0x" | "100%" => {
+                        mode = Some(SpotlightMode::Off);
+                    }
+                    "circle" | "circular" | "round" => mode = Some(SpotlightMode::Circle),
+                    "ellipse" | "elliptical" | "oval" | "on" | "true" => {
+                        mode = Some(SpotlightMode::Ellipse);
+                    }
+                    "subtle" | "low" => zoom_pct = Some(125),
+                    "medium" | "med" => zoom_pct = Some(150),
+                    "high" => zoom_pct = Some(200),
+                    "ultra" | "max" => zoom_pct = Some(300),
+                    "pixel" | "pixelated" | "block" | "blocks" | "cell" => pixelated = Some(true),
+                    "fuzzy" | "smooth" | "soft" => pixelated = Some(false),
+                    "full" | "fullscreen" => fullscreen = Some(true),
+                    "pane" | "local" => fullscreen = Some(false),
+                    "+" | "in" | "up" => step_pct = Some(25),
+                    "-" | "out" | "down" => step_pct = Some(-25),
+                    "grow" | "larger" | "bigger" => delta_size = Some((4, 1)),
+                    "shrink" | "smaller" => delta_size = Some((-4, -1)),
+                    "size" | "radius" => {
+                        let Some(rx_val) = parts.get(i + 1).and_then(|s| s.parse::<u16>().ok())
+                        else {
+                            return Some(Err(
+                                "Usage: :focalzoom size <rx_cols> [ry_rows]".to_string(),
+                            ));
+                        };
+                        rx = Some(rx_val.clamp(4, 120));
+                        i += 1;
+                        if let Some(ry_val) = parts.get(i + 1).and_then(|s| s.parse::<u16>().ok()) {
+                            ry = Some(ry_val.clamp(2, 60));
+                            i += 1;
+                        }
+                    }
+                    "feather" | "edge" => {
+                        let Some(raw) = parts.get(i + 1) else {
+                            return Some(Err(
+                                "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
+                            ));
+                        };
+                        let pct = if let Ok(f) = raw.parse::<f32>() {
+                            if f <= 1.0 {
+                                (f * 100.0).round() as u8
+                            } else {
+                                f.round() as u8
+                            }
+                        } else {
+                            return Some(Err(
+                                "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
+                            ));
+                        };
+                        feather_pct = Some(pct.clamp(5, 100));
+                        i += 1;
+                    }
+                    other => {
+                        let cleaned = other.trim_end_matches('x').trim_end_matches('%');
+                        if let Ok(val) = cleaned.parse::<f32>() {
+                            let pct = if val <= 6.0 {
+                                (val * 100.0).round() as u16
+                            } else {
+                                val.round() as u16
+                            };
+                            if pct <= 100 {
+                                mode = Some(SpotlightMode::Off);
+                            } else {
+                                zoom_pct = Some(pct.clamp(105, 400));
+                            }
+                        } else {
+                            return Some(Err(
+                                "Usage: :focalzoom [1.25x|1.5x|2x|3x|off] [circle|ellipse] [fuzzy|pixel] [+|-] [grow|shrink] [size <rx> [ry]] [feather <pct>]"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                }
+                i += 1;
+            }
+
+            Some(Ok(ColonCommand::FocalZoom {
+                mode,
+                zoom_pct,
+                step_pct,
+                pixelated,
+                fullscreen,
+                rx,
+                ry,
+                delta_size,
+                feather_pct,
             }))
         }
         "shadows" | "shadow" => {
@@ -917,6 +1125,145 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
+        ColonCommand::Spotlight {
+            mode,
+            pixelated,
+            fullscreen,
+            rx,
+            ry,
+            delta,
+            feather_pct,
+        } => {
+            let no_args = mode.is_none()
+                && pixelated.is_none()
+                && fullscreen.is_none()
+                && rx.is_none()
+                && ry.is_none()
+                && delta.is_none()
+                && feather_pct.is_none();
+            if no_args {
+                let label = wm.config.cycle_spotlight();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.spotlight_rx,
+                    wm.config.spotlight_ry,
+                    wm.config.spotlight_feather_pct
+                ));
+                return false;
+            }
+            if let Some(m) = mode {
+                wm.config.spotlight_mode = m;
+            } else if wm.config.spotlight_mode == SpotlightMode::Off {
+                wm.config.spotlight_mode = SpotlightMode::Ellipse;
+            }
+            if let Some(px) = pixelated {
+                wm.config.spotlight_pixelated = px;
+            }
+            if let Some(fs) = fullscreen {
+                wm.config.spotlight_fullscreen = fs;
+            }
+            if let Some(rx_val) = rx {
+                wm.config.spotlight_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config.spotlight_mode == SpotlightMode::Circle {
+                    wm.config.spotlight_ry = (rx_val / 2).clamp(2, 60);
+                }
+            }
+            if let Some(ry_val) = ry {
+                wm.config.spotlight_ry = ry_val.clamp(2, 60);
+            }
+            if let Some((drx, dry)) = delta {
+                wm.config.resize_spotlight(drx, dry);
+            }
+            if let Some(f) = feather_pct {
+                wm.config.spotlight_feather_pct = f.clamp(5, 100);
+            }
+            let label = wm
+                .config
+                .spotlight_mode
+                .label(wm.config.spotlight_pixelated);
+            wm.active_pane_mut().status_message = Some(format!(
+                "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                label,
+                wm.config.spotlight_rx,
+                wm.config.spotlight_ry,
+                wm.config.spotlight_feather_pct
+            ));
+            false
+        }
+        ColonCommand::FocalZoom {
+            mode,
+            zoom_pct,
+            step_pct,
+            pixelated,
+            fullscreen,
+            rx,
+            ry,
+            delta_size,
+            feather_pct,
+        } => {
+            let no_args = mode.is_none()
+                && zoom_pct.is_none()
+                && step_pct.is_none()
+                && pixelated.is_none()
+                && fullscreen.is_none()
+                && rx.is_none()
+                && ry.is_none()
+                && delta_size.is_none()
+                && feather_pct.is_none();
+            if no_args {
+                let label = wm.config.cycle_focal_zoom();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.focal_zoom_rx,
+                    wm.config.focal_zoom_ry,
+                    wm.config.focal_zoom_feather_pct
+                ));
+                return false;
+            }
+            if let Some(m) = mode {
+                wm.config.focal_zoom_mode = m;
+            } else if wm.config.focal_zoom_mode == SpotlightMode::Off && step_pct.is_none() {
+                wm.config.focal_zoom_mode = SpotlightMode::Ellipse;
+            }
+            if let Some(pct) = zoom_pct {
+                wm.config.focal_zoom_pct = pct.clamp(105, 400);
+            }
+            if let Some(delta_p) = step_pct {
+                wm.config.step_focal_zoom_level(delta_p);
+            }
+            if let Some(px) = pixelated {
+                wm.config.focal_zoom_pixelated = px;
+            }
+            if let Some(fs) = fullscreen {
+                wm.config.focal_zoom_fullscreen = fs;
+            }
+            if let Some(rx_val) = rx {
+                wm.config.focal_zoom_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config.focal_zoom_mode == SpotlightMode::Circle {
+                    wm.config.focal_zoom_ry = (rx_val / 2).clamp(2, 60);
+                }
+            }
+            if let Some(ry_val) = ry {
+                wm.config.focal_zoom_ry = ry_val.clamp(2, 60);
+            }
+            if let Some((drx, dry)) = delta_size {
+                wm.config.resize_focal_zoom(drx, dry);
+            }
+            if let Some(f) = feather_pct {
+                wm.config.focal_zoom_feather_pct = f.clamp(5, 100);
+            }
+            let label = wm.config.focal_zoom_label();
+            wm.active_pane_mut().status_message = Some(format!(
+                "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
+                label,
+                wm.config.focal_zoom_rx,
+                wm.config.focal_zoom_ry,
+                wm.config.focal_zoom_feather_pct
+            ));
+            false
+        }
         ColonCommand::Shadows(style_opt) => {
             match style_opt {
                 Some(ShadowStyle::None) => {
@@ -968,5 +1315,61 @@ mod tests {
         let cmd = parse_colon_command(":yank").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
         assert!(pane.last_osc52_sequence.is_some());
+    }
+
+    #[test]
+    fn spotlight_colon_commands_configure_shape_pixelation_and_size() {
+        let mut wm = WindowManager::new_headless(25, 80);
+        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Off);
+
+        // Cycle via bare :spotlight
+        let cmd = parse_colon_command(":spotlight").unwrap().unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Circle);
+        assert!(!wm.config.spotlight_pixelated);
+
+        // Configure elliptical pixelated spotlight with custom size and feather
+        let cmd = parse_colon_command(":spotlight ellipse pixel size 30 8 feather 60")
+            .unwrap()
+            .unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Ellipse);
+        assert!(wm.config.spotlight_pixelated);
+        assert_eq!(wm.config.spotlight_rx, 30);
+        assert_eq!(wm.config.spotlight_ry, 8);
+        assert_eq!(wm.config.spotlight_feather_pct, 60);
+
+        // Grow and shrink via :spotlight + and :spotlight -
+        let cmd = parse_colon_command(":spotlight +").unwrap().unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.spotlight_rx, 34);
+        assert_eq!(wm.config.spotlight_ry, 9);
+
+        let cmd = parse_colon_command(":spotlight off").unwrap().unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Off);
+
+        // Cycle Focal Zoom levels: Off -> 1.25x -> 1.50x -> 2.00x -> 3.00x -> Off
+        for expected_pct in [125u16, 150, 200, 300] {
+            let cmd = parse_colon_command(":focalzoom").unwrap().unwrap();
+            execute_wm_colon_command(&mut wm, cmd);
+            assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Ellipse);
+            assert_eq!(wm.config.focal_zoom_pct, expected_pct);
+        }
+        let cmd = parse_colon_command(":focalzoom").unwrap().unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Off);
+
+        // Configure 2.5x circular pixelated focal zoom with custom size and step
+        let cmd = parse_colon_command(":focalzoom 2.5x circle pixel size 24 8 feather 55")
+            .unwrap()
+            .unwrap();
+        execute_wm_colon_command(&mut wm, cmd);
+        assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Circle);
+        assert_eq!(wm.config.focal_zoom_pct, 250);
+        assert!(wm.config.focal_zoom_pixelated);
+        assert_eq!(wm.config.focal_zoom_rx, 24);
+        assert_eq!(wm.config.focal_zoom_ry, 8);
+        assert_eq!(wm.config.focal_zoom_feather_pct, 55);
     }
 }

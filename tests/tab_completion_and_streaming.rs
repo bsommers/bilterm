@@ -191,34 +191,59 @@ fn readline_non_canonical_no_echo_never_flashes_prompt_and_three_way_mode_toggle
     let mut pane = CompositePane::new_headless(1, 20, 80);
 
     // 1. Simulate Bash Readline / Zsh ZLE / Oh-My-Bash prompt subshell:
-    // Readline sets !ICANON and !ECHO simultaneously while waiting for input or running prompt hooks.
-    // This MUST NOT be mistaken for a canonical `sudo` password prompt (`ICANON && !ECHO`),
-    // and MUST NOT hide or flash the command prompt!
+    // Readline sets !ICANON and !ECHO simultaneously while the shell itself owns the TTY (fg == sh).
+    // This MUST NOT be mistaken for a `sudo` password prompt and MUST NOT hide or flash the command prompt!
     pane.line_discipline = LineDisciplineState {
-        echo_enabled: true, // inspect_pty_fd normalizes !canonical_mode to effective_echo = true
+        echo_enabled: false,
         canonical_mode: false,
-        foreground_pgid: Some(5001),
+        foreground_pgid: Some(5000),
         shell_pgid: Some(5000),
-        osc133_executing: true,
+        osc133_executing: false,
     };
     assert!(!pane.line_discipline.is_password_prompt());
     assert!(pane.is_prompt_visible());
     assert_eq!(pane.effective_routing_mode(), InputRoutingMode::CommandPrompt);
 
-    //Even if raw LineDisciplineState has echo_enabled = false with canonical_mode = false (Readline/ZLE raw mode),
-    // is_password_prompt() is false because password prompts are canonical (`ICANON && !ECHO`).
-    pane.line_discipline.echo_enabled = false;
-    pane.line_discipline.canonical_mode = false;
-    assert!(!pane.line_discipline.is_password_prompt());
-    assert!(pane.is_prompt_visible());
+    // 2. Simulate `sudo` / `sudo-rs` / `ssh` password prompt:
+    // `sudo` runs in its own foreground process group (fg != sh) and disables BOTH ECHO and ICANON!
+    // This MUST engage `!ECHO LOCK` and switch to RawPtyPassthrough so the password prompt captures keyboard input!
+    pane.line_discipline = LineDisciplineState {
+        echo_enabled: false,
+        canonical_mode: false,
+        foreground_pgid: Some(5001),
+        shell_pgid: Some(5000),
+        osc133_executing: true,
+    };
+    assert!(pane.line_discipline.is_password_prompt());
+    assert!(!pane.is_prompt_visible());
+    assert_eq!(
+        pane.effective_routing_mode(),
+        InputRoutingMode::RawPtyPassthrough
+    );
 
-    // Genuine canonical password prompt (`ICANON && !ECHO`, e.g., `sudo` or `ssh`) DOES hide prompt:
-    pane.line_discipline.echo_enabled = false;
-    pane.line_discipline.canonical_mode = true;
+    // 3. Genuine canonical password prompt (`ICANON && !ECHO`, e.g., `read -s` or `getpass`) also hides prompt:
+    pane.line_discipline = LineDisciplineState {
+        echo_enabled: false,
+        canonical_mode: true,
+        foreground_pgid: Some(5000),
+        shell_pgid: Some(5000),
+        osc133_executing: true,
+    };
     assert!(pane.line_discipline.is_password_prompt());
     assert!(!pane.is_prompt_visible());
 
+    // 4. Defense-in-depth canvas password prompt detection (`[sudo: authenticate] Password: `)
+    pane.line_discipline = LineDisciplineState::default();
+    pane.prompt.running_command = Some("sudo apt update".to_string());
+    pane.process_pty_output(b"[sudo: authenticate] Password: ");
+    assert!(pane.line_discipline.is_password_prompt());
+    assert_eq!(
+        pane.effective_routing_mode(),
+        InputRoutingMode::RawPtyPassthrough
+    );
+
     // Restore normal shell state
+    pane.prompt.running_command = None;
     pane.line_discipline = LineDisciplineState::default();
     assert!(pane.is_prompt_visible());
     assert_eq!(pane.prompt_mode(), PromptMode::Floating);

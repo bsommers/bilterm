@@ -19,7 +19,10 @@ use crate::pty::line_discipline::InputRoutingMode;
 use crate::ui::chrome::{
     render_borland_frame_styled, render_drop_shadow_styled, OutlineStyle,
 };
-use crate::ui::cursor::{render_caret, render_crosshair_cursor};
+use crate::ui::cursor::{
+    SpotlightMode, render_caret, render_crosshair_cursor, render_focal_zoom_cursor,
+    render_spotlight_cursor,
+};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::status_bar::render_dos_fkey_bar;
@@ -396,6 +399,48 @@ fn render_output_canvas(
         if cur_r < canvas.height && cur_c < canvas.width {
             let cx = canvas.x + cur_c;
             let cy = canvas.y + cur_r;
+            if active
+                && cfg.focal_zoom_mode != SpotlightMode::Off
+                && cfg.focal_zoom_pct > 100
+            {
+                let target_rect = if cfg.focal_zoom_fullscreen {
+                    buf.area
+                } else {
+                    canvas
+                };
+                render_focal_zoom_cursor(
+                    buf,
+                    target_rect,
+                    cx,
+                    cy,
+                    cfg.focal_zoom_mode,
+                    cfg.focal_zoom_pct,
+                    cfg.focal_zoom_rx,
+                    cfg.focal_zoom_ry,
+                    cfg.focal_zoom_feather_pct,
+                    cfg.focal_zoom_pixelated,
+                    palette.crosshair_bg,
+                );
+            }
+            if active && cfg.spotlight_mode != SpotlightMode::Off {
+                let target_rect = if cfg.spotlight_fullscreen {
+                    buf.area
+                } else {
+                    canvas
+                };
+                render_spotlight_cursor(
+                    buf,
+                    target_rect,
+                    cx,
+                    cy,
+                    cfg.spotlight_mode,
+                    cfg.spotlight_rx,
+                    cfg.spotlight_ry,
+                    cfg.spotlight_feather_pct,
+                    cfg.spotlight_pixelated,
+                    palette.crosshair_bg,
+                );
+            }
             if active && cfg.crosshair_cursor {
                 let target_rect = if cfg.crosshair_fullscreen {
                     buf.area
@@ -655,6 +700,45 @@ fn render_floating_prompt(
     let cx = inner.x + clamped_col;
     let cy = inner.y + clamped_row;
 
+    if active && cfg.focal_zoom_mode != SpotlightMode::Off && cfg.focal_zoom_pct > 100 {
+        let target_rect = if cfg.focal_zoom_fullscreen {
+            buf.area
+        } else {
+            canvas_rect
+        };
+        render_focal_zoom_cursor(
+            buf,
+            target_rect,
+            cx,
+            cy,
+            cfg.focal_zoom_mode,
+            cfg.focal_zoom_pct,
+            cfg.focal_zoom_rx,
+            cfg.focal_zoom_ry,
+            cfg.focal_zoom_feather_pct,
+            cfg.focal_zoom_pixelated,
+            palette.crosshair_bg,
+        );
+    }
+    if active && cfg.spotlight_mode != SpotlightMode::Off {
+        let target_rect = if cfg.spotlight_fullscreen {
+            buf.area
+        } else {
+            canvas_rect
+        };
+        render_spotlight_cursor(
+            buf,
+            target_rect,
+            cx,
+            cy,
+            cfg.spotlight_mode,
+            cfg.spotlight_rx,
+            cfg.spotlight_ry,
+            cfg.spotlight_feather_pct,
+            cfg.spotlight_pixelated,
+            palette.crosshair_bg,
+        );
+    }
     if active && cfg.crosshair_cursor {
         let target_rect = if cfg.crosshair_fullscreen {
             buf.area
@@ -813,11 +897,14 @@ impl Widget for WorkspaceWidget<'_> {
             height: area.height.saturating_sub(top_offset + bottom_offset).max(1),
         };
 
-        let rects = self.wm.compute_workspace_rects(workspace_area);
+        let mut rects = self.wm.compute_workspace_rects(workspace_area);
         let framed =
             self.wm.panes.len() > 1 || self.wm.layout_mode == WorkspaceLayoutMode::Stacked;
         let top_workspace_id = self.wm.z_stack.top();
         let qt_visible = self.wm.quick_terminal.visible;
+        if self.wm.layout_mode == WorkspaceLayoutMode::Tiled {
+            rects.sort_by_key(|(id, _)| !qt_visible && top_workspace_id == Some(*id));
+        }
 
         for (id, outer) in rects {
             let Some(pane) = self.wm.panes.get(&id) else {
@@ -1236,6 +1323,9 @@ fn render_help_modal(
         ("Ctrl+X e / F4 / Alt+E", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
         ("Ctrl+X g / F12 / Ctrl+G", "Toggle Command Box vs Regular Terminal (Raw PTY)"),
         ("Ctrl+X x / Alt+X", "Cycle IBM 3270 Cross-Hair (Pane -> Full -> Off)"),
+        ("Alt+O / :spotlight", "Cycle Focal Spotlight (Circle/Ellipse × Fuzzy/Pixelated)"),
+        ("Alt+Shift+O / :focalzoom", "Cycle Focal Zoom Lens (1.25x -> 1.50x -> 2.00x -> 3.00x -> Off)"),
+        ("Alt+Shift+] / Alt+Shift+[", "Grow / shrink Focal Spotlight or Focal Zoom radius"),
         ("Ctrl+Q / :quit", "Cleanly exit Bilterm"),
         ("═══ COMMAND PROMPT, READLINE & HISTORY ═══", ""),
         ("Alt+Left/Right / Alt+B/F", "Move cursor word left / right (macOS Option+Arrows)"),
@@ -1271,6 +1361,7 @@ fn render_help_modal(
         (":glyphs <pack>", "unicode | cp437 | nerd-font | ascii"),
         (":cursor <style>", "block | hollow | underscore | bar"),
         (":crosshair full|pane|off", "Configure full-screen or pane-local cross-hairs"),
+        (":spotlight <mode>", "circle | ellipse | pixel | fuzzy | size <rx> [ry] | + | - | off"),
     ];
 
     let max_scroll = HELP_LINES.len().saturating_sub(usize::from(inner.height));

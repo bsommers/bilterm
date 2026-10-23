@@ -5,6 +5,30 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.5.0] - 2026-10-22
+
+### Added
+- **Toggleable, Resizable Focal Spotlight Shader (`SpotlightMode`, `render_spotlight_cursor`, `src/ui/cursor.rs`, `src/config/mod.rs`, `src/ui/mod.rs`, `src/pane/colon_command.rs`, `src/input/mod.rs`)**:
+  - Supports **Circular** (aspect-corrected `2:1` for terminal character cells) and **Elliptical** (`spotlight_rx`, `spotlight_ry`) spotlight shapes centered at the active cursor (`Alt+O` / `Ctrl+X L` / `:spotlight`).
+  - **Smooth Fuzzy Falloff (`spotlight_pixelated = false`)**: Hermite `smoothstep` ($3t^2 - 2t^3$) radial luminance attenuation and phosphor core bloom.
+  - **Pixelated Character-Block Mode (`spotlight_pixelated = true`)**: Quantizes spotlight coordinates to `2×1` character-cell blocks (`x & !1`) and renders stepped block dither rings (`▒` -> `░` -> ` `) on background cells.
+  - Live dynamic resizing via `Alt+Shift+]` (`Alt+}`) / `Alt+Shift+[` (`Alt+{`) or `:spotlight [+|-|size <rx> [ry]|feather <pct>|full|pane|off]`.
+- **Focal Zoom (Fisheye Magnifying Lens) Shader (`render_focal_zoom_cursor`, `src/ui/cursor.rs`, `src/config/mod.rs`, `src/ui/mod.rs`, `src/pane/colon_command.rs`, `src/input/mod.rs`)**:
+  - Real-time radial inverse-mapped magnifying lens centered at the cursor with multiple smooth magnification levels (`1.25x`, `1.50x`, `2.00x`, `3.00x`, or custom `1.05x..=4.00x` via `Alt+Shift+O` / `:focalzoom` / `:lens`).
+  - Uses Hermite `smoothstep` radial magnification falloff to `1.00x` at the lens rim, anti-stutter primary-cell glyph placement with `Modifier::BOLD` + phosphor clarity boost, continuous box-drawing line stretching (`─`, `═`, `│`, `║`), and optional `2×1` pixelated character-block magnification (`:focalzoom pixel`).
+- **Universal Leader Prefix (`Ctrl+X`), macOS `Option` Key Normalization & Readline Word Navigation (`src/input/mod.rs`, `src/config/mod.rs`)**:
+  - Added configurable `leader_key` (`"Ctrl+X"` default) that works identically in both `CommandPrompt` and `RawPtyPassthrough` modes without colliding with macOS window manager shortcuts or outer `tmux` (`Ctrl+B`).
+  - Added `normalize_macos_option_key` (`macos_option_as_alt = true`) translating macOS `Option+<key>` Unicode symbols (`˙`, `√`, `∫`, `ƒ`, `†`, `∂`, `∑`, `Ω`, `≈`, `π`, `≤`, `≥`, `÷`, `` ` ``) back into `Alt+<key>` chords.
+  - Added Readline word-wise navigation and deletion (`Alt+Left`/`Alt+B`, `Alt+Right`/`Alt+F`, `Alt+Backspace`/`Ctrl+W`, `Alt+D`/`Alt+Delete`) in `FloatingPromptState`.
+- **3-Way Command Prompt Mode Toggle (`PromptMode`, `F4` / `Alt+E` / `Ctrl+X e` / `:mode [float|fixed|terminal|cycle]`)**:
+  - Cycles seamlessly between **Floating Command Prompt**, **Fixed (Non-Overlapping Docked) Command Prompt**, and **Regular Terminal (`RawPtyPassthrough`)**, or via clicking the bottom OIA status bar.
+
+### Fixed
+- **`sudo` / `sudo-rs` / `ssh` Non-Canonical `!ECHO` Password Prompt Input Capture (`src/pty/line_discipline.rs`, `src/pane/mod.rs`)**:
+  - Modern `sudo` (`sudo-rs` on Ubuntu 25.10+) and `ssh` disable both `ECHO` and `ICANON` (`!ECHO && !ICANON`) while running in a foreground child process group (`fg_pgrp != shell_pgid`). `inspect_pty_fd` and `LineDisciplineState::is_password_prompt` now distinguish shell Readline/ZLE (`fg_pgrp == shell_pgid`) from foreground child `!ECHO` prompts (`fg_pgrp != shell_pgid`) and include defense-in-depth canvas password prompt detection (`[sudo`, `Password:`, `passphrase`), immediately switching to `RawPtyPassthrough` (`🔒 !ECHO LOCK`) so password prompts capture keyboard input directly.
+- **Eliminated Command Prompt Flashing Under Readline / ZLE / Oh-My-Bash (`src/pty/line_discipline.rs`)**:
+  - Distinguishes interactive shell line-editor states (`!ICANON && !ECHO` with foreground `tcgetpgrp == shell_pid`) from genuine password prompts (`ICANON && !ECHO` or child subcommand `sudo`/`ssh`), preventing the floating prompt from hiding between commands.
+
 ## [v1.4.0] - 2026-10-21
 
 ### Added

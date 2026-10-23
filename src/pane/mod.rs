@@ -1224,6 +1224,15 @@ impl CompositePane {
                 if (prev_sub && !self.line_discipline.has_foreground_subcommand()) || osc_finished {
                     self.prompt.running_command = None;
                 }
+                // Fallback defense-in-depth: if the cursor line on the OutputCanvas is a password/passphrase
+                // prompt while a command is running (even if a subshell didn't change pgrp), enforce !ECHO lock.
+                if (self.prompt.running_command.is_some()
+                    || self.line_discipline.has_foreground_subcommand())
+                    && self.canvas_cursor_line_looks_like_password_prompt()
+                {
+                    self.line_discipline.echo_enabled = false;
+                    self.line_discipline.canonical_mode = true;
+                }
                 return;
             }
         }
@@ -1232,6 +1241,36 @@ impl CompositePane {
         if osc_finished {
             self.prompt.running_command = None;
         }
+        if self.prompt.running_command.is_some() && self.canvas_cursor_line_looks_like_password_prompt() {
+            self.line_discipline.echo_enabled = false;
+            self.line_discipline.canonical_mode = true;
+        }
+    }
+
+    /// Checks whether the text on the active `OutputCanvas` cursor row looks like an interactive
+    /// password/passphrase prompt (`[sudo] password for ...:`, `[sudo: authenticate] Password:`,
+    /// `Password:`, `Enter passphrase for key ...:`).
+    pub fn canvas_cursor_line_looks_like_password_prompt(&self) -> bool {
+        let screen = self.vt.screen();
+        let (cur_r, cur_c) = screen.cursor_position();
+        let (_, cols) = screen.size();
+        let end_col = (cur_c + 1).min(cols);
+        let mut line = String::with_capacity(usize::from(end_col));
+        for c in 0..end_col {
+            if let Some(cell) = screen.cell(cur_r, c) {
+                let s = cell.contents();
+                if s.is_empty() {
+                    line.push(' ');
+                } else {
+                    line.push_str(s);
+                }
+            }
+        }
+        let lower = line.trim().to_ascii_lowercase();
+        (lower.ends_with(':') || lower.ends_with(": "))
+            && (lower.contains("password")
+                || lower.contains("passphrase")
+                || lower.contains("[sudo"))
     }
 
     /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`).

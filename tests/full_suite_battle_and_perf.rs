@@ -646,7 +646,8 @@ fn cli_binary_flags_and_subcommands_work_end_to_end() {
     // 1. --version
     let ver = Command::new(bin).arg("--version").output().expect("--version");
     assert!(ver.status.success());
-    assert!(String::from_utf8_lossy(&ver.stdout).contains("bilterm 1.4.0"));
+    let expected_ver = format!("bilterm {}", env!("CARGO_PKG_VERSION"));
+    assert!(String::from_utf8_lossy(&ver.stdout).contains(&expected_ver));
 
     // 2. --help
     let help = Command::new(bin).arg("--help").output().expect("--help");

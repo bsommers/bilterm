@@ -1388,6 +1388,80 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     // Multi-pane Window Manager Alt-chords
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
+            KeyCode::Char('o') => {
+                let label = wm.config.cycle_spotlight();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.spotlight_rx,
+                    wm.config.spotlight_ry,
+                    wm.config.spotlight_feather_pct
+                ));
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('O') => {
+                let label = wm.config.cycle_focal_zoom();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.focal_zoom_rx,
+                    wm.config.focal_zoom_ry,
+                    wm.config.focal_zoom_feather_pct
+                ));
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('}') => {
+                if wm.config.focal_zoom_mode != crate::ui::cursor::SpotlightMode::Off {
+                    wm.config.resize_focal_zoom(4, 1);
+                }
+                if wm.config.spotlight_mode == crate::ui::cursor::SpotlightMode::Off
+                    && wm.config.focal_zoom_mode == crate::ui::cursor::SpotlightMode::Off
+                {
+                    wm.config.spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
+                }
+                if wm.config.spotlight_mode != crate::ui::cursor::SpotlightMode::Off {
+                    wm.config.resize_spotlight(4, 1);
+                }
+                let label = wm
+                    .config
+                    .spotlight_mode
+                    .label(wm.config.spotlight_pixelated);
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔦 Focal Radius: spot=({}, {}) zoom=({}, {}) [{}]",
+                    wm.config.spotlight_rx,
+                    wm.config.spotlight_ry,
+                    wm.config.focal_zoom_rx,
+                    wm.config.focal_zoom_ry,
+                    label
+                ));
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('{') => {
+                if wm.config.focal_zoom_mode != crate::ui::cursor::SpotlightMode::Off {
+                    wm.config.resize_focal_zoom(-4, -1);
+                }
+                if wm.config.spotlight_mode == crate::ui::cursor::SpotlightMode::Off
+                    && wm.config.focal_zoom_mode == crate::ui::cursor::SpotlightMode::Off
+                {
+                    wm.config.spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
+                }
+                if wm.config.spotlight_mode != crate::ui::cursor::SpotlightMode::Off {
+                    wm.config.resize_spotlight(-4, -1);
+                }
+                let label = wm
+                    .config
+                    .spotlight_mode
+                    .label(wm.config.spotlight_pixelated);
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔦 Focal Radius: spot=({}, {}) zoom=({}, {}) [{}]",
+                    wm.config.spotlight_rx,
+                    wm.config.spotlight_ry,
+                    wm.config.focal_zoom_rx,
+                    wm.config.focal_zoom_ry,
+                    label
+                ));
+                return Ok(AppAction::Handled);
+            }
             KeyCode::Char('x') | KeyCode::Char('X') => {
                 if !wm.config.crosshair_cursor {
                     wm.config.crosshair_cursor = true;
@@ -1561,6 +1635,31 @@ fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppActi
                 wm.config.crosshair_cursor = false;
                 wm.config.crosshair_fullscreen = false;
             }
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('L') => {
+            let label = wm.config.cycle_spotlight();
+            wm.active_pane_mut().status_message = Some(format!(
+                "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                label,
+                wm.config.spotlight_rx,
+                wm.config.spotlight_ry,
+                wm.config.spotlight_feather_pct
+            ));
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('}') => {
+            if wm.config.spotlight_mode == crate::ui::cursor::SpotlightMode::Off {
+                wm.config.spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
+            }
+            wm.config.resize_spotlight(4, 1);
+            Ok(AppAction::Handled)
+        }
+        KeyCode::Char('{') => {
+            if wm.config.spotlight_mode == crate::ui::cursor::SpotlightMode::Off {
+                wm.config.spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
+            }
+            wm.config.resize_spotlight(-4, -1);
             Ok(AppAction::Handled)
         }
         _ => handle_pane_leader_key(wm.active_pane_mut(), key),

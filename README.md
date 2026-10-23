@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.4.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange" alt="Rust" />
-  <img src="https://img.shields.io/badge/tests-86%20passing-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-91%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
@@ -37,8 +37,8 @@
   - Flood-immune streaming (`tail -f /dev/random` at 60 FPS), `DECSET 1049` alternate-screen auto-hide (`vim`, `htop`), and 3-signal `!ECHO LOCK` password protection (`sudo`, `ssh`).
 - **Multi-Pane Tiling, Z-Order Window Deck & Guake Overlay**:
   - Binary H/V splits (`F2`/`Alt+H`, `Alt+V`), overlapping Borland Z-order cascade (`Alt+M`, `F6`/`Alt+Tab`, `Alt+1..9`), and a persistent Guake drop-down terminal (`F10` / `Alt+\``).
-- **Retro Mainframe & Borland Aesthetics + Terminal Graphics**:
-  - 5 palettes (`turbo-blue`, `turbo-cyan`, `3278`, `3279`, `mono`), 8 border outlines, 4 drop-shadow styles, CRT scanlines (`:crt`), pane/full-screen IBM 3270 cross-hairs (`Alt+X`), plus **Kitty (`APC G`)** and **DEC Sixel (`DCS q`)** graphics.
+- **Retro Mainframe & Borland Aesthetics + Focal Spotlight & Lens Shaders**:
+  - 5 palettes (`turbo-blue`, `turbo-cyan`, `3278`, `3279`, `mono`), 8 border outlines, 4 drop-shadow styles, CRT scanlines (`:crt`), pane/full-screen IBM 3270 cross-hairs (`Alt+X`), **Focal Spotlight** (`Alt+O` / `:spotlight`) & **Focal Zoom Magnifying Lens** (`Alt+Shift+O` / `:focalzoom`) with smooth Hermite `smoothstep` or pixelated `2×1` character-block falloff, plus **Kitty (`APC G`)** and **DEC Sixel (`DCS q`)** graphics.
 - **First-Class Local & Remote `tmux` + `herdr`-Style SSH Fleet Management (`v1.4.0`)**:
   - Spawn remote SSH composite panes (`:ssh <user@host> [port]`), attach to persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux <user@host> [session]`), and centrally fan out commands across local and remote nodes by `@tag` (`:remote add|list|exec|disconnect`).
 - **Full Robot / Agent Automation API, Native MCP Server & Playbooks (`v1.1.0`–`v1.4.0`)**:
@@ -86,6 +86,7 @@ cargo clippy --all-targets -- -D warnings
 | **3270 Field Hints / Vi Copy / Canvas Search** | `Ctrl+X f` / `Ctrl+X [` (`Alt+C`) / `Ctrl+X /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
 | **Read-Only Lock / Multi-Pane Broadcast** | `Ctrl+X l` (`Alt+L`) / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
 | **Theme / Cross-Hairs / CRT Scanlines** | — / `Ctrl+X x` (`Alt+X`) / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
+| **Focal Spotlight / Focal Zoom Lens / Resize** | `Alt+O` (`Ctrl+X L`) / `Alt+Shift+O` / `Alt+Shift+]` & `[` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
 | **SSH Pane / Remote `tmux -CC` over SSH** | — | `:ssh <user@host> [port]` / `:ssh-tmux <user@host> [sess]` |
 | **`herdr` Fleet Register / List / Tag Exec** | — | `:remote add <name> <host> [@tags]` / `:remote list` / `:remote exec <@tag\|all> <cmd>` |
 
@@ -112,5 +113,5 @@ All detailed engineering guides, user manual chapters, and architecture diagrams
   5. [First-Class `tmux` Integration, SSH Domains & `herdr` Fleet Management](docs/user-guide/05-tmux-integration.md)
   6. [Complete Keyboard, Mouse & `:command` Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)
   7. [Troubleshooting & FAQ](docs/user-guide/07-troubleshooting-and-faq.md)
-- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.4.0`).
+- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.5.0`).
 - **[License (`LICENSE`)](LICENSE)** — Licensed under the Apache License, Version 2.0 (`Apache-2.0`).

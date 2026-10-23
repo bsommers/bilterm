@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::pane::PromptAnchor;
 use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
-use crate::ui::cursor::CaretStyle;
+use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
 
@@ -27,6 +27,32 @@ pub struct BiltermConfig {
     pub crosshair_cursor: bool,
     /// When `true`, the IBM 3270 cross-hair cursor spans the entire terminal screen rather than just the active pane.
     pub crosshair_fullscreen: bool,
+    /// Toggleable focal spotlight shape (`off`, `circle`, `ellipse`).
+    pub spotlight_mode: SpotlightMode,
+    /// Horizontal radius in columns for the focal spotlight (`4..=120`, default `22`).
+    pub spotlight_rx: u16,
+    /// Vertical radius in rows for the elliptical focal spotlight (`2..=60`, default `6`).
+    pub spotlight_ry: u16,
+    /// Fuzzy feather transition ring width as a percentage of radius (`5..=100`, default `45`).
+    pub spotlight_feather_pct: u8,
+    /// When `true`, quantizes the spotlight edge and falloff to discrete character-cell blocks (`▒`/`░`).
+    pub spotlight_pixelated: bool,
+    /// When `true`, casts the spotlight vignette across the entire workspace rather than just the active pane.
+    pub spotlight_fullscreen: bool,
+    /// Toggleable focal zoom (magnifying lens) shape (`off`, `circle`, `ellipse`).
+    pub focal_zoom_mode: SpotlightMode,
+    /// Peak magnification percentage for the focal zoom lens (`100..=400`, default `150` = `1.50x`).
+    pub focal_zoom_pct: u16,
+    /// Horizontal radius in columns for the focal zoom lens (`4..=120`, default `20`).
+    pub focal_zoom_rx: u16,
+    /// Vertical radius in rows for the elliptical focal zoom lens (`2..=60`, default `6`).
+    pub focal_zoom_ry: u16,
+    /// Fuzzy feather transition ring width for the focal zoom lens (`5..=100`, default `45`).
+    pub focal_zoom_feather_pct: u8,
+    /// When `true`, quantizes the focal zoom lens to discrete `2x1` character-cell blocks (`▒`/`░`).
+    pub focal_zoom_pixelated: bool,
+    /// When `true`, applies the focal zoom lens across the full screen area rather than clipping to the active pane.
+    pub focal_zoom_fullscreen: bool,
     /// Enables Borland Turbo Vision 2-col right / 1-row bottom drop shadows (`UI-01`).
     pub drop_shadows: bool,
     /// Enables the bottom 1-row Borland DOS Function-Key bar (`UI-03`).
@@ -73,6 +99,19 @@ impl Default for BiltermConfig {
             shadow_style: ShadowStyle::Translucent,
             crosshair_cursor: false,
             crosshair_fullscreen: false,
+            spotlight_mode: SpotlightMode::Off,
+            spotlight_rx: 22,
+            spotlight_ry: 6,
+            spotlight_feather_pct: 45,
+            spotlight_pixelated: false,
+            spotlight_fullscreen: true,
+            focal_zoom_mode: SpotlightMode::Off,
+            focal_zoom_pct: 150,
+            focal_zoom_rx: 20,
+            focal_zoom_ry: 6,
+            focal_zoom_feather_pct: 45,
+            focal_zoom_pixelated: false,
+            focal_zoom_fullscreen: true,
             drop_shadows: false,
             show_dos_fkey_bar: false,
             show_top_menubar: false,
@@ -130,6 +169,101 @@ impl BiltermConfig {
             }
             _ => PromptAnchor::Top,
         }
+    }
+
+    /// Cycles the focal spotlight through:
+    /// `Circle (Fuzzy)` -> `Ellipse (Fuzzy)` -> `Circle (Pixelated)` -> `Ellipse (Pixelated)` -> `Off`.
+    pub fn cycle_spotlight(&mut self) -> &'static str {
+        match (self.spotlight_mode, self.spotlight_pixelated) {
+            (SpotlightMode::Off, _) => {
+                self.spotlight_mode = SpotlightMode::Circle;
+                self.spotlight_pixelated = false;
+            }
+            (SpotlightMode::Circle, false) => {
+                self.spotlight_mode = SpotlightMode::Ellipse;
+                self.spotlight_pixelated = false;
+            }
+            (SpotlightMode::Ellipse, false) => {
+                self.spotlight_mode = SpotlightMode::Circle;
+                self.spotlight_pixelated = true;
+            }
+            (SpotlightMode::Circle, true) => {
+                self.spotlight_mode = SpotlightMode::Ellipse;
+                self.spotlight_pixelated = true;
+            }
+            (SpotlightMode::Ellipse, true) => {
+                self.spotlight_mode = SpotlightMode::Off;
+                self.spotlight_pixelated = false;
+            }
+        }
+        self.spotlight_mode.label(self.spotlight_pixelated)
+    }
+
+    /// Resizes the focal spotlight horizontal and vertical radii (`Alt+Shift+]` / `Alt+Shift+[` or `:spotlight +|-`).
+    pub fn resize_spotlight(&mut self, delta_rx: i16, delta_ry: i16) {
+        let next_rx = (i32::from(self.spotlight_rx) + i32::from(delta_rx)).clamp(4, 120) as u16;
+        let next_ry = (i32::from(self.spotlight_ry) + i32::from(delta_ry)).clamp(2, 60) as u16;
+        self.spotlight_rx = next_rx;
+        self.spotlight_ry = next_ry;
+    }
+
+    /// Formats a human-readable status label for the current Focal Zoom state.
+    pub fn focal_zoom_label(&self) -> String {
+        if self.focal_zoom_mode == SpotlightMode::Off || self.focal_zoom_pct <= 100 {
+            "OFF".to_string()
+        } else {
+            let mag = f32::from(self.focal_zoom_pct) / 100.0;
+            format!(
+                "{:.2}x {}",
+                mag,
+                self.focal_zoom_mode.label(self.focal_zoom_pixelated)
+            )
+        }
+    }
+
+    /// Cycles the Focal Zoom magnifying lens across smooth magnification levels:
+    /// `Off` -> `1.25x` -> `1.50x` -> `2.00x` -> `3.00x` -> `Off`.
+    pub fn cycle_focal_zoom(&mut self) -> String {
+        if self.focal_zoom_mode == SpotlightMode::Off {
+            self.focal_zoom_mode = SpotlightMode::Ellipse;
+            self.focal_zoom_pct = 125;
+        } else if self.focal_zoom_pct < 140 {
+            self.focal_zoom_pct = 150;
+        } else if self.focal_zoom_pct < 185 {
+            self.focal_zoom_pct = 200;
+        } else if self.focal_zoom_pct < 260 {
+            self.focal_zoom_pct = 300;
+        } else {
+            self.focal_zoom_mode = SpotlightMode::Off;
+            self.focal_zoom_pct = 150;
+        }
+        self.focal_zoom_label()
+    }
+
+    /// Steps the Focal Zoom magnification factor up or down (e.g. `+25%` / `-25%`).
+    pub fn step_focal_zoom_level(&mut self, delta_pct: i16) {
+        if self.focal_zoom_mode == SpotlightMode::Off {
+            if delta_pct > 0 {
+                self.focal_zoom_mode = SpotlightMode::Ellipse;
+                self.focal_zoom_pct = 125;
+            }
+            return;
+        }
+        let next = i32::from(self.focal_zoom_pct) + i32::from(delta_pct);
+        if next <= 100 {
+            self.focal_zoom_mode = SpotlightMode::Off;
+            self.focal_zoom_pct = 100;
+        } else {
+            self.focal_zoom_pct = next.clamp(105, 400) as u16;
+        }
+    }
+
+    /// Resizes the Focal Zoom horizontal and vertical lens radii (`:focalzoom grow|shrink`).
+    pub fn resize_focal_zoom(&mut self, delta_rx: i16, delta_ry: i16) {
+        let next_rx = (i32::from(self.focal_zoom_rx) + i32::from(delta_rx)).clamp(4, 120) as u16;
+        let next_ry = (i32::from(self.focal_zoom_ry) + i32::from(delta_ry)).clamp(2, 60) as u16;
+        self.focal_zoom_rx = next_rx;
+        self.focal_zoom_ry = next_ry;
     }
 }
 
