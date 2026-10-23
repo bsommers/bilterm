@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version" />
-  <img src="https://img.shields.io/badge/rust-1.86%2B%20(2024)-orange" alt="Rust" />
+  <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-91%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />

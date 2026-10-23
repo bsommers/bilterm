@@ -773,11 +773,10 @@ impl WindowManager {
     /// Computes `(PaneId, Rect)` pairs in ascending render order (painter's algorithm:
     /// bottom-most pane first, topmost focused pane last).
     pub fn compute_workspace_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
-        if let Some(zoomed_id) = self.zoomed_pane {
-            if self.panes.contains_key(&zoomed_id) {
+        if let Some(zoomed_id) = self.zoomed_pane
+            && self.panes.contains_key(&zoomed_id) {
                 return vec![(zoomed_id, area)];
             }
-        }
         match self.layout_mode {
             WorkspaceLayoutMode::Tiled => {
                 let raw = self.split_tree.compute_rects(area);

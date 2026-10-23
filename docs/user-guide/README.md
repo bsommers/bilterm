@@ -37,7 +37,7 @@ Welcome to the official User Guide for **Bilterm (`v1.4.0`)** — the Rust + Rat
 
 ### Prerequisites
 
-- **Rust Toolchain**: `rustc` and `cargo` **`1.86+`** (Rust 2024 Edition).
+- **Rust Toolchain**: `rustc` and `cargo` **`1.88+`** (Rust 2024 Edition).
 - **Host Operating System**: Linux (primary POSIX PTY), macOS, or Windows (`ConPTY`).
 - **Interactive Shell**: Any POSIX shell (`bash`, `zsh`, `fish`, `sh` via `$SHELL`) on Linux/macOS, or `powershell.exe` / `cmd.exe` (`%COMSPEC%`) on Windows.
 - **Optional**: `tmux` `3.2+` for nested `DCS tmux;` clipboard passthrough or `tmux -CC` Control Mode integration.

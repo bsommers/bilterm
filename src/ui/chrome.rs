@@ -173,28 +173,25 @@ pub fn render_drop_shadow_styled(
                 && x < clamped_bounds.x + clamped_bounds.width
                 && y >= clamped_bounds.y
                 && y < clamped_bounds.y + clamped_bounds.height
-            {
-                if let Some(cell) = buf.cell_mut((x, y)) {
+                && let Some(cell) = buf.cell_mut((x, y)) {
                     if shadow_style == ShadowStyle::SolidHalfBlock {
                         cell.set_symbol("█");
                     }
                     cell.set_style(cell_style);
                 }
-            }
         }
     }
 
     // 1-row bottom shadow
     if bottom_y >= clamped_bounds.y && bottom_y < clamped_bounds.y + clamped_bounds.height {
         for x in rect.x.saturating_add(2)..right_x_end {
-            if x >= clamped_bounds.x && x < clamped_bounds.x + clamped_bounds.width {
-                if let Some(cell) = buf.cell_mut((x, bottom_y)) {
+            if x >= clamped_bounds.x && x < clamped_bounds.x + clamped_bounds.width
+                && let Some(cell) = buf.cell_mut((x, bottom_y)) {
                     if shadow_style == ShadowStyle::SolidHalfBlock {
                         cell.set_symbol("█");
                     }
                     cell.set_style(cell_style);
                 }
-            }
         }
     }
 }
@@ -261,8 +258,8 @@ pub fn render_borland_frame_styled(
         let start_x = right_edge.saturating_sub(badges.chars().count() as u16 + 2);
         for (i, ch) in badges.chars().enumerate() {
             let x = start_x + i as u16;
-            if x < right_edge - 1 {
-                if let Some(cell) = buf.cell_mut((x, outer.y)) {
+            if x < right_edge - 1
+                && let Some(cell) = buf.cell_mut((x, outer.y)) {
                     let mut sym = [0u8; 4];
                     cell.set_symbol(ch.encode_utf8(&mut sym));
                     cell.set_style(
@@ -272,7 +269,6 @@ pub fn render_borland_frame_styled(
                             .add_modifier(Modifier::BOLD),
                     );
                 }
-            }
         }
     }
 

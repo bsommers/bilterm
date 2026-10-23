@@ -51,11 +51,10 @@ pub fn format_unix_timestamp_iso(epoch_secs: u64) -> String {
 
 /// Resolves the default directory for persisted Bilterm session history files.
 pub fn default_history_dir(custom_dir: Option<&str>) -> PathBuf {
-    if let Some(dir) = custom_dir {
-        if !dir.trim().is_empty() {
+    if let Some(dir) = custom_dir
+        && !dir.trim().is_empty() {
             return PathBuf::from(dir);
         }
-    }
     if let Some(state_home) = std::env::var_os("XDG_STATE_HOME") {
         return PathBuf::from(state_home).join("bilterm").join("history");
     }

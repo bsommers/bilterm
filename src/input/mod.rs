@@ -719,11 +719,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 if !prompt_was_empty {
                     pane.prompt.clear_line();
                 }
-                if prompt_was_empty || has_fg_sub {
-                    if let Some(pty) = &pane.pty {
+                if (prompt_was_empty || has_fg_sub)
+                    && let Some(pty) = &pane.pty {
                         pty.write_all(&[0x03])?;
                     }
-                }
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('u') => {

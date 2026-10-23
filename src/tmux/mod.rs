@@ -77,37 +77,29 @@ pub enum TmuxControlEvent {
 pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
     let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
 
-    if let Some(rest) = trimmed.strip_prefix("%output ") {
-        if let Some((pane_tok, payload)) = rest.split_once(' ') {
-            if let Some(id_str) = pane_tok.strip_prefix('%') {
-                if let Ok(pane_id) = id_str.parse::<usize>() {
+    if let Some(rest) = trimmed.strip_prefix("%output ")
+        && let Some((pane_tok, payload)) = rest.split_once(' ')
+            && let Some(id_str) = pane_tok.strip_prefix('%')
+                && let Ok(pane_id) = id_str.parse::<usize>() {
                     return TmuxControlEvent::Output {
                         pane_id,
                         data: unescape_tmux_output(payload),
                     };
                 }
-            }
-        }
-    }
 
-    if let Some(rest) = trimmed.strip_prefix("%window-add ") {
-        if let Some(id_str) = rest.trim().strip_prefix('@') {
-            if let Ok(window_id) = id_str.parse::<usize>() {
+    if let Some(rest) = trimmed.strip_prefix("%window-add ")
+        && let Some(id_str) = rest.trim().strip_prefix('@')
+            && let Ok(window_id) = id_str.parse::<usize>() {
                 return TmuxControlEvent::WindowAdd { window_id };
             }
-        }
-    }
 
     if let Some(rest) = trimmed
         .strip_prefix("%window-close ")
         .or_else(|| trimmed.strip_prefix("%unlinked-window-close "))
-    {
-        if let Some(id_str) = rest.trim().strip_prefix('@') {
-            if let Ok(window_id) = id_str.parse::<usize>() {
+        && let Some(id_str) = rest.trim().strip_prefix('@')
+            && let Ok(window_id) = id_str.parse::<usize>() {
                 return TmuxControlEvent::WindowClose { window_id };
             }
-        }
-    }
 
     if let Some(rest) = trimmed.strip_prefix("%window-pane-changed ") {
         let mut parts = rest.split_whitespace();
@@ -122,26 +114,22 @@ pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
 
     if let Some(rest) = trimmed.strip_prefix("%layout-change ") {
         let mut parts = rest.splitn(2, ' ');
-        if let Some(win_tok) = parts.next() {
-            if let Some(id_str) = win_tok.strip_prefix('@') {
-                if let Ok(window_id) = id_str.parse::<usize>() {
+        if let Some(win_tok) = parts.next()
+            && let Some(id_str) = win_tok.strip_prefix('@')
+                && let Ok(window_id) = id_str.parse::<usize>() {
                     let layout = parts.next().unwrap_or("").to_string();
                     return TmuxControlEvent::LayoutChange { window_id, layout };
                 }
-            }
-        }
     }
 
     if let Some(rest) = trimmed.strip_prefix("%session-changed ") {
         let mut parts = rest.splitn(2, ' ');
-        if let Some(sess_tok) = parts.next() {
-            if let Some(id_str) = sess_tok.strip_prefix('$') {
-                if let Ok(session_id) = id_str.parse::<usize>() {
+        if let Some(sess_tok) = parts.next()
+            && let Some(id_str) = sess_tok.strip_prefix('$')
+                && let Ok(session_id) = id_str.parse::<usize>() {
                     let name = parts.next().unwrap_or("").to_string();
                     return TmuxControlEvent::SessionChanged { session_id, name };
                 }
-            }
-        }
     }
 
     if trimmed.starts_with("%begin ") {

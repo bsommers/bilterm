@@ -1217,8 +1217,8 @@ impl CompositePane {
             Some(crate::vt::Osc133Phase::CommandFinished(_) | crate::vt::Osc133Phase::PromptStart)
         );
         #[cfg(unix)]
-        if let Some(pty) = &self.pty {
-            if let Some(fd) = pty.master_raw_fd() {
+        if let Some(pty) = &self.pty
+            && let Some(fd) = pty.master_raw_fd() {
                 let prev_sub = self.line_discipline.has_foreground_subcommand();
                 self.line_discipline = inspect_pty_fd(fd, pty.child_pid(), osc);
                 if (prev_sub && !self.line_discipline.has_foreground_subcommand()) || osc_finished {
@@ -1235,7 +1235,6 @@ impl CompositePane {
                 }
                 return;
             }
-        }
         self.line_discipline.osc133_executing =
             matches!(osc, Some(crate::vt::Osc133Phase::CommandExecuted));
         if osc_finished {
@@ -1300,13 +1299,11 @@ impl CompositePane {
             return osc7_cwd.to_path_buf();
         }
         #[cfg(target_os = "linux")]
-        if let Some(pty) = &self.pty {
-            if let Some(pid) = pty.child_pid() {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+        if let Some(pty) = &self.pty
+            && let Some(pid) = pty.child_pid()
+                && let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
                     return path;
                 }
-            }
-        }
         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
     }
 
