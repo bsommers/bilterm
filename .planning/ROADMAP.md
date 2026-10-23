@@ -182,10 +182,10 @@ Plans:
 - [x] 19-01-PLAN.md — `src/secure_fs.rs`: private 0700 dir, O_EXCL/O_NOFOLLOW 0600 files, 0600 token reader, constant-time compare (wave 1)
 - [x] 19-02-PLAN.md — SSH builders: `validate_destination`, `Result` + `--`, ControlPath `<private>/ssh-%C`, wm validation, private session fallback (wave 2)
 - [x] 19-03-PLAN.md — rc files, history export/fallback, default `.cast` moved to private dir with O_EXCL writes (wave 2)
-- [ ] 19-04-PLAN.md — RPC daemon: listen policy, Unix socket 0600 + peer uid, `auth.login` gate, token-aware client (wave 2)
-- [ ] 19-05-PLAN.md — `ppm_path` confinement + snapshot dir, confined RPC playbooks, destination validation at registration (wave 3)
-- [ ] 19-06-PLAN.md — CLI wiring (`--headless` default socket, `--allow-remote`, `--token-file`, `--snapshot-dir`, `ctl --token-file`), help, completions, man page (wave 4)
-- [ ] 19-07-PLAN.md — README/docs, CHANGELOG security entry, mark SEC-R01..04 Complete in REQUIREMENTS.md (defined by 19-01 Task 3) (wave 5)
+- [x] 19-04-PLAN.md — RPC daemon: listen policy, Unix socket 0600 + peer uid, `auth.login` gate, token-aware client (wave 2)
+- [x] 19-05-PLAN.md — `ppm_path` confinement + snapshot dir, confined RPC playbooks, destination validation at registration (wave 3)
+- [x] 19-06-PLAN.md — CLI wiring (`--headless` default socket, `--allow-remote`, `--token-file`, `--snapshot-dir`, `ctl --token-file`), help, completions, man page (wave 4)
+- [x] 19-07-PLAN.md — README/docs, CHANGELOG security entry, mark SEC-R01..04 Complete in REQUIREMENTS.md (defined by 19-01 Task 3) (wave 5)
 
 ### Phase 20: Mega-Module Decomposition (behaviour-preserving)
 
