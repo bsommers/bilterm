@@ -54,6 +54,13 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **QUAL-02**: Complete technical architecture documentation, ADRs, and Mermaid/ASCII component & data-flow diagrams in `docs/architecture/` built using the `docs` and `documentation-and-adrs` skills.
 - [x] **QUAL-03**: Extensive multi-chapter User Manual in `docs/user-guide/` (covering quickstart, composite panes, floating prompt controls, H/V splits, z-order stacking/shuffling, Guake drop-down terminal, IBM 3270 & Borland Turbo Vision themes/cursors/status bars, `config.toml` reference, and `tmux` workflows) built using the `writing-user-guides` skill.
 
+### Security Hardening (`SEC`)
+
+- [ ] **SEC-R01**: Headless listener defaults to a 0600 Unix domain socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a 0600 file via `auth.login` handshake.
+- [ ] **SEC-R02**: `workspace.snapshot` `ppm_path` parameter for RPC and MCP clients is confined to a designated snapshot directory (`$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir`), rejecting directory traversal, absolute paths, and subdirectories.
+- [ ] **SEC-R03**: All Bilterm-chosen temporary files (shell integration rc files, history exports, session fallback, `.cast` recordings, OpenSSH `ControlPath`) reside within a verified per-user 0700 private directory with race-free 0600 `O_EXCL` writes.
+- [ ] **SEC-R04**: SSH argv builders reject option injection (disallowing leading `-`, control characters, or whitespace) and emit `--` before destination arguments.
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -107,13 +114,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUAL-01 | Phase 5 | Complete |
 | QUAL-02 | Phase 5 | Complete |
 | QUAL-03 | Phase 5 | Complete |
+| SEC-R01 | Phase 19 | Pending |
+| SEC-R02 | Phase 19 | Pending |
+| SEC-R03 | Phase 19 | Pending |
+| SEC-R04 | Phase 19 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 26 total
-- Mapped to phases: 26
+- v1 requirements: 30 total
+- Mapped to phases: 30
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-10-19 after roadmap creation*
+*Last updated: 2026-10-23 for Phase 19 Security Hardening*
