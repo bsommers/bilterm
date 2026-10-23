@@ -36,6 +36,7 @@
               rustfmt
               clippy
               tmux
+              zig_0_15 # for the optional `ghostty-vt` feature
             ];
           };
         });

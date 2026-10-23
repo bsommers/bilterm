@@ -1755,7 +1755,7 @@ fn escape_json_string(s: &str) -> String {
 }
 
 fn hex_decode_ascii(hex: &str) -> Option<String> {
-    if hex.len() % 2 != 0 || hex.is_empty() {
+    if !hex.len().is_multiple_of(2) || hex.is_empty() {
         return None;
     }
     let mut bytes = Vec::with_capacity(hex.len() / 2);

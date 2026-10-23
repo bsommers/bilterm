@@ -8,13 +8,15 @@ license = "Apache-2.0"
 
 [features]
 default = []
-# EXPERIMENTAL / DOES NOT BUILD YET: the `libghostty-vt` dependency is not declared (needs Zig toolchain).
+# EXPERIMENTAL (opt-in): needs Rust 1.90+ (libghostty-vt MSRV) and Zig 0.15.2 on PATH; the build script
+# git-clones Ghostty and builds it with `zig build` (network access required). E.g. `cargo +1.90 test --features ghostty-vt`.
 # Enables the libghostty-vt FFI backend in `src/vt/ghostty_backend.rs`. See .planning/reviews/ARCHITECTURE_REVIEW_PLAN.md P0.3.
-ghostty-vt = []
+ghostty-vt = ["dep:libghostty-vt"]
 # Enables the native GPU/GUI windowing surface renderer (`GuiWorkspaceRenderer`)
 gui = []
 
 [dependencies]
+libghostty-vt = { version = "0.2.2", optional = true }
 ratatui = "0.30.0"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 portable-pty = "0.9.0"

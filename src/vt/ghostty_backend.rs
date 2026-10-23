@@ -148,14 +148,14 @@ use std::rc::Rc;
 use libghostty_vt::{
     RenderState, Terminal, TerminalOptions,
     render::{CellIterator, CursorVisualStyle, RowIterator},
-    style::{RgbColor, Underline},
-    terminal::{Mode, Screen as GhosttyScreen, ScrollViewport},
+    screen::Screen as GhosttyScreen,
+    style::{RgbColor, StyleColor, Underline},
+    terminal::{Mode, ScrollViewport},
 };
 
 #[cfg(feature = "ghostty-vt")]
 use crate::vt::snapshot::{
-    CellColor, CellSnapshot, CursorShape, CursorSnapshot, GridSnapshot, RgbTriplet, RowSnapshot,
-    UnderlineKind,
+    CellColor, CellSnapshot, CursorShape, CursorSnapshot, RgbTriplet, RowSnapshot, UnderlineKind,
 };
 
 /// Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
@@ -312,7 +312,7 @@ impl GhosttyVtEngine {
         if let Ok(mut r_iter) = self.row_iter.update(&snap) {
             while let Some(row) = r_iter.next() {
                 let row_dirty = row.dirty().unwrap_or(true);
-                let row_wrapped = row.raw_row().and_then(|r| r.wrap()).unwrap_or(false);
+                let row_wrapped = row.raw_row().and_then(|r| r.is_wrapped()).unwrap_or(false);
                 let mut row_cells = Vec::with_capacity(usize::from(cols));
 
                 if let Ok(mut c_iter) = self.cell_iter.update(row) {
@@ -338,8 +338,9 @@ impl GhosttyVtEngine {
                             Some(Underline::Dashed) => UnderlineKind::Dashed,
                             _ => UnderlineKind::None,
                         };
-                        let underline_color = style.as_ref().and_then(|s| {
-                            s.underline_color.rgb().map(|c| RgbTriplet::new(c.r, c.g, c.b))
+                        let underline_color = style.as_ref().and_then(|s| match s.underline_color {
+                            StyleColor::Rgb(c) => Some(RgbTriplet::new(c.r, c.g, c.b)),
+                            _ => None,
                         });
                         let width = unicode_width::UnicodeWidthStr::width(grapheme.as_str())
                             .clamp(1, 2) as u8;
@@ -400,5 +401,28 @@ impl GhosttyVtEngine {
             total_scrollback_rows: scrollback_rows,
             generation: self.generation,
         }
+    }
+}
+
+#[cfg(all(test, feature = "ghostty-vt"))]
+mod ghostty_vt_tests {
+    use super::*;
+
+    #[test]
+    fn ghostty_engine_snapshot_reflects_text_and_sgr_color() {
+        let mut engine = GhosttyVtEngine::new(4, 10, 100).expect("libghostty-vt terminal");
+        engine.process(b"hi\x1b[31mX");
+        let snap = engine.snapshot();
+
+        assert_eq!((snap.rows, snap.cols), (4, 10));
+        let row0 = &snap.grid_rows[0].cells;
+        assert_eq!(row0[0].grapheme, "h");
+        assert_eq!(row0[1].grapheme, "i");
+        assert_eq!(row0[2].grapheme, "X");
+        assert_eq!(row0[3].grapheme, " ");
+        assert_eq!(row0[0].fg, CellColor::Default);
+        assert!(matches!(row0[2].fg, CellColor::Rgb(..)), "fg = {:?}", row0[2].fg);
+        assert_eq!((snap.cursor.row, snap.cursor.col), (0, 3));
+        assert!(!snap.alternate_screen);
     }
 }
