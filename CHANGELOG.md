@@ -5,6 +5,28 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.6.0] - 2026-10-23
+
+### Added
+- **Persistent, session-segmented command history**: named sessions (`--session <name>` / `history_session`) stored in `<history_dir>/sessions/<name>/history.log` (`0700`/`0600`); each run is a segment (`:history runs`); the last `history_load_limit` commands are restored into Up / `Ctrl+R` / the history popup on startup; bounded by `history_max_entries` compaction.
+- **Dynamic, RAM-scaled scrollback** (`[scrollback]`, `src/vt/scrollback.rs`): global budget defaults to 10% of physical RAM (`memory_budget = "auto" | "25%" | "8GiB"`), panes start at `initial_lines` and double on demand into unused budget, and contract toward a fair share under budget overrun or low system memory (`low_memory_pct`). New `:scrollback` / `:sb` report and `:scrollback clear`.
+- **`ghostty-vt` feature now builds** against `libghostty-vt` 0.2.2 (opt-in; requires Rust 1.90+ and Zig 0.15.2; `zig_0_15` added to the flake devShell).
+
+### Fixed
+- PTY output beyond 32 KB per frame was silently discarded, splitting escape sequences and losing mode changes (alt-screen, bracketed paste, OSC 133).
+- Width changes (splits/resizes) rebuilt the terminal from only the last 64 KB of output, discarding older scrollback; scrollback is now preserved and reflowed.
+- `~/.config/bilterm/config.toml` was never loaded; it is now read at startup and parse errors are shown in the OIA bar.
+- Headless JSON-RPC daemon: one client's connection reset terminated the daemon, and deeply nested JSON overflowed the stack. Connections are now isolated per task, request lines are capped at 1 MiB, and JSON nesting is limited to 128.
+- `GhosttyCAbiTerminal` exposed undefined behaviour through a safe public constructor; construction is now restricted and the invariant documented.
+
+### Changed
+- MSRV raised to **Rust 1.88**.
+- History file escaping now also escapes backslashes; legacy per-run history logs are no longer written (existing ones are left untouched).
+
+### Security
+- `tokio` 1.54.0 → 1.54.1 (RUSTSEC-2026-0384; 1.54.0 yanked).
+- `time` 0.3.45 → 0.3.55 (RUSTSEC-2026-0009).
+
 ## [v1.5.0] - 2026-10-22
 
 ### Added
