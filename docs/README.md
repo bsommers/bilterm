@@ -18,6 +18,7 @@ Welcome to the comprehensive documentation suite for **Bilterm** — the IBM 327
 | **[`docs/diagrams/README.md`](diagrams/README.md)** | Multi-format visual diagram catalog (**ASCII** `.txt`, **Mermaid** `.mmd`, and **native draw.io** `.drawio` XML) |
 | **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-005`) |
 | **[`docs/TEST_COVERAGE.md`](TEST_COVERAGE.md)** | Test coverage report (**`83.45%` line coverage**, 86 passing tests across 14 suites) and battle/stress/performance benchmarks |
+| **[`docs/launch-presentation-and-pitch-script.md`](launch-presentation-and-pitch-script.md)** | NotebookLM / Gemini prompt script: 12-slide technical deck specification and 5-minute product launch video script |
 | **[`CHANGELOG.md`](../CHANGELOG.md)** | Semantic versioning release history (`v0.1.0` through `v1.4.0`) |
 
 ---
