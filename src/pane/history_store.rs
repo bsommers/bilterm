@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -160,17 +160,6 @@ fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
     }
 }
 
-fn private_open_options() -> OpenOptions {
-    #[allow(unused_mut)]
-    let mut opts = OpenOptions::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    opts
-}
-
 /// Returns `<base_dir>/sessions/<name>/history.log`.
 pub fn session_history_path(base_dir: &Path, session_name: &str) -> PathBuf {
     base_dir
@@ -214,9 +203,10 @@ pub fn format_unix_timestamp_iso(epoch_secs: u64) -> String {
 /// Resolves the default directory for persisted Bilterm session history files.
 pub fn default_history_dir(custom_dir: Option<&str>) -> PathBuf {
     if let Some(dir) = custom_dir
-        && !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
+        && !dir.trim().is_empty()
+    {
+        return PathBuf::from(dir);
+    }
     if let Some(state_home) = std::env::var_os("XDG_STATE_HOME") {
         return PathBuf::from(state_home).join("bilterm").join("history");
     }
@@ -227,7 +217,15 @@ pub fn default_history_dir(custom_dir: Option<&str>) -> PathBuf {
             .join("bilterm")
             .join("history");
     }
-    std::env::temp_dir().join("bilterm-history")
+    match crate::secure_fs::private_runtime_dir()
+        .and_then(|d| crate::secure_fs::private_dir_in(&d, "history"))
+    {
+        Ok(dir) => dir,
+        Err(e) => {
+            tracing::warn!(error = %e, "private history dir unavailable; history persistence disabled");
+            PathBuf::new()
+        }
+    }
 }
 
 /// Persistent, session-segmented command history manager for a `CompositePane`.
@@ -260,6 +258,13 @@ pub struct HistoryStore {
     cached_entry_count: Option<usize>,
 }
 
+fn write_export_exclusive(path: &Path, content: &str) -> std::io::Result<()> {
+    let mut f = crate::secure_fs::create_private_file(path)?;
+    f.write_all(content.as_bytes())?;
+    f.sync_all()?;
+    Ok(())
+}
+
 impl HistoryStore {
     /// Creates a `HistoryStore` for `pane_id` recording into session `session_name` under `base_dir`.
     pub fn new(
@@ -271,7 +276,11 @@ impl HistoryStore {
         max_files: usize,
     ) -> Self {
         let session_name = sanitize_session_name(session_name);
-        let session_file_path = session_history_path(&base_dir, &session_name);
+        let session_file_path = if base_dir.as_os_str().is_empty() {
+            PathBuf::new()
+        } else {
+            session_history_path(&base_dir, &session_name)
+        };
         Self {
             enabled,
             session_name,
@@ -329,7 +338,11 @@ impl HistoryStore {
             self.base_dir = default_history_dir(None);
         }
         self.session_name = sanitize_session_name(&settings.session);
-        let new_path = session_history_path(&self.base_dir, &self.session_name);
+        let new_path = if self.base_dir.as_os_str().is_empty() {
+            PathBuf::new()
+        } else {
+            session_history_path(&self.base_dir, &self.session_name)
+        };
         let changed = new_path != self.session_file_path;
         if changed {
             self.session_file_path = new_path;
@@ -341,7 +354,7 @@ impl HistoryStore {
     /// Appends a command entry to the session file, compacting it past `max_entries` and
     /// pruning least-recently-modified session directories beyond `max_files`.
     pub fn record_command(&mut self, command: &str) -> std::io::Result<Option<PathBuf>> {
-        if !self.enabled || command.trim().is_empty() {
+        if !self.enabled || self.base_dir.as_os_str().is_empty() || command.trim().is_empty() {
             return Ok(None);
         }
         if let Some(parent) = self.session_file_path.parent() {
@@ -356,7 +369,7 @@ impl HistoryStore {
             escape_history_command(command)
         );
 
-        let mut file = private_open_options()
+        let mut file = crate::secure_fs::private_open_options()
             .create(true)
             .append(true)
             .open(&self.session_file_path)?;
@@ -380,6 +393,9 @@ impl HistoryStore {
 
     /// Rewrites the session file keeping only the newest `max_entries` lines (temp file + atomic rename).
     pub fn compact(&mut self) -> std::io::Result<usize> {
+        if !self.enabled || self.base_dir.as_os_str().is_empty() {
+            return Ok(0);
+        }
         let raw = match fs::read_to_string(&self.session_file_path) {
             Ok(raw) => raw,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
@@ -400,7 +416,7 @@ impl HistoryStore {
             SESSION_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
         let write_res = (|| {
-            let mut tmp = private_open_options()
+            let mut tmp = crate::secure_fs::private_open_options()
                 .write(true)
                 .create_new(true)
                 .open(&tmp_path)?;
@@ -418,6 +434,9 @@ impl HistoryStore {
 
     /// Reads every parseable entry of the session file (oldest first); a missing file yields no entries.
     pub fn load_entries(&self) -> std::io::Result<Vec<HistoryEntry>> {
+        if self.base_dir.as_os_str().is_empty() {
+            return Ok(Vec::new());
+        }
         match fs::read_to_string(&self.session_file_path) {
             Ok(raw) => Ok(raw.lines().filter_map(parse_history_line).collect()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -466,21 +485,25 @@ impl HistoryStore {
         commands: &[String],
         custom_path: Option<&Path>,
     ) -> std::io::Result<PathBuf> {
-        let target_path = match custom_path {
-            Some(p) => p.to_path_buf(),
+        let (target_path, is_default) = match custom_path {
+            Some(p) => (p.to_path_buf(), false),
             None => {
-                let ts = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                std::env::temp_dir().join(format!(
-                    "bilterm-commands-pane{}-{}-{}-{ts}.sh",
-                    self.pane_id, self.session_name, self.run_id
-                ))
+                let runtime = crate::secure_fs::private_runtime_dir()?;
+                let export_dir = crate::secure_fs::private_dir_in(&runtime, "exports")?;
+                let filename = format!(
+                    "bilterm-commands-pane{}-{}-{}-{}.sh",
+                    self.pane_id,
+                    self.session_name,
+                    self.run_id,
+                    crate::secure_fs::unique_suffix()
+                );
+                (export_dir.join(filename), true)
             }
         };
 
-        if let Some(parent) = target_path.parent() {
+        if !is_default
+            && let Some(parent) = target_path.parent()
+        {
             fs::create_dir_all(parent)?;
         }
 
@@ -496,7 +519,17 @@ impl HistoryStore {
             out.push_str(&format!("# [{:03}]\n{}\n", idx + 1, cmd));
         }
 
-        fs::write(&target_path, out)?;
+        if is_default {
+            write_export_exclusive(&target_path, &out)?;
+        } else {
+            let mut file = crate::secure_fs::private_open_options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&target_path)?;
+            file.write_all(out.as_bytes())?;
+            file.sync_all()?;
+        }
         self.last_exported_temp_path = Some(target_path.clone());
         Ok(target_path)
     }
@@ -504,6 +537,9 @@ impl HistoryStore {
     /// Removes the least-recently-modified session directories under `<base_dir>/sessions`
     /// while more than `max_files` exist. The active session is never removed.
     pub fn prune_excess_files(&self) -> std::io::Result<usize> {
+        if self.base_dir.as_os_str().is_empty() {
+            return Ok(0);
+        }
         let Ok(entries) = fs::read_dir(self.base_dir.join("sessions")) else {
             return Ok(0);
         };
@@ -732,9 +768,83 @@ mod tests {
         let exported = s
             .export_to_temp_file(&["ls -la".to_string(), "cargo test".to_string()], None)
             .unwrap();
+        let private_root = crate::secure_fs::private_runtime_dir().unwrap();
+        assert!(exported.starts_with(private_root.join("exports")));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                fs::symlink_metadata(&exported).unwrap().mode() & 0o777,
+                0o600
+            );
+        }
         let exp_text = fs::read_to_string(&exported).unwrap();
         assert!(exp_text.contains("# Session: other"));
         assert!(exp_text.contains("cargo test"));
         let _ = fs::remove_file(&exported);
+    }
+
+    #[test]
+    fn default_exports_get_unique_names() {
+        let mut s = HistoryStore::new_headless(1);
+        let exp1 = s.export_to_temp_file(&["cmd1".to_string()], None).unwrap();
+        let exp2 = s.export_to_temp_file(&["cmd2".to_string()], None).unwrap();
+        assert_ne!(exp1, exp2);
+        assert!(exp1.exists());
+        assert!(exp2.exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(fs::symlink_metadata(&exp1).unwrap().mode() & 0o777, 0o600);
+            assert_eq!(fs::symlink_metadata(&exp2).unwrap().mode() & 0o777, 0o600);
+        }
+        let text1 = fs::read_to_string(&exp1).unwrap();
+        assert!(text1.contains("cmd1"));
+        let _ = fs::remove_file(&exp1);
+        let _ = fs::remove_file(&exp2);
+    }
+
+    #[test]
+    fn default_export_does_not_overwrite_existing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("out.sh");
+        write_export_exclusive(&target, "first").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "first");
+
+        let err = write_export_exclusive(&target, "second").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&target).unwrap(), "first");
+    }
+
+    #[test]
+    fn custom_export_path_still_works() {
+        let tmp = tempfile::tempdir().unwrap();
+        let custom = tmp.path().join("custom.sh");
+        let mut s = HistoryStore::new_headless(1);
+        let out = s
+            .export_to_temp_file(&["custom_cmd".to_string()], Some(&custom))
+            .unwrap();
+        assert_eq!(out, custom);
+        assert_eq!(s.last_exported_temp_path.as_deref(), Some(custom.as_path()));
+        assert!(fs::read_to_string(&custom).unwrap().contains("custom_cmd"));
+    }
+
+    #[test]
+    fn empty_base_dir_disables_persistence() {
+        let sessions_exist_before = Path::new("sessions").exists();
+        let mut s = HistoryStore::new(
+            1,
+            DEFAULT_HISTORY_SESSION,
+            "run",
+            PathBuf::new(),
+            true,
+            25,
+        );
+        let res = s.record_command("ls").unwrap();
+        assert_eq!(res, None);
+        assert_eq!(s.load_entries().unwrap(), Vec::new());
+        assert_eq!(s.compact().unwrap(), 0);
+        assert_eq!(s.prune_excess_files().unwrap(), 0);
+        assert_eq!(Path::new("sessions").exists(), sessions_exist_before);
     }
 }
