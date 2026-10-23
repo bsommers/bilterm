@@ -184,12 +184,12 @@ Not applicable (stable POSIX idioms). `std::os::unix::net::UnixListener`/tokio e
 | A4 | Manual constant-time compare adequate (no `subtle` dep) | Alternatives | Low |
 | A5 | std/tokio API details (`peer_cred`, `custom_flags`, `DirBuilderExt`) as described | Patterns | Compile-time discoverable |
 
-## Open Questions
-1. **Token wire protocol.** Handshake vs per-request field? Recommendation: connection-level `auth.login`, required whenever a token is configured (always for non-loopback TCP; optional for loopback; Unix socket relies on perms + peer_cred).
-2. **Playbook `export_ppm` vs confinement.** Recommend: playbooks use a trusted unconfined helper; RPC/MCP confined. If playbooks reachable via RPC, confine them too and update test to relative name + configured snapshot dir.
-3. **Builders: `Result` vs infallible + validate at entry.** Recommend `Result`.
-4. **Default snapshot dir location** (`<runtime>/bilterm/snapshots` vs `$XDG_STATE_HOME`). Runtime dir is tmpfs and cleared on logout; acceptable for snapshots; configurable via `--snapshot-dir`? Planner/user to confirm.
-5. **Loopback TCP without token** stays allowed (per criterion) - confirm no desire to require token everywhere.
+## Open Questions (RESOLVED)
+1. **Token wire protocol.** Handshake vs per-request field? Recommendation: connection-level `auth.login`, required whenever a token is configured (always for non-loopback TCP; optional for loopback; Unix socket relies on perms + peer_cred). **RESOLVED → D-01** (auth.login handshake).
+2. **Playbook `export_ppm` vs confinement.** Recommend: playbooks use a trusted unconfined helper; RPC/MCP confined. If playbooks reachable via RPC, confine them too and update test to relative name + configured snapshot dir. **RESOLVED → D-02** (CLI `--playbook` unconfined; RPC/MCP-submitted playbooks confined).
+3. **Builders: `Result` vs infallible + validate at entry.** Recommend `Result`. **RESOLVED → D-05** (`Result`).
+4. **Default snapshot dir location** (`<runtime>/bilterm/snapshots` vs `$XDG_STATE_HOME`). Runtime dir is tmpfs and cleared on logout; acceptable for snapshots; configurable via `--snapshot-dir`? Planner/user to confirm. **RESOLVED → D-03** (`$XDG_STATE_HOME/bilterm/snapshots` + `--snapshot-dir`; bare file names only).
+5. **Loopback TCP without token** stays allowed (per criterion) - confirm no desire to require token everywhere. **RESOLVED → D-04** (token optional on loopback).
 
 ## Environment Availability
 | Dependency | Required By | Available | Version | Fallback |
