@@ -16,8 +16,9 @@ use bilterm::input::{
 };
 use bilterm::pane::{CompositePane, PromptAnchor};
 use bilterm::ui::chrome::{OutlineStyle, ShadowStyle};
-use bilterm::ui::{buffer_to_snapshot_string, CompositePaneWidget, WorkspaceWidget};
-use bilterm::vt:: cell_to_ratatui_style;
+use bilterm::ui::{
+    CompositePaneWidget, WorkspaceWidget, buffer_to_snapshot_string, cell_to_ratatui_style,
+};
 
 #[test]
 fn split_top_and_split_bottom_modes_partition_command_and_output_panes_with_zero_overlap() {

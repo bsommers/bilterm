@@ -27,7 +27,7 @@ use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::status_bar::render_dos_fkey_bar;
 use crate::ui::theme::ThemePalette;
-use crate::vt::{Osc9Progress, cell_to_ratatui_style};
+use crate::vt::Osc9Progress;
 use crate::wm::{inset_window_frame, WindowManager, WorkspaceLayoutMode};
 
 /// Ratatui widget rendering a `CompositePane` in 3 immediate-mode passes:
@@ -1999,7 +1999,39 @@ pub fn buffer_to_snapshot_string(buf: &Buffer) -> String {
         }
         lines.push(row.trim_end().to_string());
     }
-     lines.join("\n")
+    lines.join("\n")
+}
+
+/// Converts a `vt100_ctt::Cell` into a `ratatui::style::Style` preserving 16-color, 256-color,
+/// and 24-bit TrueColor attributes plus bold, italic, underline, and inverse modifiers.
+pub fn cell_to_ratatui_style(cell: &vt100_ctt::Cell) -> Style {
+    let mut style = Style::default()
+        .fg(vt_color_to_ratatui(cell.fgcolor()))
+        .bg(vt_color_to_ratatui(cell.bgcolor()));
+
+    let mut modifiers = Modifier::empty();
+    if cell.bold() {
+        modifiers |= Modifier::BOLD;
+    }
+    if cell.italic() {
+        modifiers |= Modifier::ITALIC;
+    }
+    if cell.underline() {
+        modifiers |= Modifier::UNDERLINED;
+    }
+    if cell.inverse() {
+        modifiers |= Modifier::REVERSED;
+    }
+    style = style.add_modifier(modifiers);
+    style
+}
+
+fn vt_color_to_ratatui(color: vt100_ctt::Color) -> Color {
+    match color {
+        vt100_ctt::Color::Default => Color::Reset,
+        vt100_ctt::Color::Idx(idx) => Color::Indexed(idx),
+        vt100_ctt::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
+    }
 }
 
 #[cfg(test)]
