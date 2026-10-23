@@ -8,7 +8,8 @@ license = "Apache-2.0"
 
 [features]
 default = []
-# Enables the libghostty-vt FFI backend in `src/vt/ghostty_backend.rs` (requires Zig toolchain + libghostty-vt crate)
+# EXPERIMENTAL / DOES NOT BUILD YET: the `libghostty-vt` dependency is not declared (needs Zig toolchain).
+# Enables the libghostty-vt FFI backend in `src/vt/ghostty_backend.rs`. See .planning/reviews/ARCHITECTURE_REVIEW_PLAN.md P0.3.
 ghostty-vt = []
 # Enables the native GPU/GUI windowing surface renderer (`GuiWorkspaceRenderer`)
 gui = []

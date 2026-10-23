@@ -74,6 +74,11 @@ impl Default for GhosttyCAbiVtable {
 }
 
 /// Safe Rust handle wrapping a C-ABI `ghostty_terminal_t *` pointer and [`GhosttyCAbiVtable`] (`GHOSTTY-01`).
+///
+/// Invariant: `raw_handle` is always created by the fallback vtable and therefore points to a
+/// boxed [`VtParser`]. Construction is restricted to [`GhosttyCAbiTerminal::new`] so that
+/// `snapshot` and `take_query_responses` can soundly cast it back. A foreign vtable must not be
+/// accepted until the vtable itself exposes snapshot/query entry points.
 pub struct GhosttyCAbiTerminal {
     raw_handle: *mut c_void,
     vtable: GhosttyCAbiVtable,
@@ -84,7 +89,7 @@ impl GhosttyCAbiTerminal {
         Self::with_vtable(rows, cols, max_scrollback, GhosttyCAbiVtable::default())
     }
 
-    pub fn with_vtable(
+    fn with_vtable(
         rows: u16,
         cols: u16,
         max_scrollback: usize,
@@ -108,6 +113,7 @@ impl GhosttyCAbiTerminal {
 
     pub fn snapshot(&self) -> GridSnapshot {
         assert!(!self.raw_handle.is_null());
+        // SAFETY: by the type invariant `raw_handle` is a live `Box<VtParser>` from `fallback_terminal_new`.
         unsafe {
             let parser = &*self.raw_handle.cast::<VtParser>();
             parser.snapshot()
@@ -116,6 +122,7 @@ impl GhosttyCAbiTerminal {
 
     pub fn take_query_responses(&mut self) -> Vec<Vec<u8>> {
         assert!(!self.raw_handle.is_null());
+        // SAFETY: as in `snapshot`; `&mut self` guarantees exclusive access.
         unsafe {
             let parser = &mut *self.raw_handle.cast::<VtParser>();
             parser.take_query_responses()
