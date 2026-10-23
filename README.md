@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.7.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-91%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
@@ -116,5 +116,5 @@ All detailed engineering guides, user manual chapters, and architecture diagrams
   5. [First-Class `tmux` Integration, SSH Domains & `herdr` Fleet Management](docs/user-guide/05-tmux-integration.md)
   6. [Complete Keyboard, Mouse & `:command` Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)
   7. [Troubleshooting & FAQ](docs/user-guide/07-troubleshooting-and-faq.md)
-- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.5.0`).
+- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.7.0`).
 - **[License (`LICENSE`)](LICENSE)** — Licensed under the Apache License, Version 2.0 (`Apache-2.0`).

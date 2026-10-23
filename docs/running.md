@@ -25,7 +25,7 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.6.0`)
+### CLI Options (`v1.7.0`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer
 bilterm --mcp                                   # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
@@ -41,7 +41,7 @@ bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer sna
 bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
 bilterm --session <name>                       # Use (and restore) a named persistent command-history session
 bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
-bilterm --version                               # Print version (bilterm 1.6.0)
+bilterm --version                               # Print version (bilterm 1.7.0)
 bilterm --help                                  # Print CLI usage summary
 ```
 
