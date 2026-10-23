@@ -42,7 +42,7 @@
 - **First-Class Local & Remote `tmux` + `herdr`-Style SSH Fleet Management (`v1.4.0`)**:
   - Spawn remote SSH composite panes (`:ssh <user@host> [port]`), attach to persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux <user@host> [session]`), and centrally fan out commands across local and remote nodes by `@tag` (`:remote add|list|exec|disconnect`).
 - **Full Robot / Agent Automation API, Native MCP Server & Playbooks (`v1.1.0`–`v1.4.0`)**:
-  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless --listen 127.0.0.1:7370`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 8 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
+  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 8 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
 
 ---
 
@@ -64,8 +64,11 @@ cargo clippy --all-targets -- -D warnings
 |---------|-------------|
 | `bilterm` | Launch interactive IBM 3270 × Borland Turbo Vision TUI multiplexer |
 | `bilterm --mcp` | Run native Model Context Protocol (MCP `2024-11-05`) server over `stdio` |
-| `bilterm --headless --listen <addr>` | Run headless JSON-RPC 2.0 automation daemon on TCP or Unix socket |
-| `bilterm ctl <addr> <method> [json]` | Send JSON-RPC 2.0 command (`workspace.status`, `pane.exec`, `fleet.exec`, etc.) |
+| `bilterm --headless [--listen <addr>]` | Run headless JSON-RPC daemon (default private Unix socket; loopback TCP via `--listen 127.0.0.1:PORT`) |
+| `bilterm --allow-remote` | Allow listening on non-loopback TCP addresses (requires `--token-file`) |
+| `bilterm --token-file <path>` | Path to 0600 file containing bearer token (or `BILTERM_TOKEN_FILE`) |
+| `bilterm --snapshot-dir <path>` | Directory for confined workspace snapshots (default: XDG state dir) |
+| `bilterm ctl [--token-file <path>] [endpoint] <method> [json]` | Send JSON-RPC 2.0 command (`workspace.status`, `pane.exec`, `fleet.exec`, etc.; defaults to local Unix socket) |
 | `bilterm --playbook <file.toml>` | Execute declarative multi-step TOML robot playbook with assertions |
 | `bilterm --gui-dump <path.ppm>` | Render workspace via `GuiWorkspaceRenderer` to a Netpbm `.ppm` framebuffer |
 | `bilterm --completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |

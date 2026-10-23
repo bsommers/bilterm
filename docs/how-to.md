@@ -81,7 +81,7 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 1. **Open the Borland History Pop-up Window**:
    - Press **`Alt+P`** or run **`:history`**.
    - Use **`Up` / `Down`** to select a command and **`Enter`** to load it into the prompt.
-   - Press **`s`** inside the pop-up to save all session commands to `/tmp/bilterm-commands-<session_id>-pane-<id>.sh`.
+   - Press **`s`** inside the pop-up to save all session commands to `$XDG_RUNTIME_DIR/bilterm/exports/` (or `/tmp/bilterm-<uid>/exports/`) with mode `0600`.
 2. **Export Directly via Command**:
    ```text
    ==> :history save /tmp/my-commands.sh
@@ -120,10 +120,11 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
    ```
 3. **Record an Asciicast v2 (`.cast`) Terminal Session**:
    ```text
-   ==> :record start /tmp/demo.cast
+   ==> :record start
    ==> echo "Recorded in Asciicast v2 format!"
    ==> :record stop
    ```
+   *(Omitting the path writes to `$XDG_RUNTIME_DIR/bilterm/recordings/` with race-free `0600` permissions).*
 
 ---
 
@@ -151,15 +152,21 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 
 ---
 
-## Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`)
+## Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`–`v1.6.0`)
 
 1. **Drive a Live or Headless Bilterm Instance via `bilterm ctl`**:
    ```bash
-   bilterm --headless --listen 127.0.0.1:7370 &
-   bilterm ctl 127.0.0.1:7370 workspace.status
-   bilterm ctl 127.0.0.1:7370 prompt.submit '{"pane_id":1,"command":"uname -a"}'
-   bilterm ctl 127.0.0.1:7370 pane.wait_for '{"pane_id":1,"pattern":"Linux","timeout_ms":2000}'
+   # Default: private 0600 Unix domain socket
+   bilterm --headless &
+   bilterm ctl workspace.status
+   bilterm ctl pane.exec '{"pane_id":1,"command":"uname -a"}'
+
+   # Authenticated TCP endpoint with bearer token file:
+   umask 077; head -c 32 /dev/urandom | base64 > ~/.config/bilterm/token
+   bilterm --headless --listen 127.0.0.1:7370 --token-file ~/.config/bilterm/token &
+   bilterm ctl --token-file ~/.config/bilterm/token 127.0.0.1:7370 workspace.status
    ```
+   *(Note: `workspace.snapshot` `ppm_path` must be a bare file name confined to the snapshot directory, e.g. `frame.ppm` inside `$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir <path>`).*
 2. **Expose Bilterm as an AI Agent MCP Server (`bilterm --mcp`)**:
    Configure your MCP client (Claude Desktop, Cursor, Antigravity) to invoke `bilterm --mcp` over stdio to expose 11 native tools (`bilterm_workspace_status`, `bilterm_pane_read`, `bilterm_prompt_submit`, `bilterm_pane_wait_for`, `bilterm_command_execute`, `bilterm_remote_list`, `bilterm_remote_add`, `bilterm_remote_exec`, etc.).
 3. **Run a Declarative TOML Automation Playbook (`--playbook`)**:

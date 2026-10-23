@@ -5,6 +5,20 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Headless Daemon Listen Policy & Bearer Auth Gate (SEC-R01)**: The headless JSON-RPC automation daemon (`bilterm --headless`) now defaults to a private `0600` Unix domain socket with peer UID verification. Non-loopback TCP listeners strictly require `--allow-remote` and `--token-file <path>` (enforcing `0600` mode). Token-protected listeners enforce an initial `auth.login` handshake before dispatching any command; unauthenticated requests receive error code `-32001` and are immediately closed. Secret tokens are never logged or leaked in error messages.
+- **Workspace Snapshot Confinement (SEC-R02)**: Direct RPC and MCP `workspace.snapshot` commands and RPC-submitted playbooks are strictly confined to the designated snapshot directory (default `$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir <path>`). Path traversal, absolute paths, and planted symlinks are rejected via `O_NOFOLLOW` open and parent directory canonicalization.
+- **Private Temporary Files & Recordings (SEC-R03)**: All Bilterm-managed temporary and state files (shell integration rc scripts, command history exports, history store fallback directory, asciicast recordings, and SSH control paths) reside in per-user private `0700` directories with race-free `O_CREAT|O_EXCL` `0600` creation.
+- **SSH Destination Injection Guards (SEC-R04)**: Remote SSH host destinations reject options beginning with `-` across all input vectors (`:ssh`, `:ssh-tmux`, `:remote add`, `fleet.register`), and argument vectors separate options with `--` before host destinations.
+
+### Changed (breaking)
+- `bilterm ctl` default target endpoint changed from `127.0.0.1:7370` to the local private Unix domain socket.
+- `bilterm --headless` with `--listen <addr>` refuses non-loopback addresses unless `--allow-remote` is supplied.
+- `workspace.snapshot` `ppm_path` parameter over RPC/MCP must be a bare file name within the snapshot directory.
+- `RemoteHostProfile::build_ssh_args` and `build_ssh_tmux_cc_args` now take `control_dir: Option<&Path>` and return a `Result<Vec<String>>`.
+
 ## [v1.6.0] - 2026-10-23
 
 ### Added

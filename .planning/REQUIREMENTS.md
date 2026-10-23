@@ -56,10 +56,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Security Hardening (`SEC`)
 
-- [ ] **SEC-R01**: Headless listener defaults to a 0600 Unix domain socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a 0600 file via `auth.login` handshake.
-- [ ] **SEC-R02**: `workspace.snapshot` `ppm_path` parameter for RPC and MCP clients is confined to a designated snapshot directory (`$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir`), rejecting directory traversal, absolute paths, and subdirectories.
-- [ ] **SEC-R03**: All Bilterm-chosen temporary files (shell integration rc files, history exports, session fallback, `.cast` recordings, OpenSSH `ControlPath`) reside within a verified per-user 0700 private directory with race-free 0600 `O_EXCL` writes.
-- [ ] **SEC-R04**: SSH argv builders reject option injection (disallowing leading `-`, control characters, or whitespace) and emit `--` before destination arguments.
+- [x] **SEC-R01**: Headless listener defaults to a 0600 Unix domain socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a 0600 file via `auth.login` handshake.
+- [x] **SEC-R02**: `workspace.snapshot` `ppm_path` parameter for RPC and MCP clients is confined to a designated snapshot directory (`$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir`), rejecting directory traversal, absolute paths, and subdirectories.
+- [x] **SEC-R03**: All Bilterm-chosen temporary files (shell integration rc files, history exports, session fallback, `.cast` recordings, OpenSSH `ControlPath`) reside within a verified per-user 0700 private directory with race-free 0600 `O_EXCL` writes.
+- [x] **SEC-R04**: SSH argv builders reject option injection (disallowing leading `-`, control characters, or whitespace) and emit `--` before destination arguments.
 
 ## v2 Requirements
 
@@ -114,10 +114,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUAL-01 | Phase 5 | Complete |
 | QUAL-02 | Phase 5 | Complete |
 | QUAL-03 | Phase 5 | Complete |
-| SEC-R01 | Phase 19 | Pending |
-| SEC-R02 | Phase 19 | Pending |
-| SEC-R03 | Phase 19 | Pending |
-| SEC-R04 | Phase 19 | Pending |
+| SEC-R01 | Phase 19 | Complete |
+| SEC-R02 | Phase 19 | Complete |
+| SEC-R03 | Phase 19 | Complete |
+| SEC-R04 | Phase 19 | Complete |
 
 **Coverage:**
 

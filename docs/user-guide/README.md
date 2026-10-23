@@ -257,7 +257,7 @@ shadow_bg         = #000000
 |------|---------|
 | `~/.config/bilterm/config.toml` | Declarative user configuration file |
 | `~/.local/state/bilterm/history/sessions/<name>/history.log` | Append-only history of a named session (all panes and runs, `run=` segments) |
-| `/tmp/bilterm-commands-<session_id>-pane-<id>.sh` | Default output path when exporting commands via `:history save` |
+| `$XDG_RUNTIME_DIR/bilterm/exports/bilterm-commands-pane<id>-<session>-<run>-<unique>.sh` | Default output path when exporting commands via `:history save` (mode 0600) |
 | `./bilterm.log` | Non-blocking background diagnostic log written by `tracing-appender` |
 
 ### Exit Codes

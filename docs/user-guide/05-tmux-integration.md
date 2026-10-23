@@ -34,9 +34,9 @@ Bilterm's `TmuxControlBridge` and `TmuxControlSubprocess` (`src/tmux/mod.rs`) pr
 ## 3. Mode C: Remote SSH Domains, Persistent Remote `tmux -CC` & `herdr` Fleet Federation (`v1.4.0`)
 
 Bilterm `v1.4.0` extends `tmux` and composite pane multiplexing across remote SSH hosts (`src/remote/mod.rs`):
-- **First-Class SSH Composite Panes (`:ssh [split h|v] <user@host[:port]> [cmd]`)**: Spawns an OpenSSH session with `ServerAliveInterval=15` inside the focused or newly split pane and displays `SSH:<user@host>` in the 3270 OIA status bar while keeping the floating command prompt completely local and zero-latency.
+- **First-Class SSH Composite Panes (`:ssh [split h|v] <user@host[:port]> [cmd]`)**: Spawns an OpenSSH session with `ServerAliveInterval=15` inside the focused or newly split pane and displays `SSH:<user@host>` in the 3270 OIA status bar while keeping the floating command prompt completely local and zero-latency. Destinations are strictly validated (no leading `-`, no whitespace/control characters) and arguments are separated with `--` before the destination. SSH connection multiplexing sockets are placed safely in Bilterm's private runtime directory (`ControlPath=<private_dir>/ssh-%C`).
 - **Persistent Remote `tmux -CC` Over SSH (`:ssh-tmux <user@host[:port]> [session]`)**: Launches `ssh -tt <user@host> tmux -CC new-session -A -s <session>` via `TmuxControlSubprocess::spawn_remote_ssh_attach_or_new`, hydrating remote `tmux` panes directly into local Bilterm Composite Panes that survive laptop sleep or network disconnects.
-- **`herdr`-Style Central Fleet Federation (`:remote add|list|connect|exec|disconnect`)**: Connects to remote `bilterm --headless --listen` daemons across your infrastructure and forwards JSON-RPC 2.0 requests (`remote.exec` / `:remote exec <name> <method> [json]`) from a single central Bilterm dashboard.
+- **`herdr`-Style Central Fleet Federation (`:remote add|list|connect|exec|disconnect`)**: Connects to remote `bilterm --headless` daemons across your infrastructure (remote daemons require `--allow-remote --token-file <path>`) and forwards JSON-RPC 2.0 requests (`remote.exec` / `:remote exec <name> <method> [json]`) from a single central Bilterm dashboard.
 
 ---
 

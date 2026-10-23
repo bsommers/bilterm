@@ -25,20 +25,39 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.4.0`)
+### CLI Options (`v1.6.0`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer
 bilterm --mcp                                   # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
-bilterm --headless --listen 127.0.0.1:7370      # Run headless JSON-RPC 2.0 automation daemon
-bilterm ctl 127.0.0.1:7370 workspace.status     # Query or drive a running Bilterm instance via JSON-RPC 2.0
+bilterm --headless                              # Run headless JSON-RPC 2.0 daemon (default: private Unix socket)
+bilterm --headless --listen 127.0.0.1:7370      # Run headless daemon on loopback TCP
+bilterm --headless --listen 0.0.0.0:7370 --allow-remote --token-file ~/.config/bilterm/token # Listen on remote TCP
+bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
+bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP
+bilterm ctl --token-file ~/.config/bilterm/token 10.0.0.1:7370 workspace.status # Query authenticated instance
+bilterm --snapshot-dir ~/.local/state/bilterm/snapshots # Set directory for confined workspace snapshots
 bilterm --playbook <playbook.toml>              # Execute a declarative TOML automation playbook and exit
 bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
 bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
 bilterm --session <name>                       # Use (and restore) a named persistent command-history session
 bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
-bilterm --version                               # Print version (bilterm 1.4.0)
+bilterm --version                               # Print version (bilterm 1.6.0)
 bilterm --help                                  # Print CLI usage summary
 ```
+
+### Daemon Security & Authentication
+
+- **Default Unix Domain Socket**: `bilterm --headless` binds a private Unix domain socket located at `$XDG_RUNTIME_DIR/bilterm/bilterm.sock` (or `/tmp/bilterm-<uid>/bilterm.sock` if `$XDG_RUNTIME_DIR` is unset) created with file permissions `0600` inside a `0700` directory. Peer credentials are verified on every connection, dropping non-matching UIDs.
+- **Listen Policy**: TCP listener endpoints are restricted to loopback (`127.0.0.1`, `::1`, `localhost`) by default. Binding non-loopback addresses (`0.0.0.0`, LAN IPs) is refused unless `--allow-remote` is passed alongside a mandatory `--token-file` containing a bearer token.
+- **Bearer Token Authentication**: When a token is configured (via `--token-file <path>` or `BILTERM_TOKEN_FILE`), all connections must complete an `auth.login` handshake as their first request. Any unauthenticated command is rejected with error code `-32001` and the connection is closed.
+- **Generating a Token File**:
+  ```bash
+  umask 077
+  head -c 32 /dev/urandom | base64 > ~/.config/bilterm/token
+  ```
+  Token files must be regular files with mode `0600` (owned by user, no group or other permissions).
+- **Remote Plaintext Caveat**: Note that `--allow-remote` transmits bearer tokens over plaintext TCP. An SSH tunnel (`ssh -L 7370:127.0.0.1:7370 user@host`) or VPN is strongly recommended when accessing Bilterm over untrusted networks.
+- **Snapshot Directory Confinement**: Direct RPC and MCP `workspace.snapshot` commands require `ppm_path` to be a bare file name confined to the snapshot directory (default `$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir <path>`). Directory traversal (`../`), absolute paths, and planted symlinks are rejected.
 
 ---
 
