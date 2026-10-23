@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v1.5.0
 milestone_name: milestone
 current_phase: 5
 status: completed
-stopped_at: Roadmap created (Phases 1-5 mapped across 26 v1 requirements)
-last_updated: "2026-10-21T00:59:41.404Z"
-last_activity: 2026-10-20
-last_activity_desc: Phase 5 complete
+stopped_at: Released v1.5.0 (bfe59ef) with Focal Spotlight, Focal Zoom Lens, Ctrl+X leader prefix, macOS Option normalization, 3-way prompt mode toggle, and sudo !ECHO fix
+last_updated: "2026-10-22T23:22:11-04:00"
+last_activity: 2026-10-22
+last_activity_desc: Released and pushed v1.5.0 (91/91 tests passing)
 progress:
   total_phases: 5
   completed_phases: 5
@@ -89,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-20 22:02
-Stopped at: Quick task 20261020-prompt-width-scroll-running-cmd-history-help-docs complete
+Last session: 2026-10-22 23:22
+Stopped at: Released and pushed v1.5.0 (bfe59ef)
 Resume file: .planning/CHECKPOINT.md
 
 ## Quick Tasks Completed
