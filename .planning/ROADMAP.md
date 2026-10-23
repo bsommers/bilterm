@@ -164,10 +164,80 @@ Plans:
 
 - [x] 05-03-PLAN.md — Technical architecture documentation & ADRs (`docs/architecture/`) and extensive multi-chapter User Manual (`docs/user-guide/`, `README.md`)
 
+### Phase 19: Security Hardening of the Automation & Shell-Integration Surfaces
+
+**Goal**: As a user on a shared or networked host, I want the automation daemon, shell-integration scripts, and SSH helpers to be safe by default, so that no other local user or network peer can write my files, inject shell code, or smuggle SSH options.
+**Depends on**: Architecture review P0 fixes (`fix/architecture-review-p0`)
+**Requirements**: SEC-R01..SEC-R04 (`.planning/reviews/ARCHITECTURE_REVIEW_PLAN.md` §5.1)
+**Success Criteria** (what must be TRUE):
+
+  1. `--headless --listen` defaults to a `0600` Unix socket under `$XDG_RUNTIME_DIR`; non-loopback TCP requires `--allow-remote` plus a bearer token read from a `0600` file.
+  2. `workspace.snapshot` `ppm_path` is confined to a designated output directory (path traversal rejected by test).
+  3. Shell-integration rc files, history exports, `.cast` recordings, and SSH `ControlPath` live in a per-user `0700` directory (`$XDG_RUNTIME_DIR` or `tempfile` with ownership check, `O_EXCL` writes).
+  4. `build_ssh_args` / `build_ssh_tmux_cc_args` reject destinations starting with `-` and emit `--` before the destination.
+
+**Plans**: TBD (`/gsd-plan-phase 19`)
+
+### Phase 20: Mega-Module Decomposition (behaviour-preserving)
+
+**Goal**: As a maintainer, I want `vt/`, `pane/`, `input/`, and `api/` split along their existing seams, so that each file has one reason to change and later refactors produce small, reviewable diffs.
+**Depends on**: Phase 19
+**Requirements**: ARCH-R04 (review P1.4)
+**Success Criteria** (what must be TRUE):
+
+  1. `vt/mod.rs` is split into `scan`, `graphics`, `detect`, `codec`, `recording`; `cell_to_ratatui_style` moves to `ui/`.
+  2. `pane/mod.rs` is split into `prompt_editor` (`FloatingPromptState`) and `modes` (copy/hints/search); `colon_command.rs` moves out of `pane/`.
+  3. `input/mod.rs` is split into `encode`, `mouse`, `modal`, `keymap`; `api/mod.rs` into `json`, `rpc`, `mcp`, `playbook`, `server`.
+  4. No source file exceeds ~800 lines, the `pane ↔ wm` cycle is gone, and the full test suite plus `insta` snapshots pass unchanged.
+
+**Plans**: TBD (`/gsd-plan-phase 20`)
+
+### Phase 21: Encapsulated Workspace Invariants
+
+**Goal**: As a maintainer, I want `WindowManager` and `CompositePane` to own their invariants behind private fields, so that closing, reaping, focusing, and submitting commands behave identically from every caller.
+**Depends on**: Phase 20
+**Requirements**: ARCH-R02 (review P1.2)
+**Success Criteria** (what must be TRUE):
+
+  1. `WindowManager` and `CompositePane` fields are private; `app`, `api`, and `input` use methods only.
+  2. A single `WindowManager::remove_pane` serves close, exit-reaping, and fleet removal (zoom/z-stack/tree cleanup covered by tests, including reaping a zoomed pane).
+  3. A single `CompositePane::submit_command` serves the prompt and `pane.exec`.
+  4. Modal state is one `enum Modal`, focus is `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), and `leader_pending` exists in one place.
+
+**Plans**: TBD (`/gsd-plan-phase 21`)
+
+### Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap
+
+**Goal**: As a user and maintainer, I want every key chord, `:command`, playbook step, and JSON-RPC/MCP call to lower into one typed `Action`, so that each feature is implemented once and every keybinding is remappable via `[keybindings]`.
+**Depends on**: Phase 21
+**Requirements**: ARCH-R01 (review P1.1)
+**Success Criteria** (what must be TRUE):
+
+  1. `crate::action::Action` replaces `ColonCommand`; `WindowManager::apply(Action)` is the only executor.
+  2. Default chords are a data table merged with `config.toml` `[keybindings]`; `handle_wm_key_event` is under ~80 lines.
+  3. `api::dispatch_method` and the playbook engine parse into `Action` (typed params) rather than re-implementing operations.
+  4. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
+
+**Plans**: TBD (`/gsd-plan-phase 22`)
+
+### Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution
+
+**Goal**: As a maintainer, I want the VT emulator behind a `TerminalBackend` trait and every advertised subsystem either wired into production or explicitly marked experimental, so that the `alacritty_terminal`/Ghostty migration is a contained change and docs match reality.
+**Depends on**: Phase 22
+**Requirements**: ARCH-R03, ARCH-R05 (review P1.3, P1.5)
+**Success Criteria** (what must be TRUE):
+
+  1. No `vt100_ctt` type appears outside `src/vt/` (renderers read `GridSnapshot` / a cell view).
+  2. `VtParser` implements `TerminalBackend`; a second (mock) backend passes the shared conformance tests.
+  3. Decision recorded as an ADR for `VtWorkerHandle`, `TmuxControlSubprocess`, and the `ghostty-vt` feature: each is either used by the live app or marked experimental, and the `ghostty-vt` feature either builds in CI (`libghostty-vt` declared, Zig in `flake.nix`) or is removed.
+  4. A CI feature matrix (`cargo hack check --each-feature`) passes.
+
+**Plans**: TBD (`/gsd-plan-phase 23`)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -189,3 +259,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 16. `v1.2.0` Native Model Context Protocol (`bilterm --mcp`) Server for AI Agents (`AUTO-02`) | Complete | Complete | 2026-10-21 |
 | 17. `v1.3.0` Structured Automation Event Subscription Bus & Declarative Robot Playbooks (`--playbook`) (`AUTO-03`) | Complete | Complete | 2026-10-21 |
 | 18. `v1.4.0` First-Class SSH Domains (`:ssh`), Remote Persistent `tmux -CC` (`:ssh-tmux`) & `herdr`-Style Central Fleet Federation (`REM-01`) | Complete | Complete | 2026-10-21 |
+| 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 0/TBD | Not started | - |
+| 20. Mega-Module Decomposition (`ARCH-R04`) | 0/TBD | Not started | - |
+| 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/TBD | Not started | - |
+| 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
+| 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |

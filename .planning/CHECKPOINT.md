@@ -1,43 +1,27 @@
-# Session Checkpoint (`v1.5.0`)
+# Session Checkpoint (architecture-review P0 fixes)
 
-**Updated:** `2026-10-22T23:22:11-04:00`
-**Branch:** `main`
-**HEAD Commit:** `bfe59ef` (`tag: v1.5.0`, pushed to `origin/main`)
-**Baseline Verification:** `cargo test --all-targets && cargo clippy --all-targets -- -D warnings && cargo build --release` (`91/91` tests passing, `0` warnings)
+**Updated:** `2026-10-22`
+**Branch:** `fix/architecture-review-p0` (from `main` @ `b480b9e`; uncommitted work)
+**Previous checkpoint (v1.5.0):** see `git show b480b9e:.planning/CHECKPOINT.md`
 
----
+## 1. User decisions (verbatim)
+- After the architecture review (`.planning/reviews/ARCHITECTURE_REVIEW_PLAN.md`), user said: **"yes. do all 1,2,3"**, meaning:
+  1. Fix the P0 items (P0.1–P0.4), each with a regression test.
+  2. Run a dependency audit.
+  3. Break the P1 items into GSD phases (ROADMAP).
+- Nothing has been committed or pushed. Committing still needs explicit user approval.
 
-## 1. Completed Goals & User Decisions
+## 2. Progress
+- [x] P0.1 PTY truncation removed (`src/pane/mod.rs`: new `ingest_pty_events` seam + test `large_pty_bursts_are_processed_without_dropping_mode_changes`). Red → green verified.
+- [x] P0.2 Config loaded at startup (`BiltermConfig::default_path`/`load`, `WindowManager::apply_config`, errors shown in OIA).
+- [x] P0.3 Soundness: `GhosttyCAbiTerminal::with_vtable` now private + SAFETY invariant. **Open:** `ghostty-vt` feature still doesn't build (needs `libghostty-vt` 0.2.2 dep + Zig; user decision); marked EXPERIMENTAL in Cargo.toml.
+- [x] P0.4 RPC daemon: actor-owned plane, per-connection tasks, 1 MiB line cap, JSON depth 128. Live repro passes.
+- [x] `tokio` → 1.54.1. **Open:** `time` fix (0.3.47) needs MSRV 1.88 > declared 1.86 (user decision).
+- [x] P1 → ROADMAP phases 19–23 (Plans TBD via `/gsd-plan-phase`).
+- Verified: clippy clean, 104 tests passed, 0 failed.
+- [x] Audit run (`cargo audit`): 2 vulns (`time 0.3.45` → `>=0.3.47`; `tokio 1.54.0` → `>=1.54.1`, yanked). Warnings: `lru 0.12.5` (unsound) and `paste` (unmaintained) come via `vt100-ctt → ratatui 0.29`; `lru 0.16.4` (unsound) via `ratatui-core`. `vt100-ctt` duplicates ratatui (0.29 + 0.30).
+- [ ] Apply `cargo update -p time -p tokio`.
+- [ ] P1 → GSD phases 6+ in `.planning/ROADMAP.md`.
 
-1. **License Migration (`dd84700`)**:
-   - Switched project license to `Apache-2.0` (`LICENSE`, `Cargo.toml`, `README.md`, `flake.nix`).
-2. **Readline / ZLE Prompt Stability & 3-Way Prompt Mode Toggle (`19f1a1b`, `0055f00`, `bfe59ef`)**:
-   - Eliminated command prompt flashing under Bash Readline / Zsh ZLE / Oh-My-Bash (`!ICANON && !ECHO` when `fg_pgrp == shell_pgid`).
-   - Added 3-way prompt mode toggle (`Floating Prompt` -> `Fixed Prompt` -> `Regular Terminal`) via `F4` / `Alt+E` / `Ctrl+X e` / `:mode [float|fixed|terminal|cycle]` or clicking the bottom OIA status bar.
-   - Fixed `sudo` / `sudo-rs` / `ssh` non-canonical `!ECHO` password prompt input capture (`fg_pgrp != shell_pgid && !ECHO` + canvas password-prompt fallback `[sudo` / `Password:` / `passphrase:`) so password prompts in the output pane immediately switch to `RawPtyPassthrough` (`🔒 !ECHO LOCK`) and capture keyboard input.
-3. **macOS `Option` Key Normalization & Universal `Ctrl+X` Leader Prefix (`c6ecfa9`)**:
-   - Added configurable `leader_key` (`"Ctrl+X"` default) that works in both `CommandPrompt` and `RawPtyPassthrough` modes.
-   - Added `normalize_macos_option_key` (`macos_option_as_alt = true`) and Readline word-wise navigation (`Alt+Left`/`Right`, `Alt+B`/`F`, `Alt+Backspace`/`Ctrl+W`, `Alt+D`).
-4. **Focal Spotlight Shader (`bfe59ef`, `src/ui/cursor.rs`)**:
-   - Added toggleable, resizable **Circular** and **Elliptical** Focal Spotlight (`Alt+O` / `Ctrl+X L` / `:spotlight`) with:
-     - **Smooth Fuzzy Mode (`spotlight_pixelated = false`)**: Hermite `smoothstep` radial falloff and core phosphor bloom.
-     - **Pixelated Character-Block Mode (`spotlight_pixelated = true`)**: `2×1` character-cell block quantization (`x & !1`) and stepped `▒`/`░` dither rings.
-     - Dynamic radius resizing via `Alt+Shift+]` (`Alt+}`) / `Alt+Shift+[` (`Alt+{`) or `:spotlight [+|-|size <rx> [ry]|feather <pct>|full|pane|off]`.
-5. **Focal Zoom (Fisheye Magnifying Lens) Shader (`bfe59ef`, `src/ui/cursor.rs`)**:
-   - Added toggleable, resizable **Focal Zoom Magnifying Lens** (`Alt+Shift+O` / `:focalzoom` / `:lens`) with smooth Hermite `smoothstep` radial magnification falloff across multiple magnification levels (`1.25x`, `1.50x`, `2.00x`, `3.00x`, or custom `1.05x..=4.00x`), anti-stutter primary-cell glyph placement, continuous box-drawing line stretching, and pixelated `2×1` character-block mode (`:focalzoom pixel`).
-
----
-
-## 2. Working-Tree & Remote State
-
-- **Git Branch:** `main` (`bfe59ef`, synced with `origin/main` and tagged `v1.5.0` on `origin`).
-- **Background Processes:** None.
-- **Release Binary:** `./target/release/bilterm` (`v1.5.0`).
-
----
-
-## 3. Exact Resume Verification Command
-
-```bash
-git status --short && cargo test --all-targets && cargo clippy --all-targets -- -D warnings
-```
+## 3. Resume verification command
+`cargo test && cargo clippy --all-targets -- -D warnings && cargo audit`
