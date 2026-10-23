@@ -941,10 +941,14 @@ impl CompositePane {
 
         let title = format!("{} [#{id}]", pty_config.program);
         let session = PtySession::spawn(pty_config)?;
-        Ok(Self {
+        let mut pane = Self {
             id,
             title,
-            vt: VtParser::new(canvas_rows, canvas_cols, 5000),
+            vt: VtParser::new(
+                canvas_rows,
+                canvas_cols,
+                crate::vt::scrollback::DEFAULT_INITIAL_LINES,
+            ),
             pty: Some(session),
             prompt: FloatingPromptState::default(),
             history_store: HistoryStore::new_live(id),
@@ -961,7 +965,17 @@ impl CompositePane {
             last_osc52_sequence: None,
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
-        })
+        };
+        pane.restore_persisted_history();
+        Ok(pane)
+    }
+
+    /// Replaces the prompt's in-memory history with the newest persisted commands of the
+    /// pane's history session (so Up/Down, `Ctrl+R`, and the history popup see prior runs).
+    pub fn restore_persisted_history(&mut self) {
+        self.prompt.history = self.history_store.load_recent_commands();
+        self.prompt.history_index = None;
+        self.prompt.history_popup_selected = 0;
     }
 
     /// Computes the `OutputCanvas` rectangle.
@@ -1217,8 +1231,8 @@ impl CompositePane {
             Some(crate::vt::Osc133Phase::CommandFinished(_) | crate::vt::Osc133Phase::PromptStart)
         );
         #[cfg(unix)]
-        if let Some(pty) = &self.pty {
-            if let Some(fd) = pty.master_raw_fd() {
+        if let Some(pty) = &self.pty
+            && let Some(fd) = pty.master_raw_fd() {
                 let prev_sub = self.line_discipline.has_foreground_subcommand();
                 self.line_discipline = inspect_pty_fd(fd, pty.child_pid(), osc);
                 if (prev_sub && !self.line_discipline.has_foreground_subcommand()) || osc_finished {
@@ -1235,7 +1249,6 @@ impl CompositePane {
                 }
                 return;
             }
-        }
         self.line_discipline.osc133_executing =
             matches!(osc, Some(crate::vt::Osc133Phase::CommandExecuted));
         if osc_finished {
@@ -1300,13 +1313,11 @@ impl CompositePane {
             return osc7_cwd.to_path_buf();
         }
         #[cfg(target_os = "linux")]
-        if let Some(pty) = &self.pty {
-            if let Some(pid) = pty.child_pid() {
-                if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+        if let Some(pty) = &self.pty
+            && let Some(pid) = pty.child_pid()
+                && let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
                     return path;
                 }
-            }
-        }
         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
     }
 
@@ -1338,6 +1349,11 @@ impl CompositePane {
         } else {
             Vec::new()
         };
+        self.ingest_pty_events(events);
+    }
+
+    /// Feeds a batch of drained `PtyEvent`s into the VT state machine in order.
+    pub fn ingest_pty_events(&mut self, events: Vec<PtyEvent>) {
         let mut coalesced = Vec::new();
         for ev in events {
             match ev {
@@ -1350,13 +1366,10 @@ impl CompositePane {
             }
         }
         if !coalesced.is_empty() {
-            const MAX_BYTES_PER_FRAME: usize = 32_768;
-            if coalesced.len() > MAX_BYTES_PER_FRAME && !self.vt.is_alternate_screen() {
-                let start = coalesced.len() - MAX_BYTES_PER_FRAME;
-                self.vt.process(&coalesced[start..]);
-            } else {
-                self.vt.process(&coalesced);
-            }
+            // Every byte must reach the parser in order: truncating the stream splits escape
+            // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
+            // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.vt.process(&coalesced);
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }
@@ -1564,6 +1577,19 @@ impl CompositePane {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_pty_bursts_are_processed_without_dropping_mode_changes() {
+        let mut pane = CompositePane::new_headless(1, 25, 80);
+        // A mode switch at the front of a >256 KB burst must never be discarded.
+        let mut events = vec![PtyEvent::Output(b"\x1b[?1049h".to_vec())];
+        for _ in 0..40 {
+            events.push(PtyEvent::Output(vec![b'x'; 8192]));
+        }
+        pane.ingest_pty_events(events);
+        assert!(pane.vt.is_alternate_screen());
+        assert!(pane.vt.total_bytes_processed() >= 40 * 8192);
+    }
 
     #[test]
     fn moving_or_hiding_prompt_never_resizes_canvas_or_emits_sigwinch() {

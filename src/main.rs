@@ -5,6 +5,7 @@ use bilterm::api::{
     send_rpc_request,
 };
 use bilterm::app::App;
+use bilterm::config::BiltermConfig;
 use bilterm::error::TerminalRestoreGuard;
 use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use bilterm::wm::WindowManager;
@@ -31,6 +32,7 @@ async fn main() -> color_eyre::Result<()> {
                --headless --listen <ADDR>   Run headless JSON-RPC 2.0 automation daemon on TCP/Unix socket\n  \
                --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
                --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
+               --session <NAME>             Use named persistent command-history session (overrides history_session)\n  \
                --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
                --man                        Print roff manpage (bilterm.1) to stdout\n  \
                --version, -V                Print version information\n  \
@@ -81,13 +83,13 @@ async fn main() -> color_eyre::Result<()> {
     {
         match shell.as_str() {
             "bash" => println!(
-                "complete -W \"ctl --mcp --headless --listen --playbook --help --version --gui-dump --completions --man\" bilterm"
+                "complete -W \"ctl --mcp --headless --listen --playbook --help --version --gui-dump --completions --man --session\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]'"
+                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]' '--session[History session name]:name:'"
             ),
             "fish" => println!(
-                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'"
+                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'\ncomplete -c bilterm -l session -r -d 'History session name'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }
@@ -120,6 +122,27 @@ async fn main() -> color_eyre::Result<()> {
 
     let (cols, rows) = terminal::size().unwrap_or((80, 24));
     let mut app = App::spawn_default(rows, cols)?;
+    let mut cfg = BiltermConfig::default();
+    let mut cfg_error = None;
+    if let Some(cfg_path) = BiltermConfig::default_path() {
+        match BiltermConfig::load(&cfg_path) {
+            Ok(Some(loaded)) => cfg = loaded,
+            Ok(None) => {}
+            Err(msg) => {
+                tracing::warn!("{msg}; using built-in defaults");
+                cfg_error = Some(format!("config error: {msg} (using defaults)"));
+            }
+        }
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--session")
+        && let Some(name) = args.get(pos + 1)
+    {
+        cfg.history_session = name.clone();
+    }
+    app.wm.apply_config(cfg);
+    if cfg_error.is_some() {
+        app.wm.active_pane_mut().status_message = cfg_error;
+    }
 
     let host_guard = TerminalRestoreGuard::enter_host_tui()?;
     let backend = CrosstermBackend::new(io::stdout());

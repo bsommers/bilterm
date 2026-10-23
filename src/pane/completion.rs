@@ -69,8 +69,8 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":quake", &[]),
     (":guake", &[]),
     (":help", &[]),
-    (":history", &["popup", "save", "on", "off", "max-files "]),
-    (":hist", &["popup", "save", "on", "off", "max-files "]),
+    (":history", &["popup", "save", "on", "off", "runs", "max-files "]),
+    (":hist", &["popup", "save", "on", "off", "runs", "max-files "]),
     (
         ":outline",
         &[
@@ -301,15 +301,14 @@ pub fn compute_completions(
             for dir in std::env::split_paths(&path_os) {
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.flatten() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if name.starts_with(&token) && seen.insert(name.to_string()) {
+                        if let Some(name) = entry.file_name().to_str()
+                            && name.starts_with(&token) && seen.insert(name.to_string()) {
                                 out.push(CompletionCandidate {
                                     display: name.to_string(),
                                     replacement: format!("{name} "),
                                     is_dir: false,
                                 });
                             }
-                        }
                     }
                 }
             }

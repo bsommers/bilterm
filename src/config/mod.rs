@@ -1,14 +1,19 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::pane::PromptAnchor;
+use crate::pane::history_store::{
+    DEFAULT_HISTORY_LOAD_LIMIT, DEFAULT_HISTORY_MAX_ENTRIES, DEFAULT_HISTORY_SESSION,
+    HistorySettings,
+};
 use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
+use crate::vt::scrollback::ScrollbackConfig;
 
 /// Declarative Bilterm configuration loaded from `~/.config/bilterm/config.toml` (`CFG-01`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,10 +66,16 @@ pub struct BiltermConfig {
     pub show_top_menubar: bool,
     /// Enables automatic command history persistence (`true` by default).
     pub history_enabled: bool,
-    /// Maximum number of session history files to retain in the history directory (default `25`).
+    /// Maximum number of named history session directories to retain (default `25`).
     pub history_max_files: usize,
     /// Optional custom directory path for persisted session command history files.
     pub history_dir: Option<String>,
+    /// Named persistent history session (`"default"`; overridden by `--session <name>`).
+    pub history_session: String,
+    /// Maximum entries kept in a session history file before compaction (default `100000`).
+    pub history_max_entries: usize,
+    /// Number of most recent session commands restored into a new pane's prompt history (default `10000`).
+    pub history_load_limit: usize,
     /// Optional custom directory path for saved workspace session layout snapshots (`ECO-02`).
     pub session_dir: Option<String>,
     /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
@@ -83,6 +94,8 @@ pub struct BiltermConfig {
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
     pub remotes: BTreeMap<String, RemoteHostProfile>,
+    /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
+    pub scrollback: ScrollbackConfig,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -118,6 +131,9 @@ impl Default for BiltermConfig {
             history_enabled: true,
             history_max_files: 25,
             history_dir: None,
+            history_session: DEFAULT_HISTORY_SESSION.to_string(),
+            history_max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
+            history_load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
             session_dir: None,
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
@@ -127,6 +143,7 @@ impl Default for BiltermConfig {
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
+            scrollback: ScrollbackConfig::default(),
             custom_palette_override: None,
         }
     }
@@ -138,12 +155,45 @@ impl BiltermConfig {
         toml::from_str(toml_text)
     }
 
+    /// Resolves `$XDG_CONFIG_HOME/bilterm/config.toml`, falling back to `~/.config/bilterm/config.toml`.
+    pub fn default_path() -> Option<PathBuf> {
+        config_path_from_env(
+            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
+            std::env::var_os("HOME").map(PathBuf::from),
+        )
+    }
+
+    /// Loads `BiltermConfig` from `path`: `Ok(None)` if the file does not exist, `Err` if it
+    /// cannot be read or parsed (so callers can surface the problem instead of silently ignoring it).
+    pub fn load(path: &Path) -> std::result::Result<Option<Self>, String> {
+        let raw = match std::fs::read_to_string(path) {
+            Ok(raw) => raw,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
+        };
+        Self::from_toml_str(&raw)
+            .map(Some)
+            .map_err(|e| format!("invalid {}: {e}", path.display()))
+    }
+
     /// Loads `BiltermConfig` from `path` if it exists, or returns `BiltermConfig::default()`.
     pub fn load_or_default(path: &Path) -> Self {
         std::fs::read_to_string(path)
             .ok()
             .and_then(|s| Self::from_toml_str(&s).ok())
             .unwrap_or_default()
+    }
+
+    /// Builds the per-pane history persistence settings.
+    pub fn history_settings(&self) -> HistorySettings {
+        HistorySettings {
+            enabled: self.history_enabled,
+            max_files: self.history_max_files,
+            max_entries: self.history_max_entries,
+            load_limit: self.history_load_limit,
+            dir: self.history_dir.clone(),
+            session: self.history_session.clone(),
+        }
     }
 
     /// Resolves the active `ThemePalette` (applying any INI/custom override if present).
@@ -334,10 +384,46 @@ pub fn parse_ini_theme(ini_text: &str) -> ThemePalette {
     palette
 }
 
+fn config_path_from_env(xdg_config_home: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
+    let base = match xdg_config_home.filter(|p| !p.as_os_str().is_empty()) {
+        Some(xdg) => xdg,
+        None => home?.join(".config"),
+    };
+    Some(base.join("bilterm").join("config.toml"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn resolves_xdg_config_path_with_home_fallback() {
+        assert_eq!(
+            config_path_from_env(Some("/xdg".into()), Some("/home/u".into())),
+            Some(std::path::PathBuf::from("/xdg/bilterm/config.toml"))
+        );
+        assert_eq!(
+            config_path_from_env(Some("".into()), Some("/home/u".into())),
+            Some(std::path::PathBuf::from("/home/u/.config/bilterm/config.toml"))
+        );
+        assert_eq!(config_path_from_env(None, None), None);
+    }
+
+    #[test]
+    fn load_distinguishes_missing_file_from_invalid_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("absent.toml");
+        assert!(BiltermConfig::load(&missing).unwrap().is_none());
+
+        let valid = dir.path().join("valid.toml");
+        std::fs::write(&valid, "leader_key = \"Ctrl+A\"\n").unwrap();
+        assert_eq!(BiltermConfig::load(&valid).unwrap().unwrap().leader_key, "Ctrl+A");
+
+        let invalid = dir.path().join("invalid.toml");
+        std::fs::write(&invalid, "leader_key = [\n").unwrap();
+        assert!(BiltermConfig::load(&invalid).is_err());
+    }
 
     #[test]
     fn parses_toml_config_and_ini_theme_overrides() {
@@ -371,5 +457,21 @@ mod tests {
         assert_eq!(pal.name, "CUSTOM-BORLAND");
         assert_eq!(pal.prompt_surface_bg, Color::Rgb(0x11, 0x22, 0x33));
         assert_eq!(pal.active_border_fg, Color::Rgb(0xAA, 0xBB, 0xCC));
+    }
+
+    #[test]
+    fn scrollback_table_is_optional_and_parses_when_present() {
+        let old = BiltermConfig::from_toml_str("theme = \"ibm-mono\"\n").expect("old config");
+        assert_eq!(old.scrollback, ScrollbackConfig::default());
+
+        let cfg = BiltermConfig::from_toml_str(
+            "[scrollback]\nmemory_budget = \"25%\"\nmax_lines = 1000000\nlow_memory_pct = 5\n",
+        )
+        .expect("scrollback config");
+        use crate::vt::scrollback::{LineLimit, MemoryBudget};
+        assert_eq!(cfg.scrollback.memory_budget, MemoryBudget::Percent(25));
+        assert_eq!(cfg.scrollback.max_lines, LineLimit::Fixed(1_000_000));
+        assert_eq!(cfg.scrollback.low_memory_pct, 5);
+        assert_eq!(cfg.scrollback.min_lines, 2_000);
     }
 }

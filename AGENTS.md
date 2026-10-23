@@ -26,7 +26,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| **Rust** | `1.86+` (Edition 2024) | Systems language & memory-safe concurrency | Required by `tui-term 0.3.4+` and modern `ratatui 0.30` modular workspace crates; zero-cost abstractions keep multi-pane 60–120 FPS cell buffer compositing under <1ms per frame. |
+| **Rust** | `1.88+` (Edition 2024) | Systems language & memory-safe concurrency | Required by `tui-term 0.3.4+` and modern `ratatui 0.30` modular workspace crates; zero-cost abstractions keep multi-pane 60–120 FPS cell buffer compositing under <1ms per frame. |
 | **`ratatui`** | `0.30.2` | Immediate-mode TUI rendering engine & cell buffer compositor | Standard Rust TUI framework. Its immediate-mode intermediate `Buffer` architecture (`frame.buffer_mut()`) allows rendering a pane's PTY canvas first, then rendering `widgets::Clear` + the floating command prompt directly on top, and finally applying post-processing shaders/cell mutations for IBM 3270 cross-hair cursors and z-order window stacking. |
 | **`crossterm`** | `0.29.0` (with `event-stream`) | Cross-platform host terminal manipulation & input events | Pairs directly with `ratatui 0.30`. Provides unified raw mode, SGR mouse drag/click/scroll capture (`EnableMouseCapture`), Kitty keyboard protocol flags (`PushKeyboardEnhancementFlags`), bracketed paste, and Windows Console API / ConPTY host compatibility. |
 | **`portable-pty`** | `0.9.0` | Cross-platform pseudoterminal (PTY) allocation & process management | Maintained by the WezTerm project. Abstracts POSIX `openpty`/`forkpty` on Linux and macOS alongside Windows `ConPTY` behind a single `PtySystem` trait (`MasterPty`, `Child`, `CommandBuilder`), satisfying Bilterm's Linux -> macOS -> Windows priority without platform-ifdef spaghetti. |
@@ -57,7 +57,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 
 ## Installation
 
-# Cargo.toml (Rust 2024 Edition, MSRV 1.86+)
+# Cargo.toml (Rust 2024 Edition, MSRV 1.88+)
 
 # Core TUI & Terminal Manipulation
 

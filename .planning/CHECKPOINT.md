@@ -1,43 +1,31 @@
-# Session Checkpoint (`v1.5.0`)
+# Session Checkpoint (architecture-review follow-ups)
 
-**Updated:** `2026-10-22T23:22:11-04:00`
-**Branch:** `main`
-**HEAD Commit:** `bfe59ef` (`tag: v1.5.0`, pushed to `origin/main`)
-**Baseline Verification:** `cargo test --all-targets && cargo clippy --all-targets -- -D warnings && cargo build --release` (`91/91` tests passing, `0` warnings)
+**Updated:** `2026-10-22`
+**Branch:** `fix/architecture-review-p0` (pushed to origin @ `e018ad7`)
 
----
+## 1. User decisions (verbatim)
+- "1 - yes" → raised MSRV to 1.88 and bumped `time` (done, `e1ea4a1`).
+- "2 - wire-up ghostty-vt feature if it helps or provides some solid footing for future work" → done (`e018ad7`). Needs Rust 1.90+ and Zig 0.15.2; its build script git-clones Ghostty, so the first build needs network.
+- "3 - commit and push" → done. Branch pushed; no PR or merge to main yet.
+- "execute this as autonomously as possible … conserve tokens, pass minimal sufficient context to subagents, compact or clear …"
+- New request: "persistent session-segmented command histories that survive individual session runs" and "massive scrollback buffers … based on system resources (192 GB vs 16 GB) … expand or contract … save RAM when not needed … dynamic, scaled allocations".
 
-## 1. Completed Goals & User Decisions
+## 2. Done
+- History merged `3dbb528`; scrollback merged `721e8cf`. Both pushed to `origin/fix/architecture-review-p0`; worktrees removed. Verified: clippy clean, 127 tests passed, 0 failed.
 
-1. **License Migration (`dd84700`)**:
-   - Switched project license to `Apache-2.0` (`LICENSE`, `Cargo.toml`, `README.md`, `flake.nix`).
-2. **Readline / ZLE Prompt Stability & 3-Way Prompt Mode Toggle (`19f1a1b`, `0055f00`, `bfe59ef`)**:
-   - Eliminated command prompt flashing under Bash Readline / Zsh ZLE / Oh-My-Bash (`!ICANON && !ECHO` when `fg_pgrp == shell_pgid`).
-   - Added 3-way prompt mode toggle (`Floating Prompt` -> `Fixed Prompt` -> `Regular Terminal`) via `F4` / `Alt+E` / `Ctrl+X e` / `:mode [float|fixed|terminal|cycle]` or clicking the bottom OIA status bar.
-   - Fixed `sudo` / `sudo-rs` / `ssh` non-canonical `!ECHO` password prompt input capture (`fg_pgrp != shell_pgid && !ECHO` + canvas password-prompt fallback `[sudo` / `Password:` / `passphrase:`) so password prompts in the output pane immediately switch to `RawPtyPassthrough` (`🔒 !ECHO LOCK`) and capture keyboard input.
-3. **macOS `Option` Key Normalization & Universal `Ctrl+X` Leader Prefix (`c6ecfa9`)**:
-   - Added configurable `leader_key` (`"Ctrl+X"` default) that works in both `CommandPrompt` and `RawPtyPassthrough` modes.
-   - Added `normalize_macos_option_key` (`macos_option_as_alt = true`) and Readline word-wise navigation (`Alt+Left`/`Right`, `Alt+B`/`F`, `Alt+Backspace`/`Ctrl+W`, `Alt+D`).
-4. **Focal Spotlight Shader (`bfe59ef`, `src/ui/cursor.rs`)**:
-   - Added toggleable, resizable **Circular** and **Elliptical** Focal Spotlight (`Alt+O` / `Ctrl+X L` / `:spotlight`) with:
-     - **Smooth Fuzzy Mode (`spotlight_pixelated = false`)**: Hermite `smoothstep` radial falloff and core phosphor bloom.
-     - **Pixelated Character-Block Mode (`spotlight_pixelated = true`)**: `2×1` character-cell block quantization (`x & !1`) and stepped `▒`/`░` dither rings.
-     - Dynamic radius resizing via `Alt+Shift+]` (`Alt+}`) / `Alt+Shift+[` (`Alt+{`) or `:spotlight [+|-|size <rx> [ry]|feather <pct>|full|pane|off]`.
-5. **Focal Zoom (Fisheye Magnifying Lens) Shader (`bfe59ef`, `src/ui/cursor.rs`)**:
-   - Added toggleable, resizable **Focal Zoom Magnifying Lens** (`Alt+Shift+O` / `:focalzoom` / `:lens`) with smooth Hermite `smoothstep` radial magnification falloff across multiple magnification levels (`1.25x`, `1.50x`, `2.00x`, `3.00x`, or custom `1.05x..=4.00x`), anti-stutter primary-cell glyph placement, continuous box-drawing line stretching, and pixelated `2×1` character-block mode (`:focalzoom pixel`).
+## 3. Next steps
+- Optional: open a PR or merge into `main`. Not requested yet.
+- Scrollback follow-ups:
+  - Rebuild runs on the UI thread, so growing or resizing a pane with about 1M lines can stall the UI. Move it to the worker.
+  - Within the 2 s rebalance window a flood can drop the oldest lines.
+  - DECSTBM isn't restored after a rebuild.
+  - The worker and ghostty paths still use fixed capacities.
+  - The 64 KB regression test was never run against the old code to watch it fail.
 
----
+## 4. Known open items
+- `cargo fmt --check` already failed across the repo before this work started (left as-is).
+- The `zig_0_15` attribute in `flake.nix` hasn't been checked with nix.
+- A palette-indexed underline colour maps to `None` in the Ghostty backend.
 
-## 2. Working-Tree & Remote State
-
-- **Git Branch:** `main` (`bfe59ef`, synced with `origin/main` and tagged `v1.5.0` on `origin`).
-- **Background Processes:** None.
-- **Release Binary:** `./target/release/bilterm` (`v1.5.0`).
-
----
-
-## 3. Exact Resume Verification Command
-
-```bash
-git status --short && cargo test --all-targets && cargo clippy --all-targets -- -D warnings
-```
+- History follow-ups: old per-run log files are not migrated; two processes sharing one session can lose a line during compaction.
+- Main checkout has user-owned uncommitted changes (`docs/README.md`, `docs/launch-presentation-and-pitch-script.md`); don't touch them.

@@ -95,11 +95,36 @@ crosshair_fullscreen = true
 drop_shadows = true
 show_dos_fkey_bar = true
 history_enabled = true
-history_max_files = 25
+history_max_files = 25          # retained session directories
+history_session = "default"     # or: bilterm --session <name>
+history_max_entries = 100000
+history_load_limit = 10000
 # history_dir = "/custom/path/to/bilterm-history"
 default_prompt_anchor = "split-top"
 default_prompt_height = 3
 ```
+
+### Scrollback Memory (`[scrollback]`)
+
+Scrollback is sized from the host's RAM instead of a fixed line count. Every pane starts at
+`initial_lines`; roughly every 2 s (and on split, close, and resize) a pane that is at least 90%
+full doubles its capacity while the shared budget has room. An active pane may borrow budget
+that idle panes are not using. When total usage exceeds the budget, or available memory drops
+below `low_memory_pct` of total RAM, the largest panes shrink toward an equal share, never
+below `min_lines`. Panes on the alternate screen (`vim`, `htop`) are resized after they exit it.
+
+```toml
+[scrollback]
+memory_budget = "auto"   # 10% of RAM (min 64 MiB): ~19 GiB on 192 GiB, ~1.6 GiB on 16 GiB
+max_lines = "auto"       # or a hard per-pane cap, e.g. 1000000
+min_lines = 2000
+initial_lines = 10000
+low_memory_pct = 10
+```
+
+Each line costs about `columns x 32 + 64` bytes, so 1.6 GiB holds roughly 650,000 lines of an
+80-column pane. Run `:scrollback` to see the active pane's used/capacity lines and memory, and
+`:scrollback clear` to drop its history.
 
 ---
 

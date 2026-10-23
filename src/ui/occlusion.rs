@@ -26,11 +26,10 @@ pub fn occlude_rect(buf: &mut Buffer, rect: Rect) {
             let is_wide = buf
                 .cell((left_neighbor_x, y))
                 .is_some_and(|c| UnicodeWidthStr::width(c.symbol()) >= 2);
-            if is_wide {
-                if let Some(cell) = buf.cell_mut((left_neighbor_x, y)) {
+            if is_wide
+                && let Some(cell) = buf.cell_mut((left_neighbor_x, y)) {
                     cell.set_symbol(" ");
                 }
-            }
         }
 
         // 2. Right boundary: if a 2-column wide character starts at `rect_right - 1` (the last
@@ -41,11 +40,10 @@ pub fn occlude_rect(buf: &mut Buffer, rect: Rect) {
             let is_wide = buf
                 .cell((last_inside_x, y))
                 .is_some_and(|c| UnicodeWidthStr::width(c.symbol()) >= 2);
-            if is_wide {
-                if let Some(cell) = buf.cell_mut((rect_right, y)) {
+            if is_wide
+                && let Some(cell) = buf.cell_mut((rect_right, y)) {
                     cell.set_symbol(" ");
                 }
-            }
         }
     }
 

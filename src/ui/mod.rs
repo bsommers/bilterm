@@ -515,8 +515,8 @@ fn render_floating_prompt(
         let pin_str = glyphs.pin_top_bottom;
         for (idx, ch) in pin_str.chars().enumerate() {
             let x = pin_x + idx as u16;
-            if x < right_edge - 1 {
-                if let Some(cell) = buf.cell_mut((x, prompt_rect.y)) {
+            if x < right_edge - 1
+                && let Some(cell) = buf.cell_mut((x, prompt_rect.y)) {
                     let mut sym_buf = [0u8; 4];
                     cell.set_symbol(ch.encode_utf8(&mut sym_buf));
                     cell.set_style(
@@ -526,7 +526,6 @@ fn render_floating_prompt(
                             .add_modifier(Modifier::BOLD),
                     );
                 }
-            }
         }
     }
 
@@ -593,8 +592,8 @@ fn render_floating_prompt(
     };
 
     let mut rendered_lines = Vec::with_capacity(usize::from(inner.height));
-    if let Some(run_cmd) = &pane.prompt.running_command {
-        if has_running_banner {
+    if let Some(run_cmd) = &pane.prompt.running_command
+        && has_running_banner {
             let status_tag = if pane.line_discipline.has_foreground_subcommand() {
                 format!("{} RUNNING: ", glyphs.status_run_icon)
             } else {
@@ -637,7 +636,6 @@ fn render_floating_prompt(
             }
             rendered_lines.push(Line::from(banner_spans));
         }
-    }
 
     for (rel_idx, line_str) in lines_slice
         .iter()
@@ -1142,7 +1140,7 @@ fn render_history_popup(
     let mut lines = Vec::new();
     let header = format!(
         "Session: {} | Pane #{} | Entries: {}",
-        pane.history_store.session_id,
+        pane.history_store.session_name,
         pane.id,
         pane.prompt.history.len()
     );

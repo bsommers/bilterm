@@ -1,4 +1,5 @@
 pub mod ghostty_backend;
+pub mod scrollback;
 pub mod snapshot;
 pub mod worker;
 
@@ -176,6 +177,9 @@ pub struct VtParser {
     last_styled_underline_kind: UnderlineKind,
     last_styled_underline_color: Option<RgbTriplet>,
     primary_stream_log: Vec<u8>,
+    /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
+    /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
+    primary_log_complete: bool,
 }
 
 impl VtParser {
@@ -232,6 +236,7 @@ impl VtParser {
             last_styled_underline_kind: UnderlineKind::None,
             last_styled_underline_color: None,
             primary_stream_log: Vec::new(),
+            primary_log_complete: true,
         }
     }
 
@@ -280,6 +285,7 @@ impl VtParser {
                 .map(|i| excess + i + 1)
                 .unwrap_or(excess);
             self.primary_stream_log.drain(..cut);
+            self.primary_log_complete = false;
         }
     }
 
@@ -315,16 +321,17 @@ impl VtParser {
             self.rows = clamped_rows;
             self.cols = clamped_cols;
             self.generation = self.generation.wrapping_add(1);
-            if cols_changed
+            let reflow = cols_changed
                 && clamped_rows >= 2
                 && clamped_cols >= 4
-                && !self.is_alternate_screen()
-                && !self.primary_stream_log.is_empty()
-            {
+                && !self.is_alternate_screen();
+            if reflow && self.primary_log_complete && !self.primary_stream_log.is_empty() {
                 let mut replayed =
                     vt100_ctt::Parser::new(clamped_rows, clamped_cols, self.scrollback_capacity);
                 replayed.process(&self.primary_stream_log);
                 self.parser = replayed;
+            } else if reflow && !self.primary_log_complete {
+                self.rebuild(clamped_rows, clamped_cols, self.scrollback_capacity);
             } else {
                 self.parser
                     .screen_mut()
@@ -334,6 +341,165 @@ impl VtParser {
                 self.pending_query_responses.push(
                     format!("\x1b[48;{clamped_rows};{clamped_cols};0;0t").into_bytes(),
                 );
+            }
+        }
+    }
+
+    /// Maximum scrollback rows this parser retains.
+    pub fn scrollback_capacity(&self) -> usize {
+        self.scrollback_capacity
+    }
+
+    /// Rows currently held in scrollback history (clamped probe via `set_scrollback`).
+    pub fn scrollback_used_rows(&mut self) -> usize {
+        let screen = self.parser.screen_mut();
+        let offset = screen.scrollback();
+        screen.set_scrollback(usize::MAX);
+        let used = screen.scrollback();
+        screen.set_scrollback(offset);
+        used
+    }
+
+    /// Estimated heap bytes held by scrollback history.
+    pub fn estimated_scrollback_bytes(&mut self) -> u64 {
+        self.scrollback_used_rows() as u64 * scrollback::row_bytes(self.cols)
+    }
+
+    /// Changes the scrollback capacity, rebuilding the parser and keeping the newest history.
+    /// Returns `false` (no-op) while the alternate screen is active.
+    pub fn set_scrollback_capacity(&mut self, capacity: usize) -> bool {
+        if self.is_alternate_screen() {
+            return false;
+        }
+        if capacity != self.scrollback_capacity {
+            self.rebuild(self.rows, self.cols, capacity);
+        }
+        true
+    }
+
+    /// Drops all scrollback history, keeping the visible screen. Returns `false` on the alt screen.
+    pub fn clear_scrollback(&mut self) -> bool {
+        if self.is_alternate_screen() {
+            return false;
+        }
+        let capacity = self.scrollback_capacity;
+        self.rebuild_keeping(self.rows, self.cols, capacity, 0);
+        true
+    }
+
+    /// Rebuilds the underlying parser at `rows`x`cols` with `capacity` scrollback rows, keeping
+    /// the newest `min(used, capacity)` history rows. Soft-wrapped rows are rejoined into logical
+    /// lines so a column change genuinely reflows history. The viewport snaps to the bottom.
+    pub fn rebuild(&mut self, rows: u16, cols: u16, capacity: usize) {
+        self.rebuild_keeping(rows, cols, capacity, usize::MAX);
+    }
+
+    fn rebuild_keeping(&mut self, rows: u16, cols: u16, capacity: usize, max_history: usize) {
+        let rows = rows.max(1);
+        let cols = cols.max(1);
+        let used = self.scrollback_used_rows();
+        let keep = used.min(capacity).min(max_history);
+        let (old_rows, old_cols) = self.parser.screen().size();
+        let same_size = (old_rows, old_cols) == (rows, cols);
+
+        // Collect logical lines (bytes, cell width) from history, oldest kept row first.
+        let mut lines: Vec<Vec<u8>> = Vec::new();
+        let mut current: Vec<u8> = Vec::new();
+        let mut current_width = 0usize;
+        {
+            let screen = self.parser.screen_mut();
+            let mut j = used - keep;
+            while j < used {
+                let off = used - j;
+                screen.set_scrollback(off);
+                let take = usize::from(old_rows).min(off);
+                for r in 0..take {
+                    let r = r as u16;
+                    let wrapped = screen.row_wrapped(r);
+                    current_width += scrollback::serialize_row(screen, r, wrapped, &mut current);
+                    if !wrapped {
+                        lines.push(std::mem::take(&mut current));
+                        current_width = 0;
+                    }
+                }
+                j += take;
+            }
+            screen.set_scrollback(0);
+        }
+
+        let mut out: Vec<u8> = Vec::new();
+        let screen = self.parser.screen();
+        if same_size {
+            if !current.is_empty() {
+                lines.push(std::mem::take(&mut current));
+            }
+            for line in &lines {
+                out.extend_from_slice(line);
+                out.extend_from_slice(b"\x1b[0m\r\n");
+            }
+            if !lines.is_empty() {
+                out.extend(std::iter::repeat_n(b'\n', usize::from(rows) - 1));
+            }
+            out.extend_from_slice(&screen.state_formatted());
+        } else {
+            // Reflow the screen rows up to the cursor as logical lines, too.
+            let (cur_row, cur_col) = screen.cursor_position();
+            let mut cursor_offset = 0usize;
+            for r in 0..=cur_row.min(old_rows.saturating_sub(1)) {
+                if r == cur_row {
+                    cursor_offset = current_width + usize::from(cur_col);
+                    current_width += scrollback::serialize_row(screen, r, false, &mut current);
+                } else {
+                    let wrapped = screen.row_wrapped(r);
+                    current_width += scrollback::serialize_row(screen, r, wrapped, &mut current);
+                    if !wrapped {
+                        lines.push(std::mem::take(&mut current));
+                        current_width = 0;
+                    }
+                }
+            }
+            for line in &lines {
+                out.extend_from_slice(line);
+                out.extend_from_slice(b"\x1b[0m\r\n");
+            }
+            out.extend_from_slice(&current);
+            out.extend_from_slice(b"\x1b[0m");
+            let cols_usize = usize::from(cols);
+            if cursor_offset != current_width {
+                // Cursor sits before/after the end of its logical line: move it there.
+                let end_row = current_width.saturating_sub(1) / cols_usize;
+                let target_row = cursor_offset / cols_usize;
+                if end_row > target_row {
+                    out.extend_from_slice(format!("\x1b[{}A", end_row - target_row).as_bytes());
+                } else if target_row > end_row {
+                    out.extend_from_slice(format!("\x1b[{}B", target_row - end_row).as_bytes());
+                }
+                out.extend_from_slice(
+                    format!("\x1b[{}G", (cursor_offset % cols_usize) + 1).as_bytes(),
+                );
+            }
+            out.extend_from_slice(&screen.input_mode_formatted());
+            out.extend_from_slice(&screen.attributes_formatted());
+        }
+
+        let mut rebuilt = vt100_ctt::Parser::new(rows, cols, capacity);
+        rebuilt.process(&out);
+        self.parser = rebuilt;
+        self.rows = rows;
+        self.cols = cols;
+        self.scrollback_capacity = capacity;
+        self.generation = self.generation.wrapping_add(1);
+        // A rebuilt parser no longer matches the byte log; keep exact replay only if nothing was logged.
+        self.primary_log_complete &= self.primary_stream_log.is_empty();
+        self.primary_stream_log.clear();
+        self.selected_block_index = None;
+        let retained = self.scrollback_used_rows();
+        let oldest = self.total_lines_scrolled.saturating_sub(retained);
+        let before = self.command_blocks.len();
+        self.command_blocks.retain(|b| b.absolute_row >= oldest);
+        if self.command_blocks.len() != before {
+            for (i, b) in self.command_blocks.iter_mut().enumerate() {
+                b.index = i;
             }
         }
     }
@@ -1755,7 +1921,7 @@ fn escape_json_string(s: &str) -> String {
 }
 
 fn hex_decode_ascii(hex: &str) -> Option<String> {
-    if hex.len() % 2 != 0 || hex.is_empty() {
+    if !hex.len().is_multiple_of(2) || hex.is_empty() {
         return None;
     }
     let mut bytes = Vec::with_capacity(hex.len() / 2);
@@ -2390,5 +2556,101 @@ mod tests {
         let matches = vt.search_canvas("GHOSTTY");
         assert_eq!(matches.len(), 2);
         assert_eq!(matches[0].row, 0);
+    }
+
+    fn history_text(vt: &mut VtParser) -> String {
+        let used = vt.scrollback_used_rows();
+        let (rows, _) = vt.size();
+        let mut out = String::new();
+        let mut j = 0;
+        while j < used {
+            let off = used - j;
+            vt.parser.screen_mut().set_scrollback(off);
+            let take = usize::from(rows).min(off);
+            for r in 0..take {
+                let (_, cols) = vt.parser.screen().size();
+                for c in 0..cols {
+                    if let Some(cell) = vt.parser.screen().cell(r as u16, c) {
+                        out.push_str(cell.contents());
+                    }
+                }
+                out.push('\n');
+            }
+            j += take;
+        }
+        vt.parser.screen_mut().set_scrollback(0);
+        out
+    }
+
+    #[test]
+    fn column_resize_preserves_scrollback_beyond_primary_log_cap() {
+        let mut vt = VtParser::new(24, 80, 50_000);
+        let mut bytes = Vec::new();
+        for i in 0..20_000 {
+            bytes.extend_from_slice(format!("line-{i:06}\r\n").as_bytes());
+        }
+        assert!(bytes.len() > 200_000);
+        vt.process(&bytes);
+        vt.set_size(24, 60);
+        let text = history_text(&mut vt);
+        assert!(text.contains("line-000000"), "oldest line lost after column resize");
+        assert!(text.contains("line-010000"));
+        assert!(vt.scrollback_used_rows() >= 19_000);
+        assert_eq!(vt.size(), (24, 60));
+    }
+
+    #[test]
+    fn rebuild_reflows_wrapped_lines_and_honours_new_capacity() {
+        let mut vt = VtParser::new(5, 20, 1000);
+        let long: String = "abcdefghij".repeat(4); // 40 cols -> 2 rows at width 20
+        vt.process(format!("{long}\r\n").as_bytes());
+        for i in 0..100 {
+            vt.process(format!("n{i}\r\n").as_bytes());
+        }
+        vt.process(b"$ ");
+        vt.rebuild(5, 40, 1000);
+        let text = history_text(&mut vt);
+        assert!(text.contains(&long), "wrapped line should be rejoined at width 40");
+        assert_eq!(vt.screen().cursor_position().1, 2);
+        // Capacity shrink keeps only the newest lines.
+        vt.rebuild(5, 40, 10);
+        assert_eq!(vt.scrollback_capacity(), 10);
+        assert!(vt.scrollback_used_rows() <= 10);
+        let text = history_text(&mut vt);
+        assert!(text.contains("n95"));
+        assert!(!text.contains("n10\n"));
+    }
+
+    #[test]
+    fn same_size_rebuild_restores_screen_and_cursor_exactly() {
+        let mut vt = VtParser::new(4, 20, 100);
+        for i in 0..10 {
+            vt.process(format!("r{i}\r\n").as_bytes());
+        }
+        vt.process(b"\x1b[31mred\x1b[0m $ ");
+        let before = vt.screen().contents();
+        let cursor = vt.screen().cursor_position();
+        vt.set_scrollback_capacity(500);
+        assert_eq!(vt.scrollback_capacity(), 500);
+        assert_eq!(vt.screen().contents(), before);
+        assert_eq!(vt.screen().cursor_position(), cursor);
+        assert_eq!(vt.screen().cell(3, 0).unwrap().fgcolor(), vt100_ctt::Color::Idx(1));
+        assert!(history_text(&mut vt).contains("r0"));
+    }
+
+    #[test]
+    fn clear_scrollback_frees_history_and_skips_alt_screen() {
+        let mut vt = VtParser::new(4, 20, 100);
+        for i in 0..30 {
+            vt.process(format!("r{i}\r\n").as_bytes());
+        }
+        vt.record_command_submission("old");
+        assert!(vt.scrollback_used_rows() > 0);
+        vt.clear_scrollback();
+        assert_eq!(vt.scrollback_used_rows(), 0);
+        assert!(vt.screen().contents().contains("r29"));
+        vt.process(b"\x1b[?1049h");
+        assert!(!vt.set_scrollback_capacity(50));
+        assert_eq!(vt.scrollback_capacity(), 100);
     }
 }

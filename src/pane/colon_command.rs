@@ -1,3 +1,4 @@
+use crate::pane::history_store::HistorySegment;
 use crate::pane::{CompositePane, PromptAnchor, PromptMode};
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
@@ -24,6 +25,8 @@ pub enum ColonCommand {
     BlockNext,
     Yank,
     Clear,
+    /// `:scrollback` (report) / `:scrollback clear` (free history).
+    Scrollback { clear: bool },
     RawToggle,
     SplitHorizontal,
     SplitVertical,
@@ -39,6 +42,7 @@ pub enum ColonCommand {
     HistorySave(Option<String>),
     HistoryToggle(Option<bool>),
     HistoryMaxFiles(usize),
+    HistoryRuns,
     Theme(ThemePreset),
     Glyphs(GlyphPack),
     Cursor(CaretStyle),
@@ -191,12 +195,13 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some("on" | "enable" | "true") => Some(Ok(ColonCommand::HistoryToggle(Some(true)))),
             Some("off" | "disable" | "false") => Some(Ok(ColonCommand::HistoryToggle(Some(false)))),
             Some("toggle") => Some(Ok(ColonCommand::HistoryToggle(None))),
+            Some("runs" | "segments") => Some(Ok(ColonCommand::HistoryRuns)),
             Some("max-files" | "files") => match parts.get(2).and_then(|s| s.parse::<usize>().ok()) {
                 Some(n) => Some(Ok(ColonCommand::HistoryMaxFiles(n.max(1)))),
                 None => Some(Err("Usage: :history max-files <count>".to_string())),
             },
             _ => Some(Err(
-                "Usage: :history [popup | save [path] | on | off | max-files <N>]".to_string(),
+                "Usage: :history [popup | save [path] | on | off | runs | max-files <N>]".to_string(),
             )),
         },
         "block" => match parts.get(1).copied() {
@@ -652,6 +657,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         },
         "yank" => Some(Ok(ColonCommand::Yank)),
         "clear" => Some(Ok(ColonCommand::Clear)),
+        "scrollback" | "sb" => match parts.get(1).copied() {
+            None | Some("info" | "status") => Some(Ok(ColonCommand::Scrollback { clear: false })),
+            Some("clear") => Some(Ok(ColonCommand::Scrollback { clear: true })),
+            _ => Some(Err("Usage: :scrollback [clear]".to_string())),
+        },
         "raw" => Some(Ok(ColonCommand::RawToggle)),
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
@@ -659,6 +669,24 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
 }
 
 /// Executes a parsed `ColonCommand` against a single `pane`. Returns `true` if the application should quit.
+/// Formats the `:history runs` status line: segment count plus the 3 most recent runs.
+fn format_history_runs(session: &str, segments: &[HistorySegment]) -> String {
+    if segments.is_empty() {
+        return format!("History session '{session}': no recorded runs");
+    }
+    let recent: Vec<String> = segments
+        .iter()
+        .rev()
+        .take(3)
+        .map(|s| format!("{} @{} ({} cmds)", s.run_id, s.started_at, s.count))
+        .collect();
+    format!(
+        "History session '{session}': {} runs; recent: {}",
+        segments.len(),
+        recent.join(", ")
+    )
+}
+
 pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> bool {
     match cmd {
         ColonCommand::PromptTop => {
@@ -745,6 +773,13 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             pane.history_store.max_files = max_f.max(1);
             let _ = pane.history_store.prune_excess_files();
             pane.status_message = Some(format!("History max session files: {}", max_f.max(1)));
+            false
+        }
+        ColonCommand::HistoryRuns => {
+            pane.status_message = Some(format_history_runs(
+                &pane.history_store.session_name,
+                &pane.history_store.segments(),
+            ));
             false
         }
         ColonCommand::BlockPrev => {
@@ -930,6 +965,20 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 "Command history persistence: {}",
                 if next { "ON" } else { "OFF" }
             ));
+            false
+        }
+        ColonCommand::Scrollback { clear } => {
+            let note = if clear {
+                if wm.active_pane_mut().vt.clear_scrollback() {
+                    "History cleared. "
+                } else {
+                    "Cannot clear while the alternate screen is active. "
+                }
+            } else {
+                ""
+            };
+            let report = wm.scrollback_report();
+            wm.active_pane_mut().status_message = Some(format!("{note}{report}"));
             false
         }
         ColonCommand::HistoryMaxFiles(max_f) => {
@@ -1315,6 +1364,37 @@ mod tests {
         let cmd = parse_colon_command(":yank").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
         assert!(pane.last_osc52_sequence.is_some());
+    }
+
+    #[test]
+    fn history_runs_parses_and_reports_segments() {
+        assert_eq!(
+            parse_colon_command(":history runs").unwrap().unwrap(),
+            ColonCommand::HistoryRuns
+        );
+        assert_eq!(
+            parse_colon_command(":hist segments").unwrap().unwrap(),
+            ColonCommand::HistoryRuns
+        );
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut pane = CompositePane::new_headless(1, 25, 80);
+        pane.history_store.base_dir = tmp.path().to_path_buf();
+        pane.history_store.enabled = true;
+        pane.history_store.session_file_path = tmp.path().join("sessions/default/history.log");
+        assert!(!execute_colon_command(&mut pane, ColonCommand::HistoryRuns));
+        assert!(pane.status_message.as_deref().unwrap().contains("no recorded runs"));
+
+        pane.history_store.run_id = "run-1".to_string();
+        pane.history_store.record_command("ls").unwrap();
+        pane.history_store.run_id = "run-2".to_string();
+        pane.history_store.record_command("pwd").unwrap();
+        pane.history_store.record_command("id").unwrap();
+        execute_colon_command(&mut pane, ColonCommand::HistoryRuns);
+        let msg = pane.status_message.clone().unwrap();
+        assert!(msg.contains("2 runs"), "{msg}");
+        assert!(msg.find("run-2").unwrap() < msg.find("run-1").unwrap(), "{msg}");
+        assert!(msg.contains("(2 cmds)"), "{msg}");
     }
 
     #[test]

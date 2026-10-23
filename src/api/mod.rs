@@ -140,7 +140,7 @@ impl JsonValue {
     pub fn parse(input: &str) -> Option<Self> {
         let bytes = input.as_bytes();
         let mut pos = 0;
-        let val = parse_json_value(bytes, &mut pos)?;
+        let val = parse_json_value(bytes, &mut pos, 0)?;
         skip_ws(bytes, &mut pos);
         if pos == bytes.len() { Some(val) } else { None }
     }
@@ -152,7 +152,14 @@ fn skip_ws(bytes: &[u8], pos: &mut usize) {
     }
 }
 
-fn parse_json_value(bytes: &[u8], pos: &mut usize) -> Option<JsonValue> {
+/// Maximum array/object nesting accepted by [`JsonValue::parse`]; deeper input is rejected so a
+/// hostile client cannot exhaust the stack of the recursive parser.
+const MAX_JSON_DEPTH: usize = 128;
+
+fn parse_json_value(bytes: &[u8], pos: &mut usize, depth: usize) -> Option<JsonValue> {
+    if depth > MAX_JSON_DEPTH {
+        return None;
+    }
     skip_ws(bytes, pos);
     if *pos >= bytes.len() {
         return None;
@@ -180,7 +187,7 @@ fn parse_json_value(bytes: &[u8], pos: &mut usize) -> Option<JsonValue> {
                 return Some(JsonValue::Array(arr));
             }
             loop {
-                arr.push(parse_json_value(bytes, pos)?);
+                arr.push(parse_json_value(bytes, pos, depth + 1)?);
                 skip_ws(bytes, pos);
                 if *pos >= bytes.len() {
                     return None;
@@ -211,7 +218,7 @@ fn parse_json_value(bytes: &[u8], pos: &mut usize) -> Option<JsonValue> {
                     return None;
                 }
                 *pos += 1;
-                let val = parse_json_value(bytes, pos)?;
+                let val = parse_json_value(bytes, pos, depth + 1)?;
                 map.insert(key, val);
                 skip_ws(bytes, pos);
                 if *pos >= bytes.len() {
@@ -1517,25 +1524,142 @@ pub async fn run_mcp_stdio_server(rows: u16, cols: u16) -> Result<()> {
     Ok(())
 }
 
+/// Maximum length of one JSON-RPC request line; longer lines close the offending connection.
+const MAX_RPC_LINE_BYTES: u64 = 1024 * 1024;
+
 /// Runs a headless JSON-RPC 2.0 TCP automation server (`bilterm --headless --listen 127.0.0.1:PORT`).
 pub async fn run_headless_tcp_server(bind_addr: &str, rows: u16, cols: u16) -> Result<()> {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    let mut plane = AutomationControlPlane::new_headless(rows, cols);
+    serve_jsonrpc(listener, AutomationControlPlane::new_headless(rows, cols)).await
+}
+
+/// Serves JSON-RPC over `listener`. Each connection runs in its own task and forwards request
+/// lines to this task, which exclusively owns `plane`; a misbehaving or disconnecting client only
+/// ends its own connection, never the daemon.
+pub async fn serve_jsonrpc(
+    listener: tokio::net::TcpListener,
+    mut plane: AutomationControlPlane,
+) -> Result<()> {
+    type RpcRequest = (String, tokio::sync::oneshot::Sender<String>);
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<RpcRequest>(64);
 
     loop {
-        let (stream, _) = listener.accept().await?;
-        let (rd, mut wr) = stream.into_split();
-        let mut lines = BufReader::new(rd).lines();
-        while let Some(line) = lines.next_line().await? {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
+        tokio::select! {
+            accepted = listener.accept() => {
+                match accepted {
+                    Ok((stream, peer)) => {
+                        let req_tx = req_tx.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = serve_jsonrpc_connection(stream, req_tx).await {
+                                tracing::warn!(%peer, error = %e, "JSON-RPC connection closed");
+                            }
+                        });
+                    }
+                    Err(e) => tracing::warn!(error = %e, "JSON-RPC accept failed"),
+                }
             }
-            let resp = plane.handle_jsonrpc_line(trimmed);
-            wr.write_all(format!("{resp}\n").as_bytes()).await?;
-            wr.flush().await?;
+            Some((line, reply_tx)) = req_rx.recv() => {
+                let _ = reply_tx.send(plane.handle_jsonrpc_line(&line));
+            }
         }
+    }
+}
+
+async fn serve_jsonrpc_connection(
+    stream: tokio::net::TcpStream,
+    req_tx: tokio::sync::mpsc::Sender<(String, tokio::sync::oneshot::Sender<String>)>,
+) -> std::io::Result<()> {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+    let (rd, mut wr) = stream.into_split();
+    let mut reader = BufReader::new(rd);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        let n = (&mut reader)
+            .take(MAX_RPC_LINE_BYTES + 1)
+            .read_until(b'\n', &mut buf)
+            .await?;
+        if n == 0 {
+            return Ok(());
+        }
+        if buf.last() != Some(&b'\n') && n as u64 > MAX_RPC_LINE_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "JSON-RPC request line exceeds 1 MiB",
+            ));
+        }
+        let line = String::from_utf8_lossy(&buf);
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        if req_tx.send((trimmed.to_string(), reply_tx)).await.is_err() {
+            return Ok(());
+        }
+        let Ok(resp) = reply_rx.await else {
+            return Ok(());
+        };
+        wr.write_all(format!("{resp}\n").as_bytes()).await?;
+        wr.flush().await?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+    #[test]
+    fn json_parser_rejects_pathological_nesting_without_overflowing_the_stack() {
+        let deep = "[".repeat(200_000);
+        assert!(JsonValue::parse(&deep).is_none());
+        let ok = format!("{}{}", "[".repeat(MAX_JSON_DEPTH), "]".repeat(MAX_JSON_DEPTH));
+        assert!(JsonValue::parse(&ok).is_some());
+    }
+
+    async fn status_roundtrip(addr: std::net::SocketAddr) -> String {
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let (rd, mut wr) = stream.into_split();
+        wr.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"workspace.status\"}\n")
+            .await
+            .unwrap();
+        let mut line = String::new();
+        BufReader::new(rd).read_line(&mut line).await.unwrap();
+        line
+    }
+
+    #[tokio::test]
+    async fn daemon_survives_abusive_clients_and_serves_concurrent_connections() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(serve_jsonrpc(listener, AutomationControlPlane::new_headless(24, 80)));
+
+        // An idle connection must not block other clients.
+        let _idle = tokio::net::TcpStream::connect(addr).await.unwrap();
+
+        // Deeply nested JSON gets a parse error instead of crashing the process.
+        let mut deep = tokio::net::TcpStream::connect(addr).await.unwrap();
+        deep.write_all(format!("{}\n", "[".repeat(200_000)).as_bytes()).await.unwrap();
+        let mut resp = vec![0u8; 256];
+        let n = deep.read(&mut resp).await.unwrap();
+        assert!(String::from_utf8_lossy(&resp[..n]).contains("-32700"));
+
+        // A client that closes with an unread reply pending (kernel sends RST) must not stop the daemon.
+        let mut abrupt = tokio::net::TcpStream::connect(addr).await.unwrap();
+        abrupt
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"workspace.status\"}\n")
+            .await
+            .unwrap();
+        drop(abrupt);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // An oversized line closes only that connection.
+        let mut huge = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let _ = huge.write_all(&vec![b'a'; (MAX_RPC_LINE_BYTES + 16) as usize]).await;
+
+        let line = status_roundtrip(addr).await;
+        assert!(line.contains("\"id\":7") && line.contains("result"), "{line}");
     }
 }

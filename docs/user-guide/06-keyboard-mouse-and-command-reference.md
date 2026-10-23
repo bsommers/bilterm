@@ -84,6 +84,8 @@
 | `Ctrl+X [` / `Alt+C` | `:copy` | Enter keyboard-driven Vi Copy Mode (`h/j/k/l/w/b/0/$`, `v` char, `V` line, `b`/`Ctrl+V` block, `y`/`Enter` yank) (`VAL-04`) |
 | `Ctrl+LeftClick` | `:links [index]` | Yank explicit `OSC 8` hyperlink or auto-detected URL via `OSC 52` (`VAL-03`) |
 | — | `:clear` | Clear output canvas and reset scrollback |
+| — | `:scrollback` / `:sb` | Show scrollback lines used/capacity, memory, and the global budget |
+| — | `:scrollback clear` | Drop the active pane's scrollback history (keeps the screen) |
 
 ---
 
