@@ -3,7 +3,7 @@ pub mod split_tree;
 pub mod z_stack;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -211,8 +211,13 @@ impl WindowManager {
         }
         profile.tags = merged_tags.clone();
 
+        let control_dir = crate::secure_fs::private_runtime_dir()
+            .map_err(|e| {
+                tracing::warn!(error = %e, "private runtime dir unavailable; ssh ControlMaster disabled")
+            })
+            .ok();
+        let args = profile.build_ssh_args(control_dir.as_deref())?;
         let new_id = self.split_focused(SplitDirection::Vertical)?;
-        let args = profile.build_ssh_args();
         let dest = profile.destination.clone();
         if !self.headless_mode {
             let (rows, cols) = self.default_size;
@@ -260,6 +265,7 @@ impl WindowManager {
             .or_else(|| self.config.remotes.get(target).cloned())
             .unwrap_or_else(|| RemoteHostProfile::new(target, target));
         let dest = profile.destination.clone();
+        crate::remote::validate_destination(&dest)?;
         let new_id = self.split_focused(SplitDirection::Vertical)?;
         let badge = format!("{dest}/{session_name}");
         if let Some(pane) = self.panes.get_mut(&new_id) {
@@ -462,21 +468,26 @@ impl WindowManager {
             .notify_color_scheme_changed(fg, bg, cur);
     }
 
-    fn resolve_session_dir(&self) -> PathBuf {
+    pub fn session_dir_fallback_in(base: &Path) -> Result<PathBuf> {
+        crate::secure_fs::private_dir_in(base, "sessions").map_err(Into::into)
+    }
+
+    fn resolve_session_dir(&self) -> Result<PathBuf> {
         if let Some(custom) = &self.config.session_dir {
-            return PathBuf::from(custom);
+            return Ok(PathBuf::from(custom));
         }
         if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
-            return PathBuf::from(xdg).join("bilterm").join("sessions");
+            return Ok(PathBuf::from(xdg).join("bilterm").join("sessions"));
         }
         if let Ok(home) = std::env::var("HOME") {
-            return PathBuf::from(home)
+            return Ok(PathBuf::from(home)
                 .join(".local")
                 .join("state")
                 .join("bilterm")
-                .join("sessions");
+                .join("sessions"));
         }
-        std::env::temp_dir().join("bilterm-sessions")
+        let runtime = crate::secure_fs::private_runtime_dir()?;
+        Self::session_dir_fallback_in(&runtime)
     }
 
     /// Captures a `SavedWorkspaceSession` of the current multi-pane workspace (`ECO-02`).
@@ -517,7 +528,7 @@ impl WindowManager {
         } else {
             &safe_name
         };
-        let dir = self.resolve_session_dir();
+        let dir = self.resolve_session_dir()?;
         std::fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{file_stem}.toml"));
         let snap = self.snapshot_session(file_stem);
@@ -539,7 +550,7 @@ impl WindowManager {
         } else {
             &safe_name
         };
-        let path = self.resolve_session_dir().join(format!("{file_stem}.toml"));
+        let path = self.resolve_session_dir()?.join(format!("{file_stem}.toml"));
         let raw = std::fs::read_to_string(&path)?;
         let saved: SavedWorkspaceSession = toml::from_str(&raw)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
@@ -591,7 +602,13 @@ impl WindowManager {
 
     /// Lists all saved workspace session names found in `<session_dir>` (`:session list`, `ECO-02`).
     pub fn list_sessions(&self) -> Vec<String> {
-        let dir = self.resolve_session_dir();
+        let dir = match self.resolve_session_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(error = %e, "session dir unavailable");
+                return Vec::new();
+            }
+        };
         let Ok(entries) = std::fs::read_dir(dir) else {
             return Vec::new();
         };
@@ -1111,5 +1128,46 @@ mod tests {
         assert!(!execute_wm_colon_command(&mut wm, cmd));
         assert_eq!(wm.active_pane_mut().vt.scrollback_used_rows(), 0);
         assert!(parse_colon_command(":scrollback bogus").unwrap().is_err());
+    }
+
+    #[test]
+    fn spawn_ssh_pane_rejects_option_destination_without_new_pane() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let initial_panes = wm.panes.len();
+        let res = wm.spawn_ssh_pane("-oProxyCommand=evil", None, vec![]);
+        assert!(res.is_err());
+        assert_eq!(wm.panes.len(), initial_panes);
+    }
+
+    #[test]
+    fn connect_ssh_tmux_rejects_option_destination_without_new_pane() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let initial_panes = wm.panes.len();
+        let res = wm.connect_ssh_tmux("-oProxyCommand=evil", "main", vec![]);
+        assert!(res.is_err());
+        assert_eq!(wm.panes.len(), initial_panes);
+    }
+
+    #[test]
+    fn spawn_ssh_pane_accepts_valid_destination() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let initial_panes = wm.panes.len();
+        let res = wm.spawn_ssh_pane("ubuntu@10.0.0.42", None, vec![]);
+        assert!(res.is_ok());
+        assert_eq!(wm.panes.len(), initial_panes + 1);
+    }
+
+    #[test]
+    fn list_sessions_returns_empty_when_session_dir_unavailable() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Point fallback helper at an unwritable or invalid location
+        let non_dir = tmp.path().join("file_not_dir");
+        std::fs::write(&non_dir, b"foo").unwrap();
+        assert!(WindowManager::session_dir_fallback_in(&non_dir).is_err());
+
+        // A window manager with an invalid session_dir config returns empty list without panicking
+        let mut wm = WindowManager::new_headless(24, 80);
+        wm.config.session_dir = Some(non_dir.to_str().unwrap().to_string());
+        assert!(wm.list_sessions().is_empty());
     }
 }
