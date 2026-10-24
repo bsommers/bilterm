@@ -4,16 +4,16 @@ milestone: v1.7.0
 milestone_name: milestone
 current_phase: 22
 current_phase_name: unified-action-command-vocabulary-and-data-driven-keymap
-status: planned_phase_22
-stopped_at: Phase 22 planned (3 plans in 3 waves); ready for /gsd-execute-phase 22
+status: completed_phase_22
+stopped_at: Phase 22 completed (3/3 plans); ready for /gsd-plan-phase 23
 last_updated: "2026-10-24"
 last_activity: 2026-10-24
-last_activity_desc: Planned Phase 22 (Unified Action Vocabulary, Data-Driven Keymap, asciinema Ctrl+X Harmony & Whole-Workspace .cast Recorder)
+last_activity_desc: Completed Phase 22 (Unified Action Vocabulary, Data-Driven Keymap, asciinema Ctrl+X Harmony & Whole-Workspace .cast Recorder)
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 33
-  completed_plans: 30
+  completed_plans: 33
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 22 — Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`)
+**Current focus:** Phase 23 — `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`)
 
 ## Current Position
 
-Phase: 22 (unified-action-command-vocabulary-and-data-driven-keymap) — PLANNED
-Plan: 0/3 complete (`22-01-PLAN.md`..`22-03-PLAN.md`)
-Status: Ready to execute Phase 22 (`/gsd-execute-phase 22`)
-Last activity: 2026-10-24 — Planned Phase 22 (`ARCH-R01`, `REC-02`)
+Phase: 22 (unified-action-command-vocabulary-and-data-driven-keymap) — COMPLETE
+Plan: 3/3 complete (`22-01-PLAN.md`..`22-03-PLAN.md`)
+Status: Ready to plan Phase 23 (`/gsd-plan-phase 23`)
+Last activity: 2026-10-24 — Executed and verified Phase 22 (`ARCH-R01`, `REC-02`)
 
 Progress: [██████████] 100%
 

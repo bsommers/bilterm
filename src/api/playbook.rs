@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::json::JsonValue;
 use super::rpc::{AutomationControlPlane, SnapshotPolicy, extract_vt_row_text};
+use crate::colon_command::parse_colon_command;
 use crate::error::{BiltermError, Result};
 
 /// Structured automation event emitted by the Bilterm Control Plane (`v1.3.0`).
@@ -261,10 +262,14 @@ impl AutomationControlPlane {
                         .command
                         .as_deref()
                         .ok_or_else(|| format!("step {step_num}: 'colon' requires 'command'"))?;
-                    self.dispatch_method(
-                        "wm.command",
-                        &JsonValue::obj([("command", JsonValue::String(cmd.to_string()))]),
-                    )?;
+                    let normalized = if cmd.starts_with(':') {
+                        cmd.to_string()
+                    } else {
+                        format!(":{cmd}")
+                    };
+                    let action = parse_colon_command(&normalized)
+                        .ok_or_else(|| format!("not a valid :colon command: {normalized}"))??;
+                    self.wm.apply(action).map_err(|e| e.to_string())?;
                 }
                 "exec" => {
                     let cmd = step

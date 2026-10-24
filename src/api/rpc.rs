@@ -8,8 +8,8 @@ use ratatui::layout::Rect;
 use super::json::JsonValue;
 use super::mcp::parse_key_chord_str;
 use super::playbook::{AutomationEvent, Playbook};
-use crate::colon_command::{execute_wm_colon_command, parse_colon_command};
-use crate::input::handle_wm_key_event;
+use crate::colon_command::parse_colon_command;
+use crate::input::{AppAction, handle_wm_key_event};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
@@ -460,10 +460,17 @@ impl AutomationControlPlane {
                 } else {
                     format!(":{raw_cmd}")
                 };
-                let parsed = parse_colon_command(&normalized)
+                let action = parse_colon_command(&normalized)
                     .ok_or_else(|| format!("not a valid :colon command: {normalized}"))??;
-                let should_quit = execute_wm_colon_command(&mut self.wm, parsed);
-                let outcome_str = if should_quit { "quit" } else { "handled" };
+                let app_action = self
+                    .wm
+                    .apply(action)
+                    .map_err(|e| format!("action execution error: {e}"))?;
+                let outcome_str = if app_action == AppAction::Quit {
+                    "quit"
+                } else {
+                    "handled"
+                };
                 Ok(JsonValue::obj([
                     ("status", JsonValue::String(outcome_str.to_string())),
                     ("command", JsonValue::String(normalized)),
