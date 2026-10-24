@@ -220,19 +220,25 @@ Plans:
   3. A single `CompositePane::submit_command` serves the prompt and `pane.exec`.
   4. Modal state is one `enum Modal`, focus is `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), and `leader_pending` exists in one place.
 
-**Plans**: TBD (`/gsd-plan-phase 21`)
+**Plans**: 3 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Encapsulate `CompositePane`: private fields, remove `pane.leader_pending`, deduplicate `new_base`, unified `submit_command`/`submit_prompt`, and method accessors across `src/` & `tests/` (wave 1)
+- [ ] 21-02-PLAN.md — Encapsulate `WindowManager`: private fields, `enum Modal`, `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), unified `remove_pane(id)` across close/reap/fleet, and method accessors across `src/` & `tests/` (wave 2)
+- [ ] 21-03-PLAN.md — Invariant & regression tests (reaping zoomed pane, fleet disconnect pane removal, `submit_command` parity, `Modal` exclusivity, `Focus` hit-testing) and Phase 21 state sync (wave 3)
 
 ### Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap
 
-**Goal**: As a user and maintainer, I want every key chord, `:command`, playbook step, and JSON-RPC/MCP call to lower into one typed `Action`, so that each feature is implemented once and every keybinding is remappable via `[keybindings]`.
+**Goal**: As a user and maintainer, I want every key chord, `:command`, playbook step, and JSON-RPC/MCP call to lower into one typed `Action`, so that each feature is implemented once, every keybinding is remappable via `[keybindings]`, and `tmux`/`herdr` leader chords work out of the box alongside Borland Turbo Vision hotkeys.
 **Depends on**: Phase 21
 **Requirements**: ARCH-R01 (review P1.1)
 **Success Criteria** (what must be TRUE):
 
   1. `crate::action::Action` replaces `ColonCommand`; `WindowManager::apply(Action)` is the only executor.
   2. Default chords are a data table merged with `config.toml` `[keybindings]`; `handle_wm_key_event` is under ~80 lines.
-  3. `api::dispatch_method` and the playbook engine parse into `Action` (typed params) rather than re-implementing operations.
-  4. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
+  3. Dual-prefix leader support (`Ctrl+B` and `Ctrl+X` accepted when standalone; automatic fallback to `Ctrl+X` when `$TMUX` is detected so `Ctrl+B` passes cleanly to outer `tmux`), plus full `tmux`/`herdr` post-leader chord parity (`"` → `SplitHorizontal`, `%` → `SplitVertical`, `n` → `DeckNext`, `p` → `DeckPrev`) alongside existing `-`/`|`/`h/j/k/l`/`o`/`z`/`[`/`1..9`/`:`/`?` chords and Borland `F1`–`F12`/`Alt+<key>` bindings.
+  4. `api::dispatch_method` and the playbook engine parse into `Action` (typed params) rather than re-implementing operations.
+  5. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
 
 **Plans**: TBD (`/gsd-plan-phase 22`)
 
@@ -277,6 +283,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 18. `v1.4.0` First-Class SSH Domains (`:ssh`), Remote Persistent `tmux -CC` (`:ssh-tmux`) & `herdr`-Style Central Fleet Federation (`REM-01`) | Complete | Complete | 2026-10-21 |
 | 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 7/7 | Complete | 2026-10-23 |
 | 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
-| 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/TBD | Not started | - |
+| 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/3 | Planned | - |
 | 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |

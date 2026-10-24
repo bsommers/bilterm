@@ -63,7 +63,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Architecture & Modularity Refactoring (`ARCH`)
 
-- [ ] **ARCH-R01**: Unified `Action` command vocabulary and data-driven keymap replacing duplicate dispatch paths across key handlers, `:colon` commands, playbooks, and JSON-RPC/MCP (`Phase 22`, review P1.1).
+- [ ] **ARCH-R01**: Unified `Action` command vocabulary and data-driven keymap replacing duplicate dispatch paths across key handlers, `:colon` commands, playbooks, and JSON-RPC/MCP, including context-aware `Ctrl+B` / `Ctrl+X` leader prefix handling (`Ctrl+B` standalone with `$TMUX` auto-fallback to `Ctrl+X`) and `tmux`/`herdr` post-leader chord parity (`"`, `%`, `n`, `p`) (`Phase 22`, review P1.1).
 - [ ] **ARCH-R02**: Encapsulated `WindowManager` and `CompositePane` invariants behind private fields, single `remove_pane` / `submit_command` methods, `enum Modal`, and `enum Focus` (`Phase 21`, review P1.2).
 - [ ] **ARCH-R03**: `TerminalBackend` trait decoupling `vt100_ctt` from `ui/` and `pane/` via `GridSnapshot` / cell views (`Phase 23`, review P1.3).
 - [x] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so no source file exceeds ~800 lines, `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).

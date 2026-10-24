@@ -4,15 +4,15 @@ milestone: v1.7.0
 milestone_name: milestone
 current_phase: 21
 current_phase_name: encapsulated-workspace-invariants
-status: completed_phase_20
-stopped_at: Phase 20 complete (5/5 plans verified); ready to plan Phase 21
+status: planned_phase_21
+stopped_at: Phase 21 planned (3 plans in 3 waves); ready for /gsd-execute-phase 21
 last_updated: "2026-10-23"
 last_activity: 2026-10-23
-last_activity_desc: Completed Phase 20 (Mega-Module Decomposition, ARCH-R04; all 58 src/**/*.rs files <= 800 lines, pane <-> wm cycle eliminated)
+last_activity_desc: Planned Phase 21 (Encapsulated Workspace Invariants, ARCH-R02) and updated Phase 22 scope with Ctrl+B/Ctrl+X + tmux/herdr chord parity
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 7
-  total_plans: 27
+  total_plans: 30
   completed_plans: 27
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-19)
 
 ## Current Position
 
-Phase: 20 (mega-module-decomposition-behaviour-preserving) — COMPLETE
-Plan: 5/5 complete (`20-01-PLAN.md`..`20-05-PLAN.md`)
-Status: Ready to plan Phase 21 (`/gsd-plan-phase 21`)
-Last activity: 2026-10-23 — Completed Phase 20 (`ARCH-R04`)
+Phase: 21 (encapsulated-workspace-invariants) — PLANNED
+Plan: 0/3 complete (`21-01-PLAN.md`..`21-03-PLAN.md`)
+Status: Ready to execute Phase 21 (`/gsd-execute-phase 21`)
+Last activity: 2026-10-23 — Planned Phase 21 (`ARCH-R02`) and updated Phase 22 (`ARCH-R01`) leader/chord spec
 
 Progress: [██████████] 100%
 
