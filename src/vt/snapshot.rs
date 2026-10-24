@@ -233,7 +233,7 @@ impl<'a> CellView<'a> {
     }
 }
 
-/// Point-in-time snapshot of a single terminal row (`ARCH-01`, `FND-08`).
+/// Point-in-time snapshot of a single terminal row (`ARCH-01`, `FND-08`, `FONT-01`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowSnapshot {
     pub cells: Vec<CellSnapshot>,
@@ -241,6 +241,8 @@ pub struct RowSnapshot {
     pub dirty: bool,
     /// Whether this row soft-wrapped onto the next row (`FND-08`).
     pub wrapped: bool,
+    /// DEC line-size attribute (`DECSWL`, `DECDWL`, `DECDHL`) (`FONT-01`).
+    pub line_size: crate::ui::typography::LineSizeAttr,
 }
 
 impl RowSnapshot {
@@ -249,6 +251,7 @@ impl RowSnapshot {
             cells: vec![CellSnapshot::default(); usize::from(cols)],
             dirty: true,
             wrapped: false,
+            line_size: crate::ui::typography::LineSizeAttr::Single,
         }
     }
 }

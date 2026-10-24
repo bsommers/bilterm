@@ -380,6 +380,7 @@ impl GhosttyVtEngine {
                     cells: row_cells,
                     dirty: row_dirty,
                     wrapped: row_wrapped,
+                    line_size: crate::ui::typography::LineSizeAttr::Single,
                 });
             }
         }

@@ -121,6 +121,7 @@ pub struct VtParser {
     active_overline: bool,
     last_styled_underline_kind: UnderlineKind,
     last_styled_underline_color: Option<RgbTriplet>,
+    line_size_attrs: std::collections::BTreeMap<u16, crate::ui::typography::LineSizeAttr>,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
@@ -181,6 +182,7 @@ impl VtParser {
             active_overline: false,
             last_styled_underline_kind: UnderlineKind::None,
             last_styled_underline_color: None,
+            line_size_attrs: std::collections::BTreeMap::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
         }
@@ -210,10 +212,17 @@ impl VtParser {
             return;
         }
         let was_alt = self.is_alternate_screen();
+        let (start_row, _) = self.parser.screen().cursor_position();
         let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
         let normalized = normalize_extended_sgr_for_vt100(bytes);
         self.parser.process(&normalized);
+        crate::ui::typography::scan_dec_line_size_escapes(
+            bytes,
+            start_row,
+            self.rows,
+            &mut self.line_size_attrs,
+        );
         self.scan_control_sequences(bytes);
         if !was_alt && !self.is_alternate_screen() {
             self.append_primary_stream_log(&normalized);
@@ -525,6 +534,7 @@ impl VtParser {
                 cells: row_cells,
                 dirty: true,
                 wrapped: false,
+                line_size: self.line_size_attr(r),
             });
         }
 
@@ -548,14 +558,13 @@ impl VtParser {
         }
     }
 
-    pub fn size(&self) -> (u16, u16) {
-        (self.rows, self.cols)
+    pub fn size(&self) -> (u16, u16) { (self.rows, self.cols) }
+    pub fn line_size_attr(&self, row: u16) -> crate::ui::typography::LineSizeAttr {
+        self.line_size_attrs.get(&row).copied().unwrap_or_default()
     }
 
     #[cfg(test)]
-    pub(in crate::vt) fn screen(&self) -> &vt100_ctt::Screen {
-        self.parser.screen()
-    }
+    pub(in crate::vt) fn screen(&self) -> &vt100_ctt::Screen { self.parser.screen() }
 
     pub fn is_alternate_screen(&self) -> bool {
         self.parser.screen().alternate_screen() || self.alt_screen_47_or_1047
@@ -576,33 +585,13 @@ impl VtParser {
         ) || self.mouse_tracking_mode
     }
 
-    pub fn is_focus_reporting(&self) -> bool {
-        self.focus_reporting_1004
-    }
-
-    pub fn is_synchronized_output(&self) -> bool {
-        self.synchronized_output_2026
-    }
-
-    pub fn is_mouse_alternate_scroll(&self) -> bool {
-        self.mouse_alternate_scroll_1007
-    }
-
-    pub fn is_grapheme_cluster_2027(&self) -> bool {
-        self.grapheme_cluster_2027
-    }
-
-    pub fn is_report_color_scheme_2031(&self) -> bool {
-        self.report_color_scheme_2031
-    }
-
-    pub fn is_in_band_size_2048(&self) -> bool {
-        self.in_band_size_2048
-    }
-
-    pub fn is_backarrow_key_67(&self) -> bool {
-        self.backarrow_key_67
-    }
+    pub fn is_focus_reporting(&self) -> bool { self.focus_reporting_1004 }
+    pub fn is_synchronized_output(&self) -> bool { self.synchronized_output_2026 }
+    pub fn is_mouse_alternate_scroll(&self) -> bool { self.mouse_alternate_scroll_1007 }
+    pub fn is_grapheme_cluster_2027(&self) -> bool { self.grapheme_cluster_2027 }
+    pub fn is_report_color_scheme_2031(&self) -> bool { self.report_color_scheme_2031 }
+    pub fn is_in_band_size_2048(&self) -> bool { self.in_band_size_2048 }
+    pub fn is_backarrow_key_67(&self) -> bool { self.backarrow_key_67 }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
         let stack = if self.is_alternate_screen() {
@@ -647,50 +636,22 @@ impl VtParser {
         }
     }
 
-    pub fn osc9_progress(&self) -> Option<Osc9Progress> {
-        self.osc9_progress
-    }
-
-    pub fn notifications(&self) -> &[TerminalNotification] {
-        &self.notifications
-    }
+    pub fn osc9_progress(&self) -> Option<Osc9Progress> { self.osc9_progress }
+    pub fn notifications(&self) -> &[TerminalNotification] { &self.notifications }
 
     pub fn clear_notifications(&mut self) {
         self.notifications.clear();
         self.unread_bell = false;
     }
 
-    pub fn unread_bell(&self) -> bool {
-        self.unread_bell
-    }
-
-    pub fn recent_escape_sequences(&self) -> &[String] {
-        &self.recent_escape_sequences
-    }
-
-    pub fn last_exit_code(&self) -> Option<i32> {
-        self.last_exit_code
-    }
-
-    pub fn last_duration_ms(&self) -> Option<u64> {
-        self.last_duration_ms
-    }
-
-    pub fn window_title(&self) -> Option<&str> {
-        self.window_title.as_deref()
-    }
-
-    pub fn reported_cwd(&self) -> Option<&Path> {
-        self.reported_cwd.as_deref()
-    }
-
-    pub fn take_query_responses(&mut self) -> Vec<Vec<u8>> {
-        std::mem::take(&mut self.pending_query_responses)
-    }
-
-    pub fn osc133_phase(&self) -> Option<Osc133Phase> {
-        self.osc133_phase
-    }
+    pub fn unread_bell(&self) -> bool { self.unread_bell }
+    pub fn recent_escape_sequences(&self) -> &[String] { &self.recent_escape_sequences }
+    pub fn last_exit_code(&self) -> Option<i32> { self.last_exit_code }
+    pub fn last_duration_ms(&self) -> Option<u64> { self.last_duration_ms }
+    pub fn window_title(&self) -> Option<&str> { self.window_title.as_deref() }
+    pub fn reported_cwd(&self) -> Option<&Path> { self.reported_cwd.as_deref() }
+    pub fn take_query_responses(&mut self) -> Vec<Vec<u8>> { std::mem::take(&mut self.pending_query_responses) }
+    pub fn osc133_phase(&self) -> Option<Osc133Phase> { self.osc133_phase }
 
     pub fn record_command_submission(&mut self, command: impl Into<String>) {
         let (cursor_row, _) = self.parser.screen().cursor_position();

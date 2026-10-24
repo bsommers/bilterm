@@ -94,6 +94,11 @@ pub trait TerminalBackend {
 
     /// Drains pending outbound `OSC 52` clipboard sequences emitted by the child application.
     fn take_outbound_osc52(&mut self) -> Vec<String>;
+
+    /// Returns the DEC VT100/VT220 line-size attribute (`DECSWL`, `DECDWL`, `DECDHL`) for `row` (`FONT-01`).
+    fn line_size_attr(&self, _row: u16) -> crate::ui::typography::LineSizeAttr {
+        crate::ui::typography::LineSizeAttr::Single
+    }
 }
 
 impl VtParser {
@@ -222,6 +227,7 @@ impl TerminalBackend for VtParser {
     fn reset_scrollback(&mut self) { VtParser::reset_scrollback(self); }
     fn take_query_responses(&mut self) -> Vec<Vec<u8>> { VtParser::take_query_responses(self) }
     fn take_outbound_osc52(&mut self) -> Vec<String> { VtParser::take_outbound_osc52(self) }
+    fn line_size_attr(&self, row: u16) -> crate::ui::typography::LineSizeAttr { VtParser::line_size_attr(self, row) }
 }
 
 /// Lightweight, self-contained reference [`TerminalBackend`] with zero `vt100_ctt` dependency (`ARCH-R03`).
@@ -579,6 +585,7 @@ impl TerminalBackend for MockTerminalBackend {
                 cells: cells.clone(),
                 dirty: true,
                 wrapped: false,
+                line_size: crate::ui::typography::LineSizeAttr::Single,
             })
             .collect();
         let (row, col) = self.cursor_position();

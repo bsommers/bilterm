@@ -7,9 +7,11 @@ pub mod occlusion;
 pub mod renderer;
 pub mod status_bar;
 pub mod theme;
+pub mod typography;
 
 pub use drawer::render_workspace_drawer;
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
+pub use typography::{LineSizeAttr, encode_host_font_passthrough, scan_dec_line_size_escapes};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -163,6 +165,11 @@ fn render_output_canvas(
     let grapheme_2027 = vt.is_grapheme_cluster_2027();
 
     for r in 0..render_rows {
+        let line_attr = vt.line_size_attr(r);
+        if line_attr.is_double_width() {
+            typography::render_double_width_row(vt, r, canvas, render_cols, line_attr, buf);
+            continue;
+        }
         let mut skip_next_wide_continuation = false;
         for c in 0..render_cols {
             let Some(vt_cell) = vt.cell_view(r, c) else {

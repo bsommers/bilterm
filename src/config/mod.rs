@@ -99,6 +99,16 @@ pub struct BiltermConfig {
     pub scrollback: ScrollbackConfig,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
+    /// Base terminal font size in points (`6..=72`, default `14`, `FONT-01`).
+    pub font_size_pt: u16,
+    /// Dynamic terminal font zoom scale percentage (`50..=300`, default `100`, `FONT-01`).
+    pub font_scale_pct: u16,
+    /// Base unscaled pixel width per character cell for `GuiWorkspaceRenderer` (`4..=32`, default `8`, `FONT-01`).
+    pub cell_width_px: u16,
+    /// Base unscaled pixel height per character cell for `GuiWorkspaceRenderer` (`8..=64`, default `16`, `FONT-01`).
+    pub cell_height_px: u16,
+    /// Emits `OSC 50` font-scaling passthrough sequences to the host terminal when `true` (`FONT-01`).
+    pub host_font_passthrough: bool,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -148,6 +158,11 @@ impl Default for BiltermConfig {
             remotes: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
             drawer: DrawerConfig::default(),
+            font_size_pt: 14,
+            font_scale_pct: 100,
+            cell_width_px: 8,
+            cell_height_px: 16,
+            host_font_passthrough: true,
             custom_palette_override: None,
         }
     }
@@ -318,6 +333,49 @@ impl BiltermConfig {
         let next_ry = (i32::from(self.focal_zoom_ry) + i32::from(delta_ry)).clamp(2, 60) as u16;
         self.focal_zoom_rx = next_rx;
         self.focal_zoom_ry = next_ry;
+    }
+
+    /// Computes the scaled character cell pixel dimensions `(cell_width_px, cell_height_px)`
+    /// clamped to `4..=64` px wide and `8..=128` px high (`FONT-01`).
+    pub fn scaled_cell_dimensions_px(&self) -> (u16, u16) {
+        let scale = u32::from(self.font_scale_pct.clamp(50, 300));
+        let base_w = u32::from(self.cell_width_px.clamp(4, 32));
+        let base_h = u32::from(self.cell_height_px.clamp(8, 64));
+        let w = ((base_w * scale + 50) / 100).clamp(4, 64) as u16;
+        let h = ((base_h * scale + 50) / 100).clamp(8, 128) as u16;
+        (w, h)
+    }
+
+    /// Computes the effective scaled font point size (`6..=72` pt) (`FONT-01`).
+    pub fn scaled_font_size_pt(&self) -> u16 {
+        let scale = u32::from(self.font_scale_pct.clamp(50, 300));
+        let base_pt = u32::from(self.font_size_pt.clamp(6, 72));
+        ((base_pt * scale + 50) / 100).clamp(6, 72) as u16
+    }
+
+    /// Steps the font zoom scale percentage by `delta_pct` (clamped to `50..=300%`) (`FONT-01`).
+    pub fn step_font_scale(&mut self, delta_pct: i16) {
+        let next = (i32::from(self.font_scale_pct) + i32::from(delta_pct)).clamp(50, 300) as u16;
+        self.font_scale_pct = next;
+    }
+
+    /// Resets `font_scale_pct` to `100%` (`FONT-01`).
+    pub fn reset_font_scale(&mut self) {
+        self.font_scale_pct = 100;
+    }
+
+    /// Interprets `val` as a point size when `val < 50` (`6..=49` pt, updating `font_scale_pct`
+    /// proportionally relative to `14pt` base or updating `font_size_pt`) or as a direct percentage
+    /// when `val >= 50` (`50..=300%`) (`FONT-01`).
+    pub fn set_font_size_or_scale(&mut self, val: u16) {
+        if val < 50 {
+            let pt = val.clamp(6, 49);
+            let base = self.font_size_pt.clamp(6, 72);
+            self.font_scale_pct =
+                ((u32::from(pt) * 100 + u32::from(base) / 2) / u32::from(base)).clamp(50, 300) as u16;
+        } else {
+            self.font_scale_pct = val.clamp(50, 300);
+        }
     }
 }
 
