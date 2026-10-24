@@ -7,9 +7,9 @@ use crate::ui::cell_to_ratatui_style;
 fn parses_truecolor_and_256_color_cells() {
     let mut vt = VtParser::new(24, 80, 1000);
     vt.process(b"\x1b[38;2;12;34;56;48;5;208;1;3;4mA\x1b[0m");
-    let cell = vt.screen().cell(0, 0).expect("cell (0,0)");
-    assert_eq!(cell.contents(), "A");
-    let style = cell_to_ratatui_style(cell);
+    let cell = vt.cell_snapshot(0, 0).expect("cell (0,0)");
+    assert_eq!(cell.grapheme, "A");
+    let style = cell_to_ratatui_style(&cell);
     assert_eq!(style.fg, Some(Color::Rgb(12, 34, 56)));
     assert_eq!(style.bg, Some(Color::Indexed(208)));
     assert!(style.add_modifier.contains(Modifier::BOLD));

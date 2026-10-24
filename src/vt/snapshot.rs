@@ -174,6 +174,63 @@ impl CellSnapshot {
     pub fn is_wide_continuation(&self) -> bool {
         self.width == 0
     }
+
+    /// Returns a zero-allocation borrowed [`CellView`] of this snapshot cell (`ARCH-R03`).
+    pub fn as_view(&self) -> CellView<'_> {
+        CellView {
+            grapheme: self.grapheme.as_str(),
+            width: self.width,
+            fg: self.fg,
+            bg: self.bg,
+            bold: self.bold,
+            italic: self.italic,
+            underline: self.underline,
+            inverse: self.inverse,
+        }
+    }
+}
+
+/// Zero-allocation borrowed view of a single terminal cell (`ARCH-R03`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CellView<'a> {
+    pub grapheme: &'a str,
+    pub width: u8,
+    pub fg: CellColor,
+    pub bg: CellColor,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: UnderlineKind,
+    pub inverse: bool,
+}
+
+impl<'a> CellView<'a> {
+    pub const fn is_wide(&self) -> bool {
+        self.width == 2
+    }
+
+    pub const fn is_wide_continuation(&self) -> bool {
+        self.width == 0
+    }
+
+    pub fn to_ratatui_style(&self) -> Style {
+        let style = Style::default()
+            .fg(self.fg.to_ratatui_color())
+            .bg(self.bg.to_ratatui_color());
+        let mut modifiers = Modifier::empty();
+        if self.bold {
+            modifiers |= Modifier::BOLD;
+        }
+        if self.italic {
+            modifiers |= Modifier::ITALIC;
+        }
+        if self.underline.is_underlined() {
+            modifiers |= Modifier::UNDERLINED;
+        }
+        if self.inverse {
+            modifiers |= Modifier::REVERSED;
+        }
+        style.add_modifier(modifiers)
+    }
 }
 
 /// Point-in-time snapshot of a single terminal row (`ARCH-01`, `FND-08`).
@@ -251,5 +308,14 @@ impl GridSnapshot {
             }
         }
         out.trim_end().to_string()
+    }
+
+    /// Returns the full viewport text contents as newline-joined rows with trailing blank rows trimmed.
+    pub fn contents(&self) -> String {
+        let mut lines: Vec<String> = (0..self.rows).map(|r| self.row_text(r)).collect();
+        while lines.last().is_some_and(|l| l.is_empty()) {
+            lines.pop();
+        }
+        lines.join("\n")
     }
 }

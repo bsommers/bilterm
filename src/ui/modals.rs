@@ -591,11 +591,12 @@ pub(super) fn render_inspector_modal(
     let pane = wm.active_pane();
     let vt = pane.vt();
     let (rows, cols) = vt.size();
-    let (cur_r, cur_c) = vt.screen().cursor_position();
-    let cell_opt = vt.screen().cell(cur_r, cur_c);
+    let (cur_r, cur_c) = vt.cursor_position();
+    let cell_opt = vt.cell_snapshot(cur_r, cur_c);
     let cell_grapheme = cell_opt
+        .as_ref()
         .map(|c| {
-            let s = c.contents();
+            let s = c.grapheme.as_str();
             if s.is_empty() { " " } else { s }
         })
         .unwrap_or(" ");

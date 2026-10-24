@@ -17,25 +17,7 @@ use crate::vt::VtParser;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
 pub(super) fn extract_vt_row_text(vt: &VtParser, row: u16) -> String {
-    let (_, cols) = vt.size();
-    let screen = vt.screen();
-    let mut line = String::with_capacity(usize::from(cols));
-    for c in 0..cols {
-        if let Some(cell) = screen.cell(row, c) {
-            if cell.is_wide_continuation() {
-                continue;
-            }
-            let contents = cell.contents();
-            if contents.is_empty() {
-                line.push(' ');
-            } else {
-                line.push_str(contents);
-            }
-        } else {
-            line.push(' ');
-        }
-    }
-    line.trim_end().to_string()
+    vt.row_text(row)
 }
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
@@ -385,7 +367,7 @@ impl AutomationControlPlane {
                         ])
                     })
                     .collect();
-                let (cur_r, cur_c) = pane.vt().screen().cursor_position();
+                let (cur_r, cur_c) = pane.vt().cursor_position();
 
                 Ok(JsonValue::obj([
                     ("pane_id", JsonValue::Number(target_id as i64)),
@@ -705,7 +687,7 @@ impl AutomationControlPlane {
         let mut panes = Vec::new();
         for (&id, pane) in self.wm.panes() {
             let (rows, cols) = pane.vt().size();
-            let (cur_r, cur_c) = pane.vt().screen().cursor_position();
+            let (cur_r, cur_c) = pane.vt().cursor_position();
             let input_mode = match pane.effective_routing_mode() {
                 InputRoutingMode::CommandPrompt => "cmd_box",
                 InputRoutingMode::RawPtyPassthrough => "raw_pty",

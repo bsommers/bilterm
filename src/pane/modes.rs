@@ -4,6 +4,7 @@ use crate::pane::history_store::HistoryStore;
 use crate::pane::{CompositePane, FloatingPromptState, PaneId, PromptMouseDrag};
 use crate::pty::PtySession;
 use crate::pty::line_discipline::LineDisciplineState;
+use crate::vt::snapshot::GridSnapshot;
 use crate::vt::{CanvasHint, CanvasSearchMatch, VtParser, encode_osc52_clipboard};
 
 /// Interactive scrollback search & match highlighting state for the `OutputCanvas` (`VAL-02`).
@@ -101,9 +102,9 @@ impl CopyModeState {
         }
     }
 
-    /// Extracts the selected text from `screen` according to `selection_kind` (`VAL-04`).
-    pub fn extract_selected_text(&self, screen: &vt100_ctt::Screen) -> String {
-        let (rows, cols) = screen.size();
+    /// Extracts the selected text from `grid` according to `selection_kind` (`VAL-04`, `ARCH-R03`).
+    pub fn extract_selected_text(&self, grid: &GridSnapshot) -> String {
+        let (rows, cols) = (grid.rows, grid.cols);
         if rows == 0 || cols == 0 {
             return String::new();
         }
@@ -123,9 +124,9 @@ impl CopyModeState {
                         r == self.cursor_row
                     };
                 if include {
-                    let ch = screen
+                    let ch = grid
                         .cell(r, c)
-                        .map(|cell| cell.contents())
+                        .map(|cell| cell.grapheme.as_str())
                         .unwrap_or_default();
                     if ch.is_empty() {
                         line.push(' ');
@@ -207,7 +208,7 @@ impl CompositePane {
 
     /// Enters keyboard-driven Vi Copy Mode on the `OutputCanvas` (`Alt+C` / `:copy`, `VAL-04`).
     pub fn enter_copy_mode(&mut self) {
-        let (r, c) = self.vt.screen().cursor_position();
+        let (r, c) = self.vt.cursor_position();
         self.copy_mode.active = true;
         self.copy_mode.cursor_row = r;
         self.copy_mode.cursor_col = c;
@@ -227,7 +228,8 @@ impl CompositePane {
 
     /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer and `OSC 52` (`VAL-04`).
     pub fn yank_copy_selection(&mut self) -> Option<String> {
-        let text = self.copy_mode.extract_selected_text(self.vt.screen());
+        let snap = self.vt.snapshot();
+        let text = self.copy_mode.extract_selected_text(&snap);
         self.copy_mode.active = false;
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;

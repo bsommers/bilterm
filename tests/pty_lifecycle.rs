@@ -41,7 +41,7 @@ async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
             tokio::time::timeout(Duration::from_millis(100), session.output_rx_mut().recv()).await
         {
             vt.process(&bytes);
-            if vt.screen().contents().contains("BILTERM_PTY_OK_3270") {
+            if vt.contents().contains("BILTERM_PTY_OK_3270") {
                 found = true;
                 break;
             }
@@ -51,6 +51,6 @@ async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
     assert!(
         found,
         "Expected 'BILTERM_PTY_OK_3270' in VT screen contents, got: {:?}",
-        vt.screen().contents()
+        vt.contents()
     );
 }

@@ -85,7 +85,6 @@ fn tmux_control_mode_events_and_dcs_passthrough_end_to_end() {
         wm.pane(1)
             .unwrap()
             .vt()
-            .screen()
             .contents()
             .contains("LINE_FROM_TMUX_PANE_0")
     );

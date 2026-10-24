@@ -417,12 +417,12 @@ mod tests {
 
         // %output %0 with octal \033 (ESC), \015 (\r), \012 (\n)
         bridge.handle_control_line(&mut wm, "%output %0 \\033[32mHELLO_TMUX\\033[0m\\015\\012");
-        assert!(wm.pane(1).unwrap().vt().screen().contents().contains("HELLO_TMUX"));
+        assert!(wm.pane(1).unwrap().vt().contents().contains("HELLO_TMUX"));
 
         // %output %1 spawns/maps a second CompositePane automatically
         bridge.handle_control_line(&mut wm, "%output %1 SECOND_TMUX_PANE\\015\\012");
         assert_eq!(wm.pane_count(), 2);
-        assert!(wm.pane(2).unwrap().vt().screen().contents().contains("SECOND_TMUX_PANE"));
+        assert!(wm.pane(2).unwrap().vt().contents().contains("SECOND_TMUX_PANE"));
 
         let send_cmd = format_send_keys_hex(0, b"ls\n");
         assert_eq!(send_cmd, "send-keys -t %0 -H 6c 73 0a\n");

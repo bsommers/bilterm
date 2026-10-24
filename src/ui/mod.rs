@@ -29,6 +29,7 @@ use crate::ui::modals::{
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::status_bar::{render_dos_fkey_bar, render_floating_prompt};
 use crate::ui::theme::ThemePalette;
+use crate::vt::snapshot::CellSnapshot;
 use crate::wm::{WindowManager, WorkspaceLayoutMode, inset_window_frame};
 
 /// Ratatui widget rendering a `CompositePane` in 3 immediate-mode passes:
@@ -153,22 +154,22 @@ fn render_output_canvas(
     active: bool,
     buf: &mut Buffer,
 ) {
-    let screen = pane.vt().screen();
-    let (vt_rows, vt_cols) = pane.vt().size();
+    let vt = pane.vt();
+    let (vt_rows, vt_cols) = vt.size();
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
-    let grapheme_2027 = pane.vt().is_grapheme_cluster_2027();
+    let grapheme_2027 = vt.is_grapheme_cluster_2027();
 
     for r in 0..render_rows {
         let mut skip_next_wide_continuation = false;
         for c in 0..render_cols {
-            let Some(vt_cell) = screen.cell(r, c) else {
+            let Some(vt_cell) = vt.cell_view(r, c) else {
                 skip_next_wide_continuation = false;
                 continue;
             };
             let dst_x = canvas.x + c;
             let dst_y = canvas.y + r;
-            let style = cell_to_ratatui_style(vt_cell);
+            let style = vt_cell.to_ratatui_style();
 
             if skip_next_wide_continuation {
                 skip_next_wide_continuation = false;
@@ -186,7 +187,7 @@ fn render_output_canvas(
                 continue;
             }
 
-            let contents = vt_cell.contents();
+            let contents = vt_cell.grapheme;
             if vt_cell.is_wide() {
                 // Prevent a 2-column wide glyph at the rightmost column from overflowing/wrapping the host terminal
                 if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2, grapheme_2027) {
@@ -397,10 +398,10 @@ fn render_output_canvas(
 
     // When in RawPtyPassthrough and not scrolled back, highlight the live PTY cursor cell
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
-        && pane.vt().scrollback_offset() == 0
-        && !screen.hide_cursor()
+        && vt.scrollback_offset() == 0
+        && vt.is_cursor_visible()
     {
-        let (cur_r, cur_c) = screen.cursor_position();
+        let (cur_r, cur_c) = vt.cursor_position();
         if cur_r < canvas.height && cur_c < canvas.width {
             let cx = canvas.x + cur_c;
             let cy = canvas.y + cur_r;
@@ -656,36 +657,28 @@ pub fn buffer_to_snapshot_string(buf: &Buffer) -> String {
     lines.join("\n")
 }
 
-/// Converts a `vt100_ctt::Cell` into a `ratatui::style::Style` preserving 16-color, 256-color,
-/// and 24-bit TrueColor attributes plus bold, italic, underline, and inverse modifiers.
-pub fn cell_to_ratatui_style(cell: &vt100_ctt::Cell) -> Style {
+/// Converts a [`CellSnapshot`] into a `ratatui::style::Style` preserving 16-color, 256-color,
+/// and 24-bit TrueColor attributes plus bold, italic, underline, and inverse modifiers (`ARCH-R03`).
+pub fn cell_to_ratatui_style(cell: &CellSnapshot) -> Style {
     let mut style = Style::default()
-        .fg(vt_color_to_ratatui(cell.fgcolor()))
-        .bg(vt_color_to_ratatui(cell.bgcolor()));
+        .fg(cell.fg.to_ratatui_color())
+        .bg(cell.bg.to_ratatui_color());
 
     let mut modifiers = Modifier::empty();
-    if cell.bold() {
+    if cell.bold {
         modifiers |= Modifier::BOLD;
     }
-    if cell.italic() {
+    if cell.italic {
         modifiers |= Modifier::ITALIC;
     }
-    if cell.underline() {
+    if cell.underline.is_underlined() {
         modifiers |= Modifier::UNDERLINED;
     }
-    if cell.inverse() {
+    if cell.inverse {
         modifiers |= Modifier::REVERSED;
     }
     style = style.add_modifier(modifiers);
     style
-}
-
-fn vt_color_to_ratatui(color: vt100_ctt::Color) -> Color {
-    match color {
-        vt100_ctt::Color::Default => Color::Reset,
-        vt100_ctt::Color::Idx(idx) => Color::Indexed(idx),
-        vt100_ctt::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
-    }
 }
 
 #[cfg(test)]

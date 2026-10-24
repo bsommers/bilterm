@@ -155,8 +155,8 @@ fn full_control_sequence_compliance_sgr_decckm_osc_titles_cwd_and_dsr_cpr_da_que
 
     // 1. SGR modifiers: Bold(1), Italic(3), Underline(4), Inverse(7), plus 24-bit TrueColor FG and 256-color BG
     pane.process_pty_output(b"\x1b[1;3;4;7m\x1b[38;2;10;20;30m\x1b[48;5;196mX\x1b[0m");
-    let cell = pane.vt().screen().cell(0, 0).unwrap();
-    let style = cell_to_ratatui_style(cell);
+    let cell = pane.vt().cell_snapshot(0, 0).unwrap();
+    let style = cell_to_ratatui_style(&cell);
     assert_eq!(style.fg, Some(Color::Rgb(10, 20, 30)));
     assert_eq!(style.bg, Some(Color::Indexed(196)));
     assert!(style.add_modifier.contains(Modifier::BOLD));
@@ -181,11 +181,11 @@ fn full_control_sequence_compliance_sgr_decckm_osc_titles_cwd_and_dsr_cpr_da_que
 
     // 3. Mouse tracking (?1000h, ?1002h, ?1003h, ?1006h), Focus (?1004h), Sync Output (?2026h)
     pane.process_pty_output(b"\x1b[?1000h\x1b[?1006h\x1b[?1004h\x1b[?2026h");
-    assert!(pane.vt().is_mouse_SGR_or_tracking());
+    assert!(pane.vt().is_mouse_sgr_or_tracking());
     assert!(pane.vt().is_focus_reporting());
     assert!(pane.vt().is_synchronized_output());
     pane.process_pty_output(b"\x1b[?1000l\x1b[?1006l\x1b[?1004l\x1b[?2026l");
-    assert!(!pane.vt().is_mouse_SGR_or_tracking());
+    assert!(!pane.vt().is_mouse_sgr_or_tracking());
     assert!(!pane.vt().is_focus_reporting());
     assert!(!pane.vt().is_synchronized_output());
 

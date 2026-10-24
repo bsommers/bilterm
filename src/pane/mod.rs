@@ -482,18 +482,16 @@ impl CompositePane {
     /// password/passphrase prompt (`[sudo] password for ...:`, `[sudo: authenticate] Password:`,
     /// `Password:`, `Enter passphrase for key ...:`).
     pub fn canvas_cursor_line_looks_like_password_prompt(&self) -> bool {
-        let screen = self.vt.screen();
-        let (cur_r, cur_c) = screen.cursor_position();
-        let (_, cols) = screen.size();
+        let (cur_r, cur_c) = self.vt.cursor_position();
+        let (_, cols) = self.vt.size();
         let end_col = (cur_c + 1).min(cols);
         let mut line = String::with_capacity(usize::from(end_col));
         for c in 0..end_col {
-            if let Some(cell) = screen.cell(cur_r, c) {
-                let s = cell.contents();
-                if s.is_empty() {
+            if let Some(cell) = self.vt.cell_snapshot(cur_r, c) {
+                if cell.grapheme.is_empty() {
                     line.push(' ');
                 } else {
-                    line.push_str(s);
+                    line.push_str(&cell.grapheme);
                 }
             }
         }

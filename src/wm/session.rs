@@ -665,7 +665,7 @@ mod tests {
         let cap = wm.active_pane().vt().scrollback_capacity();
         assert_eq!(cap, 799);
         assert!(wm.active_pane_mut().vt_mut().scrollback_used_rows() <= cap);
-        assert!(wm.active_pane().vt().screen().contents().contains("row 999"));
+        assert!(wm.active_pane().vt().contents().contains("row 999"));
     }
 
     #[test]

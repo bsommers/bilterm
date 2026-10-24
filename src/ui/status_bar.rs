@@ -544,7 +544,7 @@ pub fn render_oia_status_bar_themed(
             (pane.prompt().cursor_row + 1, pane.prompt().cursor_col + 1)
         }
         InputRoutingMode::RawPtyPassthrough => {
-            let (vr, vc) = pane.vt().screen().cursor_position();
+            let (vr, vc) = pane.vt().cursor_position();
             (usize::from(vr) + 1, usize::from(vc) + 1)
         }
     };

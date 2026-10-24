@@ -78,7 +78,7 @@ mod tests {
         // Toggle back on: PTY canvas and prompt state remain intact
         qt.toggle();
         assert!(qt.visible);
-        assert!(qt.pane.vt().screen().contents().contains("PERSISTENT_QUAKE_OUTPUT"));
+        assert!(qt.pane.vt().contents().contains("PERSISTENT_QUAKE_OUTPUT"));
         assert_eq!(qt.pane.prompt().text(), "htop");
     }
 }

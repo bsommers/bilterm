@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod codec;
 pub mod detect;
 pub mod ghostty_backend;
@@ -8,6 +9,7 @@ pub mod scrollback;
 pub mod snapshot;
 pub mod worker;
 
+pub use backend::*;
 pub use codec::*;
 pub use detect::*;
 pub use graphics::*;
@@ -550,7 +552,8 @@ impl VtParser {
         (self.rows, self.cols)
     }
 
-    pub fn screen(&self) -> &vt100_ctt::Screen {
+    #[cfg(test)]
+    pub(in crate::vt) fn screen(&self) -> &vt100_ctt::Screen {
         self.parser.screen()
     }
 
@@ -571,11 +574,6 @@ impl VtParser {
             self.parser.screen().mouse_protocol_mode(),
             vt100_ctt::MouseProtocolMode::None
         ) || self.mouse_tracking_mode
-    }
-
-    #[allow(non_snake_case)]
-    pub fn is_mouse_SGR_or_tracking(&self) -> bool {
-        self.is_mouse_sgr_or_tracking()
     }
 
     pub fn is_focus_reporting(&self) -> bool {

@@ -165,7 +165,7 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             } else if let Some(last) = pane.vt().command_blocks().last() {
                 last.command.clone()
             } else {
-                pane.vt().screen().contents()
+                pane.vt().contents()
             };
             let seq = encode_osc52_clipboard(&text_to_yank);
             pane.set_last_osc52_sequence(Some(seq));
