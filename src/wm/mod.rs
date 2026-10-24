@@ -1,8 +1,13 @@
+pub mod drawer;
 pub mod quick_terminal;
 pub mod session;
 pub mod split_tree;
 pub mod z_stack;
 
+pub use drawer::{
+    DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
+    WorkspaceDrawer,
+};
 pub use session::{SavedPaneState, SavedWorkspaceSession};
 
 use std::collections::BTreeMap;
@@ -93,6 +98,8 @@ pub struct WindowManager {
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
+    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
+    pub(crate) drawer: WorkspaceDrawer,
 }
 
 impl WindowManager {
@@ -138,6 +145,7 @@ impl WindowManager {
             workspace_recorder: Mutex::new(None),
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
+            drawer: WorkspaceDrawer::new(),
         }
     }
 
@@ -197,81 +205,25 @@ impl WindowManager {
         }
     }
 
-    pub fn pane_count(&self) -> usize {
-        self.panes.len()
-    }
-
-    pub fn pane(&self, id: PaneId) -> Option<&CompositePane> {
-        self.panes.get(&id)
-    }
-
-    pub fn pane_mut(&mut self, id: PaneId) -> Option<&mut CompositePane> {
-        self.panes.get_mut(&id)
-    }
-
-    pub fn panes(&self) -> &BTreeMap<PaneId, CompositePane> {
-        &self.panes
-    }
-
-    pub fn panes_mut(&mut self) -> &mut BTreeMap<PaneId, CompositePane> {
-        &mut self.panes
-    }
-
-    pub fn layout_mode(&self) -> WorkspaceLayoutMode {
-        self.layout_mode
-    }
-
-    pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) {
-        self.layout_mode = mode;
-    }
-
-    pub fn split_tree(&self) -> &SplitTree {
-        &self.split_tree
-    }
-
-    pub fn z_stack(&self) -> &ZStack {
-        &self.z_stack
-    }
-
-    pub fn zoomed_pane(&self) -> Option<PaneId> {
-        self.zoomed_pane
-    }
-
-    pub fn quick_terminal(&self) -> &QuickTerminal {
-        &self.quick_terminal
-    }
-
-    pub fn quick_terminal_mut(&mut self) -> &mut QuickTerminal {
-        &mut self.quick_terminal
-    }
-
-    pub fn is_quick_terminal_visible(&self) -> bool {
-        self.quick_terminal.visible
-    }
-
-    pub fn config(&self) -> &BiltermConfig {
-        &self.config
-    }
-
-    pub fn config_mut(&mut self) -> &mut BiltermConfig {
-        &mut self.config
-    }
-
-    pub fn modal(&self) -> &Modal {
-        &self.modal
-    }
-
-    pub fn modal_mut(&mut self) -> &mut Modal {
-        &mut self.modal
-    }
-
-    pub fn close_modal(&mut self) {
-        self.modal = Modal::None;
-    }
-
-    pub fn is_help_visible(&self) -> bool {
-        matches!(self.modal, Modal::Help { .. })
-    }
+    pub fn pane_count(&self) -> usize { self.panes.len() }
+    pub fn pane(&self, id: PaneId) -> Option<&CompositePane> { self.panes.get(&id) }
+    pub fn pane_mut(&mut self, id: PaneId) -> Option<&mut CompositePane> { self.panes.get_mut(&id) }
+    pub fn panes(&self) -> &BTreeMap<PaneId, CompositePane> { &self.panes }
+    pub fn panes_mut(&mut self) -> &mut BTreeMap<PaneId, CompositePane> { &mut self.panes }
+    pub fn layout_mode(&self) -> WorkspaceLayoutMode { self.layout_mode }
+    pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) { self.layout_mode = mode; }
+    pub fn split_tree(&self) -> &SplitTree { &self.split_tree }
+    pub fn z_stack(&self) -> &ZStack { &self.z_stack }
+    pub fn zoomed_pane(&self) -> Option<PaneId> { self.zoomed_pane }
+    pub fn quick_terminal(&self) -> &QuickTerminal { &self.quick_terminal }
+    pub fn quick_terminal_mut(&mut self) -> &mut QuickTerminal { &mut self.quick_terminal }
+    pub fn is_quick_terminal_visible(&self) -> bool { self.quick_terminal.visible }
+    pub fn config(&self) -> &BiltermConfig { &self.config }
+    pub fn config_mut(&mut self) -> &mut BiltermConfig { &mut self.config }
+    pub fn modal(&self) -> &Modal { &self.modal }
+    pub fn modal_mut(&mut self) -> &mut Modal { &mut self.modal }
+    pub fn close_modal(&mut self) { self.modal = Modal::None; }
+    pub fn is_help_visible(&self) -> bool { matches!(self.modal, Modal::Help { .. }) }
 
     pub fn help_scroll(&self) -> usize {
         match self.modal {
@@ -567,6 +519,7 @@ impl WindowManager {
         self.quick_terminal.pane.poll_pty_events();
         self.quick_terminal.pane.refresh_line_discipline();
         let _ = self.poll_tmux_control();
+        self.update_drawer_telemetry();
         self.maybe_rebalance_scrollback(Instant::now());
     }
 
@@ -674,6 +627,7 @@ impl WindowManager {
     /// Computes `(PaneId, Rect)` pairs in ascending render order (painter's algorithm:
     /// bottom-most pane first, topmost focused pane last).
     pub fn compute_workspace_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
+        let area = self.effective_workspace_area(area);
         if let Some(zoomed_id) = self.zoomed_pane
             && self.panes.contains_key(&zoomed_id)
         {

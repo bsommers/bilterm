@@ -14,6 +14,7 @@ use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
 use crate::vt::scrollback::ScrollbackConfig;
+use crate::wm::DrawerConfig;
 
 /// Declarative Bilterm configuration loaded from `~/.config/bilterm/config.toml` (`CFG-01`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +97,8 @@ pub struct BiltermConfig {
     pub remotes: BTreeMap<String, RemoteHostProfile>,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
+    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
+    pub drawer: DrawerConfig,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -144,6 +147,7 @@ impl Default for BiltermConfig {
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
+            drawer: DrawerConfig::default(),
             custom_palette_override: None,
         }
     }
