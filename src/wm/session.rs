@@ -89,16 +89,16 @@ impl WindowManager {
                 if profile.remote_osc133_bootstrap {
                     let _ = live_pane.write_to_pty(remote_osc133_bootstrap_command().as_bytes());
                 }
-                live_pane.title = format!("SSH:{dest} [#{new_id}]");
-                live_pane.remote_target = Some(dest.clone());
+                live_pane.set_title(format!("SSH:{dest} [#{new_id}]"));
+                live_pane.set_remote_target(Some(dest.clone()));
                 Self::attach_history(&mut live_pane, &self.config.history_settings());
                 self.panes.insert(new_id, live_pane);
             }
         }
         if let Some(pane) = self.panes.get_mut(&new_id) {
-            pane.title = format!("SSH:{dest} [#{new_id}]");
-            pane.remote_target = Some(dest.clone());
-            pane.status_message = Some(format!("🌐 Connected SSH pane #{new_id} -> {dest}"));
+            pane.set_title(format!("SSH:{dest} [#{new_id}]"));
+            pane.set_remote_target(Some(dest.clone()));
+            pane.set_status_message(Some(format!("🌐 Connected SSH pane #{new_id} -> {dest}")));
         }
         let node_name = format!("{}-#{}", profile.name, new_id);
         self.fleet
@@ -125,11 +125,11 @@ impl WindowManager {
         let new_id = self.split_focused(SplitDirection::Vertical)?;
         let badge = format!("{dest}/{session_name}");
         if let Some(pane) = self.panes.get_mut(&new_id) {
-            pane.title = format!("TMUX-SSH:{badge} [#{new_id}]");
-            pane.remote_target = Some(badge.clone());
-            pane.status_message = Some(format!(
+            pane.set_title(format!("TMUX-SSH:{badge} [#{new_id}]"));
+            pane.set_remote_target(Some(badge.clone()));
+            pane.set_status_message(Some(format!(
                 "🌐 Attached remote tmux -CC session '{session_name}' on {dest} (pane #{new_id})"
-            ));
+            )));
         }
         let mut merged_tags = profile.tags.clone();
         for t in tags {
@@ -156,7 +156,7 @@ impl WindowManager {
                 target_pane_ids.extend(
                     self.panes
                         .iter()
-                        .filter(|(_, p)| p.remote_target.is_none())
+                        .filter(|(_, p)| p.remote_target().is_none())
                         .map(|(&id, _)| id),
                 );
             }
@@ -164,7 +164,7 @@ impl WindowManager {
                 target_pane_ids.extend(
                     self.panes
                         .iter()
-                        .filter(|(_, p)| p.remote_target.is_some())
+                        .filter(|(_, p)| p.remote_target().is_some())
                         .map(|(&id, _)| id),
                 );
             }
@@ -194,16 +194,10 @@ impl WindowManager {
         let mut executed_panes = Vec::new();
         for pid in target_pane_ids {
             if let Some(pane) = self.panes.get_mut(&pid)
-                && !pane.read_only
-                && !pane.line_discipline.is_password_prompt()
+                && !pane.is_read_only()
+                && !pane.is_password_prompt()
             {
-                pane.prompt.history.push(command.to_string());
-                let _ = pane.history_store.record_command(command);
-                pane.prompt.running_command = Some(command.to_string());
-                pane.vt.record_command_submission(command);
-                let mut payload = command.as_bytes().to_vec();
-                payload.push(b'\n');
-                let _ = pane.write_to_pty(&payload);
+                let _ = pane.submit_command(command);
                 executed_panes.push(pid);
             }
         }
@@ -244,14 +238,14 @@ impl WindowManager {
             .panes
             .values()
             .map(|p| SavedPaneState {
-                id: p.id,
-                title: p.title.clone(),
+                id: p.id(),
+                title: p.title().to_string(),
                 cwd: p.resolve_cwd().to_string_lossy().into_owned(),
-                prompt_anchor: p.prompt.anchor,
-                prompt_height: p.prompt.height,
-                prompt_width_cols: p.prompt.width_cols,
-                read_only: p.read_only,
-                history: p.prompt.history.clone(),
+                prompt_anchor: p.prompt().anchor,
+                prompt_height: p.prompt().height,
+                prompt_width_cols: p.prompt().width_cols,
+                read_only: p.is_read_only(),
+                history: p.prompt().history.clone(),
             })
             .collect();
         SavedWorkspaceSession {
@@ -322,14 +316,14 @@ impl WindowManager {
                 )
                 .unwrap_or_else(|_| CompositePane::new_headless(sp.id, rows, cols))
             };
-            pane.title = sp.title.clone();
-            pane.prompt.anchor = sp.prompt_anchor;
-            pane.prompt.height = sp.prompt_height.clamp(3, 12);
-            pane.prompt.width_cols = sp.prompt_width_cols;
-            pane.read_only = sp.read_only;
+            pane.set_title(sp.title.clone());
+            pane.prompt_mut().anchor = sp.prompt_anchor;
+            pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
+            pane.prompt_mut().width_cols = sp.prompt_width_cols;
+            pane.set_read_only(sp.read_only);
             // Configure the store first so the later sync does not overwrite the saved history.
             Self::attach_history(&mut pane, &self.config.history_settings());
-            pane.prompt.history = sp.history.clone();
+            pane.prompt_mut().history = sp.history.clone();
             new_panes.insert(sp.id, pane);
         }
 
@@ -393,8 +387,8 @@ impl WindowManager {
         let mut vts: Vec<(PaneId, &mut crate::vt::VtParser)> = self
             .panes
             .iter_mut()
-            .map(|(id, pane)| (*id, &mut pane.vt))
-            .chain(std::iter::once((0, &mut self.quick_terminal.pane.vt)))
+            .map(|(id, pane)| (*id, pane.vt_mut()))
+            .chain(std::iter::once((0, self.quick_terminal.pane.vt_mut())))
             .collect();
         for (id, vt) in vts.iter_mut() {
             if vt.is_alternate_screen() || !self.scrollback.mark_seen(*id) {
@@ -430,9 +424,9 @@ impl WindowManager {
             .panes
             .values_mut()
             .chain(std::iter::once(&mut self.quick_terminal.pane))
-            .map(|p| p.vt.estimated_scrollback_bytes())
+            .map(|p| p.vt_mut().estimated_scrollback_bytes())
             .sum();
-        let vt = &mut self.active_pane_mut().vt;
+        let vt = self.active_pane_mut().vt_mut();
         let used = vt.scrollback_used_rows();
         let cap = vt.scrollback_capacity();
         let bytes = vt.estimated_scrollback_bytes();
@@ -471,26 +465,26 @@ mod tests {
         wm.config.scrollback.max_lines = LineLimit::Fixed(3_000);
         let now = std::time::Instant::now();
         wm.rebalance_scrollback(now);
-        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 1_000);
-        assert_eq!(wm.quick_terminal.pane.vt.scrollback_capacity(), 1_000);
+        assert_eq!(wm.active_pane().vt().scrollback_capacity(), 1_000);
+        assert_eq!(wm.quick_terminal.pane.vt().scrollback_capacity(), 1_000);
 
         fill_lines(wm.active_pane_mut(), 1_200);
         assert!(!wm.scrollback.due(now), "throttled within the interval");
         wm.rebalance_scrollback(now);
-        assert_eq!(wm.active_pane().vt.scrollback_capacity(), 2_000);
+        assert_eq!(wm.active_pane().vt().scrollback_capacity(), 2_000);
         assert_eq!(
-            wm.quick_terminal.pane.vt.scrollback_capacity(),
+            wm.quick_terminal.pane.vt().scrollback_capacity(),
             1_000,
             "idle pane untouched"
         );
         fill_lines(wm.active_pane_mut(), 2_000);
         wm.rebalance_scrollback(now);
         assert_eq!(
-            wm.active_pane().vt.scrollback_capacity(),
+            wm.active_pane().vt().scrollback_capacity(),
             3_000,
             "clamped to max_lines"
         );
-        assert!(wm.active_pane_mut().vt.scrollback_used_rows() >= 1_900);
+        assert!(wm.active_pane_mut().vt_mut().scrollback_used_rows() >= 1_900);
     }
 
     #[test]
@@ -505,7 +499,7 @@ mod tests {
         fill_lines(wm.active_pane_mut(), 1_000);
         wm.rebalance_scrollback(now);
         assert_eq!(
-            wm.active_pane().vt.scrollback_capacity(),
+            wm.active_pane().vt().scrollback_capacity(),
             1_500,
             "no pressure, no shrink"
         );
@@ -516,10 +510,10 @@ mod tests {
         })));
         wm.rebalance_scrollback(now);
         // Fair share: 4 MiB / 2 panes / (80*32+64) bytes per row = 799 rows.
-        let cap = wm.active_pane().vt.scrollback_capacity();
+        let cap = wm.active_pane().vt().scrollback_capacity();
         assert_eq!(cap, 799);
-        assert!(wm.active_pane_mut().vt.scrollback_used_rows() <= cap);
-        assert!(wm.active_pane().vt.screen().contents().contains("row 999"));
+        assert!(wm.active_pane_mut().vt_mut().scrollback_used_rows() <= cap);
+        assert!(wm.active_pane().vt().screen().contents().contains("row 999"));
     }
 
     #[test]
@@ -529,7 +523,7 @@ mod tests {
         fill_lines(wm.active_pane_mut(), 300);
         let cmd = parse_colon_command(":scrollback").unwrap().unwrap();
         assert!(!execute_wm_colon_command(&mut wm, cmd));
-        let msg = wm.active_pane().status_message.clone().unwrap();
+        let msg = wm.active_pane().status_message().unwrap().to_string();
         assert!(
             msg.contains("lines") && msg.contains("MiB") && msg.contains("budget"),
             "{msg}"
@@ -537,7 +531,7 @@ mod tests {
 
         let cmd = parse_colon_command(":scrollback clear").unwrap().unwrap();
         assert!(!execute_wm_colon_command(&mut wm, cmd));
-        assert_eq!(wm.active_pane_mut().vt.scrollback_used_rows(), 0);
+        assert_eq!(wm.active_pane_mut().vt_mut().scrollback_used_rows(), 0);
         assert!(parse_colon_command(":scrollback bogus").unwrap().is_err());
     }
 

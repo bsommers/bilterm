@@ -17,22 +17,22 @@ fn tab_completes_unique_filesystem_path_and_colon_commands() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-    assert_eq!(pane.prompt.text(), ":prompt ");
+    assert_eq!(pane.prompt().text(), ":prompt ");
 
     // 2. Sub-argument colon completion: ":prompt bo" + Tab -> ":prompt bottom"
     for ch in "bo".chars() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-    assert_eq!(pane.prompt.text(), ":prompt bottom");
+    assert_eq!(pane.prompt().text(), ":prompt bottom");
 
     // 3. Relative filesystem directory completion: "echo sr" + Tab -> "echo src/"
-    pane.prompt.clear_line();
+    pane.prompt_mut().clear_line();
     for ch in "echo sr".chars() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-    assert_eq!(pane.prompt.text(), "echo src/");
+    assert_eq!(pane.prompt().text(), "echo src/");
 }
 
 #[test]
@@ -46,8 +46,8 @@ fn tab_and_shift_tab_cycle_multiple_candidates_and_render_completion_bar() {
 
     // First Tab: expands LCP ("Cargo.") and opens completion candidates
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-    assert!(pane.prompt.completion.is_active());
-    assert!(pane.prompt.completion.candidates.len() >= 2);
+    assert!(pane.prompt().completion.is_active());
+    assert!(pane.prompt().completion.candidates.len() >= 2);
 
     // Render pane and verify completion candidates bar appears inside the floating prompt
     let area = Rect::new(0, 0, 80, 20);
@@ -58,9 +58,9 @@ fn tab_and_shift_tab_cycle_multiple_candidates_and_render_completion_bar() {
     assert!(snap.contains("Cargo.toml"));
 
     // Next Tab cycles to candidate 0 ("Cargo.lock"), next Tab cycles to candidate 1 ("Cargo.toml")
-    let first_text = pane.prompt.text();
+    let first_text = pane.prompt().text();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-    let second_text = pane.prompt.text();
+    let second_text = pane.prompt().text();
     assert_ne!(first_text, second_text);
 
     // Shift+Tab (BackTab) cycles backward to the previous candidate
@@ -69,7 +69,7 @@ fn tab_and_shift_tab_cycle_multiple_candidates_and_render_completion_bar() {
         KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
     )
     .unwrap();
-    assert_eq!(pane.prompt.text(), first_text);
+    assert_eq!(pane.prompt().text(), first_text);
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn streaming_foreground_command_keeps_floating_prompt_visible_over_scrolling_bac
     // - foreground_pgid (4200) != shell_pgid (4100)
     // - canonical_mode = true, echo_enabled = true (standard cooked streaming process)
     // - osc133_executing = true (OSC 133;C emitted when command started)
-    pane.line_discipline = LineDisciplineState {
+    *pane.line_discipline_mut() = LineDisciplineState {
         echo_enabled: true,
         canonical_mode: true,
         foreground_pgid: Some(4200),
@@ -98,14 +98,14 @@ fn streaming_foreground_command_keeps_floating_prompt_visible_over_scrolling_bac
         noisy.extend_from_slice(format!("STREAM_LINE_{chunk_idx:02} ").as_bytes());
         // Include C1 control bytes (0x80..0x9F), bidi overrides, and random high bytes
         noisy.extend_from_slice(&[0x84, 0x85, 0x8d, 0x9b, b'A', 0xe2, 0x80, 0xae, b'\r', b'\n']);
-        pane.vt.process(&noisy);
+        pane.vt_mut().process(&noisy);
     }
 
     // Type a new command into the floating prompt while background is scrolling
     for ch in "ps aux".chars() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
-    assert_eq!(pane.prompt.text(), "ps aux");
+    assert_eq!(pane.prompt().text(), "ps aux");
 
     // Render and verify:
     // 1. Floating prompt stays intact on top with "==> ps aux"
@@ -137,7 +137,7 @@ fn streaming_foreground_command_keeps_floating_prompt_visible_over_scrolling_bac
 #[test]
 fn dev_random_binary_flood_with_embedded_escape_traps_never_hides_prompt_or_locks_scroll_region() {
     let mut pane = CompositePane::new_headless(1, 12, 60);
-    pane.prompt.set_text("echo floating-over-random");
+    pane.prompt_mut().set_text("echo floating-over-random");
 
     // Construct a 64KB `/dev/random`-like binary stream containing embedded VT100 traps:
     // - `\x1b[?1049h` and `\x1b[?47h` (would enter alt-screen and hide the floating prompt!)
@@ -161,7 +161,7 @@ fn dev_random_binary_flood_with_embedded_escape_traps_never_hides_prompt_or_lock
 
     // 1. Binary noise stream MUST NOT trigger alternate screen or hide the floating prompt
     assert!(
-        !pane.vt.is_alternate_screen(),
+        !pane.vt().is_alternate_screen(),
         "Random binary stream falsely triggered DECSET alternate screen"
     );
     assert!(
@@ -193,28 +193,28 @@ fn readline_non_canonical_no_echo_never_flashes_prompt_and_three_way_mode_toggle
     // 1. Simulate Bash Readline / Zsh ZLE / Oh-My-Bash prompt subshell:
     // Readline sets !ICANON and !ECHO simultaneously while the shell itself owns the TTY (fg == sh).
     // This MUST NOT be mistaken for a `sudo` password prompt and MUST NOT hide or flash the command prompt!
-    pane.line_discipline = LineDisciplineState {
+    *pane.line_discipline_mut() = LineDisciplineState {
         echo_enabled: false,
         canonical_mode: false,
         foreground_pgid: Some(5000),
         shell_pgid: Some(5000),
         osc133_executing: false,
     };
-    assert!(!pane.line_discipline.is_password_prompt());
+    assert!(!pane.is_password_prompt());
     assert!(pane.is_prompt_visible());
     assert_eq!(pane.effective_routing_mode(), InputRoutingMode::CommandPrompt);
 
     // 2. Simulate `sudo` / `sudo-rs` / `ssh` password prompt:
     // `sudo` runs in its own foreground process group (fg != sh) and disables BOTH ECHO and ICANON!
     // This MUST engage `!ECHO LOCK` and switch to RawPtyPassthrough so the password prompt captures keyboard input!
-    pane.line_discipline = LineDisciplineState {
+    *pane.line_discipline_mut() = LineDisciplineState {
         echo_enabled: false,
         canonical_mode: false,
         foreground_pgid: Some(5001),
         shell_pgid: Some(5000),
         osc133_executing: true,
     };
-    assert!(pane.line_discipline.is_password_prompt());
+    assert!(pane.is_password_prompt());
     assert!(!pane.is_prompt_visible());
     assert_eq!(
         pane.effective_routing_mode(),
@@ -222,36 +222,36 @@ fn readline_non_canonical_no_echo_never_flashes_prompt_and_three_way_mode_toggle
     );
 
     // 3. Genuine canonical password prompt (`ICANON && !ECHO`, e.g., `read -s` or `getpass`) also hides prompt:
-    pane.line_discipline = LineDisciplineState {
+    *pane.line_discipline_mut() = LineDisciplineState {
         echo_enabled: false,
         canonical_mode: true,
         foreground_pgid: Some(5000),
         shell_pgid: Some(5000),
         osc133_executing: true,
     };
-    assert!(pane.line_discipline.is_password_prompt());
+    assert!(pane.is_password_prompt());
     assert!(!pane.is_prompt_visible());
 
     // 4. Defense-in-depth canvas password prompt detection (`[sudo: authenticate] Password: `)
-    pane.line_discipline = LineDisciplineState::default();
-    pane.prompt.running_command = Some("sudo apt update".to_string());
+    *pane.line_discipline_mut() = LineDisciplineState::default();
+    pane.prompt_mut().running_command = Some("sudo apt update".to_string());
     pane.process_pty_output(b"[sudo: authenticate] Password: ");
-    assert!(pane.line_discipline.is_password_prompt());
+    assert!(pane.is_password_prompt());
     assert_eq!(
         pane.effective_routing_mode(),
         InputRoutingMode::RawPtyPassthrough
     );
 
     // Restore normal shell state
-    pane.prompt.running_command = None;
-    pane.line_discipline = LineDisciplineState::default();
+    pane.prompt_mut().running_command = None;
+    *pane.line_discipline_mut() = LineDisciplineState::default();
     assert!(pane.is_prompt_visible());
     assert_eq!(pane.prompt_mode(), PromptMode::Floating);
 
     // 2. Test 3-way mode cycle via F4: Floating -> Fixed -> RegularTerminal -> Floating
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
     assert_eq!(pane.prompt_mode(), PromptMode::Fixed);
-    assert_eq!(pane.prompt.anchor, PromptAnchor::SplitTop);
+    assert_eq!(pane.prompt().anchor, PromptAnchor::SplitTop);
     assert!(pane.is_prompt_visible());
 
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
@@ -265,7 +265,7 @@ fn readline_non_canonical_no_echo_never_flashes_prompt_and_three_way_mode_toggle
     // Pressing F4 (or Alt+E) while in RegularTerminal mode restores Floating Prompt!
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE)).unwrap();
     assert_eq!(pane.prompt_mode(), PromptMode::Floating);
-    assert_eq!(pane.prompt.anchor, PromptAnchor::Top);
+    assert_eq!(pane.prompt().anchor, PromptAnchor::Top);
     assert!(pane.is_prompt_visible());
 
     // 3. Test :mode fixed, :mode terminal, :mode float, and OIA status bar click

@@ -31,7 +31,7 @@ fn vttest_esctest_split_byte_boundaries_and_parameter_bombs_never_panic_or_corru
     }
 
     // Drain any query replies generated during chunked processing
-    let _ = pane.vt.take_query_responses();
+    let _ = pane.vt_mut().take_query_responses();
 
     let area = Rect::new(0, 0, 80, 24);
     let mut buf = Buffer::empty(area);

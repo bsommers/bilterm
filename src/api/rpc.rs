@@ -305,23 +305,15 @@ impl AutomationControlPlane {
                     .panes
                     .get_mut(&target_id)
                     .ok_or_else(|| format!("pane #{target_id} not found"))?;
-                if pane.read_only {
+                if pane.is_read_only() {
                     return Err(format!("pane #{target_id} is locked read-only (🔒 PROT)"));
                 }
-                if pane.line_discipline.is_password_prompt() && !allow_echo_lock {
+                if pane.is_password_prompt() && !allow_echo_lock {
                     return Err(format!(
                         "pane #{target_id} is in !ECHO LOCK password prompt; set allow_echo_lock=true to override"
                     ));
                 }
-                pane.prompt.history.push(cmd.to_string());
-                let _ = pane.history_store.record_command(cmd);
-                pane.prompt.running_command = Some(cmd.to_string());
-                pane.vt.record_command_submission(cmd);
-                if let Some(pty) = &pane.pty {
-                    let mut payload = cmd.as_bytes().to_vec();
-                    payload.push(b'\n');
-                    let _ = pty.write_all(&payload);
-                }
+                pane.submit_command(cmd).map_err(|e| e.to_string())?;
 
                 self.push_event(AutomationEvent::CommandSubmitted {
                     pane_id: target_id,
@@ -344,13 +336,13 @@ impl AutomationControlPlane {
                     .panes
                     .get(&target_id)
                     .ok_or_else(|| format!("pane #{target_id} not found"))?;
-                let (rows, cols) = pane.vt.size();
+                let (rows, cols) = pane.vt().size();
                 let mut lines = Vec::with_capacity(rows as usize);
                 for r in 0..rows {
-                    lines.push(JsonValue::String(extract_vt_row_text(&pane.vt, r)));
+                    lines.push(JsonValue::String(extract_vt_row_text(pane.vt(), r)));
                 }
                 let hints: Vec<JsonValue> = pane
-                    .vt
+                    .vt()
                     .detect_visible_hints()
                     .into_iter()
                     .map(|h| {
@@ -364,7 +356,7 @@ impl AutomationControlPlane {
                     })
                     .collect();
                 let blocks: Vec<JsonValue> = pane
-                    .vt
+                    .vt()
                     .command_blocks()
                     .iter()
                     .map(|b| {
@@ -385,7 +377,7 @@ impl AutomationControlPlane {
                     })
                     .collect();
                 let notifications: Vec<JsonValue> = pane
-                    .vt
+                    .vt()
                     .notifications()
                     .iter()
                     .map(|n| {
@@ -395,25 +387,25 @@ impl AutomationControlPlane {
                         ])
                     })
                     .collect();
-                let (cur_r, cur_c) = pane.vt.screen().cursor_position();
+                let (cur_r, cur_c) = pane.vt().screen().cursor_position();
 
                 Ok(JsonValue::obj([
                     ("pane_id", JsonValue::Number(target_id as i64)),
-                    ("title", JsonValue::String(pane.title.clone())),
+                    ("title", JsonValue::String(pane.title().to_string())),
                     ("rows", JsonValue::Number(i64::from(rows))),
                     ("cols", JsonValue::Number(i64::from(cols))),
                     ("cursor_row", JsonValue::Number(i64::from(cur_r))),
                     ("cursor_col", JsonValue::Number(i64::from(cur_c))),
                     (
                         "alternate_screen",
-                        JsonValue::Bool(pane.vt.is_alternate_screen()),
+                        JsonValue::Bool(pane.vt().is_alternate_screen()),
                     ),
                     (
                         "echo_lock",
-                        JsonValue::Bool(pane.line_discipline.is_password_prompt()),
+                        JsonValue::Bool(pane.is_password_prompt()),
                     ),
-                    ("read_only", JsonValue::Bool(pane.read_only)),
-                    ("recording", JsonValue::Bool(pane.vt.is_recording())),
+                    ("read_only", JsonValue::Bool(pane.is_read_only())),
+                    ("recording", JsonValue::Bool(pane.vt().is_recording())),
                     ("lines", JsonValue::Array(lines)),
                     ("hints", JsonValue::Array(hints)),
                     ("command_blocks", JsonValue::Array(blocks)),
@@ -707,15 +699,15 @@ impl AutomationControlPlane {
         };
         let mut panes = Vec::new();
         for (&id, pane) in &self.wm.panes {
-            let (rows, cols) = pane.vt.size();
-            let (cur_r, cur_c) = pane.vt.screen().cursor_position();
+            let (rows, cols) = pane.vt().size();
+            let (cur_r, cur_c) = pane.vt().screen().cursor_position();
             let input_mode = match pane.effective_routing_mode() {
                 InputRoutingMode::CommandPrompt => "cmd_box",
                 InputRoutingMode::RawPtyPassthrough => "raw_pty",
             };
             panes.push(JsonValue::obj([
                 ("id", JsonValue::Number(id as i64)),
-                ("title", JsonValue::String(pane.title.clone())),
+                ("title", JsonValue::String(pane.title().to_string())),
                 ("rows", JsonValue::Number(i64::from(rows))),
                 ("cols", JsonValue::Number(i64::from(cols))),
                 ("cursor_row", JsonValue::Number(i64::from(cur_r))),
@@ -723,17 +715,17 @@ impl AutomationControlPlane {
                 ("input_target", JsonValue::String(input_mode.to_string())),
                 (
                     "alternate_screen",
-                    JsonValue::Bool(pane.vt.is_alternate_screen()),
+                    JsonValue::Bool(pane.vt().is_alternate_screen()),
                 ),
                 (
                     "echo_lock",
-                    JsonValue::Bool(pane.line_discipline.is_password_prompt()),
+                    JsonValue::Bool(pane.is_password_prompt()),
                 ),
-                ("read_only", JsonValue::Bool(pane.read_only)),
-                ("recording", JsonValue::Bool(pane.vt.is_recording())),
+                ("read_only", JsonValue::Bool(pane.is_read_only())),
+                ("recording", JsonValue::Bool(pane.vt().is_recording())),
                 (
                     "notifications",
-                    JsonValue::Number(pane.vt.notifications().len() as i64),
+                    JsonValue::Number(pane.vt().notifications().len() as i64),
                 ),
             ]));
         }

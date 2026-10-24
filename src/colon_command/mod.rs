@@ -133,20 +133,20 @@ mod tests {
 
         let cmd = parse_colon_command(":prompt bottom").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
-        assert_eq!(pane.prompt.anchor, PromptAnchor::Bottom);
+        assert_eq!(pane.prompt().anchor, PromptAnchor::Bottom);
 
         let cmd = parse_colon_command(":prompt float 7").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
-        assert_eq!(pane.prompt.anchor, PromptAnchor::Floating { y_offset: 7 });
+        assert_eq!(pane.prompt().anchor, PromptAnchor::Floating { y_offset: 7 });
 
         let cmd = parse_colon_command(":prompt height 6").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
-        assert_eq!(pane.prompt.height, 6);
+        assert_eq!(pane.prompt().height, 6);
 
-        pane.vt.record_command_submission("cargo test");
+        pane.vt_mut().record_command_submission("cargo test");
         let cmd = parse_colon_command(":yank").unwrap().unwrap();
         assert!(!execute_colon_command(&mut pane, cmd));
-        assert!(pane.last_osc52_sequence.is_some());
+        assert!(pane.last_osc52_sequence().is_some());
     }
 
     #[test]
@@ -162,19 +162,20 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let mut pane = CompositePane::new_headless(1, 25, 80);
-        pane.history_store.base_dir = tmp.path().to_path_buf();
-        pane.history_store.enabled = true;
-        pane.history_store.session_file_path = tmp.path().join("sessions/default/history.log");
+        pane.history_store_mut().base_dir = tmp.path().to_path_buf();
+        pane.history_store_mut().enabled = true;
+        pane.history_store_mut().session_file_path =
+            tmp.path().join("sessions/default/history.log");
         assert!(!execute_colon_command(&mut pane, ColonCommand::HistoryRuns));
-        assert!(pane.status_message.as_deref().unwrap().contains("no recorded runs"));
+        assert!(pane.status_message().unwrap().contains("no recorded runs"));
 
-        pane.history_store.run_id = "run-1".to_string();
-        pane.history_store.record_command("ls").unwrap();
-        pane.history_store.run_id = "run-2".to_string();
-        pane.history_store.record_command("pwd").unwrap();
-        pane.history_store.record_command("id").unwrap();
+        pane.history_store_mut().run_id = "run-1".to_string();
+        pane.history_store_mut().record_command("ls").unwrap();
+        pane.history_store_mut().run_id = "run-2".to_string();
+        pane.history_store_mut().record_command("pwd").unwrap();
+        pane.history_store_mut().record_command("id").unwrap();
         execute_colon_command(&mut pane, ColonCommand::HistoryRuns);
-        let msg = pane.status_message.clone().unwrap();
+        let msg = pane.status_message().unwrap().to_string();
         assert!(msg.contains("2 runs"), "{msg}");
         assert!(msg.find("run-2").unwrap() < msg.find("run-1").unwrap(), "{msg}");
         assert!(msg.contains("(2 cmds)"), "{msg}");
@@ -240,7 +241,7 @@ mod tests {
     fn record_start_default_path_is_private() {
         let mut pane = CompositePane::new_headless(1, 24, 80);
         execute_colon_command(&mut pane, ColonCommand::RecordStart(None));
-        let status = pane.status_message.unwrap();
+        let status = pane.status_message().unwrap();
         let private_root = crate::secure_fs::private_runtime_dir().unwrap();
         assert!(status.contains(&private_root.display().to_string()));
         assert!(status.contains("recordings"));
@@ -253,7 +254,7 @@ mod tests {
         let cmd = parse_colon_command(":remote add evil -oProxyCommand=x").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
         assert!(!wm.fleet.nodes.contains_key("evil"));
-        let status = wm.active_pane().status_message.as_deref().unwrap_or("");
+        let status = wm.active_pane().status_message().unwrap_or("");
         assert!(
             status.contains("Remote not added:") && status.contains("invalid SSH destination"),
             "status: {status}"

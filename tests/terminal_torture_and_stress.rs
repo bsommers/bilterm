@@ -33,7 +33,7 @@ fn split_top_and_split_bottom_modes_partition_command_and_output_panes_with_zero
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(pane.prompt.anchor, PromptAnchor::SplitTop);
+    assert_eq!(pane.prompt().anchor, PromptAnchor::SplitTop);
 
     let prompt_top = pane.prompt_rect(viewport);
     let canvas_top = pane.canvas_rect(viewport);
@@ -43,14 +43,14 @@ fn split_top_and_split_bottom_modes_partition_command_and_output_panes_with_zero
 
     // Resizing viewport in SplitTop resizes VtParser to the dedicated 16-row canvas
     pane.resize_viewport(viewport).unwrap();
-    assert_eq!(pane.vt.size(), (16, 80));
+    assert_eq!(pane.vt().size(), (16, 80));
 
     // Switch to SplitBottom via :prompt split-bottom -> canvas at y=0..16, prompt at y=16..19, ZERO overlap!
     for ch in ":prompt split-bottom".chars() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(pane.prompt.anchor, PromptAnchor::SplitBottom);
+    assert_eq!(pane.prompt().anchor, PromptAnchor::SplitBottom);
 
     let prompt_bot = pane.prompt_rect(viewport);
     let canvas_bot = pane.canvas_rect(viewport);
@@ -83,7 +83,10 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
     ];
 
     for (style_name, corner_sym) in expected_top_left {
-        app.wm.active_pane_mut().prompt.set_text(&format!(":outline {style_name}"));
+        app.wm
+            .active_pane_mut()
+            .prompt_mut()
+            .set_text(&format!(":outline {style_name}"));
         handle_wm_key_event(
             &mut app.wm,
             KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -117,7 +120,7 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
 
     // Verify themeable DOS drop-shadow styles: Translucent, SolidHalfBlock, ThemeTinted, None
     for shadow_cmd in [":shadows solid", ":shadows tinted", ":shadows translucent", ":shadows off"] {
-        app.wm.active_pane_mut().prompt.set_text(shadow_cmd);
+        app.wm.active_pane_mut().prompt_mut().set_text(shadow_cmd);
         handle_wm_key_event(
             &mut app.wm,
             KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -127,7 +130,10 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
     assert_eq!(app.wm.config.shadow_style, ShadowStyle::None);
     assert!(!app.wm.config.drop_shadows);
 
-    app.wm.active_pane_mut().prompt.set_text(":shadows solid");
+    app.wm
+        .active_pane_mut()
+        .prompt_mut()
+        .set_text(":shadows solid");
     handle_wm_key_event(
         &mut app.wm,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -149,7 +155,7 @@ fn full_control_sequence_compliance_sgr_decckm_osc_titles_cwd_and_dsr_cpr_da_que
 
     // 1. SGR modifiers: Bold(1), Italic(3), Underline(4), Inverse(7), plus 24-bit TrueColor FG and 256-color BG
     pane.process_pty_output(b"\x1b[1;3;4;7m\x1b[38;2;10;20;30m\x1b[48;5;196mX\x1b[0m");
-    let cell = pane.vt.screen().cell(0, 0).unwrap();
+    let cell = pane.vt().screen().cell(0, 0).unwrap();
     let style = cell_to_ratatui_style(cell);
     assert_eq!(style.fg, Some(Color::Rgb(10, 20, 30)));
     assert_eq!(style.bg, Some(Color::Indexed(196)));
@@ -159,9 +165,9 @@ fn full_control_sequence_compliance_sgr_decckm_osc_titles_cwd_and_dsr_cpr_da_que
     assert!(style.add_modifier.contains(Modifier::REVERSED));
 
     // 2. DECCKM (?1h / ?1l) Application Cursor Keys mode
-    assert!(!pane.vt.is_application_cursor());
+    assert!(!pane.vt().is_application_cursor());
     pane.process_pty_output(b"\x1b[?1h");
-    assert!(pane.vt.is_application_cursor());
+    assert!(pane.vt().is_application_cursor());
     assert_eq!(
         encode_key_to_pty_bytes_with_modes(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE), true),
         b"\x1bOA".to_vec()
@@ -171,30 +177,30 @@ fn full_control_sequence_compliance_sgr_decckm_osc_titles_cwd_and_dsr_cpr_da_que
         b"\x1b[A".to_vec()
     );
     pane.process_pty_output(b"\x1b[?1l");
-    assert!(!pane.vt.is_application_cursor());
+    assert!(!pane.vt().is_application_cursor());
 
     // 3. Mouse tracking (?1000h, ?1002h, ?1003h, ?1006h), Focus (?1004h), Sync Output (?2026h)
     pane.process_pty_output(b"\x1b[?1000h\x1b[?1006h\x1b[?1004h\x1b[?2026h");
-    assert!(pane.vt.is_mouse_SGR_or_tracking());
-    assert!(pane.vt.is_focus_reporting());
-    assert!(pane.vt.is_synchronized_output());
+    assert!(pane.vt().is_mouse_SGR_or_tracking());
+    assert!(pane.vt().is_focus_reporting());
+    assert!(pane.vt().is_synchronized_output());
     pane.process_pty_output(b"\x1b[?1000l\x1b[?1006l\x1b[?1004l\x1b[?2026l");
-    assert!(!pane.vt.is_mouse_SGR_or_tracking());
-    assert!(!pane.vt.is_focus_reporting());
-    assert!(!pane.vt.is_synchronized_output());
+    assert!(!pane.vt().is_mouse_SGR_or_tracking());
+    assert!(!pane.vt().is_focus_reporting());
+    assert!(!pane.vt().is_synchronized_output());
 
     // 4. OSC 0 / OSC 2 dynamic window title and OSC 7 working directory reporting
     pane.process_pty_output(b"\x1b]2;MAINFRAME-JOB-3270\x07");
-    assert_eq!(pane.vt.window_title(), Some("MAINFRAME-JOB-3270"));
-    assert!(pane.title.contains("MAINFRAME-JOB-3270"));
+    assert_eq!(pane.vt().window_title(), Some("MAINFRAME-JOB-3270"));
+    assert!(pane.title().contains("MAINFRAME-JOB-3270"));
 
     pane.process_pty_output(b"\x1b]7;file://localhost/tmp\x07");
-    assert_eq!(pane.vt.reported_cwd(), Some(PathBuf::from("/tmp").as_path()));
+    assert_eq!(pane.vt().reported_cwd(), Some(PathBuf::from("/tmp").as_path()));
     assert_eq!(pane.resolve_cwd(), PathBuf::from("/tmp"));
 
     // 5. DSR (CSI 5 n), CPR (CSI 6 n), and Primary DA (CSI c) terminal queries
     pane.process_pty_output(b"\x1b[10;25H\x1b[5n\x1b[6n\x1b[c");
-    let responses = pane.vt.take_query_responses();
+    let responses = pane.vt_mut().take_query_responses();
     assert!(responses.contains(&b"\x1b[0n".to_vec()));
     assert!(responses.contains(&b"\x1b[10;25R".to_vec()));
     assert!(responses.contains(&b"\x1b[?62;22c".to_vec()));
@@ -351,11 +357,13 @@ fn comprehensive_input_router_completion_and_colon_command_coverage() {
     // 2. Exercise fuzzy history search key handling (Ctrl+R, query typing, Up/Down/Ctrl+N/Ctrl+P, Backspace, Enter, Esc)
     {
         let pane = app.wm.active_pane_mut();
-        pane.prompt.history.push("cargo test --all".to_string());
-        pane.prompt.history.push("git status -sb".to_string());
+        pane.prompt_mut()
+            .history
+            .push("cargo test --all".to_string());
+        pane.prompt_mut().history.push("git status -sb".to_string());
 
         handle_key_event(pane, KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)).unwrap();
-        assert!(pane.prompt.fuzzy_search.active);
+        assert!(pane.prompt().fuzzy_search.active);
         handle_key_event(pane, KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)).unwrap();
         handle_key_event(pane, KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)).unwrap();
         handle_key_event(pane, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
@@ -363,32 +371,32 @@ fn comprehensive_input_router_completion_and_colon_command_coverage() {
         handle_key_event(pane, KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL)).unwrap();
         handle_key_event(pane, KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL)).unwrap();
         handle_key_event(pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-        assert!(!pane.prompt.fuzzy_search.active);
+        assert!(!pane.prompt().fuzzy_search.active);
 
         // Re-open and cancel via Esc
         handle_key_event(pane, KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)).unwrap();
         handle_key_event(pane, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
-        assert!(!pane.prompt.fuzzy_search.active);
+        assert!(!pane.prompt().fuzzy_search.active);
     }
 
     // 3. Exercise Tab completion for $ENV, ${ENV}, ~, and command builtins/$PATH
     {
         let pane = app.wm.active_pane_mut();
-        pane.prompt.set_text("echo $PAT");
+        pane.prompt_mut().set_text("echo $PAT");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-        assert!(pane.prompt.text().contains("$PATH"));
+        assert!(pane.prompt().text().contains("$PATH"));
 
-        pane.prompt.set_text("echo ${PAT");
+        pane.prompt_mut().set_text("echo ${PAT");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-        assert!(pane.prompt.text().contains("${PATH}"));
+        assert!(pane.prompt().text().contains("${PATH}"));
 
-        pane.prompt.set_text("cd ~");
+        pane.prompt_mut().set_text("cd ~");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-        assert!(pane.prompt.text().starts_with("cd ~/"));
+        assert!(pane.prompt().text().starts_with("cd ~/"));
 
-        pane.prompt.set_text("ech");
+        pane.prompt_mut().set_text("ech");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-        assert!(pane.prompt.text().starts_with("echo"));
+        assert!(pane.prompt().text().starts_with("echo"));
     }
 
     // 4. Exercise all :colon commands and error branches via App::handle_crossterm_event
@@ -440,7 +448,7 @@ fn comprehensive_input_router_completion_and_colon_command_coverage() {
         ":close",
     ];
     for cmd in colon_cmds {
-        app.wm.active_pane_mut().prompt.set_text(cmd);
+        app.wm.active_pane_mut().prompt_mut().set_text(cmd);
         app.handle_crossterm_event(Event::Key(KeyEvent::new(
             KeyCode::Enter,
             KeyModifiers::NONE,
@@ -472,7 +480,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
     )))
     .unwrap();
     assert_eq!(
-        app.wm.active_pane().prompt.running_command.as_deref(),
+        app.wm.active_pane().prompt().running_command.as_deref(),
         Some("tail -f /dev/null")
     );
 
@@ -484,7 +492,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
     // 2. Resizable prompt width via :prompt width 40, Alt+] / Alt+[, and mouse border/corner drag
     app.wm
         .active_pane_mut()
-        .prompt
+        .prompt_mut()
         .set_text(":prompt width 40");
     app.handle_crossterm_event(Event::Key(KeyEvent::new(
         KeyCode::Enter,
@@ -534,7 +542,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         .map(|i| format!("echo line_{i}"))
         .collect::<Vec<_>>()
         .join("\n");
-    app.wm.active_pane_mut().prompt.set_text(&multiline);
+    app.wm.active_pane_mut().prompt_mut().set_text(&multiline);
     app.handle_crossterm_event(Event::Key(KeyEvent::new(
         KeyCode::PageUp,
         KeyModifiers::SHIFT,
@@ -552,7 +560,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         KeyModifiers::ALT,
     )))
     .unwrap();
-    assert!(app.wm.active_pane().prompt.history_popup_open);
+    assert!(app.wm.active_pane().prompt().history_popup_open);
     let mut buf = Buffer::empty(area);
     WorkspaceWidget::new(&app.wm).render(area, &mut buf);
     assert!(buffer_to_snapshot_string(&buf).contains("COMMAND HISTORY"));
@@ -565,7 +573,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
     let exported = app
         .wm
         .active_pane()
-        .history_store
+        .history_store()
         .last_exported_temp_path
         .clone()
         .expect("exported temp file");
@@ -577,12 +585,12 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         KeyModifiers::NONE,
     )))
     .unwrap();
-    assert!(!app.wm.active_pane().prompt.history_popup_open);
+    assert!(!app.wm.active_pane().prompt().history_popup_open);
 
     // 5. Full-screen cross-hairs (:crosshair full / Alt+X)
     app.wm
         .active_pane_mut()
-        .prompt
+        .prompt_mut()
         .set_text(":crosshair full");
     app.handle_crossterm_event(Event::Key(KeyEvent::new(
         KeyCode::Enter,

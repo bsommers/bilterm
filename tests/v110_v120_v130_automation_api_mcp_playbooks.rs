@@ -299,7 +299,7 @@ fn v140_remote_ssh_tmux_and_herdr_fleet_federation_work() {
             .wm
             .panes
             .get(&2)
-            .and_then(|p| p.prompt.running_command.as_deref()),
+            .and_then(|p| p.prompt().running_command.as_deref()),
         Some("systemctl status postgresql")
     );
 

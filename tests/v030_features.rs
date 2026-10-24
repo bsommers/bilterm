@@ -18,10 +18,10 @@ fn v030_osc9_progress_gauge_and_decset_2031_color_scheme_notifications() {
         .process_pty_output(b"\x1b[?2031h\x1b[?996n\x1b]9;4;1;50\x07");
 
     assert_eq!(
-        wm.active_pane().vt.osc9_progress(),
+        wm.active_pane().vt().osc9_progress(),
         Some(Osc9Progress::Normal(50))
     );
-    let replies = wm.active_pane_mut().vt.take_query_responses();
+    let replies = wm.active_pane_mut().vt_mut().take_query_responses();
     assert_eq!(replies, vec![b"\x1b[?997;1n".to_vec()]);
 
     let area = Rect::new(0, 0, 100, 25);
@@ -33,16 +33,16 @@ fn v030_osc9_progress_gauge_and_decset_2031_color_scheme_notifications() {
     // Indeterminate and clear states
     wm.active_pane_mut().process_pty_output(b"\x1b]9;4;3\x07");
     assert_eq!(
-        wm.active_pane().vt.osc9_progress(),
+        wm.active_pane().vt().osc9_progress(),
         Some(Osc9Progress::Indeterminate)
     );
     wm.active_pane_mut().process_pty_output(b"\x1b]9;4;0\x07");
-    assert_eq!(wm.active_pane().vt.osc9_progress(), None);
+    assert_eq!(wm.active_pane().vt().osc9_progress(), None);
 
     // Switching theme via :theme emits unsolicited CSI ? 997 ; 1 n to panes with ?2031 enabled
     let cmd = parse_colon_command(":theme 3279").unwrap().unwrap();
     execute_wm_colon_command(&mut wm, cmd);
-    let theme_replies = wm.active_pane_mut().vt.take_query_responses();
+    let theme_replies = wm.active_pane_mut().vt_mut().take_query_responses();
     assert_eq!(theme_replies, vec![b"\x1b[?997;1n".to_vec()]);
 }
 
@@ -53,7 +53,7 @@ fn v030_quickselect_3270_field_hints_detects_urls_paths_ips_and_shas() {
         b"\r\n\r\n\r\n\r\nDeploy https://bilterm.dev from ./src/main.rs at commit d974c7f on 192.168.1.42:8080\r\n",
     );
 
-    let hints = pane.vt.detect_visible_hints();
+    let hints = pane.vt().detect_visible_hints();
     assert_eq!(hints.len(), 4);
     assert_eq!(hints[0].kind, CanvasHintKind::Url);
     assert_eq!(hints[0].text, "https://bilterm.dev");
@@ -70,7 +70,7 @@ fn v030_quickselect_3270_field_hints_detects_urls_paths_ips_and_shas() {
 
     // Press Alt+F to open 3270 Field Hints mode
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT)).unwrap();
-    assert!(pane.hints_mode.active);
+    assert!(pane.hints_mode().active);
 
     // Render and verify [a] [b] [c] [d] badges appear on the canvas
     let area = Rect::new(0, 0, 90, 20);
@@ -88,10 +88,10 @@ fn v030_quickselect_3270_field_hints_detects_urls_paths_ips_and_shas() {
         KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE),
     )
     .unwrap();
-    assert!(!pane.hints_mode.active);
-    assert_eq!(pane.prompt.text(), "d974c7f");
-    assert_eq!(pane.prompt.yank_buffer, "d974c7f");
-    assert!(pane.last_osc52_sequence.is_some());
+    assert!(!pane.hints_mode().active);
+    assert_eq!(pane.prompt().text(), "d974c7f");
+    assert_eq!(pane.prompt().yank_buffer, "d974c7f");
+    assert!(pane.last_osc52_sequence().is_some());
 }
 
 #[test]
@@ -140,12 +140,12 @@ fn v030_inspector_modal_top_menubar_read_only_lock_and_broadcast_input() {
     // Lock Pane #1 as Read-Only (🔒 PROT), leave Pane #2 unlocked, and enable :broadcast
     wm.focus_and_raise(1);
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)).unwrap();
-    assert!(wm.panes.get(&1).unwrap().read_only);
+    assert!(wm.panes.get(&1).unwrap().is_read_only());
 
     // Attempting to run a shell command in locked Pane #1 is blocked
-    wm.active_pane_mut().prompt.set_text("rm -rf /");
+    wm.active_pane_mut().prompt_mut().set_text("rm -rf /");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(wm.panes.get(&1).unwrap().vt.command_blocks().is_empty());
+    assert!(wm.panes.get(&1).unwrap().vt().command_blocks().is_empty());
 
     // Focus Pane #2, enable :broadcast on, and submit a command -> fans out to unlocked Pane #2 while skipping locked Pane #1
     wm.focus_and_raise(2);
@@ -153,21 +153,23 @@ fn v030_inspector_modal_top_menubar_read_only_lock_and_broadcast_input() {
     execute_wm_colon_command(&mut wm, bcast_cmd);
     assert!(wm.broadcast_input);
 
-    wm.active_pane_mut().prompt.set_text("uptime");
+    wm.active_pane_mut().prompt_mut().set_text("uptime");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm.panes.get(&1).unwrap().vt.command_blocks().len(), 0);
-    assert_eq!(wm.panes.get(&2).unwrap().vt.command_blocks().len(), 1);
+    assert_eq!(wm.panes.get(&1).unwrap().vt().command_blocks().len(), 0);
+    assert_eq!(wm.panes.get(&2).unwrap().vt().command_blocks().len(), 1);
     assert_eq!(
-        wm.panes.get(&2).unwrap().vt.command_blocks()[0].command,
+        wm.panes.get(&2).unwrap().vt().command_blocks()[0].command,
         "uptime"
     );
 
     // Unlock Pane #1 and broadcast again -> both Pane #1 and Pane #2 receive the command
     wm.panes.get_mut(&1).unwrap().set_read_only(false);
-    wm.active_pane_mut().prompt.set_text("echo cluster-ready");
+    wm.active_pane_mut()
+        .prompt_mut()
+        .set_text("echo cluster-ready");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm.panes.get(&1).unwrap().vt.command_blocks().len(), 1);
-    assert_eq!(wm.panes.get(&2).unwrap().vt.command_blocks().len(), 2);
+    assert_eq!(wm.panes.get(&1).unwrap().vt().command_blocks().len(), 1);
+    assert_eq!(wm.panes.get(&2).unwrap().vt().command_blocks().len(), 2);
 }
 
 #[test]
@@ -191,7 +193,7 @@ fn v030_workspace_session_save_list_and_restore_roundtrip() {
     wm.panes
         .get_mut(&3)
         .unwrap()
-        .prompt
+        .prompt_mut()
         .history
         .push("cargo test".to_string());
 
@@ -212,12 +214,12 @@ fn v030_workspace_session_save_list_and_restore_roundtrip() {
     assert_eq!(restored_wm.panes.len(), 3);
     assert_eq!(restored_wm.layout_mode, WorkspaceLayoutMode::Stacked);
     assert_eq!(
-        restored_wm.panes.get(&1).unwrap().prompt.anchor,
+        restored_wm.panes.get(&1).unwrap().prompt().anchor,
         PromptAnchor::Bottom
     );
-    assert!(restored_wm.panes.get(&2).unwrap().read_only);
+    assert!(restored_wm.panes.get(&2).unwrap().is_read_only());
     assert_eq!(
-        restored_wm.panes.get(&3).unwrap().prompt.history,
+        restored_wm.panes.get(&3).unwrap().prompt().history,
         vec!["cargo test".to_string()]
     );
 

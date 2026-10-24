@@ -78,8 +78,8 @@ pub struct WindowManager {
 impl WindowManager {
     /// Creates a `WindowManager` around an initial `CompositePane`.
     pub fn from_initial_pane(pane: CompositePane, headless_mode: bool) -> Self {
-        let initial_id = pane.id;
-        let (rows, cols) = pane.vt.size();
+        let initial_id = pane.id();
+        let (rows, cols) = pane.vt().size();
         let screen_rows = rows + 1;
         let quick_terminal = if headless_mode {
             QuickTerminal::new_headless(screen_rows, cols)
@@ -153,10 +153,10 @@ impl WindowManager {
     /// Sets or toggles Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
     pub fn set_broadcast_input(&mut self, enabled: bool) {
         self.broadcast_input = enabled;
-        self.active_pane_mut().status_message = Some(format!(
+        self.active_pane_mut().set_status_message(Some(format!(
             "Multi-Pane Input Broadcast: {}",
             if enabled { "ON (📡 BCAST)" } else { "OFF" }
-        ));
+        )));
     }
 
     /// Toggles the interactive Fuzzy Command Palette modal (`Ctrl+P` / `Alt+Space` / `:palette`, `v0.6.0`).
@@ -254,16 +254,12 @@ impl WindowManager {
         let bg = to_rgb(pal.window_frame_bg, (0x00, 0x00, 0x84));
         let cur = to_rgb(pal.active_border_fg, (0xFF, 0xFF, 0x55));
         for pane in self.panes.values_mut() {
-            pane.vt.notify_color_scheme_changed(fg, bg, cur);
-            if let Some(pty) = &pane.pty {
-                for resp in pane.vt.take_query_responses() {
-                    let _ = pty.write_all(&resp);
-                }
-            }
+            pane.vt_mut().notify_color_scheme_changed(fg, bg, cur);
+            pane.flush_query_responses();
         }
         self.quick_terminal
             .pane
-            .vt
+            .vt_mut()
             .notify_color_scheme_changed(fg, bg, cur);
     }
 
@@ -286,7 +282,7 @@ impl WindowManager {
     }
 
     pub(super) fn attach_history(pane: &mut CompositePane, settings: &HistorySettings) {
-        if pane.history_store.apply_settings(settings) {
+        if pane.history_store_mut().apply_settings(settings) {
             pane.restore_persisted_history();
         }
     }
@@ -577,7 +573,7 @@ mod tests {
         .unwrap();
 
         let mut wm = WindowManager::new_headless(25, 80);
-        assert!(wm.active_pane().prompt.history.is_empty());
+        assert!(wm.active_pane().prompt().history.is_empty());
         let cfg = BiltermConfig {
             history_dir: Some(tmp.path().to_string_lossy().into_owned()),
             history_session: "proj".to_string(),
@@ -585,11 +581,11 @@ mod tests {
         };
         wm.apply_config(cfg);
         let expected = vec!["ls".to_string(), "echo a\necho b".to_string()];
-        assert_eq!(wm.active_pane().prompt.history, expected);
+        assert_eq!(wm.active_pane().prompt().history, expected);
 
         wm.split_focused(SplitDirection::Vertical).unwrap();
-        assert_eq!(wm.active_pane().prompt.history, expected);
-        assert_eq!(wm.active_pane().history_store.session_file_path, log);
+        assert_eq!(wm.active_pane().prompt().history, expected);
+        assert_eq!(wm.active_pane().history_store().session_file_path, log);
     }
 
     #[test]

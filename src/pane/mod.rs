@@ -26,55 +26,57 @@ pub type PaneId = usize;
 /// 2. Overlaid `FloatingCommandPrompt` (`FloatingPromptState`)
 /// 3. Bottom 1-row Operator Information Area (`OiaStatusBar`)
 pub struct CompositePane {
-    pub id: PaneId,
-    pub title: String,
-    pub vt: VtParser,
-    pub pty: Option<PtySession>,
-    pub prompt: FloatingPromptState,
-    pub history_store: HistoryStore,
-    pub line_discipline: LineDisciplineState,
-    pub mouse_drag: Option<PromptMouseDrag>,
+    id: PaneId,
+    title: String,
+    vt: VtParser,
+    pty: Option<PtySession>,
+    prompt: FloatingPromptState,
+    history_store: HistoryStore,
+    line_discipline: LineDisciplineState,
+    mouse_drag: Option<PromptMouseDrag>,
     /// Interactive scrollback search & match highlighting state (`VAL-02`).
-    pub canvas_search: CanvasSearchState,
+    canvas_search: CanvasSearchState,
     /// Keyboard-driven Vi Copy Mode & rectangular block selection state (`VAL-04`).
-    pub copy_mode: CopyModeState,
+    copy_mode: CopyModeState,
     /// Keyboard-driven QuickSelect 3270 Field Hints state (`ECO-01`).
-    pub hints_mode: HintsModeState,
+    hints_mode: HintsModeState,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
-    pub read_only: bool,
-    /// Whether the Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord on this pane.
-    pub leader_pending: bool,
+    read_only: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
-    pub remote_target: Option<String>,
+    remote_target: Option<String>,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
-    pub pending_unsafe_paste: Option<String>,
+    pending_unsafe_paste: Option<String>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
-    pub status_message: Option<String>,
+    status_message: Option<String>,
     /// Last outbound `OSC 52` clipboard escape sequence emitted by `:yank` or child PTY passthrough.
-    pub last_osc52_sequence: Option<String>,
+    last_osc52_sequence: Option<String>,
     last_canvas_size: (u16, u16),
     exited: bool,
 }
 
 impl CompositePane {
-    /// Creates a headless `CompositePane` (without spawning an OS process) for deterministic unit/snapshot testing.
-    pub fn new_headless(id: PaneId, rows: u16, cols: u16) -> Self {
-        let canvas_rows = rows.saturating_sub(1).max(1);
-        let canvas_cols = cols.max(1);
+    fn new_base(
+        id: PaneId,
+        title: String,
+        canvas_rows: u16,
+        canvas_cols: u16,
+        scrollback_lines: usize,
+        pty: Option<PtySession>,
+        history_store: HistoryStore,
+    ) -> Self {
         Self {
             id,
-            title: format!("PANE #{id}"),
-            vt: VtParser::new(canvas_rows, canvas_cols, 2000),
-            pty: None,
+            title,
+            vt: VtParser::new(canvas_rows, canvas_cols, scrollback_lines),
+            pty,
             prompt: FloatingPromptState::default(),
-            history_store: HistoryStore::new_headless(id),
+            history_store,
             line_discipline: LineDisciplineState::default(),
             mouse_drag: None,
             canvas_search: CanvasSearchState::default(),
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             read_only: false,
-            leader_pending: false,
             remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,
@@ -82,6 +84,21 @@ impl CompositePane {
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
         }
+    }
+
+    /// Creates a headless `CompositePane` (without spawning an OS process) for deterministic unit/snapshot testing.
+    pub fn new_headless(id: PaneId, rows: u16, cols: u16) -> Self {
+        let canvas_rows = rows.saturating_sub(1).max(1);
+        let canvas_cols = cols.max(1);
+        Self::new_base(
+            id,
+            format!("PANE #{id}"),
+            canvas_rows,
+            canvas_cols,
+            2000,
+            None,
+            HistoryStore::new_headless(id),
+        )
     }
 
     /// Spawns a live `CompositePane` backed by a `portable-pty` shell process.
@@ -93,33 +110,65 @@ impl CompositePane {
 
         let title = format!("{} [#{id}]", pty_config.program);
         let session = PtySession::spawn(pty_config)?;
-        let mut pane = Self {
+        let mut pane = Self::new_base(
             id,
             title,
-            vt: VtParser::new(
-                canvas_rows,
-                canvas_cols,
-                crate::vt::scrollback::DEFAULT_INITIAL_LINES,
-            ),
-            pty: Some(session),
-            prompt: FloatingPromptState::default(),
-            history_store: HistoryStore::new_live(id),
-            line_discipline: LineDisciplineState::default(),
-            mouse_drag: None,
-            canvas_search: CanvasSearchState::default(),
-            copy_mode: CopyModeState::default(),
-            hints_mode: HintsModeState::default(),
-            read_only: false,
-            leader_pending: false,
-            remote_target: None,
-            pending_unsafe_paste: None,
-            status_message: None,
-            last_osc52_sequence: None,
-            last_canvas_size: (canvas_rows, canvas_cols),
-            exited: false,
-        };
+            canvas_rows,
+            canvas_cols,
+            crate::vt::scrollback::DEFAULT_INITIAL_LINES,
+            Some(session),
+            HistoryStore::new_live(id),
+        );
         pane.restore_persisted_history();
         Ok(pane)
+    }
+
+    /// Submits `cmd` to this pane: enforces the read-only guard, updates `running_command` and
+    /// in-memory `prompt.history`, resets scrollback, records the command block in `VtParser`
+    /// and `HistoryStore`, and writes `cmd + "\n"` to the PTY.
+    pub fn submit_command(&mut self, cmd: &str) -> Result<()> {
+        if self.read_only {
+            self.status_message = Some(
+                "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
+                    .to_string(),
+            );
+            return Err(crate::error::BiltermError::Pty(format!(
+                "pane #{} is locked read-only (🔒 PROT)",
+                self.id
+            )));
+        }
+        let cmd_str = cmd.to_string();
+        if !cmd_str.trim().is_empty() {
+            if self.prompt.history.last() != Some(&cmd_str) {
+                self.prompt.history.push(cmd_str.clone());
+            }
+            if !cmd_str.trim().starts_with(':') {
+                self.prompt.running_command = Some(cmd_str.replace('\n', " ; "));
+            }
+        }
+        self.vt.reset_scrollback();
+        self.vt.record_command_submission(cmd_str.clone());
+        let _ = self.history_store.record_command(&cmd_str);
+        let mut payload = cmd_str.into_bytes();
+        payload.push(b'\n');
+        self.write_to_pty(&payload)
+    }
+
+    /// Takes the current text from `prompt` and submits it via [`Self::submit_command`].
+    pub fn submit_prompt(&mut self) -> Result<String> {
+        if self.read_only {
+            self.status_message = Some(
+                "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
+                    .to_string(),
+            );
+            return Err(crate::error::BiltermError::Pty(format!(
+                "pane #{} is locked read-only (🔒 PROT)",
+                self.id
+            )));
+        }
+        let submitted = self.prompt.take_submission();
+        self.submit_command(&submitted)?;
+        Ok(submitted)
     }
 
     /// Replaces the prompt's in-memory history with the newest persisted commands of the

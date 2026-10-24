@@ -10,7 +10,7 @@ use crate::vt::sanitize_paste_bytes;
 use crate::wm::WindowManager;
 
 pub(super) fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
-    let len = pane.hints_mode.hints.len();
+    let len = pane.hints_mode().hints.len();
     if len == 0 {
         pane.exit_hints_mode();
         return Ok(AppAction::Handled);
@@ -20,17 +20,17 @@ pub(super) fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> 
             pane.exit_hints_mode();
         }
         KeyCode::Enter => {
-            let sel = pane.hints_mode.selected.min(len - 1);
+            let sel = pane.hints_mode().selected.min(len - 1);
             let _ = pane.accept_hint_index(sel);
         }
         KeyCode::Down | KeyCode::Tab => {
-            pane.hints_mode.selected = (pane.hints_mode.selected + 1) % len;
+            pane.hints_mode_mut().selected = (pane.hints_mode().selected + 1) % len;
         }
         KeyCode::Up | KeyCode::BackTab => {
-            pane.hints_mode.selected = (pane.hints_mode.selected + len - 1) % len;
+            pane.hints_mode_mut().selected = (pane.hints_mode().selected + len - 1) % len;
         }
         KeyCode::Backspace => {
-            pane.hints_mode.typed_prefix.pop();
+            pane.hints_mode_mut().typed_prefix.pop();
         }
         KeyCode::Char(ch) => {
             let _ = pane.push_hint_char(ch);
@@ -46,26 +46,24 @@ pub(super) fn handle_unsafe_paste_modal_key(
 ) -> Result<AppAction> {
     match key.code {
         KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-            if let Some(payload) = pane.pending_unsafe_paste.take() {
+            if let Some(payload) = pane.take_pending_unsafe_paste() {
                 let clean = sanitize_paste_bytes(&payload).replace("\x1b[201~", "");
-                if let Some(pty) = &pane.pty {
-                    if pane.vt.is_bracketed_paste() {
-                        let mut framed = Vec::with_capacity(clean.len() + 12);
-                        framed.extend_from_slice(b"\x1b[200~");
-                        framed.extend_from_slice(clean.as_bytes());
-                        framed.extend_from_slice(b"\x1b[201~");
-                        pty.write_all(&framed)?;
-                    } else {
-                        pty.write_all(clean.as_bytes())?;
-                    }
+                if pane.vt().is_bracketed_paste() {
+                    let mut framed = Vec::with_capacity(clean.len() + 12);
+                    framed.extend_from_slice(b"\x1b[200~");
+                    framed.extend_from_slice(clean.as_bytes());
+                    framed.extend_from_slice(b"\x1b[201~");
+                    pane.write_to_pty(&framed)?;
+                } else {
+                    pane.write_to_pty(clean.as_bytes())?;
                 }
-                pane.status_message = Some(format!("Confirmed paste ({} chars)", clean.len()));
+                pane.set_status_message(Some(format!("Confirmed paste ({} chars)", clean.len())));
             }
             Ok(AppAction::Handled)
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-            pane.pending_unsafe_paste = None;
-            pane.status_message = Some("Cancelled unsafe multi-line paste".to_string());
+            pane.set_pending_unsafe_paste(None);
+            pane.set_status_message(Some("Cancelled unsafe multi-line paste".to_string()));
             Ok(AppAction::Handled)
         }
         _ => Ok(AppAction::Handled),
@@ -73,14 +71,15 @@ pub(super) fn handle_unsafe_paste_modal_key(
 }
 
 pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
-    let (rows, cols) = pane.vt.size();
+    let (rows, cols) = pane.vt().size();
     let max_r = rows.saturating_sub(1);
     let max_c = cols.saturating_sub(1);
 
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('v') {
-        pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
-        pane.copy_mode.selection_kind = CopySelectionKind::Block;
-        pane.status_message = Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string());
+        let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+        pane.copy_mode_mut().anchor = Some(cur);
+        pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+        pane.set_status_message(Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string()));
         return Ok(AppAction::Handled);
     }
 
@@ -89,54 +88,56 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
             pane.exit_copy_mode();
         }
         KeyCode::Left | KeyCode::Char('h') => {
-            pane.copy_mode.cursor_col = pane.copy_mode.cursor_col.saturating_sub(1);
+            pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(1);
         }
         KeyCode::Right | KeyCode::Char('l') => {
-            pane.copy_mode.cursor_col = (pane.copy_mode.cursor_col + 1).min(max_c);
+            pane.copy_mode_mut().cursor_col = (pane.copy_mode().cursor_col + 1).min(max_c);
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if pane.copy_mode.cursor_row > 0 {
-                pane.copy_mode.cursor_row -= 1;
+            if pane.copy_mode().cursor_row > 0 {
+                pane.copy_mode_mut().cursor_row -= 1;
             } else {
-                pane.vt.scroll_up(1);
+                pane.vt_mut().scroll_up(1);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if pane.copy_mode.cursor_row < max_r {
-                pane.copy_mode.cursor_row += 1;
+            if pane.copy_mode().cursor_row < max_r {
+                pane.copy_mode_mut().cursor_row += 1;
             } else {
-                pane.vt.scroll_down(1);
+                pane.vt_mut().scroll_down(1);
             }
         }
         KeyCode::Home | KeyCode::Char('0') => {
-            pane.copy_mode.cursor_col = 0;
+            pane.copy_mode_mut().cursor_col = 0;
         }
         KeyCode::End | KeyCode::Char('$') => {
-            pane.copy_mode.cursor_col = max_c;
+            pane.copy_mode_mut().cursor_col = max_c;
         }
         KeyCode::Char('w') => {
-            pane.copy_mode.cursor_col = (pane.copy_mode.cursor_col + 5).min(max_c);
+            pane.copy_mode_mut().cursor_col = (pane.copy_mode().cursor_col + 5).min(max_c);
         }
         KeyCode::Char('b') => {
             // 'b' toggles Rectangular Block selection when no modifier or moves word back if already in char mode
-            if pane.copy_mode.selection_kind != CopySelectionKind::Block {
-                pane.copy_mode.anchor =
-                    Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
-                pane.copy_mode.selection_kind = CopySelectionKind::Block;
-                pane.status_message = Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string());
+            if pane.copy_mode().selection_kind != CopySelectionKind::Block {
+                let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+                pane.copy_mode_mut().anchor = Some(cur);
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+                pane.set_status_message(Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string()));
             } else {
-                pane.copy_mode.cursor_col = pane.copy_mode.cursor_col.saturating_sub(5);
+                pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(5);
             }
         }
         KeyCode::Char('v') => {
-            pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
-            pane.copy_mode.selection_kind = CopySelectionKind::Char;
-            pane.status_message = Some("COPY MODE: VISUAL CHAR".to_string());
+            let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+            pane.copy_mode_mut().anchor = Some(cur);
+            pane.copy_mode_mut().selection_kind = CopySelectionKind::Char;
+            pane.set_status_message(Some("COPY MODE: VISUAL CHAR".to_string()));
         }
         KeyCode::Char('V') => {
-            pane.copy_mode.anchor = Some((pane.copy_mode.cursor_row, pane.copy_mode.cursor_col));
-            pane.copy_mode.selection_kind = CopySelectionKind::Line;
-            pane.status_message = Some("COPY MODE: VISUAL LINE".to_string());
+            let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+            pane.copy_mode_mut().anchor = Some(cur);
+            pane.copy_mode_mut().selection_kind = CopySelectionKind::Line;
+            pane.set_status_message(Some("COPY MODE: VISUAL LINE".to_string()));
         }
         KeyCode::Char('y') | KeyCode::Enter => {
             pane.yank_copy_selection();
@@ -153,15 +154,15 @@ pub(super) fn handle_fuzzy_search_key(
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
             KeyCode::Char('g') | KeyCode::Char('c') => {
-                pane.prompt.cancel_fuzzy_search();
+                pane.prompt_mut().cancel_fuzzy_search();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('r') | KeyCode::Char('n') => {
-                pane.prompt.fuzzy_search.select_next();
+                pane.prompt_mut().fuzzy_search.select_next();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('p') => {
-                pane.prompt.fuzzy_search.select_prev();
+                pane.prompt_mut().fuzzy_search.select_prev();
                 return Ok(AppAction::Handled);
             }
             _ => {}
@@ -170,27 +171,27 @@ pub(super) fn handle_fuzzy_search_key(
 
     match key.code {
         KeyCode::Esc => {
-            pane.prompt.cancel_fuzzy_search();
+            pane.prompt_mut().cancel_fuzzy_search();
             Ok(AppAction::Handled)
         }
         KeyCode::Enter => {
-            pane.prompt.accept_fuzzy_match();
+            pane.prompt_mut().accept_fuzzy_match();
             Ok(AppAction::Handled)
         }
         KeyCode::Up => {
-            pane.prompt.fuzzy_search.select_prev();
+            pane.prompt_mut().fuzzy_search.select_prev();
             Ok(AppAction::Handled)
         }
         KeyCode::Down => {
-            pane.prompt.fuzzy_search.select_next();
+            pane.prompt_mut().fuzzy_search.select_next();
             Ok(AppAction::Handled)
         }
         KeyCode::Backspace => {
-            pane.prompt.pop_fuzzy_query_char();
+            pane.prompt_mut().pop_fuzzy_query_char();
             Ok(AppAction::Handled)
         }
         KeyCode::Char(ch) => {
-            pane.prompt.push_fuzzy_query_char(ch);
+            pane.prompt_mut().push_fuzzy_query_char(ch);
             Ok(AppAction::Handled)
         }
         _ => Ok(AppAction::Handled),
@@ -203,27 +204,24 @@ pub(super) fn handle_history_popup_key(
 ) -> Result<AppAction> {
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => {
-            pane.prompt.history_popup_open = false;
+            pane.prompt_mut().history_popup_open = false;
             Ok(AppAction::Handled)
         }
         KeyCode::Enter => {
-            pane.prompt.accept_history_popup_selection();
+            pane.prompt_mut().accept_history_popup_selection();
             Ok(AppAction::Handled)
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            pane.prompt.history_popup_prev();
+            pane.prompt_mut().history_popup_prev();
             Ok(AppAction::Handled)
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            pane.prompt.history_popup_next();
+            pane.prompt_mut().history_popup_next();
             Ok(AppAction::Handled)
         }
         KeyCode::Char('s') => {
-            if let Ok(saved) = pane
-                .history_store
-                .export_to_temp_file(&pane.prompt.history, None)
-            {
-                pane.status_message = Some(format!("Saved history to {}", saved.display()));
+            if let Ok(saved) = pane.export_history_to_temp_file(None) {
+                pane.set_status_message(Some(format!("Saved history to {}", saved.display())));
             }
             Ok(AppAction::Handled)
         }

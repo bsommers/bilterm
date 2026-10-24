@@ -22,7 +22,7 @@ pub struct App {
 
 impl App {
     pub fn new(pane: CompositePane) -> Self {
-        let (rows, cols) = pane.vt.size();
+        let (rows, cols) = pane.vt().size();
         let wm = WindowManager::from_initial_pane(pane, false);
         Self {
             wm,
@@ -116,16 +116,7 @@ impl App {
             .values_mut()
             .chain(std::iter::once(&mut self.wm.quick_terminal.pane))
         {
-            if let Some(seq) = pane.last_osc52_sequence.take() {
-                let wire = if inside_tmux {
-                    crate::tmux::wrap_tmux_dcs_passthrough(&seq)
-                } else {
-                    seq
-                };
-                out.write_all(wire.as_bytes())?;
-                wrote = true;
-            }
-            for seq in pane.vt.take_outbound_osc52() {
+            for seq in pane.take_all_outbound_osc52() {
                 let wire = if inside_tmux {
                     crate::tmux::wrap_tmux_dcs_passthrough(&seq)
                 } else {

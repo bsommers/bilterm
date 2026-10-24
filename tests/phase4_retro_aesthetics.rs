@@ -26,7 +26,7 @@ fn snapshot_borland_turbo_vision_shadows_and_fkey_bar() {
     wm.panes
         .get_mut(&p2)
         .unwrap()
-        .prompt
+        .prompt_mut()
         .insert_str("echo BORLAND_TURBO_VISION");
     wm.resize_all(area).unwrap();
 
@@ -62,7 +62,11 @@ fn snapshot_ibm_3279_amber_cp437_crosshair_hollow_caret() {
         .get_mut(&1)
         .unwrap()
         .process_pty_output(b"MAINFRAME READY\r\nTSO LOGON\r\n");
-    wm.panes.get_mut(&1).unwrap().prompt.insert_str("submit jcl");
+    wm.panes
+        .get_mut(&1)
+        .unwrap()
+        .prompt_mut()
+        .insert_str("submit jcl");
     wm.resize_all(area).unwrap();
 
     let backend = TestBackend::new(80, 12);

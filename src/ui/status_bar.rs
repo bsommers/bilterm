@@ -92,7 +92,7 @@ pub(super) fn render_floating_prompt(
     };
     let surface_bg = palette.prompt_surface_bg;
 
-    let anchor_badge = match pane.prompt.anchor {
+    let anchor_badge = match pane.prompt().anchor {
         PromptAnchor::Top => "TOP",
         PromptAnchor::Bottom => "BOT",
         PromptAnchor::SplitTop => "SPL-T",
@@ -146,7 +146,7 @@ pub(super) fn render_floating_prompt(
     }
 
     // Render bottom-right resize corner handle when custom width is active
-    if pane.prompt.width_cols.is_some() && prompt_rect.width >= 16 && prompt_rect.height >= 3 {
+    if pane.prompt().width_cols.is_some() && prompt_rect.width >= 16 && prompt_rect.height >= 3 {
         let rx = prompt_rect.x + prompt_rect.width - 1;
         let ry = prompt_rect.y + prompt_rect.height - 1;
         if let Some(cell) = buf.cell_mut((rx, ry)) {
@@ -164,36 +164,36 @@ pub(super) fn render_floating_prompt(
         return;
     }
 
-    if pane.prompt.fuzzy_search.active {
+    if pane.prompt().fuzzy_search.active {
         render_fuzzy_search_contents(pane, inner, surface_bg, buf);
         return;
     }
 
     // Determine lines to render (handling legacy direct mutation of `pane.prompt.input` in tests)
     let fallback_lines;
-    let lines_slice: &[String] = if pane.prompt.lines.len() == 1
-        && pane.prompt.lines[0].is_empty()
-        && !pane.prompt.input.is_empty()
+    let lines_slice: &[String] = if pane.prompt().lines.len() == 1
+        && pane.prompt().lines[0].is_empty()
+        && !pane.prompt().input.is_empty()
     {
-        fallback_lines = vec![pane.prompt.input.clone()];
+        fallback_lines = vec![pane.prompt().input.clone()];
         &fallback_lines
     } else {
-        &pane.prompt.lines
+        &pane.prompt().lines
     };
 
-    let has_running_banner = pane.prompt.running_command.is_some() && inner.height >= 2;
-    let has_completion_bar = pane.prompt.completion.is_active()
+    let has_running_banner = pane.prompt().running_command.is_some() && inner.height >= 2;
+    let has_completion_bar = pane.prompt().completion.is_active()
         && inner.height >= (2 + u16::from(has_running_banner));
     let reserved_rows = usize::from(has_running_banner) + usize::from(has_completion_bar);
     let editor_rows = usize::from(inner.height).saturating_sub(reserved_rows).max(1);
 
     let auto_start_row = pane
-        .prompt
+        .prompt()
         .cursor_row
         .saturating_sub(editor_rows.saturating_sub(1));
     let max_start_row = lines_slice.len().saturating_sub(editor_rows);
-    let start_row = if pane.prompt.scroll_offset > 0 {
-        pane.prompt.scroll_offset.min(max_start_row)
+    let start_row = if pane.prompt().scroll_offset > 0 {
+        pane.prompt().scroll_offset.min(max_start_row)
     } else {
         auto_start_row
     };
@@ -201,17 +201,17 @@ pub(super) fn render_floating_prompt(
     // Horizontal scrolling when a single line exceeds inner.width
     let prefix_len = 4usize;
     let avail_text_cols = usize::from(inner.width).saturating_sub(prefix_len).max(1);
-    let h_scroll = if pane.prompt.cursor_col >= avail_text_cols {
-        pane.prompt.cursor_col + 1 - avail_text_cols
+    let h_scroll = if pane.prompt().cursor_col >= avail_text_cols {
+        pane.prompt().cursor_col + 1 - avail_text_cols
     } else {
-        pane.prompt.h_scroll_offset
+        pane.prompt().h_scroll_offset
     };
 
     let mut rendered_lines = Vec::with_capacity(usize::from(inner.height));
-    if let Some(run_cmd) = &pane.prompt.running_command
+    if let Some(run_cmd) = &pane.prompt().running_command
         && has_running_banner
     {
-        let status_tag = if pane.line_discipline.has_foreground_subcommand() {
+        let status_tag = if pane.has_foreground_subcommand() {
             format!("{} RUNNING: ", glyphs.status_run_icon)
         } else {
             format!("{} LAST CMD: ", glyphs.status_ready_icon)
@@ -232,9 +232,9 @@ pub(super) fn render_floating_prompt(
                     .add_modifier(Modifier::BOLD),
             ),
         ];
-        if let Some(exit_code) = pane.vt.last_exit_code() {
+        if let Some(exit_code) = pane.vt().last_exit_code() {
             let dur_str = pane
-                .vt
+                .vt()
                 .last_duration_ms()
                 .map(|ms| format!(" [{ms}ms]"))
                 .unwrap_or_default();
@@ -265,7 +265,7 @@ pub(super) fn render_floating_prompt(
         } else {
             glyphs.prompt_continuation
         };
-        let visible_sub: String = if h_scroll > 0 && rel_idx == pane.prompt.cursor_row {
+        let visible_sub: String = if h_scroll > 0 && rel_idx == pane.prompt().cursor_row {
             line_str.chars().skip(h_scroll).collect()
         } else {
             line_str.clone()
@@ -306,8 +306,8 @@ pub(super) fn render_floating_prompt(
 
     // Software cursor + optional IBM 3270 cross-hair cursor ruler
     let banner_offset = u16::from(has_running_banner);
-    let cursor_vis_row = pane.prompt.cursor_row.saturating_sub(start_row) as u16;
-    let vis_col = pane.prompt.cursor_col.saturating_sub(h_scroll);
+    let cursor_vis_row = pane.prompt().cursor_row.saturating_sub(start_row) as u16;
+    let vis_col = pane.prompt().cursor_col.saturating_sub(h_scroll);
     let cursor_col = (prefix_len + vis_col) as u16;
     let max_editor_row = (editor_rows as u16).saturating_sub(1);
     let clamped_row = banner_offset + cursor_vis_row.min(max_editor_row);
@@ -378,13 +378,13 @@ fn build_completion_bar_line<'a>(
             .add_modifier(Modifier::BOLD),
     )];
 
-    let selected = pane.prompt.completion.selected;
-    let total = pane.prompt.completion.candidates.len();
+    let selected = pane.prompt().completion.selected;
+    let total = pane.prompt().completion.candidates.len();
     let start_idx = selected.unwrap_or(0).saturating_sub(2);
     let mut used_cols = 5usize;
 
     for (idx, cand) in pane
-        .prompt
+        .prompt()
         .completion
         .candidates
         .iter()
@@ -427,7 +427,7 @@ fn render_fuzzy_search_contents(
     buf: &mut Buffer,
 ) {
     let mut lines = Vec::new();
-    let header = format!("(reverse-i-search)`{}': ", pane.prompt.fuzzy_search.query);
+    let header = format!("(reverse-i-search)`{}': ", pane.prompt().fuzzy_search.query);
     lines.push(Line::from(vec![Span::styled(
         header,
         Style::default()
@@ -438,14 +438,14 @@ fn render_fuzzy_search_contents(
 
     let max_matches = usize::from(inner.height.saturating_sub(1));
     for (idx, item) in pane
-        .prompt
+        .prompt()
         .fuzzy_search
         .matches
         .iter()
         .take(max_matches)
         .enumerate()
     {
-        let is_selected = idx == pane.prompt.fuzzy_search.selected;
+        let is_selected = idx == pane.prompt().fuzzy_search.selected;
         let row_bg = if is_selected {
             Color::Rgb(0, 80, 120)
         } else {
@@ -501,13 +501,13 @@ pub fn render_oia_status_bar_themed(
 
     let oia_bg = palette.oia_bg;
     let sep = glyphs.oia_separator;
-    let system_state = if pane.line_discipline.is_password_prompt() {
+    let system_state = if pane.is_password_prompt() {
         (format!(" {} !ECHO LOCK ", glyphs.status_lock_icon), Color::Red)
-    } else if pane.vt.is_alternate_screen() {
+    } else if pane.vt().is_alternate_screen() {
         (format!(" {} ALT SCR ", glyphs.status_alt_icon), Color::Yellow)
-    } else if pane.vt.scrollback_offset() > 0 {
+    } else if pane.vt().scrollback_offset() > 0 {
         (format!(" {} SCROLL ", glyphs.status_scroll_icon), Color::Cyan)
-    } else if pane.line_discipline.has_foreground_subcommand() {
+    } else if pane.has_foreground_subcommand() {
         (
             format!(" {} RUNNING ", glyphs.status_run_icon),
             Color::Rgb(85, 255, 255),
@@ -524,7 +524,7 @@ pub fn render_oia_status_bar_themed(
         InputRoutingMode::RawPtyPassthrough => (" INPUT: RAW PTY ", Color::Rgb(255, 200, 0)),
     };
 
-    let anchor_label = match pane.prompt.anchor {
+    let anchor_label = match pane.prompt().anchor {
         PromptAnchor::Top => "PIN:TOP",
         PromptAnchor::Bottom => "PIN:BOT",
         PromptAnchor::SplitTop => "PIN:SPL-T",
@@ -541,10 +541,10 @@ pub fn render_oia_status_bar_themed(
     // Row/Col counter reflects active input focus: editor cursor in CommandPrompt mode, VT100 cursor in RawPtyPassthrough
     let (disp_r, disp_c) = match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => {
-            (pane.prompt.cursor_row + 1, pane.prompt.cursor_col + 1)
+            (pane.prompt().cursor_row + 1, pane.prompt().cursor_col + 1)
         }
         InputRoutingMode::RawPtyPassthrough => {
-            let (vr, vc) = pane.vt.screen().cursor_position();
+            let (vr, vc) = pane.vt().screen().cursor_position();
             (usize::from(vr) + 1, usize::from(vc) + 1)
         }
     };
@@ -552,8 +552,8 @@ pub fn render_oia_status_bar_themed(
         " {} R:{:02} C:{:03} ",
         glyphs.cursor_pos_icon, disp_r, disp_c
     );
-    let out_lines = pane.vt.output_line_count();
-    let out_bytes = pane.vt.total_bytes_processed();
+    let out_lines = pane.vt().output_line_count();
+    let out_bytes = pane.vt().total_bytes_processed();
     let out_bytes_label = if out_bytes >= 1_048_576 {
         format!("{:.1}M", out_bytes as f64 / 1_048_576.0)
     } else if out_bytes >= 1024 {
@@ -600,7 +600,7 @@ pub fn render_oia_status_bar_themed(
         ),
     ];
 
-    if pane.read_only {
+    if pane.is_read_only() {
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),
@@ -614,7 +614,7 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
-    if let Some(remote) = &pane.remote_target {
+    if let Some(remote) = pane.remote_target() {
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),
@@ -628,7 +628,7 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
-    if pane.vt.is_recording() {
+    if pane.vt().is_recording() {
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),
@@ -642,7 +642,7 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
-    if let Some(notif) = pane.vt.notifications().last() {
+    if let Some(notif) = pane.vt().notifications().last() {
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),
@@ -656,7 +656,7 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
-    if let Some(progress) = pane.vt.osc9_progress() {
+    if let Some(progress) = pane.vt().osc9_progress() {
         let (gauge_str, gauge_fg) = format_osc9_gauge(progress);
         spans.push(Span::styled(
             format!(" {sep}"),
@@ -671,8 +671,8 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
-    if let Some(block) = pane.vt.selected_command_block() {
-        let total = pane.vt.command_blocks().len();
+    if let Some(block) = pane.vt().selected_command_block() {
+        let total = pane.vt().command_blocks().len();
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),

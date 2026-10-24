@@ -5,22 +5,22 @@ use crate::pane::CompositePane;
 /// Computes `DECSET ?1007` Mouse Alternate Scroll arrow-key bytes when scrolling inside an
 /// Alternate Screen (`?1049`) program that has not enabled mouse tracking (`less`, `man`, `git log`, `FND-02`).
 pub fn encode_alternate_scroll_wheel(pane: &CompositePane, kind: MouseEventKind) -> Option<Vec<u8>> {
-    if !pane.vt.is_alternate_screen()
-        || pane.vt.is_mouse_sgr_or_tracking()
-        || !pane.vt.is_mouse_alternate_scroll()
+    if !pane.vt().is_alternate_screen()
+        || pane.vt().is_mouse_sgr_or_tracking()
+        || !pane.vt().is_mouse_alternate_scroll()
     {
         return None;
     }
     let unit: &[u8] = match kind {
         MouseEventKind::ScrollUp => {
-            if pane.vt.is_application_cursor() {
+            if pane.vt().is_application_cursor() {
                 b"\x1bOA"
             } else {
                 b"\x1b[A"
             }
         }
         MouseEventKind::ScrollDown => {
-            if pane.vt.is_application_cursor() {
+            if pane.vt().is_application_cursor() {
                 b"\x1bOB"
             } else {
                 b"\x1b[B"

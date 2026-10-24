@@ -72,15 +72,15 @@ impl WorkspaceFrameSnapshot {
             let status_bar_rect = pane.status_bar_rect(outer);
             panes.push(PaneFrameSnapshot {
                 id,
-                title: pane.title.clone(),
+                title: pane.title().to_string(),
                 outer_rect: outer,
                 canvas_rect,
                 prompt_rect,
                 status_bar_rect,
                 active,
                 z_rank: wm.z_stack.rank_of(id),
-                grid: pane.vt.snapshot(),
-                graphics: pane.vt.graphic_placements().to_vec(),
+                grid: pane.vt().snapshot(),
+                graphics: pane.vt().graphic_placements().to_vec(),
             });
         }
 
@@ -88,8 +88,8 @@ impl WorkspaceFrameSnapshot {
             let qt_outer = wm.quick_terminal.overlay_rect(workspace_area);
             let qt_pane = &wm.quick_terminal.pane;
             Some(PaneFrameSnapshot {
-                id: qt_pane.id,
-                title: qt_pane.title.clone(),
+                id: qt_pane.id(),
+                title: qt_pane.title().to_string(),
                 outer_rect: qt_outer,
                 canvas_rect: qt_pane.canvas_rect(qt_outer),
                 prompt_rect: qt_pane
@@ -98,8 +98,8 @@ impl WorkspaceFrameSnapshot {
                 status_bar_rect: qt_pane.status_bar_rect(qt_outer),
                 active: true,
                 z_rank: None,
-                grid: qt_pane.vt.snapshot(),
-                graphics: qt_pane.vt.graphic_placements().to_vec(),
+                grid: qt_pane.vt().snapshot(),
+                graphics: qt_pane.vt().graphic_placements().to_vec(),
             })
         } else {
             None

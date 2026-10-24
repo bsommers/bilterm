@@ -14,7 +14,11 @@ fn snapshot_hv_composite_splits() {
         .get_mut(&1)
         .unwrap()
         .process_pty_output(b"LEFT_PANE_OUTPUT\r\n");
-    wm.panes.get_mut(&1).unwrap().prompt.insert_str("ls -la");
+    wm.panes
+        .get_mut(&1)
+        .unwrap()
+        .prompt_mut()
+        .insert_str("ls -la");
 
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     wm.panes
@@ -24,7 +28,7 @@ fn snapshot_hv_composite_splits() {
     wm.panes
         .get_mut(&p2)
         .unwrap()
-        .prompt
+        .prompt_mut()
         .insert_str("cargo test");
     wm.resize_all(area).unwrap();
 
@@ -58,7 +62,7 @@ fn snapshot_z_order_stacked_cascade_and_deck_shuffle() {
     wm.panes
         .get_mut(&2)
         .unwrap()
-        .prompt
+        .prompt_mut()
         .insert_str("echo TOP_OF_STACK_PANE_2");
     wm.resize_all(area).unwrap();
 
@@ -89,7 +93,7 @@ fn snapshot_guake_quick_terminal_overlay() {
     wm.toggle_quick_terminal();
     wm.quick_terminal
         .pane
-        .prompt
+        .prompt_mut()
         .insert_str("git status --short");
     wm.resize_all(area).unwrap();
 
@@ -120,7 +124,11 @@ fn snapshot_wide_char_cjk_occlusion_boundary() {
         .get_mut(&1)
         .unwrap()
         .process_pty_output(payload.as_bytes());
-    wm.panes.get_mut(&1).unwrap().prompt.insert_str("echo cjk");
+    wm.panes
+        .get_mut(&1)
+        .unwrap()
+        .prompt_mut()
+        .insert_str("echo cjk");
     wm.resize_all(area).unwrap();
 
     let backend = TestBackend::new(60, 12);

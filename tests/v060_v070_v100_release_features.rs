@@ -78,17 +78,17 @@ fn v070_osc9_osc777_notifications_triggers_and_asciicast_v2_recorder_work() {
     wm.active_pane_mut().process_pty_output(
         b"\x1b]9;Build succeeded\x07\x1b]777;notify;CI-GATE;All 82 tests green\x07FATAL_ERR in module X\r\n",
     );
-    assert_eq!(wm.active_pane().vt.notifications().len(), 2);
-    assert!(wm.active_pane().vt.unread_bell());
-    assert_eq!(wm.active_pane().vt.notifications()[1].title, "CI-GATE");
+    assert_eq!(wm.active_pane().vt().notifications().len(), 2);
+    assert!(wm.active_pane().vt().unread_bell());
+    assert_eq!(wm.active_pane().vt().notifications()[1].title, "CI-GATE");
     assert_eq!(
-        wm.active_pane().vt.notifications()[1].body,
+        wm.active_pane().vt().notifications()[1].body,
         "All 82 tests green"
     );
 
     // 2. Add output highlight trigger via :trigger add FATAL_ERR
     wm.active_pane_mut()
-        .prompt
+        .prompt_mut()
         .set_text(":trigger add FATAL_ERR");
     assert_eq!(
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap(),
@@ -104,26 +104,28 @@ fn v070_osc9_osc777_notifications_triggers_and_asciicast_v2_recorder_work() {
     assert!(snap.contains("CI-GATE: All 82 tests green"));
 
     // Clear notifications via :notifications clear
-    wm.active_pane_mut().prompt.set_text(":notifications clear");
+    wm.active_pane_mut()
+        .prompt_mut()
+        .set_text(":notifications clear");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(wm.active_pane().vt.notifications().is_empty());
-    assert!(!wm.active_pane().vt.unread_bell());
+    assert!(wm.active_pane().vt().notifications().is_empty());
+    assert!(!wm.active_pane().vt().unread_bell());
 
     // 3. Asciicast v2 (.cast) recording roundtrip via :record start <path> and :record stop
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let cast_path = temp_dir.path().join("demo.cast");
     wm.active_pane_mut()
-        .prompt
+        .prompt_mut()
         .set_text(&format!(":record start {}", cast_path.display()));
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(wm.active_pane().vt.is_recording());
+    assert!(wm.active_pane().vt().is_recording());
 
     wm.active_pane_mut()
         .process_pty_output(b"Hello Asciinema v2!\r\n");
 
-    wm.active_pane_mut().prompt.set_text(":record stop");
+    wm.active_pane_mut().prompt_mut().set_text(":record stop");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(!wm.active_pane().vt.is_recording());
+    assert!(!wm.active_pane().vt().is_recording());
 
     let cast_contents = std::fs::read_to_string(&cast_path).expect("cast file written");
     let mut lines = cast_contents.lines();

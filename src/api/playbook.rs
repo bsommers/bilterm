@@ -172,27 +172,27 @@ impl AutomationControlPlane {
             .panes
             .get_mut(&pane_id)
             .ok_or_else(|| format!("pane #{pane_id} not found"))?;
-        let prev_alt = pane.vt.is_alternate_screen();
-        let prev_blocks = pane.vt.command_blocks().len();
+        let prev_alt = pane.vt().is_alternate_screen();
+        let prev_blocks = pane.vt().command_blocks().len();
         let prev_prev_exit = pane
-            .vt
+            .vt()
             .command_blocks()
             .last()
             .and_then(|b| b.exit_code);
-        let prev_notifs = pane.vt.notifications().len();
+        let prev_notifs = pane.vt().notifications().len();
 
         pane.process_pty_output(bytes);
 
-        let now_alt = pane.vt.is_alternate_screen();
+        let now_alt = pane.vt().is_alternate_screen();
         let new_notifs: Vec<(String, String)> = pane
-            .vt
+            .vt()
             .notifications()
             .iter()
             .skip(prev_notifs)
             .map(|n| (n.title.clone(), n.body.clone()))
             .collect();
-        let completed_block = pane.vt.command_blocks().last().and_then(|b| {
-            if (pane.vt.command_blocks().len() > prev_blocks || b.exit_code != prev_prev_exit)
+        let completed_block = pane.vt().command_blocks().last().and_then(|b| {
+            if (pane.vt().command_blocks().len() > prev_blocks || b.exit_code != prev_prev_exit)
                 && b.exit_code.is_some()
             {
                 Some((b.command.clone(), b.exit_code, b.duration_ms))
@@ -203,9 +203,9 @@ impl AutomationControlPlane {
 
         let mut matched_triggers = Vec::new();
         if !triggers.is_empty() {
-            let (rows, _) = pane.vt.size();
+            let (rows, _) = pane.vt().size();
             for r in 0..rows {
-                let row_str = extract_vt_row_text(&pane.vt, r);
+                let row_str = extract_vt_row_text(pane.vt(), r);
                 let row_lower = row_str.to_ascii_lowercase();
                 for pat in &triggers {
                     if !pat.is_empty() && row_lower.contains(&pat.to_ascii_lowercase()) {
@@ -302,9 +302,9 @@ impl AutomationControlPlane {
                         .panes
                         .get(&pane_id)
                         .ok_or_else(|| format!("step {step_num}: pane #{pane_id} not found"))?;
-                    let (rows, _) = pane.vt.size();
+                    let (rows, _) = pane.vt().size();
                     let found =
-                        (0..rows).any(|r| extract_vt_row_text(&pane.vt, r).contains(expected));
+                        (0..rows).any(|r| extract_vt_row_text(pane.vt(), r).contains(expected));
                     if !found {
                         return Err(format!(
                             "step {step_num}: assertion failed — pane #{pane_id} screen does not contain '{expected}'"
@@ -334,7 +334,7 @@ impl AutomationControlPlane {
                         .panes
                         .get(&pane_id)
                         .ok_or_else(|| format!("step {step_num}: pane #{pane_id} not found"))?;
-                    let actual = pane.vt.command_blocks().last().and_then(|b| b.exit_code);
+                    let actual = pane.vt().command_blocks().last().and_then(|b| b.exit_code);
                     if actual != Some(expected_code) {
                         return Err(format!(
                             "step {step_num}: assertion failed — expected exit_code {expected_code}, got {actual:?}"

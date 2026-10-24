@@ -33,26 +33,26 @@ fn kitty_graphics_and_sixel_decode_and_render_on_tui_and_gpu_surfaces() {
 
     // 1. Kitty Graphics query (a=q,i=42) -> replies with \x1b_Gi=42;OK\x1b\\
     wm.active_pane_mut().process_pty_output(b"\x1b_Ga=q,i=42;\x1b\\");
-    let replies = wm.active_pane_mut().vt.take_query_responses();
+    let replies = wm.active_pane_mut().vt_mut().take_query_responses();
     assert_eq!(replies, vec![b"\x1b_Gi=42;OK\x1b\\".to_vec()]);
 
     // 2. Kitty Graphics transmit & display (a=T,i=7,f=24,s=2,v=2,c=4,r=2) with 4 RGB pixels (/wAA = 255,0,0)
     // 4 RGB pixels = 12 bytes: [255,0,0, 0,255,0, 0,0,255, 255,255,0] -> Base64 "/wAAAP8AAAD///8A"
     wm.active_pane_mut()
         .process_pty_output(b"\x1b_Ga=T,i=7,f=24,s=2,v=2,c=4,r=2;/wAAAP8AAAD///8A\x1b\\");
-    assert_eq!(wm.active_pane().vt.graphic_placements().len(), 1);
+    assert_eq!(wm.active_pane().vt().graphic_placements().len(), 1);
     assert_eq!(
-        wm.active_pane().vt.graphic_placements()[0].protocol,
+        wm.active_pane().vt().graphic_placements()[0].protocol,
         GraphicProtocol::Kitty
     );
-    assert_eq!(wm.active_pane().vt.graphic_placements()[0].id, 7);
+    assert_eq!(wm.active_pane().vt().graphic_placements()[0].id, 7);
 
     // 3. DEC Sixel placement (\x1bPq"1;1;8;6#1;2;100;0;0!8~\x1b\\)
     wm.active_pane_mut()
         .process_pty_output(b"\r\n\r\n\r\n\x1bPq\"1;1;8;6#1;2;100;0;0!8~\x1b\\");
-    assert_eq!(wm.active_pane().vt.graphic_placements().len(), 2);
+    assert_eq!(wm.active_pane().vt().graphic_placements().len(), 2);
     assert_eq!(
-        wm.active_pane().vt.graphic_placements()[1].protocol,
+        wm.active_pane().vt().graphic_placements()[1].protocol,
         GraphicProtocol::Sixel
     );
 
@@ -84,7 +84,7 @@ fn kitty_graphics_and_sixel_decode_and_render_on_tui_and_gpu_surfaces() {
     // 6. Kitty Graphics delete (a=d,i=7) removes placement #7
     wm.active_pane_mut()
         .process_pty_output(b"\x1b_Ga=d,i=7;\x1b\\");
-    assert_eq!(wm.active_pane().vt.graphic_placements().len(), 1);
+    assert_eq!(wm.active_pane().vt().graphic_placements().len(), 1);
 }
 
 #[test]

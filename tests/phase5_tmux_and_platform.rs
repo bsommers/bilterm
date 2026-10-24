@@ -85,7 +85,7 @@ fn tmux_control_mode_events_and_dcs_passthrough_end_to_end() {
         wm.panes
             .get(&1)
             .unwrap()
-            .vt
+            .vt()
             .screen()
             .contents()
             .contains("LINE_FROM_TMUX_PANE_0")
@@ -97,7 +97,7 @@ fn end_to_end_colon_commands_and_keyboard_chords_across_window_manager() {
     let mut wm = WindowManager::new_headless(24, 80);
 
     let run_colon = |wm: &mut WindowManager, cmd: &str| {
-        wm.active_pane_mut().prompt.set_text(cmd);
+        wm.active_pane_mut().prompt_mut().set_text(cmd);
         handle_wm_key_event(wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap()
     };
 

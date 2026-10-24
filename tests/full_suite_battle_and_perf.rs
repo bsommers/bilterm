@@ -342,7 +342,9 @@ fn colon_command_parser_and_executor_cover_all_variants_and_error_branches() {
     // Direct single-pane execute_colon_command coverage
     let mut single = CompositePane::new_headless(99, 24, 80);
     single.process_pty_output(b"\x1b]133;A\x07\x1b]133;C\x07https://bilterm.dev/docs\r\n\x1b]133;D;0\x07");
-    single.vt.record_command_submission("curl https://bilterm.dev/docs");
+    single
+        .vt_mut()
+        .record_command_submission("curl https://bilterm.dev/docs");
     for single_cmd in [
         ":prompt top",
         ":prompt bottom",
@@ -402,8 +404,8 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
     assert_eq!(app.last_viewport, Rect::new(0, 0, 120, 30));
     app.handle_crossterm_event(Event::Paste("echo pasted_cmd".to_string()))
         .expect("paste");
-    assert_eq!(app.wm.active_pane().prompt.text(), "echo pasted_cmd");
-    app.wm.active_pane_mut().prompt.clear_line();
+    assert_eq!(app.wm.active_pane().prompt().text(), "echo pasted_cmd");
+    app.wm.active_pane_mut().prompt_mut().clear_line();
 
     // Top MenuBar mouse click & keyboard navigation
     app.wm.config.show_top_menubar = true;
@@ -893,7 +895,8 @@ fn generates_real_workspace_screenshots_for_documentation() {
         r#"{"jsonrpc":"2.0","id":2,"method":"pane.feed_output","params":{"pane_id":1,"data":"\u001b]133;C\u0007\u001b[1;32m   Compiling\u001b[0m bilterm v1.4.0 (/home/bill/src/ai/bilterm)\r\n\u001b[1;32m    Finished\u001b[0m `release` profile [optimized] target(s) in 1.42s\r\n\u001b[1;36m     Running\u001b[0m 85 tests across 16 test binaries ... \u001b[1;32m85 passed; 0 failed (83.45% coverage)\u001b[0m\r\n\u001b[1;33m[FLEET]\u001b[0m Local #1 READY | SSH prod-db:2222 READY | Endpoint: https://bilterm.dev/api\r\n\u001b]9;4;1;85\u0007\u001b]133;D;0\u0007"}}"#,
     );
     if let Some(p1) = plane1.wm.panes.get_mut(&1) {
-        p1.prompt.set_text(":remote exec @prod systemctl status postgresql");
+        p1.prompt_mut()
+            .set_text(":remote exec @prod systemctl status postgresql");
     }
 
     let _ = plane1.handle_jsonrpc_line(
@@ -903,7 +906,8 @@ fn generates_real_workspace_screenshots_for_documentation() {
         r#"{"jsonrpc":"2.0","id":4,"method":"pane.feed_output","params":{"pane_id":2,"data":"\u001b]133;C\u0007\u001b[1;32m● postgresql.service\u001b[0m - PostgreSQL 16 Database Server (prod-db.internal)\r\n   Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)\r\n   Active: \u001b[1;32mactive (running)\u001b[0m since Tue 2026-10-21 20:00:00 UTC; 3h ago\r\n   Status: \"CRITICAL=0 | Connections: 42/500 | Replication: SYNC READY\"\r\n\u001b]9;PostgreSQL Healthy\u0007\u001b]133;D;0\u0007"}}"#,
     );
     if let Some(p2) = plane1.wm.panes.get_mut(&2) {
-        p2.prompt.set_text("psql -U admin -c 'SELECT pg_is_in_recovery();'");
+        p2.prompt_mut()
+            .set_text("psql -U admin -c 'SELECT pg_is_in_recovery();'");
     }
     plane1.wm.focus_and_raise(1);
 

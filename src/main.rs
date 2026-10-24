@@ -197,7 +197,7 @@ async fn main() -> color_eyre::Result<()> {
     }
     app.wm.apply_config(cfg);
     if cfg_error.is_some() {
-        app.wm.active_pane_mut().status_message = cfg_error;
+        app.wm.active_pane_mut().set_status_message(cfg_error);
     }
 
     let host_guard = TerminalRestoreGuard::enter_host_tui()?;

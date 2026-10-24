@@ -31,27 +31,27 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
     match cmd {
         ColonCommand::PromptTop => {
             pane.set_prompt_anchor(PromptAnchor::Top);
-            pane.status_message = Some("Prompt pinned to TOP".to_string());
+            pane.set_status_message(Some("Prompt pinned to TOP".to_string()));
             false
         }
         ColonCommand::PromptBottom => {
             pane.set_prompt_anchor(PromptAnchor::Bottom);
-            pane.status_message = Some("Prompt pinned to BOTTOM".to_string());
+            pane.set_status_message(Some("Prompt pinned to BOTTOM".to_string()));
             false
         }
         ColonCommand::PromptSplitTop => {
             pane.set_prompt_anchor(PromptAnchor::SplitTop);
-            pane.status_message = Some("Prompt split at TOP (non-overlapping)".to_string());
+            pane.set_status_message(Some("Prompt split at TOP (non-overlapping)".to_string()));
             false
         }
         ColonCommand::PromptSplitBottom => {
             pane.set_prompt_anchor(PromptAnchor::SplitBottom);
-            pane.status_message = Some("Prompt split at BOTTOM (non-overlapping)".to_string());
+            pane.set_status_message(Some("Prompt split at BOTTOM (non-overlapping)".to_string()));
             false
         }
         ColonCommand::PromptSplitToggle => {
             pane.toggle_split_prompt();
-            pane.status_message = Some("Toggled split/floating prompt mode".to_string());
+            pane.set_status_message(Some("Toggled split/floating prompt mode".to_string()));
             false
         }
         ColonCommand::PromptModeSet(mode_opt) => {
@@ -65,99 +65,98 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         }
         ColonCommand::PromptFloat(y_offset) => {
             pane.set_prompt_anchor(PromptAnchor::Floating { y_offset });
-            pane.status_message = Some(format!("Prompt floating at row +{y_offset}"));
+            pane.set_status_message(Some(format!("Prompt floating at row +{y_offset}")));
             false
         }
         ColonCommand::PromptHeight(rows) => {
             pane.set_prompt_height(rows);
-            pane.status_message = Some(format!("Prompt height set to {rows} rows"));
+            pane.set_status_message(Some(format!("Prompt height set to {rows} rows")));
             false
         }
         ColonCommand::PromptWidth(cols_opt) => {
             pane.set_prompt_width(cols_opt);
-            pane.status_message = Some(match cols_opt {
+            pane.set_status_message(Some(match cols_opt {
                 Some(c) => format!("Prompt width set to {c} cols"),
                 None => "Prompt width reset to full width".to_string(),
-            });
+            }));
             false
         }
         ColonCommand::HistoryPopupToggle => {
-            pane.prompt.toggle_history_popup();
+            pane.prompt_mut().toggle_history_popup();
             false
         }
         ColonCommand::HistorySave(path_opt) => {
             let custom = path_opt.as_deref().map(std::path::Path::new);
-            match pane
-                .history_store
-                .export_to_temp_file(&pane.prompt.history, custom)
-            {
+            match pane.export_history_to_temp_file(custom) {
                 Ok(saved_path) => {
-                    pane.status_message =
-                        Some(format!("Saved history to {}", saved_path.display()));
+                    pane.set_status_message(
+                        Some(format!("Saved history to {}", saved_path.display())),
+                    );
                 }
                 Err(err) => {
-                    pane.status_message = Some(format!("History save error: {err}"));
+                    pane.set_status_message(Some(format!("History save error: {err}")));
                 }
             }
             false
         }
         ColonCommand::HistoryToggle(val) => {
-            let next = val.unwrap_or(!pane.history_store.enabled);
-            pane.history_store.enabled = next;
-            pane.status_message = Some(format!(
+            let next = val.unwrap_or(!pane.history_store().enabled);
+            pane.history_store_mut().enabled = next;
+            pane.set_status_message(Some(format!(
                 "Command history persistence: {}",
                 if next { "ON" } else { "OFF" }
-            ));
+            )));
             false
         }
         ColonCommand::HistoryMaxFiles(max_f) => {
-            pane.history_store.max_files = max_f.max(1);
-            let _ = pane.history_store.prune_excess_files();
-            pane.status_message = Some(format!("History max session files: {}", max_f.max(1)));
+            pane.history_store_mut().max_files = max_f.max(1);
+            let _ = pane.history_store().prune_excess_files();
+            pane.set_status_message(Some(format!("History max session files: {}", max_f.max(1))));
             false
         }
         ColonCommand::HistoryRuns => {
-            pane.status_message = Some(format_history_runs(
-                &pane.history_store.session_name,
-                &pane.history_store.segments(),
-            ));
+            let msg = format_history_runs(
+                &pane.history_store().session_name,
+                &pane.history_store().segments(),
+            );
+            pane.set_status_message(Some(msg));
             false
         }
         ColonCommand::BlockPrev => {
-            if let Some(block) = pane.vt.jump_to_prev_command_block() {
-                pane.status_message =
-                    Some(format!("Block #{}: {}", block.index + 1, block.command));
+            let msg = if let Some(block) = pane.vt_mut().jump_to_prev_command_block() {
+                format!("Block #{}: {}", block.index + 1, block.command)
             } else {
-                pane.status_message = Some("No command blocks in scrollback".to_string());
-            }
+                "No command blocks in scrollback".to_string()
+            };
+            pane.set_status_message(Some(msg));
             false
         }
         ColonCommand::BlockNext => {
-            if let Some(block) = pane.vt.jump_to_next_command_block() {
-                pane.status_message =
-                    Some(format!("Block #{}: {}", block.index + 1, block.command));
+            let msg = if let Some(block) = pane.vt_mut().jump_to_next_command_block() {
+                format!("Block #{}: {}", block.index + 1, block.command)
             } else {
-                pane.status_message = Some("Returned to live output".to_string());
-            }
+                "Returned to live output".to_string()
+            };
+            pane.set_status_message(Some(msg));
             false
         }
         ColonCommand::Yank => {
-            let text_to_yank = if let Some(block) = pane.vt.selected_command_block() {
+            let text_to_yank = if let Some(block) = pane.vt().selected_command_block() {
                 block.command.clone()
-            } else if let Some(last) = pane.vt.command_blocks().last() {
+            } else if let Some(last) = pane.vt().command_blocks().last() {
                 last.command.clone()
             } else {
-                pane.vt.screen().contents()
+                pane.vt().screen().contents()
             };
             let seq = encode_osc52_clipboard(&text_to_yank);
-            pane.last_osc52_sequence = Some(seq);
-            pane.status_message = Some(format!("Yanked {} bytes via OSC 52", text_to_yank.len()));
+            pane.set_last_osc52_sequence(Some(seq));
+            pane.set_status_message(Some(format!("Yanked {} bytes via OSC 52", text_to_yank.len())));
             false
         }
         ColonCommand::Clear => {
             pane.process_pty_output(b"\x1b[2J\x1b[H");
-            pane.vt.reset_scrollback();
-            pane.status_message = Some("Canvas cleared".to_string());
+            pane.vt_mut().reset_scrollback();
+            pane.set_status_message(Some("Canvas cleared".to_string()));
             false
         }
         ColonCommand::RawToggle => {
@@ -178,11 +177,11 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         }
         ColonCommand::SearchOff => {
             pane.clear_canvas_search();
-            pane.status_message = Some("Cleared canvas search".to_string());
+            pane.set_status_message(Some("Cleared canvas search".to_string()));
             false
         }
         ColonCommand::CopyModeToggle => {
-            if pane.copy_mode.active {
+            if pane.copy_mode().active {
                 pane.exit_copy_mode();
             } else {
                 pane.enter_copy_mode();
@@ -191,23 +190,23 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         }
         ColonCommand::LinksYank => {
             let link = pane
-                .vt
+                .vt()
                 .detect_visible_urls()
                 .last()
                 .map(|u| u.url.clone())
-                .or_else(|| pane.vt.osc8_links().last().map(|l| l.uri.clone()));
+                .or_else(|| pane.vt().osc8_links().last().map(|l| l.uri.clone()));
             if let Some(url) = link {
                 let seq = encode_osc52_clipboard(&url);
-                pane.last_osc52_sequence = Some(seq);
-                pane.prompt.yank_buffer = url.clone();
-                pane.status_message = Some(format!("Yanked URL: {url}"));
+                pane.set_last_osc52_sequence(Some(seq));
+                pane.prompt_mut().yank_buffer = url.clone();
+                pane.set_status_message(Some(format!("Yanked URL: {url}")));
             } else {
-                pane.status_message = Some("No URLs detected on canvas".to_string());
+                pane.set_status_message(Some("No URLs detected on canvas".to_string()));
             }
             false
         }
         ColonCommand::HintsToggle => {
-            if pane.hints_mode.active {
+            if pane.hints_mode().active {
                 pane.exit_hints_mode();
             } else {
                 pane.enter_hints_mode();
@@ -215,22 +214,23 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             false
         }
         ColonCommand::LockToggle(val) => {
-            let next = val.unwrap_or(!pane.read_only);
+            let next = val.unwrap_or(!pane.is_read_only());
             pane.set_read_only(next);
             false
         }
         ColonCommand::NotificationsClear => {
-            let count = pane.vt.notifications().len();
-            pane.vt.clear_notifications();
-            pane.status_message = Some(format!("Cleared {count} notification(s)"));
+            let count = pane.vt().notifications().len();
+            pane.vt_mut().clear_notifications();
+            pane.set_status_message(Some(format!("Cleared {count} notification(s)")));
             false
         }
         ColonCommand::RecordStart(path_opt) => {
             if let Some(p) = path_opt {
                 let path = std::path::PathBuf::from(p);
-                pane.vt.start_recording(path.clone());
-                pane.status_message =
-                    Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+                pane.vt_mut().start_recording(path.clone());
+                pane.set_status_message(
+                    Some(format!("⏺ Recording asciicast v2 to {}", path.display())),
+                );
             } else {
                 match crate::secure_fs::private_runtime_dir()
                     .and_then(|d| crate::secure_fs::private_dir_in(&d, "recordings"))
@@ -238,32 +238,35 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
                     Ok(dir) => {
                         let path = dir.join(format!(
                             "bilterm-pane-{}-{}.cast",
-                            pane.id,
+                            pane.id(),
                             crate::secure_fs::unique_suffix()
                         ));
-                        pane.vt.start_recording_private(path.clone());
-                        pane.status_message =
-                            Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+                        pane.vt_mut().start_recording_private(path.clone());
+                        pane.set_status_message(
+                            Some(format!("⏺ Recording asciicast v2 to {}", path.display())),
+                        );
                     }
                     Err(e) => {
-                        pane.status_message =
-                            Some(format!("⏺ Recording not started: private dir unavailable: {e}"));
+                        pane.set_status_message(
+                            Some(format!("⏺ Recording not started: private dir unavailable: {e}")),
+                        );
                     }
                 }
             }
             false
         }
         ColonCommand::RecordStop => {
-            match pane.vt.stop_recording() {
+            match pane.vt_mut().stop_recording() {
                 Ok(Some(path)) => {
-                    pane.status_message =
-                        Some(format!("Saved asciicast v2 recording to {}", path.display()));
+                    pane.set_status_message(
+                        Some(format!("Saved asciicast v2 recording to {}", path.display())),
+                    );
                 }
                 Ok(None) => {
-                    pane.status_message = Some("No active recording on this pane".to_string());
+                    pane.set_status_message(Some("No active recording on this pane".to_string()));
                 }
                 Err(err) => {
-                    pane.status_message = Some(format!("Recording save error: {err}"));
+                    pane.set_status_message(Some(format!("Recording save error: {err}")));
                 }
             }
             false
@@ -320,15 +323,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             let next = val.unwrap_or(!wm.config.history_enabled);
             wm.config.history_enabled = next;
             wm.sync_history_config();
-            wm.active_pane_mut().status_message = Some(format!(
+            wm.active_pane_mut().set_status_message(Some(format!(
                 "Command history persistence: {}",
                 if next { "ON" } else { "OFF" }
-            ));
+            )));
             false
         }
         ColonCommand::Scrollback { clear } => {
             let note = if clear {
-                if wm.active_pane_mut().vt.clear_scrollback() {
+                if wm.active_pane_mut().vt_mut().clear_scrollback() {
                     "History cleared. "
                 } else {
                     "Cannot clear while the alternate screen is active. "
@@ -337,14 +340,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 ""
             };
             let report = wm.scrollback_report();
-            wm.active_pane_mut().status_message = Some(format!("{note}{report}"));
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("{note}{report}")));
             false
         }
         ColonCommand::HistoryMaxFiles(max_f) => {
             wm.config.history_max_files = max_f.max(1);
             wm.sync_history_config();
-            wm.active_pane_mut().status_message =
-                Some(format!("History max session files: {}", max_f.max(1)));
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("History max session files: {}", max_f.max(1))));
             false
         }
         ColonCommand::Theme(preset) => {
@@ -375,12 +379,13 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::SessionSave(name) => {
             match wm.save_session(&name) {
                 Ok(path) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("Saved session '{}' to {}", name, path.display()));
+                    wm.active_pane_mut().set_status_message(
+                        Some(format!("Saved session '{}' to {}", name, path.display())),
+                    );
                 }
                 Err(err) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("Session save error: {err}"));
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("Session save error: {err}")));
                 }
             }
             false
@@ -388,32 +393,33 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::SessionRestore(name) => {
             match wm.restore_session(&name) {
                 Ok(count) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("Restored session '{name}' ({count} pane(s))"));
+                    wm.active_pane_mut().set_status_message(
+                        Some(format!("Restored session '{name}' ({count} pane(s))")),
+                    );
                 }
                 Err(err) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("Session restore error: {err}"));
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("Session restore error: {err}")));
                 }
             }
             false
         }
         ColonCommand::SessionList => {
             let sessions = wm.list_sessions();
-            wm.active_pane_mut().status_message = Some(if sessions.is_empty() {
+            wm.active_pane_mut().set_status_message(Some(if sessions.is_empty() {
                 "Saved sessions: (none)".to_string()
             } else {
                 format!("Saved sessions: {}", sessions.join(", "))
-            });
+            }));
             false
         }
         ColonCommand::CrtToggle(val) => {
             let next = val.unwrap_or(!wm.config.crt_scanlines);
             wm.config.crt_scanlines = next;
-            wm.active_pane_mut().status_message = Some(format!(
+            wm.active_pane_mut().set_status_message(Some(format!(
                 "CRT Phosphor Scanlines: {}",
                 if next { "ON" } else { "OFF" }
-            ));
+            )));
             false
         }
         ColonCommand::PaletteToggle => {
@@ -424,27 +430,28 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             if !wm.config.triggers.contains(&pat) {
                 wm.config.triggers.push(pat.clone());
             }
-            wm.active_pane_mut().status_message = Some(format!(
-                "Added output highlight trigger '{}' ({} active)",
-                pat,
-                wm.config.triggers.len()
-            ));
+            let count = wm.config.triggers.len();
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "Added output highlight trigger '{pat}' ({count} active)"
+            )));
             false
         }
         ColonCommand::TriggerClear => {
             wm.config.triggers.clear();
-            wm.active_pane_mut().status_message =
-                Some("Cleared all output highlight triggers".to_string());
+            wm.active_pane_mut()
+                .set_status_message(Some("Cleared all output highlight triggers".to_string()));
             false
         }
         ColonCommand::SshConnect { target, port } => {
             match wm.spawn_ssh_pane(&target, port, Vec::new()) {
                 Ok(new_id) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("🌐 Connected SSH pane #{new_id} -> {target}"));
+                    wm.active_pane_mut().set_status_message(
+                        Some(format!("🌐 Connected SSH pane #{new_id} -> {target}")),
+                    );
                 }
                 Err(err) => {
-                    wm.active_pane_mut().status_message = Some(format!("SSH connect error: {err}"));
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("SSH connect error: {err}")));
                 }
             }
             false
@@ -452,13 +459,13 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::SshTmuxConnect { target, session } => {
             match wm.connect_ssh_tmux(&target, &session, Vec::new()) {
                 Ok(new_id) => {
-                    wm.active_pane_mut().status_message = Some(format!(
+                    wm.active_pane_mut().set_status_message(Some(format!(
                         "🌐 Attached remote tmux -CC '{session}' on {target} (pane #{new_id})"
-                    ));
+                    )));
                 }
                 Err(err) => {
-                    wm.active_pane_mut().status_message =
-                        Some(format!("SSH tmux connect error: {err}"));
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("SSH tmux connect error: {err}")));
                 }
             }
             false
@@ -469,45 +476,46 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             tags,
         } => {
             if let Err(e) = crate::remote::validate_destination(&destination) {
-                wm.active_pane_mut().status_message = Some(format!("Remote not added: {e}"));
+                wm.active_pane_mut()
+                    .set_status_message(Some(format!("Remote not added: {e}")));
                 return false;
             }
             let mut profile = RemoteHostProfile::new(name.clone(), destination.clone());
             profile.tags = tags.clone();
             wm.fleet.register_profile(profile);
-            wm.active_pane_mut().status_message = Some(format!(
+            wm.active_pane_mut().set_status_message(Some(format!(
                 "Registered remote host '{name}' ({destination}) tags={tags:?}"
-            ));
+            )));
             false
         }
         ColonCommand::RemoteList => {
             let names: Vec<String> = wm.fleet.nodes.keys().cloned().collect();
-            wm.active_pane_mut().status_message = Some(if names.is_empty() {
+            wm.active_pane_mut().set_status_message(Some(if names.is_empty() {
                 "Fleet nodes: (local only)".to_string()
             } else {
                 format!("Fleet nodes ({}): {}", names.len(), names.join(", "))
-            });
+            }));
             false
         }
         ColonCommand::RemoteExec { selector, command } => {
             let sel = FleetSelector::parse(&selector);
             let panes = wm.exec_fleet_command(&sel, &command);
             let nodes = wm.fleet.matching_nodes(&sel);
-            wm.active_pane_mut().status_message = Some(format!(
+            wm.active_pane_mut().set_status_message(Some(format!(
                 "🌐 Fleet exec [{}] -> {} pane(s), {} node(s)",
                 selector,
                 panes.len(),
                 nodes.len()
-            ));
+            )));
             false
         }
         ColonCommand::RemoteDisconnect(name) => {
             let removed = wm.fleet.disconnect(&name);
-            wm.active_pane_mut().status_message = Some(if removed {
+            wm.active_pane_mut().set_status_message(Some(if removed {
                 format!("Disconnected remote fleet node '{name}'")
             } else {
                 format!("Remote fleet node '{name}' not found")
-            });
+            }));
             false
         }
         ColonCommand::Glyphs(pack) => {
@@ -555,13 +563,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 && feather_pct.is_none();
             if no_args {
                 let label = wm.config.cycle_spotlight();
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
-                    label,
-                    wm.config.spotlight_rx,
-                    wm.config.spotlight_ry,
-                    wm.config.spotlight_feather_pct
-                ));
+                let rx_v = wm.config.spotlight_rx;
+                let ry_v = wm.config.spotlight_ry;
+                let f_v = wm.config.spotlight_feather_pct;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔦 Focal Spotlight: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
+                )));
                 return false;
             }
             if let Some(m) = mode {
@@ -594,13 +601,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 .config
                 .spotlight_mode
                 .label(wm.config.spotlight_pixelated);
-            wm.active_pane_mut().status_message = Some(format!(
-                "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
-                label,
-                wm.config.spotlight_rx,
-                wm.config.spotlight_ry,
-                wm.config.spotlight_feather_pct
-            ));
+            let rx_v = wm.config.spotlight_rx;
+            let ry_v = wm.config.spotlight_ry;
+            let f_v = wm.config.spotlight_feather_pct;
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "🔦 Focal Spotlight: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
+            )));
             false
         }
         ColonCommand::FocalZoom {
@@ -625,13 +631,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 && feather_pct.is_none();
             if no_args {
                 let label = wm.config.cycle_focal_zoom();
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
-                    label,
-                    wm.config.focal_zoom_rx,
-                    wm.config.focal_zoom_ry,
-                    wm.config.focal_zoom_feather_pct
-                ));
+                let rx_v = wm.config.focal_zoom_rx;
+                let ry_v = wm.config.focal_zoom_ry;
+                let f_v = wm.config.focal_zoom_feather_pct;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔍 Focal Zoom: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
+                )));
                 return false;
             }
             if let Some(m) = mode {
@@ -667,13 +672,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 wm.config.focal_zoom_feather_pct = f.clamp(5, 100);
             }
             let label = wm.config.focal_zoom_label();
-            wm.active_pane_mut().status_message = Some(format!(
-                "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
-                label,
-                wm.config.focal_zoom_rx,
-                wm.config.focal_zoom_ry,
-                wm.config.focal_zoom_feather_pct
-            ));
+            let rx_v = wm.config.focal_zoom_rx;
+            let ry_v = wm.config.focal_zoom_ry;
+            let f_v = wm.config.focal_zoom_feather_pct;
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "🔍 Focal Zoom: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
+            )));
             false
         }
         ColonCommand::Shadows(style_opt) => {

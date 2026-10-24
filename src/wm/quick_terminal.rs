@@ -19,7 +19,7 @@ impl QuickTerminal {
     pub fn new_headless(rows: u16, cols: u16) -> Self {
         let overlay_rows = ((u32::from(rows) * 40) / 100).max(5) as u16;
         let mut pane = CompositePane::new_headless(0, overlay_rows, cols);
-        pane.title = "QUAKE QUICK TERM [~]".to_string();
+        pane.set_title("QUAKE QUICK TERM [~]");
         Self {
             pane,
             visible: false,
@@ -31,7 +31,7 @@ impl QuickTerminal {
         let overlay_rows = ((u32::from(cfg.rows) * 40) / 100).max(5) as u16;
         cfg.rows = overlay_rows;
         let mut pane = CompositePane::spawn(0, cfg)?;
-        pane.title = "QUAKE QUICK TERM [~]".to_string();
+        pane.set_title("QUAKE QUICK TERM [~]");
         Ok(Self {
             pane,
             visible: false,
@@ -71,14 +71,14 @@ mod tests {
         assert!(qt.visible);
 
         qt.pane.process_pty_output(b"PERSISTENT_QUAKE_OUTPUT\r\n");
-        qt.pane.prompt.insert_str("htop");
+        qt.pane.prompt_mut().insert_str("htop");
         qt.toggle();
         assert!(!qt.visible);
 
         // Toggle back on: PTY canvas and prompt state remain intact
         qt.toggle();
         assert!(qt.visible);
-        assert!(qt.pane.vt.screen().contents().contains("PERSISTENT_QUAKE_OUTPUT"));
-        assert_eq!(qt.pane.prompt.text(), "htop");
+        assert!(qt.pane.vt().screen().contents().contains("PERSISTENT_QUAKE_OUTPUT"));
+        assert_eq!(qt.pane.prompt().text(), "htop");
     }
 }

@@ -160,11 +160,9 @@ pub(super) fn handle_pane_leader_key(
             let byte = (c.to_ascii_lowercase() as u8)
                 .wrapping_sub(b'a')
                 .wrapping_add(1);
-            if let Some(pty) = &pane.pty {
-                pty.write_all(&[byte])?;
-            }
+            pane.write_to_pty(&[byte])?;
         } else if c.eq_ignore_ascii_case(&'a') {
-            pane.prompt.move_cursor_home();
+            pane.prompt_mut().move_cursor_home();
         }
         return Ok(AppAction::Handled);
     }
@@ -187,14 +185,14 @@ pub(super) fn handle_pane_leader_key(
             pane.toggle_manual_raw_override();
         }
         KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('[') => {
-            if pane.copy_mode.active {
+            if pane.copy_mode().active {
                 pane.exit_copy_mode();
             } else {
                 pane.enter_copy_mode();
             }
         }
         KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::F(3) => {
-            if pane.hints_mode.active {
+            if pane.hints_mode().active {
                 pane.exit_hints_mode();
             } else {
                 pane.enter_hints_mode();
@@ -205,7 +203,7 @@ pub(super) fn handle_pane_leader_key(
         }
         KeyCode::Char('/') => {
             if pane.is_prompt_visible() {
-                pane.prompt.set_text(":search ");
+                pane.prompt_mut().set_text(":search ");
             }
         }
         KeyCode::Char('n') => {
@@ -215,14 +213,14 @@ pub(super) fn handle_pane_leader_key(
             pane.prev_canvas_search_match();
         }
         KeyCode::Char('p') | KeyCode::Char('P') | KeyCode::Char('H') => {
-            pane.prompt.toggle_history_popup();
+            pane.prompt_mut().toggle_history_popup();
         }
         KeyCode::Up => {
-            let h = pane.vt.size().0 + 1;
+            let h = pane.vt().size().0 + 1;
             pane.move_prompt_vertical(-1, h);
         }
         KeyCode::Down => {
-            let h = pane.vt.size().0 + 1;
+            let h = pane.vt().size().0 + 1;
             pane.move_prompt_vertical(1, h);
         }
         KeyCode::Char('+') | KeyCode::Char('=') => {
@@ -238,10 +236,10 @@ pub(super) fn handle_pane_leader_key(
             pane.resize_prompt_width(-4);
         }
         KeyCode::PageUp => {
-            pane.vt.jump_to_prev_command_block();
+            pane.vt_mut().jump_to_prev_command_block();
         }
         KeyCode::PageDown => {
-            pane.vt.jump_to_next_command_block();
+            pane.vt_mut().jump_to_next_command_block();
         }
         _ => {}
     }
@@ -323,13 +321,12 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
         }
         KeyCode::Char('L') => {
             let label = wm.config.cycle_spotlight();
-            wm.active_pane_mut().status_message = Some(format!(
-                "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
-                label,
-                wm.config.spotlight_rx,
-                wm.config.spotlight_ry,
-                wm.config.spotlight_feather_pct
-            ));
+            let rx = wm.config.spotlight_rx;
+            let ry = wm.config.spotlight_ry;
+            let feather = wm.config.spotlight_feather_pct;
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "🔦 Focal Spotlight: {label} (rx={rx}, ry={ry}, feather={feather}%)"
+            )));
             Ok(AppAction::Handled)
         }
         KeyCode::Char('}') => {
@@ -373,7 +370,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
                     return Some(AppAction::Quit);
                 }
             } else {
-                wm.active_pane_mut().prompt.set_text(&bound_action);
+                wm.active_pane_mut().prompt_mut().set_text(&bound_action);
             }
             return Some(AppAction::Handled);
         }
@@ -382,9 +379,9 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
     if is_leader_key(key, &wm.config.leader_key) {
         wm.leader_pending = true;
         let leader_label = wm.config.leader_key.clone();
-        wm.active_pane_mut().status_message = Some(format!(
+        wm.active_pane_mut().set_status_message(Some(format!(
             "⌨ LEADER [{leader_label}]: -/h=SplitH |/v=SplitV z=Zoom o/n/p=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
-        ));
+        )));
         return Some(AppAction::Handled);
     }
 
@@ -400,7 +397,7 @@ pub(super) fn handle_wm_shortcut_key(
     if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char(' '))
         || (key.modifiers.contains(KeyModifiers::CONTROL)
             && key.code == KeyCode::Char('p')
-            && !wm.active_pane().prompt.fuzzy_search.active)
+            && !wm.active_pane().prompt().fuzzy_search.active)
     {
         wm.toggle_palette();
         return Ok(Some(AppAction::Handled));
@@ -452,24 +449,22 @@ pub(super) fn handle_wm_shortcut_key(
         match key.code {
             KeyCode::Char('o') => {
                 let label = wm.config.cycle_spotlight();
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
-                    label,
-                    wm.config.spotlight_rx,
-                    wm.config.spotlight_ry,
-                    wm.config.spotlight_feather_pct
-                ));
+                let rx = wm.config.spotlight_rx;
+                let ry = wm.config.spotlight_ry;
+                let feather = wm.config.spotlight_feather_pct;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔦 Focal Spotlight: {label} (rx={rx}, ry={ry}, feather={feather}%)"
+                )));
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('O') => {
                 let label = wm.config.cycle_focal_zoom();
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
-                    label,
-                    wm.config.focal_zoom_rx,
-                    wm.config.focal_zoom_ry,
-                    wm.config.focal_zoom_feather_pct
-                ));
+                let rx = wm.config.focal_zoom_rx;
+                let ry = wm.config.focal_zoom_ry;
+                let feather = wm.config.focal_zoom_feather_pct;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔍 Focal Zoom: {label} (rx={rx}, ry={ry}, feather={feather}%)"
+                )));
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('}') => {
@@ -488,14 +483,13 @@ pub(super) fn handle_wm_shortcut_key(
                     .config
                     .spotlight_mode
                     .label(wm.config.spotlight_pixelated);
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔦 Focal Radius: spot=({}, {}) zoom=({}, {}) [{}]",
-                    wm.config.spotlight_rx,
-                    wm.config.spotlight_ry,
-                    wm.config.focal_zoom_rx,
-                    wm.config.focal_zoom_ry,
-                    label
-                ));
+                let s_rx = wm.config.spotlight_rx;
+                let s_ry = wm.config.spotlight_ry;
+                let z_rx = wm.config.focal_zoom_rx;
+                let z_ry = wm.config.focal_zoom_ry;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔦 Focal Radius: spot=({s_rx}, {s_ry}) zoom=({z_rx}, {z_ry}) [{label}]"
+                )));
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('{') => {
@@ -514,14 +508,13 @@ pub(super) fn handle_wm_shortcut_key(
                     .config
                     .spotlight_mode
                     .label(wm.config.spotlight_pixelated);
-                wm.active_pane_mut().status_message = Some(format!(
-                    "🔦 Focal Radius: spot=({}, {}) zoom=({}, {}) [{}]",
-                    wm.config.spotlight_rx,
-                    wm.config.spotlight_ry,
-                    wm.config.focal_zoom_rx,
-                    wm.config.focal_zoom_ry,
-                    label
-                ));
+                let s_rx = wm.config.spotlight_rx;
+                let s_ry = wm.config.spotlight_ry;
+                let z_rx = wm.config.focal_zoom_rx;
+                let z_ry = wm.config.focal_zoom_ry;
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "🔦 Focal Radius: spot=({s_rx}, {s_ry}) zoom=({z_rx}, {z_ry}) [{label}]"
+                )));
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {
@@ -583,7 +576,7 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
 ) -> Result<Option<AppAction>> {
     // F3: QuickSelect 3270 Field Hints (non-colliding function key in CommandPrompt mode)
     if key.code == KeyCode::F(3) {
-        if pane.hints_mode.active {
+        if pane.hints_mode().active {
             pane.exit_hints_mode();
         } else {
             pane.enter_hints_mode();
@@ -605,8 +598,8 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             KeyCode::Char('b') => {
                 // On macOS, Option+Left emits ESC b (`Alt+b`), and in Readline `Alt+b` is backward-word.
                 // When editing text in the command prompt, move word left; when empty, pin prompt to bottom.
-                if !pane.prompt.input.is_empty() {
-                    pane.prompt.move_word_left();
+                if !pane.prompt().input.is_empty() {
+                    pane.prompt_mut().move_word_left();
                 } else {
                     pane.set_prompt_anchor(PromptAnchor::Bottom);
                 }
@@ -617,7 +610,7 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('c') | KeyCode::Char('C') => {
-                if pane.copy_mode.active {
+                if pane.copy_mode().active {
                     pane.exit_copy_mode();
                 } else {
                     pane.enter_copy_mode();
@@ -625,7 +618,7 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('F') => {
-                if pane.hints_mode.active {
+                if pane.hints_mode().active {
                     pane.exit_hints_mode();
                 } else {
                     pane.enter_hints_mode();
@@ -635,9 +628,9 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             KeyCode::Char('f') => {
                 // On macOS, Option+Right emits ESC f (`Alt+f`), and in Readline `Alt+f` is forward-word.
                 // When editing text in the command prompt, move word right; when empty, open 3270 Field Hints.
-                if !pane.prompt.input.is_empty() {
-                    pane.prompt.move_word_right();
-                } else if pane.hints_mode.active {
+                if !pane.prompt().input.is_empty() {
+                    pane.prompt_mut().move_word_right();
+                } else if pane.hints_mode().active {
                     pane.exit_hints_mode();
                 } else {
                     pane.enter_hints_mode();
@@ -645,11 +638,11 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
-                pane.prompt.kill_next_word();
+                pane.prompt_mut().kill_next_word();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Backspace => {
-                pane.prompt.kill_prev_word();
+                pane.prompt_mut().kill_prev_word();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('l') | KeyCode::Char('L') => {
@@ -658,7 +651,7 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             }
             KeyCode::Char('/') => {
                 if pane.is_prompt_visible() {
-                    pane.prompt.set_text(":search ");
+                    pane.prompt_mut().set_text(":search ");
                 }
                 return Ok(Some(AppAction::Handled));
             }
@@ -671,12 +664,12 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Up => {
-                let h = pane.vt.size().0 + 1;
+                let h = pane.vt().size().0 + 1;
                 pane.move_prompt_vertical(-1, h);
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Down => {
-                let h = pane.vt.size().0 + 1;
+                let h = pane.vt().size().0 + 1;
                 pane.move_prompt_vertical(1, h);
                 return Ok(Some(AppAction::Handled));
             }
@@ -697,27 +690,27 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                pane.prompt.toggle_history_popup();
+                pane.prompt_mut().toggle_history_popup();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::PageUp => {
-                pane.vt.jump_to_prev_command_block();
+                pane.vt_mut().jump_to_prev_command_block();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::PageDown => {
-                pane.vt.jump_to_next_command_block();
+                pane.vt_mut().jump_to_next_command_block();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Left => {
-                pane.prompt.move_word_left();
+                pane.prompt_mut().move_word_left();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Right => {
-                pane.prompt.move_word_right();
+                pane.prompt_mut().move_word_right();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Enter => {
-                pane.prompt.insert_newline();
+                pane.prompt_mut().insert_newline();
                 return Ok(Some(AppAction::Handled));
             }
             _ => {}

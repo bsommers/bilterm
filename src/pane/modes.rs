@@ -1,5 +1,10 @@
-use crate::pane::CompositePane;
-use crate::vt::{CanvasHint, CanvasSearchMatch, encode_osc52_clipboard};
+use std::path::{Path, PathBuf};
+
+use crate::pane::history_store::HistoryStore;
+use crate::pane::{CompositePane, FloatingPromptState, PaneId, PromptMouseDrag};
+use crate::pty::PtySession;
+use crate::pty::line_discipline::LineDisciplineState;
+use crate::vt::{CanvasHint, CanvasSearchMatch, VtParser, encode_osc52_clipboard};
 
 /// Interactive scrollback search & match highlighting state for the `OutputCanvas` (`VAL-02`).
 #[derive(Clone, Debug, Default)]
@@ -322,5 +327,166 @@ impl CompositePane {
         let next = !self.read_only;
         self.set_read_only(next);
         next
+    }
+
+    pub fn id(&self) -> PaneId {
+        self.id
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        self.title = title.into();
+    }
+
+    pub fn vt(&self) -> &VtParser {
+        &self.vt
+    }
+
+    pub fn vt_mut(&mut self) -> &mut VtParser {
+        &mut self.vt
+    }
+
+    pub fn has_pty(&self) -> bool {
+        self.pty.is_some()
+    }
+
+    pub fn pty(&self) -> Option<&PtySession> {
+        self.pty.as_ref()
+    }
+
+    pub fn prompt(&self) -> &FloatingPromptState {
+        &self.prompt
+    }
+
+    pub fn prompt_mut(&mut self) -> &mut FloatingPromptState {
+        &mut self.prompt
+    }
+
+    pub fn history_store(&self) -> &HistoryStore {
+        &self.history_store
+    }
+
+    pub fn history_store_mut(&mut self) -> &mut HistoryStore {
+        &mut self.history_store
+    }
+
+    pub fn export_history_to_temp_file(
+        &mut self,
+        custom_path: Option<&Path>,
+    ) -> std::io::Result<PathBuf> {
+        self.history_store
+            .export_to_temp_file(&self.prompt.history, custom_path)
+    }
+
+    pub fn line_discipline(&self) -> &LineDisciplineState {
+        &self.line_discipline
+    }
+
+    pub fn line_discipline_mut(&mut self) -> &mut LineDisciplineState {
+        &mut self.line_discipline
+    }
+
+    pub fn is_password_prompt(&self) -> bool {
+        self.line_discipline.is_password_prompt()
+    }
+
+    pub fn has_foreground_subcommand(&self) -> bool {
+        self.line_discipline.has_foreground_subcommand()
+    }
+
+    pub fn mouse_drag(&self) -> Option<PromptMouseDrag> {
+        self.mouse_drag
+    }
+
+    pub fn set_mouse_drag(&mut self, drag: Option<PromptMouseDrag>) {
+        self.mouse_drag = drag;
+    }
+
+    pub fn take_mouse_drag(&mut self) -> Option<PromptMouseDrag> {
+        self.mouse_drag.take()
+    }
+
+    pub fn canvas_search(&self) -> &CanvasSearchState {
+        &self.canvas_search
+    }
+
+    pub fn copy_mode(&self) -> &CopyModeState {
+        &self.copy_mode
+    }
+
+    pub fn copy_mode_mut(&mut self) -> &mut CopyModeState {
+        &mut self.copy_mode
+    }
+
+    pub fn hints_mode(&self) -> &HintsModeState {
+        &self.hints_mode
+    }
+
+    pub fn hints_mode_mut(&mut self) -> &mut HintsModeState {
+        &mut self.hints_mode
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    pub fn remote_target(&self) -> Option<&str> {
+        self.remote_target.as_deref()
+    }
+
+    pub fn set_remote_target(&mut self, target: Option<String>) {
+        self.remote_target = target;
+    }
+
+    pub fn pending_unsafe_paste(&self) -> Option<&str> {
+        self.pending_unsafe_paste.as_deref()
+    }
+
+    pub fn set_pending_unsafe_paste(&mut self, paste: Option<String>) {
+        self.pending_unsafe_paste = paste;
+    }
+
+    pub fn take_pending_unsafe_paste(&mut self) -> Option<String> {
+        self.pending_unsafe_paste.take()
+    }
+
+    pub fn status_message(&self) -> Option<&str> {
+        self.status_message.as_deref()
+    }
+
+    pub fn set_status_message(&mut self, msg: Option<String>) {
+        self.status_message = msg;
+    }
+
+    pub fn last_osc52_sequence(&self) -> Option<&str> {
+        self.last_osc52_sequence.as_deref()
+    }
+
+    pub fn set_last_osc52_sequence(&mut self, seq: Option<String>) {
+        self.last_osc52_sequence = seq;
+    }
+
+    pub fn take_last_osc52_sequence(&mut self) -> Option<String> {
+        self.last_osc52_sequence.take()
+    }
+
+    pub fn take_all_outbound_osc52(&mut self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Some(seq) = self.last_osc52_sequence.take() {
+            out.push(seq);
+        }
+        out.extend(self.vt.take_outbound_osc52());
+        out
+    }
+
+    pub fn flush_query_responses(&mut self) {
+        if let Some(pty) = &self.pty {
+            for resp in self.vt.take_query_responses() {
+                let _ = pty.write_all(&resp);
+            }
+        }
     }
 }

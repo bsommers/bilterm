@@ -79,7 +79,7 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 2 {
             let prompt_rect = self.pane.prompt_rect(area);
-            if cfg.drop_shadows && !self.pane.prompt.anchor.is_split() {
+            if cfg.drop_shadows && !self.pane.prompt().anchor.is_split() {
                 render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
             occlude_rect(buf, prompt_rect);
@@ -99,13 +99,15 @@ impl Widget for CompositePaneWidget<'_> {
         render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
 
         // Pass 4: Render optional Borland-style Command History Pop-up Window if active on this pane
-        if self.pane.is_prompt_visible() && self.pane.prompt.history_popup_open && canvas.height >= 5
+        if self.pane.is_prompt_visible()
+            && self.pane.prompt().history_popup_open
+            && canvas.height >= 5
         {
             render_history_popup(self.pane, canvas, cfg, &palette, &glyphs, buf);
         }
 
         // Pass 5: Render unsafe multi-line paste confirmation modal if pending (FND-01)
-        if let Some(pending_paste) = &self.pane.pending_unsafe_paste
+        if let Some(pending_paste) = self.pane.pending_unsafe_paste()
             && canvas.height >= 5
             && canvas.width >= 24
         {
@@ -151,11 +153,11 @@ fn render_output_canvas(
     active: bool,
     buf: &mut Buffer,
 ) {
-    let screen = pane.vt.screen();
-    let (vt_rows, vt_cols) = pane.vt.size();
+    let screen = pane.vt().screen();
+    let (vt_rows, vt_cols) = pane.vt().size();
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
-    let grapheme_2027 = pane.vt.is_grapheme_cluster_2027();
+    let grapheme_2027 = pane.vt().is_grapheme_cluster_2027();
 
     for r in 0..render_rows {
         let mut skip_next_wide_continuation = false;
@@ -211,7 +213,7 @@ fn render_output_canvas(
     }
 
     // Highlight detected URLs with underline + bright cyan tint (VAL-03)
-    for url in pane.vt.detect_visible_urls() {
+    for url in pane.vt().detect_visible_urls() {
         if url.row < render_rows {
             for c in url.start_col..=url.end_col.min(render_cols.saturating_sub(1)) {
                 if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + url.row)) {
@@ -227,7 +229,7 @@ fn render_output_canvas(
 
     // Highlight custom output triggers (v0.7.0)
     for trigger in &cfg.triggers {
-        for m in pane.vt.search_canvas(trigger) {
+        for m in pane.vt().search_canvas(trigger) {
             if m.row < render_rows {
                 for c in m.start_col..=m.end_col.min(render_cols.saturating_sub(1)) {
                     if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + m.row)) {
@@ -255,7 +257,7 @@ fn render_output_canvas(
     }
 
     // Render Kitty Graphics (APC G) and DEC Sixel (DCS q) placements using TrueColor half-blocks (GFX-01)
-    for gfx in pane.vt.graphic_placements() {
+    for gfx in pane.vt().graphic_placements() {
         let max_r = gfx.rows.max(1);
         let max_c = gfx.cols.max(1);
         for dr in 0..max_r {
@@ -298,10 +300,10 @@ fn render_output_canvas(
     }
 
     // Highlight active OutputCanvas search matches (VAL-02)
-    if pane.canvas_search.active && !pane.canvas_search.matches.is_empty() {
+    if pane.canvas_search().active && !pane.canvas_search().matches.is_empty() {
         for r in 0..render_rows {
             for c in 0..render_cols {
-                let (is_match, is_sel) = pane.canvas_search.cell_match_status(r, c);
+                let (is_match, is_sel) = pane.canvas_search().cell_match_status(r, c);
                 if is_match
                     && let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r))
                 {
@@ -322,10 +324,10 @@ fn render_output_canvas(
     }
 
     // Highlight Vi Copy Mode selection and cursor (VAL-04)
-    if pane.copy_mode.active {
+    if pane.copy_mode().active {
         for r in 0..render_rows {
             for c in 0..render_cols {
-                if pane.copy_mode.is_cell_selected(r, c)
+                if pane.copy_mode().is_cell_selected(r, c)
                     && let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r))
                 {
                     cell.set_style(
@@ -337,8 +339,8 @@ fn render_output_canvas(
                 }
             }
         }
-        let cr = pane.copy_mode.cursor_row.min(render_rows.saturating_sub(1));
-        let cc = pane.copy_mode.cursor_col.min(render_cols.saturating_sub(1));
+        let cr = pane.copy_mode().cursor_row.min(render_rows.saturating_sub(1));
+        let cc = pane.copy_mode().cursor_col.min(render_cols.saturating_sub(1));
         render_caret(
             buf,
             canvas.x + cc,
@@ -349,12 +351,12 @@ fn render_output_canvas(
     }
 
     // Render QuickSelect 3270 Field Hints badges ([a], [b], ...) when active (ECO-01)
-    if pane.hints_mode.active && !pane.hints_mode.hints.is_empty() {
-        for (idx, hint) in pane.hints_mode.hints.iter().enumerate() {
+    if pane.hints_mode().active && !pane.hints_mode().hints.is_empty() {
+        for (idx, hint) in pane.hints_mode().hints.iter().enumerate() {
             if hint.row >= render_rows {
                 continue;
             }
-            let is_sel = idx == pane.hints_mode.selected;
+            let is_sel = idx == pane.hints_mode().selected;
             let span_fg = if is_sel {
                 Color::Rgb(255, 255, 85)
             } else {
@@ -395,7 +397,7 @@ fn render_output_canvas(
 
     // When in RawPtyPassthrough and not scrolled back, highlight the live PTY cursor cell
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
-        && pane.vt.scrollback_offset() == 0
+        && pane.vt().scrollback_offset() == 0
         && !screen.hide_cursor()
     {
         let (cur_r, cur_c) = screen.cursor_position();
@@ -525,10 +527,10 @@ impl Widget for WorkspaceWidget<'_> {
                     .rank_of(id)
                     .map(|(r, total)| format!("Z:{r}/{total}"))
                     .unwrap_or_default();
-                let lock_tag = if pane.read_only { " 🔒" } else { "" };
+                let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
                 render_borland_frame_styled(
                     outer,
-                    &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title),
+                    &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title()),
                     is_active,
                     cfg.window_outline,
                     &palette,
@@ -691,7 +693,7 @@ mod tests {
     fn renders_composite_pane_with_floating_prompt_and_oia_bar() {
         let mut pane = CompositePane::new_headless(1, 10, 60);
         pane.process_pty_output(b"LINE_0_UNDER_PROMPT\r\nLINE_1_UNDER_PROMPT\r\nLINE_2_UNDER_PROMPT\r\nLINE_3_VISIBLE_BELOW\r\n");
-        pane.prompt.set_text("ls -la");
+        pane.prompt_mut().set_text("ls -la");
 
         let area = Rect::new(0, 0, 60, 10);
         let mut buf = Buffer::empty(area);
