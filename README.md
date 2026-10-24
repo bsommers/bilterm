@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.7.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.8.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
-  <img src="https://img.shields.io/badge/tests-91%20passing-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-225%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
@@ -41,8 +41,8 @@
   - 5 palettes (`turbo-blue`, `turbo-cyan`, `3278`, `3279`, `mono`), 8 border outlines, 4 drop-shadow styles, CRT scanlines (`:crt`), pane/full-screen IBM 3270 cross-hairs (`Alt+X`), **Focal Spotlight** (`Alt+O` / `:spotlight`) & **Focal Zoom Magnifying Lens** (`Alt+Shift+O` / `:focalzoom`) with smooth Hermite `smoothstep` or pixelated `2×1` character-block falloff, plus **Kitty (`APC G`)** and **DEC Sixel (`DCS q`)** graphics.
 - **First-Class Local & Remote `tmux` + `herdr`-Style SSH Fleet Management (`v1.4.0`)**:
   - Spawn remote SSH composite panes (`:ssh <user@host> [port]`), attach to persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux <user@host> [session]`), and centrally fan out commands across local and remote nodes by `@tag` (`:remote add|list|exec|disconnect`).
-- **Full Robot / Agent Automation API, Native MCP Server & Playbooks (`v1.1.0`–`v1.4.0`)**:
-  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 8 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
+- **Full Robot / Agent Automation API, Native MCP Server & Playbooks (`v1.1.0`–`v1.8.0`)**:
+  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 9 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
 
 ---
 

@@ -5,6 +5,30 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.8.0] - 2026-10-24
+
+### Added
+- **`herdr`-Style Slide-Out Sessions/Windows/Panes & Fleet Drawer (`DRW-01`, `DRW-02`, `src/wm/drawer.rs`, `src/ui/drawer.rs`)**:
+  - Supports 4-edge docking (`Left`, `Right` vertical tree; `Top`, `Bottom` horizontal ribbon), 3 visibility modes (`OnDemand`, `Fixed`, `AutoHide` triggered by leader chord, mouse edge hover, or background pane notification/exit alert), and 2 layout modes (`Overlay` floating over the workspace with Borland drop shadow and zero `SIGWINCH`, or `Push` carving out `drawer_rect` from `workspace_area` and reflowing panes).
+  - Renders hierarchical tree connectors (`├─`, `╰─`) and live per-pane telemetry badges: focus & Z-order rank (`► [1] Z:1/N`), activity braille spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) + throughput sparkline (`▁▂▃▅▆▇`), OSC 133 command status (`⚙ RUN`, `✓ 0`, `✗ <code>`), mode/security badges (`🖥 ALT`, `🔑 !ECHO`, `🔒 PROT`, `⏺ REC`, `📡 BCAST`, `🔔 N`), and transport badges (`🌐 SSH`, `🔗 TMUX`).
+  - Controllable via `F7`, `Alt+Shift+D`, `<Leader> d`, `:drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|size <n>]`, interactive keyboard navigation (`j`/`k`/`h`/`l`/`Enter`/`Space`/`x`/`z`/`d`/`m`/`p`), and mouse edge hover/click/drag.
+- **Dynamic Terminal Text & Font Size Scaling (`FONT-01`, `src/ui/typography.rs`, `src/ui/renderer.rs`)**:
+  - Wired `Action::FontZoomIn`, `Action::FontZoomOut`, `Action::FontZoomReset`, and `Action::FontSetSize(u16)` to `Ctrl++`/`Ctrl+=`, `Ctrl+-`, `Ctrl+0`, `<Leader> 0`, `:fontsize [+|-|reset|<pt>|<pct>%]`, JSON-RPC `workspace.fontsize`, MCP `bilterm_workspace_fontsize`, and `config.toml` (`font_size_pt`, `font_scale_pct`, `cell_width_px`, `cell_height_px`, `host_font_passthrough`).
+  - `GuiWorkspaceRenderer` and `GuiFrameSurface` dynamically scale cell pixel dimensions (`50%..=300%`), SVG `<text font-size="...">`, and `.ppm` raster glyph dimensions, and recalculate `(rows, cols)` character grids for a given pixel window size (`resize_workspace_for_pixel_window`).
+  - `VtParser` and `render_output_canvas` parse and render DEC VT100/VT220 line-size attributes (`\x1b#5` `DECSWL`, `\x1b#6` `DECDWL` double-width, `\x1b#3`/`\x1b#4` `DECDHL` double-height top/bottom) across 2 horizontal cells per character in TUI mode, paired with `OSC 50` host-terminal font passthrough (`encode_host_font_passthrough`).
+- **Built-in Whole-Workspace Asciicast v2 (`.cast`) Compositor Frame Recorder (`REC-02`, `src/vt/recording.rs`)**:
+  - `:record start [path]` / `:record workspace [path]` / `:record stop` (`Ctrl+X R`) diffs rendered multi-pane `ratatui::buffer::Buffer` frames into ANSI escape sequences so splits, Z-order stacks, floating prompts, Borland menus, 3270 cross-hairs, and modals are captured into a single playable `.cast` stream.
+- **Unified `Action` Command Vocabulary & Declarative Keymap Tables (`ARCH-R01`, `src/action.rs`, `src/input/keymap.rs`)**:
+  - Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP operation lowers into `crate::action::Action` executed by `WindowManager::apply`.
+  - Dual-leader prefix (`Ctrl+B` and `Ctrl+X` when standalone; automatic fallback to `Ctrl+X` inside outer `$TMUX`), held-`Ctrl` leader chord normalization (`Ctrl+X Ctrl+<key>`), `tmux`/`herdr` chord parity (`"`, `%`, `n`, `p`, `z`, `o`, `[`), and `asciinema` PTY-wrapper `!ECHO` override harmony.
+- **`TerminalBackend` Port Trait & Reference `MockTerminalBackend` (`ARCH-R03`, `ARCH-R05`, `src/vt/backend.rs`, `docs/adr/007-unwired-subsystems.md`)**:
+  - Isolated all `vt100_ctt` types inside `src/vt/`, added `trait TerminalBackend` implemented by `VtParser`, `MockTerminalBackend`, and `GhosttyVtEngine`, wired `TmuxControlSubprocess` into `WindowManager`, and added `docs/DEVELOPER_AND_AGENT_GUIDE.md`.
+
+### Changed
+- **Modular Architecture & Encapsulated State Invariants (`ARCH-R02`, `ARCH-R04`)**:
+  - Decomposed `src/vt/`, `src/pane/`, `src/input/`, `src/api/`, `src/ui/`, and `src/wm/` into focused submodules (all `src/**/*.rs` files `<= 800` lines; `handle_wm_key_event <= 80` lines) with zero `pane ↔ wm` dependency cycles.
+  - Encapsulated `WindowManager` and `CompositePane` fields behind invariant-preserving methods (`WindowManager::remove_pane`, `CompositePane::submit_command`, exclusive `enum Modal`, and `enum Focus { Quick, Pane(PaneId) }`).
+
 ## [v1.7.0] - 2026-10-23
 
 ### Security

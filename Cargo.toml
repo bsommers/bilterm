@@ -1,6 +1,6 @@
 [package]
 name = "bilterm"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2024"
 rust-version = "1.88"
 description = "IBM 3270 & Borland Turbo Vision inspired TUI multiplexer and composite-pane shell wrapper"
