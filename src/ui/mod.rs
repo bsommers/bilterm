@@ -634,6 +634,9 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.is_palette_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_palette_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+
+        // Capture full composited workspace frame if Whole-Workspace Asciicast v2 recording is active (REC-02)
+        self.wm.record_workspace_frame(buf);
     }
 }
 

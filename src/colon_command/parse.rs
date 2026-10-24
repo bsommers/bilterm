@@ -465,8 +465,18 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 let path = parts.get(2).map(|s| (*s).to_string());
                 Some(Ok(ColonCommand::RecordStart(path)))
             }
+            Some("workspace" | "ws" | "all") => {
+                let path = parts.get(2).map(|s| (*s).to_string());
+                Some(Ok(ColonCommand::RecordWorkspaceStart(path)))
+            }
+            Some("pane") => {
+                let path = parts.get(2).map(|s| (*s).to_string());
+                Some(Ok(ColonCommand::RecordPaneStart(path)))
+            }
             Some("stop" | "end") => Some(Ok(ColonCommand::RecordStop)),
-            _ => Some(Err("Usage: :record start [path.cast] | stop".to_string())),
+            _ => Some(Err(
+                "Usage: :record [start|workspace|pane] [path.cast] | stop".to_string(),
+            )),
         },
         "ssh" => {
             let Some(&target) = parts.get(1) else {

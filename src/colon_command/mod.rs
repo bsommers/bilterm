@@ -1,130 +1,18 @@
 pub mod execute;
 pub mod parse;
 
+pub use crate::action::Action;
 pub use execute::{execute_colon_command, execute_wm_colon_command};
 pub use parse::parse_colon_command;
 
-use crate::pane::PromptMode;
-use crate::ui::chrome::{OutlineStyle, ShadowStyle};
-use crate::ui::cursor::{CaretStyle, SpotlightMode};
-use crate::ui::glyphs::GlyphPack;
-use crate::ui::theme::ThemePreset;
-use crate::wm::WorkspaceLayoutMode;
-
-/// Parsed in-prompt `:command` (`PANE-03`, `PANE-05`, `PTY-04`, `WM-01..05`, `UI-01..05`).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ColonCommand {
-    PromptTop,
-    PromptBottom,
-    PromptSplitTop,
-    PromptSplitBottom,
-    PromptSplitToggle,
-    PromptModeSet(Option<PromptMode>),
-    PromptFloat(u16),
-    PromptHeight(u16),
-    PromptWidth(Option<u16>),
-    BlockPrev,
-    BlockNext,
-    Yank,
-    Clear,
-    /// `:scrollback` (report) / `:scrollback clear` (free history).
-    Scrollback { clear: bool },
-    RawToggle,
-    SplitHorizontal,
-    SplitVertical,
-    DeckNext,
-    DeckPrev,
-    FocusPane(usize),
-    ZoomToggle,
-    ClosePane,
-    LayoutMode(WorkspaceLayoutMode),
-    QuakeToggle,
-    HelpToggle,
-    HistoryPopupToggle,
-    HistorySave(Option<String>),
-    HistoryToggle(Option<bool>),
-    HistoryMaxFiles(usize),
-    HistoryRuns,
-    Theme(ThemePreset),
-    Glyphs(GlyphPack),
-    Cursor(CaretStyle),
-    Outline {
-        window: Option<OutlineStyle>,
-        prompt: Option<OutlineStyle>,
-    },
-    CrosshairToggle {
-        enabled: Option<bool>,
-        fullscreen: Option<bool>,
-    },
-    Spotlight {
-        mode: Option<SpotlightMode>,
-        pixelated: Option<bool>,
-        fullscreen: Option<bool>,
-        rx: Option<u16>,
-        ry: Option<u16>,
-        delta: Option<(i16, i16)>,
-        feather_pct: Option<u8>,
-    },
-    FocalZoom {
-        mode: Option<SpotlightMode>,
-        zoom_pct: Option<u16>,
-        step_pct: Option<i16>,
-        pixelated: Option<bool>,
-        fullscreen: Option<bool>,
-        rx: Option<u16>,
-        ry: Option<u16>,
-        delta_size: Option<(i16, i16)>,
-        feather_pct: Option<u8>,
-    },
-    Shadows(Option<ShadowStyle>),
-    FKeyBarToggle(Option<bool>),
-    SearchQuery(String),
-    SearchNext,
-    SearchPrev,
-    SearchOff,
-    CopyModeToggle,
-    LinksYank,
-    InspectorToggle(Option<bool>),
-    HintsToggle,
-    LockToggle(Option<bool>),
-    BroadcastToggle(Option<bool>),
-    MenuBarToggle(Option<bool>),
-    SessionSave(String),
-    SessionRestore(String),
-    SessionList,
-    CrtToggle(Option<bool>),
-    PaletteToggle,
-    NotificationsClear,
-    TriggerAdd(String),
-    TriggerClear,
-    RecordStart(Option<String>),
-    RecordStop,
-    SshConnect {
-        target: String,
-        port: Option<u16>,
-    },
-    SshTmuxConnect {
-        target: String,
-        session: String,
-    },
-    RemoteAdd {
-        name: String,
-        destination: String,
-        tags: Vec<String>,
-    },
-    RemoteList,
-    RemoteExec {
-        selector: String,
-        command: String,
-    },
-    RemoteDisconnect(String),
-    Quit,
-}
+/// Type alias preserving `ColonCommand` compatibility while unifying on [`crate::action::Action`] (`ARCH-R01`).
+pub type ColonCommand = crate::action::Action;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::pane::{CompositePane, PromptAnchor};
+    use crate::ui::cursor::SpotlightMode;
     use crate::wm::WindowManager;
 
     #[test]

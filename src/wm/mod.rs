@@ -6,17 +6,24 @@ pub mod z_stack;
 pub use session::{SavedPaneState, SavedWorkspaceSession};
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
 
+use crate::action::Action;
+use crate::colon_command::execute_wm_colon_command;
 use crate::config::BiltermConfig;
 use crate::error::Result;
+use crate::input::AppAction;
 use crate::pane::{CompositePane, PaneId};
 use crate::pty::PtyConfig;
 use crate::remote::FleetRegistry;
+use crate::vt::recording::WorkspaceRecorder;
 use crate::vt::scrollback::{FixedMemoryProbe, ScrollbackGovernor, SystemMemoryProbe};
 use crate::wm::quick_terminal::QuickTerminal;
 use crate::wm::split_tree::{SplitDirection, SplitTree};
@@ -80,6 +87,8 @@ pub struct WindowManager {
     default_size: (u16, u16),
     /// Dynamic scrollback budget governor (`[scrollback]`).
     scrollback: ScrollbackGovernor,
+    /// Whole-workspace Asciicast v2 (`.cast`) compositor frame recorder (`REC-02`).
+    workspace_recorder: Mutex<Option<WorkspaceRecorder>>,
 }
 
 impl WindowManager {
@@ -122,6 +131,63 @@ impl WindowManager {
             } else {
                 ScrollbackGovernor::new(Box::new(SystemMemoryProbe))
             },
+            workspace_recorder: Mutex::new(None),
+        }
+    }
+
+    /// Executes a unified [`Action`] against the workspace and active pane (`ARCH-R01.1`).
+    pub fn apply(&mut self, action: Action) -> Result<AppAction> {
+        if execute_wm_colon_command(self, action) {
+            Ok(AppAction::Quit)
+        } else {
+            Ok(AppAction::Handled)
+        }
+    }
+
+    /// Starts whole-workspace `.cast` compositor frame recording (`REC-02`).
+    pub fn start_workspace_recording(&mut self, path: PathBuf, private: bool) {
+        let (rows, cols) = self.default_size;
+        if let Ok(mut guard) = self.workspace_recorder.lock() {
+            *guard = Some(WorkspaceRecorder::new(path, private, cols, rows));
+        }
+    }
+
+    /// Returns `true` if whole-workspace `.cast` compositor frame recording is active.
+    pub fn is_workspace_recording(&self) -> bool {
+        self.workspace_recorder
+            .lock()
+            .map(|g| g.is_some())
+            .unwrap_or(false)
+    }
+
+    /// Returns `true` if an active whole-workspace `.cast` recorder has captured at least one rendered frame.
+    pub fn has_recorded_workspace_frames(&self) -> bool {
+        self.workspace_recorder
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|r| r.frame_count() > 0))
+            .unwrap_or(false)
+    }
+
+    /// Captures a rendered workspace `Buffer` frame into the active `WorkspaceRecorder` (`REC-02`).
+    pub fn record_workspace_frame(&self, buf: &Buffer) {
+        if let Ok(mut guard) = self.workspace_recorder.lock()
+            && let Some(recorder) = guard.as_mut()
+        {
+            recorder.capture_buffer(buf);
+        }
+    }
+
+    /// Stops whole-workspace `.cast` recording and writes the `.cast` file to disk (`REC-02`).
+    pub fn stop_workspace_recording(&mut self) -> std::io::Result<Option<PathBuf>> {
+        let recorder_opt = self
+            .workspace_recorder
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take());
+        match recorder_opt {
+            Some(rec) => rec.stop().map(Some),
+            None => Ok(None),
         }
     }
 
