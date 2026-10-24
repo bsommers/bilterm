@@ -118,13 +118,20 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
    ==> :trigger add ERROR:
    ==> :trigger add PANIC
    ```
-3. **Record an Asciicast v2 (`.cast`) Terminal Session**:
+3. **Record a Whole-Workspace or Single-Pane Asciicast v2 (`.cast`) Terminal Session**:
    ```text
    ==> :record start
-   ==> echo "Recorded in Asciicast v2 format!"
+   ==> :record workspace /tmp/workspace.cast
+   ==> :record pane /tmp/pane-only.cast
    ==> :record stop
    ```
-   *(Omitting the path writes to `$XDG_RUNTIME_DIR/bilterm/recordings/` with race-free `0600` permissions).*
+   - `:record start [path]` / `:record workspace [path]` (or leader chord `Ctrl+B R` / `Ctrl+X R`) records the **entire multi-pane Ratatui compositor buffer** (floating command prompts, Z-order window borders, DOS drop shadows, and OIA status bars) into an Asciicast v2 `.cast` file using cell-diffing (`WorkspaceRecorder`).
+   - `:record pane [path]` records only the active pane's raw PTY stdout stream (`SessionRecorder`).
+   - *(Omitting the path writes to `$XDG_RUNTIME_DIR/bilterm/recordings/` with race-free `0600` permissions).*
+4. **Running Bilterm Inside `asciinema rec` (External Recorder Compatibility)**:
+   - When `asciinema rec` spawns a sub-PTY inside a pane, `tcgetattr(master_fd)` reports non-canonical `!ECHO` raw mode, which initially hides the floating command prompt (`!ECHO LOCK`).
+   - Press **`F4`**, **`F12`**, or **`Ctrl+X e` / `Ctrl+B e`** (`:mode float`) to enable `force_command_prompt` and restore the floating command prompt over the `asciinema` sub-shell while still auto-hiding whenever `sudo`/`ssh` prints an active `Password:` prompt.
+   - You can also keep `Ctrl` held down across two-key leader chords (`Ctrl+X Ctrl+V`, `Ctrl+B Ctrl+Z`, `Ctrl+X Ctrl+E`).
 
 ---
 
@@ -176,14 +183,22 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 
 ---
 
-## Recipe 10: Local Verification & Coverage Gate (CI Conservation)
+## Recipe 10: Live Inspection, Debugging & Local Verification Gate
 
-Run the full test, torture, clippy, and coverage suite locally before committing or pushing:
+1. **Live 3270 Terminal Inspector (`<F9>` / `:inspector`)**:
+   - Press **`F9`** (or `Ctrl+B i` / `Ctrl+X i` / `:inspector`) at any time to inspect active `DECSET` modes (`ALT_SCREEN`, `BRACKETED_PASTE`, `SGR_MOUSE`), `termios` `ICANON`/`ECHO` state, Kitty keyboard flags, the cell under the cursor (`U+XXXX`, FG/BG RGB), and the last 16 CSI/OSC sequences.
+2. **Non-Blocking Diagnostic Trace Logging (`bilterm.log`)**:
+   ```bash
+   RUST_LOG=bilterm=debug cargo run
+   tail -f bilterm.log
+   ```
+3. **FullVerification & Architecture Gate (CI Conservation)**:
+   Run the full test, torture, clippy, and line-budget suite locally before committing or pushing (see [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](DEVELOPER_AND_AGENT_GUIDE.md) for the complete architecture & debugging manual):
 
 ```bash
 cargo test --all-targets
 cargo clippy --all-targets -- -D warnings
-cargo llvm-cov --summary-only
+awk 'ENDFILE { if (FNR > 800) { print FILENAME ": " FNR; bad=1 } } END { exit bad }' src/**/*.rs
 ```
 
 ---
@@ -193,6 +208,8 @@ cargo llvm-cov --summary-only
 | Symptom | Root Cause | Remedy |
 |---------|------------|--------|
 | Floating prompt hidden while running `vim`, `htop`, or `less` | Alternate Screen (`DECSET 47/1047/1049`) auto-hide (`▣ ALT SCR`) | Exit the TUI app, or press `F12` / `Ctrl+G` (`:raw`) to toggle manually |
+| Floating prompt hidden inside `asciinema rec` | `asciinema` puts its inner sub-PTY into non-canonical `!ECHO` raw mode | Press `F4`, `F12`, or `Ctrl+X e` / `Ctrl+B e` (`:mode float`) to restore the floating command prompt |
+| `Ctrl+X <key>` or `Ctrl+B <key>` chord ignored when `Ctrl` stays held | Second key arrives with `KeyModifiers::CONTROL` | Supported natively: `Ctrl+X Ctrl+<key>` and `Ctrl+B Ctrl+<key>` normalize automatically to leader chords |
 | Floating prompt hidden with red `♦ !ECHO LOCK` badge | Foreground process (`sudo`, `ssh`) disabled `termios ECHO` | Type your password and press `Enter`; prompt reappears automatically once `ECHO` is restored |
 | Prompt covers top 3 lines of command output | Default `PIN:TOP` floating mode | Press `Alt+S` or run `:prompt split-top` for zero-overlap split mode |
 | Need to stop `tail -f /dev/random` while in Command Box | Foreground job streaming continuously | Press `Ctrl+C` directly in the command box (sends `0x03` `SIGINT` to the PTY) |

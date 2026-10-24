@@ -11,33 +11,35 @@
 
 ---
 
-## 1. Function Keys, `Ctrl+X` Leader Prefix & Global Window Manager Shortcuts
+## 1. Function Keys, Dual `Ctrl+B` / `Ctrl+X` Leader Prefix & Global Window Manager Shortcuts
 
-> **macOS Compatibility:** Bilterm provides a universal **`Ctrl+X` Leader Prefix** (`keybindings.leader_key = "Ctrl+X"`) that avoids macOS Spotlight (`Ctrl+Space`), Mission Control, and Touch Bar `Fn` key collisions. In addition, when `keybindings.macos_option_as_alt = true` (default), macOS US-layout `Option` Unicode glyphs (`˙`, `√`, `∫`, `ƒ`, `†`, `ß`, `¬`, `µ`, `≈`, `∑`, `π`, `÷`, `¡`..`ª`, etc.) are automatically normalized back to `Alt+<key>`.
+> **Dual `Ctrl+B` (`tmux`/`herdr`) + `Ctrl+X` (Borland/DOS) Leader Prefix & `$TMUX` Auto-Fallback:**
+> By default (`keybindings.leader_key = "Ctrl+B"`), Bilterm accepts **both** **`Ctrl+B`** (`tmux`/`herdr` muscle memory) and **`Ctrl+X`** (Borland Turbo Vision / macOS safe) as leader keys, and automatically normalizes held-`Ctrl` second strokes (`Ctrl+B Ctrl+<key>` / `Ctrl+X Ctrl+<key>`). When running nested inside an outer `$TMUX` session, Bilterm automatically falls back to **`Ctrl+X`** only so `Ctrl+B` passes cleanly to your outer `tmux`. When `keybindings.macos_option_as_alt = true` (default), macOS US-layout `Option` Unicode glyphs (`˙`, `√`, `∫`, `ƒ`, `†`, `ß`, `¬`, `µ`, `≈`, `∑`, `π`, `÷`, `¡`..`ª`, etc.) are also normalized to `Alt+<key>`.
 
-| Keybinding | `:command` | Description |
+| Keybinding (`<Leader>` = `Ctrl+B` or `Ctrl+X`) | `:command` | Description |
 |------------|------------|-------------|
-| **`F1`** / `Ctrl+X ?` | `:help` / `:?` | Toggle interactive scrollable Borland Turbo Vision Help Modal |
-| **`F2`** / `Ctrl+X -` / `Alt+H` | `:split h` / `:sp` | Split focused composite pane horizontally (Top / Bottom) (`WM-01`) |
-| `Ctrl+X \|` / `Ctrl+X v` / `Alt+V` | `:split v` / `:vs` | Split focused composite pane vertically (Left / Right) (`WM-01`) |
-| **`F4`** / `Ctrl+X e` / `Alt+E` | `:mode [float\|fixed\|terminal\|cycle]` | Cycle between **Floating Prompt**, **Fixed (Docked) Prompt**, and **Regular Terminal** |
-| **`F5`** / `Ctrl+X z` / `Alt+Z` | `:zoom` | Toggle zoom/maximize on the focused composite pane (`WM-03`) |
-| **`F6`** / `Ctrl+X Tab` / `Alt+Tab` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (`WM-02`) |
-| `Alt+Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (`WM-02`) |
-| `Ctrl+X 1..9` / `Alt+1` .. `Alt+9` | `:focus <1..9>` | Selectively raise and focus pane `#1..#9` (`WM-02`) |
-| `Ctrl+X m` / `Alt+M` | `:layout stack\|tile` | Toggle between Tiled Splits and Overlapping Z-Order Cascade (`WM-02`) |
-| **`F9`** / `Ctrl+X i` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (active DECSET modes, Kitty flags, cursor cell `U+XXXX`, CSI/OSC log) (`BEL-01`) |
+| **`F1`** / `<Leader> ?` | `:help` / `:?` | Toggle interactive scrollable Borland Turbo Vision Help Modal |
+| **`F2`** / `<Leader> -` / `<Leader> "` / `Alt+H` | `:split h` / `:sp` | Split focused composite pane horizontally (Top / Bottom) (`WM-01`) |
+| `<Leader> \|` / `<Leader> %` / `<Leader> v` / `Alt+V` | `:split v` / `:vs` | Split focused composite pane vertically (Left / Right) (`WM-01`) |
+| **`F4`** / `<Leader> e` / `Alt+E` | `:mode [float\|fixed\|terminal\|cycle]` | Cycle between **Floating Prompt**, **Fixed (Docked) Prompt**, and **Regular Terminal** (also restores floating prompt inside `asciinema rec`) |
+| **`F5`** / `<Leader> z` / `Alt+Z` | `:zoom` | Toggle zoom/maximize on the focused composite pane (`WM-03`) |
+| **`F6`** / `<Leader> Tab` / `<Leader> n` / `Alt+Tab` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (`WM-02`) |
+| `<Leader> p` / `Alt+Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (`WM-02`) |
+| `<Leader> 1..9` / `Alt+1` .. `Alt+9` | `:focus <1..9>` | Selectively raise and focus pane `#1..#9` (`WM-02`) |
+| `<Leader> m` / `Alt+M` | `:layout stack\|tile` | Toggle between Tiled Splits and Overlapping Z-Order Cascade (`WM-02`) |
+| **`F9`** / `<Leader> i` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (active DECSET modes, Kitty flags, cursor cell `U+XXXX`, CSI/OSC log) (`BEL-01`) |
 | **`F10`** / `Ctrl+\` / `Alt+\`` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal (`WM-05`) |
 | **`F12`** / `Ctrl+G` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` (`PTY-02`) |
-| **`Ctrl+P`** / `Alt+Space` | `:palette` / `:cmd` | Open interactive Fuzzy Command Palette (`nucleo-matcher`) (`CMD-01`) |
-| `Ctrl+X f` / `Alt+Shift+F` | `:hints` / `:hint` | Toggle QuickSelect 3270 Field Hints (`[a]..[z]`) for URLs, paths, IPv4s, and Git SHAs (`ECO-01`) |
-| `Ctrl+X l` / `Alt+L` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane (`ECO-04`) |
+| **`Ctrl+P`** / `<Leader> :` / `Alt+Space` | `:palette` / `:cmd` | Open interactive Fuzzy Command Palette (`nucleo-matcher`) (`CMD-01`) |
+| `<Leader> f` / `Alt+Shift+F` | `:hints` / `:hint` | Toggle QuickSelect 3270 Field Hints (`[a]..[z]`) for URLs, paths, IPv4s, and Git SHAs (`ECO-01`) |
+| `<Leader> l` / `Alt+L` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane (`ECO-04`) |
+| `<Leader> H` / `<Leader> P` / `Alt+P` | `:history` / `:hist` | Toggle Borland Command History Pop-up Window |
+| `<Leader> R` | `:record start [path] \| workspace [path] \| pane [path] \| stop` | Start or stop whole-workspace (`REC-02`) or single-pane (`REC-01`) Asciicast v2 (`.cast`) recording (`⏺ REC`) |
 | — | `:broadcast [on\|off]` | Toggle Synchronized Multi-Pane Input Broadcast (`📡 BCAST`) across unlocked panes (`ECO-04`) |
 | — | `:menubar [on\|off]` | Toggle interactive Top Borland Turbo Vision Menu Bar (`ECO-03`) |
 | — | `:crt [on\|off]` | Toggle retro CRT phosphor scanline shader (`CRT-01`) |
 | — | `:notifications clear` | Clear `OSC 9` / `OSC 777` desktop notification & bell badge (`🔔`) (`NTF-01`) |
 | — | `:trigger add <pat> \| clear` | Add or clear live output highlight triggers on the `OutputCanvas` (`TRG-01`) |
-| — | `:record start [path] \| stop` | Start or stop Asciicast v2 (`.cast`) terminal session recording (`⏺ REC`) (`REC-01`) |
 | — | `:session save <name>` | Save multi-pane workspace topology and pane metadata to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml` (`ECO-02`) |
 | — | `:session restore <name>` | Restore saved multi-pane workspace session (`ECO-02`) |
 | — | `:session list` | List saved workspace sessions (`ECO-02`) |

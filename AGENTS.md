@@ -150,14 +150,38 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+> **Full Engineering & Agent Reference:** Always consult [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md) before modifying state, keybindings, commands, or security boundaries.
+
+1. **Module & Function Size Ceilings (`ARCH-R04`, `ARCH-R01`)**:
+   - Every Rust source file under `src/**/*.rs` MUST remain **`<= 800` lines**. Split cohesive submodules (`foo/mod.rs` + children) rather than growing monolithic files.
+   - `src/input/mod.rs::handle_wm_key_event` MUST remain **`<= 80` lines**; all keyboard shortcuts live in declarative `KeyBinding` tables in `src/input/keymap.rs`.
+2. **Unified `Action` Dispatch (`ARCH-R01`)**:
+   - Every user-triggerable operation (leader chord, global/pane shortcut, `:colon` command, Fuzzy Command Palette item, top menu bar action, JSON-RPC `"wm.command"`/`"command.execute"`, MCP tool, or TOML Playbook `colon` step) MUST lower to `crate::action::Action` (`pub type ColonCommand = crate::action::Action;`) and execute through `WindowManager::apply(&mut self, action: Action) -> ActionResult`.
+   - Every new `Action` variant MUST be covered in `src/action.rs::tests::every_action_is_reachable_from_keymap_colon_or_rpc`.
+3. **Encapsulated State Invariants (`ARCH-R02`)**:
+   - Never make `WindowManager` topology fields (`panes`, `layout`, `z_order`, `focused_pane_id`, `zoomed_pane_id`, `modal`, `workspace_recorder`) or `CompositePane` internal fields (`prompt`, `vt_worker`, `line_discipline`, `mode`, `focus`) `pub`.
+   - Pane removal MUST go exclusively through `WindowManager::remove_pane(id)` (`debug_assert!` verifies post-conditions across `panes`, `layout`, `z_order`, `focused_pane_id`, and `zoomed_pane_id`).
+   - Command submission MUST go exclusively through `CompositePane::submit_command(&mut self) -> Result<Option<SubmittedCommand>>`.
+   - Overlays are mutually exclusive via `Modal` (`None`, `Help`, `CommandPalette`, `Inspector`, `TopMenu`); intra-pane focus is mutually exclusive via `Focus` (`FloatingPrompt`, `RawPassthrough`, `HistoryPopup`, `CopyMode`).
+4. **Filesystem & Credential Confinement (`SEC-R01..04`)**:
+   - All runtime state, session TOMLs, history exports, `.cast` recordings,Unix RPC sockets, and snapshots MUST use `src/util/secure_fs.rs` (`ensure_private_dir` `0700`, `write_private_file_atomic` `0600`, `validate_safe_name` rejecting `..`, `/`, `\`, NUL).
+   - Never pass secrets on CLI argv; use `--token-file <path>` (`0600`).
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+Bilterm is organized as a cycle-free 48-file modular DAG under `src/` (`vt` / `config` / `theme` / `tmux` / `util` → `pane` → `wm` → `action` / `colon_command` / `input` → `api` / `app` → `lib` / `main`):
+
+- **`src/action.rs` & `src/colon_command/{mod,parse,execute,complete}.rs`**: Canonical `Action` enum (`60+` variants), `:colon` parser, `WindowManager::apply(Action)` executor (`execute_colon_command`), and `<Tab>` completion.
+- **`src/input/{mod,keymap,modal,mouse,normalize}.rs`**: Declarative keymap tables (`DEFAULT_LEADER_BINDINGS`, `DEFAULT_GLOBAL_BINDINGS`, `DEFAULT_PANE_BINDINGS`), dual `Ctrl+B`/`Ctrl+X` leader with `$TMUX` fallback and held-`Ctrl` normalization, modal key handlers, SGR mouse routing, and macOS `Option`-as-`Alt` normalization.
+- **`src/pane/{mod,prompt,prompt_editor,render,overlays,discipline,completion,selection,hints}.rs`**: `CompositePane` (combining `OutputCanvas`, `FloatingCommandPrompt`, and 3270 `OiaStatusBar`), 3-signal `!ECHO LOCK` + `asciinema` `force_command_prompt` override, `DECSET 1049` alternate screen auto-hide, Vi copy mode, and QuickSelect field hints.
+- **`src/wm/{mod,layout_tree,render,shaders,palette,session,fleet}.rs`**: Multi-pane BSP `SplitNode` tiling, Z-order `z_order: Vec<PaneId>` cascade, Guake drop-down pane, 3-pass Ratatui compositor + CRT/cross-hair/spotlight/focal-zoom shaders, and `WorkspaceRecorder` whole-workspace `.cast` recording.
+- **`src/vt/{mod,worker,snapshot,parser,graphics,recording}.rs`**: Dedicated `portable-pty` reader + `alacritty_terminal 0.26` worker thread publishing immutable `Arc<GridSnapshot>` frames via `tokio::sync::watch` (60 FPS flood immunity), Kitty/Sixel graphics, and Asciicast v2 `.cast` recorders (`SessionRecorder` & `WorkspaceRecorder`).
+- **`src/api/{mod,rpc,mcp,playbook,gui_renderer}.rs`**: JSON-RPC 2.0 server/client, native MCP `2024-11-05` stdio server, TOML automation playbooks, and headless `.ppm` renderer.
+
+See [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md) and [`docs/architecture.md`](docs/architecture.md) for full details, Mermaid diagrams, and live debugging workflows (`<F9>` 3270 Inspector, `RUST_LOG=bilterm=debug` -> `bilterm.log`, `bilterm ctl`).
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->

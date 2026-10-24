@@ -10,13 +10,14 @@ Welcome to the comprehensive documentation suite for **Bilterm** — the IBM 327
 
 | Document | Purpose & Scope |
 |----------|-----------------|
+| **[`docs/DEVELOPER_AND_AGENT_GUIDE.md`](DEVELOPER_AND_AGENT_GUIDE.md)** | **Developer, Maintainer & AI Agent Engineering Guide** — complete crate dependency stack, 48-file source tree (`<= 800` lines gate), `Action` pipeline, encapsulated invariants, live `<F9>` Inspector / `bilterm.log` / `bilterm ctl` debugging playbook, and extension workflow |
 | **[`docs/purpose.md`](purpose.md)** | Problem statement, IBM 3270 + Borland Turbo Vision design philosophy, threat model, and security boundaries (`!ECHO LOCK`, `sanitize_stream_traps`, `occlude_rect`) |
-| **[`docs/architecture.md`](architecture.md)** | Full subsystem breakdown (`v1.4.0`), 3-pass Ratatui compositor, 3-signal line-discipline state machine, SSH/Fleet Federation, JSON-RPC 2.0 / MCP Automation Plane, and Mermaid/ASCII diagrams |
+| **[`docs/architecture.md`](architecture.md)** | Full subsystem breakdown (`v1.7.0`), 3-pass Ratatui compositor, 3-signal line-discipline state machine, SSH/Fleet Federation, JSON-RPC 2.0 / MCP Automation Plane, `WorkspaceRecorder`, and Mermaid/ASCII diagrams |
 | **[`docs/running.md`](running.md)** | Prerequisites, installation, **CLI & Automation (`--mcp`, `--headless`, `bilterm ctl`, `--playbook`)**, **shell resolution (`$SHELL` / `%COMSPEC%`)**, **Tab command completion internals**, `config.toml` (`[remotes.<name>]`), and exit codes |
-| **[`docs/how-to.md`](how-to.md)** | Step-by-step task recipes (including SSH domains, `herdr` fleet management, and JSON-RPC/MCP automation), CI/CD verification pipeline, and troubleshooting matrix |
+| **[`docs/how-to.md`](how-to.md)** | Step-by-step task recipes (including whole-workspace `.cast` recording, `asciinema` harmony, SSH domains, `herdr` fleet management, and JSON-RPC/MCP automation), CI/CD verification pipeline, and troubleshooting matrix |
 | **[`docs/user-guide/README.md`](user-guide/README.md)** | Complete 7-chapter interactive User Manual with embedded workspace screenshots covering every keybinding, mouse gesture, and `:colon` command |
 | **[`docs/diagrams/README.md`](diagrams/README.md)** | Multi-format visual diagram catalog (**ASCII** `.txt`, **Mermaid** `.mmd`, and **native draw.io** `.drawio` XML) |
-| **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-005`) |
+| **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-006`) |
 | **[`docs/TEST_COVERAGE.md`](TEST_COVERAGE.md)** | Test coverage report (**`83.45%` line coverage**, 86 passing tests across 14 suites) and battle/stress/performance benchmarks |
 | **[`docs/launch-presentation-and-pitch-script.md`](launch-presentation-and-pitch-script.md)** | NotebookLM / Gemini prompt script: 12-slide technical deck specification and 5-minute product launch video script |
 | **[`CHANGELOG.md`](../CHANGELOG.md)** | Semantic versioning release history (`v0.1.0` through `v1.4.0`) |

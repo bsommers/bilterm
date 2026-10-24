@@ -78,18 +78,21 @@ cargo clippy --all-targets -- -D warnings
 
 ## Essential Shortcuts & `:colon` Commands
 
-| Action | Shortcut | `:command` |
+> **Dual Leader Prefix (`Ctrl+B` & `Ctrl+X`):** Bilterm supports both **`Ctrl+B`** (`tmux`/`herdr` style) and **`Ctrl+X`** (Borland/DOS & macOS safe) out of the box (automatically falling back to `Ctrl+X` when nested inside an outer `$TMUX` session, and accepting held-`Ctrl` chords like `Ctrl+B Ctrl+V` or `Ctrl+X Ctrl+Z`).
+
+| Action | Shortcut (`<L>` = `Ctrl+B` or `Ctrl+X`) | `:command` |
 |--------|----------|------------|
-| **Help / Command Palette / 3270 Inspector** | `F1` (`Ctrl+X ?`) / `Ctrl+P` (`Alt+Space`) / `F9` (`Ctrl+X i`) | `:help` / `:palette` / `:inspector` |
-| **Split Horizontal / Split Vertical / Zoom** | `F2` (`Ctrl+X -` / `Alt+H`) / `Ctrl+X \|` (`Alt+V`) / `F5` (`Ctrl+X z` / `Alt+Z`) | `:split h` / `:split v` / `:zoom` |
-| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `Ctrl+X m` (`Alt+M`) / `F6` (`Ctrl+X Tab`) / `Ctrl+X 1..9` (`Alt+1..9`) | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
+| **Help / Command Palette / 3270 Inspector** | `F1` (`<L> ?`) / `Ctrl+P` (`<L> :` / `Alt+Space`) / `F9` (`<L> i`) | `:help` / `:palette` / `:inspector` |
+| **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> "` / `<L> -` / `Alt+H`) / `<L> %` (`<L> \|` / `Alt+V`) / `F5` (`<L> z` / `Alt+Z`) | `:split h` / `:split v` / `:zoom` |
+| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `<L> m` (`Alt+M`) / `F6` (`<L> n` / `<L> p` / `<L> Tab`) / `<L> 1..9` (`Alt+1..9`) | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
 | **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Ctrl+\` / `Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
-| **Cycle Floating / Fixed / Regular Terminal** | `F4` (`Ctrl+X e` / `Alt+E`) / Click OIA Bar | `:mode [float \| fixed \| terminal \| cycle]` |
-| **Prompt Pin Top / Bottom / Non-Overlapping Split**| `Ctrl+X t` (`Alt+T`) / `Ctrl+X b` / `Ctrl+X s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |
-| **3270 Field Hints / Vi Copy / Canvas Search** | `Ctrl+X f` / `Ctrl+X [` (`Alt+C`) / `Ctrl+X /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
-| **Read-Only Lock / Multi-Pane Broadcast** | `Ctrl+X l` (`Alt+L`) / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
-| **Theme / Cross-Hairs / CRT Scanlines** | — / `Ctrl+X x` (`Alt+X`) / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
-| **Focal Spotlight / Focal Zoom Lens / Resize** | `Alt+O` (`Ctrl+X L`) / `Alt+Shift+O` / `Alt+Shift+]` & `[` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
+| **Cycle Floating / Fixed / Regular Terminal** | `F4` (`<L> e` / `Alt+E`) / Click OIA Bar | `:mode [float \| fixed \| terminal \| cycle]` |
+| **Prompt Pin Top / Bottom / Non-Overlapping Split**| `<L> t` (`Alt+T`) / `<L> b` / `<L> s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |
+| **3270 Field Hints / Vi Copy / Canvas Search** | `<L> f` / `<L> [` (`Alt+C`) / `<L> /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
+| **Whole-Workspace or Pane `.cast` Recording** | `<L> R` / — | `:record start [path] \| workspace [path] \| pane [path] \| stop` |
+| **Read-Only Lock / Multi-Pane Broadcast** | `<L> l` (`Alt+L`) / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
+| **Theme / Cross-Hairs / CRT Scanlines** | — / `<L> x` (`Alt+X`) / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
+| **Focal Spotlight / Focal Zoom Lens / Resize** | `Alt+O` (`<L> L`) / `Alt+Shift+O` / `Alt+Shift+]` & `[` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
 | **SSH Pane / Remote `tmux -CC` over SSH** | — | `:ssh <user@host> [port]` / `:ssh-tmux <user@host> [sess]` |
 | **`herdr` Fleet Register / List / Tag Exec** | — | `:remote add <name> <host> [@tags]` / `:remote list` / `:remote exec <@tag\|all> <cmd>` |
 
@@ -102,6 +105,7 @@ cargo clippy --all-targets -- -D warnings
 All detailed engineering guides, user manual chapters, and architecture diagrams live in [`docs/`](docs/README.md):
 
 - **[Documentation Index (`docs/README.md`)](docs/README.md)**
+  - **[Developer, Maintainer & AI Agent Reference (`docs/DEVELOPER_AND_AGENT_GUIDE.md`)](docs/DEVELOPER_AND_AGENT_GUIDE.md)** — Complete 48-file source map, crate & library stack, encapsulated state invariants, unified `Action` + declarative keymap architecture, and live inspectability/debugging guide (`F9` Inspector, `bilterm.log`, JSON-RPC/MCP).
   - **[Purpose & Security Threat Model (`docs/purpose.md`)](docs/purpose.md)** — IBM 3270 × Borland design rationale, `!ECHO LOCK` password safety, `/dev/random` flood immunity, and paste-injection guards.
   - **[System Architecture & Internals (`docs/architecture.md`)](docs/architecture.md)** — 3-pass Ratatui compositor, `GridSnapshot` + `VtWorkerHandle` seam, 3-signal line-discipline detector, JSON-RPC/MCP control plane, and SSH/`tmux -CC` fleet bridge.
   - **[Running, Shells, Tab Completion & Config (`docs/running.md`)](docs/running.md)** — Shell resolution (`$SHELL` / `%COMSPEC%`), dual-mode `<Tab>` completion internals, `config.toml` & `[remotes.<name>]` schema, and CLI reference.
