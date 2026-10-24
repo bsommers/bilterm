@@ -18,6 +18,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Window Manager — H/V Composite Splits, Z-Order Stacking/Shuffling & Guake Drop-Down Terminal** - Binary split tree for H/V composite panes, z-order deck stacking/shuffling/selective raise, persistent Guake-style drop-down quick terminal, multi-pane mouse/keyboard controls, and wide-grapheme boundary occlusion (completed 2026-10-20)
 - [x] **Phase 4: Retro Mainframe & DOS Aesthetics — IBM 3270 + Borland Turbo Vision Chrome, Modular Status Bars, Glyphs & Declarative Config** - Borland Turbo Vision window frames and drop shadows, IBM 3270 cross-hair cursors and OIA/F-key status bars, Unicode/CP437/Nerd Font glyph sets, and `config.toml` theme engine (completed 2026-10-20)
 - [x] **Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation** - Outer `$TMUX` passthrough and collision avoidance, `tmux -CC` control mode session backend, Linux/macOS/Windows (`ConPTY`) parity, comprehensive test/snapshot coverage, architecture docs/ADRs, and extensive User Manual (completed 2026-10-20)
+- [x] **Phase 19: Security Hardening of the Automation & Shell-Integration Surfaces** - `0600` Unix socket default, bearer token gate for remote TCP, confined snapshot paths, `0700`/`0600` private temp files, and hardened SSH argv builders (completed 2026-10-23)
+- [x] **Phase 20: Mega-Module Decomposition** - Split `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams (`<= 800` lines per file, no `pane ↔ wm` cycle) (completed 2026-10-23)
+- [ ] **Phase 21: Encapsulated Workspace Invariants** - Private `WindowManager` and `CompositePane` fields, unified `remove_pane`/`submit_command`, `enum Modal`, and `enum Focus`
+- [ ] **Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback), and `tmux`/`herdr` chord parity
+- [ ] **Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution** - Decouple `vt100_ctt` behind `TerminalBackend`, resolve `VtWorkerHandle`/`TmuxControlSubprocess`/`ghostty-vt`, and CI feature matrix
+- [ ] **Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes** - 4-edge (`Left`/`Right`/`Top`/`Bottom`) slide-out drawer with `OnDemand`/`Fixed`/`AutoHide` policies, `Overlay` (float) vs `Push` (auto-resize) layout modes, and live telemetry glyphs (`DRW-01`, `DRW-02`)
+- [ ] **Phase 25: Dynamic Terminal Text & Font Size Scaling** - Runtime `Ctrl++`/`Ctrl+-`/`Ctrl+0`/`:fontsize` scaling across `GuiWorkspaceRenderer` pixel/SVG cells, DEC double-width/height (`DECDWL`/`DECDHL`) TUI canvas lines, and host-terminal font-zoom OSC passthrough (`FONT-01`)
+- [ ] **Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas** - Classic Tektronix 4010/4014 4096×3120 vector mode (`\x1b[?38h`) with phosphor decay plus modern retained scene-graph, 2D sprites, declarative plotting, and image viewer over Braille/Sextant/Quadrant TUI & full-res GUI rasterizers (`TEK-01`, `CANV-01`)
 
 ## Phase Details
 
@@ -256,10 +264,51 @@ Plans:
 
 **Plans**: TBD (`/gsd-plan-phase 23`)
 
+### Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes
+
+**Goal**: As an operator managing multiple sessions, split trees, z-order decks, and remote fleet nodes, I want a `herdr`-inspired slide-out drawer that can dock to any screen edge (`Left`, `Right`, `Top`, `Bottom`), operate in `OnDemand`, `Fixed`, or `AutoHide` mode, either float over panes (`Overlay`) or bump/auto-resize the workspace (`Push`), and render expressive live status glyphs for every session, window, and pane.
+**Depends on**: Phase 23
+**Requirements**: DRW-01, DRW-02
+**Success Criteria** (what must be TRUE):
+
+  1. `DrawerConfig` and runtime `WorkspaceDrawer` support 4 docking edges (`Left`, `Right` vertical tree; `Top`, `Bottom` horizontal ribbon/bar), configurable width/height, and 3 visibility modes (`OnDemand`, `Fixed`, `AutoHide` triggered by leader-key activation, mouse edge hover, or background pane notification/exit alert).
+  2. `DrawerLayoutMode::Overlay` renders the drawer over the active workspace using `occlude_rect` and Borland drop shadow (`render_drop_shadow_styled`) without emitting `SIGWINCH` to PTYs; `DrawerLayoutMode::Push` subtracts `drawer_rect` from `workspace_area` before `WindowManager::compute_workspace_rects` and `WindowManager::resize_all`, reflowing panes cleanly.
+  3. Each session/window/pane row renders rich telemetry glyphs: hierarchy connectors (`├─`, `╰─`), focus & z-order rank (`► [1] Z:1/4`), live activity braille spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) + output throughput sparkline (`▁▂▃▅▆▇`), OSC 133 command state (`⚙ RUN`, `✓ 0`, `✗ <code >`), mode/security badges (`🖥 ALT`, `🔑 !ECHO`, `🔒 PROT`, `⏺ REC`, `📡 BCAST`, `🔔 N`), and transport badges (`🌐 SSH`, `🔗 TMUX`).
+  4. Keyboard navigation (`j`/`k`/`h`/`l`, `Enter` to focus/jump, `Space` to preview, `x` to close, `z` to zoom, `d` to cycle dock edge, `m` to toggle `Overlay`/`Push`, `p` to pin/unpin `Fixed`/`AutoHide`) and mouse click/hover/drag interactions work across both TUI (`Ratatui`) and GUI (`GuiWorkspaceRenderer`) surfaces, with deterministic `insta` / `TestBackend` snapshot coverage.
+
+**Plans**: TBD (`/gsd-plan-phase 24`)
+
+### Phase 25: Dynamic Terminal Text & Font Size Scaling
+
+**Goal**: As a user operating Bilterm across high-DPI monitors, projector demos, and nested terminals, I want on-the-fly terminal text and font size scaling (`Ctrl++`/`Ctrl+=`, `Ctrl+-`, `Ctrl+0`, `:fontsize`) across both the native pixel/SVG renderer and the host TUI canvas.
+**Depends on**: Phase 24
+**Requirements**: FONT-01
+**Success Criteria** (what must be TRUE):
+
+  1. `Action::FontZoomIn`, `Action::FontZoomOut`, `Action::FontZoomReset`, and `Action::FontSetSize(u16)` are wired to `Ctrl++`/`Ctrl+=`, `Ctrl+-`, `Ctrl+0`, `:fontsize <pt|pct|+|-|reset>`, JSON-RPC/MCP (`workspace.fontsize`), and `config.toml` (`font_size_pt`, `font_scale_pct`, `cell_width_px`, `cell_height_px`).
+  2. `GuiWorkspaceRenderer` / `GuiFrameSurface` dynamically scales cell pixel dimensions (`50%..=300%`), SVG typography (`font-size`), and PPM raster glyph scaling, recalculating viewport `(rows, cols)` for a given pixel window size and resizing panes accordingly.
+  3. In TUI mode (`Ratatui`), `VtParser` and the canvas renderer support DEC double-width (`DECDWL` `\x1b#6`) and double-height (`DECDHL` `\x1b#3` / `\x1b#4`) line attributes plus multi-cell scaled text rendering, paired with the focal zoom magnification lens (`render_focal_zoom_cursor`) and optional host-terminal `OSC 50` / Kitty font-size passthrough.
+
+**Plans**: TBD (`/gsd-plan-phase 25`)
+
+### Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas
+
+**Goal**: As a systems programmer, scientist, or AI agent, I want each CompositePane to include an optional high-speed graphical canvas supporting both classic Tektronix 4010/4014 vector storage-tube emulation and a modern 2026/2027 retained scene-graph with 2D sprites, declarative plotting, and interactive image inspection.
+**Depends on**: Phase 25
+**Requirements**: TEK-01, CANV-01
+**Success Criteria** (what must be TRUE):
+
+  1. Classic Tektronix 4010/4014 state machine (`\x1b[?38h` / `\x1b[?38l` / `:canvas tek`) decodes 10-bit and 12-bit 4096×3120 vector coordinates (`GS` `0x1D` dark/bright vectors, `FS` point plot, `RS` incremental plot, `ESC` solid/dotted/dot-dash/short-dash/long-dash styles, `\x1b\x0c` screen erase with authentic green 3278 / amber 3279 phosphor persistence decay).
+  2. Modern retained scene-graph (`PaneCanvasScene`) supports vector primitives (lines, polylines, bezier curves, circles, polygons, text labels), a 2D sprite engine (`id`, position, velocity, frame animation, z-index, AABB collision), declarative live data plots (`line`, `scatter`, `bar`, `candlestick`, `heatmap`), and an interactive image viewer (`pan`, `zoom`, pixel inspector).
+  3. Dual-backend rasterizer renders the canvas into sub-cell Unicode 2×4 Braille (`U+2800..U+28FF`), 2×3 Sextant (`U+1FB00..U+1FB3B`), and Quadrant blocks with 24-bit TrueColor (plus Kitty/Sixel overlays) in TUI mode, and crisp full-resolution vector/pixel graphics in `GuiWorkspaceRenderer` (SVG/PPM), while keeping the floating command prompt cleanly composited on top.
+  4. Controllable via in-band PTY escape sequences, `:canvas <subcommand>`, and JSON-RPC/MCP `canvas.*` automation endpoints, verified by deterministic vector/sprite/plot snapshot tests.
+
+**Plans**: TBD (`/gsd-plan-phase 26`)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -286,3 +335,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/3 | Planned | - |
 | 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |
+| 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/TBD | Not started | - |
+| 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
+| 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 0/TBD | Not started | - |
