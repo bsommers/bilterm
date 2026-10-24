@@ -4,16 +4,16 @@ milestone: v1.7.0
 milestone_name: milestone
 current_phase: 25
 current_phase_name: dynamic-terminal-text-and-font-size-scaling
-status: planned_phase_25
-stopped_at: Phase 25 planned (3 plans in .planning/phases/25-dynamic-terminal-text-and-font-size-scaling/); ready for /gsd-execute-phase 25
+status: completed_phase_25
+stopped_at: Phase 25 complete (FONT-01 verified); ready for /gsd-plan-phase 26
 last_updated: "2026-10-24"
 last_activity: 2026-10-24
-last_activity_desc: Planned Phase 25 (Dynamic Terminal Text & Font Size Scaling)
+last_activity_desc: Completed Phase 25 (Dynamic Terminal Text & Font Size Scaling)
 progress:
   total_phases: 12
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 42
-  completed_plans: 39
+  completed_plans: 42
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 25 — Dynamic Terminal Text & Font Size Scaling (`FONT-01`)
+**Current focus:** Phase 26 — Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`)
 
 ## Current Position
 
-Phase: 25 (dynamic-terminal-text-and-font-size-scaling) — PLANNED
-Plan: 0/3 complete (`25-01-PLAN.md`..`25-03-PLAN.md`)
-Status: Ready to execute Phase 25 (`/gsd-execute-phase 25`)
-Last activity: 2026-10-24 — Planned Phase 25 (`FONT-01`)
+Phase: 25 (dynamic-terminal-text-and-font-size-scaling) — COMPLETE
+Plan: 3/3 complete (`25-01-SUMMARY.md`..`25-03-SUMMARY.md`)
+Status: Ready to plan Phase 26 (`/gsd-plan-phase 26`)
+Last activity: 2026-10-24 — Completed Phase 25 (`FONT-01`)
 
 Progress: [██████████] 100%
 

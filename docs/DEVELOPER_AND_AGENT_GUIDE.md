@@ -218,6 +218,9 @@ cargo run -- ctl pane.read '{"pane_id":1}'
 
 # Execute any Action via :colon syntax
 cargo run -- ctl wm.command '{"command":":split v"}'
+
+# Query or scale workspace font size dynamically (Phase 25 FONT-01)
+cargo run -- ctl workspace.fontsize '{"action":"150%"}'
 ```
 
 ### 5.4 Deterministic Headless Reproduction in Rust Tests
