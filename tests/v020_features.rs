@@ -5,7 +5,7 @@ use ratatui::widgets::Widget;
 
 use bilterm::input::{handle_key_event, handle_mouse_event, handle_paste_event};
 use bilterm::pane::CompositePane;
-use bilterm::pane::colon_command::{execute_colon_command, parse_colon_command};
+use bilterm::colon_command::{execute_colon_command, parse_colon_command};
 use bilterm::ui::{CompositePaneWidget, buffer_to_snapshot_string};
 
 #[test]

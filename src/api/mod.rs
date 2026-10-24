@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{BiltermError, Result};
 use crate::input::handle_wm_key_event;
-use crate::pane::colon_command::{execute_wm_colon_command, parse_colon_command};
+use crate::colon_command::{execute_wm_colon_command, parse_colon_command};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};

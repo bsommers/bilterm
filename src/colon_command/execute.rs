@@ -1,0 +1,704 @@
+use crate::colon_command::ColonCommand;
+use crate::pane::history_store::HistorySegment;
+use crate::pane::{CompositePane, PromptAnchor};
+use crate::remote::{FleetSelector, RemoteHostProfile};
+use crate::ui::chrome::ShadowStyle;
+use crate::ui::cursor::SpotlightMode;
+use crate::vt::encode_osc52_clipboard;
+use crate::wm::WindowManager;
+use crate::wm::split_tree::SplitDirection;
+
+/// Formats the `:history runs` status line: segment count plus the 3 most recent runs.
+fn format_history_runs(session: &str, segments: &[HistorySegment]) -> String {
+    if segments.is_empty() {
+        return format!("History session '{session}': no recorded runs");
+    }
+    let recent: Vec<String> = segments
+        .iter()
+        .rev()
+        .take(3)
+        .map(|s| format!("{} @{} ({} cmds)", s.run_id, s.started_at, s.count))
+        .collect();
+    format!(
+        "History session '{session}': {} runs; recent: {}",
+        segments.len(),
+        recent.join(", ")
+    )
+}
+
+/// Executes a parsed `ColonCommand` against a single `pane`. Returns `true` if the application should quit.
+pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> bool {
+    match cmd {
+        ColonCommand::PromptTop => {
+            pane.set_prompt_anchor(PromptAnchor::Top);
+            pane.status_message = Some("Prompt pinned to TOP".to_string());
+            false
+        }
+        ColonCommand::PromptBottom => {
+            pane.set_prompt_anchor(PromptAnchor::Bottom);
+            pane.status_message = Some("Prompt pinned to BOTTOM".to_string());
+            false
+        }
+        ColonCommand::PromptSplitTop => {
+            pane.set_prompt_anchor(PromptAnchor::SplitTop);
+            pane.status_message = Some("Prompt split at TOP (non-overlapping)".to_string());
+            false
+        }
+        ColonCommand::PromptSplitBottom => {
+            pane.set_prompt_anchor(PromptAnchor::SplitBottom);
+            pane.status_message = Some("Prompt split at BOTTOM (non-overlapping)".to_string());
+            false
+        }
+        ColonCommand::PromptSplitToggle => {
+            pane.toggle_split_prompt();
+            pane.status_message = Some("Toggled split/floating prompt mode".to_string());
+            false
+        }
+        ColonCommand::PromptModeSet(mode_opt) => {
+            match mode_opt {
+                Some(mode) => pane.set_prompt_mode(mode),
+                None => {
+                    pane.cycle_prompt_mode();
+                }
+            }
+            false
+        }
+        ColonCommand::PromptFloat(y_offset) => {
+            pane.set_prompt_anchor(PromptAnchor::Floating { y_offset });
+            pane.status_message = Some(format!("Prompt floating at row +{y_offset}"));
+            false
+        }
+        ColonCommand::PromptHeight(rows) => {
+            pane.set_prompt_height(rows);
+            pane.status_message = Some(format!("Prompt height set to {rows} rows"));
+            false
+        }
+        ColonCommand::PromptWidth(cols_opt) => {
+            pane.set_prompt_width(cols_opt);
+            pane.status_message = Some(match cols_opt {
+                Some(c) => format!("Prompt width set to {c} cols"),
+                None => "Prompt width reset to full width".to_string(),
+            });
+            false
+        }
+        ColonCommand::HistoryPopupToggle => {
+            pane.prompt.toggle_history_popup();
+            false
+        }
+        ColonCommand::HistorySave(path_opt) => {
+            let custom = path_opt.as_deref().map(std::path::Path::new);
+            match pane
+                .history_store
+                .export_to_temp_file(&pane.prompt.history, custom)
+            {
+                Ok(saved_path) => {
+                    pane.status_message =
+                        Some(format!("Saved history to {}", saved_path.display()));
+                }
+                Err(err) => {
+                    pane.status_message = Some(format!("History save error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::HistoryToggle(val) => {
+            let next = val.unwrap_or(!pane.history_store.enabled);
+            pane.history_store.enabled = next;
+            pane.status_message = Some(format!(
+                "Command history persistence: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::HistoryMaxFiles(max_f) => {
+            pane.history_store.max_files = max_f.max(1);
+            let _ = pane.history_store.prune_excess_files();
+            pane.status_message = Some(format!("History max session files: {}", max_f.max(1)));
+            false
+        }
+        ColonCommand::HistoryRuns => {
+            pane.status_message = Some(format_history_runs(
+                &pane.history_store.session_name,
+                &pane.history_store.segments(),
+            ));
+            false
+        }
+        ColonCommand::BlockPrev => {
+            if let Some(block) = pane.vt.jump_to_prev_command_block() {
+                pane.status_message =
+                    Some(format!("Block #{}: {}", block.index + 1, block.command));
+            } else {
+                pane.status_message = Some("No command blocks in scrollback".to_string());
+            }
+            false
+        }
+        ColonCommand::BlockNext => {
+            if let Some(block) = pane.vt.jump_to_next_command_block() {
+                pane.status_message =
+                    Some(format!("Block #{}: {}", block.index + 1, block.command));
+            } else {
+                pane.status_message = Some("Returned to live output".to_string());
+            }
+            false
+        }
+        ColonCommand::Yank => {
+            let text_to_yank = if let Some(block) = pane.vt.selected_command_block() {
+                block.command.clone()
+            } else if let Some(last) = pane.vt.command_blocks().last() {
+                last.command.clone()
+            } else {
+                pane.vt.screen().contents()
+            };
+            let seq = encode_osc52_clipboard(&text_to_yank);
+            pane.last_osc52_sequence = Some(seq);
+            pane.status_message = Some(format!("Yanked {} bytes via OSC 52", text_to_yank.len()));
+            false
+        }
+        ColonCommand::Clear => {
+            pane.process_pty_output(b"\x1b[2J\x1b[H");
+            pane.vt.reset_scrollback();
+            pane.status_message = Some("Canvas cleared".to_string());
+            false
+        }
+        ColonCommand::RawToggle => {
+            pane.toggle_manual_raw_override();
+            false
+        }
+        ColonCommand::SearchQuery(query) => {
+            pane.set_canvas_search(&query);
+            false
+        }
+        ColonCommand::SearchNext => {
+            pane.next_canvas_search_match();
+            false
+        }
+        ColonCommand::SearchPrev => {
+            pane.prev_canvas_search_match();
+            false
+        }
+        ColonCommand::SearchOff => {
+            pane.clear_canvas_search();
+            pane.status_message = Some("Cleared canvas search".to_string());
+            false
+        }
+        ColonCommand::CopyModeToggle => {
+            if pane.copy_mode.active {
+                pane.exit_copy_mode();
+            } else {
+                pane.enter_copy_mode();
+            }
+            false
+        }
+        ColonCommand::LinksYank => {
+            let link = pane
+                .vt
+                .detect_visible_urls()
+                .last()
+                .map(|u| u.url.clone())
+                .or_else(|| pane.vt.osc8_links().last().map(|l| l.uri.clone()));
+            if let Some(url) = link {
+                let seq = encode_osc52_clipboard(&url);
+                pane.last_osc52_sequence = Some(seq);
+                pane.prompt.yank_buffer = url.clone();
+                pane.status_message = Some(format!("Yanked URL: {url}"));
+            } else {
+                pane.status_message = Some("No URLs detected on canvas".to_string());
+            }
+            false
+        }
+        ColonCommand::HintsToggle => {
+            if pane.hints_mode.active {
+                pane.exit_hints_mode();
+            } else {
+                pane.enter_hints_mode();
+            }
+            false
+        }
+        ColonCommand::LockToggle(val) => {
+            let next = val.unwrap_or(!pane.read_only);
+            pane.set_read_only(next);
+            false
+        }
+        ColonCommand::NotificationsClear => {
+            let count = pane.vt.notifications().len();
+            pane.vt.clear_notifications();
+            pane.status_message = Some(format!("Cleared {count} notification(s)"));
+            false
+        }
+        ColonCommand::RecordStart(path_opt) => {
+            if let Some(p) = path_opt {
+                let path = std::path::PathBuf::from(p);
+                pane.vt.start_recording(path.clone());
+                pane.status_message =
+                    Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+            } else {
+                match crate::secure_fs::private_runtime_dir()
+                    .and_then(|d| crate::secure_fs::private_dir_in(&d, "recordings"))
+                {
+                    Ok(dir) => {
+                        let path = dir.join(format!(
+                            "bilterm-pane-{}-{}.cast",
+                            pane.id,
+                            crate::secure_fs::unique_suffix()
+                        ));
+                        pane.vt.start_recording_private(path.clone());
+                        pane.status_message =
+                            Some(format!("⏺ Recording asciicast v2 to {}", path.display()));
+                    }
+                    Err(e) => {
+                        pane.status_message =
+                            Some(format!("⏺ Recording not started: private dir unavailable: {e}"));
+                    }
+                }
+            }
+            false
+        }
+        ColonCommand::RecordStop => {
+            match pane.vt.stop_recording() {
+                Ok(Some(path)) => {
+                    pane.status_message =
+                        Some(format!("Saved asciicast v2 recording to {}", path.display()));
+                }
+                Ok(None) => {
+                    pane.status_message = Some("No active recording on this pane".to_string());
+                }
+                Err(err) => {
+                    pane.status_message = Some(format!("Recording save error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::Quit => true,
+        _ => false,
+    }
+}
+
+/// Executes a parsed `ColonCommand` against the multi-pane `WindowManager`.
+pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bool {
+    match cmd {
+        ColonCommand::SplitHorizontal => {
+            let _ = wm.split_focused(SplitDirection::Horizontal);
+            false
+        }
+        ColonCommand::SplitVertical => {
+            let _ = wm.split_focused(SplitDirection::Vertical);
+            false
+        }
+        ColonCommand::DeckNext => {
+            wm.shuffle_deck_next();
+            false
+        }
+        ColonCommand::DeckPrev => {
+            wm.shuffle_deck_prev();
+            false
+        }
+        ColonCommand::FocusPane(id) => {
+            wm.focus_and_raise(id);
+            false
+        }
+        ColonCommand::ZoomToggle => {
+            wm.toggle_zoom();
+            false
+        }
+        ColonCommand::ClosePane => {
+            wm.close_focused_pane();
+            false
+        }
+        ColonCommand::LayoutMode(mode) => {
+            wm.layout_mode = mode;
+            false
+        }
+        ColonCommand::QuakeToggle => {
+            wm.toggle_quick_terminal();
+            false
+        }
+        ColonCommand::HelpToggle => {
+            wm.toggle_help();
+            false
+        }
+        ColonCommand::HistoryToggle(val) => {
+            let next = val.unwrap_or(!wm.config.history_enabled);
+            wm.config.history_enabled = next;
+            wm.sync_history_config();
+            wm.active_pane_mut().status_message = Some(format!(
+                "Command history persistence: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::Scrollback { clear } => {
+            let note = if clear {
+                if wm.active_pane_mut().vt.clear_scrollback() {
+                    "History cleared. "
+                } else {
+                    "Cannot clear while the alternate screen is active. "
+                }
+            } else {
+                ""
+            };
+            let report = wm.scrollback_report();
+            wm.active_pane_mut().status_message = Some(format!("{note}{report}"));
+            false
+        }
+        ColonCommand::HistoryMaxFiles(max_f) => {
+            wm.config.history_max_files = max_f.max(1);
+            wm.sync_history_config();
+            wm.active_pane_mut().status_message =
+                Some(format!("History max session files: {}", max_f.max(1)));
+            false
+        }
+        ColonCommand::Theme(preset) => {
+            wm.config.theme = preset;
+            wm.config.custom_palette_override = None;
+            wm.notify_theme_changed();
+            false
+        }
+        ColonCommand::InspectorToggle(val) => {
+            wm.inspector_visible = val.unwrap_or(!wm.inspector_visible);
+            if wm.inspector_visible {
+                wm.inspector_scroll = 0;
+            }
+            false
+        }
+        ColonCommand::BroadcastToggle(val) => {
+            let next = val.unwrap_or(!wm.broadcast_input);
+            wm.set_broadcast_input(next);
+            false
+        }
+        ColonCommand::MenuBarToggle(val) => {
+            wm.config.show_top_menubar = val.unwrap_or(!wm.config.show_top_menubar);
+            if !wm.config.show_top_menubar {
+                wm.menubar_open_category = None;
+            }
+            false
+        }
+        ColonCommand::SessionSave(name) => {
+            match wm.save_session(&name) {
+                Ok(path) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Saved session '{}' to {}", name, path.display()));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Session save error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SessionRestore(name) => {
+            match wm.restore_session(&name) {
+                Ok(count) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Restored session '{name}' ({count} pane(s))"));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("Session restore error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SessionList => {
+            let sessions = wm.list_sessions();
+            wm.active_pane_mut().status_message = Some(if sessions.is_empty() {
+                "Saved sessions: (none)".to_string()
+            } else {
+                format!("Saved sessions: {}", sessions.join(", "))
+            });
+            false
+        }
+        ColonCommand::CrtToggle(val) => {
+            let next = val.unwrap_or(!wm.config.crt_scanlines);
+            wm.config.crt_scanlines = next;
+            wm.active_pane_mut().status_message = Some(format!(
+                "CRT Phosphor Scanlines: {}",
+                if next { "ON" } else { "OFF" }
+            ));
+            false
+        }
+        ColonCommand::PaletteToggle => {
+            wm.toggle_palette();
+            false
+        }
+        ColonCommand::TriggerAdd(pat) => {
+            if !wm.config.triggers.contains(&pat) {
+                wm.config.triggers.push(pat.clone());
+            }
+            wm.active_pane_mut().status_message = Some(format!(
+                "Added output highlight trigger '{}' ({} active)",
+                pat,
+                wm.config.triggers.len()
+            ));
+            false
+        }
+        ColonCommand::TriggerClear => {
+            wm.config.triggers.clear();
+            wm.active_pane_mut().status_message =
+                Some("Cleared all output highlight triggers".to_string());
+            false
+        }
+        ColonCommand::SshConnect { target, port } => {
+            match wm.spawn_ssh_pane(&target, port, Vec::new()) {
+                Ok(new_id) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("🌐 Connected SSH pane #{new_id} -> {target}"));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message = Some(format!("SSH connect error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::SshTmuxConnect { target, session } => {
+            match wm.connect_ssh_tmux(&target, &session, Vec::new()) {
+                Ok(new_id) => {
+                    wm.active_pane_mut().status_message = Some(format!(
+                        "🌐 Attached remote tmux -CC '{session}' on {target} (pane #{new_id})"
+                    ));
+                }
+                Err(err) => {
+                    wm.active_pane_mut().status_message =
+                        Some(format!("SSH tmux connect error: {err}"));
+                }
+            }
+            false
+        }
+        ColonCommand::RemoteAdd {
+            name,
+            destination,
+            tags,
+        } => {
+            if let Err(e) = crate::remote::validate_destination(&destination) {
+                wm.active_pane_mut().status_message = Some(format!("Remote not added: {e}"));
+                return false;
+            }
+            let mut profile = RemoteHostProfile::new(name.clone(), destination.clone());
+            profile.tags = tags.clone();
+            wm.fleet.register_profile(profile);
+            wm.active_pane_mut().status_message = Some(format!(
+                "Registered remote host '{name}' ({destination}) tags={tags:?}"
+            ));
+            false
+        }
+        ColonCommand::RemoteList => {
+            let names: Vec<String> = wm.fleet.nodes.keys().cloned().collect();
+            wm.active_pane_mut().status_message = Some(if names.is_empty() {
+                "Fleet nodes: (local only)".to_string()
+            } else {
+                format!("Fleet nodes ({}): {}", names.len(), names.join(", "))
+            });
+            false
+        }
+        ColonCommand::RemoteExec { selector, command } => {
+            let sel = FleetSelector::parse(&selector);
+            let panes = wm.exec_fleet_command(&sel, &command);
+            let nodes = wm.fleet.matching_nodes(&sel);
+            wm.active_pane_mut().status_message = Some(format!(
+                "🌐 Fleet exec [{}] -> {} pane(s), {} node(s)",
+                selector,
+                panes.len(),
+                nodes.len()
+            ));
+            false
+        }
+        ColonCommand::RemoteDisconnect(name) => {
+            let removed = wm.fleet.disconnect(&name);
+            wm.active_pane_mut().status_message = Some(if removed {
+                format!("Disconnected remote fleet node '{name}'")
+            } else {
+                format!("Remote fleet node '{name}' not found")
+            });
+            false
+        }
+        ColonCommand::Glyphs(pack) => {
+            wm.config.glyphs = pack;
+            false
+        }
+        ColonCommand::Cursor(style) => {
+            wm.config.cursor_style = style;
+            false
+        }
+        ColonCommand::Outline { window, prompt } => {
+            if let Some(w) = window {
+                wm.config.window_outline = w;
+            }
+            if let Some(p) = prompt {
+                wm.config.prompt_outline = p;
+            }
+            false
+        }
+        ColonCommand::CrosshairToggle {
+            enabled,
+            fullscreen,
+        } => {
+            wm.config.crosshair_cursor = enabled.unwrap_or(!wm.config.crosshair_cursor);
+            if let Some(fs) = fullscreen {
+                wm.config.crosshair_fullscreen = fs;
+            }
+            false
+        }
+        ColonCommand::Spotlight {
+            mode,
+            pixelated,
+            fullscreen,
+            rx,
+            ry,
+            delta,
+            feather_pct,
+        } => {
+            let no_args = mode.is_none()
+                && pixelated.is_none()
+                && fullscreen.is_none()
+                && rx.is_none()
+                && ry.is_none()
+                && delta.is_none()
+                && feather_pct.is_none();
+            if no_args {
+                let label = wm.config.cycle_spotlight();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.spotlight_rx,
+                    wm.config.spotlight_ry,
+                    wm.config.spotlight_feather_pct
+                ));
+                return false;
+            }
+            if let Some(m) = mode {
+                wm.config.spotlight_mode = m;
+            } else if wm.config.spotlight_mode == SpotlightMode::Off {
+                wm.config.spotlight_mode = SpotlightMode::Ellipse;
+            }
+            if let Some(px) = pixelated {
+                wm.config.spotlight_pixelated = px;
+            }
+            if let Some(fs) = fullscreen {
+                wm.config.spotlight_fullscreen = fs;
+            }
+            if let Some(rx_val) = rx {
+                wm.config.spotlight_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config.spotlight_mode == SpotlightMode::Circle {
+                    wm.config.spotlight_ry = (rx_val / 2).clamp(2, 60);
+                }
+            }
+            if let Some(ry_val) = ry {
+                wm.config.spotlight_ry = ry_val.clamp(2, 60);
+            }
+            if let Some((drx, dry)) = delta {
+                wm.config.resize_spotlight(drx, dry);
+            }
+            if let Some(f) = feather_pct {
+                wm.config.spotlight_feather_pct = f.clamp(5, 100);
+            }
+            let label = wm
+                .config
+                .spotlight_mode
+                .label(wm.config.spotlight_pixelated);
+            wm.active_pane_mut().status_message = Some(format!(
+                "🔦 Focal Spotlight: {} (rx={}, ry={}, feather={}%)",
+                label,
+                wm.config.spotlight_rx,
+                wm.config.spotlight_ry,
+                wm.config.spotlight_feather_pct
+            ));
+            false
+        }
+        ColonCommand::FocalZoom {
+            mode,
+            zoom_pct,
+            step_pct,
+            pixelated,
+            fullscreen,
+            rx,
+            ry,
+            delta_size,
+            feather_pct,
+        } => {
+            let no_args = mode.is_none()
+                && zoom_pct.is_none()
+                && step_pct.is_none()
+                && pixelated.is_none()
+                && fullscreen.is_none()
+                && rx.is_none()
+                && ry.is_none()
+                && delta_size.is_none()
+                && feather_pct.is_none();
+            if no_args {
+                let label = wm.config.cycle_focal_zoom();
+                wm.active_pane_mut().status_message = Some(format!(
+                    "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
+                    label,
+                    wm.config.focal_zoom_rx,
+                    wm.config.focal_zoom_ry,
+                    wm.config.focal_zoom_feather_pct
+                ));
+                return false;
+            }
+            if let Some(m) = mode {
+                wm.config.focal_zoom_mode = m;
+            } else if wm.config.focal_zoom_mode == SpotlightMode::Off && step_pct.is_none() {
+                wm.config.focal_zoom_mode = SpotlightMode::Ellipse;
+            }
+            if let Some(pct) = zoom_pct {
+                wm.config.focal_zoom_pct = pct.clamp(105, 400);
+            }
+            if let Some(delta_p) = step_pct {
+                wm.config.step_focal_zoom_level(delta_p);
+            }
+            if let Some(px) = pixelated {
+                wm.config.focal_zoom_pixelated = px;
+            }
+            if let Some(fs) = fullscreen {
+                wm.config.focal_zoom_fullscreen = fs;
+            }
+            if let Some(rx_val) = rx {
+                wm.config.focal_zoom_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config.focal_zoom_mode == SpotlightMode::Circle {
+                    wm.config.focal_zoom_ry = (rx_val / 2).clamp(2, 60);
+                }
+            }
+            if let Some(ry_val) = ry {
+                wm.config.focal_zoom_ry = ry_val.clamp(2, 60);
+            }
+            if let Some((drx, dry)) = delta_size {
+                wm.config.resize_focal_zoom(drx, dry);
+            }
+            if let Some(f) = feather_pct {
+                wm.config.focal_zoom_feather_pct = f.clamp(5, 100);
+            }
+            let label = wm.config.focal_zoom_label();
+            wm.active_pane_mut().status_message = Some(format!(
+                "🔍 Focal Zoom: {} (rx={}, ry={}, feather={}%)",
+                label,
+                wm.config.focal_zoom_rx,
+                wm.config.focal_zoom_ry,
+                wm.config.focal_zoom_feather_pct
+            ));
+            false
+        }
+        ColonCommand::Shadows(style_opt) => {
+            match style_opt {
+                Some(ShadowStyle::None) => {
+                    wm.config.shadow_style = ShadowStyle::None;
+                    wm.config.drop_shadows = false;
+                }
+                Some(style) => {
+                    wm.config.shadow_style = style;
+                    wm.config.drop_shadows = true;
+                }
+                None => {
+                    wm.config.drop_shadows = !wm.config.drop_shadows;
+                    if wm.config.drop_shadows && wm.config.shadow_style == ShadowStyle::None {
+                        wm.config.shadow_style = ShadowStyle::Translucent;
+                    }
+                }
+            }
+            false
+        }
+        ColonCommand::FKeyBarToggle(val) => {
+            wm.config.show_dos_fkey_bar = val.unwrap_or(!wm.config.show_dos_fkey_bar);
+            false
+        }
+        other => execute_colon_command(wm.active_pane_mut(), other),
+    }
+}

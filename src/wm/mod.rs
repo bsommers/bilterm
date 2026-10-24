@@ -1116,7 +1116,7 @@ mod tests {
 
     #[test]
     fn scrollback_colon_command_reports_and_clears() {
-        use crate::pane::colon_command::{execute_wm_colon_command, parse_colon_command};
+        use crate::colon_command::{execute_wm_colon_command, parse_colon_command};
         let mut wm = WindowManager::new_headless(25, 80);
         fill_lines(wm.active_pane_mut(), 300);
         let cmd = parse_colon_command(":scrollback").unwrap().unwrap();

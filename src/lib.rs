@@ -1,5 +1,6 @@
 pub mod api;
 pub mod app;
+pub mod colon_command;
 pub mod config;
 pub mod error;
 pub mod input;

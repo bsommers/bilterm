@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
 
 use bilterm::input::{handle_key_event, handle_wm_key_event, handle_wm_mouse_event};
-use bilterm::pane::colon_command::{execute_wm_colon_command, parse_colon_command};
+use bilterm::colon_command::{execute_wm_colon_command, parse_colon_command};
 use bilterm::pane::{CompositePane, PromptAnchor};
 use bilterm::ui::{CompositePaneWidget, WorkspaceWidget, buffer_to_snapshot_string};
 use bilterm::vt::{CanvasHintKind, Osc9Progress};

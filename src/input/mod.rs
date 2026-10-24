@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use crate::error::Result;
-use crate::pane::colon_command::{
+use crate::colon_command::{
     execute_colon_command, execute_wm_colon_command, parse_colon_command,
 };
 use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};

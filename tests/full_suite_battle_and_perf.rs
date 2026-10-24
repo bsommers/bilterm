@@ -12,7 +12,7 @@ use bilterm::input::{
     handle_wm_mouse_event,
 };
 use bilterm::pane::CompositePane;
-use bilterm::pane::colon_command::{
+use bilterm::colon_command::{
     execute_colon_command, execute_wm_colon_command, parse_colon_command,
 };
 use bilterm::remote::{
