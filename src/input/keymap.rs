@@ -115,6 +115,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Down, Action::PromptMoveVertical(1)),
     (KeyCode::Char('+'), Action::PromptResizeHeight(1)),
     (KeyCode::Char('='), Action::PromptResizeHeight(1)),
+    (KeyCode::Char('0'), Action::FontZoomReset),
     (KeyCode::Char(']'), Action::PromptResizeWidth(4)),
     (KeyCode::PageUp, Action::BlockPrev),
     (KeyCode::PageDown, Action::BlockNext),
@@ -218,6 +219,27 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('7'), Action::FocusPane(7)),
     (KeyModifiers::ALT, KeyCode::Char('8'), Action::FocusPane(8)),
     (KeyModifiers::ALT, KeyCode::Char('9'), Action::FocusPane(9)),
+    // Dynamic terminal font & text scaling (FONT-01)
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('+'),
+        Action::FontZoomIn,
+    ),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('='),
+        Action::FontZoomIn,
+    ),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('-'),
+        Action::FontZoomOut,
+    ),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('0'),
+        Action::FontZoomReset,
+    ),
 ];
 
 /// Declarative intra-pane shortcut table (`F3` and `Alt+<key>` in `CommandPrompt` mode, `ARCH-R01.2`).

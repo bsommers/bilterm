@@ -174,12 +174,14 @@ pub struct GuiImageTexture {
     pub rgba_bytes: Vec<u8>,
 }
 
-/// Hardware-accelerated GUI/GPU scene surface consumed by `GPUI` or `winit + egui` (`GPU-01`).
+/// Hardware-accelerated GUI/GPU scene surface consumed by `GPUI` or `winit + egui` (`GPU-01`, `FONT-01`).
 #[derive(Clone, Debug, Default)]
 pub struct GuiFrameSurface {
     pub viewport_cells: Rect,
     pub cell_width_px: u16,
     pub cell_height_px: u16,
+    pub font_size_pt: u16,
+    pub font_scale_pct: u16,
     pub crt_scanlines: bool,
     pub quads: Vec<GuiQuadPrimitive>,
     pub glyphs: Vec<GuiGlyphRun>,
@@ -192,6 +194,8 @@ impl GuiFrameSurface {
             viewport_cells: Rect::default(),
             cell_width_px: cell_width_px.max(4),
             cell_height_px: cell_height_px.max(8),
+            font_size_pt: 14,
+            font_scale_pct: 100,
             crt_scanlines: false,
             quads: Vec::new(),
             glyphs: Vec::new(),
@@ -356,7 +360,11 @@ impl GuiFrameSurface {
         }
 
         // Pass 2: Glyph runs
-        let font_size = (ch * 0.78).round();
+        let font_size = if self.font_size_pt > 0 {
+            f32::from(self.font_size_pt).max((ch * 0.78).round())
+        } else {
+            (ch * 0.78).round()
+        };
         let baseline_offset = (ch * 0.78).round();
         for g in &self.glyphs {
             let [r, gr, b, _] = g.fg_rgba;
@@ -425,15 +433,55 @@ impl GuiWorkspaceRenderer {
             cell_height_px: cell_height_px.max(8),
         }
     }
+
+    /// Computes the effective scaled `(cell_width_px, cell_height_px)` for `wm`'s current `font_scale_pct` (`FONT-01`).
+    pub fn scaled_cell_dimensions(&self, wm: &WindowManager) -> (u16, u16) {
+        let scale = u32::from(wm.config().font_scale_pct.clamp(50, 300));
+        let base_w = u32::from(self.cell_width_px.max(4));
+        let base_h = u32::from(self.cell_height_px.max(8));
+        let eff_cw = ((base_w * scale + 50) / 100).clamp(4, 64) as u16;
+        let eff_ch = ((base_h * scale + 50) / 100).clamp(8, 128) as u16;
+        (eff_cw, eff_ch)
+    }
+
+    /// Computes the character-cell viewport `Rect(0, 0, cols, rows)` that fits inside a pixel window
+    /// of `(width_px, height_px)` at the current `font_scale_pct` (`FONT-01`).
+    pub fn viewport_for_pixel_window(
+        &self,
+        wm: &WindowManager,
+        width_px: u32,
+        height_px: u32,
+    ) -> Rect {
+        let (eff_cw, eff_ch) = self.scaled_cell_dimensions(wm);
+        let cols = (width_px / u32::from(eff_cw.max(1))).clamp(20, 500) as u16;
+        let rows = (height_px / u32::from(eff_ch.max(1))).clamp(6, 200) as u16;
+        Rect::new(0, 0, cols, rows)
+    }
+
+    /// Recalculates the character-cell viewport for `(width_px, height_px)` at the current `font_scale_pct`
+    /// and resizes all workspace panes accordingly (`FONT-01`).
+    pub fn resize_workspace_for_pixel_window(
+        &mut self,
+        wm: &mut WindowManager,
+        width_px: u32,
+        height_px: u32,
+    ) -> crate::error::Result<Rect> {
+        let vp = self.viewport_for_pixel_window(wm, width_px, height_px);
+        wm.resize_all(vp)?;
+        Ok(vp)
+    }
 }
 
 impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
     type Surface = GuiFrameSurface;
 
     fn render_workspace(&mut self, wm: &WindowManager, viewport: Rect, surface: &mut Self::Surface) {
+        let (eff_cw, eff_ch) = self.scaled_cell_dimensions(wm);
         surface.viewport_cells = viewport;
-        surface.cell_width_px = self.cell_width_px;
-        surface.cell_height_px = self.cell_height_px;
+        surface.cell_width_px = eff_cw;
+        surface.cell_height_px = eff_ch;
+        surface.font_size_pt = wm.config().scaled_font_size_pt();
+        surface.font_scale_pct = wm.config().font_scale_pct;
         surface.crt_scanlines = wm.config().crt_scanlines;
         surface.quads.clear();
         surface.glyphs.clear();
@@ -442,8 +490,8 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
         let mut cell_buf = Buffer::empty(viewport);
         WorkspaceWidget::new(wm).render(viewport, &mut cell_buf);
 
-        let cw = f32::from(self.cell_width_px);
-        let ch = f32::from(self.cell_height_px);
+        let cw = f32::from(eff_cw);
+        let ch = f32::from(eff_ch);
         let palette = wm.config().theme.palette();
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
@@ -502,10 +550,10 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
                 let y_cell = pane_snap.canvas_rect.y.saturating_add(gfx.row);
                 surface.images.push(GuiImageTexture {
                     id: gfx.id,
-                    x_px: u32::from(x_cell) * u32::from(self.cell_width_px),
-                    y_px: u32::from(y_cell) * u32::from(self.cell_height_px),
-                    width_px: u32::from(gfx.cols.max(1)) * u32::from(self.cell_width_px),
-                    height_px: u32::from(gfx.rows.max(1)) * u32::from(self.cell_height_px),
+                    x_px: u32::from(x_cell) * u32::from(eff_cw),
+                    y_px: u32::from(y_cell) * u32::from(eff_ch),
+                    width_px: u32::from(gfx.cols.max(1)) * u32::from(eff_cw),
+                    height_px: u32::from(gfx.rows.max(1)) * u32::from(eff_ch),
                     pixel_width: gfx.pixel_width,
                     pixel_height: gfx.pixel_height,
                     rgba_bytes: gfx.rgba_bytes.clone(),

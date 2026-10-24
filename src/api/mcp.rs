@@ -63,6 +63,7 @@ impl AutomationControlPlane {
                     "bilterm_run_playbook" => Some("playbook.run"),
                     "bilterm_remote_connect" => Some("remote.connect_ssh"),
                     "bilterm_fleet_exec" => Some("fleet.exec"),
+                    "bilterm_workspace_fontsize" => Some("workspace.fontsize"),
                     _ => None,
                 };
                 match mapped_method {
@@ -154,6 +155,14 @@ impl AutomationControlPlane {
                 &[
                     ("selector", "string", "Fleet target selector: all, local, remote, @tag, or node name"),
                     ("command", "string", "Shell command to fan out across matching sessions"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_workspace_fontsize",
+                "Query or dynamically adjust terminal font size and scale percentage (in, out, reset, size pt, or scale_pct).",
+                &[
+                    ("action", "string", "Optional action: in, out, reset, or size/percentage string"),
+                    ("size", "integer", "Optional font point size (6..49) or scale percentage (50..300)"),
                 ],
             ),
         ];

@@ -132,6 +132,10 @@ pub enum Action {
     DrawerVisibility(Option<DrawerVisibilityMode>),
     DrawerLayout(Option<DrawerLayoutMode>),
     DrawerSize(u16),
+    FontZoomIn,
+    FontZoomOut,
+    FontZoomReset,
+    FontSetSize(u16),
     Quit,
 }
 
@@ -273,6 +277,10 @@ mod tests {
             Action::DrawerVisibility(_) => Some(":drawer fixed"),
             Action::DrawerLayout(_) => Some(":drawer push"),
             Action::DrawerSize(_) => Some(":drawer size 32"),
+            Action::FontZoomIn => Some(":fontsize +"),
+            Action::FontZoomOut => Some(":fontsize -"),
+            Action::FontZoomReset => Some(":fontsize reset"),
+            Action::FontSetSize(_) => Some(":fontsize 18"),
             Action::Quit => Some(":quit"),
         };
 
@@ -390,6 +398,10 @@ mod tests {
             Action::DrawerVisibility(Some(DrawerVisibilityMode::Fixed)),
             Action::DrawerLayout(Some(DrawerLayoutMode::Push)),
             Action::DrawerSize(32),
+            Action::FontZoomIn,
+            Action::FontZoomOut,
+            Action::FontZoomReset,
+            Action::FontSetSize(18),
             Action::Quit,
         ];
 

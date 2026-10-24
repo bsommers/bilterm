@@ -616,6 +616,23 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                     .to_string(),
             )),
         },
+        "fontsize" | "font" | "textsize" => match parts.get(1).copied() {
+            None | Some("reset" | "0" | "default") => Some(Ok(ColonCommand::FontZoomReset)),
+            Some("+" | "in" | "up" | "grow" | "larger") => Some(Ok(ColonCommand::FontZoomIn)),
+            Some("-" | "out" | "down" | "shrink" | "smaller") => {
+                Some(Ok(ColonCommand::FontZoomOut))
+            }
+            Some(raw) => {
+                let cleaned = raw.trim_end_matches("pt").trim_end_matches('%');
+                if let Ok(val) = cleaned.parse::<u16>() {
+                    Some(Ok(ColonCommand::FontSetSize(val)))
+                } else {
+                    Some(Err(
+                        "Usage: :fontsize [+|-|reset|<pt>|<pct>%]".to_string(),
+                    ))
+                }
+            }
+        },
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
     }

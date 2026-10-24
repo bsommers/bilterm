@@ -245,4 +245,74 @@ impl WindowManager {
         self.resize_all(area)?;
         Ok(area)
     }
+
+    /// Executes a font scaling [`Action`](crate::action::Action) (`FontZoomIn`, `FontZoomOut`, `FontZoomReset`, `FontSetSize`) (`FONT-01`).
+    pub fn execute_font_action(&mut self, action: &crate::action::Action) -> String {
+        match *action {
+            crate::action::Action::FontZoomIn => self.font_zoom_in(),
+            crate::action::Action::FontZoomOut => self.font_zoom_out(),
+            crate::action::Action::FontZoomReset => self.font_zoom_reset(),
+            crate::action::Action::FontSetSize(val) => self.font_set_size(val),
+            _ => self.notify_font_scale_changed(),
+        }
+    }
+
+    /// Handles the JSON-RPC `workspace.fontsize` method (`FONT-01`).
+    pub fn handle_rpc_fontsize(
+        &mut self,
+        params: &crate::api::JsonValue,
+    ) -> std::result::Result<crate::api::JsonValue, String> {
+        use crate::api::JsonValue;
+        if let Some(action) = params.get("action").and_then(JsonValue::as_str) {
+            match action.trim().to_ascii_lowercase().as_str() {
+                "in" | "up" | "+" | "zoom_in" => {
+                    self.font_zoom_in();
+                }
+                "out" | "down" | "-" | "zoom_out" => {
+                    self.font_zoom_out();
+                }
+                "reset" | "0" | "default" => {
+                    self.font_zoom_reset();
+                }
+                other => {
+                    if let Ok(val) = other
+                        .trim_end_matches("pt")
+                        .trim_end_matches('%')
+                        .parse::<u16>()
+                    {
+                        self.font_set_size(val);
+                    } else {
+                        return Err(format!("invalid workspace.fontsize action: {other}"));
+                    }
+                }
+            }
+        }
+        if let Some(size) = params.get("size").and_then(JsonValue::as_usize) {
+            self.font_set_size(size as u16);
+        }
+        if let Some(scale) = params.get("scale_pct").and_then(JsonValue::as_usize) {
+            self.font_set_size((scale as u16).clamp(50, 300));
+        }
+        let (cw, ch) = self.config().scaled_cell_dimensions_px();
+        Ok(JsonValue::obj([
+            (
+                "font_size_pt",
+                JsonValue::Number(i64::from(self.config().scaled_font_size_pt())),
+            ),
+            (
+                "base_font_size_pt",
+                JsonValue::Number(i64::from(self.config().font_size_pt)),
+            ),
+            (
+                "font_scale_pct",
+                JsonValue::Number(i64::from(self.config().font_scale_pct)),
+            ),
+            ("cell_width_px", JsonValue::Number(i64::from(cw))),
+            ("cell_height_px", JsonValue::Number(i64::from(ch))),
+            (
+                "host_font_passthrough",
+                JsonValue::Bool(self.config().host_font_passthrough),
+            ),
+        ]))
+    }
 }

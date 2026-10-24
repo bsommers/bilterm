@@ -675,6 +675,7 @@ impl AutomationControlPlane {
                     ("name", JsonValue::String(name.to_string())),
                 ]))
             }
+            "workspace.fontsize" => self.wm.handle_rpc_fontsize(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }
