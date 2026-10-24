@@ -97,9 +97,11 @@ src/
 │   ├── session.rs              # Workspace session save/restore/list, SSH/fleet helpers, palette items, scrollback sync
 │   ├── split_tree.rs           # Recursive H/V binary space partitioning (SplitTree, SplitDirection)
 │   ├── z_stack.rs              # Overlapping Borland Turbo Vision z-order window deck (ZStack)
+│   ├── drawer.rs               # herdr-style slide-out Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
 │   └── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal)
 ├── ui/
 │   ├── mod.rs                  # 3-pass Ratatui compositor (WorkspaceWidget, CompositePaneWidget) + cell_to_ratatui_style
+│   ├── drawer.rs               # 4-edge slide-out drawer TUI/GUI renderer (Overlay drop shadow + Push reflow)
 │   ├── chrome.rs               # Borland borders (8 OutlineStyles), 4 DOS ShadowStyles, Top Menu Bar
 │   ├── cursor.rs               # IBM 3270 cross-hairs, software carets, Focal Spotlight & Focal Zoom lens shaders
 │   ├── glyphs.rs               # Unicode, CP437, Nerd Font, and ASCII glyph packs

@@ -456,7 +456,8 @@ impl WindowManager {
         for (idx, (&id, pane)) in self.panes.iter().enumerate() {
             let connector = if idx + 1 == pane_count && !has_extra_groups { "╰─" } else { "├─" };
             let is_focused = !qt_visible && top_id == Some(id);
-            let (z_r, z_tot) = self.z_stack.rank_of(id).unwrap_or((idx + 1, pane_count));
+            let (z_pos, z_tot) = self.z_stack.rank_of(id).unwrap_or((idx + 1, pane_count));
+            let z_r = z_tot.saturating_sub(z_pos) + 1;
             let focus_marker = if is_focused { "►" } else { " " };
             let focus_rank_badge = format!("{focus_marker} [{id}] Z:{z_r}/{z_tot}");
 

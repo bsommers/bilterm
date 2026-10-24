@@ -287,12 +287,12 @@ Plans:
   3. Each session/window/pane row renders rich telemetry glyphs: hierarchy connectors (`├─`, `╰─`), focus & z-order rank (`► [1] Z:1/4`), live activity braille spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) + output throughput sparkline (`▁▂▃▅▆▇`), OSC 133 command state (`⚙ RUN`, `✓ 0`, `✗ <code >`), mode/security badges (`🖥 ALT`, `🔑 !ECHO`, `🔒 PROT`, `⏺ REC`, `📡 BCAST`, `🔔 N`), and transport badges (`🌐 SSH`, `🔗 TMUX`).
   4. Keyboard navigation (`j`/`k`/`h`/`l`, `Enter` to focus/jump, `Space` to preview, `x` to close, `z` to zoom, `d` to cycle dock edge, `m` to toggle `Overlay`/`Push`, `p` to pin/unpin `Fixed`/`AutoHide`) and mouse click/hover/drag interactions work across both TUI (`Ratatui`) and GUI (`GuiWorkspaceRenderer`) surfaces, with deterministic `insta` / `TestBackend` snapshot coverage.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 24-01-PLAN.md — `src/wm/drawer.rs`, `DrawerConfig`, `WorkspaceDrawer`, `Overlay`/`Push` geometry, `AutoHide` triggers, and telemetry glyph builder (wave 1)
-- [ ] 24-02-PLAN.md — `src/ui/drawer.rs` TUI/GUI renderer, `Action::Drawer*`, `:drawer` colon commands, keyboard modal navigation, and mouse edge hover/click/drag handlers (wave 2)
-- [ ] 24-03-PLAN.md — `tests/slide_out_drawer_and_telemetry.rs` integration & snapshot suite, documentation updates, and Phase 24 state sync (wave 3)
+- [x] 24-01-PLAN.md — `src/wm/drawer.rs`, `DrawerConfig`, `WorkspaceDrawer`, `Overlay`/`Push` geometry, `AutoHide` triggers, and telemetry glyph builder (wave 1)
+- [x] 24-02-PLAN.md — `src/ui/drawer.rs` TUI/GUI renderer, `Action::Drawer*`, `:drawer` colon commands, keyboard modal navigation, and mouse edge hover/click/drag handlers (wave 2)
+- [x] 24-03-PLAN.md — `tests/slide_out_drawer_and_telemetry.rs` integration & snapshot suite, documentation updates, and Phase 24 state sync (wave 3)
 
 ### Phase 25: Dynamic Terminal Text & Font Size Scaling
 
@@ -351,6 +351,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 3/3 | Complete | 2026-10-24 |
 | 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 3/3 | Complete | 2026-10-24 |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 3/3 | Complete | 2026-10-24 |
-| 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/3 | Planned | - |
+| 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 3/3 | Complete | 2026-10-24 |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 0/TBD | Not started | - |

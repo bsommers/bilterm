@@ -4,16 +4,16 @@ milestone: v1.7.0
 milestone_name: milestone
 current_phase: 24
 current_phase_name: herdr-style-slide-out-sessions-windows-panes-drawer
-status: planned_phase_24
-stopped_at: Phase 24 planned (3 plans in .planning/phases/24-herdr-style-slide-out-sessions-windows-panes-drawer/); ready for /gsd-execute-phase 24
+status: completed_phase_24
+stopped_at: Phase 24 completed (3/3 plans); ready for /gsd-plan-phase 25
 last_updated: "2026-10-24"
 last_activity: 2026-10-24
-last_activity_desc: Planned Phase 24 (herdr-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes)
+last_activity_desc: Completed Phase 24 (herdr-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes)
 progress:
   total_phases: 11
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 39
-  completed_plans: 36
+  completed_plans: 39
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-19)
 
 ## Current Position
 
-Phase: 24 (herdr-style-slide-out-sessions-windows-panes-drawer) — PLANNED
-Plan: 0/3 complete (`24-01-PLAN.md`..`24-03-PLAN.md`)
-Status: Ready to execute Phase 24 (`/gsd-execute-phase 24`)
-Last activity: 2026-10-24 — Planned Phase 24 (`DRW-01`, `DRW-02`)
+Phase: 24 (herdr-style-slide-out-sessions-windows-panes-drawer) — COMPLETE
+Plan: 3/3 complete (`24-01-PLAN.md`..`24-03-PLAN.md`)
+Status: Ready to plan Phase 25 (`/gsd-plan-phase 25`)
+Last activity: 2026-10-24 — Executed and verified Phase 24 (`DRW-01`, `DRW-02`)
 
 Progress: [██████████] 100%
 

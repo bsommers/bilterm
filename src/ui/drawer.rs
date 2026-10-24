@@ -106,7 +106,21 @@ pub fn render_workspace_drawer(
     let selected = drawer.selected_index.min(rows.len().saturating_sub(1));
 
     if dcfg.edge.is_vertical() {
-        let list_h = inner.height.saturating_sub(1).max(1) as usize;
+        let header_line = format!(
+            "[D:{}] [M:{}] [P:{}]",
+            dcfg.edge.label(),
+            dcfg.layout.label(),
+            dcfg.visibility.label()
+        );
+        let header_style = Style::default()
+            .fg(palette.title_fg)
+            .bg(palette.oia_bg)
+            .add_modifier(Modifier::BOLD);
+        fill_rect(buf, Rect::new(inner.x, inner.y, inner.width, 1), header_style);
+        write_clipped_line(buf, inner.x, inner.y, inner.width, &header_line, header_style);
+
+        let list_y = inner.y + 1;
+        let list_h = inner.height.saturating_sub(2).max(1) as usize;
         let scroll = if selected >= list_h {
             selected + 1 - list_h
         } else {
@@ -120,7 +134,10 @@ pub fn render_workspace_drawer(
             .take(list_h)
             .enumerate()
         {
-            let y = inner.y + vis_idx as u16;
+            let y = list_y + vis_idx as u16;
+            if y >= inner.y + inner.height.saturating_sub(1) {
+                break;
+            }
             let is_sel = row_idx == selected;
             let mut row_style = match row.kind {
                 DrawerRowKind::SessionHeader(_) => Style::default()
