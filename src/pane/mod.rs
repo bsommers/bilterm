@@ -304,12 +304,14 @@ impl CompositePane {
     /// and ensures the command prompt is visible (exiting Regular Terminal mode if active).
     pub fn set_prompt_anchor(&mut self, anchor: PromptAnchor) {
         self.prompt.manual_raw_override = false;
+        self.prompt.force_command_prompt = true;
         self.prompt.anchor = anchor;
     }
 
     /// Toggles the command prompt between floating mode and non-overlapping fixed/split mode (`Alt+S` / `:prompt split`).
     pub fn toggle_split_prompt(&mut self) {
         self.prompt.manual_raw_override = false;
+        self.prompt.force_command_prompt = true;
         self.prompt.anchor = match self.prompt.anchor {
             PromptAnchor::Top | PromptAnchor::Floating { .. } => PromptAnchor::SplitTop,
             PromptAnchor::Bottom => PromptAnchor::SplitBottom,
@@ -320,7 +322,10 @@ impl CompositePane {
 
     /// Returns the active high-level `PromptMode` (`Floating`, `Fixed`, or `RegularTerminal`).
     pub fn prompt_mode(&self) -> PromptMode {
-        if self.prompt.manual_raw_override {
+        if self.prompt.manual_raw_override
+            || (!self.vt.is_alternate_screen()
+                && self.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough)
+        {
             PromptMode::RegularTerminal
         } else if self.prompt.anchor.is_split() {
             PromptMode::Fixed
@@ -334,6 +339,7 @@ impl CompositePane {
         match mode {
             PromptMode::Floating => {
                 self.prompt.manual_raw_override = false;
+                self.prompt.force_command_prompt = true;
                 if self.prompt.anchor.is_split() {
                     self.prompt.anchor = match self.prompt.anchor {
                         PromptAnchor::SplitBottom => PromptAnchor::Bottom,
@@ -347,6 +353,7 @@ impl CompositePane {
             }
             PromptMode::Fixed => {
                 self.prompt.manual_raw_override = false;
+                self.prompt.force_command_prompt = true;
                 if !self.prompt.anchor.is_split() {
                     self.prompt.anchor = match self.prompt.anchor {
                         PromptAnchor::Bottom => PromptAnchor::SplitBottom,
@@ -360,6 +367,7 @@ impl CompositePane {
             }
             PromptMode::RegularTerminal => {
                 self.prompt.manual_raw_override = true;
+                self.prompt.force_command_prompt = false;
                 self.status_message = Some(
                     "MODE: REGULAR TERMINAL — direct shell input (press F4, Alt+E, or F12/Ctrl+G to restore Command Prompt)"
                         .to_string(),
@@ -421,7 +429,15 @@ impl CompositePane {
 
     /// Toggles manual Raw PTY passthrough (`Ctrl+G` / `F12`).
     pub fn toggle_manual_raw_override(&mut self) {
-        self.prompt.manual_raw_override = !self.prompt.manual_raw_override;
+        if !self.prompt.manual_raw_override
+            && !self.vt.is_alternate_screen()
+            && self.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+        {
+            self.prompt.force_command_prompt = true;
+        } else {
+            self.prompt.manual_raw_override = !self.prompt.manual_raw_override;
+            self.prompt.force_command_prompt = !self.prompt.manual_raw_override;
+        }
     }
 
     /// Refreshes three-signal line-discipline telemetry (`OSC 133` + `tcgetpgrp` + `termios !ECHO`).
@@ -488,11 +504,19 @@ impl CompositePane {
                 || lower.contains("[sudo"))
     }
 
-    /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`).
+    /// Returns `true` when an interactive password prompt (`[sudo] password...`, `Password:`)
+    /// is actively running on the canvas and must never be bypassed by `force_command_prompt`.
+    pub fn is_active_canvas_password_prompt(&self) -> bool {
+        (self.prompt.running_command.is_some() || self.line_discipline.has_foreground_subcommand())
+            && self.canvas_cursor_line_looks_like_password_prompt()
+    }
+
+    /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`, `REC-02`).
     pub fn effective_routing_mode(&self) -> InputRoutingMode {
         if self.vt.is_alternate_screen()
-            || self.line_discipline.is_password_prompt()
             || self.prompt.manual_raw_override
+            || self.is_active_canvas_password_prompt()
+            || (self.line_discipline.is_password_prompt() && !self.prompt.force_command_prompt)
         {
             InputRoutingMode::RawPtyPassthrough
         } else {

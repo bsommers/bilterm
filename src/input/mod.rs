@@ -7,18 +7,21 @@ pub use encode::{
     encode_alternate_scroll_wheel, encode_key_to_pty_bytes, encode_key_to_pty_bytes_full,
     encode_key_to_pty_bytes_with_modes,
 };
-pub use keymap::{is_leader_key, normalize_macos_option_key};
+pub use keymap::{
+    DEFAULT_GLOBAL_BINDINGS, DEFAULT_LEADER_BINDINGS, DEFAULT_PANE_BINDINGS,
+    default_global_action, default_leader_action, default_pane_action, is_leader_key,
+    is_leader_key_with_tmux, normalize_macos_option_key,
+};
 pub use mouse::{handle_mouse_event, handle_wm_mouse_event};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::colon_command::{
-    execute_colon_command, execute_wm_colon_command, parse_colon_command,
-};
+use crate::action::Action;
+use crate::colon_command::{execute_colon_command, parse_colon_command};
 use crate::error::Result;
 use crate::input::keymap::{
-    handle_pane_alt_or_fkey_shortcut, handle_wm_leader_key, handle_wm_shortcut_key,
-    handle_wm_user_binding_or_leader_entry,
+    handle_pane_alt_or_fkey_shortcut, handle_wm_enter_submission, handle_wm_leader_key,
+    handle_wm_shortcut_key, handle_wm_user_binding_or_leader_entry,
 };
 use crate::input::modal::{
     handle_copy_mode_key, handle_fuzzy_search_key, handle_hints_mode_key,
@@ -84,9 +87,10 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     }
 
     // Global 3-way mode cycle (Floating Prompt -> Fixed Prompt -> Regular Terminal -> Floating Prompt):
-    // Active in CommandPrompt mode and in manual RegularTerminal mode (when not inside a DECSET 1049 ALT_SCREEN app like htop/vim)
+    // Active in CommandPrompt mode, manual RegularTerminal mode, and false-positive !ECHO PTY wrappers (asciinema)
+    // when not inside a DECSET 1049 ALT_SCREEN app like htop/vim or an active canvas password prompt.
     if !pane.vt().is_alternate_screen()
-        && !pane.is_password_prompt()
+        && !pane.is_active_canvas_password_prompt()
         && (key.code == KeyCode::F(4)
             || (key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))))
@@ -334,13 +338,13 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
     }
 }
 
-/// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`).
+/// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`, `ARCH-R01.2`).
 pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<AppAction> {
     let key = normalize_macos_option_key(raw_key, wm.config().macos_option_as_alt);
 
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
-        return Ok(AppAction::Quit);
+        return wm.apply(Action::Quit);
     }
 
     // Active WM modal overlays (Help, Inspector, Palette, Menu Bar)
@@ -348,14 +352,14 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(action);
     }
 
-    // If Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord, dispatch it across WM + Pane
+    // If Prefix/Leader key (`Ctrl+B` / `Ctrl+X` by default) is awaiting the next chord, dispatch it
     if wm.is_leader_pending() {
         wm.set_leader_pending(false);
         wm.active_pane_mut().set_status_message(None);
         return handle_wm_leader_key(wm, key);
     }
 
-    if let Some(action) = handle_wm_user_binding_or_leader_entry(wm, key) {
+    if let Some(action) = handle_wm_user_binding_or_leader_entry(wm, key)? {
         return Ok(action);
     }
 
@@ -376,38 +380,8 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(action);
     }
 
-    // Intercept Enter on `:split`, `:deck`, `:focus`, `:zoom`, `:close`, `:layout`, `:quake`, or broadcast submissions
-    if key.code == KeyCode::Enter
-        && !key.modifiers.contains(KeyModifiers::SHIFT)
-        && !key.modifiers.contains(KeyModifiers::ALT)
-        && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
-        && !wm.active_pane().prompt().fuzzy_search.active
-        && !wm.active_pane().copy_mode().active
-        && !wm.active_pane().hints_mode().active
-        && wm.active_pane().pending_unsafe_paste().is_none()
-    {
-        let text = wm.active_pane().prompt().text();
-        if let Some(cmd_res) = parse_colon_command(&text) {
-            let _ = wm.active_pane_mut().prompt_mut().take_submission();
-            match cmd_res {
-                Ok(cmd) => {
-                    if execute_wm_colon_command(wm, cmd) {
-                        return Ok(AppAction::Quit);
-                    }
-                }
-                Err(err) => {
-                    wm.active_pane_mut().set_status_message(Some(err));
-                }
-            }
-            return Ok(AppAction::Handled);
-        }
-
-        // Synchronized Multi-Pane Input Broadcast (ECO-04): submit command to all non-locked workspace panes
-        if wm.is_broadcast_input() && !wm.active_pane().is_read_only() {
-            let submitted = wm.active_pane_mut().prompt_mut().take_submission();
-            wm.broadcast_command(&submitted)?;
-            return Ok(AppAction::Handled);
-        }
+    if let Some(action) = handle_wm_enter_submission(wm, key)? {
+        return Ok(action);
     }
 
     handle_key_event(wm.active_pane_mut(), key)

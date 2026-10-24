@@ -1,14 +1,351 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::colon_command::{
-    execute_colon_command, execute_wm_colon_command, parse_colon_command,
-};
+use crate::action::Action;
+use crate::colon_command::{execute_colon_command, parse_colon_command};
 use crate::error::Result;
 use crate::input::AppAction;
-use crate::pane::{CompositePane, PromptAnchor};
+use crate::pane::CompositePane;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
-use crate::wm::split_tree::SplitDirection;
+
+/// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
+///
+/// Unifies classic Borland/DOS chords, `tmux` prefix chords (`"`, `%`, `z`, `n`, `p`, `o`, `[`, `:`),
+/// and `herdr` workspace chords into a single data table.
+pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
+    // Tmux / Herdr / Borland window & split management
+    (KeyCode::Char('"'), Action::SplitHorizontal),
+    (KeyCode::Char('-'), Action::SplitHorizontal),
+    (KeyCode::Char('h'), Action::SplitHorizontal),
+    (KeyCode::F(2), Action::SplitHorizontal),
+    (KeyCode::Char('%'), Action::SplitVertical),
+    (KeyCode::Char('|'), Action::SplitVertical),
+    (KeyCode::Char('\\'), Action::SplitVertical),
+    (KeyCode::Char('v'), Action::SplitVertical),
+    (KeyCode::Char('V'), Action::SplitVertical),
+    (KeyCode::Char('z'), Action::ZoomToggle),
+    (KeyCode::Char('Z'), Action::ZoomToggle),
+    (KeyCode::F(5), Action::ZoomToggle),
+    (KeyCode::Char('o'), Action::DeckNext),
+    (KeyCode::Char('O'), Action::DeckNext),
+    (KeyCode::Char('n'), Action::DeckNext),
+    (KeyCode::Tab, Action::DeckNext),
+    (KeyCode::F(6), Action::DeckNext),
+    (KeyCode::Char('p'), Action::DeckPrev),
+    (KeyCode::BackTab, Action::DeckPrev),
+    (KeyCode::Char('1'), Action::FocusPane(1)),
+    (KeyCode::Char('2'), Action::FocusPane(2)),
+    (KeyCode::Char('3'), Action::FocusPane(3)),
+    (KeyCode::Char('4'), Action::FocusPane(4)),
+    (KeyCode::Char('5'), Action::FocusPane(5)),
+    (KeyCode::Char('6'), Action::FocusPane(6)),
+    (KeyCode::Char('7'), Action::FocusPane(7)),
+    (KeyCode::Char('8'), Action::FocusPane(8)),
+    (KeyCode::Char('9'), Action::FocusPane(9)),
+    (KeyCode::Char('w'), Action::ClosePane),
+    (KeyCode::Char('W'), Action::ClosePane),
+    (KeyCode::Char('M'), Action::LayoutCycle),
+    (KeyCode::Char('q'), Action::QuakeToggle),
+    (KeyCode::Char('`'), Action::QuakeToggle),
+    (KeyCode::Char('~'), Action::QuakeToggle),
+    (KeyCode::F(10), Action::QuakeToggle),
+    (KeyCode::Char(' '), Action::PaletteToggle),
+    (KeyCode::Char(':'), Action::PaletteToggle),
+    (KeyCode::Char('?'), Action::HelpToggle),
+    (KeyCode::F(1), Action::HelpToggle),
+    (KeyCode::Char('i'), Action::InspectorToggle(None)),
+    (KeyCode::Char('I'), Action::InspectorToggle(None)),
+    (KeyCode::F(9), Action::InspectorToggle(None)),
+    (KeyCode::Char('x'), Action::CrosshairCycle),
+    (KeyCode::Char('X'), Action::CrosshairCycle),
+    (KeyCode::Char('L'), Action::spotlight_cycle()),
+    (
+        KeyCode::Char('}'),
+        Action::Spotlight {
+            mode: None,
+            pixelated: None,
+            fullscreen: None,
+            rx: None,
+            ry: None,
+            delta: Some((4, 1)),
+            feather_pct: None,
+        },
+    ),
+    (
+        KeyCode::Char('{'),
+        Action::Spotlight {
+            mode: None,
+            pixelated: None,
+            fullscreen: None,
+            rx: None,
+            ry: None,
+            delta: Some((-4, -1)),
+            feather_pct: None,
+        },
+    ),
+    // Intra-pane prompt, modes & workspace recorder
+    (KeyCode::Char('t'), Action::PromptTop),
+    (KeyCode::Char('T'), Action::PromptTop),
+    (KeyCode::Char('b'), Action::PromptBottom),
+    (KeyCode::Char('B'), Action::PromptBottom),
+    (KeyCode::Char('s'), Action::PromptSplitToggle),
+    (KeyCode::Char('S'), Action::PromptSplitToggle),
+    (KeyCode::Char('e'), Action::PromptModeSet(None)),
+    (KeyCode::Char('E'), Action::PromptModeSet(None)),
+    (KeyCode::Char('m'), Action::PromptModeSet(None)),
+    (KeyCode::F(4), Action::PromptModeSet(None)),
+    (KeyCode::Char('g'), Action::RawToggle),
+    (KeyCode::Char('G'), Action::RawToggle),
+    (KeyCode::F(12), Action::RawToggle),
+    (KeyCode::Char('c'), Action::CopyModeToggle),
+    (KeyCode::Char('C'), Action::CopyModeToggle),
+    (KeyCode::Char('['), Action::CopyModeToggle),
+    (KeyCode::Char('f'), Action::HintsToggle),
+    (KeyCode::Char('F'), Action::HintsToggle),
+    (KeyCode::F(3), Action::HintsToggle),
+    (KeyCode::Char('l'), Action::LockToggle(None)),
+    (KeyCode::Char('/'), Action::SearchPromptPrefill),
+    (KeyCode::Char('N'), Action::SearchPrev),
+    (KeyCode::Char('P'), Action::HistoryPopupToggle),
+    (KeyCode::Char('H'), Action::HistoryPopupToggle),
+    (KeyCode::Char('R'), Action::RecordWorkspaceStart(None)),
+    (KeyCode::Up, Action::PromptMoveVertical(-1)),
+    (KeyCode::Down, Action::PromptMoveVertical(1)),
+    (KeyCode::Char('+'), Action::PromptResizeHeight(1)),
+    (KeyCode::Char('='), Action::PromptResizeHeight(1)),
+    (KeyCode::Char(']'), Action::PromptResizeWidth(4)),
+    (KeyCode::PageUp, Action::BlockPrev),
+    (KeyCode::PageDown, Action::BlockNext),
+];
+
+/// Declarative global workspace shortcut table (`F1`..`F10`, `Alt+<key>`, `Ctrl+P`, `Ctrl+\\`, `ARCH-R01.2`).
+pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
+    // Global Fuzzy Command Palette & Guake/Quake quick terminal
+    (KeyModifiers::ALT, KeyCode::Char(' '), Action::PaletteToggle),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('p'),
+        Action::PaletteToggle,
+    ),
+    (KeyModifiers::ALT, KeyCode::Char('`'), Action::QuakeToggle),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char(' '),
+        Action::QuakeToggle,
+    ),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('\\'),
+        Action::QuakeToggle,
+    ),
+    (
+        KeyModifiers::CONTROL,
+        KeyCode::Char('\x1c'),
+        Action::QuakeToggle,
+    ),
+    // Borland Turbo Vision function keys
+    (KeyModifiers::NONE, KeyCode::F(1), Action::HelpToggle),
+    (KeyModifiers::NONE, KeyCode::F(2), Action::SplitHorizontal),
+    (KeyModifiers::NONE, KeyCode::F(5), Action::ZoomToggle),
+    (KeyModifiers::NONE, KeyCode::F(6), Action::DeckNext),
+    (
+        KeyModifiers::NONE,
+        KeyCode::F(9),
+        Action::InspectorToggle(None),
+    ),
+    (KeyModifiers::NONE, KeyCode::F(10), Action::QuakeToggle),
+    // Multi-pane Window Manager Alt-chords
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('o'),
+        Action::spotlight_cycle(),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('O'),
+        Action::focal_zoom_cycle(),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('}'),
+        Action::FocalRadiusResize(4, 1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('{'),
+        Action::FocalRadiusResize(-4, -1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('x'),
+        Action::CrosshairCycle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('X'),
+        Action::CrosshairCycle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('h'),
+        Action::SplitHorizontal,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('H'),
+        Action::SplitHorizontal,
+    ),
+    (KeyModifiers::ALT, KeyCode::Char('v'), Action::SplitVertical),
+    (KeyModifiers::ALT, KeyCode::Char('V'), Action::SplitVertical),
+    (KeyModifiers::ALT, KeyCode::Char('w'), Action::ClosePane),
+    (KeyModifiers::ALT, KeyCode::Char('W'), Action::ClosePane),
+    (KeyModifiers::ALT, KeyCode::Char('z'), Action::ZoomToggle),
+    (KeyModifiers::ALT, KeyCode::Char('Z'), Action::ZoomToggle),
+    (KeyModifiers::ALT, KeyCode::Char('m'), Action::LayoutCycle),
+    (KeyModifiers::ALT, KeyCode::Char('M'), Action::LayoutCycle),
+    (KeyModifiers::ALT, KeyCode::Tab, Action::DeckNext),
+    (KeyModifiers::ALT, KeyCode::BackTab, Action::DeckPrev),
+    (KeyModifiers::ALT, KeyCode::Char('1'), Action::FocusPane(1)),
+    (KeyModifiers::ALT, KeyCode::Char('2'), Action::FocusPane(2)),
+    (KeyModifiers::ALT, KeyCode::Char('3'), Action::FocusPane(3)),
+    (KeyModifiers::ALT, KeyCode::Char('4'), Action::FocusPane(4)),
+    (KeyModifiers::ALT, KeyCode::Char('5'), Action::FocusPane(5)),
+    (KeyModifiers::ALT, KeyCode::Char('6'), Action::FocusPane(6)),
+    (KeyModifiers::ALT, KeyCode::Char('7'), Action::FocusPane(7)),
+    (KeyModifiers::ALT, KeyCode::Char('8'), Action::FocusPane(8)),
+    (KeyModifiers::ALT, KeyCode::Char('9'), Action::FocusPane(9)),
+];
+
+/// Declarative intra-pane shortcut table (`F3` and `Alt+<key>` in `CommandPrompt` mode, `ARCH-R01.2`).
+pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
+    (KeyModifiers::NONE, KeyCode::F(3), Action::HintsToggle),
+    (KeyModifiers::ALT, KeyCode::Char('t'), Action::PromptTop),
+    (KeyModifiers::ALT, KeyCode::Char('T'), Action::PromptTop),
+    (KeyModifiers::ALT, KeyCode::Char('B'), Action::PromptBottom),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('s'),
+        Action::PromptSplitToggle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('S'),
+        Action::PromptSplitToggle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('c'),
+        Action::CopyModeToggle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('C'),
+        Action::CopyModeToggle,
+    ),
+    (KeyModifiers::ALT, KeyCode::Char('F'), Action::HintsToggle),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('l'),
+        Action::LockToggle(None),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('L'),
+        Action::LockToggle(None),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('/'),
+        Action::SearchPromptPrefill,
+    ),
+    (KeyModifiers::ALT, KeyCode::Char('n'), Action::SearchNext),
+    (KeyModifiers::ALT, KeyCode::Char('N'), Action::SearchPrev),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Up,
+        Action::PromptMoveVertical(-1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Down,
+        Action::PromptMoveVertical(1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('+'),
+        Action::PromptResizeHeight(1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('='),
+        Action::PromptResizeHeight(1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('-'),
+        Action::PromptResizeHeight(-1),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char(']'),
+        Action::PromptResizeWidth(4),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('['),
+        Action::PromptResizeWidth(-4),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('p'),
+        Action::HistoryPopupToggle,
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('P'),
+        Action::HistoryPopupToggle,
+    ),
+    (KeyModifiers::ALT, KeyCode::PageUp, Action::BlockPrev),
+    (KeyModifiers::ALT, KeyCode::PageDown, Action::BlockNext),
+];
+
+/// Looks up `key` in [`DEFAULT_LEADER_BINDINGS`].
+pub fn default_leader_action(key: KeyEvent) -> Option<Action> {
+    DEFAULT_LEADER_BINDINGS
+        .iter()
+        .find(|(code, _)| *code == key.code)
+        .map(|(_, action)| action.clone())
+}
+
+/// Looks up `key` in [`DEFAULT_GLOBAL_BINDINGS`].
+pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option<Action> {
+    if fuzzy_search_active
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.code == KeyCode::Char('p')
+    {
+        return None;
+    }
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    DEFAULT_GLOBAL_BINDINGS
+        .iter()
+        .find(|(mods, code, _)| *mods == lookup_mods && *code == key.code)
+        .map(|(_, _, action)| action.clone())
+}
+
+/// Looks up `key` in [`DEFAULT_PANE_BINDINGS`].
+pub fn default_pane_action(key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    DEFAULT_PANE_BINDINGS
+        .iter()
+        .find(|(mods, code, _)| *mods == lookup_mods && *code == key.code)
+        .map(|(_, _, action)| action.clone())
+}
 
 /// Normalizes macOS `Option+<key>` and `Option+Shift+<key>` Unicode dead-key / symbol characters
 /// (`˙`, `√`, `∫`, `ƒ`, `†`, `ß`, `ç`, `¬`, `π`, `∑`, `Ω`, `µ`, `≈`, `\u{00a0}`, `¡`..`ª`, etc.)
@@ -25,7 +362,6 @@ pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
         return key;
     };
     let mapped: Option<(char, KeyModifiers)> = match c {
-        // Option + a..z
         'å' => Some(('a', KeyModifiers::ALT)),
         '∫' => Some(('b', KeyModifiers::ALT)),
         'ç' => Some(('c', KeyModifiers::ALT)),
@@ -52,7 +388,6 @@ pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
         '≈' => Some(('x', KeyModifiers::ALT)),
         '¥' => Some(('y', KeyModifiers::ALT)),
         'Ω' => Some(('z', KeyModifiers::ALT)),
-        // Option + Shift + A..Z
         'Å' => Some(('A', KeyModifiers::ALT | KeyModifiers::SHIFT)),
         'ı' => Some(('B', KeyModifiers::ALT | KeyModifiers::SHIFT)),
         'Ç' => Some(('C', KeyModifiers::ALT | KeyModifiers::SHIFT)),
@@ -76,7 +411,6 @@ pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
         '˛' => Some(('X', KeyModifiers::ALT | KeyModifiers::SHIFT)),
         'Á' => Some(('Y', KeyModifiers::ALT | KeyModifiers::SHIFT)),
         '¸' => Some(('Z', KeyModifiers::ALT | KeyModifiers::SHIFT)),
-        // Option + 1..9, 0
         '¡' => Some(('1', KeyModifiers::ALT)),
         '™' => Some(('2', KeyModifiers::ALT)),
         '£' => Some(('3', KeyModifiers::ALT)),
@@ -87,7 +421,6 @@ pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
         '•' => Some(('8', KeyModifiers::ALT)),
         'ª' => Some(('9', KeyModifiers::ALT)),
         'º' => Some(('0', KeyModifiers::ALT)),
-        // Option + Space & Punctuation
         '\u{00a0}' => Some((' ', KeyModifiers::ALT)),
         '÷' => Some(('/', KeyModifiers::ALT)),
         '≠' => Some(('=', KeyModifiers::ALT)),
@@ -108,20 +441,36 @@ pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
     }
 }
 
-/// Checks whether `key` matches the configured Prefix/Leader key chord (e.g. `"Ctrl+X"`, `"Ctrl+A"`).
+/// Checks whether `key` matches the configured Prefix/Leader key chord (e.g. `"Ctrl+X"`, `"Ctrl+B"`).
 pub fn is_leader_key(key: KeyEvent, leader_cfg: &str) -> bool {
+    is_leader_key_with_tmux(key, leader_cfg, crate::tmux::TmuxEnv::detect().is_some())
+}
+
+/// Checks whether `key` matches the configured Prefix/Leader key chord with explicit outer-`tmux` awareness (`ARCH-R01.2`, `REC-02`).
+///
+/// When `leader_cfg` is `"Ctrl+X"` or `"Ctrl+B"`:
+/// - Standalone (`!inside_tmux`): accepts both `Ctrl+B` (`tmux`/`herdr`) and `Ctrl+X` (Borland/DOS).
+/// - Inside an outer `tmux` session (`inside_tmux == true`): falls back to `Ctrl+X` so `Ctrl+B` passes cleanly to outer `tmux`.
+pub fn is_leader_key_with_tmux(key: KeyEvent, leader_cfg: &str, inside_tmux: bool) -> bool {
     let target = leader_cfg.trim();
     if target.is_empty() {
         return false;
     }
-    if let Some(chord) = format_key_chord(key) {
-        chord.eq_ignore_ascii_case(target)
+    let Some(chord) = format_key_chord(key) else {
+        return false;
+    };
+    if target.eq_ignore_ascii_case("Ctrl+X") || target.eq_ignore_ascii_case("Ctrl+B") {
+        if inside_tmux {
+            chord.eq_ignore_ascii_case("Ctrl+X")
+        } else {
+            chord.eq_ignore_ascii_case("Ctrl+X") || chord.eq_ignore_ascii_case("Ctrl+B")
+        }
     } else {
-        false
+        chord.eq_ignore_ascii_case(target)
     }
 }
 
-pub(super) fn format_key_chord(key: KeyEvent) -> Option<String> {
+pub(crate) fn format_key_chord(key: KeyEvent) -> Option<String> {
     let mut parts = Vec::new();
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         parts.push("Ctrl".to_string());
@@ -145,213 +494,47 @@ pub(super) fn format_key_chord(key: KeyEvent) -> Option<String> {
     Some(parts.join("+"))
 }
 
-pub(super) fn handle_pane_leader_key(
-    pane: &mut CompositePane,
-    key: KeyEvent,
-) -> Result<AppAction> {
-    if key.modifiers.contains(KeyModifiers::CONTROL)
+pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+    let lookup_key = if key.modifiers.contains(KeyModifiers::CONTROL)
         && let KeyCode::Char(c) = key.code
     {
         if c.eq_ignore_ascii_case(&'q') {
-            return Ok(AppAction::Quit);
+            return wm.apply(Action::Quit);
         }
-        // Double-tap leader (e.g. Ctrl+X Ctrl+X or Ctrl+A Ctrl+A)
-        if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+        if wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+            && matches!(c.to_ascii_lowercase(), 'x' | 'b' | 'a')
+        {
             let byte = (c.to_ascii_lowercase() as u8)
                 .wrapping_sub(b'a')
                 .wrapping_add(1);
-            pane.write_to_pty(&[byte])?;
-        } else if c.eq_ignore_ascii_case(&'a') {
-            pane.prompt_mut().move_cursor_home();
+            wm.active_pane_mut().write_to_pty(&[byte])?;
+            return Ok(AppAction::Handled);
         }
+        if c.eq_ignore_ascii_case(&'a') {
+            wm.active_pane_mut().prompt_mut().move_cursor_home();
+            return Ok(AppAction::Handled);
+        }
+        KeyEvent::new(key.code, key.modifiers - KeyModifiers::CONTROL)
+    } else {
+        key
+    };
+
+    if lookup_key.code == KeyCode::Esc {
         return Ok(AppAction::Handled);
     }
 
-    match key.code {
-        KeyCode::Esc => {}
-        KeyCode::Char('t') | KeyCode::Char('T') => {
-            pane.set_prompt_anchor(PromptAnchor::Top);
-        }
-        KeyCode::Char('b') | KeyCode::Char('B') => {
-            pane.set_prompt_anchor(PromptAnchor::Bottom);
-        }
-        KeyCode::Char('s') | KeyCode::Char('S') => {
-            pane.toggle_split_prompt();
-        }
-        KeyCode::Char('e') | KeyCode::Char('m') | KeyCode::F(4) => {
-            pane.cycle_prompt_mode();
-        }
-        KeyCode::Char('g') | KeyCode::F(12) => {
-            pane.toggle_manual_raw_override();
-        }
-        KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('[') => {
-            if pane.copy_mode().active {
-                pane.exit_copy_mode();
-            } else {
-                pane.enter_copy_mode();
-            }
-        }
-        KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::F(3) => {
-            if pane.hints_mode().active {
-                pane.exit_hints_mode();
-            } else {
-                pane.enter_hints_mode();
-            }
-        }
-        KeyCode::Char('l') | KeyCode::Char('L') => {
-            pane.toggle_read_only();
-        }
-        KeyCode::Char('/') => {
-            if pane.is_prompt_visible() {
-                pane.prompt_mut().set_text(":search ");
-            }
-        }
-        KeyCode::Char('n') => {
-            pane.next_canvas_search_match();
-        }
-        KeyCode::Char('N') => {
-            pane.prev_canvas_search_match();
-        }
-        KeyCode::Char('p') | KeyCode::Char('P') | KeyCode::Char('H') => {
-            pane.prompt_mut().toggle_history_popup();
-        }
-        KeyCode::Up => {
-            let h = pane.vt().size().0 + 1;
-            pane.move_prompt_vertical(-1, h);
-        }
-        KeyCode::Down => {
-            let h = pane.vt().size().0 + 1;
-            pane.move_prompt_vertical(1, h);
-        }
-        KeyCode::Char('+') | KeyCode::Char('=') => {
-            pane.resize_prompt_height(1);
-        }
-        KeyCode::Char('-') => {
-            pane.resize_prompt_height(-1);
-        }
-        KeyCode::Char(']') | KeyCode::Char('}') => {
-            pane.resize_prompt_width(4);
-        }
-        KeyCode::Char('{') => {
-            pane.resize_prompt_width(-4);
-        }
-        KeyCode::PageUp => {
-            pane.vt_mut().jump_to_prev_command_block();
-        }
-        KeyCode::PageDown => {
-            pane.vt_mut().jump_to_next_command_block();
-        }
-        _ => {}
+    if let Some(action) = default_leader_action(lookup_key) {
+        return wm.apply(action);
     }
+
     Ok(AppAction::Handled)
-}
-
-pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
-    if key.modifiers.contains(KeyModifiers::CONTROL)
-        && let KeyCode::Char(c) = key.code
-    {
-        if c.eq_ignore_ascii_case(&'q') {
-            return Ok(AppAction::Quit);
-        }
-        return handle_pane_leader_key(wm.active_pane_mut(), key);
-    }
-
-    match key.code {
-        KeyCode::Esc => Ok(AppAction::Handled),
-        KeyCode::Char('-') | KeyCode::Char('h') | KeyCode::F(2) => {
-            wm.split_focused(SplitDirection::Horizontal)?;
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('|') | KeyCode::Char('\\') | KeyCode::Char('v') | KeyCode::Char('V') => {
-            wm.split_focused(SplitDirection::Vertical)?;
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('z') | KeyCode::Char('Z') | KeyCode::F(5) => {
-            wm.toggle_zoom();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('o') | KeyCode::Char('O') | KeyCode::Tab | KeyCode::F(6) => {
-            wm.shuffle_deck_next();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::BackTab => {
-            wm.shuffle_deck_prev();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char(d @ '1'..='9') => {
-            let id = (d as u8 - b'0') as usize;
-            wm.focus_and_raise(id);
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('w') | KeyCode::Char('W') => {
-            wm.close_focused_pane();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('M') => {
-            wm.toggle_layout_mode();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('q') | KeyCode::Char('`') | KeyCode::Char('~') | KeyCode::F(10) => {
-            wm.toggle_quick_terminal();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char(' ') | KeyCode::Char(':') => {
-            wm.toggle_palette();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('?') | KeyCode::F(1) => {
-            wm.toggle_help();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('i') | KeyCode::Char('I') | KeyCode::F(9) => {
-            wm.toggle_inspector();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('x') | KeyCode::Char('X') => {
-            if !wm.config().crosshair_cursor {
-                wm.config_mut().crosshair_cursor = true;
-                wm.config_mut().crosshair_fullscreen = false;
-            } else if !wm.config().crosshair_fullscreen {
-                wm.config_mut().crosshair_fullscreen = true;
-            } else {
-                wm.config_mut().crosshair_cursor = false;
-                wm.config_mut().crosshair_fullscreen = false;
-            }
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('L') => {
-            let label = wm.config_mut().cycle_spotlight();
-            let rx = wm.config().spotlight_rx;
-            let ry = wm.config().spotlight_ry;
-            let feather = wm.config().spotlight_feather_pct;
-            wm.active_pane_mut().set_status_message(Some(format!(
-                "🔦 Focal Spotlight: {label} (rx={rx}, ry={ry}, feather={feather}%)"
-            )));
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('}') => {
-            if wm.config().spotlight_mode == crate::ui::cursor::SpotlightMode::Off {
-                wm.config_mut().spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
-            }
-            wm.config_mut().resize_spotlight(4, 1);
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char('{') => {
-            if wm.config().spotlight_mode == crate::ui::cursor::SpotlightMode::Off {
-                wm.config_mut().spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
-            }
-            wm.config_mut().resize_spotlight(-4, -1);
-            Ok(AppAction::Handled)
-        }
-        _ => handle_pane_leader_key(wm.active_pane_mut(), key),
-    }
 }
 
 /// Handles user-configured `[keybindings]` and Workspace Leader mode entry.
 pub(super) fn handle_wm_user_binding_or_leader_entry(
     wm: &mut WindowManager,
     key: KeyEvent,
-) -> Option<AppAction> {
+) -> Result<Option<AppAction>> {
     if !wm.config().keybindings.is_empty()
         && let Some(chord) = format_key_chord(key)
     {
@@ -362,30 +545,29 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
             .find(|(k, _)| k.eq_ignore_ascii_case(&chord))
             .map(|(_, v)| v.clone());
         if let Some(bound_action) = bound_opt {
-            if let Some(Ok(cmd)) = parse_colon_command(&bound_action) {
-                if execute_wm_colon_command(wm, cmd.clone()) {
-                    return Some(AppAction::Quit);
-                }
-                if execute_colon_command(wm.active_pane_mut(), cmd) {
-                    return Some(AppAction::Quit);
-                }
-            } else {
-                wm.active_pane_mut().prompt_mut().set_text(&bound_action);
+            if let Some(Ok(action)) = parse_colon_command(&bound_action) {
+                return Ok(Some(wm.apply(action)?));
             }
-            return Some(AppAction::Handled);
+            wm.active_pane_mut().prompt_mut().set_text(&bound_action);
+            return Ok(Some(AppAction::Handled));
         }
     }
 
-    if is_leader_key(key, &wm.config().leader_key) {
+    let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
+    if is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
         wm.set_leader_pending(true);
-        let leader_label = wm.config().leader_key.clone();
+        let leader_label = if inside_tmux {
+            "Ctrl+X".to_string()
+        } else {
+            format!("{} / Ctrl+B", wm.config().leader_key)
+        };
         wm.active_pane_mut().set_status_message(Some(format!(
-            "⌨ LEADER [{leader_label}]: -/h=SplitH |/v=SplitV z=Zoom o/n/p=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
+            "⌨ LEADER [{leader_label}]: \"/-=SplitH %/|=SplitV z=Zoom n/p/o=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
         )));
-        return Some(AppAction::Handled);
+        return Ok(Some(AppAction::Handled));
     }
 
-    None
+    Ok(None)
 }
 
 /// Handles global WindowManager shortcuts (Palette, Quake drop-down, F1..F10, and Alt-chords).
@@ -393,247 +575,68 @@ pub(super) fn handle_wm_shortcut_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    //Global Fuzzy Command Palette hotkey: Ctrl+P (when not in fuzzy history search) or Alt+Space (v0.6.0)
-    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char(' '))
-        || (key.modifiers.contains(KeyModifiers::CONTROL)
-            && key.code == KeyCode::Char('p')
-            && !wm.active_pane().prompt().fuzzy_search.active)
-    {
-        wm.toggle_palette();
-        return Ok(Some(AppAction::Handled));
+    let fuzzy_active = wm.active_pane().prompt().fuzzy_search.active;
+    if let Some(action) = default_global_action(key, fuzzy_active) {
+        return Ok(Some(wm.apply(action)?));
     }
-
-    // Global Guake/Quake-style quick terminal drop-down hotkey: Ctrl+\ (macOS-safe), Alt+`, or Ctrl+Space (WM-05)
-    if (key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('`'))
-        || (key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(
-                key.code,
-                KeyCode::Char(' ') | KeyCode::Char('\\') | KeyCode::Char('\x1c')
-            ))
-    {
-        wm.toggle_quick_terminal();
-        return Ok(Some(AppAction::Handled));
-    }
-
-    // Borland Turbo Vision function keys: F1 = Help, F2 = Split, F5 = Zoom, F6 = Next Pane, F9 = Inspector, F10 = Quake
-    match key.code {
-        KeyCode::F(1) => {
-            wm.toggle_help();
-            return Ok(Some(AppAction::Handled));
-        }
-        KeyCode::F(2) => {
-            wm.split_focused(SplitDirection::Horizontal)?;
-            return Ok(Some(AppAction::Handled));
-        }
-        KeyCode::F(5) => {
-            wm.toggle_zoom();
-            return Ok(Some(AppAction::Handled));
-        }
-        KeyCode::F(6) => {
-            wm.shuffle_deck_next();
-            return Ok(Some(AppAction::Handled));
-        }
-        KeyCode::F(9) => {
-            wm.toggle_inspector();
-            return Ok(Some(AppAction::Handled));
-        }
-        KeyCode::F(10) => {
-            wm.toggle_quick_terminal();
-            return Ok(Some(AppAction::Handled));
-        }
-        _ => {}
-    }
-
-    // Multi-pane Window Manager Alt-chords
-    if key.modifiers.contains(KeyModifiers::ALT) {
-        match key.code {
-            KeyCode::Char('o') => {
-                let label = wm.config_mut().cycle_spotlight();
-                let rx = wm.config().spotlight_rx;
-                let ry = wm.config().spotlight_ry;
-                let feather = wm.config().spotlight_feather_pct;
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "🔦 Focal Spotlight: {label} (rx={rx}, ry={ry}, feather={feather}%)"
-                )));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('O') => {
-                let label = wm.config_mut().cycle_focal_zoom();
-                let rx = wm.config().focal_zoom_rx;
-                let ry = wm.config().focal_zoom_ry;
-                let feather = wm.config().focal_zoom_feather_pct;
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "🔍 Focal Zoom: {label} (rx={rx}, ry={ry}, feather={feather}%)"
-                )));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('}') => {
-                if wm.config().focal_zoom_mode != crate::ui::cursor::SpotlightMode::Off {
-                    wm.config_mut().resize_focal_zoom(4, 1);
-                }
-                if wm.config().spotlight_mode == crate::ui::cursor::SpotlightMode::Off
-                    && wm.config().focal_zoom_mode == crate::ui::cursor::SpotlightMode::Off
-                {
-                    wm.config_mut().spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
-                }
-                if wm.config().spotlight_mode != crate::ui::cursor::SpotlightMode::Off {
-                    wm.config_mut().resize_spotlight(4, 1);
-                }
-                let label = wm
-                    .config()
-                    .spotlight_mode
-                    .label(wm.config().spotlight_pixelated);
-                let s_rx = wm.config().spotlight_rx;
-                let s_ry = wm.config().spotlight_ry;
-                let z_rx = wm.config().focal_zoom_rx;
-                let z_ry = wm.config().focal_zoom_ry;
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "🔦 Focal Radius: spot=({s_rx}, {s_ry}) zoom=({z_rx}, {z_ry}) [{label}]"
-                )));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('{') => {
-                if wm.config().focal_zoom_mode != crate::ui::cursor::SpotlightMode::Off {
-                    wm.config_mut().resize_focal_zoom(-4, -1);
-                }
-                if wm.config().spotlight_mode == crate::ui::cursor::SpotlightMode::Off
-                    && wm.config().focal_zoom_mode == crate::ui::cursor::SpotlightMode::Off
-                {
-                    wm.config_mut().spotlight_mode = crate::ui::cursor::SpotlightMode::Ellipse;
-                }
-                if wm.config().spotlight_mode != crate::ui::cursor::SpotlightMode::Off {
-                    wm.config_mut().resize_spotlight(-4, -1);
-                }
-                let label = wm
-                    .config()
-                    .spotlight_mode
-                    .label(wm.config().spotlight_pixelated);
-                let s_rx = wm.config().spotlight_rx;
-                let s_ry = wm.config().spotlight_ry;
-                let z_rx = wm.config().focal_zoom_rx;
-                let z_ry = wm.config().focal_zoom_ry;
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "🔦 Focal Radius: spot=({s_rx}, {s_ry}) zoom=({z_rx}, {z_ry}) [{label}]"
-                )));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('x') | KeyCode::Char('X') => {
-                if !wm.config().crosshair_cursor {
-                    wm.config_mut().crosshair_cursor = true;
-                    wm.config_mut().crosshair_fullscreen = false;
-                } else if !wm.config().crosshair_fullscreen {
-                    wm.config_mut().crosshair_fullscreen = true;
-                } else {
-                    wm.config_mut().crosshair_cursor = false;
-                    wm.config_mut().crosshair_fullscreen = false;
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('h') | KeyCode::Char('H') => {
-                wm.split_focused(SplitDirection::Horizontal)?;
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('v') | KeyCode::Char('V') => {
-                wm.split_focused(SplitDirection::Vertical)?;
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('w') | KeyCode::Char('W') => {
-                wm.close_focused_pane();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('z') | KeyCode::Char('Z') => {
-                wm.toggle_zoom();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('m') | KeyCode::Char('M') => {
-                wm.toggle_layout_mode();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Tab => {
-                wm.shuffle_deck_next();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::BackTab => {
-                wm.shuffle_deck_prev();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char(d @ '1'..='9') => {
-                let id = (d as u8 - b'0') as usize;
-                wm.focus_and_raise(id);
-                return Ok(Some(AppAction::Handled));
-            }
-            _ => {}
-        }
-    }
-
     Ok(None)
 }
 
-/// Handles single-pane function keys (F3 Hints) and Alt-chord shortcuts in CommandPrompt mode.
+/// Handles `Enter` submissions on the active `WindowManager` pane (in-prompt `:colon` commands and broadcast mode).
+pub(super) fn handle_wm_enter_submission(
+    wm: &mut WindowManager,
+    key: KeyEvent,
+) -> Result<Option<AppAction>> {
+    if key.code == KeyCode::Enter
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+        && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
+        && !wm.active_pane().prompt().fuzzy_search.active
+        && !wm.active_pane().copy_mode().active
+        && !wm.active_pane().hints_mode().active
+        && wm.active_pane().pending_unsafe_paste().is_none()
+    {
+        let text = wm.active_pane().prompt().text();
+        if let Some(cmd_res) = parse_colon_command(&text) {
+            let _ = wm.active_pane_mut().prompt_mut().take_submission();
+            return match cmd_res {
+                Ok(action) => Ok(Some(wm.apply(action)?)),
+                Err(err) => {
+                    wm.active_pane_mut().set_status_message(Some(err));
+                    Ok(Some(AppAction::Handled))
+                }
+            };
+        }
+
+        if wm.is_broadcast_input() && !wm.active_pane().is_read_only() {
+            let submitted = wm.active_pane_mut().prompt_mut().take_submission();
+            wm.broadcast_command(&submitted)?;
+            return Ok(Some(AppAction::Handled));
+        }
+    }
+    Ok(None)
+}
+
+/// Handles single-pane function keys (`F3` Hints) and Alt-chord shortcuts in `CommandPrompt` mode.
 pub(super) fn handle_pane_alt_or_fkey_shortcut(
     pane: &mut CompositePane,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    // F3: QuickSelect 3270 Field Hints (non-colliding function key in CommandPrompt mode)
-    if key.code == KeyCode::F(3) {
-        if pane.hints_mode().active {
-            pane.exit_hints_mode();
-        } else {
-            pane.enter_hints_mode();
-        }
-        return Ok(Some(AppAction::Handled));
-    }
-
-    // Intra-pane prompt positioning, height resize, search, copy mode, Readline word navigation, and OSC 133 command-block jump hotkeys
     if key.modifiers.contains(KeyModifiers::ALT) {
         match key.code {
-            KeyCode::Char('t') | KeyCode::Char('T') => {
-                pane.set_prompt_anchor(PromptAnchor::Top);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('B') => {
-                pane.set_prompt_anchor(PromptAnchor::Bottom);
-                return Ok(Some(AppAction::Handled));
-            }
             KeyCode::Char('b') => {
-                // On macOS, Option+Left emits ESC b (`Alt+b`), and in Readline `Alt+b` is backward-word.
-                // When editing text in the command prompt, move word left; when empty, pin prompt to bottom.
                 if !pane.prompt().input.is_empty() {
                     pane.prompt_mut().move_word_left();
                 } else {
-                    pane.set_prompt_anchor(PromptAnchor::Bottom);
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('s') | KeyCode::Char('S') => {
-                pane.toggle_split_prompt();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('c') | KeyCode::Char('C') => {
-                if pane.copy_mode().active {
-                    pane.exit_copy_mode();
-                } else {
-                    pane.enter_copy_mode();
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('F') => {
-                if pane.hints_mode().active {
-                    pane.exit_hints_mode();
-                } else {
-                    pane.enter_hints_mode();
+                    let _ = execute_colon_command(pane, Action::PromptBottom);
                 }
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('f') => {
-                // On macOS, Option+Right emits ESC f (`Alt+f`), and in Readline `Alt+f` is forward-word.
-                // When editing text in the command prompt, move word right; when empty, open 3270 Field Hints.
                 if !pane.prompt().input.is_empty() {
                     pane.prompt_mut().move_word_right();
-                } else if pane.hints_mode().active {
-                    pane.exit_hints_mode();
                 } else {
-                    pane.enter_hints_mode();
+                    let _ = execute_colon_command(pane, Action::HintsToggle);
                 }
                 return Ok(Some(AppAction::Handled));
             }
@@ -643,62 +646,6 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             }
             KeyCode::Backspace => {
                 pane.prompt_mut().kill_prev_word();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('l') | KeyCode::Char('L') => {
-                pane.toggle_read_only();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('/') => {
-                if pane.is_prompt_visible() {
-                    pane.prompt_mut().set_text(":search ");
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('n') => {
-                pane.next_canvas_search_match();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('N') => {
-                pane.prev_canvas_search_match();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Up => {
-                let h = pane.vt().size().0 + 1;
-                pane.move_prompt_vertical(-1, h);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Down => {
-                let h = pane.vt().size().0 + 1;
-                pane.move_prompt_vertical(1, h);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('+') | KeyCode::Char('=') => {
-                pane.resize_prompt_height(1);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('-') => {
-                pane.resize_prompt_height(-1);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char(']') => {
-                pane.resize_prompt_width(4);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('[') => {
-                pane.resize_prompt_width(-4);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('p') | KeyCode::Char('P') => {
-                pane.prompt_mut().toggle_history_popup();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::PageUp => {
-                pane.vt_mut().jump_to_prev_command_block();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::PageDown => {
-                pane.vt_mut().jump_to_next_command_block();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Left => {
@@ -715,6 +662,11 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             }
             _ => {}
         }
+    }
+
+    if let Some(action) = default_pane_action(key) {
+        let _ = execute_colon_command(pane, action);
+        return Ok(Some(AppAction::Handled));
     }
 
     Ok(None)

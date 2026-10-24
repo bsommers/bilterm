@@ -86,6 +86,9 @@ pub struct FloatingPromptState {
     /// Manual toggle (`Ctrl+G` / `F12`) allowing the user to hide the floating prompt and
     /// route keystrokes directly to the underlying PTY at any time (`PTY-02`).
     pub manual_raw_override: bool,
+    /// Explicit user override (`F4`, `F12`, `Ctrl+X e/t/b/s`, `:mode float/fixed`) that forces
+    /// `CommandPrompt` mode when a PTY wrapper (`asciinema rec`, `script`) sets `!ECHO` on the outer PTY (`REC-02`).
+    pub force_command_prompt: bool,
 }
 
 impl Default for FloatingPromptState {
@@ -113,6 +116,7 @@ impl Default for FloatingPromptState {
             fuzzy_search: FuzzyHistorySearchState::default(),
             completion: TabCompletionState::default(),
             manual_raw_override: false,
+            force_command_prompt: false,
         }
     }
 }
