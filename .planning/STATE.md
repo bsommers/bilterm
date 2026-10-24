@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.7.0
 milestone_name: milestone
-current_phase: 23
-current_phase_name: terminalbackend-trait-and-unwired-subsystem-resolution
-status: completed_phase_23
-stopped_at: Phase 23 completed (3/3 plans); ready for /gsd-plan-phase 24
+current_phase: 24
+current_phase_name: herdr-style-slide-out-sessions-windows-panes-drawer
+status: planned_phase_24
+stopped_at: Phase 24 planned (3 plans in .planning/phases/24-herdr-style-slide-out-sessions-windows-panes-drawer/); ready for /gsd-execute-phase 24
 last_updated: "2026-10-24"
 last_activity: 2026-10-24
-last_activity_desc: Completed Phase 23 (TerminalBackend Trait, Zero vt100_ctt Leak & Unwired-Subsystem Resolution)
+last_activity_desc: Planned Phase 24 (herdr-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes)
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 10
-  total_plans: 36
+  total_plans: 39
   completed_plans: 36
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 23 — `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`)
+**Current focus:** Phase 24 — `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`)
 
 ## Current Position
 
-Phase: 23 (terminalbackend-trait-and-unwired-subsystem-resolution) — COMPLETE
-Plan: 3/3 complete (`23-01-PLAN.md`..`23-03-PLAN.md`)
-Status: Ready to plan Phase 24 (`/gsd-plan-phase 24`)
-Last activity: 2026-10-24 — Executed and verified Phase 23 (`ARCH-R03`, `ARCH-R05`)
+Phase: 24 (herdr-style-slide-out-sessions-windows-panes-drawer) — PLANNED
+Plan: 0/3 complete (`24-01-PLAN.md`..`24-03-PLAN.md`)
+Status: Ready to execute Phase 24 (`/gsd-execute-phase 24`)
+Last activity: 2026-10-24 — Planned Phase 24 (`DRW-01`, `DRW-02`)
 
 Progress: [██████████] 100%
 
