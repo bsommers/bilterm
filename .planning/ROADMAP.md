@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 19: Security Hardening of the Automation & Shell-Integration Surfaces** - `0600` Unix socket default, bearer token gate for remote TCP, confined snapshot paths, `0700`/`0600` private temp files, and hardened SSH argv builders (completed 2026-10-23)
 - [x] **Phase 20: Mega-Module Decomposition** - Split `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams (`<= 800` lines per file, no `pane ↔ wm` cycle) (completed 2026-10-23)
 - [x] **Phase 21: Encapsulated Workspace Invariants** - Private `WindowManager` and `CompositePane` fields, unified `remove_pane`/`submit_command`, `enum Modal`, and `enum Focus` (completed 2026-10-24)
-- [ ] **Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback), and `tmux`/`herdr` chord parity
+- [ ] **Phase 22: Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback, held-`Ctrl` chord normalization, `asciinema` PTY-wrapper harmony), `tmux`/`herdr` chord parity, and whole-workspace Asciicast v2 (`.cast`) compositor recorder (`ARCH-R01`, `REC-02`)
 - [ ] **Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution** - Decouple `vt100_ctt` behind `TerminalBackend`, resolve `VtWorkerHandle`/`TmuxControlSubprocess`/`ghostty-vt`, and CI feature matrix
 - [ ] **Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes** - 4-edge (`Left`/`Right`/`Top`/`Bottom`) slide-out drawer with `OnDemand`/`Fixed`/`AutoHide` policies, `Overlay` (float) vs `Push` (auto-resize) layout modes, and live telemetry glyphs (`DRW-01`, `DRW-02`)
 - [ ] **Phase 25: Dynamic Terminal Text & Font Size Scaling** - Runtime `Ctrl++`/`Ctrl+-`/`Ctrl+0`/`:fontsize` scaling across `GuiWorkspaceRenderer` pixel/SVG cells, DEC double-width/height (`DECDWL`/`DECDHL`) TUI canvas lines, and host-terminal font-zoom OSC passthrough (`FONT-01`)
@@ -235,18 +235,19 @@ Plans:
 - [x] 21-02-PLAN.md — Encapsulate `WindowManager`: private fields, `enum Modal`, `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), unified `remove_pane(id)` across close/reap/fleet, and method accessors across `src/` & `tests/` (wave 2)
 - [x] 21-03-PLAN.md — Invariant & regression tests (reaping zoomed pane, fleet disconnect pane removal, `submit_command` parity, `Modal` exclusivity, `Focus` hit-testing) and Phase 21 state sync (wave 3)
 
-### Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap
+### Phase 22: Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder
 
-**Goal**: As a user and maintainer, I want every key chord, `:command`, playbook step, and JSON-RPC/MCP call to lower into one typed `Action`, so that each feature is implemented once, every keybinding is remappable via `[keybindings]`, and `tmux`/`herdr` leader chords work out of the box alongside Borland Turbo Vision hotkeys.
+**Goal**: As a user and maintainer, I want every key chord, `:command`, playbook step, and JSON-RPC/MCP call to lower into one typed `Action`, with harmonized `<Ctrl+X>`/`<Ctrl+B>` controls under `asciinema` and a built-in whole-workspace Asciicast v2 (`.cast`) compositor recorder that captures all windows, splits, z-order stacks, floating prompts, and chrome.
 **Depends on**: Phase 21
-**Requirements**: ARCH-R01 (review P1.1)
+**Requirements**: ARCH-R01, REC-02 (review P1.1)
 **Success Criteria** (what must be TRUE):
 
   1. `crate::action::Action` replaces `ColonCommand`; `WindowManager::apply(Action)` is the only executor.
   2. Default chords are a data table merged with `config.toml` `[keybindings]`; `handle_wm_key_event` is under ~80 lines.
-  3. Dual-prefix leader support (`Ctrl+B` and `Ctrl+X` accepted when standalone; automatic fallback to `Ctrl+X` when `$TMUX` is detected so `Ctrl+B` passes cleanly to outer `tmux`), plus full `tmux`/`herdr` post-leader chord parity (`"` → `SplitHorizontal`, `%` → `SplitVertical`, `n` → `DeckNext`, `p` → `DeckPrev`) alongside existing `-`/`|`/`h/j/k/l`/`o`/`z`/`[`/`1..9`/`:`/`?` chords and Borland `F1`–`F12`/`Alt+<key>` bindings.
+  3. Dual-prefix leader support (`Ctrl+B` and `Ctrl+X` accepted when standalone; automatic fallback to `Ctrl+X` when `$TMUX` is detected so `Ctrl+B` passes cleanly to outer `tmux`), held-`Ctrl` leader chord normalization (`Ctrl+X Ctrl+<key>` / `Ctrl+B Ctrl+<key>` match `Ctrl+X <key>`), `asciinema` PTY-wrapper harmony (prompt mode toggles `Ctrl+X e/t/b/s`, `F4`, `F12` override false-positive `!ECHO` passthrough when not in `ALT_SCREEN`), and full `tmux`/`herdr` post-leader chord parity (`"` → `SplitHorizontal`, `%` → `SplitVertical`, `n` → `DeckNext`, `p` → `DeckPrev`) alongside existing `-`/`|`/`h/j/k/l`/`o`/`z`/`[`/`1..9`/`:`/`?` chords and Borland `F1`–`F12`/`Alt+<key>` bindings.
   4. `api::dispatch_method` and the playbook engine parse into `Action` (typed params) rather than re-implementing operations.
-  5. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
+  5. Built-in Whole-Workspace Asciicast v2 (`.cast`) compositor recorder (`:record start [path]` / `:record workspace [path]` / `:record pane [path]` / `:record stop`) diffs rendered `ratatui::buffer::Buffer` frames into ANSI escape sequences so multi-pane splits, z-order stacks, floating prompts, Borland menus, 3270 cross-hairs, and modals are recorded into a single standard `.cast` file.
+  6. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
 
 **Plans**: TBD (`/gsd-plan-phase 22`)
 
@@ -333,7 +334,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 7/7 | Complete | 2026-10-23 |
 | 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 3/3 | Complete | 2026-10-24 |
-| 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
+| 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 0/TBD | Not started | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/TBD | Not started | - |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
