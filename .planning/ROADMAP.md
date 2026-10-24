@@ -249,7 +249,12 @@ Plans:
   5. Built-in Whole-Workspace Asciicast v2 (`.cast`) compositor recorder (`:record start [path]` / `:record workspace [path]` / `:record pane [path]` / `:record stop`) diffs rendered `ratatui::buffer::Buffer` frames into ANSI escape sequences so multi-pane splits, z-order stacks, floating prompts, Borland menus, 3270 cross-hairs, and modals are recorded into a single standard `.cast` file.
   6. A table test asserts that every `Action` is reachable from keymap, colon parser, and RPC where applicable.
 
-**Plans**: TBD (`/gsd-plan-phase 22`)
+**Plans**: 3 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Create `crate::action::Action`, `WindowManager::apply(Action)`, and `WorkspaceRecorder` whole-workspace Asciicast v2 (`.cast`) compositor frame recorder (wave 1)
+- [ ] 22-02-PLAN.md — Declarative `DEFAULT_LEADER_BINDINGS`/`DEFAULT_GLOBAL_BINDINGS` tables, `<80`-line `handle_wm_key_event`, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` fallback), `tmux`/`herdr` chords (`"`, `%`, `n`, `p`), held-`Ctrl` chord normalization, and `asciinema` PTY-wrapper prompt override (wave 2)
+- [ ] 22-03-PLAN.md — Lower `api::dispatch_method` & Playbook engine into `Action`, add table reachability + whole-workspace `.cast` + `asciinema` harmony tests, and sync Phase 22 state (wave 3)
 
 ### Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution
 
@@ -334,7 +339,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 7/7 | Complete | 2026-10-23 |
 | 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 3/3 | Complete | 2026-10-24 |
-| 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 0/TBD | Not started | - |
+| 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 0/3 | Planned | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/TBD | Not started | - |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
