@@ -480,7 +480,7 @@ impl Widget for WorkspaceWidget<'_> {
             return;
         }
 
-        let cfg = &self.wm.config;
+        let cfg = self.wm.config();
         let palette = cfg.palette();
         let glyphs = cfg.glyph_set();
 
@@ -498,20 +498,20 @@ impl Widget for WorkspaceWidget<'_> {
 
         let mut rects = self.wm.compute_workspace_rects(workspace_area);
         let framed =
-            self.wm.panes.len() > 1 || self.wm.layout_mode == WorkspaceLayoutMode::Stacked;
-        let top_workspace_id = self.wm.z_stack.top();
-        let qt_visible = self.wm.quick_terminal.visible;
-        if self.wm.layout_mode == WorkspaceLayoutMode::Tiled {
+            self.wm.pane_count() > 1 || self.wm.layout_mode() == WorkspaceLayoutMode::Stacked;
+        let top_workspace_id = self.wm.z_stack().top();
+        let qt_visible = self.wm.is_quick_terminal_visible();
+        if self.wm.layout_mode() == WorkspaceLayoutMode::Tiled {
             rects.sort_by_key(|(id, _)| !qt_visible && top_workspace_id == Some(*id));
         }
 
         for (id, outer) in rects {
-            let Some(pane) = self.wm.panes.get(&id) else {
+            let Some(pane) = self.wm.pane(id) else {
                 continue;
             };
             let is_active = !qt_visible && top_workspace_id == Some(id);
             if framed {
-                if cfg.drop_shadows && self.wm.layout_mode == WorkspaceLayoutMode::Stacked {
+                if cfg.drop_shadows && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
                     render_drop_shadow_styled(
                         buf,
                         outer,
@@ -523,7 +523,7 @@ impl Widget for WorkspaceWidget<'_> {
                 occlude_rect(buf, outer);
                 let z_badge = self
                     .wm
-                    .z_stack
+                    .z_stack()
                     .rank_of(id)
                     .map(|(r, total)| format!("Z:{r}/{total}"))
                     .unwrap_or_default();
@@ -546,7 +546,7 @@ impl Widget for WorkspaceWidget<'_> {
 
         // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
         if qt_visible {
-            let qt_outer = self.wm.quick_terminal.overlay_rect(workspace_area);
+            let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);
             if cfg.drop_shadows {
                 render_drop_shadow_styled(
                     buf,
@@ -567,7 +567,7 @@ impl Widget for WorkspaceWidget<'_> {
                 buf,
             );
             let qt_inner = inset_window_frame(qt_outer);
-            CompositePaneWidget::with_config(&self.wm.quick_terminal.pane, true, cfg)
+            CompositePaneWidget::with_config(&self.wm.quick_terminal().pane, true, cfg)
                 .render(qt_inner, buf);
         }
 
@@ -580,13 +580,13 @@ impl Widget for WorkspaceWidget<'_> {
                 height: 1,
             };
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
-            if let Some(cat) = self.wm.menubar_open_category
+            if let Some((cat, sel_item)) = self.wm.menubar_state()
                 && workspace_area.height >= 6
                 && workspace_area.width >= 24
             {
                 render_menubar_dropdown(
                     cat,
-                    self.wm.menubar_selected_item,
+                    sel_item,
                     workspace_area,
                     cfg,
                     &palette,
@@ -607,7 +607,7 @@ impl Widget for WorkspaceWidget<'_> {
         }
 
         // Render interactive <F9> Live 3270 Terminal Inspector modal on top of workspace (BEL-01)
-        if self.wm.inspector_visible && workspace_area.width >= 24 && workspace_area.height >= 6 {
+        if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(
                 self.wm,
                 workspace_area,
@@ -619,9 +619,9 @@ impl Widget for WorkspaceWidget<'_> {
         }
 
         // Render interactive <F1> Borland Turbo Vision Help Modal on top of the workspace
-        if self.wm.help_visible && workspace_area.width >= 20 && workspace_area.height >= 6 {
+        if self.wm.is_help_visible() && workspace_area.width >= 20 && workspace_area.height >= 6 {
             render_help_modal(
-                self.wm.help_scroll,
+                self.wm.help_scroll(),
                 workspace_area,
                 cfg,
                 &palette,
@@ -631,7 +631,7 @@ impl Widget for WorkspaceWidget<'_> {
         }
 
         // Render interactive Fuzzy Command Palette modal on top of the workspace (v0.6.0)
-        if self.wm.palette_visible && workspace_area.width >= 24 && workspace_area.height >= 6 {
+        if self.wm.is_palette_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_palette_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
     }

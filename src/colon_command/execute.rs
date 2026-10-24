@@ -308,7 +308,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::LayoutMode(mode) => {
-            wm.layout_mode = mode;
+            wm.set_layout_mode(mode);
             false
         }
         ColonCommand::QuakeToggle => {
@@ -320,8 +320,8 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::HistoryToggle(val) => {
-            let next = val.unwrap_or(!wm.config.history_enabled);
-            wm.config.history_enabled = next;
+            let next = val.unwrap_or(!wm.config().history_enabled);
+            wm.config_mut().history_enabled = next;
             wm.sync_history_config();
             wm.active_pane_mut().set_status_message(Some(format!(
                 "Command history persistence: {}",
@@ -345,34 +345,33 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::HistoryMaxFiles(max_f) => {
-            wm.config.history_max_files = max_f.max(1);
+            wm.config_mut().history_max_files = max_f.max(1);
             wm.sync_history_config();
             wm.active_pane_mut()
                 .set_status_message(Some(format!("History max session files: {}", max_f.max(1))));
             false
         }
         ColonCommand::Theme(preset) => {
-            wm.config.theme = preset;
-            wm.config.custom_palette_override = None;
+            wm.config_mut().theme = preset;
+            wm.config_mut().custom_palette_override = None;
             wm.notify_theme_changed();
             false
         }
         ColonCommand::InspectorToggle(val) => {
-            wm.inspector_visible = val.unwrap_or(!wm.inspector_visible);
-            if wm.inspector_visible {
-                wm.inspector_scroll = 0;
-            }
+            let next = val.unwrap_or(!wm.is_inspector_visible());
+            wm.set_inspector_visible(next);
             false
         }
         ColonCommand::BroadcastToggle(val) => {
-            let next = val.unwrap_or(!wm.broadcast_input);
+            let next = val.unwrap_or(!wm.is_broadcast_input());
             wm.set_broadcast_input(next);
             false
         }
         ColonCommand::MenuBarToggle(val) => {
-            wm.config.show_top_menubar = val.unwrap_or(!wm.config.show_top_menubar);
-            if !wm.config.show_top_menubar {
-                wm.menubar_open_category = None;
+            let next = val.unwrap_or(!wm.config().show_top_menubar);
+            wm.config_mut().show_top_menubar = next;
+            if !next {
+                wm.set_menubar_open_category(None);
             }
             false
         }
@@ -414,8 +413,8 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::CrtToggle(val) => {
-            let next = val.unwrap_or(!wm.config.crt_scanlines);
-            wm.config.crt_scanlines = next;
+            let next = val.unwrap_or(!wm.config().crt_scanlines);
+            wm.config_mut().crt_scanlines = next;
             wm.active_pane_mut().set_status_message(Some(format!(
                 "CRT Phosphor Scanlines: {}",
                 if next { "ON" } else { "OFF" }
@@ -427,17 +426,17 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::TriggerAdd(pat) => {
-            if !wm.config.triggers.contains(&pat) {
-                wm.config.triggers.push(pat.clone());
+            if !wm.config().triggers.contains(&pat) {
+                wm.config_mut().triggers.push(pat.clone());
             }
-            let count = wm.config.triggers.len();
+            let count = wm.config().triggers.len();
             wm.active_pane_mut().set_status_message(Some(format!(
                 "Added output highlight trigger '{pat}' ({count} active)"
             )));
             false
         }
         ColonCommand::TriggerClear => {
-            wm.config.triggers.clear();
+            wm.config_mut().triggers.clear();
             wm.active_pane_mut()
                 .set_status_message(Some("Cleared all output highlight triggers".to_string()));
             false
@@ -482,14 +481,14 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             let mut profile = RemoteHostProfile::new(name.clone(), destination.clone());
             profile.tags = tags.clone();
-            wm.fleet.register_profile(profile);
+            wm.fleet_mut().register_profile(profile);
             wm.active_pane_mut().set_status_message(Some(format!(
                 "Registered remote host '{name}' ({destination}) tags={tags:?}"
             )));
             false
         }
         ColonCommand::RemoteList => {
-            let names: Vec<String> = wm.fleet.nodes.keys().cloned().collect();
+            let names: Vec<String> = wm.fleet().nodes.keys().cloned().collect();
             wm.active_pane_mut().set_status_message(Some(if names.is_empty() {
                 "Fleet nodes: (local only)".to_string()
             } else {
@@ -500,7 +499,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::RemoteExec { selector, command } => {
             let sel = FleetSelector::parse(&selector);
             let panes = wm.exec_fleet_command(&sel, &command);
-            let nodes = wm.fleet.matching_nodes(&sel);
+            let nodes = wm.fleet().matching_nodes(&sel);
             wm.active_pane_mut().set_status_message(Some(format!(
                 "🌐 Fleet exec [{}] -> {} pane(s), {} node(s)",
                 selector,
@@ -510,7 +509,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::RemoteDisconnect(name) => {
-            let removed = wm.fleet.disconnect(&name);
+            let removed = wm.disconnect_fleet_node(&name);
             wm.active_pane_mut().set_status_message(Some(if removed {
                 format!("Disconnected remote fleet node '{name}'")
             } else {
@@ -519,19 +518,19 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::Glyphs(pack) => {
-            wm.config.glyphs = pack;
+            wm.config_mut().glyphs = pack;
             false
         }
         ColonCommand::Cursor(style) => {
-            wm.config.cursor_style = style;
+            wm.config_mut().cursor_style = style;
             false
         }
         ColonCommand::Outline { window, prompt } => {
             if let Some(w) = window {
-                wm.config.window_outline = w;
+                wm.config_mut().window_outline = w;
             }
             if let Some(p) = prompt {
-                wm.config.prompt_outline = p;
+                wm.config_mut().prompt_outline = p;
             }
             false
         }
@@ -539,9 +538,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             enabled,
             fullscreen,
         } => {
-            wm.config.crosshair_cursor = enabled.unwrap_or(!wm.config.crosshair_cursor);
+            let next = enabled.unwrap_or(!wm.config().crosshair_cursor);
+            wm.config_mut().crosshair_cursor = next;
             if let Some(fs) = fullscreen {
-                wm.config.crosshair_fullscreen = fs;
+                wm.config_mut().crosshair_fullscreen = fs;
             }
             false
         }
@@ -562,48 +562,48 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 && delta.is_none()
                 && feather_pct.is_none();
             if no_args {
-                let label = wm.config.cycle_spotlight();
-                let rx_v = wm.config.spotlight_rx;
-                let ry_v = wm.config.spotlight_ry;
-                let f_v = wm.config.spotlight_feather_pct;
+                let label = wm.config_mut().cycle_spotlight();
+                let rx_v = wm.config().spotlight_rx;
+                let ry_v = wm.config().spotlight_ry;
+                let f_v = wm.config().spotlight_feather_pct;
                 wm.active_pane_mut().set_status_message(Some(format!(
                     "🔦 Focal Spotlight: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
                 )));
                 return false;
             }
             if let Some(m) = mode {
-                wm.config.spotlight_mode = m;
-            } else if wm.config.spotlight_mode == SpotlightMode::Off {
-                wm.config.spotlight_mode = SpotlightMode::Ellipse;
+                wm.config_mut().spotlight_mode = m;
+            } else if wm.config().spotlight_mode == SpotlightMode::Off {
+                wm.config_mut().spotlight_mode = SpotlightMode::Ellipse;
             }
             if let Some(px) = pixelated {
-                wm.config.spotlight_pixelated = px;
+                wm.config_mut().spotlight_pixelated = px;
             }
             if let Some(fs) = fullscreen {
-                wm.config.spotlight_fullscreen = fs;
+                wm.config_mut().spotlight_fullscreen = fs;
             }
             if let Some(rx_val) = rx {
-                wm.config.spotlight_rx = rx_val.clamp(4, 120);
-                if ry.is_none() && wm.config.spotlight_mode == SpotlightMode::Circle {
-                    wm.config.spotlight_ry = (rx_val / 2).clamp(2, 60);
+                wm.config_mut().spotlight_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config().spotlight_mode == SpotlightMode::Circle {
+                    wm.config_mut().spotlight_ry = (rx_val / 2).clamp(2, 60);
                 }
             }
             if let Some(ry_val) = ry {
-                wm.config.spotlight_ry = ry_val.clamp(2, 60);
+                wm.config_mut().spotlight_ry = ry_val.clamp(2, 60);
             }
             if let Some((drx, dry)) = delta {
-                wm.config.resize_spotlight(drx, dry);
+                wm.config_mut().resize_spotlight(drx, dry);
             }
             if let Some(f) = feather_pct {
-                wm.config.spotlight_feather_pct = f.clamp(5, 100);
+                wm.config_mut().spotlight_feather_pct = f.clamp(5, 100);
             }
             let label = wm
-                .config
+                .config()
                 .spotlight_mode
-                .label(wm.config.spotlight_pixelated);
-            let rx_v = wm.config.spotlight_rx;
-            let ry_v = wm.config.spotlight_ry;
-            let f_v = wm.config.spotlight_feather_pct;
+                .label(wm.config().spotlight_pixelated);
+            let rx_v = wm.config().spotlight_rx;
+            let ry_v = wm.config().spotlight_ry;
+            let f_v = wm.config().spotlight_feather_pct;
             wm.active_pane_mut().set_status_message(Some(format!(
                 "🔦 Focal Spotlight: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
             )));
@@ -630,51 +630,51 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 && delta_size.is_none()
                 && feather_pct.is_none();
             if no_args {
-                let label = wm.config.cycle_focal_zoom();
-                let rx_v = wm.config.focal_zoom_rx;
-                let ry_v = wm.config.focal_zoom_ry;
-                let f_v = wm.config.focal_zoom_feather_pct;
+                let label = wm.config_mut().cycle_focal_zoom();
+                let rx_v = wm.config().focal_zoom_rx;
+                let ry_v = wm.config().focal_zoom_ry;
+                let f_v = wm.config().focal_zoom_feather_pct;
                 wm.active_pane_mut().set_status_message(Some(format!(
                     "🔍 Focal Zoom: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
                 )));
                 return false;
             }
             if let Some(m) = mode {
-                wm.config.focal_zoom_mode = m;
-            } else if wm.config.focal_zoom_mode == SpotlightMode::Off && step_pct.is_none() {
-                wm.config.focal_zoom_mode = SpotlightMode::Ellipse;
+                wm.config_mut().focal_zoom_mode = m;
+            } else if wm.config().focal_zoom_mode == SpotlightMode::Off && step_pct.is_none() {
+                wm.config_mut().focal_zoom_mode = SpotlightMode::Ellipse;
             }
             if let Some(pct) = zoom_pct {
-                wm.config.focal_zoom_pct = pct.clamp(105, 400);
+                wm.config_mut().focal_zoom_pct = pct.clamp(105, 400);
             }
             if let Some(delta_p) = step_pct {
-                wm.config.step_focal_zoom_level(delta_p);
+                wm.config_mut().step_focal_zoom_level(delta_p);
             }
             if let Some(px) = pixelated {
-                wm.config.focal_zoom_pixelated = px;
+                wm.config_mut().focal_zoom_pixelated = px;
             }
             if let Some(fs) = fullscreen {
-                wm.config.focal_zoom_fullscreen = fs;
+                wm.config_mut().focal_zoom_fullscreen = fs;
             }
             if let Some(rx_val) = rx {
-                wm.config.focal_zoom_rx = rx_val.clamp(4, 120);
-                if ry.is_none() && wm.config.focal_zoom_mode == SpotlightMode::Circle {
-                    wm.config.focal_zoom_ry = (rx_val / 2).clamp(2, 60);
+                wm.config_mut().focal_zoom_rx = rx_val.clamp(4, 120);
+                if ry.is_none() && wm.config().focal_zoom_mode == SpotlightMode::Circle {
+                    wm.config_mut().focal_zoom_ry = (rx_val / 2).clamp(2, 60);
                 }
             }
             if let Some(ry_val) = ry {
-                wm.config.focal_zoom_ry = ry_val.clamp(2, 60);
+                wm.config_mut().focal_zoom_ry = ry_val.clamp(2, 60);
             }
             if let Some((drx, dry)) = delta_size {
-                wm.config.resize_focal_zoom(drx, dry);
+                wm.config_mut().resize_focal_zoom(drx, dry);
             }
             if let Some(f) = feather_pct {
-                wm.config.focal_zoom_feather_pct = f.clamp(5, 100);
+                wm.config_mut().focal_zoom_feather_pct = f.clamp(5, 100);
             }
-            let label = wm.config.focal_zoom_label();
-            let rx_v = wm.config.focal_zoom_rx;
-            let ry_v = wm.config.focal_zoom_ry;
-            let f_v = wm.config.focal_zoom_feather_pct;
+            let label = wm.config().focal_zoom_label();
+            let rx_v = wm.config().focal_zoom_rx;
+            let ry_v = wm.config().focal_zoom_ry;
+            let f_v = wm.config().focal_zoom_feather_pct;
             wm.active_pane_mut().set_status_message(Some(format!(
                 "🔍 Focal Zoom: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
             )));
@@ -683,24 +683,26 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::Shadows(style_opt) => {
             match style_opt {
                 Some(ShadowStyle::None) => {
-                    wm.config.shadow_style = ShadowStyle::None;
-                    wm.config.drop_shadows = false;
+                    wm.config_mut().shadow_style = ShadowStyle::None;
+                    wm.config_mut().drop_shadows = false;
                 }
                 Some(style) => {
-                    wm.config.shadow_style = style;
-                    wm.config.drop_shadows = true;
+                    wm.config_mut().shadow_style = style;
+                    wm.config_mut().drop_shadows = true;
                 }
                 None => {
-                    wm.config.drop_shadows = !wm.config.drop_shadows;
-                    if wm.config.drop_shadows && wm.config.shadow_style == ShadowStyle::None {
-                        wm.config.shadow_style = ShadowStyle::Translucent;
+                    let next = !wm.config().drop_shadows;
+                    wm.config_mut().drop_shadows = next;
+                    if next && wm.config().shadow_style == ShadowStyle::None {
+                        wm.config_mut().shadow_style = ShadowStyle::Translucent;
                     }
                 }
             }
             false
         }
         ColonCommand::FKeyBarToggle(val) => {
-            wm.config.show_dos_fkey_bar = val.unwrap_or(!wm.config.show_dos_fkey_bar);
+            let next = val.unwrap_or(!wm.config().show_dos_fkey_bar);
+            wm.config_mut().show_dos_fkey_bar = next;
             false
         }
         other => execute_colon_command(wm.active_pane_mut(), other),

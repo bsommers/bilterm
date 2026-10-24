@@ -408,7 +408,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
     app.wm.active_pane_mut().prompt_mut().clear_line();
 
     // Top MenuBar mouse click & keyboard navigation
-    app.wm.config.show_top_menubar = true;
+    app.wm.config_mut().show_top_menubar = true;
     for col in [2u16, 14, 24, 31, 38, 46, 55] {
         let click = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -418,7 +418,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
         };
         handle_wm_mouse_event(&mut app.wm, click, app.last_viewport).expect("menubar click");
     }
-    app.wm.menubar_open_category = Some(0);
+    app.wm.set_menubar_open_category(Some(0));
     handle_wm_key_event(
         &mut app.wm,
         KeyEvent::new(KeyCode::Right, KeyModifiers::empty()),
@@ -444,7 +444,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
     )
     .unwrap();
-    assert!(app.wm.inspector_visible);
+    assert!(app.wm.is_inspector_visible());
 
     // Inspector modal navigation (Up, Down, PageUp, PageDown, Esc)
     for code in [
@@ -456,7 +456,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
     ] {
         handle_wm_key_event(&mut app.wm, KeyEvent::new(code, KeyModifiers::empty())).unwrap();
     }
-    assert!(!app.wm.inspector_visible);
+    assert!(!app.wm.is_inspector_visible());
 
     // Help modal navigation (F1, Down, Up, PageDown, PageUp, Esc)
     for code in [
@@ -469,7 +469,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
     ] {
         handle_wm_key_event(&mut app.wm, KeyEvent::new(code, KeyModifiers::empty())).unwrap();
     }
-    assert!(!app.wm.help_visible);
+    assert!(!app.wm.is_help_visible());
 
     // Fuzzy Command Palette navigation (Ctrl+P, type query, Backspace, Down, Up, Enter)
     handle_wm_key_event(
@@ -477,7 +477,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
         KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
     )
     .unwrap();
-    assert!(app.wm.palette_visible);
+    assert!(app.wm.is_palette_visible());
     handle_wm_key_event(
         &mut app.wm,
         KeyEvent::new(KeyCode::Char('3'), KeyModifiers::empty()),
@@ -503,7 +503,7 @@ fn app_coordinator_input_modals_menubar_and_key_encoders_work_end_to_end() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
     )
     .unwrap();
-    assert!(!app.wm.palette_visible);
+    assert!(!app.wm.is_palette_visible());
 
     // Key chord parser & VT/Kitty key byte encoders
     for chord in [
@@ -750,7 +750,7 @@ fn performance_and_stress_benchmark_verifies_sub_millisecond_frame_and_rpc_budge
                 .split_focused(bilterm::wm::split_tree::SplitDirection::Vertical);
         }
     }
-    assert!(plane.wm.panes.len() >= 32);
+    assert!(plane.wm.pane_count() >= 32);
 
     // 2. Throughput benchmark: Feed 64KB chunked ANSI/TrueColor/OSC-133 stream across panes (matches PTY 64KB reader chunks)
     let single_line = b"\x1b]133;C\x07\x1b[38;2;0;255;102m[PERF-BENCH] Metric=99.98% latency=0.12ms https://bilterm.dev/perf\x1b[0m\r\n\x1b]133;D;0\x07";
@@ -759,7 +759,7 @@ fn performance_and_stress_benchmark_verifies_sub_millisecond_frame_and_rpc_budge
     let vt_start = Instant::now();
     for i in 0..iterations {
         let pid = (i % 16) + 1;
-        if let Some(p) = plane.wm.panes.get_mut(&pid) {
+        if let Some(p) = plane.wm.pane_mut(pid) {
             p.process_pty_output(&chunk);
         }
     }
@@ -882,11 +882,11 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     // 1. Screenshot 1: Multi-Pane Tiled Workspace + SSH Fleet + Top MenuBar + DOS F-Key Bar (Turbo Blue)
     let mut plane1 = AutomationControlPlane::new_headless(32, 128);
-    plane1.wm.config.show_top_menubar = true;
-    plane1.wm.config.show_dos_fkey_bar = true;
-    plane1.wm.config.drop_shadows = true;
-    plane1.wm.config.crosshair_cursor = true;
-    plane1.wm.config.triggers = vec!["CRITICAL".to_string(), "READY".to_string()];
+    plane1.wm.config_mut().show_top_menubar = true;
+    plane1.wm.config_mut().show_dos_fkey_bar = true;
+    plane1.wm.config_mut().drop_shadows = true;
+    plane1.wm.config_mut().crosshair_cursor = true;
+    plane1.wm.config_mut().triggers = vec!["CRITICAL".to_string(), "READY".to_string()];
 
     let _ = plane1.handle_jsonrpc_line(
         r#"{"jsonrpc":"2.0","id":1,"method":"pane.exec","params":{"pane_id":1,"command":"cargo test --all-targets && bilterm ctl 127.0.0.1:7370 fleet.list"}}"#,
@@ -894,7 +894,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let _ = plane1.handle_jsonrpc_line(
         r#"{"jsonrpc":"2.0","id":2,"method":"pane.feed_output","params":{"pane_id":1,"data":"\u001b]133;C\u0007\u001b[1;32m   Compiling\u001b[0m bilterm v1.4.0 (/home/bill/src/ai/bilterm)\r\n\u001b[1;32m    Finished\u001b[0m `release` profile [optimized] target(s) in 1.42s\r\n\u001b[1;36m     Running\u001b[0m 85 tests across 16 test binaries ... \u001b[1;32m85 passed; 0 failed (83.45% coverage)\u001b[0m\r\n\u001b[1;33m[FLEET]\u001b[0m Local #1 READY | SSH prod-db:2222 READY | Endpoint: https://bilterm.dev/api\r\n\u001b]9;4;1;85\u0007\u001b]133;D;0\u0007"}}"#,
     );
-    if let Some(p1) = plane1.wm.panes.get_mut(&1) {
+    if let Some(p1) = plane1.wm.pane_mut(1) {
         p1.prompt_mut()
             .set_text(":remote exec @prod systemctl status postgresql");
     }
@@ -905,7 +905,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let _ = plane1.handle_jsonrpc_line(
         r#"{"jsonrpc":"2.0","id":4,"method":"pane.feed_output","params":{"pane_id":2,"data":"\u001b]133;C\u0007\u001b[1;32m● postgresql.service\u001b[0m - PostgreSQL 16 Database Server (prod-db.internal)\r\n   Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)\r\n   Active: \u001b[1;32mactive (running)\u001b[0m since Tue 2026-10-21 20:00:00 UTC; 3h ago\r\n   Status: \"CRITICAL=0 | Connections: 42/500 | Replication: SYNC READY\"\r\n\u001b]9;PostgreSQL Healthy\u0007\u001b]133;D;0\u0007"}}"#,
     );
-    if let Some(p2) = plane1.wm.panes.get_mut(&2) {
+    if let Some(p2) = plane1.wm.pane_mut(2) {
         p2.prompt_mut()
             .set_text("psql -U admin -c 'SELECT pg_is_in_recovery();'");
     }
@@ -920,10 +920,10 @@ fn generates_real_workspace_screenshots_for_documentation() {
     assert!(svg1_path.exists());
 
     // 2. Screenshot 2: IBM 3278 Phosphor Green + Full-Screen Cross-Hair + Live 3270 Terminal Inspector Modal (F9)
-    plane1.wm.config.theme = ThemePreset::Ibm3278Green;
-    plane1.wm.config.crosshair_fullscreen = true;
-    plane1.wm.config.crt_scanlines = true;
-    plane1.wm.inspector_visible = true;
+    plane1.wm.config_mut().theme = ThemePreset::Ibm3278Green;
+    plane1.wm.config_mut().crosshair_fullscreen = true;
+    plane1.wm.config_mut().crt_scanlines = true;
+    plane1.wm.toggle_inspector();
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg2 = surface.export_svg(
@@ -934,11 +934,9 @@ fn generates_real_workspace_screenshots_for_documentation() {
     assert!(svg2_path.exists());
 
     // 3. Screenshot 3: IBM 3279 Amber CRT + Z-Order Stacked Cascade + Fuzzy Command Palette (Ctrl+P)
-    plane1.wm.inspector_visible = false;
-    plane1.wm.config.theme = ThemePreset::Ibm3279Amber;
-    plane1.wm.layout_mode = bilterm::wm::WorkspaceLayoutMode::Stacked;
-    plane1.wm.palette_visible = true;
-    plane1.wm.palette_query = "remote".to_string();
+    plane1.wm.config_mut().theme = ThemePreset::Ibm3279Amber;
+    plane1.wm.set_layout_mode(bilterm::wm::WorkspaceLayoutMode::Stacked);
+    plane1.wm.open_palette_with_query("remote");
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg3 = surface.export_svg(

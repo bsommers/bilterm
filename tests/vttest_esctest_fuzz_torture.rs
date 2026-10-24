@@ -66,15 +66,15 @@ fn sixteen_simultaneous_sessions_tile_stack_overlap_shuffle_and_zoom() {
             SplitDirection::Horizontal
         };
         let new_id = wm.split_focused(dir).unwrap();
-        let pane = wm.panes.get_mut(&new_id).unwrap();
+        let pane = wm.pane_mut(new_id).unwrap();
         pane.process_pty_output(format!("SESSION #{new_id} OUTPUT READY\r\n").as_bytes());
     }
 
-    assert_eq!(wm.panes.len(), 16);
-    assert_eq!(wm.z_stack.order().len(), 16);
+    assert_eq!(wm.pane_count(), 16);
+    assert_eq!(wm.z_stack().order().len(), 16);
 
     // 1. Tiled BSP mode: all 16 panes receive non-overlapping rectangles
-    wm.layout_mode = WorkspaceLayoutMode::Tiled;
+    wm.set_layout_mode(WorkspaceLayoutMode::Tiled);
     wm.resize_all(screen).unwrap();
     let tiled_rects = wm.compute_workspace_rects(screen);
     assert_eq!(tiled_rects.len(), 16);
@@ -83,7 +83,7 @@ fn sixteen_simultaneous_sessions_tile_stack_overlap_shuffle_and_zoom() {
     WorkspaceWidget::new(&wm).render(screen, &mut buf_tiled);
 
     // 2. Stacked (overlapping z-order cascade) mode: all 16 windows overlap in painter's z-order
-    wm.layout_mode = WorkspaceLayoutMode::Stacked;
+    wm.set_layout_mode(WorkspaceLayoutMode::Stacked);
     wm.resize_all(screen).unwrap();
     let stacked_rects = wm.compute_workspace_rects(screen);
     assert_eq!(stacked_rects.len(), 16);
@@ -95,9 +95,10 @@ fn sixteen_simultaneous_sessions_tile_stack_overlap_shuffle_and_zoom() {
     assert!(wm.focus_and_raise(7));
     assert_eq!(wm.active_pane_id(), 7);
 
-    // Toggle Quake drop-down quick terminal (session #0) over the 16-window stack
+    // Toggle Quake drop-down quick terminal (Focus::Quick) over the 16-window stack
     wm.toggle_quick_terminal();
-    assert_eq!(wm.active_pane_id(), 0);
+    assert_eq!(wm.focus(), bilterm::wm::Focus::Quick);
+    assert_eq!(wm.active_pane_id(), 7);
 
     let mut buf_stacked = Buffer::empty(screen);
     WorkspaceWidget::new(&wm).render(screen, &mut buf_stacked);

@@ -184,57 +184,57 @@ mod tests {
     #[test]
     fn spotlight_colon_commands_configure_shape_pixelation_and_size() {
         let mut wm = WindowManager::new_headless(25, 80);
-        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Off);
+        assert_eq!(wm.config().spotlight_mode, SpotlightMode::Off);
 
         // Cycle via bare :spotlight
         let cmd = parse_colon_command(":spotlight").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Circle);
-        assert!(!wm.config.spotlight_pixelated);
+        assert_eq!(wm.config().spotlight_mode, SpotlightMode::Circle);
+        assert!(!wm.config().spotlight_pixelated);
 
         // Configure elliptical pixelated spotlight with custom size and feather
         let cmd = parse_colon_command(":spotlight ellipse pixel size 30 8 feather 60")
             .unwrap()
             .unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Ellipse);
-        assert!(wm.config.spotlight_pixelated);
-        assert_eq!(wm.config.spotlight_rx, 30);
-        assert_eq!(wm.config.spotlight_ry, 8);
-        assert_eq!(wm.config.spotlight_feather_pct, 60);
+        assert_eq!(wm.config().spotlight_mode, SpotlightMode::Ellipse);
+        assert!(wm.config().spotlight_pixelated);
+        assert_eq!(wm.config().spotlight_rx, 30);
+        assert_eq!(wm.config().spotlight_ry, 8);
+        assert_eq!(wm.config().spotlight_feather_pct, 60);
 
         // Grow and shrink via :spotlight + and :spotlight -
         let cmd = parse_colon_command(":spotlight +").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.spotlight_rx, 34);
-        assert_eq!(wm.config.spotlight_ry, 9);
+        assert_eq!(wm.config().spotlight_rx, 34);
+        assert_eq!(wm.config().spotlight_ry, 9);
 
         let cmd = parse_colon_command(":spotlight off").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.spotlight_mode, SpotlightMode::Off);
+        assert_eq!(wm.config().spotlight_mode, SpotlightMode::Off);
 
         // Cycle Focal Zoom levels: Off -> 1.25x -> 1.50x -> 2.00x -> 3.00x -> Off
         for expected_pct in [125u16, 150, 200, 300] {
             let cmd = parse_colon_command(":focalzoom").unwrap().unwrap();
             execute_wm_colon_command(&mut wm, cmd);
-            assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Ellipse);
-            assert_eq!(wm.config.focal_zoom_pct, expected_pct);
+            assert_eq!(wm.config().focal_zoom_mode, SpotlightMode::Ellipse);
+            assert_eq!(wm.config().focal_zoom_pct, expected_pct);
         }
         let cmd = parse_colon_command(":focalzoom").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Off);
+        assert_eq!(wm.config().focal_zoom_mode, SpotlightMode::Off);
 
         // Configure 2.5x circular pixelated focal zoom with custom size and step
         let cmd = parse_colon_command(":focalzoom 2.5x circle pixel size 24 8 feather 55")
             .unwrap()
             .unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert_eq!(wm.config.focal_zoom_mode, SpotlightMode::Circle);
-        assert_eq!(wm.config.focal_zoom_pct, 250);
-        assert!(wm.config.focal_zoom_pixelated);
-        assert_eq!(wm.config.focal_zoom_rx, 24);
-        assert_eq!(wm.config.focal_zoom_ry, 8);
-        assert_eq!(wm.config.focal_zoom_feather_pct, 55);
+        assert_eq!(wm.config().focal_zoom_mode, SpotlightMode::Circle);
+        assert_eq!(wm.config().focal_zoom_pct, 250);
+        assert!(wm.config().focal_zoom_pixelated);
+        assert_eq!(wm.config().focal_zoom_rx, 24);
+        assert_eq!(wm.config().focal_zoom_ry, 8);
+        assert_eq!(wm.config().focal_zoom_feather_pct, 55);
     }
 
     #[test]
@@ -253,7 +253,7 @@ mod tests {
         let mut wm = WindowManager::new_headless(24, 80);
         let cmd = parse_colon_command(":remote add evil -oProxyCommand=x").unwrap().unwrap();
         execute_wm_colon_command(&mut wm, cmd);
-        assert!(!wm.fleet.nodes.contains_key("evil"));
+        assert!(!wm.fleet().nodes.contains_key("evil"));
         let status = wm.active_pane().status_message().unwrap_or("");
         assert!(
             status.contains("Remote not added:") && status.contains("invalid SSH destination"),

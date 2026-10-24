@@ -336,7 +336,7 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
 
 /// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`).
 pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<AppAction> {
-    let key = normalize_macos_option_key(raw_key, wm.config.macos_option_as_alt);
+    let key = normalize_macos_option_key(raw_key, wm.config().macos_option_as_alt);
 
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
@@ -349,8 +349,8 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     }
 
     // If Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord, dispatch it across WM + Pane
-    if wm.leader_pending {
-        wm.leader_pending = false;
+    if wm.is_leader_pending() {
+        wm.set_leader_pending(false);
         wm.active_pane_mut().set_status_message(None);
         return handle_wm_leader_key(wm, key);
     }
@@ -403,14 +403,9 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         }
 
         // Synchronized Multi-Pane Input Broadcast (ECO-04): submit command to all non-locked workspace panes
-        if wm.broadcast_input && !wm.active_pane().is_read_only() {
+        if wm.is_broadcast_input() && !wm.active_pane().is_read_only() {
             let submitted = wm.active_pane_mut().prompt_mut().take_submission();
-            for pane in wm.panes.values_mut() {
-                if pane.is_read_only() {
-                    continue;
-                }
-                pane.submit_command(&submitted)?;
-            }
+            wm.broadcast_command(&submitted)?;
             return Ok(AppAction::Handled);
         }
     }
@@ -621,7 +616,7 @@ mod tests {
         //    automatically normalize to Alt+<key> and trigger WM splits & pane focus!
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('√'), KeyModifiers::NONE))
             .unwrap();
-        assert_eq!(wm.panes.len(), 2);
+        assert_eq!(wm.pane_count(), 2);
 
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('¡'), KeyModifiers::NONE))
             .unwrap();
@@ -633,11 +628,11 @@ mod tests {
             KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
         )
         .unwrap();
-        assert!(wm.leader_pending);
+        assert!(wm.is_leader_pending());
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE))
             .unwrap();
-        assert!(!wm.leader_pending);
-        assert_eq!(wm.zoomed_pane, Some(1));
+        assert!(!wm.is_leader_pending());
+        assert_eq!(wm.zoomed_pane(), Some(1));
 
         // Unzoom via Leader + z
         handle_wm_key_event(
@@ -647,7 +642,7 @@ mod tests {
         .unwrap();
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE))
             .unwrap();
-        assert_eq!(wm.zoomed_pane, None);
+        assert_eq!(wm.zoomed_pane(), None);
 
         // Pin prompt to Bottom via Leader + b
         handle_wm_key_event(
@@ -665,13 +660,13 @@ mod tests {
             KeyEvent::new(KeyCode::Char('\\'), KeyModifiers::CONTROL),
         )
         .unwrap();
-        assert!(wm.quick_terminal.visible);
+        assert!(wm.is_quick_terminal_visible());
         handle_wm_key_event(
             &mut wm,
             KeyEvent::new(KeyCode::Char('\\'), KeyModifiers::CONTROL),
         )
         .unwrap();
-        assert!(!wm.quick_terminal.visible);
+        assert!(!wm.is_quick_terminal_visible());
 
         // 3. Readline word navigation (Alt+b / Option+Left, Alt+f / Option+Right, Alt+Backspace, Alt+d)
         //    in CommandPrompt does NOT move the prompt box or trigger hints when text is present
@@ -717,12 +712,12 @@ mod tests {
             InputRoutingMode::RawPtyPassthrough
         );
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)).unwrap();
-        assert!(!wm.help_visible);
+        assert!(!wm.is_help_visible());
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE)).unwrap();
-        assert!(!wm.quick_terminal.visible);
+        assert!(!wm.is_quick_terminal_visible());
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('v'), KeyModifiers::ALT))
             .unwrap();
-        assert_eq!(wm.panes.len(), 2);
+        assert_eq!(wm.pane_count(), 2);
 
         // Leader Ctrl+X ? still opens Help even from inside ALT_SCREEN!
         handle_wm_key_event(
@@ -732,6 +727,6 @@ mod tests {
         .unwrap();
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE))
             .unwrap();
-        assert!(wm.help_visible);
+        assert!(wm.is_help_visible());
     }
 }

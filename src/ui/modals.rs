@@ -46,10 +46,11 @@ pub(super) fn render_palette_modal(
         return;
     }
 
+    let (palette_query, palette_selected) = wm.palette_state().unwrap_or(("", 0));
     let items = wm.filtered_palette_items();
     let mut lines = Vec::new();
     lines.push(Line::from(Span::styled(
-        format!("Search > {}_", wm.palette_query),
+        format!("Search > {palette_query}_"),
         Style::default()
             .fg(Color::Rgb(255, 255, 85))
             .bg(palette.window_frame_bg)
@@ -57,7 +58,7 @@ pub(super) fn render_palette_modal(
     )));
 
     let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
-    let sel = wm.palette_selected.min(items.len().saturating_sub(1));
+    let sel = palette_selected.min(items.len().saturating_sub(1));
     let start = sel.saturating_sub(list_rows.saturating_sub(1));
     for (idx, (cmd, key, desc)) in items.iter().enumerate().skip(start).take(list_rows) {
         let is_sel = idx == sel;
@@ -455,7 +456,7 @@ pub(super) fn render_top_menubar(
     let bar_bg = Color::Rgb(170, 170, 170);
     let mut spans = Vec::new();
     for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
-        let is_open = wm.menubar_open_category == Some(idx);
+        let is_open = wm.menubar_open_category() == Some(idx);
         let (fg, bg) = if is_open {
             (Color::White, Color::Rgb(0, 128, 0))
         } else {
@@ -466,7 +467,7 @@ pub(super) fn render_top_menubar(
             Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
         ));
     }
-    if wm.broadcast_input {
+    if wm.is_broadcast_input() {
         spans.push(Span::styled(
             " 📡 BCAST ",
             Style::default()
@@ -645,7 +646,7 @@ pub(super) fn render_inspector_modal(
                 on_off(vt.is_backarrow_key_67()),
                 vt.kitty_keyboard_flags(),
                 on_off(pane.is_read_only()),
-                on_off(wm.broadcast_input),
+                on_off(wm.is_broadcast_input()),
             ),
         ),
         (
@@ -693,7 +694,7 @@ pub(super) fn render_inspector_modal(
     }
 
     let max_scroll = info_rows.len().saturating_sub(usize::from(inner.height));
-    let start = wm.inspector_scroll.min(max_scroll);
+    let start = wm.inspector_scroll().min(max_scroll);
     let mut lines = Vec::with_capacity(usize::from(inner.height));
     for (k, v) in info_rows
         .into_iter()

@@ -98,12 +98,12 @@ fn v030_quickselect_3270_field_hints_detects_urls_paths_ips_and_shas() {
 fn v030_inspector_modal_top_menubar_read_only_lock_and_broadcast_input() {
     let mut wm = WindowManager::new_headless(26, 96);
     wm.split_focused(SplitDirection::Vertical).unwrap();
-    assert_eq!(wm.panes.len(), 2);
+    assert_eq!(wm.pane_count(), 2);
 
     // Enable Top Menu Bar (:menubar on) and click "View" category on row 0
     let cmd = parse_colon_command(":menubar on").unwrap().unwrap();
     execute_wm_colon_command(&mut wm, cmd);
-    assert!(wm.config.show_top_menubar);
+    assert!(wm.config().show_top_menubar);
 
     let area = Rect::new(0, 0, 96, 26);
     handle_wm_mouse_event(
@@ -117,14 +117,14 @@ fn v030_inspector_modal_top_menubar_read_only_lock_and_broadcast_input() {
         area,
     )
     .unwrap();
-    assert!(wm.menubar_open_category.is_some());
+    assert!(wm.menubar_open_category().is_some());
 
     // Press Esc to close menu dropdown, then press F9 to open Live 3270 Terminal Inspector
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
-    assert!(wm.menubar_open_category.is_none());
+    assert!(wm.menubar_open_category().is_none());
 
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE)).unwrap();
-    assert!(wm.inspector_visible);
+    assert!(wm.is_inspector_visible());
 
     let mut buf = Buffer::empty(area);
     WorkspaceWidget::new(&wm).render(area, &mut buf);
@@ -135,41 +135,41 @@ fn v030_inspector_modal_top_menubar_read_only_lock_and_broadcast_input() {
 
     // Close inspector with F9
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE)).unwrap();
-    assert!(!wm.inspector_visible);
+    assert!(!wm.is_inspector_visible());
 
     // Lock Pane #1 as Read-Only (🔒 PROT), leave Pane #2 unlocked, and enable :broadcast
     wm.focus_and_raise(1);
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)).unwrap();
-    assert!(wm.panes.get(&1).unwrap().is_read_only());
+    assert!(wm.pane(1).unwrap().is_read_only());
 
     // Attempting to run a shell command in locked Pane #1 is blocked
     wm.active_pane_mut().prompt_mut().set_text("rm -rf /");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(wm.panes.get(&1).unwrap().vt().command_blocks().is_empty());
+    assert!(wm.pane(1).unwrap().vt().command_blocks().is_empty());
 
     // Focus Pane #2, enable :broadcast on, and submit a command -> fans out to unlocked Pane #2 while skipping locked Pane #1
     wm.focus_and_raise(2);
     let bcast_cmd = parse_colon_command(":broadcast on").unwrap().unwrap();
     execute_wm_colon_command(&mut wm, bcast_cmd);
-    assert!(wm.broadcast_input);
+    assert!(wm.is_broadcast_input());
 
     wm.active_pane_mut().prompt_mut().set_text("uptime");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm.panes.get(&1).unwrap().vt().command_blocks().len(), 0);
-    assert_eq!(wm.panes.get(&2).unwrap().vt().command_blocks().len(), 1);
+    assert_eq!(wm.pane(1).unwrap().vt().command_blocks().len(), 0);
+    assert_eq!(wm.pane(2).unwrap().vt().command_blocks().len(), 1);
     assert_eq!(
-        wm.panes.get(&2).unwrap().vt().command_blocks()[0].command,
+        wm.pane(2).unwrap().vt().command_blocks()[0].command,
         "uptime"
     );
 
     // Unlock Pane #1 and broadcast again -> both Pane #1 and Pane #2 receive the command
-    wm.panes.get_mut(&1).unwrap().set_read_only(false);
+    wm.pane_mut(1).unwrap().set_read_only(false);
     wm.active_pane_mut()
         .prompt_mut()
         .set_text("echo cluster-ready");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm.panes.get(&1).unwrap().vt().command_blocks().len(), 1);
-    assert_eq!(wm.panes.get(&2).unwrap().vt().command_blocks().len(), 2);
+    assert_eq!(wm.pane(1).unwrap().vt().command_blocks().len(), 1);
+    assert_eq!(wm.pane(2).unwrap().vt().command_blocks().len(), 2);
 }
 
 #[test]
@@ -181,17 +181,15 @@ fn v030_workspace_session_save_list_and_restore_roundtrip() {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
     let mut wm = WindowManager::new_headless(25, 80);
-    wm.config.session_dir = Some(tmp_dir.to_string_lossy().into_owned());
+    wm.config_mut().session_dir = Some(tmp_dir.to_string_lossy().into_owned());
     wm.split_focused(SplitDirection::Horizontal).unwrap();
     wm.split_focused(SplitDirection::Vertical).unwrap();
-    wm.layout_mode = WorkspaceLayoutMode::Stacked;
-    wm.panes
-        .get_mut(&1)
+    wm.set_layout_mode(WorkspaceLayoutMode::Stacked);
+    wm.pane_mut(1)
         .unwrap()
         .set_prompt_anchor(PromptAnchor::Bottom);
-    wm.panes.get_mut(&2).unwrap().set_read_only(true);
-    wm.panes
-        .get_mut(&3)
+    wm.pane_mut(2).unwrap().set_read_only(true);
+    wm.pane_mut(3)
         .unwrap()
         .prompt_mut()
         .history
@@ -203,23 +201,23 @@ fn v030_workspace_session_save_list_and_restore_roundtrip() {
 
     // Reset workspace to a single pane and restore 'prod_ops'
     let mut restored_wm = WindowManager::new_headless(25, 80);
-    restored_wm.config.session_dir = Some(tmp_dir.to_string_lossy().into_owned());
-    assert_eq!(restored_wm.panes.len(), 1);
+    restored_wm.config_mut().session_dir = Some(tmp_dir.to_string_lossy().into_owned());
+    assert_eq!(restored_wm.pane_count(), 1);
 
     let restore_cmd = parse_colon_command(":session restore prod_ops")
         .unwrap()
         .unwrap();
     execute_wm_colon_command(&mut restored_wm, restore_cmd);
 
-    assert_eq!(restored_wm.panes.len(), 3);
-    assert_eq!(restored_wm.layout_mode, WorkspaceLayoutMode::Stacked);
+    assert_eq!(restored_wm.pane_count(), 3);
+    assert_eq!(restored_wm.layout_mode(), WorkspaceLayoutMode::Stacked);
     assert_eq!(
-        restored_wm.panes.get(&1).unwrap().prompt().anchor,
+        restored_wm.pane(1).unwrap().prompt().anchor,
         PromptAnchor::Bottom
     );
-    assert!(restored_wm.panes.get(&2).unwrap().is_read_only());
+    assert!(restored_wm.pane(2).unwrap().is_read_only());
     assert_eq!(
-        restored_wm.panes.get(&3).unwrap().prompt().history,
+        restored_wm.pane(3).unwrap().prompt().history,
         vec!["cargo test".to_string()]
     );
 

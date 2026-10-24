@@ -14,17 +14,15 @@ fn snapshot_borland_turbo_vision_shadows_and_fkey_bar() {
     let mut wm = WindowManager::new_headless(16, 80);
     let area = Rect::new(0, 0, 80, 16);
 
-    wm.config.drop_shadows = true;
-    wm.config.show_dos_fkey_bar = true;
-    wm.layout_mode = WorkspaceLayoutMode::Stacked;
+    wm.config_mut().drop_shadows = true;
+    wm.config_mut().show_dos_fkey_bar = true;
+    wm.set_layout_mode(WorkspaceLayoutMode::Stacked);
 
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(b"BACKGROUND_WINDOW_TEXT_VISIBLE_UNDER_SHADOW_0123456789\r\n");
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
-    wm.panes
-        .get_mut(&p2)
+    wm.pane_mut(p2)
         .unwrap()
         .prompt_mut()
         .insert_str("echo BORLAND_TURBO_VISION");
@@ -52,18 +50,16 @@ fn snapshot_ibm_3279_amber_cp437_crosshair_hollow_caret() {
     let mut wm = WindowManager::new_headless(12, 80);
     let area = Rect::new(0, 0, 80, 12);
 
-    wm.config.theme = ThemePreset::Ibm3279Amber;
-    wm.config.glyphs = GlyphPack::Cp437;
-    wm.config.cursor_style = CaretStyle::BlinkingHollowBlock;
-    wm.config.crosshair_cursor = true;
-    wm.config.show_dos_fkey_bar = true;
+    wm.config_mut().theme = ThemePreset::Ibm3279Amber;
+    wm.config_mut().glyphs = GlyphPack::Cp437;
+    wm.config_mut().cursor_style = CaretStyle::BlinkingHollowBlock;
+    wm.config_mut().crosshair_cursor = true;
+    wm.config_mut().show_dos_fkey_bar = true;
 
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(b"MAINFRAME READY\r\nTSO LOGON\r\n");
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .prompt_mut()
         .insert_str("submit jcl");

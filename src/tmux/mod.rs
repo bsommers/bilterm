@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::pane::{CompositePane, PaneId};
+use crate::pane::PaneId;
 use crate::wm::WindowManager;
 
 /// Outer `$TMUX` environment metadata (`TMUX-01`).
@@ -262,12 +262,7 @@ impl TmuxControlBridge {
         if let Some(&id) = self.tmux_to_bilterm.get(&tmux_pane_id) {
             return id;
         }
-        let new_id = wm.panes.keys().max().copied().unwrap_or(1) + 1;
-        let (rows, cols) = wm.active_pane().vt().size();
-        let mut new_pane = CompositePane::new_headless(new_id, rows + 1, cols);
-        new_pane.set_title(format!("TMUX %{tmux_pane_id}"));
-        wm.panes.insert(new_id, new_pane);
-        wm.z_stack.push(new_id);
+        let new_id = wm.insert_tmux_pane(tmux_pane_id);
         self.tmux_to_bilterm.insert(tmux_pane_id, new_id);
         self.bilterm_to_tmux.insert(new_id, tmux_pane_id);
         new_id
@@ -279,7 +274,7 @@ impl TmuxControlBridge {
         match &ev {
             TmuxControlEvent::Output { pane_id, data } => {
                 let bilterm_id = self.ensure_tmux_pane(wm, *pane_id);
-                if let Some(pane) = wm.panes.get_mut(&bilterm_id) {
+                if let Some(pane) = wm.pane_mut(bilterm_id) {
                     pane.process_pty_output(data);
                 }
             }
@@ -422,12 +417,12 @@ mod tests {
 
         // %output %0 with octal \033 (ESC), \015 (\r), \012 (\n)
         bridge.handle_control_line(&mut wm, "%output %0 \\033[32mHELLO_TMUX\\033[0m\\015\\012");
-        assert!(wm.panes.get(&1).unwrap().vt().screen().contents().contains("HELLO_TMUX"));
+        assert!(wm.pane(1).unwrap().vt().screen().contents().contains("HELLO_TMUX"));
 
         // %output %1 spawns/maps a second CompositePane automatically
         bridge.handle_control_line(&mut wm, "%output %1 SECOND_TMUX_PANE\\015\\012");
-        assert_eq!(wm.panes.len(), 2);
-        assert!(wm.panes.get(&2).unwrap().vt().screen().contents().contains("SECOND_TMUX_PANE"));
+        assert_eq!(wm.pane_count(), 2);
+        assert!(wm.pane(2).unwrap().vt().screen().contents().contains("SECOND_TMUX_PANE"));
 
         let send_cmd = format_send_keys_hex(0, b"ls\n");
         assert_eq!(send_cmd, "send-keys -t %0 -H 6c 73 0a\n");

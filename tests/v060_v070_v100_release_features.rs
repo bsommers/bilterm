@@ -23,11 +23,11 @@ fn v060_command_palette_custom_keybindings_and_crt_scanlines_work() {
         "#,
     )
     .expect("valid v0.6.0 config.toml");
-    wm.config = cfg;
-    assert!(wm.config.crt_scanlines);
+    *wm.config_mut() = cfg;
+    assert!(wm.config().crt_scanlines);
 
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm.config.theme, ThemePreset::Ibm3279Amber);
+    assert_eq!(wm.config().theme, ThemePreset::Ibm3279Amber);
 
     // 2. Open Fuzzy Command Palette via Ctrl+P, filter for "broadcast", and press Enter
     handle_wm_key_event(
@@ -35,7 +35,7 @@ fn v060_command_palette_custom_keybindings_and_crt_scanlines_work() {
         KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
     )
     .unwrap();
-    assert!(wm.palette_visible);
+    assert!(wm.is_palette_visible());
 
     for ch in "bcast".chars() {
         handle_wm_key_event(
@@ -57,8 +57,8 @@ fn v060_command_palette_custom_keybindings_and_crt_scanlines_work() {
 
     // Press Enter to execute :broadcast from the Command Palette
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
-    assert!(!wm.palette_visible);
-    assert!(wm.broadcast_input);
+    assert!(!wm.is_palette_visible());
+    assert!(wm.is_broadcast_input());
 
     // 3. Verify GPU rasterizer applies CRT scanlines
     let mut gpu_renderer = GuiWorkspaceRenderer::new(8, 16);
@@ -94,7 +94,7 @@ fn v070_osc9_osc777_notifications_triggers_and_asciicast_v2_recorder_work() {
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap(),
         AppAction::Handled
     );
-    assert_eq!(wm.config.triggers, vec!["FATAL_ERR".to_string()]);
+    assert_eq!(wm.config().triggers, vec!["FATAL_ERR".to_string()]);
 
     // Render workspace and verify 🔔 notification badge appears in OIA bar
     let viewport = Rect::new(0, 0, 80, 20);

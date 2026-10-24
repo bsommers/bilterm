@@ -7,7 +7,7 @@ use crate::input::encode::encode_alternate_scroll_wheel;
 use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::vt::encode_osc52_clipboard;
-use crate::wm::{WindowManager, encode_sgr_mouse_local};
+use crate::wm::{Focus, WindowManager, encode_sgr_mouse_local};
 
 /// Routes SGR mouse events for intra-pane floating prompt dragging, height resizing,
 /// `[▲][▼]` pin badge clicks, `Ctrl+Click` URL yanking (`VAL-03`), `Alt+LeftDrag` rectangular canvas selection (`VAL-04`),
@@ -225,7 +225,7 @@ pub fn handle_wm_mouse_event(
     mouse: MouseEvent,
     screen_area: Rect,
 ) -> Result<AppAction> {
-    if wm.config.show_top_menubar
+    if wm.config().show_top_menubar
         && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
         && mouse.row == screen_area.y
     {
@@ -239,28 +239,25 @@ pub fn handle_wm_mouse_event(
             44..=50 => 5,
             _ => 6,
         };
-        if wm.menubar_open_category == Some(cat) {
-            wm.menubar_open_category = None;
+        if wm.menubar_open_category() == Some(cat) {
+            wm.set_menubar_open_category(None);
         } else {
-            wm.menubar_open_category = Some(cat);
-            wm.menubar_selected_item = 0;
+            wm.set_menubar_open_category(Some(cat));
         }
         return Ok(AppAction::Handled);
     }
-    let Some((hit_id, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, screen_area)
+    let Some((hit_focus, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, screen_area)
     else {
         return Ok(AppAction::Continue);
     };
 
-    if matches!(mouse.kind, MouseEventKind::Down(_)) && hit_id != 0 {
+    if matches!(mouse.kind, MouseEventKind::Down(_))
+        && let Focus::Pane(hit_id) = hit_focus
+    {
         wm.focus_and_raise(hit_id);
     }
 
-    let pane = if hit_id == 0 {
-        &mut wm.quick_terminal.pane
-    } else if let Some(p) = wm.panes.get_mut(&hit_id) {
-        p
-    } else {
+    let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
         return Ok(AppAction::Continue);
     };
 

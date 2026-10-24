@@ -4,10 +4,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
 use super::{WindowManager, WorkspaceLayoutMode};
+use crate::config::BiltermConfig;
 use crate::error::Result;
+use crate::pane::history_store::HistorySettings;
 use crate::pane::{CompositePane, PaneId, PromptAnchor};
 use crate::pty::PtyConfig;
 use crate::remote::{
@@ -42,6 +45,125 @@ pub struct SavedWorkspaceSession {
 }
 
 impl WindowManager {
+    /// Returns `(colon_cmd, shortcut, description)` entries matching `palette_query` ranked by `nucleo-matcher` (`v0.6.0`).
+    pub fn filtered_palette_items(&self) -> Vec<(&'static str, &'static str, &'static str)> {
+        use nucleo_matcher::{Config, Matcher, Utf32Str};
+        const CATALOG: &[(&str, &str, &str)] = &[
+            (":split h", "Ctrl+X - / F2", "Split focused pane horizontally (Top/Bottom)"),
+            (":split v", "Ctrl+X | / Alt+V", "Split focused pane vertically (Left/Right)"),
+            (":zoom", "Ctrl+X z / F5", "Toggle zoom/maximize on focused pane"),
+            (":layout stack", "Ctrl+X M / Alt+M", "Switch workspace to Z-Order Stacked Cascade"),
+            (":layout tile", "Ctrl+X M / Alt+M", "Switch workspace to Tiled Binary Split Tree"),
+            (":deck next", "Ctrl+X o / F6", "Shuffle Z-order window deck top-to-bottom"),
+            (":quake", "Ctrl+X q / Ctrl+\\", "Toggle persistent Guake drop-down quick terminal"),
+            (":inspector", "Ctrl+X i / F9", "Open Live 3270 Terminal Inspector modal"),
+            (":hints", "Ctrl+X f / F3", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
+            (":copy", "Ctrl+X [ / Alt+C", "Enter Vi Copy Mode & Rectangular Block Selection"),
+            (":lock", "Ctrl+X l / Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
+            (":broadcast", "—", "Toggle Synchronized Multi-Pane Input Broadcast"),
+            (":menubar", "—", "Toggle Top Borland Turbo Vision Menu Bar"),
+            (":crt", "—", "Toggle Retro CRT Phosphor Scanline Effect"),
+            (":mode cycle", "Ctrl+X e / F4", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
+            (":mode fixed", "Ctrl+X s / Alt+S", "Switch to Fixed (Non-Overlapping Docked) Command Prompt"),
+            (":mode float", "Ctrl+X t / Alt+T", "Switch to Floating Command Prompt over Terminal Canvas"),
+            (":mode terminal", "F12 / Ctrl+G", "Switch to Regular Terminal (Hide Command Prompt Box)"),
+            (":prompt split-top", "Ctrl+X s / Alt+S", "Non-overlapping Split Command Prompt at Top"),
+            (":prompt top", "Ctrl+X t / Alt+T", "Pin Floating Command Prompt to Top"),
+            (":prompt bottom", "Ctrl+X b / Alt+B", "Pin Floating Command Prompt to Bottom"),
+            (":crosshair full", "Ctrl+X x / Alt+X", "Enable Full-Screen IBM 3270 Cross-Hair Cursor"),
+            (":spotlight", "Alt+O", "Cycle Focal Spotlight (Circle/Ellipse × Fuzzy/Pixelated)"),
+            (":spotlight ellipse fuzzy", "Alt+O", "Enable Elliptical Fuzzy Focal Spotlight"),
+            (":spotlight ellipse pixel", "Alt+O", "Enable Elliptical Pixelated Character-Block Spotlight"),
+            (":spotlight circle pixel", "Alt+O", "Enable Circular Pixelated Character-Block Spotlight"),
+            (":spotlight +", "Alt+Shift+]", "Grow Focal Spotlight Radius (+4 cols, +1 row)"),
+            (":spotlight -", "Alt+Shift+[", "Shrink Focal Spotlight Radius (-4 cols, -1 row)"),
+            (":spotlight off", "—", "Disable Focal Spotlight"),
+            (":focalzoom", "Alt+Shift+O", "Cycle Focal Zoom Lens (1.25x -> 1.50x -> 2.00x -> 3.00x -> Off)"),
+            (":focalzoom 1.5x fuzzy", "Alt+Shift+O", "Enable 1.50x Smooth Fuzzy Focal Zoom Lens"),
+            (":focalzoom 2x fuzzy", "Alt+Shift+O", "Enable 2.00x High Magnification Focal Zoom Lens"),
+            (":focalzoom 2x pixel", "—", "Enable 2.00x Pixelated Character-Block Focal Zoom Lens"),
+            (":focalzoom +", "—", "Step Focal Zoom Magnification Up (+0.25x)"),
+            (":focalzoom -", "—", "Step Focal Zoom Magnification Down (-0.25x)"),
+            (":focalzoom off", "—", "Disable Focal Zoom Lens"),
+            (":theme turbo-blue", "—", "Switch palette to Borland Turbo Vision Blue"),
+            (":theme 3278", "—", "Switch palette to IBM 3278 Phosphor Green"),
+            (":theme 3279", "—", "Switch palette to IBM 3279 Amber CRT"),
+            (":session save default", "—", "Save multi-pane workspace session to TOML"),
+            (":session restore default", "—", "Restore saved multi-pane workspace session"),
+            (":record start", "—", "Start Asciicast v2 (.cast) terminal recording"),
+            (":record stop", "—", "Stop Asciicast v2 (.cast) terminal recording"),
+            (":notifications clear", "—", "Clear OSC 9 / OSC 777 desktop notifications"),
+            (":remote list", "—", "List local and remote SSH / tmux-CC fleet sessions"),
+            (":help", "Ctrl+X ? / F1", "Open Borland Turbo Vision Quick Reference Help"),
+            (":quit", "Ctrl+Q", "Cleanly exit Bilterm"),
+        ];
+        let q = self.palette_state().map(|(q, _)| q).unwrap_or("").trim();
+        if q.is_empty() {
+            return CATALOG.to_vec();
+        }
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let mut needle_buf = Vec::new();
+        let needle = Utf32Str::new(q, &mut needle_buf);
+        let mut scored: Vec<(u16, (&'static str, &'static str, &'static str))> = CATALOG
+            .iter()
+            .filter_map(|&item| {
+                let combined = format!("{} {} {}", item.0, item.1, item.2);
+                let mut hay_buf = Vec::new();
+                let hay = Utf32Str::new(&combined, &mut hay_buf);
+                matcher.fuzzy_match(hay, needle).map(|score| (score, item))
+            })
+            .collect();
+        scored.sort_by_key(|a| std::cmp::Reverse(a.0));
+        scored.into_iter().map(|(_, item)| item).collect()
+    }
+
+    /// Propagates the active `ThemePalette` RGB values to all panes and queues unsolicited
+    /// `CSI ? 997 ; 1|2 n` notifications on any pane with `DECSET ?2031` active (`BEL-03`).
+    pub fn notify_theme_changed(&mut self) {
+        let pal = self.config.palette();
+        let to_rgb = |c: Color, fallback: (u8, u8, u8)| match c {
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::Black => (0x00, 0x00, 0x00),
+            Color::White => (0xFF, 0xFF, 0xFF),
+            _ => fallback,
+        };
+        let fg = to_rgb(pal.title_fg, (0xFF, 0xFF, 0xFF));
+        let bg = to_rgb(pal.window_frame_bg, (0x00, 0x00, 0x84));
+        let cur = to_rgb(pal.active_border_fg, (0xFF, 0xFF, 0x55));
+        for pane in self.panes.values_mut() {
+            pane.vt_mut().notify_color_scheme_changed(fg, bg, cur);
+            pane.flush_query_responses();
+        }
+        self.quick_terminal
+            .pane
+            .vt_mut()
+            .notify_color_scheme_changed(fg, bg, cur);
+    }
+
+    /// Replaces the active configuration (theme + history persistence settings) at startup or reload.
+    pub fn apply_config(&mut self, config: BiltermConfig) {
+        self.config = config;
+        self.notify_theme_changed();
+        self.sync_history_config();
+        self.rebalance_scrollback(Instant::now());
+    }
+
+    /// Propagates the `history_*` config settings to all panes, reloading prompt history for
+    /// panes whose session file location (dir / session name) changed.
+    pub fn sync_history_config(&mut self) {
+        let settings = self.config.history_settings();
+        for pane in self.panes.values_mut() {
+            Self::attach_history(pane, &settings);
+        }
+        Self::attach_history(&mut self.quick_terminal.pane, &settings);
+    }
+
+    pub(super) fn attach_history(pane: &mut CompositePane, settings: &HistorySettings) {
+        if pane.history_store_mut().apply_settings(settings) {
+            pane.restore_persisted_history();
+        }
+    }
+
     /// Spawns a new `CompositePane` connected to a remote SSH host or configured `[remotes.<name>]` profile (`v1.4.0`).
     pub fn spawn_ssh_pane(
         &mut self,
@@ -208,6 +330,26 @@ impl WindowManager {
             }
         }
         executed_panes
+    }
+
+    /// Disconnects a fleet node by name and removes any associated SSH/tmux panes via [`Self::remove_pane`] (`ARCH-R02`).
+    pub fn disconnect_fleet_node(&mut self, name: &str) -> bool {
+        if let Some(node) = self.fleet.nodes.remove(name) {
+            match node.kind {
+                FleetNodeKind::SshPane { pane_id, .. } => {
+                    let _ = self.remove_pane(pane_id);
+                }
+                FleetNodeKind::SshTmux { pane_ids, .. } => {
+                    for pid in pane_ids {
+                        let _ = self.remove_pane(pid);
+                    }
+                }
+                FleetNodeKind::HostProfile { .. } => {}
+            }
+            true
+        } else {
+            false
+        }
     }
 
     pub fn session_dir_fallback_in(base: &Path) -> Result<PathBuf> {
@@ -382,16 +524,11 @@ impl WindowManager {
     /// budget and host memory pressure. Panes on the alternate screen are deferred.
     pub fn rebalance_scrollback(&mut self, now: Instant) {
         let policy = self.scrollback.begin(&self.config.scrollback, now);
-        let live: BTreeSet<PaneId> = self.panes.keys().copied().chain([0]).collect();
+        let live: BTreeSet<PaneId> = self.panes.keys().copied().collect();
         self.scrollback.retain_seen(&live);
-        let mut vts: Vec<(PaneId, &mut crate::vt::VtParser)> = self
-            .panes
-            .iter_mut()
-            .map(|(id, pane)| (*id, pane.vt_mut()))
-            .chain(std::iter::once((0, self.quick_terminal.pane.vt_mut())))
-            .collect();
-        for (id, vt) in vts.iter_mut() {
-            if vt.is_alternate_screen() || !self.scrollback.mark_seen(*id) {
+        for (&id, pane) in self.panes.iter_mut() {
+            let vt = pane.vt_mut();
+            if vt.is_alternate_screen() || !self.scrollback.mark_seen(id) {
                 continue;
             }
             let initial = policy.initial_capacity(vt.size().1);
@@ -399,15 +536,30 @@ impl WindowManager {
                 vt.set_scrollback_capacity(initial);
             }
         }
+        {
+            let qvt = self.quick_terminal.pane.vt_mut();
+            if !qvt.is_alternate_screen() && self.scrollback.mark_quick_seen() {
+                let initial = policy.initial_capacity(qvt.size().1);
+                if qvt.scrollback_capacity() != initial && qvt.scrollback_used_rows() <= initial {
+                    qvt.set_scrollback_capacity(initial);
+                }
+            }
+        }
+        let mut vts: Vec<&mut crate::vt::VtParser> = self
+            .panes
+            .values_mut()
+            .map(|pane| pane.vt_mut())
+            .chain(std::iter::once(self.quick_terminal.pane.vt_mut()))
+            .collect();
         let usages: Vec<PaneUsage> = vts
             .iter_mut()
-            .map(|(_, vt)| PaneUsage {
+            .map(|vt| PaneUsage {
                 used_rows: vt.scrollback_used_rows(),
                 capacity: vt.scrollback_capacity(),
                 cols: vt.size().1,
             })
             .collect();
-        for ((_, vt), target) in vts.iter_mut().zip(plan_capacities(&usages, &policy)) {
+        for (vt, target) in vts.iter_mut().zip(plan_capacities(&usages, &policy)) {
             if target != vt.scrollback_capacity() {
                 vt.set_scrollback_capacity(target);
             }

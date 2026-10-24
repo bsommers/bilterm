@@ -126,7 +126,7 @@ fn v120_mcp_server_protocol_exposes_and_executes_agent_tools() {
         .expect("tools/call response");
     assert!(call_resp.contains("\"isError\":false"));
     assert_eq!(
-        plane.wm.config.theme,
+        plane.wm.config().theme,
         bilterm::ui::theme::ThemePreset::Ibm3278Green
     );
 
@@ -137,7 +137,7 @@ fn v120_mcp_server_protocol_exposes_and_executes_agent_tools() {
         )
         .expect("tools/call send_keys response");
     assert!(key_resp.contains("\"isError\":false"));
-    assert!(plane.wm.palette_visible);
+    assert!(plane.wm.is_palette_visible());
 }
 
 #[tokio::test]
@@ -297,14 +297,13 @@ fn v140_remote_ssh_tmux_and_herdr_fleet_federation_work() {
     assert_eq!(
         plane
             .wm
-            .panes
-            .get(&2)
+            .pane(2)
             .and_then(|p| p.prompt().running_command.as_deref()),
         Some("systemctl status postgresql")
     );
 
     // 6. Verify OIA status bar renders 🌐 SSH:<target> badge for the SSH pane
-    let pane2 = plane.wm.panes.get(&2).expect("pane 2");
+    let pane2 = plane.wm.pane(2).expect("pane 2");
     let area = Rect::new(0, 0, 140, 10);
     let mut buf = Buffer::empty(area);
     CompositePaneWidget::new(pane2, true).render(area, &mut buf);

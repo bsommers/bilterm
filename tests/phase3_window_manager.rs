@@ -10,23 +10,19 @@ fn snapshot_hv_composite_splits() {
     let mut wm = WindowManager::new_headless(16, 80);
     let area = Rect::new(0, 0, 80, 16);
 
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(b"LEFT_PANE_OUTPUT\r\n");
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .prompt_mut()
         .insert_str("ls -la");
 
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
-    wm.panes
-        .get_mut(&p2)
+    wm.pane_mut(p2)
         .unwrap()
         .process_pty_output(b"RIGHT_PANE_OUTPUT\r\n");
-    wm.panes
-        .get_mut(&p2)
+    wm.pane_mut(p2)
         .unwrap()
         .prompt_mut()
         .insert_str("cargo test");
@@ -55,12 +51,11 @@ fn snapshot_z_order_stacked_cascade_and_deck_shuffle() {
 
     let _p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     let _p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
-    wm.layout_mode = WorkspaceLayoutMode::Stacked;
+    wm.set_layout_mode(WorkspaceLayoutMode::Stacked);
 
     // Shuffle deck top-to-bottom so Pane #2 becomes topmost active window
     assert_eq!(wm.shuffle_deck_next(), Some(2));
-    wm.panes
-        .get_mut(&2)
+    wm.pane_mut(2)
         .unwrap()
         .prompt_mut()
         .insert_str("echo TOP_OF_STACK_PANE_2");
@@ -85,13 +80,12 @@ fn snapshot_guake_quick_terminal_overlay() {
     let mut wm = WindowManager::new_headless(18, 80);
     let area = Rect::new(0, 0, 80, 18);
 
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(b"UNDER_PANE_1\r\nUNDER_PANE_2\r\nUNDER_PANE_3\r\nUNDER_PANE_4\r\nUNDER_PANE_5\r\nUNDER_PANE_6\r\nUNDER_PANE_7\r\nUNDER_PANE_8\r\nUNDER_PANE_9\r\nUNDER_PANE_10\r\n");
 
     wm.toggle_quick_terminal();
-    wm.quick_terminal
+    wm.quick_terminal_mut()
         .pane
         .prompt_mut()
         .insert_str("git status --short");
@@ -120,12 +114,10 @@ fn snapshot_wide_char_cjk_occlusion_boundary() {
     // Fill rows 0..3 with 2-column wide CJK characters ("漢字漢字...") straddling the floating prompt borders
     let wide_row = "漢字".repeat(15);
     let payload = format!("{wide_row}\r\n{wide_row}\r\n{wide_row}\r\n{wide_row}\r\n");
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(payload.as_bytes());
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .prompt_mut()
         .insert_str("echo cjk");

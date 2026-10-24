@@ -82,8 +82,7 @@ fn tmux_control_mode_events_and_dcs_passthrough_end_to_end() {
     );
     bridge.handle_control_line(&mut wm, "%output %0 LINE_FROM_TMUX_PANE_0\\015\\012");
     assert!(
-        wm.panes
-            .get(&1)
+        wm.pane(1)
             .unwrap()
             .vt()
             .screen()
@@ -102,28 +101,28 @@ fn end_to_end_colon_commands_and_keyboard_chords_across_window_manager() {
     };
 
     assert_eq!(run_colon(&mut wm, ":split v"), AppAction::Handled);
-    assert_eq!(wm.panes.len(), 2);
+    assert_eq!(wm.pane_count(), 2);
 
     assert_eq!(run_colon(&mut wm, ":theme 3278"), AppAction::Handled);
-    assert_eq!(wm.config.theme, ThemePreset::Ibm3278Green);
+    assert_eq!(wm.config().theme, ThemePreset::Ibm3278Green);
 
     assert_eq!(run_colon(&mut wm, ":glyphs nerd-font"), AppAction::Handled);
-    assert_eq!(wm.config.glyphs, GlyphPack::NerdFont);
+    assert_eq!(wm.config().glyphs, GlyphPack::NerdFont);
 
     assert_eq!(run_colon(&mut wm, ":cursor underscore"), AppAction::Handled);
-    assert_eq!(wm.config.cursor_style, CaretStyle::Underscore);
+    assert_eq!(wm.config().cursor_style, CaretStyle::Underscore);
 
     assert_eq!(run_colon(&mut wm, ":crosshair on"), AppAction::Handled);
-    assert!(wm.config.crosshair_cursor);
+    assert!(wm.config().crosshair_cursor);
 
     assert_eq!(run_colon(&mut wm, ":shadows on"), AppAction::Handled);
-    assert!(wm.config.drop_shadows);
+    assert!(wm.config().drop_shadows);
 
     assert_eq!(run_colon(&mut wm, ":fkeybar on"), AppAction::Handled);
-    assert!(wm.config.show_dos_fkey_bar);
+    assert!(wm.config().show_dos_fkey_bar);
 
     assert_eq!(run_colon(&mut wm, ":quake"), AppAction::Handled);
-    assert!(wm.quick_terminal.visible);
+    assert!(wm.quick_terminal().visible);
 
     assert_eq!(run_colon(&mut wm, ":quit"), AppAction::Quit);
 }

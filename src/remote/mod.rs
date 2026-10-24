@@ -309,6 +309,18 @@ impl FleetRegistry {
         self.nodes.remove(name).is_some()
     }
 
+    /// Removes any fleet node references to a closed/reaped `pane_id`.
+    pub fn remove_pane_references(&mut self, target_id: PaneId) {
+        self.nodes.retain(|_, node| match &mut node.kind {
+            FleetNodeKind::SshPane { pane_id, .. } => *pane_id != target_id,
+            FleetNodeKind::SshTmux { pane_ids, .. } => {
+                pane_ids.retain(|&pid| pid != target_id);
+                !pane_ids.is_empty()
+            }
+            FleetNodeKind::HostProfile { .. } => true,
+        });
+    }
+
     /// Resolves which `FleetNode` names match `selector`.
     pub fn matching_nodes(&self, selector: &FleetSelector) -> Vec<String> {
         self.nodes

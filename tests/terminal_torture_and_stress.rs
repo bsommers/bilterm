@@ -94,7 +94,7 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
         .unwrap();
 
         let mut buf = Buffer::empty(area);
-        CompositePaneWidget::with_config(app.wm.active_pane(), true, &app.wm.config)
+        CompositePaneWidget::with_config(app.wm.active_pane(), true, app.wm.config())
             .render(area, &mut buf);
         let p_rect = app.wm.active_pane().prompt_rect(area);
         assert_eq!(
@@ -105,16 +105,16 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
     }
 
     // Verify dotted and dashed horizontal border glyphs specifically
-    app.wm.config.prompt_outline = OutlineStyle::Dotted;
+    app.wm.config_mut().prompt_outline = OutlineStyle::Dotted;
     let mut buf = Buffer::empty(area);
-    CompositePaneWidget::with_config(app.wm.active_pane(), true, &app.wm.config)
+    CompositePaneWidget::with_config(app.wm.active_pane(), true, app.wm.config())
         .render(area, &mut buf);
     let p_rect = app.wm.active_pane().prompt_rect(area);
     assert_eq!(buf.cell((p_rect.x + 1, p_rect.y + p_rect.height - 1)).unwrap().symbol(), "┈");
 
-    app.wm.config.prompt_outline = OutlineStyle::Dashed;
+    app.wm.config_mut().prompt_outline = OutlineStyle::Dashed;
     let mut buf = Buffer::empty(area);
-    CompositePaneWidget::with_config(app.wm.active_pane(), true, &app.wm.config)
+    CompositePaneWidget::with_config(app.wm.active_pane(), true, app.wm.config())
         .render(area, &mut buf);
     assert_eq!(buf.cell((p_rect.x + 1, p_rect.y + p_rect.height - 1)).unwrap().symbol(), "┄");
 
@@ -127,8 +127,8 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
         )
         .unwrap();
     }
-    assert_eq!(app.wm.config.shadow_style, ShadowStyle::None);
-    assert!(!app.wm.config.drop_shadows);
+    assert_eq!(app.wm.config().shadow_style, ShadowStyle::None);
+    assert!(!app.wm.config().drop_shadows);
 
     app.wm
         .active_pane_mut()
@@ -139,11 +139,11 @@ fn selectable_outline_styles_and_themeable_dos_drop_shadows_render_accurately() 
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     )
     .unwrap();
-    assert_eq!(app.wm.config.shadow_style, ShadowStyle::SolidHalfBlock);
-    assert!(app.wm.config.drop_shadows);
+    assert_eq!(app.wm.config().shadow_style, ShadowStyle::SolidHalfBlock);
+    assert!(app.wm.config().drop_shadows);
 
     let mut buf = Buffer::empty(area);
-    CompositePaneWidget::with_config(app.wm.active_pane(), true, &app.wm.config)
+    CompositePaneWidget::with_config(app.wm.active_pane(), true, app.wm.config())
         .render(area, &mut buf);
     let right_shadow_x = p_rect.x + p_rect.width;
     assert_eq!(buf.cell((right_shadow_x, p_rect.y + 1)).unwrap().symbol(), "█");
@@ -229,7 +229,7 @@ fn terminal_torture_and_multi_pane_workspace_stress_test() {
     assert_eq!(cfg.prompt_outline, OutlineStyle::Rounded);
     assert_eq!(cfg.shadow_style, ShadowStyle::ThemeTinted);
     assert_eq!(cfg.resolved_prompt_anchor(), PromptAnchor::SplitTop);
-    app.wm.config = cfg;
+    *app.wm.config_mut() = cfg;
 
     // Stress 1: Multi-pane splits, layout switches, z-order shuffles, zoom, and Guake overlay via App::handle_crossterm_event
     let chords = [
@@ -597,8 +597,8 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         KeyModifiers::NONE,
     )))
     .unwrap();
-    assert!(app.wm.config.crosshair_cursor);
-    assert!(app.wm.config.crosshair_fullscreen);
+    assert!(app.wm.config().crosshair_cursor);
+    assert!(app.wm.config().crosshair_fullscreen);
 
     // 6. <F1> Interactive Help modal toggle and scrolling
     app.handle_crossterm_event(Event::Key(KeyEvent::new(
@@ -606,7 +606,7 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         KeyModifiers::NONE,
     )))
     .unwrap();
-    assert!(app.wm.help_visible);
+    assert!(app.wm.is_help_visible());
     let mut buf = Buffer::empty(area);
     WorkspaceWidget::new(&app.wm).render(area, &mut buf);
     assert!(buffer_to_snapshot_string(&buf).contains("TURBO VISION HELP"));
@@ -621,5 +621,5 @@ fn prompt_width_resize_scrolling_running_banner_history_popup_f1_help_and_fullsc
         KeyModifiers::NONE,
     )))
     .unwrap();
-    assert!(!app.wm.help_visible);
+    assert!(!app.wm.is_help_visible());
 }

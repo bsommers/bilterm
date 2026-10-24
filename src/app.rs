@@ -83,48 +83,25 @@ impl App {
     }
 
     pub fn poll_all_ptys(&mut self) {
-        let mut exited_ids = Vec::new();
-        for (&id, pane) in &mut self.wm.panes {
-            pane.poll_pty_events();
-            pane.refresh_line_discipline();
-            if pane.has_exited() {
-                exited_ids.push(id);
-            }
-        }
-        for id in exited_ids {
-            if self.wm.panes.len() > 1 && self.wm.split_tree.remove_leaf(id) {
-                self.wm.panes.remove(&id);
-                self.wm.z_stack.remove(id);
-            }
-        }
-        self.wm.quick_terminal.pane.poll_pty_events();
-        self.wm.quick_terminal.pane.refresh_line_discipline();
-        self.wm.maybe_rebalance_scrollback(std::time::Instant::now());
+        self.wm.poll_all_ptys();
     }
 
     pub fn all_panes_exited(&self) -> bool {
-        self.wm.panes.values().all(CompositePane::has_exited)
+        self.wm.all_panes_exited()
     }
 
     pub fn flush_osc52_to_host(&mut self) -> Result<()> {
         let mut out = io::stdout();
         let mut wrote = false;
         let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
-        for pane in self
-            .wm
-            .panes
-            .values_mut()
-            .chain(std::iter::once(&mut self.wm.quick_terminal.pane))
-        {
-            for seq in pane.take_all_outbound_osc52() {
-                let wire = if inside_tmux {
-                    crate::tmux::wrap_tmux_dcs_passthrough(&seq)
-                } else {
-                    seq
-                };
-                out.write_all(wire.as_bytes())?;
-                wrote = true;
-            }
+        for seq in self.wm.drain_outbound_osc52() {
+            let wire = if inside_tmux {
+                crate::tmux::wrap_tmux_dcs_passthrough(&seq)
+            } else {
+                seq
+            };
+            out.write_all(wire.as_bytes())?;
+            wrote = true;
         }
         if wrote {
             out.flush()?;

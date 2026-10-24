@@ -166,11 +166,10 @@ impl AutomationControlPlane {
         pane_id: usize,
         bytes: &[u8],
     ) -> std::result::Result<(), String> {
-        let triggers = self.wm.config.triggers.clone();
+        let triggers = self.wm.config().triggers.clone();
         let pane = self
             .wm
-            .panes
-            .get_mut(&pane_id)
+            .pane_mut(pane_id)
             .ok_or_else(|| format!("pane #{pane_id} not found"))?;
         let prev_alt = pane.vt().is_alternate_screen();
         let prev_blocks = pane.vt().command_blocks().len();
@@ -299,8 +298,7 @@ impl AutomationControlPlane {
                     let expected = step.expected.as_deref().unwrap_or("");
                     let pane = self
                         .wm
-                        .panes
-                        .get(&pane_id)
+                        .pane(pane_id)
                         .ok_or_else(|| format!("step {step_num}: pane #{pane_id} not found"))?;
                     let (rows, _) = pane.vt().size();
                     let found =
@@ -331,8 +329,7 @@ impl AutomationControlPlane {
                     let expected_code = step.exit_code.unwrap_or(0);
                     let pane = self
                         .wm
-                        .panes
-                        .get(&pane_id)
+                        .pane(pane_id)
                         .ok_or_else(|| format!("step {step_num}: pane #{pane_id} not found"))?;
                     let actual = pane.vt().command_blocks().last().and_then(|b| b.exit_code);
                     if actual != Some(expected_code) {
@@ -682,7 +679,7 @@ path = "pb.ppm"
 
         let resp = plane.handle_jsonrpc_line(&req);
         assert!(resp.contains("error"), "expected error response: {resp}");
-        assert!(!plane.wm.fleet.nodes.contains_key("bad_node"));
+        assert!(!plane.wm.fleet().nodes.contains_key("bad_node"));
     }
 
     #[test]
@@ -707,6 +704,6 @@ path = "pb.ppm"
 
         let resp = plane.handle_jsonrpc_line(&req);
         assert!(!resp.contains("error"), "expected success: {resp}");
-        assert!(plane.wm.fleet.nodes.contains_key("good_node"));
+        assert!(plane.wm.fleet().nodes.contains_key("good_node"));
     }
 }

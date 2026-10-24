@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::input::AppAction;
 use crate::pane::{CompositePane, CopySelectionKind};
 use crate::vt::sanitize_paste_bytes;
-use crate::wm::WindowManager;
+use crate::wm::{Modal, WindowManager};
 
 pub(super) fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
     let len = pane.hints_mode().hints.len();
@@ -234,7 +234,7 @@ pub(super) fn execute_menubar_selection(
     category: usize,
     item: usize,
 ) -> Result<AppAction> {
-    wm.menubar_open_category = None;
+    wm.close_modal();
     let cmd_str = match (category, item) {
         (0, 0) => ":inspector",
         (0, 1) => ":session save default",
@@ -275,125 +275,130 @@ pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    // If the <F1> Help modal is open, route keys to it first
-    if wm.help_visible {
-        match key.code {
-            KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => {
-                wm.help_visible = false;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                wm.help_scroll = wm.help_scroll.saturating_sub(1);
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                wm.help_scroll = wm.help_scroll.saturating_add(1);
-            }
-            KeyCode::PageUp => {
-                wm.help_scroll = wm.help_scroll.saturating_sub(8);
-            }
-            KeyCode::PageDown => {
-                wm.help_scroll = wm.help_scroll.saturating_add(8);
-            }
-            _ => {}
-        }
-        return Ok(Some(AppAction::Handled));
-    }
-
-    // If the <F9> Live 3270 Terminal Inspector modal is open, route keys to it first (BEL-01)
-    if wm.inspector_visible {
-        match key.code {
-            KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => {
-                wm.inspector_visible = false;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                wm.inspector_scroll = wm.inspector_scroll.saturating_sub(1);
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                wm.inspector_scroll = wm.inspector_scroll.saturating_add(1);
-            }
-            KeyCode::PageUp => {
-                wm.inspector_scroll = wm.inspector_scroll.saturating_sub(6);
-            }
-            KeyCode::PageDown => {
-                wm.inspector_scroll = wm.inspector_scroll.saturating_add(6);
-            }
-            _ => {}
-        }
-        return Ok(Some(AppAction::Handled));
-    }
-
-    // If the Fuzzy Command Palette modal is open, route keys to it first (v0.6.0)
-    if wm.palette_visible {
-        match key.code {
-            KeyCode::Esc => {
-                wm.palette_visible = false;
-            }
-            KeyCode::Up => {
-                wm.palette_selected = wm.palette_selected.saturating_sub(1);
-            }
-            KeyCode::Down => {
-                let count = wm.filtered_palette_items().len();
-                if count > 0 {
-                    wm.palette_selected = (wm.palette_selected + 1).min(count - 1);
+    match wm.modal_mut() {
+        Modal::None => Ok(None),
+        Modal::Help { scroll } => {
+            match key.code {
+                KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => {
+                    wm.close_modal();
                 }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    *scroll = scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    *scroll = scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    *scroll = scroll.saturating_sub(8);
+                }
+                KeyCode::PageDown => {
+                    *scroll = scroll.saturating_add(8);
+                }
+                _ => {}
             }
-            KeyCode::Backspace => {
-                wm.palette_query.pop();
-                wm.palette_selected = 0;
+            Ok(Some(AppAction::Handled))
+        }
+        Modal::Inspector { scroll } => {
+            match key.code {
+                KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => {
+                    wm.close_modal();
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    *scroll = scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    *scroll = scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    *scroll = scroll.saturating_sub(6);
+                }
+                KeyCode::PageDown => {
+                    *scroll = scroll.saturating_add(6);
+                }
+                _ => {}
             }
-            KeyCode::Enter => {
-                let items = wm.filtered_palette_items();
-                let sel = items
-                    .get(wm.palette_selected)
-                    .or_else(|| items.first())
-                    .map(|&(cmd, _, _)| cmd);
-                wm.palette_visible = false;
-                if let Some(cmd_str) = sel
-                    && let Some(Ok(cmd)) = parse_colon_command(cmd_str)
-                {
-                    if execute_wm_colon_command(wm, cmd.clone()) {
-                        return Ok(Some(AppAction::Quit));
-                    }
-                    if execute_colon_command(wm.active_pane_mut(), cmd) {
-                        return Ok(Some(AppAction::Quit));
+            Ok(Some(AppAction::Handled))
+        }
+        Modal::Palette { .. } => {
+            match key.code {
+                KeyCode::Esc => {
+                    wm.close_modal();
+                }
+                KeyCode::Up => {
+                    if let Modal::Palette { selected, .. } = wm.modal_mut() {
+                        *selected = selected.saturating_sub(1);
                     }
                 }
+                KeyCode::Down => {
+                    let count = wm.filtered_palette_items().len();
+                    if count > 0
+                        && let Modal::Palette { selected, .. } = wm.modal_mut()
+                    {
+                        *selected = (*selected + 1).min(count - 1);
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Modal::Palette { query, selected } = wm.modal_mut() {
+                        query.pop();
+                        *selected = 0;
+                    }
+                }
+                KeyCode::Enter => {
+                    let selected_idx = wm.palette_state().map(|(_, s)| s).unwrap_or(0);
+                    let items = wm.filtered_palette_items();
+                    let sel = items
+                        .get(selected_idx)
+                        .or_else(|| items.first())
+                        .map(|&(cmd, _, _)| cmd);
+                    wm.close_modal();
+                    if let Some(cmd_str) = sel
+                        && let Some(Ok(cmd)) = parse_colon_command(cmd_str)
+                    {
+                        if execute_wm_colon_command(wm, cmd.clone()) {
+                            return Ok(Some(AppAction::Quit));
+                        }
+                        if execute_colon_command(wm.active_pane_mut(), cmd) {
+                            return Ok(Some(AppAction::Quit));
+                        }
+                    }
+                }
+                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    if let Modal::Palette { query, selected } = wm.modal_mut() {
+                        query.push(c);
+                        *selected = 0;
+                    }
+                }
+                _ => {}
             }
-            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                wm.palette_query.push(c);
-                wm.palette_selected = 0;
-            }
-            _ => {}
+            Ok(Some(AppAction::Handled))
         }
-        return Ok(Some(AppAction::Handled));
-    }
-
-    // If a top Borland Turbo Vision Menu Bar pull-down is open, route keys to it first (ECO-03)
-    if let Some(cat) = wm.menubar_open_category {
-        match key.code {
-            KeyCode::Esc => {
-                wm.menubar_open_category = None;
+        Modal::Menubar { category, item } => {
+            let cat = *category;
+            let sel = *item;
+            match key.code {
+                KeyCode::Esc => {
+                    wm.close_modal();
+                }
+                KeyCode::Left => {
+                    *category = (cat + 6) % 7;
+                    *item = 0;
+                }
+                KeyCode::Right => {
+                    *category = (cat + 1) % 7;
+                    *item = 0;
+                }
+                KeyCode::Up => {
+                    *item = sel.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    *item = (sel + 1).min(3);
+                }
+                KeyCode::Enter => {
+                    return execute_menubar_selection(wm, cat, sel).map(Some);
+                }
+                _ => {}
             }
-            KeyCode::Left => {
-                wm.menubar_open_category = Some((cat + 6) % 7);
-                wm.menubar_selected_item = 0;
-            }
-            KeyCode::Right => {
-                wm.menubar_open_category = Some((cat + 1) % 7);
-                wm.menubar_selected_item = 0;
-            }
-            KeyCode::Up => {
-                wm.menubar_selected_item = wm.menubar_selected_item.saturating_sub(1);
-            }
-            KeyCode::Down => {
-                wm.menubar_selected_item = (wm.menubar_selected_item + 1).min(3);
-            }
-            KeyCode::Enter => {
-                return execute_menubar_selection(wm, cat, wm.menubar_selected_item).map(Some);
-            }
-            _ => {}
+            Ok(Some(AppAction::Handled))
         }
-        return Ok(Some(AppAction::Handled));
     }
-
-    Ok(None)
 }

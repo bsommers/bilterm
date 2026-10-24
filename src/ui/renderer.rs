@@ -46,7 +46,7 @@ pub struct WorkspaceFrameSnapshot {
 impl WorkspaceFrameSnapshot {
     /// Captures a complete point-in-time [`WorkspaceFrameSnapshot`] from `wm` at `viewport`.
     pub fn capture(wm: &WindowManager, viewport: Rect) -> Self {
-        let workspace_area = if wm.config.show_dos_fkey_bar && viewport.height > 2 {
+        let workspace_area = if wm.config().show_dos_fkey_bar && viewport.height > 2 {
             Rect {
                 x: viewport.x,
                 y: viewport.y,
@@ -58,12 +58,12 @@ impl WorkspaceFrameSnapshot {
         };
 
         let rects = wm.compute_workspace_rects(workspace_area);
-        let top_id = wm.z_stack.top();
-        let qt_visible = wm.quick_terminal.visible;
+        let top_id = wm.z_stack().top();
+        let qt_visible = wm.is_quick_terminal_visible();
 
         let mut panes = Vec::with_capacity(rects.len());
         for (id, outer) in rects {
-            let Some(pane) = wm.panes.get(&id) else {
+            let Some(pane) = wm.pane(id) else {
                 continue;
             };
             let active = !qt_visible && top_id == Some(id);
@@ -78,15 +78,15 @@ impl WorkspaceFrameSnapshot {
                 prompt_rect,
                 status_bar_rect,
                 active,
-                z_rank: wm.z_stack.rank_of(id),
+                z_rank: wm.z_stack().rank_of(id),
                 grid: pane.vt().snapshot(),
                 graphics: pane.vt().graphic_placements().to_vec(),
             });
         }
 
         let quick_terminal = if qt_visible {
-            let qt_outer = wm.quick_terminal.overlay_rect(workspace_area);
-            let qt_pane = &wm.quick_terminal.pane;
+            let qt_outer = wm.quick_terminal().overlay_rect(workspace_area);
+            let qt_pane = &wm.quick_terminal().pane;
             Some(PaneFrameSnapshot {
                 id: qt_pane.id(),
                 title: qt_pane.title().to_string(),
@@ -107,10 +107,10 @@ impl WorkspaceFrameSnapshot {
 
         Self {
             viewport,
-            layout_mode: wm.layout_mode,
+            layout_mode: wm.layout_mode(),
             panes,
             quick_terminal,
-            help_visible: wm.help_visible,
+            help_visible: wm.is_help_visible(),
         }
     }
 }
@@ -432,7 +432,7 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
         surface.viewport_cells = viewport;
         surface.cell_width_px = self.cell_width_px;
         surface.cell_height_px = self.cell_height_px;
-        surface.crt_scanlines = wm.config.crt_scanlines;
+        surface.crt_scanlines = wm.config().crt_scanlines;
         surface.quads.clear();
         surface.glyphs.clear();
         surface.images.clear();
@@ -442,7 +442,7 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
 
         let cw = f32::from(self.cell_width_px);
         let ch = f32::from(self.cell_height_px);
-        let palette = wm.config.theme.palette();
+        let palette = wm.config().theme.palette();
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
 

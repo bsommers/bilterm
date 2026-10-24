@@ -302,8 +302,7 @@ impl AutomationControlPlane {
 
                 let pane = self
                     .wm
-                    .panes
-                    .get_mut(&target_id)
+                    .pane_mut(target_id)
                     .ok_or_else(|| format!("pane #{target_id} not found"))?;
                 if pane.is_read_only() {
                     return Err(format!("pane #{target_id} is locked read-only (🔒 PROT)"));
@@ -333,8 +332,7 @@ impl AutomationControlPlane {
                     .unwrap_or_else(|| self.wm.active_pane_id());
                 let pane = self
                     .wm
-                    .panes
-                    .get(&target_id)
+                    .pane(target_id)
                     .ok_or_else(|| format!("pane #{target_id} not found"))?;
                 let (rows, cols) = pane.vt().size();
                 let mut lines = Vec::with_capacity(rows as usize);
@@ -475,7 +473,7 @@ impl AutomationControlPlane {
                     ),
                     (
                         "pane_count",
-                        JsonValue::Number(self.wm.panes.len() as i64),
+                        JsonValue::Number(self.wm.pane_count() as i64),
                     ),
                 ]))
             }
@@ -602,17 +600,17 @@ impl AutomationControlPlane {
                 if let Some(ep) = params.get("rpc_endpoint").and_then(JsonValue::as_str) {
                     profile.rpc_endpoint = Some(ep.to_string());
                 }
-                self.wm.fleet.register_profile(profile);
+                self.wm.fleet_mut().register_profile(profile);
                 Ok(JsonValue::obj([
                     ("status", JsonValue::String("registered".to_string())),
                     ("name", JsonValue::String(name.to_string())),
-                    ("node_count", JsonValue::Number(self.wm.fleet.nodes.len() as i64)),
+                    ("node_count", JsonValue::Number(self.wm.fleet().nodes.len() as i64)),
                 ]))
             }
             "fleet.list" => {
                 let nodes: Vec<JsonValue> = self
                     .wm
-                    .fleet
+                    .fleet()
                     .nodes
                     .values()
                     .map(|n| {
@@ -647,7 +645,7 @@ impl AutomationControlPlane {
                     .ok_or_else(|| "missing 'command' parameter".to_string())?;
                 let selector = FleetSelector::parse(selector_str);
                 let panes = self.wm.exec_fleet_command(&selector, command);
-                let matched_nodes = self.wm.fleet.matching_nodes(&selector);
+                let matched_nodes = self.wm.fleet().matching_nodes(&selector);
                 for &pid in &panes {
                     self.push_event(AutomationEvent::CommandSubmitted {
                         pane_id: pid,
@@ -682,7 +680,7 @@ impl AutomationControlPlane {
                     .get("name")
                     .and_then(JsonValue::as_str)
                     .ok_or_else(|| "missing 'name' parameter".to_string())?;
-                let removed = self.wm.fleet.disconnect(name);
+                let removed = self.wm.disconnect_fleet_node(name);
                 Ok(JsonValue::obj([
                     ("removed", JsonValue::Bool(removed)),
                     ("name", JsonValue::String(name.to_string())),
@@ -693,12 +691,12 @@ impl AutomationControlPlane {
     }
 
     pub fn workspace_status_json(&self) -> JsonValue {
-        let layout_str = match self.wm.layout_mode {
+        let layout_str = match self.wm.layout_mode() {
             WorkspaceLayoutMode::Tiled => "tiled",
             WorkspaceLayoutMode::Stacked => "stacked",
         };
         let mut panes = Vec::new();
-        for (&id, pane) in &self.wm.panes {
+        for (&id, pane) in self.wm.panes() {
             let (rows, cols) = pane.vt().size();
             let (cur_r, cur_c) = pane.vt().screen().cursor_position();
             let input_mode = match pane.effective_routing_mode() {
@@ -737,20 +735,20 @@ impl AutomationControlPlane {
             ),
             (
                 "pane_count",
-                JsonValue::Number(self.wm.panes.len() as i64),
+                JsonValue::Number(self.wm.pane_count() as i64),
             ),
-            ("broadcast_input", JsonValue::Bool(self.wm.broadcast_input)),
+            ("broadcast_input", JsonValue::Bool(self.wm.is_broadcast_input())),
             (
                 "menu_bar_visible",
-                JsonValue::Bool(self.wm.config.show_top_menubar),
+                JsonValue::Bool(self.wm.config().show_top_menubar),
             ),
             (
                 "crt_scanlines",
-                JsonValue::Bool(self.wm.config.crt_scanlines),
+                JsonValue::Bool(self.wm.config().crt_scanlines),
             ),
             (
                 "palette_visible",
-                JsonValue::Bool(self.wm.palette_visible),
+                JsonValue::Bool(self.wm.is_palette_visible()),
             ),
             ("panes", JsonValue::Array(panes)),
         ])

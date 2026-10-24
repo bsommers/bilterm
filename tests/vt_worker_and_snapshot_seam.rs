@@ -142,15 +142,13 @@ fn dedicated_vt_worker_thread_pipes_live_portable_pty_into_grid_snapshot() {
 fn workspace_frame_snapshot_and_renderer_decouple_ui_from_terminal_core() {
     let viewport = Rect::new(0, 0, 100, 30);
     let mut wm = WindowManager::new_headless(30, 100);
-    wm.panes
-        .get_mut(&1)
+    wm.pane_mut(1)
         .unwrap()
         .process_pty_output(b"Pane 1 Snapshot Text\r\n");
     let p2 = wm
         .split_focused(bilterm::wm::split_tree::SplitDirection::Vertical)
         .expect("split vertical");
-    wm.panes
-        .get_mut(&p2)
+    wm.pane_mut(p2)
         .unwrap()
         .process_pty_output(b"Pane 2 Snapshot Text\r\n");
 

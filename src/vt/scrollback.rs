@@ -449,6 +449,7 @@ pub struct ScrollbackGovernor {
     probe: Box<dyn MemoryProbe>,
     last_run: Option<Instant>,
     seen: BTreeSet<usize>,
+    quick_seen: bool,
     last_policy: Option<ResolvedPolicy>,
 }
 
@@ -467,6 +468,7 @@ impl ScrollbackGovernor {
             probe,
             last_run: None,
             seen: BTreeSet::new(),
+            quick_seen: false,
             last_policy: None,
         }
     }
@@ -497,6 +499,11 @@ impl ScrollbackGovernor {
     /// Marks `id` as sized; returns `true` the first time a pane is seen.
     pub fn mark_seen(&mut self, id: usize) -> bool {
         self.seen.insert(id)
+    }
+
+    /// Marks the persistent quick terminal as sized; returns `true` the first time it is seen.
+    pub fn mark_quick_seen(&mut self) -> bool {
+        !std::mem::replace(&mut self.quick_seen, true)
     }
 
     /// Forgets panes that no longer exist.
