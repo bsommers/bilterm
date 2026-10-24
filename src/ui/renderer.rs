@@ -40,6 +40,7 @@ pub struct WorkspaceFrameSnapshot {
     pub layout_mode: WorkspaceLayoutMode,
     pub panes: Vec<PaneFrameSnapshot>,
     pub quick_terminal: Option<PaneFrameSnapshot>,
+    pub drawer_rect: Option<Rect>,
     pub help_visible: bool,
 }
 
@@ -110,6 +111,7 @@ impl WorkspaceFrameSnapshot {
             layout_mode: wm.layout_mode(),
             panes,
             quick_terminal,
+            drawer_rect: wm.drawer_rect(workspace_area),
             help_visible: wm.is_help_visible(),
         }
     }

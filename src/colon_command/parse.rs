@@ -4,7 +4,7 @@ use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
-use crate::wm::WorkspaceLayoutMode;
+use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
 
 /// Parses an input string starting with `:` into a `ColonCommand`.
 /// Returns `None` if `input` does not start with `:` or is not a recognized internal command.
@@ -560,6 +560,62 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             _ => Some(Err("Usage: :scrollback [clear]".to_string())),
         },
         "raw" => Some(Ok(ColonCommand::RawToggle)),
+        "drawer" | "sidebar" | "panels" => match parts.get(1).copied() {
+            None | Some("toggle") => Some(Ok(ColonCommand::DrawerToggle)),
+            Some("focus" | "open" | "show") => Some(Ok(ColonCommand::DrawerFocus)),
+            Some("left") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Left)))),
+            Some("right") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Right)))),
+            Some("top") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Top)))),
+            Some("bottom" | "bot") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Bottom)))),
+            Some("edge" | "dock") => match parts.get(2).copied() {
+                Some("left") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Left)))),
+                Some("right") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Right)))),
+                Some("top") => Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Top)))),
+                Some("bottom" | "bot") => {
+                    Some(Ok(ColonCommand::DrawerDock(Some(DrawerEdge::Bottom))))
+                }
+                None => Some(Ok(ColonCommand::DrawerDock(None))),
+                _ => Some(Err(
+                    "Usage: :drawer edge [left|right|top|bottom]".to_string(),
+                )),
+            },
+            Some("fixed" | "pin") => Some(Ok(ColonCommand::DrawerVisibility(Some(
+                DrawerVisibilityMode::Fixed,
+            )))),
+            Some("autohide" | "auto" | "auto-hide") => Some(Ok(ColonCommand::DrawerVisibility(
+                Some(DrawerVisibilityMode::AutoHide),
+            ))),
+            Some("ondemand" | "on-demand") => Some(Ok(ColonCommand::DrawerVisibility(Some(
+                DrawerVisibilityMode::OnDemand,
+            )))),
+            Some("float" | "overlay") => Some(Ok(ColonCommand::DrawerLayout(Some(
+                DrawerLayoutMode::Overlay,
+            )))),
+            Some("push" | "bump") => {
+                Some(Ok(ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Push))))
+            }
+            Some("mode" | "layout") => match parts.get(2).copied() {
+                Some("float" | "overlay") => Some(Ok(ColonCommand::DrawerLayout(Some(
+                    DrawerLayoutMode::Overlay,
+                )))),
+                Some("push" | "bump") => {
+                    Some(Ok(ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Push))))
+                }
+                None => Some(Ok(ColonCommand::DrawerLayout(None))),
+                _ => Some(Err("Usage: :drawer mode [float|push]".to_string())),
+            },
+            Some("size" | "width" | "height") => {
+                if let Some(n) = parts.get(2).and_then(|s| s.parse::<u16>().ok()) {
+                    Some(Ok(ColonCommand::DrawerSize(n)))
+                } else {
+                    Some(Err("Usage: :drawer size <cols_or_rows>".to_string()))
+                }
+            }
+            _ => Some(Err(
+                "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|size <n>]"
+                    .to_string(),
+            )),
+        },
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
     }

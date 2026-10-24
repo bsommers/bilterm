@@ -738,6 +738,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.config_mut().show_dos_fkey_bar = val.unwrap_or(!wm.config().show_dos_fkey_bar);
             false
         }
+        ref drawer_act @ (ColonCommand::DrawerToggle
+        | ColonCommand::DrawerFocus
+        | ColonCommand::DrawerDock(_)
+        | ColonCommand::DrawerVisibility(_)
+        | ColonCommand::DrawerLayout(_)
+        | ColonCommand::DrawerSize(_)) => {
+            wm.execute_drawer_action(drawer_act);
+            false
+        }
         other => execute_colon_command(wm.active_pane_mut(), other),
     }
 }

@@ -270,11 +270,40 @@ pub(super) fn execute_menubar_selection(
     Ok(AppAction::Handled)
 }
 
-/// Handles active WindowManager modal overlays (`<F1>` Help, `<F9>` Inspector, Fuzzy Command Palette, and Top Menu Bar).
+/// Handles active WindowManager modal overlays (`<F1>` Help, `<F9>` Inspector, Fuzzy Command Palette, Top Menu Bar, and Slide-Out Drawer).
 pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
+    if wm.drawer().focused {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => wm.close_drawer(),
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::Right | KeyCode::Char('l') => {
+                wm.drawer_select_next();
+            }
+            KeyCode::Up | KeyCode::Char('k') | KeyCode::Left | KeyCode::Char('h') => {
+                wm.drawer_select_prev();
+            }
+            KeyCode::Enter => wm.drawer_activate_selected(true),
+            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Char('x') | KeyCode::Delete => {
+                wm.drawer_close_selected_pane();
+            }
+            KeyCode::Char('z') => wm.drawer_zoom_selected_pane(),
+            KeyCode::Char('d') => {
+                wm.set_drawer_edge(None);
+            }
+            KeyCode::Char('m') => {
+                wm.set_drawer_layout(None);
+            }
+            KeyCode::Char('p') => {
+                wm.set_drawer_visibility(None);
+            }
+            _ => {}
+        }
+        return Ok(Some(AppAction::Handled));
+    }
+
     match wm.modal_mut() {
         Modal::None => Ok(None),
         Modal::Help { scroll } => {

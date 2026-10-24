@@ -1,5 +1,6 @@
 pub mod chrome;
 pub mod cursor;
+pub mod drawer;
 pub mod glyphs;
 pub mod modals;
 pub mod occlusion;
@@ -7,6 +8,7 @@ pub mod renderer;
 pub mod status_bar;
 pub mod theme;
 
+pub use drawer::render_workspace_drawer;
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
 
 use ratatui::buffer::Buffer;
@@ -544,6 +546,9 @@ impl Widget for WorkspaceWidget<'_> {
                 CompositePaneWidget::with_config(pane, is_active, cfg).render(outer, buf);
             }
         }
+
+        // Render `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
+        render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
         if qt_visible {

@@ -7,7 +7,7 @@ use crate::input::encode::encode_alternate_scroll_wheel;
 use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::vt::encode_osc52_clipboard;
-use crate::wm::{Focus, WindowManager, encode_sgr_mouse_local};
+use crate::wm::{DrawerEdge, Focus, WindowManager, encode_sgr_mouse_local, rect_contains};
 
 /// Routes SGR mouse events for intra-pane floating prompt dragging, height resizing,
 /// `[▲][▼]` pin badge clicks, `Ctrl+Click` URL yanking (`VAL-03`), `Alt+LeftDrag` rectangular canvas selection (`VAL-04`),
@@ -246,7 +246,21 @@ pub fn handle_wm_mouse_event(
         }
         return Ok(AppAction::Handled);
     }
-    let Some((hit_focus, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, screen_area)
+
+    let top_off = u16::from(wm.config().show_top_menubar && screen_area.height > 3);
+    let bot_off = u16::from(wm.config().show_dos_fkey_bar && screen_area.height > 2 + top_off);
+    let workspace_area = Rect {
+        x: screen_area.x,
+        y: screen_area.y + top_off,
+        width: screen_area.width,
+        height: screen_area.height.saturating_sub(top_off + bot_off).max(1),
+    };
+
+    if let Some(action) = handle_drawer_mouse_event(wm, mouse, workspace_area) {
+        return Ok(action);
+    }
+
+    let Some((hit_focus, _outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area)
     else {
         return Ok(AppAction::Continue);
     };
@@ -275,4 +289,105 @@ pub fn handle_wm_mouse_event(
     }
 
     handle_mouse_event(pane, mouse, inner)
+}
+
+fn handle_drawer_mouse_event(
+    wm: &mut WindowManager,
+    mouse: MouseEvent,
+    workspace_area: Rect,
+) -> Option<AppAction> {
+    match mouse.kind {
+        MouseEventKind::Moved => {
+            if wm.update_drawer_hover(mouse.column, mouse.row, workspace_area) {
+                return Some(AppAction::Handled);
+            }
+            return None;
+        }
+        MouseEventKind::Drag(MouseButton::Left) if wm.drawer().resizing_drag => {
+            let new_size = match wm.drawer_config().edge {
+                DrawerEdge::Left => mouse.column.saturating_sub(workspace_area.x) + 1,
+                DrawerEdge::Right => workspace_area
+                    .x
+                    .saturating_add(workspace_area.width)
+                    .saturating_sub(mouse.column),
+                DrawerEdge::Top => mouse.row.saturating_sub(workspace_area.y) + 1,
+                DrawerEdge::Bottom => workspace_area
+                    .y
+                    .saturating_add(workspace_area.height)
+                    .saturating_sub(mouse.row),
+            };
+            wm.resize_drawer(new_size);
+            let _ = wm.resize_all(workspace_area);
+            return Some(AppAction::Handled);
+        }
+        MouseEventKind::Up(MouseButton::Left) if wm.drawer().resizing_drag => {
+            wm.drawer_mut().resizing_drag = false;
+            return Some(AppAction::Handled);
+        }
+        _ => {}
+    }
+
+    let dr = wm.drawer_rect(workspace_area)?;
+    if !rect_contains(dr, mouse.column, mouse.row) {
+        if matches!(mouse.kind, MouseEventKind::Down(_)) && wm.drawer().focused {
+            wm.drawer_mut().focused = false;
+        }
+        return None;
+    }
+
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {
+            let edge = wm.drawer_config().edge;
+            let on_resize_border = match edge {
+                DrawerEdge::Left => mouse.column == dr.x + dr.width.saturating_sub(1),
+                DrawerEdge::Right => mouse.column == dr.x,
+                DrawerEdge::Top => mouse.row == dr.y + dr.height.saturating_sub(1),
+                DrawerEdge::Bottom => mouse.row == dr.y,
+            };
+            if on_resize_border {
+                wm.drawer_mut().resizing_drag = true;
+                return Some(AppAction::Handled);
+            }
+
+            // Header bar click: close button `[▪]` on right or cycle edge/mode/pin badges
+            if mouse.row == dr.y {
+                let rel_x = mouse.column.saturating_sub(dr.x);
+                if rel_x >= dr.width.saturating_sub(5) {
+                    wm.close_drawer();
+                } else if rel_x < 17 {
+                    wm.set_drawer_edge(None);
+                } else if rel_x < 26 {
+                    wm.set_drawer_layout(None);
+                } else {
+                    wm.set_drawer_visibility(None);
+                }
+                let _ = wm.resize_all(workspace_area);
+                return Some(AppAction::Handled);
+            }
+
+            // Row click inside vertical or horizontal drawer
+            wm.drawer_mut().focused = true;
+            if edge.is_vertical() {
+                let rel_row = usize::from(mouse.row.saturating_sub(dr.y + 1));
+                let rows_len = wm.drawer_rows().len();
+                if rel_row < rows_len {
+                    wm.drawer_mut().selected_index = rel_row;
+                    wm.drawer_activate_selected(false);
+                }
+            } else {
+                wm.drawer_select_next();
+                wm.drawer_activate_selected(false);
+            }
+            Some(AppAction::Handled)
+        }
+        MouseEventKind::ScrollUp => {
+            wm.drawer_select_prev();
+            Some(AppAction::Handled)
+        }
+        MouseEventKind::ScrollDown => {
+            wm.drawer_select_next();
+            Some(AppAction::Handled)
+        }
+        _ => Some(AppAction::Handled),
+    }
 }

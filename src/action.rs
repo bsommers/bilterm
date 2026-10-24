@@ -8,7 +8,7 @@ use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
-use crate::wm::WorkspaceLayoutMode;
+use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -126,6 +126,12 @@ pub enum Action {
         command: String,
     },
     RemoteDisconnect(String),
+    DrawerToggle,
+    DrawerFocus,
+    DrawerDock(Option<DrawerEdge>),
+    DrawerVisibility(Option<DrawerVisibilityMode>),
+    DrawerLayout(Option<DrawerLayoutMode>),
+    DrawerSize(u16),
     Quit,
 }
 
@@ -261,6 +267,12 @@ mod tests {
             Action::RemoteList => Some(":remote list"),
             Action::RemoteExec { .. } => Some(":remote exec @all uptime"),
             Action::RemoteDisconnect(_) => Some(":remote disconnect web1"),
+            Action::DrawerToggle => Some(":drawer"),
+            Action::DrawerFocus => Some(":drawer focus"),
+            Action::DrawerDock(_) => Some(":drawer left"),
+            Action::DrawerVisibility(_) => Some(":drawer fixed"),
+            Action::DrawerLayout(_) => Some(":drawer push"),
+            Action::DrawerSize(_) => Some(":drawer size 32"),
             Action::Quit => Some(":quit"),
         };
 
@@ -372,6 +384,12 @@ mod tests {
                 command: "uptime".to_string(),
             },
             Action::RemoteDisconnect("web1".to_string()),
+            Action::DrawerToggle,
+            Action::DrawerFocus,
+            Action::DrawerDock(Some(DrawerEdge::Left)),
+            Action::DrawerVisibility(Some(DrawerVisibilityMode::Fixed)),
+            Action::DrawerLayout(Some(DrawerLayoutMode::Push)),
+            Action::DrawerSize(32),
             Action::Quit,
         ];
 

@@ -712,4 +712,57 @@ impl WindowManager {
         }
         prev != self.drawer.hover_active
     }
+
+    /// Executes any `Action::Drawer*` variant (`ARCH-R01`, `DRW-01`).
+    pub fn execute_drawer_action(&mut self, action: &crate::action::Action) -> bool {
+        use crate::action::Action;
+        match action {
+            Action::DrawerToggle => {
+                self.toggle_drawer();
+                let vis = self.is_drawer_effectively_visible();
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Slide-Out Drawer: {}",
+                    if vis { "OPEN" } else { "HIDDEN" }
+                )));
+                true
+            }
+            Action::DrawerFocus => {
+                self.focus_drawer();
+                self.active_pane_mut()
+                    .set_status_message(Some("Slide-Out Drawer: FOCUSED".to_string()));
+                true
+            }
+            Action::DrawerDock(edge_opt) => {
+                let edge = self.set_drawer_edge(*edge_opt);
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Slide-Out Drawer Dock Edge: {}",
+                    edge.label()
+                )));
+                true
+            }
+            Action::DrawerVisibility(vis_opt) => {
+                let vis = self.set_drawer_visibility(*vis_opt);
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Slide-Out Drawer Visibility: {}",
+                    vis.label()
+                )));
+                true
+            }
+            Action::DrawerLayout(layout_opt) => {
+                let layout = self.set_drawer_layout(*layout_opt);
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Slide-Out Drawer Layout Mode: {}",
+                    layout.label()
+                )));
+                true
+            }
+            Action::DrawerSize(size) => {
+                self.resize_drawer(*size);
+                self.active_pane_mut()
+                    .set_status_message(Some(format!("Slide-Out Drawer Size: {size}")));
+                true
+            }
+            _ => false,
+        }
+    }
 }
