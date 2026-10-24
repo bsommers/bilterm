@@ -305,7 +305,12 @@ Plans:
   2. `GuiWorkspaceRenderer` / `GuiFrameSurface` dynamically scales cell pixel dimensions (`50%..=300%`), SVG typography (`font-size`), and PPM raster glyph scaling, recalculating viewport `(rows, cols)` for a given pixel window size and resizing panes accordingly.
   3. In TUI mode (`Ratatui`), `VtParser` and the canvas renderer support DEC double-width (`DECDWL` `\x1b#6`) and double-height (`DECDHL` `\x1b#3` / `\x1b#4`) line attributes plus multi-cell scaled text rendering, paired with the focal zoom magnification lens (`render_focal_zoom_cursor`) and optional host-terminal `OSC 50` / Kitty font-size passthrough.
 
-**Plans**: TBD (`/gsd-plan-phase 25`)
+**Plans**: 3 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — `src/ui/typography.rs`, `BiltermConfig` font scaling fields, DEC `DECDWL`/`DECDHL` line attributes in `VtParser`/`TerminalBackend`, and TUI multi-cell rendering (wave 1)
+- [ ] 25-02-PLAN.md — `GuiWorkspaceRenderer`/`GuiFrameSurface` dynamic cell/SVG/PPM scaling & pixel-window viewport calculation, `Action::Font*`, `:fontsize`, `Ctrl++`/`Ctrl+-`/`Ctrl+0`, and JSON-RPC/MCP `workspace.fontsize` (wave 2)
+- [ ] 25-03-PLAN.md — `tests/font_scaling_and_dec_line_attrs.rs` integration suite, documentation updates, and Phase 25 state sync (wave 3)
 
 ### Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas
 
@@ -352,5 +357,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 3/3 | Complete | 2026-10-24 |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 3/3 | Complete | 2026-10-24 |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 3/3 | Complete | 2026-10-24 |
-| 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
+| 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/3 | Planned | - |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 0/TBD | Not started | - |
