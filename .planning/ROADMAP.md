@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: First-Class `tmux` Integration, Cross-Platform Hardening, Test Verification & Documentation** - Outer `$TMUX` passthrough and collision avoidance, `tmux -CC` control mode session backend, Linux/macOS/Windows (`ConPTY`) parity, comprehensive test/snapshot coverage, architecture docs/ADRs, and extensive User Manual (completed 2026-10-20)
 - [x] **Phase 19: Security Hardening of the Automation & Shell-Integration Surfaces** - `0600` Unix socket default, bearer token gate for remote TCP, confined snapshot paths, `0700`/`0600` private temp files, and hardened SSH argv builders (completed 2026-10-23)
 - [x] **Phase 20: Mega-Module Decomposition** - Split `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams (`<= 800` lines per file, no `pane ↔ wm` cycle) (completed 2026-10-23)
-- [ ] **Phase 21: Encapsulated Workspace Invariants** - Private `WindowManager` and `CompositePane` fields, unified `remove_pane`/`submit_command`, `enum Modal`, and `enum Focus`
+- [x] **Phase 21: Encapsulated Workspace Invariants** - Private `WindowManager` and `CompositePane` fields, unified `remove_pane`/`submit_command`, `enum Modal`, and `enum Focus` (completed 2026-10-24)
 - [ ] **Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback), and `tmux`/`herdr` chord parity
 - [ ] **Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution** - Decouple `vt100_ctt` behind `TerminalBackend`, resolve `VtWorkerHandle`/`TmuxControlSubprocess`/`ghostty-vt`, and CI feature matrix
 - [ ] **Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes** - 4-edge (`Left`/`Right`/`Top`/`Bottom`) slide-out drawer with `OnDemand`/`Fixed`/`AutoHide` policies, `Overlay` (float) vs `Push` (auto-resize) layout modes, and live telemetry glyphs (`DRW-01`, `DRW-02`)
@@ -228,12 +228,12 @@ Plans:
   3. A single `CompositePane::submit_command` serves the prompt and `pane.exec`.
   4. Modal state is one `enum Modal`, focus is `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), and `leader_pending` exists in one place.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 21-01-PLAN.md — Encapsulate `CompositePane`: private fields, remove `pane.leader_pending`, deduplicate `new_base`, unified `submit_command`/`submit_prompt`, and method accessors across `src/` & `tests/` (wave 1)
-- [ ] 21-02-PLAN.md — Encapsulate `WindowManager`: private fields, `enum Modal`, `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), unified `remove_pane(id)` across close/reap/fleet, and method accessors across `src/` & `tests/` (wave 2)
-- [ ] 21-03-PLAN.md — Invariant & regression tests (reaping zoomed pane, fleet disconnect pane removal, `submit_command` parity, `Modal` exclusivity, `Focus` hit-testing) and Phase 21 state sync (wave 3)
+- [x] 21-01-PLAN.md — Encapsulate `CompositePane`: private fields, remove `pane.leader_pending`, deduplicate `new_base`, unified `submit_command`/`submit_prompt`, and method accessors across `src/` & `tests/` (wave 1)
+- [x] 21-02-PLAN.md — Encapsulate `WindowManager`: private fields, `enum Modal`, `enum Focus { Quick, Pane(PaneId) }` (no `PaneId 0` sentinel), unified `remove_pane(id)` across close/reap/fleet, and method accessors across `src/` & `tests/` (wave 2)
+- [x] 21-03-PLAN.md — Invariant & regression tests (reaping zoomed pane, fleet disconnect pane removal, `submit_command` parity, `Modal` exclusivity, `Focus` hit-testing) and Phase 21 state sync (wave 3)
 
 ### Phase 22: Unified `Action` Command Vocabulary & Data-Driven Keymap
 
@@ -332,7 +332,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 18. `v1.4.0` First-Class SSH Domains (`:ssh`), Remote Persistent `tmux -CC` (`:ssh-tmux`) & `herdr`-Style Central Fleet Federation (`REM-01`) | Complete | Complete | 2026-10-21 |
 | 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 7/7 | Complete | 2026-10-23 |
 | 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
-| 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/3 | Planned | - |
+| 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 3/3 | Complete | 2026-10-24 |
 | 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/TBD | Not started | - |

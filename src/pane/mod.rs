@@ -686,4 +686,41 @@ mod tests {
         prompt.yank();
         assert_eq!(prompt.lines[1], "echo second");
     }
+
+    #[test]
+    fn submit_command_and_submit_prompt_enforce_identical_invariants() {
+        let mut pane = CompositePane::new_headless(1, 25, 80);
+
+        pane.prompt_mut().set_text("echo from_prompt");
+        let submitted = pane.submit_prompt().expect("submit_prompt");
+        assert_eq!(submitted, "echo from_prompt");
+        assert_eq!(pane.prompt().text(), "");
+        assert_eq!(pane.prompt().history, vec!["echo from_prompt".to_string()]);
+        assert_eq!(
+            pane.prompt().running_command.as_deref(),
+            Some("echo from_prompt")
+        );
+        assert_eq!(pane.vt().command_blocks().len(), 1);
+
+        pane.submit_command("echo programmatic")
+            .expect("submit_command");
+        assert_eq!(
+            pane.prompt().history,
+            vec![
+                "echo from_prompt".to_string(),
+                "echo programmatic".to_string()
+            ]
+        );
+        assert_eq!(
+            pane.prompt().running_command.as_deref(),
+            Some("echo programmatic")
+        );
+        assert_eq!(pane.vt().command_blocks().len(), 2);
+
+        pane.set_read_only(true);
+        assert!(pane.submit_command("echo blocked").is_err());
+        pane.prompt_mut().set_text("echo blocked_prompt");
+        assert!(pane.submit_prompt().is_err());
+        assert_eq!(pane.vt().command_blocks().len(), 2);
+    }
 }

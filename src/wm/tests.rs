@@ -67,3 +67,77 @@ fn window_manager_splits_stacks_shuffles_raises_and_translates_sgr_mouse() {
     // Pane #2 outer starts at x=40, y=0; inner starts at x=41, y=1 -> local_col = 60 - 41 + 1 = 20, local_row = 5 - 1 + 1 = 5
     assert_eq!(String::from_utf8(sgr).unwrap(), "\x1b[<0;20;5M");
 }
+
+#[test]
+fn reap_exited_zoomed_pane_clears_zoom_and_updates_tree_and_z_stack() {
+    let mut wm = WindowManager::new_headless(25, 80);
+    let screen = Rect::new(0, 0, 80, 25);
+
+    let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
+    assert_eq!(p2, 2);
+    wm.toggle_zoom();
+    assert_eq!(wm.zoomed_pane(), Some(2));
+
+    wm.pane_mut(2)
+        .unwrap()
+        .ingest_pty_events(vec![crate::pty::PtyEvent::Exited(Some(0))]);
+    wm.poll_all_ptys();
+
+    assert_eq!(wm.pane_count(), 1);
+    assert_eq!(wm.zoomed_pane(), None);
+    assert_eq!(wm.active_pane_id(), 1);
+    assert_eq!(wm.compute_workspace_rects(screen), vec![(1, screen)]);
+}
+
+#[test]
+fn disconnect_fleet_node_removes_associated_ssh_pane_via_remove_pane() {
+    let mut wm = WindowManager::new_headless(25, 80);
+
+    let ssh_pid = wm
+        .spawn_ssh_pane("ubuntu@10.0.0.42", None, vec![])
+        .expect("spawn headless ssh pane");
+    assert_eq!(ssh_pid, 2);
+    wm.toggle_zoom();
+    assert_eq!(wm.zoomed_pane(), Some(2));
+
+    assert!(wm.disconnect_fleet_node("ubuntu@10.0.0.42-#2"));
+    assert_eq!(wm.pane_count(), 1);
+    assert_eq!(wm.zoomed_pane(), None);
+    assert_eq!(wm.active_pane_id(), 1);
+    assert!(wm.fleet().nodes.is_empty());
+}
+
+#[test]
+fn modal_enum_enforces_mutual_exclusion_and_focus_avoids_zero_sentinel() {
+    let mut wm = WindowManager::new_headless(25, 80);
+    assert_eq!(wm.modal(), &Modal::None);
+    assert_eq!(wm.focus(), Focus::Pane(1));
+    assert_eq!(wm.active_pane_id(), 1);
+
+    wm.toggle_help();
+    assert!(wm.is_help_visible());
+    assert!(!wm.is_inspector_visible());
+    assert!(!wm.is_palette_visible());
+
+    wm.toggle_inspector();
+    assert!(!wm.is_help_visible());
+    assert!(wm.is_inspector_visible());
+    assert!(!wm.is_palette_visible());
+
+    wm.toggle_palette();
+    assert!(!wm.is_help_visible());
+    assert!(!wm.is_inspector_visible());
+    assert!(wm.is_palette_visible());
+
+    wm.set_menubar_open_category(Some(2));
+    assert!(!wm.is_palette_visible());
+    assert_eq!(wm.menubar_open_category(), Some(2));
+
+    wm.close_modal();
+    assert_eq!(wm.modal(), &Modal::None);
+
+    wm.toggle_quick_terminal();
+    assert!(wm.is_quick_terminal_visible());
+    assert_eq!(wm.focus(), Focus::Quick);
+    assert_eq!(wm.active_pane_id(), 1);
+}
