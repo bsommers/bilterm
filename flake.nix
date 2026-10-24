@@ -32,6 +32,7 @@
           default = pkgs.mkShell {
             buildInputs = with pkgs; [
               cargo
+              cargo-hack
               rustc
               rustfmt
               clippy

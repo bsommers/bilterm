@@ -89,6 +89,10 @@ pub struct WindowManager {
     scrollback: ScrollbackGovernor,
     /// Whole-workspace Asciicast v2 (`.cast`) compositor frame recorder (`REC-02`).
     workspace_recorder: Mutex<Option<WorkspaceRecorder>>,
+    /// Optional attached `tmux -CC` Control Mode subprocess (`TMUX-03`, `ARCH-R05`).
+    pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
+    /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
+    pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
 }
 
 impl WindowManager {
@@ -132,6 +136,8 @@ impl WindowManager {
                 ScrollbackGovernor::new(Box::new(SystemMemoryProbe))
             },
             workspace_recorder: Mutex::new(None),
+            tmux_control: None,
+            tmux_bridge: crate::tmux::TmuxControlBridge::new(),
         }
     }
 
@@ -560,6 +566,7 @@ impl WindowManager {
         }
         self.quick_terminal.pane.poll_pty_events();
         self.quick_terminal.pane.refresh_line_discipline();
+        let _ = self.poll_tmux_control();
         self.maybe_rebalance_scrollback(Instant::now());
     }
 

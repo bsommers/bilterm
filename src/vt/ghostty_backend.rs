@@ -1,4 +1,8 @@
-//! `libghostty-vt` terminal core adapter & C-ABI FFI bridge (`ARCH-02`, `ARCH-03`, `GHOSTTY-01`).
+//! **[EXPERIMENTAL]** `libghostty-vt` terminal core adapter & C-ABI FFI bridge (`ARCH-02`, `ARCH-03`, `ARCH-R05`, `GHOSTTY-01`).
+//!
+//! > **Subsystem Status (`ADR-007` / `ARCH-R05`):** This module is an **experimental, opt-in** backend
+//! > exercised by tests and gated behind `--features ghostty-vt` (requires Rust `1.90+` and `zig 0.15`).
+//! > Production `CompositePane` instances use [`crate::vt::VtParser`] (`TerminalBackend`) by default.
 //!
 //! Provides:
 //! 1. [`GhosttyCAbiVtable`] & [`GhosttyCAbiTerminal`] — C-ABI FFI dispatch table (`extern "C"` function
@@ -6,7 +10,8 @@
 //!    `ghostty_terminal_resize`, and `ghostty_render_state_snapshot`) that works across all builds and
 //!    allows dynamic/static C-ABI binding without requiring a system Zig compiler for default builds.
 //! 2. [`GhosttyVtEngine`] — When compiled with `--features ghostty-vt`, wraps Ghostty's `libghostty-vt`
-//!    [`Terminal`](libghostty_vt::Terminal) and [`RenderState`](libghostty_vt::RenderState) directly.
+//!    [`Terminal`](libghostty_vt::Terminal) and [`RenderState`](libghostty_vt::RenderState) directly and
+//!    implements [`crate::vt::TerminalBackend`].
 
 use std::ffi::c_void;
 
@@ -154,18 +159,21 @@ use libghostty_vt::{
 };
 
 #[cfg(feature = "ghostty-vt")]
+use crate::vt::backend::TerminalBackend;
+#[cfg(feature = "ghostty-vt")]
 use crate::vt::snapshot::{
-    CellColor, CellSnapshot, CursorShape, CursorSnapshot, RgbTriplet, RowSnapshot, UnderlineKind,
+    CellColor, CellSnapshot, CellView, CursorShape, CursorSnapshot, RgbTriplet, RowSnapshot,
+    UnderlineKind,
 };
 
-/// Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
-/// dedicated worker thread (`!Send`, `!Sync`) and produces thread-safe [`GridSnapshot`] frames.
+/// **[EXPERIMENTAL]** Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
+/// dedicated worker thread (`!Send`, `!Sync`) and produces thread-safe [`GridSnapshot`] frames (`ARCH-R03`, `ARCH-R05`).
 #[cfg(feature = "ghostty-vt")]
 pub struct GhosttyVtEngine {
     terminal: Box<Terminal<'static, 'static>>,
-    render_state: RenderState<'static>,
-    row_iter: RowIterator<'static>,
-    cell_iter: CellIterator<'static>,
+    render_state: RefCell<RenderState<'static>>,
+    row_iter: RefCell<RowIterator<'static>>,
+    cell_iter: RefCell<CellIterator<'static>>,
     pending_pty_writes: Rc<RefCell<Vec<Vec<u8>>>>,
     rows: u16,
     cols: u16,
@@ -193,9 +201,9 @@ impl GhosttyVtEngine {
             }
         })?;
 
-        let render_state = RenderState::new()?;
-        let row_iter = RowIterator::new()?;
-        let cell_iter = CellIterator::new()?;
+        let render_state = RefCell::new(RenderState::new()?);
+        let row_iter = RefCell::new(RowIterator::new()?);
+        let cell_iter = RefCell::new(CellIterator::new()?);
 
         Ok(Self {
             terminal,
@@ -288,8 +296,9 @@ impl GhosttyVtEngine {
     }
 
     /// Captures a point-in-time [`GridSnapshot`] from `libghostty-vt`'s [`RenderState`].
-    pub fn snapshot(&mut self) -> GridSnapshot {
-        let Ok(snap) = self.render_state.update(&self.terminal) else {
+    pub fn snapshot(&self) -> GridSnapshot {
+        let mut render_state = self.render_state.borrow_mut();
+        let Ok(snap) = render_state.update(&self.terminal) else {
             return GridSnapshot::empty(self.rows, self.cols);
         };
 
@@ -309,13 +318,15 @@ impl GhosttyVtEngine {
         };
 
         let mut grid_rows = Vec::with_capacity(usize::from(rows));
-        if let Ok(mut r_iter) = self.row_iter.update(&snap) {
+        let mut row_iter = self.row_iter.borrow_mut();
+        let mut cell_iter = self.cell_iter.borrow_mut();
+        if let Ok(mut r_iter) = row_iter.update(&snap) {
             while let Some(row) = r_iter.next() {
                 let row_dirty = row.dirty().unwrap_or(true);
                 let row_wrapped = row.raw_row().and_then(|r| r.is_wrapped()).unwrap_or(false);
                 let mut row_cells = Vec::with_capacity(usize::from(cols));
 
-                if let Ok(mut c_iter) = self.cell_iter.update(row) {
+                if let Ok(mut c_iter) = cell_iter.update(row) {
                     while let Some(cell) = c_iter.next() {
                         let grapheme = match cell.graphemes() {
                             Ok(chars) if !chars.is_empty() => chars.into_iter().collect::<String>(),
@@ -402,6 +413,35 @@ impl GhosttyVtEngine {
             generation: self.generation,
         }
     }
+}
+
+#[cfg(feature = "ghostty-vt")]
+impl TerminalBackend for GhosttyVtEngine {
+    fn process(&mut self, bytes: &[u8]) { GhosttyVtEngine::process(self, bytes); }
+    fn set_size(&mut self, rows: u16, cols: u16) { GhosttyVtEngine::set_size(self, rows, cols); }
+    fn size(&self) -> (u16, u16) { (self.rows, self.cols) }
+    fn cursor_position(&self) -> (u16, u16) {
+        let snap = self.snapshot();
+        (snap.cursor.row, snap.cursor.col)
+    }
+    fn is_cursor_visible(&self) -> bool { self.snapshot().cursor.visible }
+    fn snapshot(&self) -> GridSnapshot { GhosttyVtEngine::snapshot(self) }
+    fn cell_view(&self, _row: u16, _col: u16) -> Option<CellView<'_>> { None }
+    fn is_alternate_screen(&self) -> bool { GhosttyVtEngine::is_alternate_screen(self) }
+    fn is_bracketed_paste(&self) -> bool { GhosttyVtEngine::is_bracketed_paste(self) }
+    fn is_application_cursor(&self) -> bool { false }
+    fn is_mouse_sgr_or_tracking(&self) -> bool { self.terminal.mode(Mode::SGR_MOUSE).unwrap_or(false) }
+    fn is_focus_reporting(&self) -> bool { self.terminal.mode(Mode::FOCUS_EVENT).unwrap_or(false) }
+    fn is_synchronized_output(&self) -> bool { self.terminal.mode(Mode::SYNC_OUTPUT).unwrap_or(false) }
+    fn is_mouse_alternate_scroll(&self) -> bool { self.terminal.mode(Mode::ALT_SCROLL).unwrap_or(true) }
+    fn is_grapheme_cluster_2027(&self) -> bool { self.terminal.mode(Mode::GRAPHEME_CLUSTER).unwrap_or(false) }
+    fn kitty_keyboard_flags(&self) -> u8 { 0 }
+    fn scrollback_offset(&self) -> usize { self.snapshot().scrollback_offset }
+    fn scroll_up(&mut self, lines: usize) { self.scroll_delta(-(lines as isize)); }
+    fn scroll_down(&mut self, lines: usize) { self.scroll_delta(lines as isize); }
+    fn reset_scrollback(&mut self) { self.scroll_to_bottom(); }
+    fn take_query_responses(&mut self) -> Vec<Vec<u8>> { GhosttyVtEngine::take_query_responses(self) }
+    fn take_outbound_osc52(&mut self) -> Vec<String> { Vec::new() }
 }
 
 #[cfg(all(test, feature = "ghostty-vt"))]

@@ -391,6 +391,66 @@ impl TmuxControlSubprocess {
             line_rx,
         })
     }
+
+    /// Constructs a `TmuxControlSubprocess` from pre-existing channel endpoints (for deterministic testing or SSH stream bridges).
+    pub fn from_channels(
+        session_name: impl Into<String>,
+        cmd_tx: tokio::sync::mpsc::UnboundedSender<String>,
+        line_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    ) -> Self {
+        Self {
+            session_name: session_name.into(),
+            cmd_tx,
+            line_rx,
+        }
+    }
+}
+
+impl WindowManager {
+    /// Attaches a live `tmux -CC` Control Mode subprocess (`TmuxControlSubprocess`) to this workspace (`TMUX-03`, `ARCH-R05`).
+    pub fn attach_tmux_control(&mut self, subproc: TmuxControlSubprocess) {
+        self.tmux_bridge.active_session_name = Some(subproc.session_name.clone());
+        self.tmux_control = Some(subproc);
+    }
+
+    /// Returns `true` if a `TmuxControlSubprocess` is currently attached (`ARCH-R05`).
+    pub fn is_tmux_control_attached(&self) -> bool {
+        self.tmux_control.is_some()
+    }
+
+    /// Drains all available control lines from an attached `TmuxControlSubprocess` and routes them
+    /// through `TmuxControlBridge::handle_control_line` (`TMUX-03`, `ARCH-R05`).
+    pub fn poll_tmux_control(&mut self) -> usize {
+        let mut lines = Vec::new();
+        let mut disconnected = false;
+        if let Some(subproc) = self.tmux_control.as_mut() {
+            loop {
+                match subproc.line_rx.try_recv() {
+                    Ok(line) => lines.push(line),
+                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+        }
+        let count = lines.len();
+        let mut bridge = std::mem::take(&mut self.tmux_bridge);
+        for line in &lines {
+            if matches!(
+                bridge.handle_control_line(self, line),
+                TmuxControlEvent::Exit { .. }
+            ) {
+                disconnected = true;
+            }
+        }
+        self.tmux_bridge = bridge;
+        if disconnected {
+            self.tmux_control = None;
+        }
+        count
+    }
 }
 
 #[cfg(test)]

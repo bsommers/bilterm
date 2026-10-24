@@ -1,4 +1,8 @@
-//! Dedicated background worker thread pipeline (`ARCH-02`):
+//! **[EXPERIMENTAL]** Dedicated background worker thread pipeline (`ARCH-02`, `ARCH-R05`):
+//!
+//! > **Subsystem Status (`ADR-007` / `ARCH-R05`):** `VtWorkerHandle` is an **experimental, opt-in**
+//! > asynchronous VT worker seam exercised by `tests/vt_worker_and_snapshot_seam.rs`. Production
+//! > `CompositePane` instances use synchronous `PtySession` + `VtParser` (`TerminalBackend`) polling.
 //!
 //! ```text
 //! ┌────────────────────────────────────────────────────────┐
