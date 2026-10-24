@@ -202,11 +202,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — `src/vt/` decomposition (`scan`, `graphics`, `detect`, `codec`, `recording`, `tests`, `scrollback_tests`), move `cell_to_ratatui_style` to `src/ui/`, define `ARCH-R01..05` in `REQUIREMENTS.md` (wave 1)
-- [ ] 20-02-PLAN.md — `src/pane/` decomposition (`prompt_editor`, `modes`, `history_store_tests`) and move `colon_command` to `src/colon_command/{mod,parse,execute}.rs`, eliminating `pane ↔ wm` cycle (wave 1)
-- [ ] 20-03-PLAN.md — `src/input/` decomposition (`encode`, `mouse`, `modal`, `keymap`, `mod.rs`) (wave 2)
-- [ ] 20-04-PLAN.md — `src/api/` decomposition (`json`, `rpc`, `mcp`, `playbook`, `server`, `tests`, `mod.rs`) (wave 2)
-- [ ] 20-05-PLAN.md — `src/ui/` (`modals`, `status_bar`) and `src/wm/` (`session`) decomposition for global `<= 800` line ceiling, full test/snapshot gate, and Phase 20 state sync (wave 3)
+- [x] 20-01-PLAN.md — `src/vt/` decomposition (`scan`, `graphics`, `detect`, `codec`, `recording`, `tests`, `scrollback_tests`), move `cell_to_ratatui_style` to `src/ui/`, define `ARCH-R01..05` in `REQUIREMENTS.md` (wave 1)
+- [x] 20-02-PLAN.md — `src/pane/` decomposition (`prompt_editor`, `modes`, `history_store_tests`) and move `colon_command` to `src/colon_command/{mod,parse,execute}.rs`, eliminating `pane ↔ wm` cycle (wave 1)
+- [x] 20-03-PLAN.md — `src/input/` decomposition (`encode`, `mouse`, `modal`, `keymap`, `mod.rs`) (wave 2)
+- [x] 20-04-PLAN.md — `src/api/` decomposition (`json`, `rpc`, `mcp`, `playbook`, `server`, `tests`, `mod.rs`) (wave 2)
+- [x] 20-05-PLAN.md — `src/ui/` (`modals`, `status_bar`) and `src/wm/` (`session`) decomposition for global `<= 800` line ceiling, full test/snapshot gate, and Phase 20 state sync (wave 3)
 
 ### Phase 21: Encapsulated Workspace Invariants
 
@@ -276,7 +276,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 17. `v1.3.0` Structured Automation Event Subscription Bus & Declarative Robot Playbooks (`--playbook`) (`AUTO-03`) | Complete | Complete | 2026-10-21 |
 | 18. `v1.4.0` First-Class SSH Domains (`:ssh`), Remote Persistent `tmux -CC` (`:ssh-tmux`) & `herdr`-Style Central Fleet Federation (`REM-01`) | Complete | Complete | 2026-10-21 |
 | 19. Security Hardening of Automation & Shell-Integration Surfaces (`SEC-R01..04`) | 7/7 | Complete | 2026-10-23 |
-| 20. Mega-Module Decomposition (`ARCH-R04`) | 0/5 | Planned | - |
+| 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 0/TBD | Not started | - |
 | 22. Unified `Action` Command Vocabulary & Data-Driven Keymap (`ARCH-R01`) | 0/TBD | Not started | - |
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/TBD | Not started | - |

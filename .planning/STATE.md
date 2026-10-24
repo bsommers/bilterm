@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.7.0
 milestone_name: milestone
-current_phase: 20
-current_phase_name: mega-module-decomposition-behaviour-preserving
-status: planned
-stopped_at: Phase 20 planned (5 plans ready for execution)
+current_phase: 21
+current_phase_name: encapsulated-workspace-invariants
+status: completed_phase_20
+stopped_at: Phase 20 complete (5/5 plans verified); ready to plan Phase 21
 last_updated: "2026-10-23"
 last_activity: 2026-10-23
-last_activity_desc: Released v1.7.0; planned Phase 20 (Mega-Module Decomposition, 5 plans across 3 waves)
+last_activity_desc: Completed Phase 20 (Mega-Module Decomposition, ARCH-R04; all 58 src/**/*.rs files <= 800 lines, pane <-> wm cycle eliminated)
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 27
-  completed_plans: 22
+  completed_plans: 27
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 20 — Mega-Module Decomposition (`ARCH-R04`, 5 plans ready to execute)
+**Current focus:** Phase 21 — Encapsulated Workspace Invariants (`ARCH-R02`)
 
 ## Current Position
 
-Phase: 20 (mega-module-decomposition-behaviour-preserving) — PLANNED
-Plan: 0/5 complete (`20-01-PLAN.md`..`20-05-PLAN.md`)
-Status: Ready to execute (`/gsd-execute-phase 20`)
-Last activity: 2026-10-23 — Released `v1.7.0` and planned Phase 20 (`ARCH-R04`)
+Phase: 20 (mega-module-decomposition-behaviour-preserving) — COMPLETE
+Plan: 5/5 complete (`20-01-PLAN.md`..`20-05-PLAN.md`)
+Status: Ready to plan Phase 21 (`/gsd-plan-phase 21`)
+Last activity: 2026-10-23 — Completed Phase 20 (`ARCH-R04`)
 
 Progress: [██████████] 100%
 

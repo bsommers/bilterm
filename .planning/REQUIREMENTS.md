@@ -66,7 +66,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **ARCH-R01**: Unified `Action` command vocabulary and data-driven keymap replacing duplicate dispatch paths across key handlers, `:colon` commands, playbooks, and JSON-RPC/MCP (`Phase 22`, review P1.1).
 - [ ] **ARCH-R02**: Encapsulated `WindowManager` and `CompositePane` invariants behind private fields, single `remove_pane` / `submit_command` methods, `enum Modal`, and `enum Focus` (`Phase 21`, review P1.2).
 - [ ] **ARCH-R03**: `TerminalBackend` trait decoupling `vt100_ctt` from `ui/` and `pane/` via `GridSnapshot` / cell views (`Phase 23`, review P1.3).
-- [ ] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so no source file exceeds ~800 lines, `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).
+- [x] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so no source file exceeds ~800 lines, `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).
 - [ ] **ARCH-R05**: Unwired-subsystem resolution and CI feature matrix (`cargo hack check --each-feature`) for `VtWorkerHandle`, `TmuxControlSubprocess`, and `ghostty-vt` (`Phase 23`, review P1.5).
 
 ## v2 Requirements
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-R01 | Phase 22 | Pending |
 | ARCH-R02 | Phase 21 | Pending |
 | ARCH-R03 | Phase 23 | Pending |
-| ARCH-R04 | Phase 20 | In Progress |
+| ARCH-R04 | Phase 20 | Complete |
 | ARCH-R05 | Phase 23 | Pending |
 
 **Coverage:**
@@ -140,4 +140,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-10-23 for Phase 19 Security Hardening*
+*Last updated: 2026-10-23 for Phase 20 Mega-Module Decomposition*
