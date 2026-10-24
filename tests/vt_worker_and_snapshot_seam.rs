@@ -162,3 +162,79 @@ fn workspace_frame_snapshot_and_renderer_decouple_ui_from_terminal_core() {
     renderer.render_workspace(&wm, viewport, &mut buf);
     assert_eq!(buf.area, viewport);
 }
+
+#[test]
+fn no_vt100_ctt_types_appear_outside_src_vt() {
+    use std::path::Path;
+
+    fn visit_rs_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    visit_rs_files(&path, out);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    out.push(path);
+                }
+            }
+        }
+    }
+
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src_dir = manifest_dir.join("src");
+    let vt_dir = src_dir.join("vt");
+    let mut rs_files = Vec::new();
+    visit_rs_files(&src_dir, &mut rs_files);
+    assert!(!rs_files.is_empty());
+
+    for file in rs_files {
+        let content = std::fs::read_to_string(&file).expect("read source file");
+        let lines = content.lines().count();
+        assert!(
+            lines <= 800,
+            "{} exceeds 800-line ceiling ({} lines)",
+            file.display(),
+            lines
+        );
+        if !file.starts_with(&vt_dir) {
+            assert!(
+                !content.contains("vt100_ctt"),
+                "{} leaked vt100_ctt outside src/vt/",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn tmux_control_subprocess_polls_into_window_manager() {
+    use bilterm::tmux::TmuxControlSubprocess;
+    use bilterm::vt::{MockTerminalBackend, assert_terminal_backend_conformance};
+
+    assert_terminal_backend_conformance(VtParser::new);
+    assert_terminal_backend_conformance(MockTerminalBackend::new);
+
+    let mut wm = WindowManager::new_headless(20, 80);
+    let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (line_tx, line_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let subproc = TmuxControlSubprocess::from_channels("bilterm-live", cmd_tx, line_rx);
+
+    wm.attach_tmux_control(subproc);
+    assert!(wm.is_tmux_control_attached());
+
+    line_tx
+        .send("%output %0 \\033[32mTMUX_SUBPROC_PANE_1\\033[0m\\015\\012".to_string())
+        .unwrap();
+    line_tx
+        .send("%output %1 TMUX_SUBPROC_PANE_2\\015\\012".to_string())
+        .unwrap();
+
+    wm.poll_all_ptys();
+    assert_eq!(wm.pane_count(), 2);
+    assert!(wm.pane(1).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_1"));
+    assert!(wm.pane(2).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_2"));
+
+    line_tx.send("%exit client detached".to_string()).unwrap();
+    wm.poll_all_ptys();
+    assert!(!wm.is_tmux_control_attached());
+}

@@ -80,6 +80,7 @@ src/
 │   └── shell_integration.rs    # Automatic bash/zsh/fish OSC 133 + OSC 7 rc/hook injection in 0700 dir
 ├── vt/
 │   ├── mod.rs                  # VtParser state machine, CommandBlock tracking, scrollback & size management
+│   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
 │   ├── scan.rs                 # Stream pre-scanner (DECSET traps, OSC 7/8/9/52/133/777, DECRPM/XTGETTCAP)
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
 │   ├── detect.rs               # Auto-detection of URLs and QuickSelect 3270 Field Hints (URLs, paths, IPs, SHAs)

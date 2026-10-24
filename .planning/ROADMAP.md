@@ -268,12 +268,12 @@ Plans:
   3. Decision recorded as an ADR for `VtWorkerHandle`, `TmuxControlSubprocess`, and the `ghostty-vt` feature: each is either used by the live app or marked experimental, and the `ghostty-vt` feature either builds in CI (`libghostty-vt` declared, Zig in `flake.nix`) or is removed.
   4. A CI feature matrix (`cargo hack check --each-feature`) passes.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 23-01-PLAN.md — `TerminalBackend` trait, `MockTerminalBackend`, shared conformance test suite, and removal of all `vt100_ctt` types outside `src/vt/` (wave 1)
-- [ ] 23-02-PLAN.md — Wire `TmuxControlSubprocess` into `WindowManager`/`App`, implement `TerminalBackend` for `GhosttyVtEngine`, pin `rust-toolchain.toml` (`1.90`), update `flake.nix`, and record `ADR-007` (wave 2)
-- [ ] 23-03-PLAN.md — Architectural boundary enforcement test (`no_vt100_ctt_types_appear_outside_src_vt`), `TmuxControlSubprocess` polling test, and Phase 23 documentation/state sync (wave 3)
+- [x] 23-01-PLAN.md — `TerminalBackend` trait, `MockTerminalBackend`, shared conformance test suite, and removal of all `vt100_ctt` types outside `src/vt/` (wave 1)
+- [x] 23-02-PLAN.md — Wire `TmuxControlSubprocess` into `WindowManager`/`App`, implement `TerminalBackend` for `GhosttyVtEngine`, pin `rust-toolchain.toml` (`1.90`), update `flake.nix`, and record `ADR-007` (wave 2)
+- [x] 23-03-PLAN.md — Architectural boundary enforcement test (`no_vt100_ctt_types_appear_outside_src_vt`), `TmuxControlSubprocess` polling test, and Phase 23 documentation/state sync (wave 3)
 
 ### Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes
 
@@ -345,7 +345,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 20. Mega-Module Decomposition (`ARCH-R04`) | 5/5 | Complete | 2026-10-23 |
 | 21. Encapsulated Workspace Invariants (`ARCH-R02`) | 3/3 | Complete | 2026-10-24 |
 | 22. Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder (`ARCH-R01`, `REC-02`) | 3/3 | Complete | 2026-10-24 |
-| 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 0/3 | Planned | - |
+| 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 3/3 | Complete | 2026-10-24 |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 0/TBD | Not started | - |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 0/TBD | Not started | - |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 0/TBD | Not started | - |

@@ -65,9 +65,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **ARCH-R01**: Unified `Action` command vocabulary and data-driven keymap replacing duplicate dispatch paths across key handlers, `:colon` commands, playbooks, and JSON-RPC/MCP, including context-aware `Ctrl+B` / `Ctrl+X` leader prefix handling (`Ctrl+B` standalone with `$TMUX` auto-fallback to `Ctrl+X`), `tmux`/`herdr` post-leader chord parity (`"`, `%`, `n`, `p`), held-`Ctrl` leader chord normalization (`Ctrl+X Ctrl+<key>` / `Ctrl+B Ctrl+<key>`), and `asciinema` PTY-wrapper control harmonization (`Phase 22`, review P1.1).
 - [x] **ARCH-R02**: Encapsulated `WindowManager` and `CompositePane` invariants behind private fields, single `remove_pane` / `submit_command` methods, `enum Modal`, and `enum Focus` (`Phase 21`, review P1.2).
-- [ ] **ARCH-R03**: `TerminalBackend` trait decoupling `vt100_ctt` from `ui/` and `pane/` via `GridSnapshot` / cell views (`Phase 23`, review P1.3).
+- [x] **ARCH-R03**: `TerminalBackend` trait decoupling `vt100_ctt` from `ui/` and `pane/` via `GridSnapshot` / cell views (`Phase 23`, review P1.3).
 - [x] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so no source file exceeds ~800 lines, `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).
-- [ ] **ARCH-R05**: Unwired-subsystem resolution and CI feature matrix (`cargo hack check --each-feature`) for `VtWorkerHandle`, `TmuxControlSubprocess`, and `ghostty-vt` (`Phase 23`, review P1.5).
+- [x] **ARCH-R05**: Unwired-subsystem resolution and CI feature matrix (`cargo hack check --each-feature`) for `VtWorkerHandle`, `TmuxControlSubprocess`, and `ghostty-vt` (`Phase 23`, review P1.5).
 - [x] **REC-02**: Built-in Whole-Workspace Asciicast v2 (`.cast`) compositor frame recorder (`:record start [path]` / `:record workspace [path]` / `:record pane [path]` / `:record stop` + `Action::RecordStart` / `Action::RecordStop`) that diffs rendered `ratatui::buffer::Buffer` frames into ANSI escape sequences so multi-pane splits, z-order stacks, floating command prompts, Borland menus, 3270 cross-hairs, and modals are captured into a single playable `.cast` stream (`Phase 22`).
 
 ### Slide-Out Sessions/Windows/Panes Drawer, Dynamic Typography & Graphical Canvas (`DRW`, `FONT`, `TEK`, `CANV`)
@@ -137,9 +137,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-R04 | Phase 19 | Complete |
 | ARCH-R01 | Phase 22 | Complete |
 | ARCH-R02 | Phase 21 | Complete |
-| ARCH-R03 | Phase 23 | Pending |
+| ARCH-R03 | Phase 23 | Complete |
 | ARCH-R04 | Phase 20 | Complete |
-| ARCH-R05 | Phase 23 | Pending |
+| ARCH-R05 | Phase 23 | Complete |
 | REC-02 | Phase 22 | Complete |
 | DRW-01 | Phase 24 | Pending |
 | DRW-02 | Phase 24 | Pending |
