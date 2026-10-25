@@ -5,6 +5,18 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.9.1] - 2026-10-24
+
+### Fixed
+- **WSL & Linux 3270 Command Prompt Password Input Lock (`src/pane/mod.rs`, `src/pane/modes.rs`, `src/pty/line_discipline.rs`, `src/vt/mod.rs`, `src/secure_fs.rs`)**:
+  - Reset `force_command_prompt = false` in `CompositePane::submit_command` so cycling terminal modes (`F4` / `Alt+E` / `Alt+T` / `Alt+B` / `Alt+S`) never prevents subsequent `sudo` / `ssh` password prompts from auto-hiding the 3270 command prompt and routing keystrokes to `RawPtyPassthrough`.
+  - Transitioned `VtParser::record_command_submission` immediately to `Osc133Phase::CommandExecuted` so the 16ms `refresh_line_discipline` tick does not clear `running_command` while `OSC 133;A` (`PromptStart`) is still active before `PS0` (`\e]133;C\a`).
+  - Updated `LineDisciplineState::is_password_prompt` and `inspect_pty_fd` to recognize non-canonical `!ECHO && !ICANON` password prompts (`sudo 1.9.15+` with `use_pty`, `sudo-rs`, and subshells) and added a zero-allocation `cur_c == 0` fast path to `canvas_cursor_line_looks_like_password_prompt`.
+  - Allowed symlinked parent `XDG_RUNTIME_DIR` (`/run/user/1000 -> /mnt/wslg/runtime-dir`) on WSL2 in `private_dir_in` while preserving `O_NOFOLLOW` / `symlink_metadata` validation on target runtime directories.
+- **Windows PowerShell Build, Clippy & ConPTY Test Suite (`src/api/server.rs`, `src/app.rs`, `src/pty/mod.rs`, `src/pane/history_store.rs`, `tests/full_suite_battle_and_perf.rs`)**:
+  - Eliminated non-Unix unused-import and unused-variable warnings under `cargo clippy --all-targets -- -D warnings`.
+  - Fixed `App::new` to propagate `pane.is_headless()` so headless tests do not spawn a live `powershell.exe` ConPTY inside `QuickTerminal`, ordered `PtySession::writer` before `master` for clean ConPTY teardown, and kept headless `HistoryStore` instances disabled in `apply_settings` unless a custom `dir` is configured.
+
 ## [v1.9.0] - 2026-10-24
 
 ### Added
