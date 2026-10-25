@@ -1,6 +1,6 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10.0
+milestone: v1.10.1
 milestone_name: milestone
 current_phase: 27
 current_phase_name: high-res-pixel-canvas-and-adaptive-ssh-gui-graphics

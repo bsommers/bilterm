@@ -269,13 +269,7 @@ impl AutomationControlPlane {
                     };
                     let action = parse_colon_command(&normalized)
                         .ok_or_else(|| format!("not a valid :colon command: {normalized}"))??;
-                    if policy == SnapshotPolicy::Confined
-                        && let crate::action::Action::CanvasCommand(ref subcmd) = action
-                    {
-                        self.execute_canvas_command_confined(subcmd)?;
-                    } else {
-                        self.wm.apply(action).map_err(|e| e.to_string())?;
-                    }
+                    self.apply_with_policy(action, policy)?;
                 }
                 "exec" => {
                     let cmd = step

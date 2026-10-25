@@ -1,5 +1,4 @@
 use crate::colon_command::ColonCommand;
-pub use crate::colon_command::execute_wm::execute_wm_colon_command;
 use crate::pane::history_store::HistorySegment;
 use crate::pane::{CompositePane, PromptAnchor};
 use crate::vt::encode_osc52_clipboard;

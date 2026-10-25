@@ -264,6 +264,25 @@ pub fn unique_suffix() -> String {
     )
 }
 
+/// Validates that `name` is a single plain file name (no separators, `.`/`..`, or NUL) so it cannot escape a confining directory.
+pub fn validate_plain_file_name(name: &str) -> std::result::Result<(), String> {
+    const MSG: &str = "ppm_path must be a file name within the snapshot directory";
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains('\0')
+        || name == "."
+        || name == ".."
+    {
+        return Err(MSG.to_string());
+    }
+    let mut components = std::path::Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(()),
+        _ => Err(MSG.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -56,7 +56,8 @@ src/
 ├── colon_command/
 │   ├── mod.rs                  # Re-exports Action as ColonCommand alias, parse & execute entrypoints
 │   ├── parse.rs                # Parses ":..." strings into Result<Action, String>
-│   └── execute.rs              # Executes Action against WindowManager and active CompositePane
+│   └── execute.rs              # Executes ColonCommand against the active CompositePane
+│       └── execute_wm.rs           # Executes Action against WindowManager (WindowManager::apply)
 ├── config/
 │   └── mod.rs                  # BiltermConfig (config.toml + .ini theme loader + Spotlight/FocalZoom state)
 ├── input/
@@ -246,7 +247,7 @@ Because of the Phase 22 unified `Action` architecture, adding a new workspace or
 
 1. **Add variant to [`Action`](../src/action.rs)** in `src/action.rs`.
 2. **Parse `:colon` syntax in [`parse_colon_command`](../src/colon_command/parse.rs)** in `src/colon_command/parse.rs` (if the action has a `:command` form).
-3. **Implement execution in [`execute_wm_colon_command`](../src/colon_command/execute.rs) or [`execute_colon_command`](../src/colon_command/execute.rs)** in `src/colon_command/execute.rs` (called by `WindowManager::apply`).
+3. **Implement execution in [`execute_wm_colon_command`](../src/colon_command/execute_wm.rs) or [`execute_colon_command`](../src/colon_command/execute.rs)** in `src/colon_command/execute_wm.rs` / `execute.rs` (called by `WindowManager::apply`).
 4. **Bind default key chord (optional)** in [`DEFAULT_LEADER_BINDINGS`](../src/input/keymap.rs), [`DEFAULT_GLOBAL_BINDINGS`](../src/input/keymap.rs), or [`DEFAULT_PANE_BINDINGS`](../src/input/keymap.rs) in `src/input/keymap.rs`, and add the variant to `every_action_is_reachable_from_keymap_colon_or_rpc` in `src/action.rs`.
 
 ---

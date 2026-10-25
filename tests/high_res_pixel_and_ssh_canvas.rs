@@ -202,7 +202,10 @@ fn canvas_export_encode_resolutions_octant_and_cli_bilterm_plot_work_end_to_end(
     let msg_ppm = pane
         .execute_canvas_command(&format!("export {}", ppm_path.display()))
         .unwrap();
-    assert!(msg_ppm.contains("CANVAS EXPORT: wrote 1280x768"));
+    // Export is sized to the VT canvas (excludes the prompt row) at 2x = 16x32 px/cell.
+    let (vt_rows, vt_cols) = pane.vt().size();
+    let expected = format!("CANVAS EXPORT: wrote {}x{}", u32::from(vt_cols) * 16, u32::from(vt_rows) * 32);
+    assert!(msg_ppm.contains(&expected), "{msg_ppm} !~ {expected}");
     assert!(ppm_path.exists());
 
     // Switch to 1080p Full HD and 4K UHD resolutions
@@ -211,7 +214,8 @@ fn canvas_export_encode_resolutions_octant_and_cli_bilterm_plot_work_end_to_end(
     let msg_svg = pane
         .execute_canvas_command(&format!("export {}", svg_path.display()))
         .unwrap();
-    assert!(msg_svg.contains("CANVAS EXPORT: wrote 1920x1080"));
+    // Height is `floor(1080 / rows) * rows`, so it only equals 1080 when the canvas row count divides it.
+    assert!(msg_svg.contains("CANVAS EXPORT: wrote 1920x10"), "{msg_svg}");
     let svg_content = std::fs::read_to_string(&svg_path).unwrap();
     assert!(svg_content.contains("<svg"));
 
@@ -357,4 +361,27 @@ fn rpc_canvas_export_enforces_snapshot_dir_confinement_and_dynamic_resolution() 
         )
         .unwrap();
     assert!(tmp_dir.path().join("confined_scene.ppm").exists());
+}
+
+#[test]
+fn rpc_confinement_covers_record_start_and_export_dimensions_match_canvas() {
+    use bilterm::api::{AutomationControlPlane, JsonValue};
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let mut plane =
+        AutomationControlPlane::new_headless(24, 80).with_snapshot_dir(tmp_dir.path().to_path_buf());
+    let cmd = |c: &str| JsonValue::obj([("command", JsonValue::String(c.to_string()))]);
+
+    // `:record start <path>` cannot target a path outside the snapshot dir.
+    let escape = format!(":record start {}/escape.cast", outside.path().display());
+    assert!(plane.dispatch_method("wm.command", &cmd(&escape)).is_err());
+    assert!(!outside.path().join("escape.cast").exists());
+
+    // Canvas errors surface as errors through `wm.command` too (same as `canvas.command`).
+    assert!(plane.dispatch_method("wm.command", &cmd(":canvas export")).is_err());
+
+    // Canvas export under a confined plane is written inside the snapshot dir.
+    plane.dispatch_method("canvas.command", &cmd("export dims.svg")).unwrap();
+    assert!(tmp_dir.path().join("dims.svg").exists());
 }

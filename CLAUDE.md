@@ -6,7 +6,7 @@ Please read **[`AGENTS.md`](AGENTS.md)** and **[`docs/DEVELOPER_AND_AGENT_GUIDE.
 2. **Complete 48-File Source Map (`src/**/*.rs`) & Architectural Gates**:
    - Every `src/**/*.rs` file MUST stay **`<= 800` lines** (`ARCH-R04`).
    - `src/input/mod.rs::handle_wm_key_event` MUST stay **`<= 80` lines** (`ARCH-R01`).
-   - All user-triggerable commands/keybindings/RPC calls lower to `crate::action::Action` and execute via `WindowManager::apply(Action)` (`src/colon_command/execute.rs`).
+   - All user-triggerable commands/keybindings/RPC calls lower to `crate::action::Action` and execute via `WindowManager::apply(Action)` (`src/colon_command/execute_wm.rs`).
    - All `WindowManager` and `CompositePane` internal fields are private (`ARCH-R02`); pane removal goes exclusively through `WindowManager::remove_pane(id)` and command submission goes exclusively through `CompositePane::submit_command(&mut self)`.
    - All runtime directories and files use `src/util/secure_fs.rs` (`0700` dirs, `0600` atomic files, `validate_safe_name`).
 3. **Inspectability & Debugging**:

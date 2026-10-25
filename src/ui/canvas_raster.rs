@@ -371,6 +371,8 @@ pub fn render_graphical_canvas(
 
     let mode = scene.subcell_mode;
     if matches!(mode, CanvasSubcellMode::HalfBlock | CanvasSubcellMode::Octant) {
+        // On-screen flush only samples at most a 2x4 sub-cell grid per cell, so the per-frame raster is
+        // capped (4..=16 x 8..=32 px/cell) to bound render cost; `:canvas export` keeps the full resolution.
         let (px_c, px_r) = scene
             .resolution
             .resolve_px_per_cell(canvas.width, canvas.height);
@@ -738,8 +740,16 @@ fn render_image_to_subcells(sub: &mut SubcellBuffer, img: &InteractiveImageView)
 impl WindowManager {
     /// Executes a `:canvas <subcommand>` on the active pane (`TEK-01`, `CANV-01`).
     pub fn execute_canvas_action(&mut self, subcommand: &str) -> String {
-        match self.active_pane_mut().execute_canvas_command(subcommand) {
-            Ok(msg) | Err(msg) => msg,
+        let confine = self.automation_confine_dir().map(std::path::Path::to_path_buf);
+        match self
+            .active_pane_mut()
+            .execute_canvas_command_in(subcommand, confine.as_deref())
+        {
+            Ok(msg) => msg,
+            Err(msg) => {
+                self.record_automation_error(msg.clone());
+                msg
+            }
         }
     }
 }

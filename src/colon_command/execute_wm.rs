@@ -92,7 +92,17 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::RecordStart(path_opt) | ColonCommand::RecordWorkspaceStart(path_opt) => {
             if let Some(p) = path_opt {
-                let path = std::path::PathBuf::from(p);
+                let path = match wm.automation_confine_dir().map(std::path::Path::to_path_buf) {
+                    Some(dir) => match crate::secure_fs::validate_plain_file_name(&p) {
+                        Ok(()) => dir.join(&p),
+                        Err(e) => {
+                            wm.record_automation_error(e.clone());
+                            wm.active_pane_mut().set_status_message(Some(e));
+                            return false;
+                        }
+                    },
+                    None => std::path::PathBuf::from(p),
+                };
                 wm.start_workspace_recording(path.clone(), false);
                 wm.active_pane_mut().vt_mut().start_recording(path.clone());
                 wm.active_pane_mut().set_status_message(Some(format!(

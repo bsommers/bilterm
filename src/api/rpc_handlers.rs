@@ -7,23 +7,18 @@ use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
 
 impl AutomationControlPlane {
-    /// Executes a `:canvas <subcommand>` with strict `snapshot_dir` confinement for `export` (`P0.1`, `SEC-R01`).
-    pub(super) fn execute_canvas_command_confined(
+    /// Applies `action` through `WindowManager::apply` (via `apply_automation`), confining file writes to
+    /// the snapshot dir under `SnapshotPolicy::Confined` (`P0.1`, `SEC-R01`).
+    pub(super) fn apply_with_policy(
         &mut self,
-        cmd: &str,
-    ) -> std::result::Result<String, String> {
-        let parts: Vec<&str> = cmd.split_whitespace().collect();
-        if parts.first().copied() == Some("export") {
-            let Some(file_name) = parts.get(1).copied() else {
-                return Err("Usage: :canvas export <file.ppm|file.svg>".to_string());
-            };
-            let snap_dir = self.resolved_snapshot_dir()?;
-            return self
-                .wm
-                .active_pane_mut()
-                .export_canvas_confined(&snap_dir, file_name);
-        }
-        self.wm.active_pane_mut().execute_canvas_command(cmd)
+        action: crate::action::Action,
+        policy: super::rpc::SnapshotPolicy,
+    ) -> std::result::Result<crate::input::AppAction, String> {
+        let confine = match policy {
+            super::rpc::SnapshotPolicy::Confined => Some(self.resolved_snapshot_dir()?),
+            super::rpc::SnapshotPolicy::Trusted => None,
+        };
+        self.wm.apply_automation(action, confine.as_deref())
     }
 
     /// Handles the JSON-RPC `workspace.fontsize` method (`FONT-01`, `FONT-02`).
@@ -56,10 +51,12 @@ impl AutomationControlPlane {
             }
         }
         if let Some(size) = params.get("size").and_then(JsonValue::as_usize) {
-            self.wm.font_set_size(size as u16);
+            let size = u16::try_from(size).map_err(|_| format!("size out of range: {size}"))?;
+            self.wm.font_set_size(size);
         }
         if let Some(scale) = params.get("scale_pct").and_then(JsonValue::as_usize) {
-            self.wm.font_set_size((scale as u16).clamp(50, 300));
+            let scale = u16::try_from(scale).map_err(|_| format!("scale_pct out of range: {scale}"))?;
+            self.wm.font_set_size(scale.clamp(50, 300));
         }
         if let Some(cmd) = params.get("command").and_then(JsonValue::as_str) {
             self.wm.execute_pane_font_command(cmd)?;
@@ -112,7 +109,10 @@ impl AutomationControlPlane {
         params: &JsonValue,
     ) -> std::result::Result<JsonValue, String> {
         if let Some(cmd) = params.get("command").and_then(JsonValue::as_str) {
-            self.execute_canvas_command_confined(cmd)?;
+            self.apply_with_policy(
+                crate::action::Action::CanvasCommand(cmd.to_string()),
+                super::rpc::SnapshotPolicy::Confined,
+            )?;
         }
         let pane = self.wm.active_pane();
         let tek = pane.vt().tektronix();

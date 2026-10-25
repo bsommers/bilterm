@@ -12,7 +12,7 @@ pub use session::{SavedPaneState, SavedWorkspaceSession};
 pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -95,6 +95,10 @@ pub struct WindowManager {
     scrollback: ScrollbackGovernor,
     /// Whole-workspace Asciicast v2 (`.cast`) compositor frame recorder (`REC-02`).
     workspace_recorder: Mutex<Option<WorkspaceRecorder>>,
+    /// Directory file-writing commands are confined to while an automation action runs (`SEC-R01`).
+    automation_confine_dir: Option<PathBuf>,
+    /// First error raised by a command whose `apply` arm otherwise reports only via the status bar.
+    automation_error: Option<String>,
     /// Optional attached `tmux -CC` Control Mode subprocess (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
@@ -146,6 +150,8 @@ impl WindowManager {
                 ScrollbackGovernor::new(Box::new(SystemMemoryProbe))
             },
             workspace_recorder: Mutex::new(None),
+            automation_confine_dir: None,
+            automation_error: None,
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
@@ -160,6 +166,36 @@ impl WindowManager {
         } else {
             Ok(AppAction::Handled)
         }
+    }
+
+    /// Executes an [`Action`] on behalf of the automation plane (JSON-RPC / playbooks) through [`Self::apply`].
+    ///
+    /// With `confine = Some(dir)`, `:canvas export` and `:record start <path>` may only write a plain
+    /// file name inside `dir`. Command errors that the interactive path only shows in the status bar
+    /// are returned as `Err`, identically for confined and trusted callers.
+    pub fn apply_automation(
+        &mut self,
+        action: Action,
+        confine: Option<&Path>,
+    ) -> std::result::Result<AppAction, String> {
+        self.automation_confine_dir = confine.map(Path::to_path_buf);
+        self.automation_error = None;
+        let res = self.apply(action);
+        self.automation_confine_dir = None;
+        if let Some(err) = self.automation_error.take() {
+            return Err(err);
+        }
+        res.map_err(|e| e.to_string())
+    }
+
+    /// Directory the running automation action is confined to, if any.
+    pub fn automation_confine_dir(&self) -> Option<&Path> {
+        self.automation_confine_dir.as_deref()
+    }
+
+    /// Records the first error of the running automation action (surfaced by [`Self::apply_automation`]).
+    pub fn record_automation_error(&mut self, err: String) {
+        self.automation_error.get_or_insert(err);
     }
 
     /// Starts whole-workspace `.cast` compositor frame recording (`REC-02`).

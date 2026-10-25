@@ -5,6 +5,27 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.10.1] - 2026-10-25
+
+### Security
+- **Unified Automation File-Write Confinement & Atomic Private Exports (`SEC-R01`, `src/secure_fs.rs`, `src/wm/mod.rs`, `src/colon_command/execute_wm.rs`, `src/ui/hires_subcell.rs`, `src/api/rpc_handlers.rs`)**:
+  - Added `WindowManager::apply_automation(action, confine)` and `AutomationControlPlane::apply_with_policy(action, policy)` so all JSON-RPC (`wm.command`, `canvas.command`), MCP, and confined Playbook actions route through a single policy gate.
+  - Confined both `:canvas export <name>` and `:record start <name>` / `:record workspace <name>` under `SnapshotPolicy::Confined` to `snapshot_dir` via `secure_fs::validate_plain_file_name`, rejecting path traversal (`..`, `/`, `\`, NUL) and symlinks, and writing canvas exports atomically (`0600`) via `secure_fs::write_private_file`.
+  - Added checked `u16::try_from` bounds validation for `size` and `scale_pct` in `workspace.fontsize` (`src/api/rpc_handlers.rs`).
+- **Supply-Chain & Dependency Hardening (`Cargo.toml`, `Cargo.lock`, `docs/DEPENDENCY_AUDIT.md`)**:
+  - Disabled unused `default = ["tui-term"]` feature on `vt100-ctt = { version = "0.17.1", default-features = false }`, pruning 13 unused transitive dependencies (including duplicate `ratatui 0.29.0`, unmaintained `paste 1.0.15` `RUSTSEC-2024-0436`, and `lru 0.12.5` `RUSTSEC-2026-0002`) for `0` CVEs across `247` lockfile crates.
+
+### Fixed
+- **Live `CanvasResolution` Wiring, Dynamic Canvas Export Dimensions & Cached `TIOCGWINSZ` Probing (`src/ui/canvas_raster.rs`, `src/ui/hires_subcell.rs`, `src/app.rs`)**:
+  - Wired `scene.resolution.resolve_px_per_cell(canvas.width, canvas.height)` into `render_graphical_canvas` (capped at `4..=16 × 8..=32` px/cell for 60 FPS on-screen `HalfBlock`/`Octant` rendering while preserving full uncapped resolution on `:canvas export`).
+  - Cached `ioctl(TIOCGWINSZ)` terminal pixel dimensions in `CACHED_TERMINAL_PIXELS` refreshed on `Event::Resize` (`refresh_terminal_pixel_size`), avoiding per-frame syscalls.
+  - Updated `:canvas export` and `:canvas encode` to use the active pane's exact `self.vt.size()` dimensions instead of hardcoded `(80, 24)` and surfaced `wm.split_focused(...)` errors in the pane status bar.
+
+### Changed
+- **Module DAG Decoupling & `ARCH-R04` Ceiling Decompression (`src/api/rpc_handlers.rs`, `src/colon_command/execute_wm.rs`, `src/pane/tests.rs`, `src/wm/tests.rs`, `docs/ARCHITECTURE_REVIEW.md`, `docs/REFACTOR_LOG.md`)**:
+  - Eliminated the `ui <-> api` circular dependency by moving `handle_rpc_canvas` and `handle_rpc_fontsize` into `src/api/rpc_handlers.rs`.
+  - Split `src/colon_command/execute.rs` into `execute.rs` (`298` LOC) and `execute_wm.rs` (`505` LOC) and extracted unit tests into `src/pane/tests.rs` and `src/wm/tests.rs` so all source files remain comfortably under the `800`-line `ARCH-R04` ceiling.
+
 ## [v1.10.0] - 2026-10-25
 
 ### Added

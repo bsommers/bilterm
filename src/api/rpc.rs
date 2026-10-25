@@ -63,21 +63,7 @@ pub fn default_snapshot_dir_from(
 
 /// Validates that a requested snapshot file name is a single file name within the snapshot directory.
 pub fn validate_snapshot_name(name: &str) -> std::result::Result<(), String> {
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains('\0')
-        || name == "."
-        || name == ".."
-    {
-        return Err("ppm_path must be a file name within the snapshot directory".to_string());
-    }
-    let path = Path::new(name);
-    let mut components = path.components();
-    match (components.next(), components.next()) {
-        (Some(std::path::Component::Normal(_)), None) => Ok(()),
-        _ => Err("ppm_path must be a file name within the snapshot directory".to_string()),
-    }
+    crate::secure_fs::validate_plain_file_name(name)
 }
 
 impl AutomationControlPlane {
@@ -444,16 +430,9 @@ impl AutomationControlPlane {
                 };
                 let action = parse_colon_command(&normalized)
                     .ok_or_else(|| format!("not a valid :colon command: {normalized}"))??;
-                if let crate::action::Action::CanvasCommand(ref subcmd) = action {
-                    self.execute_canvas_command_confined(subcmd)?;
-                }
-                let app_action = if matches!(action, crate::action::Action::CanvasCommand(_)) {
-                    AppAction::Handled
-                } else {
-                    self.wm
-                        .apply(action)
-                        .map_err(|e| format!("action execution error: {e}"))?
-                };
+                let app_action = self
+                    .apply_with_policy(action, SnapshotPolicy::Confined)
+                    .map_err(|e| format!("action execution error: {e}"))?;
                 let outcome_str = if app_action == AppAction::Quit {
                     "quit"
                 } else {

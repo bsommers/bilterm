@@ -348,7 +348,8 @@ impl CompositePane {
         let cfg = BiltermConfig::default();
         let (canvas_rows, canvas_cols) = self.vt.size();
         let cols = canvas_cols.max(1);
-        let rows = canvas_rows.saturating_add(1).max(1);
+        let rows = canvas_rows.max(1);
+        // Export intentionally uses the full resolved resolution (not the on-screen render cap).
         let (px_c, px_r) = self.canvas_scene.resolution.resolve_px_per_cell(cols, rows);
         let buf = PixelCanvasBuffer::render_pane_scene(self, &cfg, cols, rows, px_c, px_r);
         let payload = if display_path.ends_with(".svg") {
@@ -369,33 +370,33 @@ impl CompositePane {
         }
     }
 
-    /// Exports the active canvas scene confined strictly to `snapshot_dir` (`SEC-R01`, `P0.1`).
-    pub fn export_canvas_confined(
-        &mut self,
-        snapshot_dir: &Path,
-        file_name: &str,
-    ) -> std::result::Result<String, String> {
-        crate::api::validate_snapshot_name(file_name)?;
-        let dst = snapshot_dir.join(file_name);
-        let res = self.write_canvas_export_bytes(&dst, &dst.display().to_string());
-        match &res {
-            Ok(msg) | Err(msg) => self.set_status_message(Some(msg.clone())),
-        }
-        res
-    }
-
     /// Executes a `:canvas <subcommand>` on this pane (`TEK-01`, `CANV-01`, `CANV-02`, `CANV-03`).
     pub fn execute_canvas_command(&mut self, cmd: &str) -> std::result::Result<String, String> {
+        self.execute_canvas_command_in(cmd, None)
+    }
+
+    /// Like [`Self::execute_canvas_command`], but when `confine` is set `export` accepts only a plain
+    /// file name and writes it inside that directory (`SEC-R01`, `P0.1`).
+    pub fn execute_canvas_command_in(
+        &mut self,
+        cmd: &str,
+        confine: Option<&Path>,
+    ) -> std::result::Result<String, String> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         let res = match parts.first().copied() {
             Some("export") => {
                 let Some(path) = parts.get(1).copied() else {
                     return Err("Usage: :canvas export <file.ppm|file.svg>".to_string());
                 };
-                if path.contains("..") || path.contains('\0') {
+                if let Some(dir) = confine {
+                    crate::secure_fs::validate_plain_file_name(path)?;
+                    let dst = dir.join(path);
+                    self.write_canvas_export_bytes(&dst, &dst.display().to_string())
+                } else if path.contains("..") || path.contains('\0') {
                     return Err("Invalid export path (path traversal rejected)".to_string());
+                } else {
+                    self.write_canvas_export_bytes(Path::new(path), path)
                 }
-                self.write_canvas_export_bytes(Path::new(path), path)
             }
             Some("encode") => {
                 let req = parts
