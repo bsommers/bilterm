@@ -5,6 +5,20 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.10.2] - 2026-10-25
+
+### Changed
+- **Strict Acyclic Core Domain DAG (`error/secure_fs -> pty -> vt -> pane`, `src/pty/line_discipline.rs`, `src/vt/snapshot.rs`, `src/pane/typography.rs`, `tests/vt_worker_and_snapshot_seam.rs`)**:
+  - Moved `Osc133Phase` into `src/pty/line_discipline.rs`, `LineSizeAttr` and `scan_dec_line_size_escapes` into `src/vt/snapshot.rs`, and `FontFamilyPreset`, `PaneFontOptions`, and `CanvasResolution` into `src/pane/typography.rs`, eliminating all upward `crate::ui` and `crate::config` imports from `pty`, `vt`, and `pane`.
+  - Added automated CI layer DAG acyclicity tests (`core_domain_layers_pty_vt_pane_form_strict_acyclic_dag` and `ui_layer_never_imports_api_layer`).
+- **`FloatingPromptState` Encapsulation & `ARCH-R04` Module Decompression (`src/pane/prompt_editor.rs`, `src/colon_command/parse_visual.rs`, `src/vt/scan_osc_dcs.rs`)**:
+  - Restricted internal buffer/cursor fields on `FloatingPromptState` (`input`, `lines`, `cursor_row`, `cursor_col`, `cursor_char_idx`, `scroll_offset`, `h_scroll_offset`, `history_index`) to `pub(crate)` visibility and added read-only getters.
+  - Split `src/colon_command/parse.rs` (`412` LOC) + `src/colon_command/parse_visual.rs` (`338` LOC) and `src/vt/scan.rs` (`352` LOC) + `src/vt/scan_osc_dcs.rs` (`378` LOC) so all `75` source files remain well below the `800`-line `ARCH-R04` ceiling.
+- **Dirty-Driven Redraw, Cached `PixelCanvasBuffer` Rasterization & Single-Pass `ESC` Scanner (`src/app.rs`, `src/ui/canvas_raster.rs`, `src/vt/scan.rs`)**:
+  - Updated `CompositePane::poll_pty_events`, `CompositePane::ingest_pty_events`, and `WindowManager::poll_all_ptys` to return `bool`, gating `App::run` terminal redraws on `self.needs_redraw`.
+  - Added generation-keyed `Arc<PixelCanvasBuffer>` caching (`RASTER_CACHE`) in `render_graphical_canvas` so idle frames reuse rasterized pixel buffers without re-allocating RGBA framebuffers.
+  - Replaced the 14 separate `text.match_indices(...)` passes in `VtParser::scan_control_sequences` with a single-pass `text.match_indices('\x1b')` dispatcher (with a fast `!bytes.contains(&0x1b)` early return).
+
 ## [v1.10.1] - 2026-10-25
 
 ### Security

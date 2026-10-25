@@ -5,6 +5,7 @@ pub mod ghostty_backend;
 pub mod graphics;
 pub mod recording;
 pub mod scan;
+mod scan_osc_dcs;
 pub mod scrollback;
 pub mod snapshot;
 pub mod tektronix;
@@ -24,23 +25,13 @@ use std::time::Instant;
 
 use crate::vt::codec::{is_binary_noise_chunk, sanitize_binary_noise_chunk};
 use crate::vt::scan::normalize_extended_sgr_for_vt100;
+pub use crate::vt::snapshot::{LineSizeAttr, scan_dec_line_size_escapes};
 use crate::vt::snapshot::{
     CellColor, CellSnapshot, CursorShape, CursorSnapshot, GridSnapshot, RgbTriplet, RowSnapshot,
     UnderlineKind,
 };
 
-/// Semantic shell integration markers (`OSC 133;A/B/C/D`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Osc133Phase {
-    /// `OSC 133;A` — Shell prompt start.
-    PromptStart,
-    /// `OSC 133;B` — Command input start (shell waiting at prompt).
-    CommandStart,
-    /// `OSC 133;C` — Command execution started (foreground command running).
-    CommandExecuted,
-    /// `OSC 133;D[;exit_code]` — Command finished with optional exit status.
-    CommandFinished(Option<i32>),
-}
+pub use crate::pty::line_discipline::Osc133Phase;
 
 /// Recorded command block boundary in scrollback/screen history (`PANE-05`, `VAL-06`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -126,7 +117,7 @@ pub struct VtParser {
     active_overline: bool,
     last_styled_underline_kind: UnderlineKind,
     last_styled_underline_color: Option<RgbTriplet>,
-    line_size_attrs: std::collections::BTreeMap<u16, crate::ui::typography::LineSizeAttr>,
+    line_size_attrs: std::collections::BTreeMap<u16, LineSizeAttr>,
     tektronix: TektronixState,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
@@ -226,7 +217,7 @@ impl VtParser {
         if !vt_bytes.is_empty() {
             let normalized = normalize_extended_sgr_for_vt100(&vt_bytes);
             self.parser.process(&normalized);
-            crate::ui::typography::scan_dec_line_size_escapes(
+            scan_dec_line_size_escapes(
                 &vt_bytes,
                 start_row,
                 self.rows,
@@ -569,7 +560,8 @@ impl VtParser {
     }
 
     pub fn size(&self) -> (u16, u16) { (self.rows, self.cols) }
-    pub fn line_size_attr(&self, row: u16) -> crate::ui::typography::LineSizeAttr {
+    pub fn generation(&self) -> u64 { self.generation }
+    pub fn line_size_attr(&self, row: u16) -> LineSizeAttr {
         self.line_size_attrs.get(&row).copied().unwrap_or_default()
     }
     pub fn tektronix(&self) -> &TektronixState { &self.tektronix }

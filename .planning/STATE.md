@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10.1
+milestone: v1.10.2
 milestone_name: milestone
 current_phase: 28
 current_phase_name: architecture-hardening-and-dag-decoupling
-status: released_v1_10_1_phase_28_planned
-stopped_at: Released v1.10.1 (P0/P1 review remediations, unified automation confinement, dependency audit) and planned Phase 28 (28-01-PLAN.md)
+status: released_v1_10_2
+stopped_at: Completed Phase 28 Waves 1-3 and prepared v1.10.2 release
 last_updated: "2026-10-25"
 last_activity: 2026-10-25
-last_activity_desc: Released v1.10.1 with P0/P1 architecture & security remediations and dependency audit; planned Phase 28
+last_activity_desc: Completed Phase 28 Waves 1-3 (28-01-PLAN.md) and bumped version to v1.10.2
 progress:
   total_phases: 28
-  completed_phases: 27
+  completed_phases: 28
   total_plans: 52
-  completed_plans: 51
+  completed_plans: 52
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-25)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** `v1.10.1` released; Phase 28 (`28-01-PLAN.md` — P2 Module DAG Decoupling & Dirty-Driven Rendering) planned and ready.
+**Current focus:** Phase 28 (`28-01-PLAN.md` — Architecture Hardening, Module DAG Decoupling & Runtime Efficiency) complete.
 
 ## Current Position
 
-Phase: 28 (architecture-hardening-and-dag-decoupling) — P0/P1 COMPLETE (`v1.10.1`), P2 PLANNED (`28-01-PLAN.md`)
-Plan: `28-01-PLAN.md` ready for execution
-Status: Phases 1–27 complete (`47/47` requirements shipped through `v1.10.1`); Phase 28 P0/P1 shipped in `v1.10.1`
-Last activity: 2026-10-25 — Released `v1.10.1` (`677b668`) with unified `SnapshotPolicy::Confined` (`WindowManager::apply_automation`), live `CanvasResolution` + cached `TIOCGWINSZ`, `ui <-> api` cycle removal, `ARCH-R04` module splits, and `vt100-ctt` dependency pruning.
+Phase: 28 (architecture-hardening-and-dag-decoupling) — COMPLETE (Waves 1–3)
+Plan: `28-01-PLAN.md` complete
+Status: Phases 1–28 complete (`47/47` requirements + Phase 28 architecture hardening complete)
+Last activity: 2026-10-25 — Completed Phase 28 Waves 2 & 3 (`pty -> vt -> pane` strict acyclic DAG, `parse_visual.rs` & `scan_osc_dcs.rs` decompression, `FloatingPromptState` encapsulation, dirty-driven redraw, cached `PixelCanvasBuffer` rasterization, single-pass `ESC` scanner, and CI DAG acyclicity gate).
 
 Progress: [██████████] 100%
 

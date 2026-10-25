@@ -169,17 +169,7 @@ pub(super) fn render_floating_prompt(
         return;
     }
 
-    // Determine lines to render (handling legacy direct mutation of `pane.prompt.input` in tests)
-    let fallback_lines;
-    let lines_slice: &[String] = if pane.prompt().lines.len() == 1
-        && pane.prompt().lines[0].is_empty()
-        && !pane.prompt().input.is_empty()
-    {
-        fallback_lines = vec![pane.prompt().input.clone()];
-        &fallback_lines
-    } else {
-        &pane.prompt().lines
-    };
+    let lines_slice: &[String] = &pane.prompt().lines;
 
     let has_running_banner = pane.prompt().running_command.is_some() && inner.height >= 2;
     let has_completion_bar = pane.prompt().completion.is_active()

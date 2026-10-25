@@ -18,6 +18,7 @@ pub struct App {
     pub wm: WindowManager,
     pub should_quit: bool,
     pub last_viewport: Rect,
+    pub needs_redraw: bool,
 }
 
 impl App {
@@ -29,6 +30,7 @@ impl App {
             wm,
             should_quit: false,
             last_viewport: Rect::new(0, 0, cols, rows + 1),
+            needs_redraw: true,
         }
     }
 
@@ -38,6 +40,7 @@ impl App {
             wm,
             should_quit: false,
             last_viewport: Rect::new(0, 0, cols, rows),
+            needs_redraw: true,
         })
     }
 
@@ -52,12 +55,15 @@ impl App {
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
-            terminal.draw(|frame| {
-                let area = frame.area();
-                self.last_viewport = area;
-                let _ = self.wm.resize_all(area);
-                frame.render_widget(WorkspaceWidget::new(&self.wm), area);
-            })?;
+            if self.needs_redraw {
+                terminal.draw(|frame| {
+                    let area = frame.area();
+                    self.last_viewport = area;
+                    let _ = self.wm.resize_all(area);
+                    frame.render_widget(WorkspaceWidget::new(&self.wm), area);
+                })?;
+                self.needs_redraw = false;
+            }
 
             self.flush_osc52_to_host()?;
 
@@ -69,10 +75,13 @@ impl App {
                 maybe_event = reader.next() => {
                     if let Some(Ok(event)) = maybe_event {
                         self.handle_crossterm_event(event)?;
+                        self.needs_redraw = true;
                     }
                 }
                 _ = tick.tick() => {
-                    self.poll_all_ptys();
+                    if self.poll_all_ptys() {
+                        self.needs_redraw = true;
+                    }
                 }
                 _ = tokio::signal::ctrl_c() => {
                     self.should_quit = true;
@@ -83,8 +92,12 @@ impl App {
         Ok(())
     }
 
-    pub fn poll_all_ptys(&mut self) {
-        self.wm.poll_all_ptys();
+    pub fn poll_all_ptys(&mut self) -> bool {
+        let changed = self.wm.poll_all_ptys();
+        if changed {
+            self.needs_redraw = true;
+        }
+        changed
     }
 
     pub fn all_panes_exited(&self) -> bool {

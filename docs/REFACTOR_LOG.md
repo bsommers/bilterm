@@ -26,3 +26,25 @@ Tracks incremental, behavior-preserving architectural refactorings and security 
   - `cargo clippy --all-features --all-targets -- -D warnings`: ✅ `0` warnings, `0` errors
   - `cargo test`: ✅ `235` passed, `0` failed (including `rpc_canvas_export_enforces_snapshot_dir_confinement_and_dynamic_resolution` and `rpc_confinement_covers_record_start_and_export_dimensions_match_canvas`)
 - **Status**: ✅ Complete
+
+---
+
+### [2026-10-25] Refactoring Batch: Phase 28 Waves 2 & 3 (Strict `pty -> vt -> pane` DAG, Single-Pass VT Scanner & Dirty-Driven Redraw)
+
+- **Tasks Completed**:
+  1. **P1.1 (Part B) — Strict `error/secure_fs -> pty -> vt -> pane` Acyclic Layer DAG**:
+     - **Target Files**: [`src/pty/line_discipline.rs`](../src/pty/line_discipline.rs), [`src/vt/snapshot.rs`](../src/vt/snapshot.rs), [`src/vt/mod.rs`](../src/vt/mod.rs), [`src/vt/backend.rs`](../src/vt/backend.rs), [`src/vt/ghostty_backend.rs`](../src/vt/ghostty_backend.rs), [`src/vt/tests.rs`](../src/vt/tests.rs), [`src/pane/typography.rs`](../src/pane/typography.rs), [`src/pane/mod.rs`](../src/pane/mod.rs), [`src/pane/canvas_scene.rs`](../src/pane/canvas_scene.rs), [`src/ui/typography.rs`](../src/ui/typography.rs), [`src/ui/hires_subcell.rs`](../src/ui/hires_subcell.rs)
+     - **Changes**: Relocated `Osc133Phase` to `src/pty/line_discipline.rs`, `LineSizeAttr` + `scan_dec_line_size_escapes` to `src/vt/snapshot.rs`, and `FontFamilyPreset` + `PaneFontOptions` + `CanvasResolution` + `probe_terminal_pixel_size` to `src/pane/typography.rs` (with compatibility re-exports in `src/vt/` and `src/ui/`). Eliminated all upward `crate::ui`, `crate::wm`, `crate::config`, and `crate::api` imports across `src/pty/`, `src/vt/`, and `src/pane/`.
+  2. **P1.2 (Part B) & P2.2 — Module Decompression & Single-Pass `ESC` Control Sequence Scanner**:
+     - **Target Files**: [`src/colon_command/parse.rs`](../src/colon_command/parse.rs) (`732` $\rightarrow$ `412` LOC), [`src/colon_command/parse_visual.rs`](../src/colon_command/parse_visual.rs) (`338` LOC), [`src/vt/scan.rs`](../src/vt/scan.rs) (`776` $\rightarrow$ `352` LOC), [`src/vt/scan_osc_dcs.rs`](../src/vt/scan_osc_dcs.rs) (`378` LOC), [`src/wm/mod.rs`](../src/wm/mod.rs) (`758` LOC), [`src/wm/quick_terminal.rs`](../src/wm/quick_terminal.rs) (`127` LOC)
+     - **Changes**: Extracted visual/shader/drawer/font/canvas `:colon` parsing into `src/colon_command/parse_visual.rs`, extracted OSC/DCS/APC sequence handlers into `src/vt/scan_osc_dcs.rs`, and replaced the 14-pass `text.match_indices(...)` loops in `VtParser::scan_control_sequences` with a single-pass `ESC` (`\x1b`) dispatcher (plus zero-allocation fast-return when `!bytes.contains(&0x1b)`).
+  3. **P1.3 — `FloatingPromptState` Buffer & Cursor Encapsulation**:
+     - **Target Files**: [`src/pane/prompt_editor.rs`](../src/pane/prompt_editor.rs), [`src/ui/status_bar.rs`](../src/ui/status_bar.rs), [`tests/composite_pane_snapshots.rs`](../tests/composite_pane_snapshots.rs)
+     - **Changes**: Restricted `FloatingPromptState` internal buffer/cursor fields (`input`, `lines`, `cursor_row`, `cursor_col`, `cursor_char_idx`, `scroll_offset`, `h_scroll_offset`, `history_index`) to `pub(crate)` and exposed read-only accessors (`lines()`, `cursor_row()`, `cursor_col()`, `cursor_char_idx()`, `scroll_offset()`, `h_scroll_offset()`, `history_index()`).
+  4. **P2.1 & P3.2 — Dirty-Driven Redraw, Cached `PixelCanvasBuffer` Rasterization & Automated Layer DAG Gate**:
+     - **Target Files**: [`src/app.rs`](../src/app.rs), [`src/pane/mod.rs`](../src/pane/mod.rs), [`src/wm/mod.rs`](../src/wm/mod.rs), [`src/ui/canvas_raster.rs`](../src/ui/canvas_raster.rs), [`tests/vt_worker_and_snapshot_seam.rs`](../tests/vt_worker_and_snapshot_seam.rs)
+     - **Changes**: Added `App::needs_redraw` gated on Crossterm input events and `WindowManager::poll_all_ptys(&mut self) -> bool`, added thread-local `RASTER_CACHE` (`RasterCacheKey -> Arc<PixelCanvasBuffer>`) in `render_graphical_canvas`, and enforced layer DAG acyclicity in `tests/vt_worker_and_snapshot_seam.rs`.
+- **Verification**:
+  - `cargo clippy --all-features --all-targets -- -D warnings`: ✅ `0` warnings, `0` errors
+  - `cargo test`: ✅ `235` passed, `0` failed
+- **Status**: ✅ Complete

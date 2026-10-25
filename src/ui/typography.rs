@@ -16,135 +16,15 @@
 //!    Handles `Ctrl++`/`Ctrl+=`, `Ctrl+-`, `Ctrl+0`, `:fontsize`, and dynamic `(rows, cols)`
 //!    viewport recalculation when font scale changes inside a fixed pixel window.
 
-use std::collections::BTreeMap;
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
-use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+pub use crate::pane::typography::{FontFamilyPreset, PaneFontOptions};
 use crate::vt::VtParser;
+pub use crate::vt::{LineSizeAttr, scan_dec_line_size_escapes};
 use crate::wm::WindowManager;
-
-/// Per-row DEC VT100/VT220 line-size attribute (`DECSWL`, `DECDWL`, `DECDHL`) (`FONT-01`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LineSizeAttr {
-    /// Standard 1x1 character cells (`\x1b#5` `DECSWL`).
-    #[default]
-    Single,
-    /// Double-width 2x1 character cells (`\x1b#6` `DECDWL`).
-    DoubleWidth,
-    /// Double-height top-half 2x2 character cells (`\x1b#3` `DECDHL`).
-    DoubleHeightTop,
-    /// Double-height bottom-half 2x2 character cells (`\x1b#4` `DECDHL`).
-    DoubleHeightBottom,
-}
-
-impl LineSizeAttr {
-    /// Returns `true` when each logical character occupies 2 horizontal cells (`DECDWL` or `DECDHL`).
-    #[inline]
-    pub const fn is_double_width(self) -> bool {
-        !matches!(self, Self::Single)
-    }
-
-    /// Returns `true` when the row is part of a `DECDHL` double-height pair (`\x1b#3` or `\x1b#4`).
-    #[inline]
-    pub const fn is_double_height(self) -> bool {
-        matches!(self, Self::DoubleHeightTop | Self::DoubleHeightBottom)
-    }
-
-    /// Human-readable badge for the 3270 Inspector and diagnostics.
-    #[inline]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Single => "1x1 (DECSWL)",
-            Self::DoubleWidth => "2x1 (DECDWL)",
-            Self::DoubleHeightTop => "2x2-TOP (DECDHL)",
-            Self::DoubleHeightBottom => "2x2-BOT (DECDHL)",
-        }
-    }
-}
-
-/// Scans a raw PTY byte stream for DEC line-size escape sequences (`\x1b#3`, `\x1b#4`, `\x1b#5`, `\x1b#6`),
-/// tracking intermediate newlines and CSI cursor-positioning sequences so multi-row bursts assign
-/// line-size attributes to the exact target row (`FONT-01`).
-pub fn scan_dec_line_size_escapes(
-    bytes: &[u8],
-    start_row: u16,
-    max_rows: u16,
-    attrs: &mut BTreeMap<u16, LineSizeAttr>,
-) {
-    let limit = max_rows.max(1);
-    let mut cur_row = start_row.min(limit.saturating_sub(1));
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\n' => {
-                cur_row = (cur_row + 1).min(limit.saturating_sub(1));
-                i += 1;
-            }
-            0x1b if i + 1 < bytes.len() => match bytes[i + 1] {
-                b'#' if i + 2 < bytes.len() => {
-                    match bytes[i + 2] {
-                        b'3' => {
-                            attrs.insert(cur_row, LineSizeAttr::DoubleHeightTop);
-                        }
-                        b'4' => {
-                            attrs.insert(cur_row, LineSizeAttr::DoubleHeightBottom);
-                        }
-                        b'5' => {
-                            attrs.remove(&cur_row);
-                        }
-                        b'6' => {
-                            attrs.insert(cur_row, LineSizeAttr::DoubleWidth);
-                        }
-                        _ => {}
-                    }
-                    i += 3;
-                }
-                b'c' => {
-                    attrs.clear();
-                    cur_row = 0;
-                    i += 2;
-                }
-                b'[' => {
-                    let mut j = i + 2;
-                    while j < bytes.len() && !(0x40..=0x7e).contains(&bytes[j]) {
-                        j += 1;
-                    }
-                    if j < bytes.len() {
-                        let final_byte = bytes[j];
-                        let params = std::str::from_utf8(&bytes[i + 2..j]).unwrap_or("");
-                        match final_byte {
-                            b'H' | b'f' => {
-                                let row_1 = params
-                                    .split(';')
-                                    .next()
-                                    .and_then(|s| s.parse::<u16>().ok())
-                                    .unwrap_or(1);
-                                cur_row = row_1.saturating_sub(1).min(limit.saturating_sub(1));
-                            }
-                            b'J' if params == "2" || params == "3" => {
-                                attrs.clear();
-                            }
-                            _ => {}
-                        }
-                        i = j + 1;
-                    } else {
-                        break;
-                    }
-                }
-                _ => {
-                    i += 2;
-                }
-            },
-            _ => {
-                i += 1;
-            }
-        }
-    }
-}
 
 /// Formats an `OSC 50` host-terminal font scaling passthrough sequence (`FONT-01`).
 pub fn encode_host_font_passthrough(font_size_pt: u16, scale_pct: u16) -> String {
@@ -311,115 +191,17 @@ impl WindowManager {
     }
 }
 
-/// Selectable font family preset per pane or window (`FONT-02`).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FontFamilyPreset {
-    /// Classic IBM 3270 Mainframe phosphor terminal font (`"IBM 3270"`).
-    #[default]
-    Ibm3270,
-    /// Classic DOS Borland Turbo Vision 8×16 bitmap font (`"PxPlus IBM VGA8"`).
-    BorlandDosVga,
-    /// Classic 1974 Tektronix 4014 storage-tube vector stroke font (`"Tektronix 4014"`).
-    Tektronix4014,
-    /// Modern developer ligature font (`"JetBrains Mono"`).
-    JetBrainsMono,
-    /// Modern functional programming font (`"Fira Code"`).
-    FiraCode,
-    /// High-density slender terminal font (`"Iosevka Term"`).
-    IosevkaTerm,
-    /// Microsoft terminal font (`"Cascadia Code"`).
-    CascadiaCode,
-    /// Clean open-source monospace font (`"Hack"`).
-    Hack,
-    /// User-specified custom font family name.
-    Custom(String),
-}
-
-impl FontFamilyPreset {
-    pub fn from_name(raw: &str) -> Option<Self> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "ibm3270" | "3270" | "ibm" | "mainframe" => Some(Self::Ibm3270),
-            "vga" | "vga8" | "dos" | "borland" | "cp437" | "turbo" => Some(Self::BorlandDosVga),
-            "tek" | "tek4014" | "tektronix" | "vector" => Some(Self::Tektronix4014),
-            "jetbrains" | "jetbrains-mono" | "jbmono" | "jb" => Some(Self::JetBrainsMono),
-            "fira" | "firacode" | "fira-code" => Some(Self::FiraCode),
-            "iosevka" | "iosevka-term" => Some(Self::IosevkaTerm),
-            "cascadia" | "cascadia-code" => Some(Self::CascadiaCode),
-            "hack" => Some(Self::Hack),
-            _ => None,
-        }
-    }
-
-    pub fn display_name(&self) -> &str {
-        match self {
-            Self::Ibm3270 => "IBM 3270",
-            Self::BorlandDosVga => "PxPlus IBM VGA8",
-            Self::Tektronix4014 => "Tektronix 4014",
-            Self::JetBrainsMono => "JetBrains Mono",
-            Self::FiraCode => "Fira Code",
-            Self::IosevkaTerm => "Iosevka Term",
-            Self::CascadiaCode => "Cascadia Code",
-            Self::Hack => "Hack",
-            Self::Custom(name) => name.as_str(),
-        }
-    }
-
-    pub fn short_badge(&self) -> &str {
-        match self {
-            Self::Ibm3270 => "3270",
-            Self::BorlandDosVga => "VGA8",
-            Self::Tektronix4014 => "TEK",
-            Self::JetBrainsMono => "JBMono",
-            Self::FiraCode => "Fira",
-            Self::IosevkaTerm => "Iosevka",
-            Self::CascadiaCode => "Cascadia",
-            Self::Hack => "Hack",
-            Self::Custom(name) => name.as_str(),
-        }
-    }
-}
-
-/// Per-pane / per-window selectable typography options (`FONT-02`).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PaneFontOptions {
-    pub family: FontFamilyPreset,
-    pub size_pt: Option<u16>,
-    pub scale_pct: Option<u16>,
-    pub bold: bool,
-    pub italic: bool,
-    pub double_width: bool,
-}
-
 impl PaneFontOptions {
-    pub fn effective_size_pt(&self, cfg: & crate::config::BiltermConfig) -> u16 {
-        let base = self.size_pt.unwrap_or(cfg.font_size_pt).clamp(6, 72);
-        let pct = self.effective_scale_pct(cfg);
-        ((u32::from(base) * u32::from(pct) + 50) / 100).clamp(6, 96) as u16
+    pub fn effective_size_pt(&self, cfg: &crate::config::BiltermConfig) -> u16 {
+        self.effective_size_pt_with_defaults(cfg.font_size_pt, cfg.font_scale_pct)
     }
 
     pub fn effective_scale_pct(&self, cfg: &crate::config::BiltermConfig) -> u16 {
-        self.scale_pct.unwrap_or(cfg.font_scale_pct).clamp(50, 400)
-    }
-
-    pub fn has_custom_overrides(&self) -> bool {
-        self.family != FontFamilyPreset::Ibm3270
-            || self.size_pt.is_some()
-            || self.scale_pct.is_some()
-            || self.bold
-            || self.italic
-            || self.double_width
+        self.effective_scale_pct_with_default(cfg.font_scale_pct)
     }
 
     pub fn summary(&self, cfg: &crate::config::BiltermConfig) -> String {
-        format!(
-            "family='{}' size={}pt ({}%) bold={} italic={} double_width={}",
-            self.family.display_name(),
-            self.effective_size_pt(cfg),
-            self.effective_scale_pct(cfg),
-            self.bold,
-            self.italic,
-            self.double_width
-        )
+        self.summary_with_defaults(cfg.font_size_pt, cfg.font_scale_pct)
     }
 
     pub fn execute_command(
@@ -427,116 +209,7 @@ impl PaneFontOptions {
         cfg: &crate::config::BiltermConfig,
         raw: &str,
     ) -> std::result::Result<String, String> {
-        let parts: Vec<&str> = raw.split_whitespace().collect();
-        match parts.first().copied().unwrap_or("status") {
-            "status" => Ok(format!("PANE FONT: {}", self.summary(cfg))),
-            "list" | "presets" => Ok(
-                "FONT PRESETS: ibm3270 | vga (Borland DOS) | tek4014 | jetbrains | firacode | iosevka | cascadia | hack | custom <name>"
-                    .to_string(),
-            ),
-            "reset" | "default" => {
-                *self = Self::default();
-                Ok(format!("PANE FONT RESET: {}", self.summary(cfg)))
-            }
-            "+" | "in" | "up" | "bigger" => {
-                let cur = self.effective_scale_pct(cfg);
-                self.scale_pct = Some((cur + 10).clamp(50, 400));
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "-" | "out" | "down" | "smaller" => {
-                let cur = self.effective_scale_pct(cfg);
-                self.scale_pct = Some(cur.saturating_sub(10).clamp(50, 400));
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "bold" => {
-                self.bold = match parts.get(1).copied() {
-                    Some("on" | "true" | "1") => true,
-                    Some("off" | "false" | "0") => false,
-                    _ => !self.bold,
-                };
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "italic" => {
-                self.italic = match parts.get(1).copied() {
-                    Some("on" | "true" | "1") => true,
-                    Some("off" | "false" | "0") => false,
-                    _ => !self.italic,
-                };
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "double" | "2x" | "wide" => {
-                self.double_width = match parts.get(1).copied() {
-                    Some("on" | "true" | "1") => true,
-                    Some("off" | "false" | "0") => false,
-                    _ => !self.double_width,
-                };
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "size" => {
-                let Some(v) = parts.get(1).and_then(|s| s.trim_end_matches("pt").parse::<u16>().ok()) else {
-                    return Err("Usage: :font size <6..72>".to_string());
-                };
-                self.size_pt = Some(v.clamp(6, 72));
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "scale" => {
-                let Some(v) = parts.get(1).and_then(|s| s.trim_end_matches('%').parse::<u16>().ok()) else {
-                    return Err("Usage: :font scale <50..400>%".to_string());
-                };
-                self.scale_pct = Some(v.clamp(50, 400));
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            "custom" | "family" => {
-                let name = parts.get(1..).map(|s| s.join(" ")).unwrap_or_default();
-                if name.trim().is_empty() {
-                    return Err("Usage: :font custom <Font Family Name>".to_string());
-                }
-                if let Some(preset) = FontFamilyPreset::from_name(&name) {
-                    self.family = preset;
-                } else {
-                    self.family = FontFamilyPreset::Custom(name);
-                }
-                Ok(format!("PANE FONT: {}", self.summary(cfg)))
-            }
-            other => {
-                if let Some(preset) = FontFamilyPreset::from_name(other) {
-                    self.family = preset;
-                    if let Some(arg2) = parts.get(1).copied() {
-                        if let Some(pt) = arg2.strip_suffix("pt").and_then(|s| s.parse::<u16>().ok()) {
-                            self.size_pt = Some(pt.clamp(6, 72));
-                        } else if let Some(pct) = arg2.strip_suffix('%').and_then(|s| s.parse::<u16>().ok()) {
-                            self.scale_pct = Some(pct.clamp(50, 400));
-                        } else if let Ok(v) = arg2.parse::<u16>() {
-                            if v < 50 {
-                                self.size_pt = Some(v.clamp(6, 72));
-                            } else {
-                                self.scale_pct = Some(v.clamp(50, 400));
-                            }
-                        }
-                    }
-                    return Ok(format!("PANE FONT: {}", self.summary(cfg)));
-                }
-                if let Some(pt) = other.strip_suffix("pt").and_then(|s| s.parse::<u16>().ok()) {
-                    self.size_pt = Some(pt.clamp(6, 72));
-                    return Ok(format!("PANE FONT: {}", self.summary(cfg)));
-                }
-                if let Some(pct) = other.strip_suffix('%').and_then(|s| s.parse::<u16>().ok()) {
-                    self.scale_pct = Some(pct.clamp(50, 400));
-                    return Ok(format!("PANE FONT: {}", self.summary(cfg)));
-                }
-                if let Ok(v) = other.parse::<u16>() {
-                    if v < 50 {
-                        self.size_pt = Some(v.clamp(6, 72));
-                    } else {
-                        self.scale_pct = Some(v.clamp(50, 400));
-                    }
-                    return Ok(format!("PANE FONT: {}", self.summary(cfg)));
-                }
-                Err(format!(
-                    "Unknown :font option '{other}'. Usage: :font <ibm3270|vga|tek4014|jetbrains|firacode|iosevka|cascadia|hack|custom <name>|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
-                ))
-            }
-        }
+        self.execute_command_with_defaults(cfg.font_size_pt, cfg.font_scale_pct, raw)
     }
 }
 

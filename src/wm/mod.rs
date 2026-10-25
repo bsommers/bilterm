@@ -8,6 +8,7 @@ pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
     WorkspaceDrawer,
 };
+pub use quick_terminal::{encode_sgr_mouse_local, inset_window_frame, rect_contains};
 pub use session::{SavedPaneState, SavedWorkspaceSession};
 pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 
@@ -16,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
@@ -542,25 +542,41 @@ impl WindowManager {
 
     /// Polls all workspace panes and the quick terminal for PTY output and reaps exited panes
     /// when more than one workspace pane exists (`ARCH-R02`).
-    pub fn poll_all_ptys(&mut self) {
+    pub fn poll_all_ptys(&mut self) -> bool {
+        let mut changed = false;
         let mut exited_ids = Vec::new();
         for (&id, pane) in self.panes.iter_mut() {
-            pane.poll_pty_events();
+            let prev_ld = *pane.line_discipline();
+            if pane.poll_pty_events() {
+                changed = true;
+            }
             pane.refresh_line_discipline();
+            if *pane.line_discipline() != prev_ld {
+                changed = true;
+            }
             if pane.has_exited() {
                 exited_ids.push(id);
             }
         }
         for id in exited_ids {
-            if self.panes.len() > 1 {
-                let _ = self.remove_pane(id);
+            if self.panes.len() > 1 && self.remove_pane(id) {
+                changed = true;
             }
         }
-        self.quick_terminal.pane.poll_pty_events();
+        let prev_qt_ld = *self.quick_terminal.pane.line_discipline();
+        if self.quick_terminal.pane.poll_pty_events() {
+            changed = true;
+        }
         self.quick_terminal.pane.refresh_line_discipline();
-        let _ = self.poll_tmux_control();
+        if *self.quick_terminal.pane.line_discipline() != prev_qt_ld {
+            changed = true;
+        }
+        if self.poll_tmux_control() > 0 {
+            changed = true;
+        }
         self.update_drawer_telemetry();
         self.maybe_rebalance_scrollback(Instant::now());
+        changed
     }
 
     /// Returns `true` when every workspace pane has exited.
@@ -734,48 +750,6 @@ impl WindowManager {
         }
         None
     }
-}
-
-/// Insets a window rectangle by 1 cell on all sides for the Borland Turbo Vision window frame (`╔═╗` / `┌─┐`).
-pub fn inset_window_frame(outer: Rect) -> Rect {
-    if outer.width <= 2 || outer.height <= 2 {
-        return outer;
-    }
-    Rect {
-        x: outer.x + 1,
-        y: outer.y + 1,
-        width: outer.width.saturating_sub(2),
-        height: outer.height.saturating_sub(2),
-    }
-}
-
-pub fn rect_contains(r: Rect, col: u16, row: u16) -> bool {
-    col >= r.x && col < r.x + r.width && row >= r.y && row < r.y + r.height
-}
-
-/// Translates a global `MouseEvent` into pane-local coordinates and encodes an SGR (1006)
-/// mouse sequence (`\x1b[<btn;local_col;local_rowM` or `m`) (`WM-03`).
-pub fn encode_sgr_mouse_local(mouse: MouseEvent, pane_inner: Rect) -> Option<Vec<u8>> {
-    if !rect_contains(pane_inner, mouse.column, mouse.row) {
-        return None;
-    }
-    let local_col = mouse.column.saturating_sub(pane_inner.x) + 1;
-    let local_row = mouse.row.saturating_sub(pane_inner.y) + 1;
-
-    let (btn_code, suffix) = match mouse.kind {
-        MouseEventKind::Down(MouseButton::Left) => (0, 'M'),
-        MouseEventKind::Down(MouseButton::Middle) => (1, 'M'),
-        MouseEventKind::Down(MouseButton::Right) => (2, 'M'),
-        MouseEventKind::Up(MouseButton::Left) => (0, 'm'),
-        MouseEventKind::Up(MouseButton::Middle) => (1, 'm'),
-        MouseEventKind::Up(MouseButton::Right) => (2, 'm'),
-        MouseEventKind::Drag(MouseButton::Left) => (32, 'M'),
-        MouseEventKind::ScrollUp => (64, 'M'),
-        MouseEventKind::ScrollDown => (65, 'M'),
-        _ => return None,
-    };
-
-    Some(format!("\x1b[<{btn_code};{local_col};{local_row}{suffix}").into_bytes())
 }
 
 #[cfg(test)]

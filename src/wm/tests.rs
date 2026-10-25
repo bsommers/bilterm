@@ -1,5 +1,5 @@
 use super::*;
-use crossterm::event::KeyModifiers;
+use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 #[test]
 fn apply_config_restores_session_history_into_existing_and_split_panes() {

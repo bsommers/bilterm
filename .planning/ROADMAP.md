@@ -355,15 +355,15 @@ Plans:
 **Depends on**: Phase 27
 **Requirements**: ARCH-R01, ARCH-R02, ARCH-R04, SEC-R01
 
-**Plans**: 1 plan (Wave 1 complete; Waves 2–3 tracked)
+**Plans**: 1/1 plan complete (Waves 1–3 complete)
 
 Plans:
-- [x] 28-01-PLAN.md — Wave 1 (P0.1 confined `:canvas export`, P0.2 cached `TIOCGWINSZ` & live `CanvasResolution`, P1.1a `src/api/rpc_handlers.rs` breaking `ui -> api` cycle, P1.2a `execute_wm.rs` / `pane/tests.rs` / `wm/tests.rs` ceiling decompression, and `Cargo.toml` `vt100-ctt` supply-chain pruning); Waves 2–3 roadmap (`docs/ARCHITECTURE_REVIEW.md`)
+- [x] 28-01-PLAN.md — Wave 1 (P0.1 confined `:canvas export`, P0.2 cached `TIOCGWINSZ` & live `CanvasResolution`, P1.1a `src/api/rpc_handlers.rs` breaking `ui -> api` cycle, P1.2a `execute_wm.rs` / `pane/tests.rs` / `wm/tests.rs` ceiling decompression, and `Cargo.toml` `vt100-ctt` supply-chain pruning); Wave 2 (`error/secure_fs -> pty -> vt -> pane` strict acyclic DAG, `parse_visual.rs` & `scan_osc_dcs.rs` decompression, `FloatingPromptState` encapsulation); Wave 3 (dirty-driven `App::run` redraw, cached `PixelCanvasBuffer` rasterization, single-pass `ESC` scanner, and CI DAG acyclicity gate)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -394,3 +394,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 3/3 | Complete | 2026-10-24 |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 3/3 | Complete | 2026-10-24 |
 | 27. High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) | 3/3 | Complete | 2026-10-25 |
+| 28. Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency (`ARCH-R01..04`, `SEC-R01`) | 1/1 | Complete | 2026-10-25 |

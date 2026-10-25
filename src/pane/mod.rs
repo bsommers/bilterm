@@ -5,6 +5,7 @@ pub mod highlight;
 pub mod history_store;
 pub mod modes;
 pub mod prompt_editor;
+pub mod typography;
 
 pub use canvas_scene::{
     CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
@@ -12,7 +13,10 @@ pub use canvas_scene::{
 };
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
-pub use crate::ui::typography::{FontFamilyPreset, PaneFontOptions};
+pub use typography::{
+    CanvasResolution, FontFamilyPreset, PaneFontOptions, probe_terminal_pixel_size,
+    refresh_terminal_pixel_size,
+};
 
 use std::path::PathBuf;
 
@@ -614,18 +618,19 @@ impl CompositePane {
 
     /// Drains pending events from the live `PtySession` with a bounded per-frame budget so
     /// high-throughput streams (`tail -f /dev/random`, `yes`) never starve the UI loop.
-    pub fn poll_pty_events(&mut self) {
+    pub fn poll_pty_events(&mut self) -> bool {
         let events = if let Some(pty) = &mut self.pty {
             pty.drain_events()
         } else {
             Vec::new()
         };
-        self.ingest_pty_events(events);
+        self.ingest_pty_events(events)
     }
 
     /// Feeds a batch of drained `PtyEvent`s into the VT state machine in order.
-    pub fn ingest_pty_events(&mut self, events: Vec<PtyEvent>) {
+    pub fn ingest_pty_events(&mut self, events: Vec<PtyEvent>) -> bool {
         let mut coalesced = Vec::new();
+        let mut exited_now = false;
         for ev in events {
             match ev {
                 PtyEvent::Output(bytes) => {
@@ -633,6 +638,7 @@ impl CompositePane {
                 }
                 PtyEvent::Exited(_) => {
                     self.exited = true;
+                    exited_now = true;
                 }
             }
         }
@@ -652,7 +658,9 @@ impl CompositePane {
                 }
             }
             self.refresh_line_discipline();
+            return true;
         }
+        exited_now
     }
 
     /// Writes raw bytes to the underlying `PtySession` if one is attached (`v1.1.0` / `v1.4.0`).

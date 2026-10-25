@@ -27,8 +27,8 @@ fn snapshot_top_pinned_prompt_over_scrolling_output_canvas() {
     for idx in 0..9 {
         pane.process_pty_output(format!("OUTPUT_ROW_{idx:02}: system telemetry nominal\r\n").as_bytes());
     }
-    pane.prompt_mut().input = "status --all".to_string();
-    pane.prompt_mut().cursor_char_idx = pane.prompt().input.len();
+    pane.prompt_mut().set_text("status --all");
+    pane.prompt_mut().move_cursor_home();
 
     let rendered = render_pane_to_string(&pane, 64, 10);
     // Rows 0..3 are occluded by the top-pinned floating prompt; rows 3..9 remain visible underneath
@@ -45,7 +45,8 @@ fn snapshot_bottom_pinned_and_alternate_screen_auto_hide() {
         pane.process_pty_output(format!("CANVAS_ROW_{idx:02}: scrolling underneath\r\n").as_bytes());
     }
     pane.set_prompt_anchor(PromptAnchor::Bottom);
-    pane.prompt_mut().input = "vim Cargo.toml".to_string();
+    pane.prompt_mut().set_text("vim Cargo.toml");
+    pane.prompt_mut().move_cursor_home();
 
     let bottom_rendered = render_pane_to_string(&pane, 64, 10);
     // Top rows are now visible while bottom rows are occluded by the bottom-pinned prompt

@@ -370,7 +370,9 @@ pub struct PaneCanvasScene {
     #[serde(default)]
     pub render_backend: CanvasRenderBackend,
     #[serde(default)]
-    pub resolution: crate::ui::hires_subcell::CanvasResolution,
+    pub resolution: crate::pane::typography::CanvasResolution,
+    #[serde(skip)]
+    pub generation: u64,
     pub primitives: Vec<VectorPrimitive>,
     pub sprites: Vec<Sprite2D>,
     pub plots: Vec<DeclarativePlot>,
@@ -391,6 +393,7 @@ impl PaneCanvasScene {
     }
 
     pub fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.primitives.clear();
         self.sprites.clear();
         self.plots.clear();
@@ -399,6 +402,7 @@ impl PaneCanvasScene {
 
     /// Steps all sprite physics by `dt` and returns pairs of colliding sprite `(id_a, id_b)` (`CANV-01`).
     pub fn step_sprites(&mut self, dt: f32) -> Vec<(u32, u32)> {
+        self.generation = self.generation.wrapping_add(1);
         for sp in &mut self.sprites {
             sp.step_physics(dt);
         }
@@ -424,6 +428,7 @@ impl PaneCanvasScene {
         tektronix: &mut TektronixState,
         raw: &str,
     ) -> std::result::Result<String, String> {
+        self.generation = self.generation.wrapping_add(1);
         let parts: Vec<&str> = raw.split_whitespace().collect();
         match parts.first().copied().unwrap_or("status") {
             "status" => Ok(format!(
@@ -458,7 +463,7 @@ impl PaneCanvasScene {
                         24 * px_r
                     ));
                 };
-                let res = crate::ui::hires_subcell::CanvasResolution::from_name(res_str).ok_or_else(|| {
+                let res = crate::pane::typography::CanvasResolution::from_name(res_str).ok_or_else(|| {
                     "Usage: :canvas res <auto|1x|2x|4x|hd|720p|fhd|1080p|4k|2160p|<WxH>>".to_string()
                 })?;
                 self.resolution = res;

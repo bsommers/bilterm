@@ -47,15 +47,15 @@ struct EditorSnapshot {
 #[derive(Clone, Debug)]
 pub struct FloatingPromptState {
     /// Flattened view of `lines.join("\n")` kept synchronized for single-string inspection.
-    pub input: String,
+    pub(crate) input: String,
     /// Multi-line buffer (`PANE-04`). Always has at least 1 line.
-    pub lines: Vec<String>,
+    pub(crate) lines: Vec<String>,
     /// Active cursor row index (`0..lines.len()`).
-    pub cursor_row: usize,
+    pub(crate) cursor_row: usize,
     /// Active cursor character column within `lines[cursor_row]`.
-    pub cursor_col: usize,
+    pub(crate) cursor_col: usize,
     /// Global character offset across `input` (`lines.join("\n")`).
-    pub cursor_char_idx: usize,
+    pub(crate) cursor_char_idx: usize,
     pub anchor: PromptAnchor,
     /// Minimum/base prompt box height in rows (default `3`, range `3..=12`).
     pub height: u16,
@@ -64,9 +64,9 @@ pub struct FloatingPromptState {
     /// Optional custom horizontal column offset relative to the canvas left edge when `width_cols` is set.
     pub x_offset: Option<u16>,
     /// Vertical line scroll offset inside the command prompt editor (`0..lines.len()`).
-    pub scroll_offset: usize,
+    pub(crate) scroll_offset: usize,
     /// Horizontal character scroll offset inside the command prompt editor.
-    pub h_scroll_offset: usize,
+    pub(crate) h_scroll_offset: usize,
     /// Last submitted command shown on the prompt banner while a foreground command (`tail -f /dev/null`, etc.) is running or pending.
     pub running_command: Option<String>,
     /// Whether the interactive Borland-style Command History Pop-up Window is open.
@@ -74,7 +74,7 @@ pub struct FloatingPromptState {
     /// Selected entry index inside the Command History Pop-up Window (`0..history.len()`).
     pub history_popup_selected: usize,
     pub history: Vec<String>,
-    pub history_index: Option<usize>,
+    pub(crate) history_index: Option<usize>,
     /// Last killed text (`Ctrl+K`, `Ctrl+U`, `Ctrl+W`) available for `Ctrl+Y` yank.
     pub yank_buffer: String,
     undo_stack: Vec<EditorSnapshot>,
@@ -174,6 +174,41 @@ impl FloatingPromptState {
     /// Returns the full multi-line command text.
     pub fn text(&self) -> String {
         self.lines.join("\n")
+    }
+
+    /// Read-only view of the multi-line prompt buffer (`P1.3`).
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+
+    /// Active 0-indexed cursor row (`0..lines.len()`) (`P1.3`).
+    pub fn cursor_row(&self) -> usize {
+        self.cursor_row
+    }
+
+    /// Active 0-indexed cursor column within `lines()[cursor_row()]` (`P1.3`).
+    pub fn cursor_col(&self) -> usize {
+        self.cursor_col
+    }
+
+    /// Global character offset across the flattened `text()` buffer (`P1.3`).
+    pub fn cursor_char_idx(&self) -> usize {
+        self.cursor_char_idx
+    }
+
+    /// Vertical line scroll offset (`P1.3`).
+    pub fn scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
+
+    /// Horizontal character scroll offset (`P1.3`).
+    pub fn h_scroll_offset(&self) -> usize {
+        self.h_scroll_offset
+    }
+
+    /// Active history recall index, if any (`P1.3`).
+    pub fn history_index(&self) -> Option<usize> {
+        self.history_index
     }
 
     pub fn insert_char(&mut self, ch: char) {

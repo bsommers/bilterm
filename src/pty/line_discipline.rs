@@ -1,4 +1,15 @@
-use crate::vt::Osc133Phase;
+/// Semantic shell integration markers (`OSC 133;A/B/C/D`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Osc133Phase {
+    /// `OSC 133;A` — Shell prompt start.
+    PromptStart,
+    /// `OSC 133;B` — Command input start (shell waiting at prompt).
+    CommandStart,
+    /// `OSC 133;C` — Command execution started (foreground command running).
+    CommandExecuted,
+    /// `OSC 133;D[;exit_code]` — Command finished with optional exit status.
+    CommandFinished(Option<i32>),
+}
 
 /// Routing target for keyboard events inside a `CompositePane`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

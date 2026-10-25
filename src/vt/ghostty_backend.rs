@@ -162,8 +162,8 @@ use libghostty_vt::{
 use crate::vt::backend::TerminalBackend;
 #[cfg(feature = "ghostty-vt")]
 use crate::vt::snapshot::{
-    CellColor, CellSnapshot, CellView, CursorShape, CursorSnapshot, RgbTriplet, RowSnapshot,
-    UnderlineKind,
+    CellColor, CellSnapshot, CellView, CursorShape, CursorSnapshot, LineSizeAttr, RgbTriplet,
+    RowSnapshot, UnderlineKind,
 };
 
 /// **[EXPERIMENTAL]** Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
@@ -380,7 +380,7 @@ impl GhosttyVtEngine {
                     cells: row_cells,
                     dirty: row_dirty,
                     wrapped: row_wrapped,
-                    line_size: crate::ui::typography::LineSizeAttr::Single,
+                    line_size: LineSizeAttr::Single,
                 });
             }
         }

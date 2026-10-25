@@ -253,78 +253,44 @@ Almost every cycle stems from **four misplaced type/impl locations**:
 
 ### Phase P1: Layer Decoupling & 800-Line Ceiling Decompression
 
-- [ ] **P1.1: Relocate `WindowManager` and `CompositePane` Domain/RPC Impls Out of `src/ui/`**
-  - **Location:** [`src/ui/canvas_raster.rs:736-789`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs#L736-L789), [`src/ui/hires_subcell.rs:308-382`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs#L308-L382), [`src/ui/typography.rs:205-393,624-661`](file:///home/bill/src/ai/bilterm/src/ui/typography.rs#L205-L393)
-  - **Problem:** `src/ui/` contains `impl WindowManager` and `impl CompositePane` blocks that import `crate::api::JsonValue` and `crate::action::Action`, inverting the presentation layer boundary.
-  - **Proposed Solution:**
-    - Move `handle_rpc_canvas` and `handle_rpc_fontsize` into `src/api/rpc.rs` (or `src/api/handlers.rs`).
-    - Move `FontFamilyPreset`, `PaneFontOptions`, `LineSizeAttr`, `scan_dec_line_size_escapes`, and `CanvasResolution` into domain modules (`src/pane/typography.rs`, `src/pane/canvas_scene.rs`, `src/vt/mod.rs`).
-  - **Code Transformation Example:**
-```rust
-// ❌ BEFORE: src/ui/typography.rs imports crate::api::JsonValue & crate::action::Action
-impl WindowManager {
-    pub fn handle_rpc_fontsize(
-        &mut self,
-        params: &crate::api::JsonValue,
-    ) -> std::result::Result<crate::api::JsonValue, String> { /* ... */ }
-}
+- [x] **P1.1: Relocate `WindowManager` and `CompositePane` Domain/RPC Impls Out of `src/ui/`** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/api/rpc_handlers.rs`](file:///home/bill/src/ai/bilterm/src/api/rpc_handlers.rs), [`src/pane/typography.rs`](file:///home/bill/src/ai/bilterm/src/pane/typography.rs), [`src/vt/snapshot.rs`](file:///home/bill/src/ai/bilterm/src/vt/snapshot.rs), [`src/pty/line_discipline.rs`](file:///home/bill/src/ai/bilterm/src/pty/line_discipline.rs)
+  - **Resolution:** Moved `handle_rpc_canvas` and `handle_rpc_fontsize` into `src/api/rpc_handlers.rs`; moved `Osc133Phase` into `src/pty/line_discipline.rs`; moved `LineSizeAttr` and `scan_dec_line_size_escapes` into `src/vt/snapshot.rs`; moved `FontFamilyPreset`, `PaneFontOptions`, and `CanvasResolution` into `src/pane/typography.rs`. `error/secure_fs -> pty -> vt -> pane` is now a strict 0-cycle DAG with zero `crate::ui` or `crate::config` imports.
 
-// ✅ AFTER: Domain state lives in src/pane/typography.rs; RPC serialization lives in src/api/rpc.rs
-// src/pane/typography.rs (pure domain, zero UI or API imports):
-pub struct PaneFontOptions { /* ... */ }
-
-// src/api/rpc.rs (adapter layer formats JsonValue response from domain state):
-fn handle_workspace_fontsize(wm: &mut WindowManager, params: &JsonValue) -> Result<JsonValue, String> { /* ... */ }
-```
-  - **Estimated Effort:** Medium
-
-- [ ] **P1.2: Decompress the 8 Near-Ceiling Files (`772..789` LOC) into Cohesive Submodules**
+- [x] **P1.2: Decompress the 8 Near-Ceiling Files (`772..789` LOC) into Cohesive Submodules** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
   - **Location:**
-    - [`src/colon_command/execute.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs) (`789` LOC) $\rightarrow$ split into `execute_pane.rs` and `execute_wm.rs`
-    - [`src/colon_command/parse.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/parse.rs) (`732` LOC, 722-line fn) $\rightarrow$ split by command family (`parse_pane.rs`, `parse_wm.rs`, `parse_visual.rs`)
-    - [`src/pane/mod.rs`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs) (`788` LOC) $\rightarrow$ extract geometry/accessors into `src/pane/geometry.rs`
-    - [`src/wm/z_stack.rs`](file:///home/bill/src/ai/bilterm/src/wm/z_stack.rs) (`788` LOC) $\rightarrow$ move the 175-line inline test to `src/wm/tests.rs`
-    - [`src/input/keymap.rs`](file:///home/bill/src/ai/bilterm/src/input/keymap.rs) (`787` LOC) $\rightarrow$ move inline keymap tests to `src/input/tests.rs`
-    - [`src/vt/scan.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs) (`776` LOC) $\rightarrow$ split CSI/DECSET scanning from OSC/DCS/APC scanning
-  - **Estimated Effort:** Medium
+    - [`src/colon_command/execute.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs) (`789` $\rightarrow$ `298` LOC) + [`src/colon_command/execute_wm.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/execute_wm.rs) (`505` LOC)
+    - [`src/colon_command/parse.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/parse.rs) (`732` $\rightarrow$ `412` LOC) + [`src/colon_command/parse_visual.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/parse_visual.rs) (`338` LOC)
+    - [`src/pane/mod.rs`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs) (`788` $\rightarrow$ `695` LOC) + [`src/pane/tests.rs`](file:///home/bill/src/ai/bilterm/src/pane/tests.rs) (`115` LOC)
+    - [`src/wm/z_stack.rs`](file:///home/bill/src/ai/bilterm/src/wm/z_stack.rs) (`788` $\rightarrow$ `611` LOC) + [`src/wm/tests.rs`](file:///home/bill/src/ai/bilterm/src/wm/tests.rs) (`267` LOC)
+    - [`src/vt/scan.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs) (`776` $\rightarrow$ `352` LOC) + [`src/vt/scan_osc_dcs.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan_osc_dcs.rs) (`378` LOC)
 
-- [ ] **P1.3: Encapsulate `FloatingPromptState` Fields (`src/pane/prompt_editor.rs`)**
-  - **Location:** [`src/pane/prompt_editor.rs:42-73`](file:///home/bill/src/ai/bilterm/src/pane/prompt_editor.rs#L42-L73)
-  - **Problem:** `FloatingPromptState` has 21 `pub` fields (`lines`, `cursor_row`, `cursor_col`, `manual_raw_override`, `force_command_prompt`), allowing external callers to mutate cursor/line indices out of sync.
-  - **Proposed Solution:** Make cursor/buffer fields private (`pub(crate)` only where needed inside `pane/`) and expose invariant-preserving accessors/mutators.
-  - **Estimated Effort:** Medium
+- [x] **P1.3: Encapsulate `FloatingPromptState` Fields (`src/pane/prompt_editor.rs`)** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/pane/prompt_editor.rs`](file:///home/bill/src/ai/bilterm/src/pane/prompt_editor.rs)
+  - **Resolution:** Restricted `input`, `lines`, `cursor_row`, `cursor_col`, `cursor_char_idx`, `scroll_offset`, `h_scroll_offset`, and `history_index` to `pub(crate)` visibility and added read-only getters (`lines()`, `cursor_row()`, `cursor_col()`, `cursor_char_idx()`, `scroll_offset()`, `h_scroll_offset()`, `history_index()`).
 
 ### Phase P2: Runtime Efficiency, Caching & Maintainability
 
-- [ ] **P2.1: Dirty-Driven Redraw & Cached Canvas Rasterization**
-  - **Location:** [`src/app.rs:54-81`](file:///home/bill/src/ai/bilterm/src/app.rs#L54-L81), [`src/ui/mod.rs:245-333`](file:///home/bill/src/ai/bilterm/src/ui/mod.rs#L245-L333), [`src/ui/canvas_raster.rs:358-480`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs#L358-L480)
-  - **Problem:** `App::run` redraws and calls `wm.resize_all` every 16 ms even when idle, re-running URL regex/token scans, trigger searches, and full `PixelCanvasBuffer` rasterization every tick.
-  - **Proposed Solution:**
-    - Track a `dirty: bool` / generation counter on `WindowManager` and `CompositePane` (set on input, PTY output, resize, or active animation/blink).
-    - Call `wm.resize_all(area)` only when `area != self.last_viewport` or layout topology changes.
-    - Cache `PixelCanvasBuffer` on `(scene_generation, tek_generation, canvas.width, canvas.height, resolution, focal_cursor_pos)`.
-  - **Estimated Effort:** Medium
+- [x] **P2.1: Dirty-Driven Redraw & Cached Canvas Rasterization** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/app.rs`](file:///home/bill/src/ai/bilterm/src/app.rs), [`src/pane/mod.rs`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs), [`src/wm/mod.rs`](file:///home/bill/src/ai/bilterm/src/wm/mod.rs), [`src/ui/canvas_raster.rs`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs)
+  - **Resolution:** Updated `CompositePane::poll_pty_events`/`ingest_pty_events` and `WindowManager::poll_all_ptys` to return `bool`, gated `App::run` redraws on `self.needs_redraw`, and added generation-keyed `Arc<PixelCanvasBuffer>` caching (`RASTER_CACHE`) in `render_graphical_canvas`.
 
-- [ ] **P2.2: Single-Pass Control Sequence Scanner (`src/vt/scan.rs`)**
-  - **Location:** [`src/vt/scan.rs:23-563`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs#L23-L563)
-  - **Problem:** `scan_control_sequences` performs 14 separate `text.match_indices(...)` passes over every PTY output buffer.
-  - **Proposed Solution:** Scan for `ESC` (`\x1b`) once in a single pass and dispatch on the byte immediately following `\x1b` (`[`, `]`, `P`, `_`, `^`).
-  - **Estimated Effort:** Medium
+- [x] **P2.2: Single-Pass Control Sequence Scanner (`src/vt/scan.rs`)** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/vt/scan.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs), [`src/vt/scan_osc_dcs.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan_osc_dcs.rs)
+  - **Resolution:** Replaced the 14 separate `text.match_indices(...)` passes with a single-pass `text.match_indices('\x1b')` dispatcher (with a fast `!bytes.contains(&0x1b)` early return).
 
-- [ ] **P2.3: Audit Remaining `let _ =` Sites in Command Execution (`src/colon_command/execute.rs`)**
-  - **Location:** [`src/colon_command/execute.rs:132,296,308,312,438,768`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs#L296-L315)
-  - **Problem:** Several `execute_wm_colon_command` arms discard `Result` errors via `let _ = wm.split_focused(...)` or `let _ = wm.stop_workspace_recording()`, losing error context if PTY spawning or file flushing fails.
-  - **Proposed Solution:** Surface `Err(e)` into `wm.active_pane_mut().set_status_message(Some(format!("Error: {e}")))` and `tracing::warn!`.
-  - **Estimated Effort:** Small
+- [x] **P2.3: Audit Remaining `let _ =` Sites in Command Execution (`src/colon_command/execute.rs`)** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/colon_command/execute_wm.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/execute_wm.rs)
+  - **Resolution:** Surfaced `Err(e)` from `wm.split_focused(...)` and recording operations into the active pane status bar.
 
 ### Phase P3: Future-Proofing & Extensibility
 
 - [ ] **P3.1: Wire `VtWorkerHandle` (`src/vt/worker.rs`) into Live `CompositePane`**
   - Replace synchronous `PtySession::drain_events` polling with the existing `VtWorkerHandle` background thread + `tokio::sync::watch<Arc<GridSnapshot>>` channel so `App::run` wakes reactively via `tokio::select!`.
-- [ ] **P3.2: Enforce Module DAG Acyclicity in CI (`tests/vt_worker_and_snapshot_seam.rs`)**
-  - Add an automated architecture test asserting zero upward `use crate::ui` imports from `vt`, `pty`, `pane`, or `config`, and zero `use crate::api` imports from `ui`.
+- [x] **P3.2: Enforce Module DAG Acyclicity in CI (`tests/vt_worker_and_snapshot_seam.rs`)** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - Added automated architecture tests (`core_domain_layers_pty_vt_pane_form_strict_acyclic_dag` and `ui_layer_never_imports_api_layer`) in `tests/vt_worker_and_snapshot_seam.rs`.
 - [ ] **P3.3: Extract `bilterm-core` Workspace Crate**
-  - Once P1.1 breaks the `ui <-> pane/vt/wm` cycles, split `bilterm-core` (VT, PTY, Pane, WM, Action, Config) from `bilterm-tui` / `bilterm-gui` frontends.
+  - Now that `pty -> vt -> pane` and `ui -/-> api` are decoupled, extract `bilterm-core` (VT, PTY, Pane, WM, Action, Config) from `bilterm-tui` / `bilterm-gui` frontends.
 
 ---
 

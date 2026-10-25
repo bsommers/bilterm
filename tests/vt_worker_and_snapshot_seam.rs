@@ -183,6 +183,9 @@ fn no_vt100_ctt_types_appear_outside_src_vt() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src_dir = manifest_dir.join("src");
     let vt_dir = src_dir.join("vt");
+    let pty_dir = src_dir.join("pty");
+    let pane_dir = src_dir.join("pane");
+    let ui_dir = src_dir.join("ui");
     let mut rs_files = Vec::new();
     visit_rs_files(&src_dir, &mut rs_files);
     assert!(!rs_files.is_empty());
@@ -200,6 +203,54 @@ fn no_vt100_ctt_types_appear_outside_src_vt() {
             assert!(
                 !content.contains("vt100_ctt"),
                 "{} leaked vt100_ctt outside src/vt/",
+                file.display()
+            );
+        }
+        let code_only: String = content
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if file.starts_with(&pty_dir) {
+            for forbidden in [
+                "crate::vt",
+                "crate::pane",
+                "crate::wm",
+                "crate::ui",
+                "crate::api",
+            ] {
+                assert!(
+                    !code_only.contains(forbidden),
+                    "{} violates pty layer DAG by importing {}",
+                    file.display(),
+                    forbidden
+                );
+            }
+        }
+        if file.starts_with(&vt_dir) {
+            for forbidden in ["crate::pane", "crate::wm", "crate::ui", "crate::api"] {
+                assert!(
+                    !code_only.contains(forbidden),
+                    "{} violates vt layer DAG by importing {}",
+                    file.display(),
+                    forbidden
+                );
+            }
+        }
+        if file.starts_with(&pane_dir) {
+            for forbidden in ["crate::wm", "crate::ui", "crate::api", "crate::config"] {
+                assert!(
+                    !code_only.contains(forbidden),
+                    "{} violates pane layer DAG by importing {}",
+                    file.display(),
+                    forbidden
+                );
+            }
+        }
+        if file.starts_with(&ui_dir) {
+            assert!(
+                !code_only.contains("crate::api"),
+                "{} violates ui layer DAG by importing crate::api",
                 file.display()
             );
         }

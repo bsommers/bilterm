@@ -1,4 +1,126 @@
+use std::collections::BTreeMap;
+
 use ratatui::style::{Color, Modifier, Style};
+use serde::{Deserialize, Serialize};
+
+/// Per-row DEC VT100/VT220 line-size attribute (`DECSWL`, `DECDWL`, `DECDHL`) (`FONT-01`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LineSizeAttr {
+    /// Standard 1x1 character cells (`\x1b#5` `DECSWL`).
+    #[default]
+    Single,
+    /// Double-width 2x1 character cells (`\x1b#6` `DECDWL`).
+    DoubleWidth,
+    /// Double-height top-half 2x2 character cells (`\x1b#3` `DECDHL`).
+    DoubleHeightTop,
+    /// Double-height bottom-half 2x2 character cells (`\x1b#4` `DECDHL`).
+    DoubleHeightBottom,
+}
+
+impl LineSizeAttr {
+    /// Returns `true` when each logical character occupies 2 horizontal cells (`DECDWL` or `DECDHL`).
+    #[inline]
+    pub const fn is_double_width(self) -> bool {
+        !matches!(self, Self::Single)
+    }
+
+    /// Returns `true` when the row is part of a `DECDHL` double-height pair (`\x1b#3` or `\x1b#4`).
+    #[inline]
+    pub const fn is_double_height(self) -> bool {
+        matches!(self, Self::DoubleHeightTop | Self::DoubleHeightBottom)
+    }
+
+    /// Human-readable badge for the 3270 Inspector and diagnostics.
+    #[inline]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Single => "1x1 (DECSWL)",
+            Self::DoubleWidth => "2x1 (DECDWL)",
+            Self::DoubleHeightTop => "2x2-TOP (DECDHL)",
+            Self::DoubleHeightBottom => "2x2-BOT (DECDHL)",
+        }
+    }
+}
+
+/// Scans a raw PTY byte stream for DEC line-size escape sequences (`\x1b#3`, `\x1b#4`, `\x1b#5`, `\x1b#6`),
+/// tracking intermediate newlines and CSI cursor-positioning sequences so multi-row bursts assign
+/// line-size attributes to the exact target row (`FONT-01`).
+pub fn scan_dec_line_size_escapes(
+    bytes: &[u8],
+    start_row: u16,
+    max_rows: u16,
+    attrs: &mut BTreeMap<u16, LineSizeAttr>,
+) {
+    let limit = max_rows.max(1);
+    let mut cur_row = start_row.min(limit.saturating_sub(1));
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\n' => {
+                cur_row = (cur_row + 1).min(limit.saturating_sub(1));
+                i += 1;
+            }
+            0x1b if i + 1 < bytes.len() => match bytes[i + 1] {
+                b'#' if i + 2 < bytes.len() => {
+                    match bytes[i + 2] {
+                        b'3' => {
+                            attrs.insert(cur_row, LineSizeAttr::DoubleHeightTop);
+                        }
+                        b'4' => {
+                            attrs.insert(cur_row, LineSizeAttr::DoubleHeightBottom);
+                        }
+                        b'5' => {
+                            attrs.remove(&cur_row);
+                        }
+                        b'6' => {
+                            attrs.insert(cur_row, LineSizeAttr::DoubleWidth);
+                        }
+                        _ => {}
+                    }
+                    i += 3;
+                }
+                b'c' => {
+                    attrs.clear();
+                    cur_row = 0;
+                    i += 2;
+                }
+                b'[' => {
+                    let mut j = i + 2;
+                    while j < bytes.len() && !(0x40..=0x7e).contains(&bytes[j]) {
+                        j += 1;
+                    }
+                    if j < bytes.len() {
+                        let final_byte = bytes[j];
+                        let params = std::str::from_utf8(&bytes[i + 2..j]).unwrap_or("");
+                        match final_byte {
+                            b'H' | b'f' => {
+                                let row_1 = params
+                                    .split(';')
+                                    .next()
+                                    .and_then(|s| s.parse::<u16>().ok())
+                                    .unwrap_or(1);
+                                cur_row = row_1.saturating_sub(1).min(limit.saturating_sub(1));
+                            }
+                            b'J' if params == "2" || params == "3" => {
+                                attrs.clear();
+                            }
+                            _ => {}
+                        }
+                        i = j + 1;
+                    } else {
+                        break;
+                    }
+                }
+                _ => {
+                    i += 2;
+                }
+            },
+            _ => {
+                i += 1;
+            }
+        }
+    }
+}
 
 /// 24-bit RGB color triplet used in renderer-agnostic [`GridSnapshot`] frames (`ARCH-01`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -242,7 +364,7 @@ pub struct RowSnapshot {
     /// Whether this row soft-wrapped onto the next row (`FND-08`).
     pub wrapped: bool,
     /// DEC line-size attribute (`DECSWL`, `DECDWL`, `DECDHL`) (`FONT-01`).
-    pub line_size: crate::ui::typography::LineSizeAttr,
+    pub line_size: LineSizeAttr,
 }
 
 impl RowSnapshot {
@@ -251,7 +373,7 @@ impl RowSnapshot {
             cells: vec![CellSnapshot::default(); usize::from(cols)],
             dirty: true,
             wrapped: false,
-            line_size: crate::ui::typography::LineSizeAttr::Single,
+            line_size: LineSizeAttr::Single,
         }
     }
 }

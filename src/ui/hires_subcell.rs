@@ -12,149 +12,48 @@
 //!    spatial resolution of `HalfBlock`** with full 24-bit TrueColor anti-aliased shading.
 
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
-use serde::{Deserialize, Serialize};
 
 use crate::config::BiltermConfig;
-use crate::pane::{CanvasRenderBackend, CanvasSubcellMode, CompositePane, PaneCanvasScene};
-use crate::ui::canvas_raster::{
-    QUADRANT_CHARS, braille_char_from_mask, sextant_char_from_mask,
+pub use crate::pane::typography::{
+    CanvasResolution, probe_terminal_pixel_size, refresh_terminal_pixel_size,
 };
+use crate::pane::{CanvasRenderBackend, CanvasSubcellMode, CompositePane, PaneCanvasScene};
 use crate::ui::pixel_canvas::PixelCanvasBuffer;
+use crate::wm::WindowManager;
 
-/// Cached terminal pixel size (`(wx << 32) | wy`, `u64::MAX` = unprobed, `0` = unavailable).
-static CACHED_TERMINAL_PIXELS: AtomicU64 = AtomicU64::new(u64::MAX);
+pub const QUADRANT_CHARS: [char; 16] = [
+    ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
+];
 
-/// Target pixel resolution preset for [`PixelCanvasBuffer`] (`CANV-03`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CanvasResolution {
-    /// Query OS `TIOCGWINSZ` (`ws_xpixel × ws_ypixel`) or default to `2x` Retina HiDPI (`16×32` px/cell).
-    #[default]
-    Auto,
-    /// Standard `1x` (`8×16` px/cell, e.g. `640×384` at `80×24`).
-    Scale1x,
-    /// Retina / HiDPI `2x` (`16×32` px/cell, e.g. `1280×768` at `80×24`).
-    Scale2x,
-    /// Ultra-HiDPI `4x` (`32×64` px/cell, e.g. `2560×1536` at `80×24`).
-    Scale4x,
-    /// HD 720p (`1280×720`).
-    Hd720p,
-    /// Full HD 1080p (`1920×1080`).
-    FullHd1080p,
-    /// 4K UHD (`3840×2160`).
-    UltraHd4k,
-    /// Custom explicit pixel dimensions (`width × height`).
-    Custom { width: u32, height: u32 },
-}
-
-impl CanvasResolution {
-    pub fn from_name(raw: &str) -> Option<Self> {
-        let lower = raw.trim().to_ascii_lowercase();
-        match lower.as_str() {
-            "auto" | "native" | "hidpi" => Some(Self::Auto),
-            "1x" | "sd" | "standard" => Some(Self::Scale1x),
-            "2x" | "retina" => Some(Self::Scale2x),
-            "4x" | "ultra" => Some(Self::Scale4x),
-            "hd" | "720p" => Some(Self::Hd720p),
-            "fhd" | "1080p" | "fullhd" => Some(Self::FullHd1080p),
-            "4k" | "2160p" | "uhd" => Some(Self::UltraHd4k),
-            _ => {
-                if let Some((w_s, h_s)) = lower.split_once('x')
-                    && let (Ok(w), Ok(h)) = (w_s.parse::<u32>(), h_s.parse::<u32>())
-                    && w >= 16
-                    && h >= 16
-                {
-                    Some(Self::Custom {
-                        width: w.min(7680),
-                        height: h.min(4320),
-                    })
-                } else {
-                    None
-                }
+/// Maps a 6-bit (`0..64`) `2×3` sextant mask (`bit 0`=TL, `1`=TR, `2`=ML, `3`=MR, `4`=BL, `5`=BR)
+/// to its Unicode Legacy Computing Sextant glyph (`U+1FB00..=U+1FB3B`, `' '` for `0`, `'▌'` for `0b010101`, `'▐'` for `0b101010`, `'█'` for `0x3F`).
+pub fn sextant_char_from_mask(mask: u8) -> char {
+    match mask & 0x3f {
+        0x00 => ' ',
+        0x15 => '▌',
+        0x2a => '▐',
+        0x3f => '█',
+        m => {
+            let mut idx = u32::from(m) - 1;
+            if m > 0x15 {
+                idx -= 1;
             }
-        }
-    }
-
-    /// Resolves `(px_per_col, px_per_row)` for a given `(cols, rows)` terminal grid (`CANV-03`).
-    pub fn resolve_px_per_cell(self, cols: u16, rows: u16) -> (u32, u32) {
-        let c = u32::from(cols.max(1));
-        let r = u32::from(rows.max(1));
-        match self {
-            Self::Auto => {
-                if let Some((wx, wy)) = probe_terminal_pixel_size()
-                    && wx >= c * 4
-                    && wy >= r * 8
-                {
-                    return ((wx / c).clamp(8, 64), (wy / r).clamp(16, 128));
-                }
-                (16, 32)
+            if m > 0x2a {
+                idx -= 1;
             }
-            Self::Scale1x => (8, 16),
-            Self::Scale2x => (16, 32),
-            Self::Scale4x => (32, 64),
-            Self::Hd720p => ((1280 / c).max(4), (720 / r).max(8)),
-            Self::FullHd1080p => ((1920 / c).max(4), (1080 / r).max(8)),
-            Self::UltraHd4k => ((3840 / c).max(4), (2160 / r).max(8)),
-            Self::Custom { width, height } => ((width / c).max(2), (height / r).max(4)),
-        }
-    }
-
-    pub fn label(self) -> String {
-        match self {
-            Self::Auto => "Auto (2x HiDPI / TIOCGWINSZ)".to_string(),
-            Self::Scale1x => "1x (8x16 px/cell)".to_string(),
-            Self::Scale2x => "2x Retina (16x32 px/cell)".to_string(),
-            Self::Scale4x => "4x Ultra-HiDPI (32x64 px/cell)".to_string(),
-            Self::Hd720p => "720p HD (1280x720)".to_string(),
-            Self::FullHd1080p => "1080p Full HD (1920x1080)".to_string(),
-            Self::UltraHd4k => "4K UHD (3840x2160)".to_string(),
-            Self::Custom { width, height } => format!("Custom ({width}x{height})"),
+            char::from_u32(0x1fb00 + idx).unwrap_or('█')
         }
     }
 }
 
-/// Queries the host OS terminal's hardware pixel dimensions (`ws_xpixel, ws_ypixel`) via `TIOCGWINSZ`,
-/// caching the result in an atomic so 60 FPS rendering never repeats the syscall (`CANV-03`).
-pub fn probe_terminal_pixel_size() -> Option<(u32, u32)> {
-    let cached = CACHED_TERMINAL_PIXELS.load(Ordering::Relaxed);
-    if cached != u64::MAX {
-        return if cached == 0 {
-            None
-        } else {
-            Some(((cached >> 32) as u32, (cached & 0xffff_ffff) as u32))
-        };
-    }
-    refresh_terminal_pixel_size()
-}
-
-/// Re-probes `ioctl(TIOCGWINSZ)` on terminal resize events and updates [`CACHED_TERMINAL_PIXELS`].
-pub fn refresh_terminal_pixel_size() -> Option<(u32, u32)> {
-    #[cfg(unix)]
-    {
-        let probed = unsafe {
-            let mut ws: libc::winsize = std::mem::zeroed();
-            if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut ws) == 0
-                && ws.ws_xpixel > 0
-                && ws.ws_ypixel > 0
-            {
-                Some((u32::from(ws.ws_xpixel), u32::from(ws.ws_ypixel)))
-            } else {
-                None
-            }
-        };
-        let encoded = probed.map_or(0, |(wx, wy)| (u64::from(wx) << 32) | u64::from(wy));
-        CACHED_TERMINAL_PIXELS.store(encoded, Ordering::Relaxed);
-        probed
-    }
-    #[cfg(not(unix))]
-    {
-        CACHED_TERMINAL_PIXELS.store(0, Ordering::Relaxed);
-        None
-    }
+/// Maps an 8-bit (`0..=255`) `2×4` sub-pixel mask to a Unicode Braille glyph (`U+2800..=U+28FF`).
+#[inline]
+pub fn braille_char_from_mask(mask: u8) -> char {
+    char::from_u32(0x2800 + u32::from(mask)).unwrap_or('⠀')
 }
 
 /// Maps an 8-bit (`0..=255`) `2×4` sub-pixel mask to a Unicode 16.0 Legacy Computing Octant
@@ -436,6 +335,23 @@ impl CompositePane {
             Err(err) => {
                 self.set_status_message(Some(err.clone()));
                 Err(err)
+            }
+        }
+    }
+}
+
+impl WindowManager {
+    /// Executes a `:canvas <subcommand>` on the active pane (`TEK-01`, `CANV-01`).
+    pub fn execute_canvas_action(&mut self, subcommand: &str) -> String {
+        let confine = self.automation_confine_dir().map(std::path::Path::to_path_buf);
+        match self
+            .active_pane_mut()
+            .execute_canvas_command_in(subcommand, confine.as_deref())
+        {
+            Ok(msg) => msg,
+            Err(msg) => {
+                self.record_automation_error(msg.clone());
+                msg
             }
         }
     }

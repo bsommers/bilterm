@@ -55,9 +55,10 @@ src/
 ├── action.rs                   # Unified Action enum (all key chords, :commands, playbooks & RPC lower here)
 ├── colon_command/
 │   ├── mod.rs                  # Re-exports Action as ColonCommand alias, parse & execute entrypoints
-│   ├── parse.rs                # Parses ":..." strings into Result<Action, String>
-│   └── execute.rs              # Executes ColonCommand against the active CompositePane
-│       └── execute_wm.rs           # Executes Action against WindowManager (WindowManager::apply)
+│   ├── parse.rs                # Parses pane/WM ":..." strings into Result<Action, String>
+│   ├── parse_visual.rs         # Parses visual/theme/font/drawer/canvas ":..." strings into Result<Action, String>
+│   ├── execute.rs              # Executes ColonCommand against the active CompositePane
+│   └── execute_wm.rs           # Executes Action against WindowManager (WindowManager::apply)
 ├── config/
 │   └── mod.rs                  # BiltermConfig (config.toml + .ini theme loader + Spotlight/FocalZoom state)
 ├── input/
@@ -68,29 +69,32 @@ src/
 │   └── encode.rs               # VT100/Xterm/DECCKM/Kitty CSI-u keystroke & alternate-scroll byte encoders
 ├── pane/
 │   ├── mod.rs                  # Encapsulated CompositePane (private fields, submit_command, effective_routing_mode)
-│   ├── prompt_editor.rs        # FloatingPromptState (multi-line editor, undo/redo, PromptAnchor, PromptMode)
+│   ├── prompt_editor.rs        # FloatingPromptState (encapsulated buffer/cursor, undo/redo, PromptAnchor, PromptMode)
+│   ├── typography.rs           # Domain FontFamilyPreset, PaneFontOptions, CanvasResolution & cached TIOCGWINSZ
 │   ├── canvas_scene.rs         # Retained PaneCanvasScene (vectors, 2D sprites, plots, images) & CanvasRenderBackend
 │   ├── modes.rs                # Vi CopyModeState, QuickSelect HintsModeState, CanvasSearchState, accessors
 │   ├── completion.rs           # Interactive Tab / Shift+Tab completion (:commands, $PATH, CWD files, $ENV)
 │   ├── fuzzy_history.rs        # nucleo-matcher Ctrl+R fuzzy history search state
 │   ├── highlight.rs            # Live shell lexical tokenizer & syntax highlighter
 │   ├── history_store.rs        # Per-session 0600 command history persistence, pruning, and .sh export
-│   └── history_store_tests.rs  # Unit tests for HistoryStore
+│   ├── history_store_tests.rs  # Unit tests for HistoryStore
+│   └── tests.rs                # Unit tests for CompositePane
 ├── pty/
 │   ├── mod.rs                  # PtySession (portable-pty spawn, 64KB blocking reader thread, SIGWINCH dedup)
-│   ├── line_discipline.rs      # 3-signal detector (OSC 133 + tcgetpgrp + termios !ECHO/ICANON)
+│   ├── line_discipline.rs      # 3-signal detector (Osc133Phase + tcgetpgrp + termios !ECHO/ICANON)
 │   └── shell_integration.rs    # Automatic bash/zsh/fish OSC 133 + OSC 7 rc/hook injection in 0700 dir
 ├── vt/
 │   ├── mod.rs                  # VtParser state machine, CommandBlock tracking, scrollback & size management
 │   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
-│   ├── scan.rs                 # Stream pre-scanner (DECSET traps, OSC 7/8/9/52/133/777, DECRPM/XTGETTCAP)
+│   ├── scan.rs                 # Single-pass ESC (\x1b) stream pre-scanner (DECSET traps, CSI DECRPM/DA1/DSR)
+│   ├── scan_osc_dcs.rs         # OSC 7/8/9/52/133/777/1337, DCS XTGETTCAP/Sixel & APC Kitty scanners
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
 │   ├── tektronix.rs            # Tektronix 4010/4014 10-bit/12-bit vector storage-tube state machine & phosphor decay
 │   ├── detect.rs               # Auto-detection of URLs and QuickSelect 3270 Field Hints (URLs, paths, IPs, SHAs)
 │   ├── codec.rs                # OSC 52 base64 clipboard encoder and paste control-byte sanitizer
 │   ├── recording.rs            # WorkspaceRecorder (whole-workspace Buffer->ANSI .cast) & single-pane .cast recorder
 │   ├── scrollback.rs           # Dynamic RAM-aware ScrollbackGovernor and ring-buffer line reflow
-│   ├── snapshot.rs             # Renderer-agnostic GridSnapshot & CellSnapshot
+│   ├── snapshot.rs             # Renderer-agnostic GridSnapshot, CellSnapshot & DEC LineSizeAttr
 │   ├── worker.rs               # Dedicated background VtWorkerHandle thread seam
 │   ├── ghostty_backend.rs      # Optional libghostty-vt C-ABI vtable integration
 │   ├── tests.rs                # VtParser unit tests
@@ -101,7 +105,8 @@ src/
 │   ├── split_tree.rs           # Recursive H/V binary space partitioning (SplitTree, SplitDirection)
 │   ├── z_stack.rs              # Overlapping Borland Turbo Vision z-order window deck (ZStack)
 │   ├── drawer.rs               # herdr-style slide-out Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
-│   └── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal)
+│   ├── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal) & frame helpers
+│   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── ui/
 │   ├── mod.rs                  # 3-pass Ratatui compositor (WorkspaceWidget, CompositePaneWidget) + cell_to_ratatui_style
 │   ├── canvas_raster.rs        # SubcellBuffer (Braille/Sextant/Quadrant) & GUI SVG/PPM canvas rasterizer (CANV-01)

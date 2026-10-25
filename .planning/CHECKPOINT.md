@@ -1,17 +1,19 @@
-# Session Checkpoint — `v1.10.1` Released & Phase 28 Planned — 2026-10-25
+# Session Checkpoint — Phase 28 Complete (`v1.10.2`) — 2026-10-25
 
-**Status:** COMPLETE — `v1.10.1` released and pushed; ready for Phase 28 (`/gsd-execute-phase 28`) or next milestone work.
+**Status:** COMPLETE — Phase 28 Waves 1–3 (`28-01-PLAN.md`) complete, verified, and tagged `v1.10.2`.
 
 - **Updated:** `2026-10-25`
-- **Branch:** `main` (synced with `origin/main`, tag `v1.10.1` @ `677b668`)
+- **Branch:** `main` (tagged `v1.10.2`)
 - **Latest Releases:**
+  - `v1.10.2`: Phase 28 Waves 2 & 3 (`pty -> vt -> pane` strict acyclic DAG, `FloatingPromptState` encapsulation, dirty-driven redraw, cached `PixelCanvasBuffer`, single-pass `ESC` scanner, CI DAG gate)
   - `v1.10.1`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.1> (14 cross-platform release archives + `SHA256SUMS`)
   - `v1.10.0`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.0>
 - **Baseline Verification:**
   - `cargo clippy --all-features --all-targets -- -D warnings` → **0 warnings, 0 errors**
   - `cargo test --quiet` → **235 passed, 0 failed** (`151` unit + `84` integration across 23 test binaries)
   - `cargo audit` → **0 CVEs, 0 unsound crates** (`247` lockfile packages, `100%` permissive OSI licenses)
-  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `72` files in `src/**/*.rs`) → **100% compliant** (max file is `src/input/keymap.rs` at `787` LOC)
+  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `75` files in `src/**/*.rs`) → **100% compliant**
+  - Module DAG Gate (`tests/vt_worker_and_snapshot_seam.rs`) → **100% compliant** (`error/secure_fs -> pty -> vt -> pane` 0-cycle DAG, `ui -/-> api`)
 
 ---
 

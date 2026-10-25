@@ -13,49 +13,50 @@
 //!    Since `GuiWorkspaceRenderer` renders `WorkspaceWidget` into its cell buffer and also supports
 //!    high-resolution quads, any active graphical canvas is automatically reflected in both SVG and `.ppm` exports.
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::config::BiltermConfig;
 use crate::pane::{
-    CanvasSubcellMode, CompositePane, DeclarativePlot, InteractiveImageView, PlotKind,
+    CanvasSubcellMode, CompositePane, DeclarativePlot, InteractiveImageView, PaneId, PlotKind,
     VectorPrimitive,
 };
 use crate::ui::cursor::SpotlightMode;
+pub use crate::ui::hires_subcell::{
+    QUADRANT_CHARS, braille_char_from_mask, sextant_char_from_mask,
+};
+use crate::ui::pixel_canvas::PixelCanvasBuffer;
 use crate::ui::theme::ThemePreset;
 use crate::vt::{TEK_MAX_X, TEK_MAX_Y, TekLineStyle};
-use crate::wm::WindowManager;
 
-pub const QUADRANT_CHARS: [char; 16] = [
-    ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
-];
-
-/// Maps a 6-bit (`0..64`) `2×3` sextant mask (`bit 0`=TL, `1`=TR, `2`=ML, `3`=MR, `4`=BL, `5`=BR)
-/// to its Unicode Legacy Computing Sextant glyph (`U+1FB00..=U+1FB3B`, `' '` for `0`, `'▌'` for `0b010101`, `'▐'` for `0b101010`, `'█'` for `0x3F`).
-pub fn sextant_char_from_mask(mask: u8) -> char {
-    match mask & 0x3f {
-        0x00 => ' ',
-        0x15 => '▌',
-        0x2a => '▐',
-        0x3f => '█',
-        m => {
-            let mut idx = u32::from(m) - 1;
-            if m > 0x15 {
-                idx -= 1;
-            }
-            if m > 0x2a {
-                idx -= 1;
-            }
-            char::from_u32(0x1fb00 + idx).unwrap_or('█')
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RasterCacheKey {
+    vt_gen: u64,
+    scene_gen: u64,
+    tek_segs: usize,
+    tek_decay: usize,
+    prims: usize,
+    plots: usize,
+    sprites: usize,
+    has_img: bool,
+    width: u16,
+    height: u16,
+    px_c: u32,
+    px_r: u32,
+    theme: ThemePreset,
+    focal_mode: SpotlightMode,
+    focal_pct: u16,
+    cursor: (u16, u16),
 }
 
-/// Maps an 8-bit (`0..=255`) `2×4` sub-pixel mask to a Unicode Braille glyph (`U+2800..=U+28FF`).
-#[inline]
-pub fn braille_char_from_mask(mask: u8) -> char {
-    char::from_u32(0x2800 + u32::from(mask)).unwrap_or('⠀')
+thread_local! {
+    static RASTER_CACHE: RefCell<BTreeMap<PaneId, (RasterCacheKey, Arc<PixelCanvasBuffer>)>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -373,17 +374,50 @@ pub fn render_graphical_canvas(
     if matches!(mode, CanvasSubcellMode::HalfBlock | CanvasSubcellMode::Octant) {
         // On-screen flush only samples at most a 2x4 sub-cell grid per cell, so the per-frame raster is
         // capped (4..=16 x 8..=32 px/cell) to bound render cost; `:canvas export` keeps the full resolution.
-        let (px_c, px_r) = scene
+        let (raw_c, raw_r) = scene
             .resolution
             .resolve_px_per_cell(canvas.width, canvas.height);
-        let px_buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
-            pane,
-            cfg,
-            canvas.width,
-            canvas.height,
-            px_c.clamp(4, 16),
-            px_r.clamp(8, 32),
-        );
+        let px_c = raw_c.clamp(4, 16);
+        let px_r = raw_r.clamp(8, 32);
+        let key = RasterCacheKey {
+            vt_gen: pane.vt().generation(),
+            scene_gen: scene.generation,
+            tek_segs: tek.segments.len(),
+            tek_decay: tek.decaying_segments.len(),
+            prims: scene.primitives.len(),
+            plots: scene.plots.len(),
+            sprites: scene.sprites.len(),
+            has_img: scene.image_view.is_some(),
+            width: canvas.width,
+            height: canvas.height,
+            px_c,
+            px_r,
+            theme: cfg.theme,
+            focal_mode: cfg.focal_zoom_mode,
+            focal_pct: cfg.focal_zoom_pct,
+            cursor: pane.vt().cursor_position(),
+        };
+        let can_use_cache = (key.vt_gen > 0 || key.scene_gen > 0) && key.sprites == 0;
+        let px_buf = RASTER_CACHE.with(|cache| {
+            if can_use_cache
+                && let Some((cached_key, buf_arc)) = cache.borrow().get(&pane.id())
+                && *cached_key == key
+            {
+                return Arc::clone(buf_arc);
+            }
+            let rendered = Arc::new(PixelCanvasBuffer::render_pane_scene(
+                pane,
+                cfg,
+                canvas.width,
+                canvas.height,
+                px_c,
+                px_r,
+            ));
+            if can_use_cache {
+                cache.borrow_mut().insert(pane.id(), (key, Arc::clone(&rendered)));
+            }
+            rendered
+        });
         px_buf.flush_truecolor_subcells_to_ratatui(mode, canvas, buf);
     } else {
         let lens = SubcellFocalLens::from_config(cfg, canvas, pane.vt().cursor_position(), mode);
@@ -732,23 +766,6 @@ fn render_image_to_subcells(sub: &mut SubcellBuffer, img: &InteractiveImageView)
                 && a > 0
             {
                 sub.plot(img.pan_x + dx, img.pan_y + dy, (r, g, b));
-            }
-        }
-    }
-}
-
-impl WindowManager {
-    /// Executes a `:canvas <subcommand>` on the active pane (`TEK-01`, `CANV-01`).
-    pub fn execute_canvas_action(&mut self, subcommand: &str) -> String {
-        let confine = self.automation_confine_dir().map(std::path::Path::to_path_buf);
-        match self
-            .active_pane_mut()
-            .execute_canvas_command_in(subcommand, confine.as_deref())
-        {
-            Ok(msg) => msg,
-            Err(msg) => {
-                self.record_automation_error(msg.clone());
-                msg
             }
         }
     }
