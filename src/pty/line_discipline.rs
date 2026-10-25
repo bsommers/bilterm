@@ -38,9 +38,10 @@ impl Default for LineDisciplineState {
 
 impl LineDisciplineState {
     /// Returns `true` when password prompt protection (`!ECHO`, either in canonical `getpass`/`read -s`
-    /// mode or non-canonical `sudo`/`sudo-rs`/`ssh` foreground subcommand mode) is active.
+    /// mode or non-canonical `sudo`/`sudo-rs`/`ssh` foreground/executing command mode) is active.
     pub fn is_password_prompt(&self) -> bool {
         !self.echo_enabled
+            && (self.canonical_mode || self.has_foreground_subcommand() || self.osc133_executing)
     }
 
     /// Returns `true` when a foreground child process group different from the shell owns the TTY.
@@ -52,7 +53,7 @@ impl LineDisciplineState {
     }
 
     /// Evaluates the 3-signal heuristic (`PTY-03`):
-    /// - Signal 1: `!echo_enabled` (`sudo`/`ssh`/`read -s` password prompt) -> always `RawPtyPassthrough`
+    /// - Signal 1: `is_password_prompt()` (`sudo`/`ssh`/`read -s` password prompt) -> always `RawPtyPassthrough`
     /// - Signal 2: `foreground_pgid != shell_pgid && !canonical_mode` (interactive raw/cbreak sub-REPL like `python`, `node`, `less`) -> `RawPtyPassthrough`
     /// - Signal 3: `shell_pgid.is_none() && osc133_executing && !canonical_mode` (headless/synthetic raw command under OSC 133) -> `RawPtyPassthrough`
     ///
@@ -61,7 +62,7 @@ impl LineDisciplineState {
     /// returns `false` so the `FloatingCommandPrompt` remains visible and floats smoothly over the
     /// scrolling `OutputCanvas`.
     pub fn requires_raw_passthrough(&self) -> bool {
-        if !self.echo_enabled {
+        if self.is_password_prompt() {
             return true;
         }
         if !self.canonical_mode

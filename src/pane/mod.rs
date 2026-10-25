@@ -493,7 +493,9 @@ impl CompositePane {
         if osc_finished {
             self.prompt.running_command = None;
         }
-        if self.canvas_cursor_line_looks_like_password_prompt() {
+        if (self.pty.is_some() || self.prompt.running_command.is_some())
+            && self.canvas_cursor_line_looks_like_password_prompt()
+        {
             self.line_discipline.echo_enabled = false;
             self.line_discipline.canonical_mode = true;
         } else if self.pty.is_some() {
@@ -539,7 +541,12 @@ impl CompositePane {
     /// Returns `true` when an interactive password prompt (`[sudo] password...`, `Password:`)
     /// is actively running on the canvas and must never be bypassed by `force_command_prompt`.
     pub fn is_active_canvas_password_prompt(&self) -> bool {
-        !self.vt.is_alternate_screen() && self.canvas_cursor_line_looks_like_password_prompt()
+        !self.vt.is_alternate_screen()
+            && (!self.line_discipline.echo_enabled
+                || self.prompt.running_command.is_some()
+                || self.line_discipline.has_foreground_subcommand()
+                || self.line_discipline.osc133_executing)
+            && self.canvas_cursor_line_looks_like_password_prompt()
     }
 
     /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`, `REC-02`).
