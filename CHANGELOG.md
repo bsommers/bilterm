@@ -5,6 +5,25 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.9.0] - 2026-10-24
+
+### Added
+- **Interactive Mouse & Keyboard Window/Pane Moving, Resizing, Minimize & Maximize (`src/wm/z_stack.rs`, `src/wm/split_tree.rs`, `src/input/mouse.rs`, `src/ui/chrome.rs`)**:
+  - **Z-Stack & Tiled Window Moving & Resizing**: Drag any window's top title bar (`╔═╗`) to move it freely across the workspace (or swap panes in Tiled mode; `Alt+Drag` pops a tiled pane into Z-Stack mode). Drag any window border or lower-right `◢` corner resize handle to resize windows in Z-Stack mode or adjust split ratios in Tiled mode.
+  - **Keyboard & `:colon` Geometry Commands**: Added `Alt+Shift+Arrows` (`<Leader> M`) and `:move <left|right|up|down|x y> [n]` (`Action::WindowMove`), `Ctrl+Alt+Arrows` (`<Leader> <`/`>`/`+`/`-`) and `:resize <left|right|up|down|w h> [n]` (`Action::WindowResize`), and `:cascade` / `:equalize` (`<Leader> =`, `Action::WindowResetGeometry`).
+  - **Resizable Modals (`F1` Help, `F9` Inspector, `Ctrl+P` Palette, `F10` Quake) + Title-Bar `[_][↕][▪]` Controls**: Added `[_]` Minimize (`minimize_badge`) alongside `[↕]` Maximize/Zoom and `[▪]` Close on Borland window frames. Help, Inspector, and Command Palette modals can be moved by dragging their title bar, resized via their lower-right `◢` corner or borders, maximized/restored via `[↕]`, and closed via `[_]`/`[▪]`.
+- **Conventional Unix/Linux Short & Long CLI Switches (`src/main.rs`, `docs/bilterm.1`)**:
+  - Added full short and long flag parity (`-f <VAL>`, `--flag <VAL>`, `-f=<VAL>`, `--flag=<VAL>`): `-v`/`-V`/`--version`, `-h`/`--help`, `-m`/`--mcp`, `-d`/`--headless`/`--daemon`, `-l`/`--listen`, `-r`/`--allow-remote`, `-t`/`--token-file`, `-S`/`--snapshot-dir`, `-p`/`--playbook`, `-g`/`--gui-dump`, `-s`/`--session`, `-c`/`--config`, `-C`/`--completions`, and `-M`/`--man`.
+- **Cross-Platform Developer Setup & Plain Binary Installer Scripts (`scripts/setup.{sh,ps1}`, `scripts/install.{sh,ps1}`)**:
+  - Added `scripts/setup.sh` (Linux/macOS) and `scripts/setup.ps1` (Windows PowerShell) to check/install system C compilers, `rustup`, Rust `1.90`, `rustfmt`, `clippy`, and optional dev tools (`cargo-nextest`, `cargo-insta`, `cargo-llvm-cov`).
+  - Added `scripts/install.sh` and `scripts/install.ps1` supporting `--local` (`~/.local/bin`), `--cargo` (`~/.cargo/bin`), `--global` (`/usr/local/bin`), `--prefix <DIR>`, `--binary-only` (GitHub Release download), `--from-source`, `--dry-run`, and `--uninstall`.
+- **Text-Mode Font Scaling & Sub-Pixel Graphical Canvas Lens for `:focalzoom` (`src/ui/typography.rs`, `src/ui/cursor.rs`, `src/ui/canvas_raster.rs`)**:
+  - `:focalzoom` (`Alt+Shift+O`) now scales `font_scale_pct` (`125%..=300%`) and emits host terminal font-scaling sequences in text mode without inserting blank spaces between characters, while applying a smooth sub-pixel radial lens (`SubcellFocalLens`) to Tektronix 4014 vectors and `PaneCanvasScene` graphics.
+
+### Fixed
+- **Interactive `:tek` / `:canvas` Immediate Rendering & Terminal Text Passthrough (`src/vt/tektronix.rs`, `src/ui/canvas_raster.rs`, `src/pane/mod.rs`)**:
+  - Separated `TektronixState::stream_capture` (only enabled by in-band `DECSET ?38h` `\x1b[?38h` PTY escape streams) from `active` so interactive `:tek demo` never swallows subsequent VT100 shell output into Tektronix labels, preserved non-empty terminal text cells during `SubcellBuffer::flush_to_ratatui`, and auto-dismissed the demo wireframe when the next shell command is submitted.
+
 ## [v1.8.0] - 2026-10-24
 
 ### Added

@@ -25,24 +25,25 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.8.0`)
+### CLI Options (`v1.9.0`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer
-bilterm --mcp                                   # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
-bilterm --headless                              # Run headless JSON-RPC 2.0 daemon (default: private Unix socket)
-bilterm --headless --listen 127.0.0.1:7370      # Run headless daemon on loopback TCP
-bilterm --headless --listen 0.0.0.0:7370 --allow-remote --token-file ~/.config/bilterm/token # Listen on remote TCP
+bilterm -m / --mcp                              # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
+bilterm -d / --headless                         # Run headless JSON-RPC 2.0 daemon (default: private Unix socket)
+bilterm -d -l 127.0.0.1:7370                    # Run headless daemon on loopback TCP
+bilterm -d -l 0.0.0.0:7370 -r -t ~/.config/bilterm/token # Listen on remote TCP
 bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
 bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP
-bilterm ctl --token-file ~/.config/bilterm/token 10.0.0.1:7370 workspace.status # Query authenticated instance
-bilterm --snapshot-dir ~/.local/state/bilterm/snapshots # Set directory for confined workspace snapshots
-bilterm --playbook <playbook.toml>              # Execute a declarative TOML automation playbook and exit
-bilterm --gui-dump <path.ppm>                   # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
-bilterm --completions bash|zsh|fish              # Generate shell completions for bash, zsh, or fish
-bilterm --session <name>                       # Use (and restore) a named persistent command-history session
-bilterm --man                                   # Print roff(7) manual page (docs/bilterm.1)
-bilterm --version                               # Print version (bilterm 1.8.0)
-bilterm --help                                  # Print CLI usage summary
+bilterm ctl -t ~/.config/bilterm/token 10.0.0.1:7370 workspace.status # Query authenticated instance
+bilterm -S ~/.local/state/bilterm/snapshots     # Set directory for confined workspace snapshots
+bilterm -p <playbook.toml>                      # Execute a declarative TOML automation playbook and exit
+bilterm -g <path.ppm>                           # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
+bilterm -C bash|zsh|fish                        # Generate shell completions for bash, zsh, or fish
+bilterm -s <name>                               # Use (and restore) a named persistent command-history session
+bilterm -c <config.toml>                        # Load configuration from custom TOML file path
+bilterm -M / --man                              # Print roff(7) manual page (docs/bilterm.1)
+bilterm -v / -V / --version                     # Print version (bilterm 1.9.0)
+bilterm -h / --help                             # Print CLI usage summary
 ```
 
 ### Daemon Security & Authentication
