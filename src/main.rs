@@ -16,44 +16,60 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
-fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a String> {
-    let pos = args.iter().position(|a| a == flag)?;
-    args.get(pos + 1)
+fn has_switch(args: &[String], switches: &[&str]) -> bool {
+    args.iter().any(|a| switches.contains(&a.as_str()))
+}
+
+fn switch_value<'a>(args: &'a [String], switches: &[&str]) -> Option<&'a str> {
+    for (i, arg) in args.iter().enumerate() {
+        if switches.contains(&arg.as_str()) {
+            return args.get(i + 1).map(String::as_str);
+        }
+        for sw in switches {
+            if let Some(rest) = arg.strip_prefix(sw)
+                && let Some(val) = rest.strip_prefix('=')
+            {
+                return Some(val);
+            }
+        }
+    }
+    None
 }
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| a == "--version" || a == "-V") {
+    if has_switch(&args, &["-v", "-V", "--version"]) {
         println!("bilterm {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
-    if args.iter().any(|a| a == "--help" || a == "-h") {
+    if has_switch(&args, &["-h", "--help"]) {
         println!(
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
-               bilterm ctl [--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n\
+               bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n\
              Options:\n  \
-               --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
-               --headless                   Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via --listen 127.0.0.1:PORT)\n  \
-               --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
-               --allow-remote               Allow listening on non-loopback TCP addresses (requires --token-file)\n  \
-               --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
-               --snapshot-dir <PATH>        Directory for confined workspace snapshots (default: XDG state dir)\n  \
-               --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
-               --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
-               --session <NAME>             Use named persistent command-history session (overrides history_session)\n  \
-               --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
-               --man                        Print roff manpage (bilterm.1) to stdout\n  \
-               --version, -V                Print version information\n  \
-               --help, -h                   Print this help message",
+               -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
+               -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
+               -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
+               -r, --allow-remote               Allow listening on non-loopback TCP addresses (requires -t/--token-file)\n  \
+               -t, --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
+               -S, --snapshot-dir <PATH>        Directory for confined workspace snapshots (default: XDG state dir)\n  \
+               -p, --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
+               -g, --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
+               -s, --session <NAME>             Use named persistent command-history session (overrides history_session)\n  \
+               -c, --config <FILE.toml>         Load configuration from custom TOML file path\n  \
+               -C, --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
+               -M, --man                        Print roff manpage (bilterm.1) to stdout\n  \
+               -v, -V, --version                Print version information\n  \
+               -h, --help                       Print this help message",
             env!("CARGO_PKG_VERSION")
         );
         return Ok(());
     }
 
-    let token = if let Some(path_str) = flag_value(&args, "--token-file") {
+    let token = if let Some(path_str) = switch_value(&args, &["-t", "--token-file"]) {
         Some(load_token_file(Path::new(path_str))?)
     } else if let Ok(env_path) = std::env::var("BILTERM_TOKEN_FILE") {
         Some(load_token_file(Path::new(&env_path))?)
@@ -64,7 +80,9 @@ async fn main() -> color_eyre::Result<()> {
     if args.first().map(String::as_str) == Some("ctl") {
         let mut rest = args[1..].to_vec();
         let mut ctl_token_path = None;
-        if let Some(pos) = rest.iter().position(|a| a == "--token-file")
+        if let Some(pos) = rest
+            .iter()
+            .position(|a| a == "--token-file" || a == "-t")
             && pos + 1 < rest.len()
         {
             ctl_token_path = Some(rest[pos + 1].clone());
@@ -94,17 +112,15 @@ async fn main() -> color_eyre::Result<()> {
         println!("{resp}");
         return Ok(());
     }
-    if args.iter().any(|a| a == "--mcp") {
+    if has_switch(&args, &["-m", "--mcp"]) {
         let mut plane = AutomationControlPlane::new_headless(24, 80);
-        if let Some(snap_dir) = flag_value(&args, "--snapshot-dir") {
+        if let Some(snap_dir) = switch_value(&args, &["-S", "--snapshot-dir"]) {
             plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
         }
         run_mcp_stdio_server_with_plane(plane).await?;
         return Ok(());
     }
-    if let Some(pos) = args.iter().position(|a| a == "--playbook")
-        && let Some(pb_path) = args.get(pos + 1)
-    {
+    if let Some(pb_path) = switch_value(&args, &["-p", "--playbook"]) {
         let raw_toml = std::fs::read_to_string(pb_path)?;
         let pb = Playbook::from_toml_str(&raw_toml)?;
         let mut plane = AutomationControlPlane::new_headless(24, 80);
@@ -117,13 +133,13 @@ async fn main() -> color_eyre::Result<()> {
         );
         return Ok(());
     }
-    if args.iter().any(|a| a == "--headless") {
-        let listen = flag_value(&args, "--listen").map(String::as_str);
-        let allow_remote = args.iter().any(|a| a == "--allow-remote");
+    if has_switch(&args, &["-d", "--headless", "--daemon"]) {
+        let listen = switch_value(&args, &["-l", "--listen"]);
+        let allow_remote = has_switch(&args, &["-r", "--allow-remote"]);
         let default_unix = default_socket_path().ok();
         let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
         let mut plane = AutomationControlPlane::new_headless(24, 80);
-        if let Some(snap_dir) = flag_value(&args, "--snapshot-dir") {
+        if let Some(snap_dir) = switch_value(&args, &["-S", "--snapshot-dir"]) {
             plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
         }
         let endpoint_display = match &cfg.endpoint {
@@ -134,30 +150,26 @@ async fn main() -> color_eyre::Result<()> {
         run_headless_server(cfg, plane).await?;
         return Ok(());
     }
-    if let Some(pos) = args.iter().position(|a| a == "--completions")
-        && let Some(shell) = args.get(pos + 1)
-    {
-        match shell.as_str() {
+    if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
+        match shell {
             "bash" => println!(
-                "complete -W \"ctl --mcp --headless --listen --allow-remote --token-file --snapshot-dir --playbook --help --version --gui-dump --completions --man --session\" bilterm"
+                "complete -W \"ctl -m --mcp -d --headless --daemon -l --listen -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '--mcp[Run MCP server]' '--headless[Headless daemon]' '--listen[Listen address]:addr:' '--allow-remote[Allow remote TCP]' '--token-file[Bearer token file]:file:_files' '--snapshot-dir[Snapshot directory]:dir:_files -/' '--playbook[Run TOML playbook]:file:_files' '--help[Print help]' '--version[Print version]' '--gui-dump[Dump GPU PPM]:file:_files' '--completions[Shell completions]:shell:(bash zsh fish)' '--man[Print manpage]' '--session[History session name]:name:'"
+                "#compdef bilterm\n_arguments '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
             ),
             "fish" => println!(
-                "complete -c bilterm -l mcp -d 'Run MCP server'\ncomplete -c bilterm -l headless -d 'Headless daemon'\ncomplete -c bilterm -l listen -r -d 'Listen address'\ncomplete -c bilterm -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -l help -d 'Print help'\ncomplete -c bilterm -l version -d 'Print version'\ncomplete -c bilterm -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -l man -d 'Print manpage'\ncomplete -c bilterm -l session -r -d 'History session name'"
+                "complete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }
         return Ok(());
     }
-    if args.iter().any(|a| a == "--man") {
+    if has_switch(&args, &["-M", "--man"]) {
         print!("{}", include_str!("../docs/bilterm.1"));
         return Ok(());
     }
-    if let Some(pos) = args.iter().position(|a| a == "--gui-dump")
-        && let Some(out_path) = args.get(pos + 1)
-    {
+    if let Some(out_path) = switch_value(&args, &["-g", "--gui-dump"]) {
         let wm = WindowManager::new_headless(24, 80);
         let mut renderer = GuiWorkspaceRenderer::default();
         let mut surface = GuiFrameSurface::new(8, 16);
@@ -180,7 +192,8 @@ async fn main() -> color_eyre::Result<()> {
     let mut app = App::spawn_default(rows, cols)?;
     let mut cfg = BiltermConfig::default();
     let mut cfg_error = None;
-    if let Some(cfg_path) = BiltermConfig::default_path() {
+    let custom_cfg_path = switch_value(&args, &["-c", "--config"]).map(PathBuf::from);
+    if let Some(cfg_path) = custom_cfg_path.or_else(BiltermConfig::default_path) {
         match BiltermConfig::load(&cfg_path) {
             Ok(Some(loaded)) => cfg = loaded,
             Ok(None) => {}
@@ -190,10 +203,8 @@ async fn main() -> color_eyre::Result<()> {
             }
         }
     }
-    if let Some(pos) = args.iter().position(|a| a == "--session")
-        && let Some(name) = args.get(pos + 1)
-    {
-        cfg.history_session = name.clone();
+    if let Some(name) = switch_value(&args, &["-s", "--session"]) {
+        cfg.history_session = name.to_string();
     }
     app.wm.apply_config(cfg);
     if cfg_error.is_some() {

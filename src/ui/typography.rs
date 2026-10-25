@@ -235,6 +235,28 @@ impl WindowManager {
         self.notify_font_scale_changed()
     }
 
+    /// Synchronizes terminal font scaling with `:focalzoom` when in text mode so `:focalzoom`
+    /// scales the font larger instead of double-spacing characters (`FONT-01`).
+    pub fn sync_focal_zoom_font_scale(&mut self) {
+        let has_canvas = self.active_pane().vt().tektronix().has_visible_content()
+            || self.active_pane().canvas_scene().has_visible_content();
+        if has_canvas {
+            return;
+        }
+        let target_pct = if self.config().focal_zoom_mode == crate::ui::cursor::SpotlightMode::Off {
+            100
+        } else {
+            self.config().focal_zoom_pct.clamp(50, 300)
+        };
+        self.config_mut().font_scale_pct = target_pct;
+        let pt = self.config().scaled_font_size_pt();
+        let passthrough = self.config().host_font_passthrough;
+        if passthrough {
+            self.active_pane_mut()
+                .set_last_osc52_sequence(Some(encode_host_font_passthrough(pt, target_pct)));
+        }
+    }
+
     /// Recalculates the terminal character grid `(rows, cols)` that fits inside a pixel window
     /// of `(width_px, height_px)` at the current scaled cell dimensions and resizes all workspace panes (`FONT-01`).
     pub fn resize_for_pixel_window(&mut self, width_px: u32, height_px: u32) -> Result<Rect> {

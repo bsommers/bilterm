@@ -718,9 +718,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 if let Some(f) = feather_pct { cfg.focal_zoom_feather_pct = f.clamp(5, 100); }
                 cfg.focal_zoom_label()
             };
-            let (rx_v, ry_v, f_v) = (wm.config().focal_zoom_rx, wm.config().focal_zoom_ry, wm.config().focal_zoom_feather_pct);
+            wm.sync_focal_zoom_font_scale();
+            let (rx_v, ry_v, f_v, pt_v) = (
+                wm.config().focal_zoom_rx,
+                wm.config().focal_zoom_ry,
+                wm.config().focal_zoom_feather_pct,
+                wm.config().scaled_font_size_pt(),
+            );
             wm.active_pane_mut().set_status_message(Some(format!(
-                "🔍 Focal Zoom: {label} (rx={rx_v}, ry={ry_v}, feather={f_v}%)"
+                "🔍 Focal Zoom: {label} (font={pt_v}pt, rx={rx_v}, ry={ry_v}, feather={f_v}%)"
             )));
             false
         }

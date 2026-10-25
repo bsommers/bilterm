@@ -638,7 +638,7 @@ impl Widget for WorkspaceWidget<'_> {
         // Render interactive <F1> Borland Turbo Vision Help Modal on top of the workspace
         if self.wm.is_help_visible() && workspace_area.width >= 20 && workspace_area.height >= 6 {
             render_help_modal(
-                self.wm.help_scroll(),
+                self.wm,
                 workspace_area,
                 cfg,
                 &palette,

@@ -268,6 +268,10 @@ pub fn handle_wm_mouse_event(
         return Ok(action);
     }
 
+    if let Some(action) = handle_modal_mouse_event(wm, mouse, workspace_area) {
+        return Ok(action);
+    }
+
     let Some((hit_focus, outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area)
     else {
         return Ok(AppAction::Continue);
@@ -280,13 +284,25 @@ pub fn handle_wm_mouse_event(
     }
 
     if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-        && let Focus::Pane(hit_id) = hit_focus
-        && wm.is_framed()
         && !rect_contains(inner, mouse.column, mouse.row)
-        && let Some(action) =
-            handle_wm_frame_border_mouse_down(wm, hit_id, outer, mouse, workspace_area)?
     {
-        return Ok(action);
+        match hit_focus {
+            Focus::Quick => {
+                if let Some(action) =
+                    handle_quick_terminal_border_mouse_down(wm, outer, mouse, workspace_area)?
+                {
+                    return Ok(action);
+                }
+            }
+            Focus::Pane(hit_id) if wm.is_framed() => {
+                if let Some(action) =
+                    handle_wm_frame_border_mouse_down(wm, hit_id, outer, mouse, workspace_area)?
+                {
+                    return Ok(action);
+                }
+            }
+            _ => {}
+        }
     }
 
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
@@ -309,47 +325,31 @@ pub fn handle_wm_mouse_event(
     handle_mouse_event(pane, mouse, inner)
 }
 
-fn handle_wm_frame_border_mouse_down(
-    wm: &mut WindowManager,
-    hit_id: crate::pane::PaneId,
-    outer: Rect,
-    mouse: MouseEvent,
-    workspace_area: Rect,
-) -> Result<Option<AppAction>> {
-    let col = mouse.column;
-    let row = mouse.row;
+fn detect_title_bar_badge_click(wm: &WindowManager, outer: Rect, col: u16) -> Option<u8> {
+    if outer.width < 24 {
+        return None;
+    }
+    let glyphs = wm.config().glyph_set();
+    let min_len = glyphs.minimize_badge.chars().count() as u16;
+    let zoom_len = glyphs.zoom_badge.chars().count() as u16;
+    let close_len = glyphs.close_badge.chars().count() as u16;
+    let right_edge = outer.x + outer.width;
+    let start_x = right_edge.saturating_sub(min_len + zoom_len + close_len + 2);
+    if col >= start_x && col < start_x + min_len {
+        Some(0) // [_] Minimize
+    } else if col >= start_x + min_len && col < start_x + min_len + zoom_len {
+        Some(1) // [↕] Maximize / Zoom
+    } else if col >= start_x + min_len + zoom_len && col < start_x + min_len + zoom_len + close_len {
+        Some(2) // [▪] Close
+    } else {
+        None
+    }
+}
+
+fn detect_border_resize_edge(outer: Rect, col: u16, row: u16) -> Option<WindowResizeEdge> {
     let right_x = outer.x + outer.width.saturating_sub(1);
     let bottom_y = outer.y + outer.height.saturating_sub(1);
-
-    // Top title bar: check [↕] zoom and [▪] close badges on right, otherwise start MoveWindow drag
-    if row == outer.y {
-        if outer.width >= 24 {
-            let glyphs = wm.config().glyph_set();
-            let zoom_len = glyphs.zoom_badge.chars().count() as u16;
-            let close_len = glyphs.close_badge.chars().count() as u16;
-            let right_edge = outer.x + outer.width;
-            let start_x = right_edge.saturating_sub(zoom_len + close_len + 2);
-            if col >= start_x && col < start_x + zoom_len {
-                wm.toggle_zoom();
-                wm.resize_all(workspace_area)?;
-                return Ok(Some(AppAction::Handled));
-            }
-            if col >= start_x + zoom_len && col < start_x + zoom_len + close_len {
-                if wm.remove_pane(hit_id) {
-                    wm.resize_all(workspace_area)?;
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-        }
-        wm.set_wm_mouse_drag(Some(WmMouseDrag::MoveWindow {
-            pane_id: hit_id,
-            grab_dx: col.saturating_sub(outer.x),
-            grab_dy: 0,
-        }));
-        return Ok(Some(AppAction::Handled));
-    }
-
-    let edge = if (row == bottom_y && col >= right_x.saturating_sub(1))
+    if (row == bottom_y && col >= right_x.saturating_sub(1))
         || (col == right_x && row >= bottom_y.saturating_sub(1))
     {
         Some(WindowResizeEdge::BottomRight)
@@ -363,9 +363,146 @@ fn handle_wm_frame_border_mouse_down(
         Some(WindowResizeEdge::Right)
     } else {
         None
-    };
+    }
+}
 
-    if let Some(edge) = edge {
+fn apply_rect_edge_resize(
+    initial_rect: Rect,
+    edge: WindowResizeEdge,
+    col: u16,
+    row: u16,
+    bounds: Rect,
+) -> Rect {
+    let mut new_x = initial_rect.x;
+    let mut new_y = initial_rect.y;
+    let mut new_w = initial_rect.width;
+    let mut new_h = initial_rect.height;
+    let right_edge = initial_rect.x + initial_rect.width;
+    let bottom_edge = initial_rect.y + initial_rect.height;
+
+    if matches!(edge, WindowResizeEdge::Right | WindowResizeEdge::BottomRight) {
+        new_w = col.saturating_sub(initial_rect.x).saturating_add(1);
+    }
+    if matches!(edge, WindowResizeEdge::Left | WindowResizeEdge::BottomLeft) {
+        new_x = col.clamp(bounds.x, right_edge.saturating_sub(16));
+        new_w = right_edge.saturating_sub(new_x);
+    }
+    if matches!(
+        edge,
+        WindowResizeEdge::Bottom | WindowResizeEdge::BottomLeft | WindowResizeEdge::BottomRight
+    ) {
+        new_h = row.saturating_sub(initial_rect.y).saturating_add(1);
+    }
+    if matches!(edge, WindowResizeEdge::Top) {
+        new_y = row.clamp(bounds.y, bottom_edge.saturating_sub(5));
+        new_h = bottom_edge.saturating_sub(new_y);
+    }
+    Rect::new(new_x, new_y, new_w, new_h)
+}
+
+fn handle_modal_mouse_event(
+    wm: &mut WindowManager,
+    mouse: MouseEvent,
+    workspace_area: Rect,
+) -> Option<AppAction> {
+    let modal_outer = wm.active_modal_rect(workspace_area)?;
+    if !rect_contains(modal_outer, mouse.column, mouse.row) {
+        return None;
+    }
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {
+            if mouse.row == modal_outer.y {
+                match detect_title_bar_badge_click(wm, modal_outer, mouse.column) {
+                    Some(0 | 2) => wm.close_modal(),
+                    Some(1) => wm.toggle_maximize_modal(),
+                    _ => wm.set_wm_mouse_drag(Some(WmMouseDrag::MoveModal {
+                        grab_dx: mouse.column.saturating_sub(modal_outer.x),
+                        grab_dy: 0,
+                    })),
+                }
+            } else if let Some(edge) = detect_border_resize_edge(modal_outer, mouse.column, mouse.row) {
+                wm.set_wm_mouse_drag(Some(WmMouseDrag::ResizeModal {
+                    edge,
+                    initial_rect: modal_outer,
+                }));
+            }
+            Some(AppAction::Handled)
+        }
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
+            match wm.modal_mut() {
+                crate::wm::Modal::Help { scroll } | crate::wm::Modal::Inspector { scroll } => {
+                    *scroll = if up { scroll.saturating_sub(2) } else { scroll.saturating_add(2) };
+                }
+                crate::wm::Modal::Palette { selected, .. } => {
+                    *selected = if up { selected.saturating_sub(1) } else { selected.saturating_add(1) };
+                }
+                _ => {}
+            }
+            Some(AppAction::Handled)
+        }
+        _ => Some(AppAction::Handled),
+    }
+}
+
+fn handle_quick_terminal_border_mouse_down(
+    wm: &mut WindowManager,
+    outer: Rect,
+    mouse: MouseEvent,
+    workspace_area: Rect,
+) -> Result<Option<AppAction>> {
+    if mouse.row == outer.y {
+        match detect_title_bar_badge_click(wm, outer, mouse.column) {
+            Some(0 | 2) => wm.quick_terminal_mut().visible = false,
+            Some(1) => {
+                let qt = wm.quick_terminal_mut();
+                qt.height_pct = if qt.height_pct >= 80 { 40 } else { 90 };
+                wm.resize_all(workspace_area)?;
+            }
+            _ => {}
+        }
+        return Ok(Some(AppAction::Handled));
+    }
+    if detect_border_resize_edge(outer, mouse.column, mouse.row).is_some() {
+        wm.set_wm_mouse_drag(Some(WmMouseDrag::ResizeQuickTerminal));
+        return Ok(Some(AppAction::Handled));
+    }
+    Ok(None)
+}
+
+fn handle_wm_frame_border_mouse_down(
+    wm: &mut WindowManager,
+    hit_id: crate::pane::PaneId,
+    outer: Rect,
+    mouse: MouseEvent,
+    workspace_area: Rect,
+) -> Result<Option<AppAction>> {
+    let (col, row) = (mouse.column, mouse.row);
+    if row == outer.y {
+        match detect_title_bar_badge_click(wm, outer, col) {
+            Some(0) => wm.toggle_minimize_pane(hit_id),
+            Some(1) => {
+                if wm.z_stack().is_minimized(hit_id) {
+                    wm.toggle_minimize_pane(hit_id);
+                } else {
+                    wm.toggle_zoom();
+                    wm.resize_all(workspace_area)?;
+                }
+            }
+            Some(2) => {
+                if wm.remove_pane(hit_id) {
+                    wm.resize_all(workspace_area)?;
+                }
+            }
+            _ => wm.set_wm_mouse_drag(Some(WmMouseDrag::MoveWindow {
+                pane_id: hit_id,
+                grab_dx: col.saturating_sub(outer.x),
+                grab_dy: 0,
+            })),
+        }
+        return Ok(Some(AppAction::Handled));
+    }
+    if let Some(edge) = detect_border_resize_edge(outer, col, row) {
         wm.set_wm_mouse_drag(Some(WmMouseDrag::ResizeWindow {
             pane_id: hit_id,
             edge,
@@ -373,7 +510,6 @@ fn handle_wm_frame_border_mouse_down(
         }));
         return Ok(Some(AppAction::Handled));
     }
-
     Ok(None)
 }
 
@@ -442,47 +578,14 @@ fn handle_wm_window_drag_event(
                         if wm.layout_mode() == WorkspaceLayoutMode::Tiled {
                             wm.set_layout_mode(WorkspaceLayoutMode::Stacked);
                         }
-                        let mut new_x = initial_rect.x;
-                        let mut new_y = initial_rect.y;
-                        let mut new_w = initial_rect.width;
-                        let mut new_h = initial_rect.height;
-                        let right_edge = initial_rect.x + initial_rect.width;
-                        let bottom_edge = initial_rect.y + initial_rect.height;
-
-                        if matches!(
+                        let resized = apply_rect_edge_resize(
+                            initial_rect,
                             edge,
-                            WindowResizeEdge::Right | WindowResizeEdge::BottomRight
-                        ) {
-                            new_w = mouse
-                                .column
-                                .saturating_sub(initial_rect.x)
-                                .saturating_add(1);
-                        }
-                        if matches!(
-                            edge,
-                            WindowResizeEdge::Left | WindowResizeEdge::BottomLeft
-                        ) {
-                            new_x = mouse.column.clamp(eff_area.x, right_edge.saturating_sub(16));
-                            new_w = right_edge.saturating_sub(new_x);
-                        }
-                        if matches!(
-                            edge,
-                            WindowResizeEdge::Bottom
-                                | WindowResizeEdge::BottomLeft
-                                | WindowResizeEdge::BottomRight
-                        ) {
-                            new_h = mouse.row.saturating_sub(initial_rect.y).saturating_add(1);
-                        }
-                        if matches!(edge, WindowResizeEdge::Top) {
-                            new_y = mouse.row.clamp(eff_area.y, bottom_edge.saturating_sub(5));
-                            new_h = bottom_edge.saturating_sub(new_y);
-                        }
-
-                        let updated = wm.z_stack_mut().set_window_rect(
-                            pane_id,
-                            Rect::new(new_x, new_y, new_w, new_h),
+                            mouse.column,
+                            mouse.row,
                             eff_area,
                         );
+                        let updated = wm.z_stack_mut().set_window_rect(pane_id, resized, eff_area);
                         wm.resize_all(workspace_area)?;
                         wm.active_pane_mut().set_status_message(Some(format!(
                             "Window #{pane_id} resized to {}x{} @ ({},{})",
@@ -524,6 +627,39 @@ fn handle_wm_window_drag_event(
                             wm.resize_all(workspace_area)?;
                         }
                     }
+                    Ok(Some(AppAction::Handled))
+                }
+                WmMouseDrag::MoveModal { grab_dx, grab_dy } => {
+                    if let Some(cur) = wm.active_modal_rect(workspace_area) {
+                        let new_x = mouse.column.saturating_sub(grab_dx).max(workspace_area.x);
+                        let new_y = mouse.row.saturating_sub(grab_dy).max(workspace_area.y);
+                        wm.set_modal_rect(
+                            Rect::new(new_x, new_y, cur.width, cur.height),
+                            workspace_area,
+                        );
+                    }
+                    Ok(Some(AppAction::Handled))
+                }
+                WmMouseDrag::ResizeModal { edge, initial_rect } => {
+                    let resized = apply_rect_edge_resize(
+                        initial_rect,
+                        edge,
+                        mouse.column,
+                        mouse.row,
+                        workspace_area,
+                    );
+                    wm.set_modal_rect(resized, workspace_area);
+                    Ok(Some(AppAction::Handled))
+                }
+                WmMouseDrag::ResizeQuickTerminal => {
+                    let rel_h = mouse
+                        .row
+                        .saturating_sub(workspace_area.y)
+                        .saturating_add(1);
+                    let pct = ((u32::from(rel_h) * 100) / u32::from(workspace_area.height.max(1)))
+                        .clamp(15, 95) as u16;
+                    wm.quick_terminal_mut().height_pct = pct;
+                    wm.resize_all(workspace_area)?;
                     Ok(Some(AppAction::Handled))
                 }
             }

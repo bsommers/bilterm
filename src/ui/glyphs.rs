@@ -31,6 +31,7 @@ impl GlyphPack {
         match self {
             Self::Unicode => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
+                minimize_badge: "[_]",
                 close_badge: "[▪]",
                 zoom_badge: "[↕]",
                 resize_corner: "◢",
@@ -47,6 +48,7 @@ impl GlyphPack {
             },
             Self::Cp437 => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
+                minimize_badge: "[─]",
                 close_badge: "[■]",
                 zoom_badge: "[↕]",
                 resize_corner: "╬",
@@ -63,6 +65,7 @@ impl GlyphPack {
             },
             Self::NerdFont => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
+                minimize_badge: "[_]",
                 close_badge: "[▪]",
                 zoom_badge: "[↕]",
                 resize_corner: "◢",
@@ -79,6 +82,7 @@ impl GlyphPack {
             },
             Self::Ascii => GlyphSet {
                 pin_top_bottom: "[^][v]",
+                minimize_badge: "[_]",
                 close_badge: "[x]",
                 zoom_badge: "[+]",
                 resize_corner: "/",
@@ -101,6 +105,7 @@ impl GlyphPack {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GlyphSet {
     pub pin_top_bottom: &'static str,
+    pub minimize_badge: &'static str,
     pub close_badge: &'static str,
     pub zoom_badge: &'static str,
     pub resize_corner: &'static str,
@@ -126,6 +131,7 @@ impl GlyphSet {
     /// Verifies that every badge in the `GlyphSet` has the exact expected column width.
     pub fn validate_cell_widths(&self) -> bool {
         UnicodeWidthStr::width(self.pin_top_bottom) == 6
+            && UnicodeWidthStr::width(self.minimize_badge) == 3
             && UnicodeWidthStr::width(self.close_badge) == 3
             && UnicodeWidthStr::width(self.zoom_badge) == 3
             && UnicodeWidthStr::width(self.resize_corner) == 1

@@ -265,20 +265,6 @@ pub fn render_spotlight_cursor(
     }
 }
 
-fn is_repeatable_horizontal_glyph(sym: &str) -> bool {
-    matches!(
-        sym,
-        "─" | "━" | "═" | "┄" | "┅" | "┈" | "┉" | "_" | "-" | "=" | "█" | "▓" | "▒" | "░" | "▀" | "▄"
-    )
-}
-
-fn is_repeatable_vertical_glyph(sym: &str) -> bool {
-    matches!(
-        sym,
-        "│" | "┃" | "║" | "┆" | "┇" | "┊" | "┋" | "|" | "█" | "▓" | "▒" | "░"
-    )
-}
-
 /// Renders a circular or elliptical **Focal Zoom (Fisheye Magnifying Lens)** centered at
 /// `(cursor_x, cursor_y)` with smooth Hermite `smoothstep` radial magnification falloff
 /// (or quantized `2x1` character-block magnification when `pixelated` is `true`) across
@@ -412,7 +398,7 @@ pub fn render_focal_zoom_cursor(
             if dist >= outer_edge || mag <= 1.001 {
                 continue;
             }
-            let (src_x, src_y, src_x_f, src_y_f) = map_to_src(x, y, mag);
+            let (src_x, src_y, _src_x_f, _src_y_f) = map_to_src(x, y, mag);
             let snap_idx = usize::from(src_y - clamped.y) * width_usize + usize::from(src_x - clamped.x);
             let Some(sampled) = snapshot.get(snap_idx) else {
                 continue;
@@ -444,52 +430,16 @@ pub fn render_focal_zoom_cursor(
                     .clamp(0.0, 255.0) as u8,
             );
 
-            // Determine if this destination cell is a secondary stretched cell of the same source cell
-            let is_primary_x = if pixelated {
-                true
-            } else {
-                let err_cur = (src_x_f - f32::from(src_x)).abs();
-                let left_closer = if x > clamped.x {
-                    let (m_l, _) = local_mag_at(x - 1, y);
-                    let (sx_l, _, sxf_l, _) = map_to_src(x - 1, y, m_l);
-                    sx_l == src_x && (sxf_l - f32::from(src_x)).abs() <= err_cur
-                } else {
-                    false
-                };
-                let right_closer = if x + 1 < clamped.x + clamped.width {
-                    let (m_r, _) = local_mag_at(x + 1, y);
-                    let (sx_r, _, sxf_r, _) = map_to_src(x + 1, y, m_r);
-                    sx_r == src_x && (sxf_r - f32::from(src_x)).abs() < err_cur
-                } else {
-                    false
-                };
-                !left_closer && !right_closer
-            };
-
-            let is_primary_y = if pixelated {
-                true
-            } else {
-                let err_cur = (src_y_f - f32::from(src_y)).abs();
-                let up_closer = if y > clamped.y {
-                    let (m_u, _) = local_mag_at(x, y - 1);
-                    let (_, sy_u, _, syf_u) = map_to_src(x, y - 1, m_u);
-                    sy_u == src_y && (syf_u - f32::from(src_y)).abs() <= err_cur
-                } else {
-                    false
-                };
-                let down_closer = if y + 1 < clamped.y + clamped.height {
-                    let (m_d, _) = local_mag_at(x, y + 1);
-                    let (_, sy_d, _, syf_d) = map_to_src(x, y + 1, m_d);
-                    sy_d == src_y && (syf_d - f32::from(src_y)).abs() < err_cur
-                } else {
-                    false
-                };
-                !up_closer && !down_closer
-            };
+            let is_graphical_subcell = sampled_sym.chars().next().is_some_and(|ch| {
+                let u = ch as u32;
+                (0x2800..=0x28ff).contains(&u)
+                    || (0x1fb00..=0x1fb3b).contains(&u)
+                    || (0x2580..=0x259f).contains(&u)
+            });
 
             if let Some(cell) = buf.cell_mut((x, y)) {
-                let out_sym = if pixelated {
-                    if sampled_sym == " " && dist > inner_edge && dist < outer_edge {
+                if pixelated || is_graphical_subcell {
+                    let out_sym = if sampled_sym == " " && dist > inner_edge && dist < outer_edge {
                         let t = ((dist - inner_edge) / (outer_edge - inner_edge)).clamp(0.0, 1.0);
                         if t < 0.33 {
                             "▒"
@@ -500,21 +450,46 @@ pub fn render_focal_zoom_cursor(
                         }
                     } else {
                         sampled_sym
+                    };
+                    cell.set_symbol(out_sym);
+                    let mut new_style = style.fg(new_fg).bg(new_bg);
+                    if mag >= 1.15 && out_sym != " " {
+                        new_style = new_style.add_modifier(Modifier::BOLD);
                     }
-                } else if (is_primary_y && (is_primary_x || is_repeatable_horizontal_glyph(sampled_sym)))
-                    || (is_primary_x && is_repeatable_vertical_glyph(sampled_sym))
-                {
-                    sampled_sym
+                    cell.set_style(new_style);
                 } else {
-                    " "
-                };
-
-                cell.set_symbol(out_sym);
-                let mut new_style = style.fg(new_fg).bg(new_bg);
-                if mag >= 1.22 && out_sym != " " {
-                    new_style = new_style.add_modifier(Modifier::BOLD);
+                    // Text mode: never double-space characters with blank gaps; preserve text alignment
+                    // while applying smooth radial lens luminance boost + bold weight (paired with font scaling).
+                    let orig_idx =
+                        usize::from(y - clamped.y) * width_usize + usize::from(x - clamped.x);
+                    let orig_cell = snapshot.get(orig_idx).unwrap_or(sampled);
+                    let orig_sym = orig_cell.symbol();
+                    let orig_style = orig_cell.style();
+                    let ofg = color_to_rgb(orig_style.fg.unwrap_or(Color::Reset), (192, 208, 224));
+                    let obg = color_to_rgb(orig_style.bg.unwrap_or(Color::Reset), (0, 0, 20));
+                    let tfg = Color::Rgb(
+                        (f32::from(ofg.0) * fg_gain).round().clamp(0.0, 255.0) as u8,
+                        (f32::from(ofg.1) * fg_gain).round().clamp(0.0, 255.0) as u8,
+                        (f32::from(ofg.2) * fg_gain).round().clamp(0.0, 255.0) as u8,
+                    );
+                    let tbg = Color::Rgb(
+                        (f32::from(obg.0) * (1.0 - lens_mix) + f32::from(tint_rgb.0) * lens_mix)
+                            .round()
+                            .clamp(0.0, 255.0) as u8,
+                        (f32::from(obg.1) * (1.0 - lens_mix) + f32::from(tint_rgb.1) * lens_mix)
+                            .round()
+                            .clamp(0.0, 255.0) as u8,
+                        (f32::from(obg.2) * (1.0 - lens_mix) + f32::from(tint_rgb.2) * lens_mix)
+                            .round()
+                            .clamp(0.0, 255.0) as u8,
+                    );
+                    cell.set_symbol(orig_sym);
+                    let mut new_style = orig_style.fg(tfg).bg(tbg);
+                    if mag >= 1.15 && orig_sym != " " {
+                        new_style = new_style.add_modifier(Modifier::BOLD);
+                    }
+                    cell.set_style(new_style);
                 }
-                cell.set_style(new_style);
             }
         }
     }
@@ -702,7 +677,8 @@ mod tests {
             Color::Rgb(0, 60, 80),
         );
 
-        // Center 'C' stays at (20, 10) with BOLD modifier and boosted phosphor luminance
+        // Center 'C' stays at (20, 10) with BOLD modifier and boosted phosphor luminance,
+        // and neighboring text 'D' stays contiguous at (21, 10) without double-spacing!
         assert_eq!(buf.cell((20, 10)).unwrap().symbol(), "C");
         assert!(
             buf.cell((20, 10))
@@ -711,8 +687,7 @@ mod tests {
                 .add_modifier
                 .contains(Modifier::BOLD)
         );
-        // At 2.0x magnification, 'D' (originally at x=21, dx=+1) is radially displaced outward to x=22 (dx=+2)
-        assert_eq!(buf.cell((22, 10)).unwrap().symbol(), "D");
+        assert_eq!(buf.cell((21, 10)).unwrap().symbol(), "D");
         // Distant cell (0, 0) outside the lens is completely untouched
         assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "Z");
 

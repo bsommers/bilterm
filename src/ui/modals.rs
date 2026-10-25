@@ -22,11 +22,13 @@ pub(super) fn render_palette_modal(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let pop_w = canvas.width.saturating_sub(4).clamp(24, 76).min(canvas.width);
-    let pop_h = canvas.height.saturating_sub(2).clamp(6, 14).min(canvas.height);
-    let pop_x = canvas.x + (canvas.width.saturating_sub(pop_w)) / 2;
-    let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
-    let pop_rect = Rect::new(pop_x, pop_y, pop_w, pop_h);
+    let pop_rect = wm.active_modal_rect(canvas).unwrap_or_else(|| {
+        let pop_w = canvas.width.saturating_sub(4).clamp(24, 76).min(canvas.width);
+        let pop_h = canvas.height.saturating_sub(2).clamp(6, 14).min(canvas.height);
+        let pop_x = canvas.x + (canvas.width.saturating_sub(pop_w)) / 2;
+        let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
+        Rect::new(pop_x, pop_y, pop_w, pop_h)
+    });
 
     if cfg.drop_shadows {
         render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
@@ -247,26 +249,29 @@ pub(super) fn render_unsafe_paste_modal(
 }
 
 pub(super) fn render_help_modal(
-    scroll: usize,
+    wm: &WindowManager,
     workspace_area: Rect,
     cfg: &BiltermConfig,
     palette: &ThemePalette,
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let w = workspace_area
-        .width
-        .saturating_sub(4)
-        .clamp(20, 78)
-        .min(workspace_area.width);
-    let h = workspace_area
-        .height
-        .saturating_sub(2)
-        .clamp(6, 22)
-        .min(workspace_area.height);
-    let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
-    let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
-    let modal = Rect::new(x, y, w, h);
+    let scroll = wm.help_scroll();
+    let modal = wm.active_modal_rect(workspace_area).unwrap_or_else(|| {
+        let w = workspace_area
+            .width
+            .saturating_sub(4)
+            .clamp(20, 78)
+            .min(workspace_area.width);
+        let h = workspace_area
+            .height
+            .saturating_sub(2)
+            .clamp(6, 22)
+            .min(workspace_area.height);
+        let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
+        let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
+        Rect::new(x, y, w, h)
+    });
 
     if cfg.drop_shadows {
         render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);
@@ -556,19 +561,21 @@ pub(super) fn render_inspector_modal(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let w = workspace_area
-        .width
-        .saturating_sub(4)
-        .clamp(24, 76)
-        .min(workspace_area.width);
-    let h = workspace_area
-        .height
-        .saturating_sub(2)
-        .clamp(6, 20)
-        .min(workspace_area.height);
-    let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
-    let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
-    let modal = Rect::new(x, y, w, h);
+    let modal = wm.active_modal_rect(workspace_area).unwrap_or_else(|| {
+        let w = workspace_area
+            .width
+            .saturating_sub(4)
+            .clamp(24, 76)
+            .min(workspace_area.width);
+        let h = workspace_area
+            .height
+            .saturating_sub(2)
+            .clamp(6, 20)
+            .min(workspace_area.height);
+        let x = workspace_area.x + (workspace_area.width.saturating_sub(w)) / 2;
+        let y = workspace_area.y + (workspace_area.height.saturating_sub(h)) / 2;
+        Rect::new(x, y, w, h)
+    });
 
     if cfg.drop_shadows {
         render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);

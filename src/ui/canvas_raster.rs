@@ -23,6 +23,7 @@ use crate::pane::{
     CanvasSubcellMode, CompositePane, DeclarativePlot, InteractiveImageView, PlotKind,
     VectorPrimitive,
 };
+use crate::ui::cursor::SpotlightMode;
 use crate::ui::theme::ThemePreset;
 use crate::vt::{TEK_MAX_X, TEK_MAX_Y, TekLineStyle};
 use crate::wm::WindowManager;
@@ -58,15 +59,104 @@ pub fn braille_char_from_mask(mask: u8) -> char {
     char::from_u32(0x2800 + u32::from(mask)).unwrap_or('⠀')
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SubcellFocalLens {
+    focus_x: f32,
+    focus_y: f32,
+    rx_sub: f32,
+    ry_sub: f32,
+    peak_zoom: f32,
+    inner_edge: f32,
+    outer_edge: f32,
+}
+
+impl SubcellFocalLens {
+    fn from_config(
+        cfg: &BiltermConfig,
+        canvas: Rect,
+        cursor_rc: (u16, u16),
+        mode: CanvasSubcellMode,
+    ) -> Option<Self> {
+        if cfg.focal_zoom_mode == SpotlightMode::Off || cfg.focal_zoom_pct <= 100 {
+            return None;
+        }
+        let (sx, sy) = mode.subcell_grid();
+        let (cur_r, cur_c) = cursor_rc;
+        let cc = if cur_c < canvas.width {
+            cur_c
+        } else {
+            canvas.width / 2
+        };
+        let cr = if cur_r < canvas.height {
+            cur_r
+        } else {
+            canvas.height / 2
+        };
+        let focus_x = (f32::from(cc) + 0.5) * f32::from(sx);
+        let focus_y = (f32::from(cr) + 0.5) * f32::from(sy);
+        let rx_cols = f32::from(cfg.focal_zoom_rx.max(4));
+        let ry_rows = match cfg.focal_zoom_mode {
+            SpotlightMode::Circle => (rx_cols * 0.5).max(2.0),
+            SpotlightMode::Ellipse => f32::from(cfg.focal_zoom_ry.max(2)),
+            SpotlightMode::Off => return None,
+        };
+        let feather = f32::from(cfg.focal_zoom_feather_pct.clamp(5, 100)) / 100.0;
+        Some(Self {
+            focus_x,
+            focus_y,
+            rx_sub: rx_cols * f32::from(sx),
+            ry_sub: ry_rows * f32::from(sy),
+            peak_zoom: f32::from(cfg.focal_zoom_pct.clamp(105, 400)) / 100.0,
+            inner_edge: (1.0 - feather).max(0.0),
+            outer_edge: 1.0 + feather,
+        })
+    }
+
+    #[inline]
+    fn warp(&self, x: f32, y: f32) -> (i32, i32) {
+        let dx = x - self.focus_x;
+        let dy = y - self.focus_y;
+        let nx = dx / self.rx_sub.max(1.0);
+        let ny = dy / self.ry_sub.max(1.0);
+        let dist = (nx * nx + ny * ny).sqrt();
+        let mag = if dist <= self.inner_edge {
+            let t = if self.inner_edge > 0.01 {
+                (dist / self.inner_edge).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let s = t * t * (3.0 - 2.0 * t);
+            self.peak_zoom - (self.peak_zoom - 1.0) * 0.12 * s
+        } else if dist < self.outer_edge {
+            let t = ((dist - self.inner_edge) / (self.outer_edge - self.inner_edge)).clamp(0.0, 1.0);
+            let s = t * t * (3.0 - 2.0 * t);
+            let edge_start = self.peak_zoom - (self.peak_zoom - 1.0) * 0.12;
+            edge_start * (1.0 - s) + s
+        } else {
+            1.0
+        };
+        (
+            (self.focus_x + dx * mag).round() as i32,
+            (self.focus_y + dy * mag).round() as i32,
+        )
+    }
+}
+
 struct SubcellBuffer {
     sub_w: usize,
     sub_h: usize,
     lit: Vec<bool>,
     rgb: Vec<(u8, u8, u8)>,
+    lens: Option<SubcellFocalLens>,
 }
 
 impl SubcellBuffer {
-    fn new(cols: u16, rows: u16, mode: CanvasSubcellMode) -> Self {
+    fn new(
+        cols: u16,
+        rows: u16,
+        mode: CanvasSubcellMode,
+        lens: Option<SubcellFocalLens>,
+    ) -> Self {
         let (sx, sy) = mode.subcell_grid();
         let sub_w = usize::from(cols.max(1)) * usize::from(sx);
         let sub_h = usize::from(rows.max(1)) * usize::from(sy);
@@ -75,11 +165,12 @@ impl SubcellBuffer {
             sub_h,
             lit: vec![false; sub_w * sub_h],
             rgb: vec![(0, 0, 0); sub_w * sub_h],
+            lens,
         }
     }
 
     #[inline]
-    fn plot(&mut self, x: i32, y: i32, color: (u8, u8, u8)) {
+    fn plot_raw(&mut self, x: i32, y: i32, color: (u8, u8, u8)) {
         if x >= 0 && y >= 0 && (x as usize) < self.sub_w && (y as usize) < self.sub_h {
             let idx = (y as usize) * self.sub_w + (x as usize);
             self.lit[idx] = true;
@@ -87,7 +178,17 @@ impl SubcellBuffer {
         }
     }
 
-    fn draw_line(
+    #[inline]
+    fn plot(&mut self, x: i32, y: i32, color: (u8, u8, u8)) {
+        if let Some(lens) = self.lens {
+            let (wx, wy) = lens.warp(x as f32, y as f32);
+            self.plot_raw(wx, wy, color);
+        } else {
+            self.plot_raw(x, y, color);
+        }
+    }
+
+    fn draw_line_raw(
         &mut self,
         x0: i32,
         y0: i32,
@@ -106,7 +207,7 @@ impl SubcellBuffer {
         let mut step_idx = 0usize;
         loop {
             if style.pattern_bit(step_idx) {
-                self.plot(cx, cy, color);
+                self.plot_raw(cx, cy, color);
             }
             if cx == x1 && cy == y1 {
                 break;
@@ -121,6 +222,34 @@ impl SubcellBuffer {
                 cy += sy;
             }
             step_idx = step_idx.wrapping_add(1);
+        }
+    }
+
+    fn draw_line(
+        &mut self,
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        style: TekLineStyle,
+        color: (u8, u8, u8),
+    ) {
+        if let Some(lens) = self.lens {
+            let span = (x1 - x0).abs().max((y1 - y0).abs()).max(1);
+            let steps = (span * 2).clamp(1, 2048);
+            let mut prev = lens.warp(x0 as f32, y0 as f32);
+            for s in 1..=steps {
+                let t = (s as f32) / (steps as f32);
+                let lx = (x0 as f32) + ((x1 - x0) as f32) * t;
+                let ly = (y0 as f32) + ((y1 - y0) as f32) * t;
+                let cur = lens.warp(lx, ly);
+                if style.pattern_bit(s as usize) {
+                    self.draw_line_raw(prev.0, prev.1, cur.0, cur.1, TekLineStyle::Solid, color);
+                }
+                prev = cur;
+            }
+        } else {
+            self.draw_line_raw(x0, y0, x1, y1, style, color);
         }
     }
 
@@ -201,18 +330,21 @@ impl SubcellBuffer {
                 if mask != 0
                     && let Some(cell) = buf.cell_mut((canvas.x + c as u16, canvas.y + r as u16))
                 {
-                    let ch = match mode {
-                        CanvasSubcellMode::Braille => braille_char_from_mask(mask),
-                        CanvasSubcellMode::Sextant => sextant_char_from_mask(mask),
-                        CanvasSubcellMode::Quadrant => QUADRANT_CHARS[usize::from(mask & 0x0f)],
-                    };
-                    let mut sym_buf = [0u8; 4];
-                    cell.set_symbol(ch.encode_utf8(&mut sym_buf));
-                    cell.set_style(
-                        cell.style()
-                            .fg(Color::Rgb(fg_rgb.0, fg_rgb.1, fg_rgb.2))
-                            .add_modifier(Modifier::BOLD),
-                    );
+                    // Preserve non-empty VT100 terminal text characters so shell output after `:tek demo` remains readable
+                    if cell.symbol() == " " || cell.symbol().is_empty() {
+                        let ch = match mode {
+                            CanvasSubcellMode::Braille => braille_char_from_mask(mask),
+                            CanvasSubcellMode::Sextant => sextant_char_from_mask(mask),
+                            CanvasSubcellMode::Quadrant => QUADRANT_CHARS[usize::from(mask & 0x0f)],
+                        };
+                        let mut sym_buf = [0u8; 4];
+                        cell.set_symbol(ch.encode_utf8(&mut sym_buf));
+                        cell.set_style(
+                            cell.style()
+                                .fg(Color::Rgb(fg_rgb.0, fg_rgb.1, fg_rgb.2))
+                                .add_modifier(Modifier::BOLD),
+                        );
+                    }
                 }
             }
         }
@@ -237,7 +369,8 @@ pub fn render_graphical_canvas(
     }
 
     let mode = scene.subcell_mode;
-    let mut sub = SubcellBuffer::new(canvas.width, canvas.height, mode);
+    let lens = SubcellFocalLens::from_config(cfg, canvas, pane.vt().cursor_position(), mode);
+    let mut sub = SubcellBuffer::new(canvas.width, canvas.height, mode, lens);
     let max_x = (sub.sub_w.saturating_sub(1)).max(1) as i32;
     let max_y = (sub.sub_h.saturating_sub(1)).max(1) as i32;
 
@@ -346,7 +479,9 @@ fn draw_canvas_label(
         if dst_c >= canvas.width {
             break;
         }
-        if let Some(cell) = buf.cell_mut((canvas.x + dst_c, canvas.y + row)) {
+        if let Some(cell) = buf.cell_mut((canvas.x + dst_c, canvas.y + row))
+            && (cell.symbol() == " " || cell.symbol().is_empty())
+        {
             let mut sym = [0u8; 4];
             cell.set_symbol(ch.encode_utf8(&mut sym));
             cell.set_style(

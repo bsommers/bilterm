@@ -251,10 +251,13 @@ pub fn render_borland_frame_styled(
         .border_style(Style::default().fg(border_fg).bg(frame_bg));
     block.render(outer, buf);
 
-    // Top-right [↕] zoom badge and [▪] close badge when window is wide enough
+    // Top-right [_] minimize badge, [↕] maximize/zoom badge, and [▪] close badge when window is wide enough
     if outer.width >= 24 {
         let right_edge = outer.x + outer.width;
-        let badges = format!("{}{}", glyphs.zoom_badge, glyphs.close_badge);
+        let badges = format!(
+            "{}{}{}",
+            glyphs.minimize_badge, glyphs.zoom_badge, glyphs.close_badge
+        );
         let start_x = right_edge.saturating_sub(badges.chars().count() as u16 + 2);
         for (i, ch) in badges.chars().enumerate() {
             let x = start_x + i as u16;

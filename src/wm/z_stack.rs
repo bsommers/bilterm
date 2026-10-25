@@ -33,6 +33,18 @@ pub enum WmMouseDrag {
         edge: WindowResizeEdge,
         initial_rect: Rect,
     },
+    /// Dragging a modal window's top title bar (`Help`, `Inspector`, `Palette`).
+    MoveModal {
+        grab_dx: u16,
+        grab_dy: u16,
+    },
+    /// Dragging a modal window's border or bottom-right `◢` corner (`Help`, `Inspector`, `Palette`).
+    ResizeModal {
+        edge: WindowResizeEdge,
+        initial_rect: Rect,
+    },
+    /// Dragging the Quake quick terminal's bottom border or `◢` corner.
+    ResizeQuickTerminal,
 }
 
 /// Per-window floating position and size override in `WorkspaceLayoutMode::Stacked`.
@@ -42,6 +54,8 @@ pub struct FloatingWindowGeometry {
     pub y_offset: Option<u16>,
     pub width: Option<u16>,
     pub height: Option<u16>,
+    #[serde(default)]
+    pub minimized: bool,
 }
 
 impl FloatingWindowGeometry {
@@ -50,6 +64,7 @@ impl FloatingWindowGeometry {
             || self.y_offset.is_some()
             || self.width.is_some()
             || self.height.is_some()
+            || self.minimized
     }
 }
 
@@ -62,6 +77,10 @@ pub struct ZStack {
     order: Vec<PaneId>,
     #[serde(default)]
     geometries: BTreeMap<PaneId, FloatingWindowGeometry>,
+    #[serde(skip)]
+    pub modal_rect: Option<Rect>,
+    #[serde(skip)]
+    pub modal_maximized: bool,
 }
 
 impl ZStack {
@@ -69,6 +88,8 @@ impl ZStack {
         Self {
             order: vec![initial_pane],
             geometries: BTreeMap::new(),
+            modal_rect: None,
+            modal_maximized: false,
         }
     }
 
@@ -76,6 +97,8 @@ impl ZStack {
         Self {
             order: if order.is_empty() { vec![1] } else { order },
             geometries: BTreeMap::new(),
+            modal_rect: None,
+            modal_maximized: false,
         }
     }
 
@@ -104,6 +127,19 @@ impl ZStack {
     /// Clears all custom window position/size overrides, restoring the default Borland cascade.
     pub fn reset_geometries(&mut self) {
         self.geometries.clear();
+        self.modal_rect = None;
+        self.modal_maximized = false;
+    }
+
+    /// Toggles the minimized state of `pane_id`.
+    pub fn toggle_minimize(&mut self, pane_id: PaneId) -> bool {
+        let entry = self.geometries.entry(pane_id).or_default();
+        entry.minimized = !entry.minimized;
+        entry.minimized
+    }
+
+    pub fn is_minimized(&self, pane_id: PaneId) -> bool {
+        self.geometries.get(&pane_id).is_some_and(|g| g.minimized)
     }
 
     /// Pushes a newly created `PaneId` to the top of the z-order stack.
@@ -196,10 +232,13 @@ impl ZStack {
                     .width
                     .unwrap_or(default_w)
                     .clamp(min_w, area.width.max(1));
-                let h = geom
-                    .height
-                    .unwrap_or(default_h)
-                    .clamp(min_h, area.height.max(1));
+                let h = if geom.minimized {
+                    3.min(area.height.max(1))
+                } else {
+                    geom.height
+                        .unwrap_or(default_h)
+                        .clamp(min_h, area.height.max(1))
+                };
                 let def_rel_x = (idx as u16) * max_step_x;
                 let def_rel_y = (idx as u16) * max_step_y;
                 let rel_x = geom
@@ -243,6 +282,7 @@ impl ZStack {
                 y_offset: Some(rel_y),
                 width: Some(w),
                 height: Some(h),
+                minimized: false,
             },
         );
         Rect::new(area.x + rel_x, area.y + rel_y, w, h)
@@ -332,10 +372,122 @@ impl WindowManager {
         (full, eff)
     }
 
+    /// Computes the active modal window's outer `Rect` (`Help`, `Inspector`, or `Palette`),
+    /// honoring user mouse/keyboard resize, drag-move, and `[↕]` maximize state.
+    pub fn active_modal_rect(&self, workspace_area: Rect) -> Option<Rect> {
+        let (def_w, def_h) = match self.modal {
+            super::Modal::Help { .. } => (
+                workspace_area
+                    .width
+                    .saturating_sub(4)
+                    .clamp(20, 78)
+                    .min(workspace_area.width),
+                workspace_area
+                    .height
+                    .saturating_sub(2)
+                    .clamp(6, 22)
+                    .min(workspace_area.height),
+            ),
+            super::Modal::Inspector { .. } => (
+                workspace_area
+                    .width
+                    .saturating_sub(4)
+                    .clamp(24, 76)
+                    .min(workspace_area.width),
+                workspace_area
+                    .height
+                    .saturating_sub(2)
+                    .clamp(6, 20)
+                    .min(workspace_area.height),
+            ),
+            super::Modal::Palette { .. } => (
+                workspace_area
+                    .width
+                    .saturating_sub(4)
+                    .clamp(24, 76)
+                    .min(workspace_area.width),
+                workspace_area
+                    .height
+                    .saturating_sub(2)
+                    .clamp(6, 14)
+                    .min(workspace_area.height),
+            ),
+            super::Modal::None | super::Modal::Menubar { .. } => return None,
+        };
+        if self.z_stack.modal_maximized {
+            return Some(workspace_area);
+        }
+        if let Some(r) = self.z_stack.modal_rect {
+            let min_w = 20.min(workspace_area.width.max(1));
+            let min_h = 5.min(workspace_area.height.max(1));
+            let w = r.width.clamp(min_w, workspace_area.width.max(1));
+            let h = r.height.clamp(min_h, workspace_area.height.max(1));
+            let max_x = workspace_area.x + workspace_area.width.saturating_sub(w);
+            let max_y = workspace_area.y + workspace_area.height.saturating_sub(h);
+            return Some(Rect::new(
+                r.x.clamp(workspace_area.x, max_x),
+                r.y.clamp(workspace_area.y, max_y),
+                w,
+                h,
+            ));
+        }
+        let x = workspace_area.x + (workspace_area.width.saturating_sub(def_w)) / 2;
+        let y = workspace_area.y + (workspace_area.height.saturating_sub(def_h)) / 2;
+        Some(Rect::new(x, y, def_w, def_h))
+    }
+
+    /// Sets the custom floating `Rect` for the active modal (`Help`, `Inspector`, `Palette`).
+    pub fn set_modal_rect(&mut self, rect: Rect, workspace_area: Rect) -> Rect {
+        self.z_stack.modal_maximized = false;
+        let min_w = 20.min(workspace_area.width.max(1));
+        let min_h = 5.min(workspace_area.height.max(1));
+        let w = rect.width.clamp(min_w, workspace_area.width.max(1));
+        let h = rect.height.clamp(min_h, workspace_area.height.max(1));
+        let max_x = workspace_area.x + workspace_area.width.saturating_sub(w);
+        let max_y = workspace_area.y + workspace_area.height.saturating_sub(h);
+        let clamped = Rect::new(
+            rect.x.clamp(workspace_area.x, max_x),
+            rect.y.clamp(workspace_area.y, max_y),
+            w,
+            h,
+        );
+        self.z_stack.modal_rect = Some(clamped);
+        clamped
+    }
+
+    /// Toggles `[↕]` maximize on the active modal (`Help`, `Inspector`, `Palette`).
+    pub fn toggle_maximize_modal(&mut self) {
+        self.z_stack.modal_maximized = !self.z_stack.modal_maximized;
+    }
+
+    /// Toggles `[_]` minimize on `pane_id`, collapsing it to a 3-row title bar in `Stacked` mode
+    /// or restoring its full size.
+    pub fn toggle_minimize_pane(&mut self, pane_id: PaneId) {
+        if self.zoomed_pane == Some(pane_id) {
+            self.zoomed_pane = None;
+        }
+        if self.layout_mode == WorkspaceLayoutMode::Tiled {
+            self.layout_mode = WorkspaceLayoutMode::Stacked;
+        }
+        let min_now = self.z_stack.toggle_minimize(pane_id);
+        let (full_area, _) = self.current_workspace_area();
+        let _ = self.resize_all(full_area);
+        self.active_pane_mut().set_status_message(Some(format!(
+            "Window #{pane_id} {}",
+            if min_now { "MINIMIZED [_]" } else { "RESTORED" }
+        )));
+    }
+
     /// Resizes the active pane/window by `(dw, dh)` columns/rows in either `Stacked` or `Tiled` mode.
     pub fn resize_focused_pane_or_window(&mut self, dw: i16, dh: i16) {
-        let active_id = self.active_pane_id();
         let (full_area, ws_area) = self.current_workspace_area();
+        if let Some(modal_r) = self.active_modal_rect(ws_area) {
+            let new_w = (i32::from(modal_r.width) + i32::from(dw)).max(20) as u16;
+            let new_h = (i32::from(modal_r.height) + i32::from(dh)).max(5) as u16;
+            self.set_modal_rect(Rect::new(modal_r.x, modal_r.y, new_w, new_h), ws_area);
+            return;
+        }
+        let active_id = self.active_pane_id();
         if self.layout_mode == WorkspaceLayoutMode::Stacked || self.panes.len() == 1 {
             if self.panes.len() == 1 && self.layout_mode == WorkspaceLayoutMode::Tiled {
                 self.layout_mode = WorkspaceLayoutMode::Stacked;
@@ -378,8 +530,14 @@ impl WindowManager {
 
     /// Moves the active window by `(dx, dy)` in `Stacked` mode, or swaps panes in `Tiled` mode.
     pub fn move_focused_pane_or_window(&mut self, dx: i16, dy: i16) {
-        let active_id = self.active_pane_id();
         let (full_area, ws_area) = self.current_workspace_area();
+        if let Some(modal_r) = self.active_modal_rect(ws_area) {
+            let new_x = (i32::from(modal_r.x) + i32::from(dx)).max(i32::from(ws_area.x)) as u16;
+            let new_y = (i32::from(modal_r.y) + i32::from(dy)).max(i32::from(ws_area.y)) as u16;
+            self.set_modal_rect(Rect::new(new_x, new_y, modal_r.width, modal_r.height), ws_area);
+            return;
+        }
+        let active_id = self.active_pane_id();
         if self.layout_mode == WorkspaceLayoutMode::Stacked || self.panes.len() == 1 {
             if self.panes.len() == 1 && self.layout_mode == WorkspaceLayoutMode::Tiled {
                 self.layout_mode = WorkspaceLayoutMode::Stacked;
@@ -611,5 +769,20 @@ mod tests {
         wm.apply(Action::WindowResetGeometry).unwrap();
         assert!(!wm.z_stack().has_any_custom_geometry());
         assert_eq!(wm.z_stack().rect_for(2, area).unwrap(), z_before);
+
+        // Help modal (F1) resize, move, maximize, and pane minimize
+        wm.toggle_help();
+        let m0 = wm.active_modal_rect(area).unwrap();
+        wm.resize_focused_pane_or_window(-12, -4);
+        assert_eq!(wm.active_modal_rect(area).unwrap().width, m0.width - 12);
+        wm.toggle_maximize_modal();
+        assert_eq!(wm.active_modal_rect(area).unwrap(), area);
+        wm.close_modal();
+
+        wm.toggle_minimize_pane(2);
+        assert!(wm.z_stack().is_minimized(2));
+        assert_eq!(wm.z_stack().rect_for(2, area).unwrap().height, 3);
+        wm.toggle_minimize_pane(2);
+        assert!(!wm.z_stack().is_minimized(2));
     }
 }

@@ -152,6 +152,19 @@ impl CompositePane {
             }
             if !cmd_str.trim().starts_with(':') {
                 self.prompt.running_command = Some(cmd_str.replace('\n', " ; "));
+                // Auto-dismiss interactive `:tek demo` / `:canvas demo` overlay when a shell command is executed
+                if cmd_str.trim() == "clear"
+                    || self
+                        .vt
+                        .tektronix()
+                        .labels
+                        .iter()
+                        .any(|l| l.text == "TEK 4014 STORAGE TUBE")
+                {
+                    self.vt.tektronix_mut().clear_all();
+                    self.canvas_scene.clear();
+                    self.canvas_scene.active = false;
+                }
             }
         }
         self.vt.reset_scrollback();

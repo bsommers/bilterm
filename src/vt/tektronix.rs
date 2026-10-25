@@ -88,6 +88,9 @@ pub struct TekAlphaLabel {
 #[derive(Clone, Debug, Default)]
 pub struct TektronixState {
     pub active: bool,
+    /// `true` only when entered via in-band `DECSET ?38h` (`\x1b[?38h`) so interactive `:tek demo`
+    /// never swallows subsequent VT100 shell text output.
+    pub stream_capture: bool,
     pub mode: TekMode,
     pub line_style: TekLineStyle,
     pub beam_x: u16,
@@ -149,6 +152,7 @@ impl TektronixState {
     /// Immediately clears all active and decaying vectors and labels.
     pub fn clear_all(&mut self) {
         self.active = false;
+        self.stream_capture = false;
         self.segments.clear();
         self.decaying_segments.clear();
         self.labels.clear();
@@ -243,14 +247,14 @@ impl TektronixState {
     /// that belong to the standard VT100 stream (so Tektronix vector coordinates never print
     /// raw ASCII characters onto the VT100 text screen) (`TEK-01`).
     pub fn process_and_filter_vt100(&mut self, bytes: &[u8]) -> Vec<u8> {
-        if !self.active && !bytes.windows(5).any(|w| w == b"[?38h") {
+        if !self.stream_capture && !bytes.windows(5).any(|w| w == b"[?38h") {
             return bytes.to_vec();
         }
         let mut vt_out = Vec::with_capacity(bytes.len());
         for &b in bytes {
-            let was_active = self.active;
+            let was_capturing = self.stream_capture;
             self.process_byte(b);
-            if !was_active && !self.active && !self.esc_pending && !self.csi_pending {
+            if !was_capturing && !self.stream_capture && !self.esc_pending && !self.csi_pending {
                 vt_out.push(b);
             }
         }
@@ -263,9 +267,11 @@ impl TektronixState {
             if (0x40..=0x7e).contains(&b) {
                 if self.csi_buf == b"?38h" {
                     self.active = true;
+                    self.stream_capture = true;
                     self.mode = TekMode::Alpha;
                 } else if self.csi_buf == b"?38l" {
                     self.active = false;
+                    self.stream_capture = false;
                     self.mode = TekMode::Alpha;
                 }
                 self.csi_pending = false;
@@ -290,6 +296,7 @@ impl TektronixState {
                 }
                 0x03 => {
                     self.active = false;
+                    self.stream_capture = false;
                     self.mode = TekMode::Alpha;
                     return;
                 }
@@ -504,4 +511,31 @@ pub const fn encode_tek_12bit_point(x_4096: u16, y_3120: u16) -> [u8; 5] {
     let hi_x = 0x20 | (((x >> 7) & 0x1f) as u8);
     let lo_x = 0x40 | (((x >> 2) & 0x1f) as u8);
     [hi_y, extra, lo_y, hi_x, lo_x]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tek_demo_does_not_swallow_subsequent_vt100_terminal_text() {
+        let mut tek = TektronixState::default();
+        tek.load_demo_scene();
+        assert!(tek.active);
+        assert!(!tek.stream_capture);
+        assert!(tek.has_visible_content());
+
+        let vt_bytes = b"ls -la\r\ntotal 42\r\n";
+        let passthrough = tek.process_and_filter_vt100(vt_bytes);
+        assert_eq!(passthrough, vt_bytes);
+    }
+
+    #[test]
+    fn inband_decset_38h_captures_tek_stream_until_38l() {
+        let mut tek = TektronixState::default();
+        let stream = b"BEFORE\x1b[?38h\x1d\x20\x40\x20\x40\x1b[?38lAFTER";
+        let passthrough = tek.process_and_filter_vt100(stream);
+        assert_eq!(passthrough, b"BEFOREAFTER");
+        assert!(!tek.stream_capture);
+    }
 }

@@ -8,37 +8,46 @@ bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexe
 \fBbilterm\fR is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing.
 .SH OPTIONS
 .TP
-\fB\-\-mcp\fR
+\fB\-m\fR, \fB\-\-mcp\fR
 Run the Model Context Protocol (MCP \fB2024-11-05\fR) JSON-RPC 2.0 server over standard input/output for AI agents.
 .TP
-\fB\-\-headless\fR [\fB\-\-listen\fR \fIIP:PORT|localhost:PORT|unix:PATH\fR]
-Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane. Default endpoint is a private Unix domain socket ($XDG_RUNTIME_DIR/bilterm/bilterm.sock or /tmp/bilterm-<uid>/bilterm.sock, mode 0600). TCP listeners are restricted to loopback addresses unless \fB\-\-allow\-remote\fR is specified.
+\fB\-d\fR, \fB\-\-headless\fR, \fB\-\-daemon\fR [\fB\-l\fR, \fB\-\-listen\fR \fIIP:PORT|localhost:PORT|unix:PATH\fR]
+Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane. Default endpoint is a private Unix domain socket ($XDG_RUNTIME_DIR/bilterm/bilterm.sock or /tmp/bilterm-<uid>/bilterm.sock, mode 0600). TCP listeners are restricted to loopback addresses unless \fB\-r\fR / \fB\-\-allow\-remote\fR is specified.
 .TP
-\fB\-\-allow\-remote\fR
-Allow binding the JSON-RPC daemon to non-loopback TCP addresses. Requires \fB\-\-token\-file\fR.
+\fB\-l\fR, \fB\-\-listen\fR \fIADDR\fR
+Listen address (\fIIP:PORT\fR, \fIlocalhost:PORT\fR, or \fIunix:PATH\fR).
 .TP
-\fB\-\-token\-file\fR \fIPATH\fR
+\fB\-r\fR, \fB\-\-allow\-remote\fR
+Allow binding the JSON-RPC daemon to non-loopback TCP addresses. Requires \fB\-t\fR / \fB\-\-token\-file\fR.
+.TP
+\fB\-t\fR, \fB\-\-token\-file\fR \fIPATH\fR
 Path to a private file (mode 0600) containing the bearer authentication token for the JSON-RPC control plane. Can also be set via the \fBBILTERM_TOKEN_FILE\fR environment variable.
 .TP
-\fB\-\-snapshot\-dir\fR \fIPATH\fR
+\fB\-S\fR, \fB\-\-snapshot\-dir\fR \fIPATH\fR
 Directory for confined workspace snapshots (defaults to $XDG_STATE_HOME/bilterm/snapshots). Direct RPC and MCP snapshot requests must specify a single file name within this directory.
 .TP
-\fBctl\fR [\fB\-\-token\-file\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
+\fBctl\fR [\fB\-t\fR, \fB\-\-token\-file\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
 Send a JSON-RPC 2.0 request to a running Bilterm instance and print the JSON result. Default endpoint is the local private Unix domain socket.
 .TP
-\fB\-\-playbook\fR \fIPATH.toml\fR
+\fB\-p\fR, \fB\-\-playbook\fR \fIPATH.toml\fR
 Execute a declarative TOML automation playbook against an embedded workspace and exit.
 .TP
-\fB\-\-gui\-dump\fR \fIPATH.ppm\fR
+\fB\-g\fR, \fB\-\-gui\-dump\fR \fIPATH.ppm\fR
 Render the workspace via \fBGuiWorkspaceRenderer\fR to a Netpbm P6 \fB.ppm\fR pixel framebuffer.
 .TP
-\fB\-\-completions\fR \fIbash|zsh|fish\fR
+\fB\-s\fR, \fB\-\-session\fR \fINAME\fR
+Use named persistent command-history session (overrides \fBhistory_session\fR).
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fIPATH.toml\fR
+Load configuration from custom TOML file path.
+.TP
+\fB\-C\fR, \fB\-\-completions\fR \fIbash|zsh|fish\fR
 Print shell completion script for the specified shell to standard output.
 .TP
-\fB\-\-man\fR
+\fB\-M\fR, \fB\-\-man\fR
 Print this roff manual page to standard output.
 .TP
-\fB\-V\fR, \fB\-\-version\fR
+\fB\-v\fR, \fB\-V\fR, \fB\-\-version\fR
 Print version information.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
