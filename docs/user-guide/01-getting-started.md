@@ -13,6 +13,18 @@
 ## 1. Building & Launching Bilterm
 
 ```bash
+# Option A: Plain binary installer (Linux / macOS)
+./scripts/install.sh            # installs to ~/.local/bin (or pass --cargo, --global, --prefix <DIR>)
+bilterm -v
+
+# Option B: Fresh clone developer setup (installs C toolchain, rustup, Rust 1.90, builds & installs)
+./scripts/setup.sh --yes --build --install
+
+# Option C: Windows PowerShell setup or plain binary install
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Yes -Build -Install
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+
+# Option D: Direct Cargo build
 cargo build --release
 ./target/release/bilterm
 ```

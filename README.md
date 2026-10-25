@@ -50,12 +50,32 @@
 
 ## Quick Start
 
+### Option A: Plain Binary Installer (Users)
+
 ```bash
-# Build & launch interactive TUI multiplexer
+# Linux & macOS — install bilterm binary, manpage & completions to ~/.local/bin (or --cargo / --global / --prefix <DIR>)
+./scripts/install.sh
+
+# Or one-liner directly from GitHub:
+curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+```
+
+### Option B: Fresh Clone Developer Setup & Build (Linux, macOS, Windows)
+
+```bash
+# Linux & macOS — check/install C compiler, rustup, Rust 1.90, clippy/rustfmt, build & install
+./scripts/setup.sh --check
+./scripts/setup.sh --yes --build --install
+
+# Windows (PowerShell) — check/install Git, MSVC Build Tools, rustup, build & install
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -Yes -Build -Install
+
+# Manual Cargo build & verification suite
 cargo build --release
 ./target/release/bilterm
-
-# Run full verification & coverage suite locally
 cargo test --all-targets
 cargo clippy --all-targets -- -D warnings
 ```
@@ -65,16 +85,20 @@ cargo clippy --all-targets -- -D warnings
 | Command | Description |
 |---------|-------------|
 | `bilterm` | Launch interactive IBM 3270 × Borland Turbo Vision TUI multiplexer |
-| `bilterm --mcp` | Run native Model Context Protocol (MCP `2024-11-05`) server over `stdio` |
-| `bilterm --headless [--listen <addr>]` | Run headless JSON-RPC daemon (default private Unix socket; loopback TCP via `--listen 127.0.0.1:PORT`) |
-| `bilterm --allow-remote` | Allow listening on non-loopback TCP addresses (requires `--token-file`) |
-| `bilterm --token-file <path>` | Path to 0600 file containing bearer token (or `BILTERM_TOKEN_FILE`) |
-| `bilterm --snapshot-dir <path>` | Directory for confined workspace snapshots (default: XDG state dir) |
-| `bilterm ctl [--token-file <path>] [endpoint] <method> [json]` | Send JSON-RPC 2.0 command (`workspace.status`, `pane.exec`, `fleet.exec`, etc.; defaults to local Unix socket) |
-| `bilterm --playbook <file.toml>` | Execute declarative multi-step TOML robot playbook with assertions |
-| `bilterm --gui-dump <path.ppm>` | Render workspace via `GuiWorkspaceRenderer` to a Netpbm `.ppm` framebuffer |
-| `bilterm --completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
-| `bilterm --man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
+| `bilterm -v` / `--version` | Print version information (`-V` also supported) |
+| `bilterm -h` / `--help` | Print CLI help summary |
+| `bilterm -m` / `--mcp` | Run native Model Context Protocol (MCP `2024-11-05`) server over `stdio` |
+| `bilterm -d` / `--headless [-l <addr>]` | Run headless JSON-RPC daemon (default private Unix socket; loopback TCP via `-l 127.0.0.1:PORT`) |
+| `bilterm -r` / `--allow-remote` | Allow listening on non-loopback TCP addresses (requires `-t` / `--token-file`) |
+| `bilterm -t` / `--token-file <path>` | Path to 0600 file containing bearer token (or `BILTERM_TOKEN_FILE`) |
+| `bilterm -S` / `--snapshot-dir <path>` | Directory for confined workspace snapshots (default: XDG state dir) |
+| `bilterm ctl [-t <path>] [endpoint] <method> [json]` | Send JSON-RPC 2.0 command (`workspace.status`, `pane.exec`, `fleet.exec`, etc.; defaults to local Unix socket) |
+| `bilterm -p` / `--playbook <file.toml>` | Execute declarative multi-step TOML robot playbook with assertions |
+| `bilterm -g` / `--gui-dump <path.ppm>` | Render workspace via `GuiWorkspaceRenderer` to a Netpbm `.ppm` framebuffer |
+| `bilterm -s` / `--session <name>` | Use named persistent command-history session |
+| `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
+| `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
+| `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
 
 ---
 
