@@ -264,8 +264,14 @@ try_download_prebuilt() {
     tmp_dir="$(mktemp -d)"
     if curl -fsSL "$url" -o "${tmp_dir}/bilterm.tar.gz" 2>/dev/null; then
         tar -xzf "${tmp_dir}/bilterm.tar.gz" -C "$tmp_dir"
+        local found_bin=""
         if [[ -f "${tmp_dir}/bilterm" ]]; then
-            cp -f "${tmp_dir}/bilterm" "$dest_bin"
+            found_bin="${tmp_dir}/bilterm"
+        else
+            found_bin="$(find "$tmp_dir" -name "bilterm" -type f | head -n 1 || true)"
+        fi
+        if [[ -n "$found_bin" && -f "$found_bin" ]]; then
+            cp -f "$found_bin" "$dest_bin"
             chmod 0755 "$dest_bin"
             rm -rf "$tmp_dir"
             log_ok "Downloaded prebuilt bilterm (${triple})"

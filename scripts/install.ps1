@@ -95,9 +95,9 @@ function Try-DownloadPrebuilt($dest) {
     try {
         Invoke-WebRequest -Uri $url -OutFile $tmpZip -ErrorAction Stop
         Expand-Archive -Path $tmpZip -DestinationPath $tmpExtract -Force
-        $exe = Join-Path $tmpExtract "bilterm.exe"
-        if (Test-Path $exe) {
-            Copy-Item -Path $exe -Destination $dest -Force
+        $exeItem = Get-ChildItem -Path $tmpExtract -Filter "bilterm.exe" -Recurse | Select-Object -First 1
+        if ($exeItem) {
+            Copy-Item -Path $exeItem.FullName -Destination $dest -Force
             Write-Ok "Downloaded prebuilt bilterm.exe ($triple)"
             return $true
         }
