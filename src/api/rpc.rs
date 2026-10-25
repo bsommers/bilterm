@@ -95,7 +95,7 @@ impl AutomationControlPlane {
         self
     }
 
-    fn resolved_snapshot_dir(&self) -> std::result::Result<PathBuf, String> {
+    pub(super) fn resolved_snapshot_dir(&self) -> std::result::Result<PathBuf, String> {
         let dir = if let Some(ref d) = self.snapshot_dir {
             d.clone()
         } else if let Some(d) = default_snapshot_dir_from(
@@ -444,10 +444,16 @@ impl AutomationControlPlane {
                 };
                 let action = parse_colon_command(&normalized)
                     .ok_or_else(|| format!("not a valid :colon command: {normalized}"))??;
-                let app_action = self
-                    .wm
-                    .apply(action)
-                    .map_err(|e| format!("action execution error: {e}"))?;
+                if let crate::action::Action::CanvasCommand(ref subcmd) = action {
+                    self.execute_canvas_command_confined(subcmd)?;
+                }
+                let app_action = if matches!(action, crate::action::Action::CanvasCommand(_)) {
+                    AppAction::Handled
+                } else {
+                    self.wm
+                        .apply(action)
+                        .map_err(|e| format!("action execution error: {e}"))?
+                };
                 let outcome_str = if app_action == AppAction::Quit {
                     "quit"
                 } else {
@@ -675,8 +681,8 @@ impl AutomationControlPlane {
                     ("name", JsonValue::String(name.to_string())),
                 ]))
             }
-            "workspace.fontsize" => self.wm.handle_rpc_fontsize(params),
-            "canvas.command" | "canvas.status" => self.wm.handle_rpc_canvas(params),
+            "workspace.fontsize" => self.handle_rpc_fontsize(params),
+            "canvas.command" | "canvas.status" => self.handle_rpc_canvas(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

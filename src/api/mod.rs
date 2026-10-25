@@ -10,6 +10,7 @@ pub mod json;
 pub mod mcp;
 pub mod playbook;
 pub mod rpc;
+pub mod rpc_handlers;
 pub mod server;
 #[cfg(test)]
 mod tests;

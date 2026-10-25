@@ -11,6 +11,9 @@
 //!    sub-pixel grid into two optimal 24-bit RGB colors (`fg_rgb` + `bg_rgb`), delivering up to **4× the
 //!    spatial resolution of `HalfBlock`** with full 24-bit TrueColor anti-aliased shading.
 
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -22,6 +25,9 @@ use crate::ui::canvas_raster::{
     QUADRANT_CHARS, braille_char_from_mask, sextant_char_from_mask,
 };
 use crate::ui::pixel_canvas::PixelCanvasBuffer;
+
+/// Cached terminal pixel size (`(wx << 32) | wy`, `u64::MAX` = unprobed, `0` = unavailable).
+static CACHED_TERMINAL_PIXELS: AtomicU64 = AtomicU64::new(u64::MAX);
 
 /// Target pixel resolution preset for [`PixelCanvasBuffer`] (`CANV-03`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,23 +117,42 @@ impl CanvasResolution {
     }
 }
 
-/// Queries the host OS terminal's hardware pixel dimensions (`ws_xpixel, ws_ypixel`) via `TIOCGWINSZ`.
+/// Queries the host OS terminal's hardware pixel dimensions (`ws_xpixel, ws_ypixel`) via `TIOCGWINSZ`,
+/// caching the result in an atomic so 60 FPS rendering never repeats the syscall (`CANV-03`).
 pub fn probe_terminal_pixel_size() -> Option<(u32, u32)> {
+    let cached = CACHED_TERMINAL_PIXELS.load(Ordering::Relaxed);
+    if cached != u64::MAX {
+        return if cached == 0 {
+            None
+        } else {
+            Some(((cached >> 32) as u32, (cached & 0xffff_ffff) as u32))
+        };
+    }
+    refresh_terminal_pixel_size()
+}
+
+/// Re-probes `ioctl(TIOCGWINSZ)` on terminal resize events and updates [`CACHED_TERMINAL_PIXELS`].
+pub fn refresh_terminal_pixel_size() -> Option<(u32, u32)> {
     #[cfg(unix)]
     {
-        unsafe {
+        let probed = unsafe {
             let mut ws: libc::winsize = std::mem::zeroed();
             if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut ws) == 0
                 && ws.ws_xpixel > 0
                 && ws.ws_ypixel > 0
             {
-                return Some((u32::from(ws.ws_xpixel), u32::from(ws.ws_ypixel)));
+                Some((u32::from(ws.ws_xpixel), u32::from(ws.ws_ypixel)))
+            } else {
+                None
             }
-        }
-        None
+        };
+        let encoded = probed.map_or(0, |(wx, wy)| (u64::from(wx) << 32) | u64::from(wy));
+        CACHED_TERMINAL_PIXELS.store(encoded, Ordering::Relaxed);
+        probed
     }
     #[cfg(not(unix))]
     {
+        CACHED_TERMINAL_PIXELS.store(0, Ordering::Relaxed);
         None
     }
 }
@@ -314,6 +339,51 @@ impl CompositePane {
         &mut self.canvas_scene
     }
 
+    fn write_canvas_export_bytes(&self, dst: &Path, display_path: &str) -> std::result::Result<String, String> {
+        if let Ok(meta) = std::fs::symlink_metadata(dst)
+            && meta.file_type().is_symlink()
+        {
+            return Err("Invalid export path (refusing to overwrite symlink)".to_string());
+        }
+        let cfg = BiltermConfig::default();
+        let (canvas_rows, canvas_cols) = self.vt.size();
+        let cols = canvas_cols.max(1);
+        let rows = canvas_rows.saturating_add(1).max(1);
+        let (px_c, px_r) = self.canvas_scene.resolution.resolve_px_per_cell(cols, rows);
+        let buf = PixelCanvasBuffer::render_pane_scene(self, &cfg, cols, rows, px_c, px_r);
+        let payload = if display_path.ends_with(".svg") {
+            buf.export_svg("Bilterm High-Res Canvas").into_bytes()
+        } else {
+            buf.export_ppm()
+        };
+        #[cfg(unix)]
+        let write_res = crate::secure_fs::write_private_file(dst, &payload);
+        #[cfg(not(unix))]
+        let write_res = std::fs::write(dst, &payload);
+        match write_res {
+            Ok(()) => Ok(format!(
+                "CANVAS EXPORT: wrote {}x{} high-res image to {display_path}",
+                buf.width, buf.height
+            )),
+            Err(e) => Err(format!("CANVAS EXPORT ERROR: {e}")),
+        }
+    }
+
+    /// Exports the active canvas scene confined strictly to `snapshot_dir` (`SEC-R01`, `P0.1`).
+    pub fn export_canvas_confined(
+        &mut self,
+        snapshot_dir: &Path,
+        file_name: &str,
+    ) -> std::result::Result<String, String> {
+        crate::api::validate_snapshot_name(file_name)?;
+        let dst = snapshot_dir.join(file_name);
+        let res = self.write_canvas_export_bytes(&dst, &dst.display().to_string());
+        match &res {
+            Ok(msg) | Err(msg) => self.set_status_message(Some(msg.clone())),
+        }
+        res
+    }
+
     /// Executes a `:canvas <subcommand>` on this pane (`TEK-01`, `CANV-01`, `CANV-02`, `CANV-03`).
     pub fn execute_canvas_command(&mut self, cmd: &str) -> std::result::Result<String, String> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -325,21 +395,7 @@ impl CompositePane {
                 if path.contains("..") || path.contains('\0') {
                     return Err("Invalid export path (path traversal rejected)".to_string());
                 }
-                let cfg = BiltermConfig::default();
-                let (px_c, px_r) = self.canvas_scene.resolution.resolve_px_per_cell(80, 24);
-                let buf = PixelCanvasBuffer::render_pane_scene(self, &cfg, 80, 24, px_c, px_r);
-                let write_res = if path.ends_with(".svg") {
-                    std::fs::write(path, buf.export_svg("Bilterm High-Res Canvas"))
-                } else {
-                    std::fs::write(path, buf.export_ppm())
-                };
-                match write_res {
-                    Ok(()) => Ok(format!(
-                        "CANVAS EXPORT: wrote {}x{} high-res image to {path}",
-                        buf.width, buf.height
-                    )),
-                    Err(e) => Err(format!("CANVAS EXPORT ERROR: {e}")),
-                }
+                self.write_canvas_export_bytes(Path::new(path), path)
             }
             Some("encode") => {
                 let req = parts
@@ -349,12 +405,15 @@ impl CompositePane {
                 let eff = req.resolve_auto();
                 let in_tmux = std::env::var("TMUX").is_ok_and(|v| !v.is_empty());
                 let cfg = BiltermConfig::default();
-                let (px_c, px_r) = self.canvas_scene.resolution.resolve_px_per_cell(40, 12);
-                let buf = PixelCanvasBuffer::render_pane_scene(self, &cfg, 40, 12, px_c, px_r);
+                let (canvas_rows, canvas_cols) = self.vt.size();
+                let cols = (canvas_cols / 2).max(40);
+                let rows = (canvas_rows / 2).max(12);
+                let (px_c, px_r) = self.canvas_scene.resolution.resolve_px_per_cell(cols, rows);
+                let buf = PixelCanvasBuffer::render_pane_scene(self, &cfg, cols, rows, px_c, px_r);
                 let stream = match eff {
                     CanvasRenderBackend::Sixel => buf.encode_sixel_dcs(in_tmux),
-                    CanvasRenderBackend::ITerm2 => buf.encode_iterm2_osc1337(40, 12, in_tmux),
-                    _ => buf.encode_kitty_apc(40, 12, in_tmux),
+                    CanvasRenderBackend::ITerm2 => buf.encode_iterm2_osc1337(cols, rows, in_tmux),
+                    _ => buf.encode_kitty_apc(cols, rows, in_tmux),
                 };
                 Ok(format!(
                     "CANVAS ENCODE ({eff:?}, {}x{}px, tmux_passthrough={in_tmux}): {} bytes ready",

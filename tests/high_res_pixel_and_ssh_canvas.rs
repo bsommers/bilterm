@@ -309,3 +309,52 @@ fn selectable_per_pane_and_per_window_font_options_work_independently() {
     let mut buf = Buffer::empty(area);
     WorkspaceWidget::new(&wm).render(area, &mut buf);
 }
+
+#[test]
+fn rpc_canvas_export_enforces_snapshot_dir_confinement_and_dynamic_resolution() {
+    use bilterm::api::{AutomationControlPlane, JsonValue};
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let mut plane =
+        AutomationControlPlane::new_headless(24, 80).with_snapshot_dir(tmp_dir.path().to_path_buf());
+
+    plane
+        .dispatch_method(
+            "canvas.command",
+            &JsonValue::obj([("command", JsonValue::String("hires".to_string()))]),
+        )
+        .unwrap();
+
+    // Reject path traversal and absolute paths over RPC `canvas.command` and `wm.command`
+    assert!(
+        plane
+            .dispatch_method(
+                "canvas.command",
+                &JsonValue::obj([("command", JsonValue::String("export ../escape.ppm".to_string()))]),
+            )
+            .is_err()
+    );
+    assert!(
+        plane
+            .dispatch_method(
+                "wm.command",
+                &JsonValue::obj([(
+                    "command",
+                    JsonValue::String(":canvas export /tmp/escape.ppm".to_string())
+                )]),
+            )
+            .is_err()
+    );
+
+    // Allow safe single-file export confined inside `snapshot_dir`
+    plane
+        .dispatch_method(
+            "canvas.command",
+            &JsonValue::obj([(
+                "command",
+                JsonValue::String("export confined_scene.ppm".to_string()),
+            )]),
+        )
+        .unwrap();
+    assert!(tmp_dir.path().join("confined_scene.ppm").exists());
+}

@@ -1,22 +1,24 @@
-# Architecture & Code Review Improvement Plan: Bilterm
+# Architecture & Code Review Improvement Plan: Bilterm (`v1.10.0`)
 
-> **Repository:** `bilterm` (`/home/bill/src/ai/bilterm`)
-> **Date:** `2026-10-22`
-> **Commit reviewed:** `b480b9e` (v1.5.0, clean tree)
-> **Review Scope:** Full repository, `src/` (19,239 LOC across 35 files) plus test layout
-> **Reviewer:** Claude Opus 5.5 / `code-architecture-review` skill (graphify structural graph: 945 nodes, 2,457 edges)
-> **Architecture Health Score:** `C+` (Score: `68/100`)
+> **Repository:** `bilterm` (`/home/bill/src/ai/bilterm`)  
+> **Date:** `2026-10-25`  
+> **Commit Reviewed:** `9ee68bf` (tag `v1.10.0`, clean working tree)  
+> **Review Scope:** Full Repository (`33,453` LOC across `69` Rust source files in `src/` + `25` integration test suites in `tests/`)  
+> **Reviewer:** Antigravity (`swe-skills:code-architecture-review` + `graphify` AST graph: `3,183` nodes, `6,071` edges)  
+> **Architecture Health Score:** **A-** (Score: **91/100**, up from **B+ / 84/100** pre-remediation and **C+ / 68/100** at `v1.5.0`)
 
-**Baseline evidence (fresh, at this commit):**
+---
 
-| Check | Result |
-|---|---|
-| `cargo clippy --all-targets -- -D warnings` | ✅ clean |
-| `cargo test` | ✅ 99 passed, 0 failed |
-| `cargo check --features gui` | ✅ compiles |
-| `cargo check --features ghostty-vt` | ❌ **fails** (`unresolved import libghostty_vt`, duplicate `GridSnapshot`, E0277) |
-| Headless daemon + client connection reset | ❌ **daemon exits** (`Connection reset by peer`, `src/main.rs:76`) |
-| Headless daemon + `[` × 200,000 | ❌ **process aborts** (`thread 'main' has overflowed its stack`) |
+## Baseline Verification Evidence (`v1.10.0`)
+
+| Verification Check | Result | Notes |
+| :--- | :--- | :--- |
+| `cargo check --all-features --all-targets` | ✅ Pass | Default, `gui`, and `ghostty-vt` feature flags all compile cleanly |
+| `cargo clippy --all-features --all-targets -- -D warnings` | ✅ Pass | `0` warnings, `0` errors across all targets |
+| `cargo test` | ✅ Pass | `233` passed, `0` failed |
+| `ARCH-R04` File Size Gate (`<= 800` LOC) | ⚠️ Pass (Tight) | All `69` files `<= 800` LOC, but `8` files have `< 30` lines of headroom (`772..789` LOC) |
+| `ARCH-R02` Aggregate Encapsulation | ✅ Pass | `WindowManager` (`0` `pub` fields) & `CompositePane` (`0` `pub` fields) fully encapsulated |
+| Module DAG Acyclicity | ❌ Fail | `14` two-module cycles & `26` three-module cycles across `src/` |
 
 ---
 
@@ -24,135 +26,113 @@
 
 ### 1.1 Executive Architectural Summary
 
-Bilterm is a **single-crate modular monolith**: a Rust 2024 library (`src/lib.rs`, 12 top-level modules) with a thin binary (`src/main.rs`). The runtime is **one `tokio::select!` loop** (`src/app.rs`) that redraws every iteration, polls every PTY on a 16 ms tick, and routes crossterm events through free functions in `input/`. State lives in **one mutable aggregate**, `WindowManager`, which owns every `CompositePane` (VT parser + PTY + prompt editor + six per-pane modes). Rendering is immediate-mode Ratatui (`ui/`), plus a second software "GUI" renderer that writes PPM files.
+Bilterm is a **single-crate modular monolith** (`src/lib.rs` exporting `15` top-level domain, rendering, and adapter modules; `src/main.rs` providing the CLI/TUI/daemon entrypoint). Since the `v1.5.0` review (`68/100`), the codebase has grown from `19,239` LOC (`35` files) to `33,453` LOC (`69` files) while resolving every critical `v1.5.0` P0 defect:
+- **Resolved since `v1.5.0`**: Lossless PTY byte ingestion (`ingest_pty_events`), runtime `config.toml` loading, unified `Action` vocabulary (`src/action.rs`), declarative keybinding tables (`src/input/keymap.rs`), private fields + invariant-enforcing mutators on `WindowManager` and `CompositePane`, `TerminalBackend` trait seam (`src/vt/backend.rs`), hardened JSON-RPC/MCP server (`MAX_JSON_DEPTH = 64`, `1 MiB` line cap, Unix `0600` socket default, bearer token auth, `SnapshotPolicy::Confined`), and `src/secure_fs.rs` (`0700` directories, `0600` atomic file writes).
 
-The core design (prompt overlaid on a full-PTY canvas, BSP split tree + z-stack, three-signal line discipline) is sound and well documented in ADR-001…005. Most of the debt is accidental. Features were added by version tag (`v0.6.0`, `ECO-04`, `v1.4.0`…) as new `pub` fields on the two god structs and new arms in four 400–540-line `match` functions. The result is that one concept, "a command", is dispatched through **four parallel paths** (key handler, leader handler, colon commands, JSON-RPC) that don't share a command type.
-
-Several advertised subsystems are **scaffolding with no production caller**:
-- the `VtWorkerHandle` threaded pipeline (ARCH-02)
-- `TmuxControlSubprocess` (tmux Mode B)
-- the `ghostty-vt` feature, which doesn't compile
-- **`BiltermConfig::load_or_default`, which nothing calls**, so `~/.config/bilterm/config.toml` is never read
+However, rapid feature delivery in `v1.7.0`–`v1.10.0` (Workspace Drawer, Tektronix 4010/4014 vector CRT, retained 2D Canvas Scene-Graph, High-Res Anti-Aliased Pixel/GPU Canvas, Adaptive SSH Graphics Engine, and Per-Pane Typography) introduced **three structural pressures**:
+1. **800-Line Ceiling Spillover (`Cross-Layer impl Dispersion`)**: Because `src/pane/mod.rs` (`788` LOC) and `src/wm/mod.rs` (`746` LOC) are nearly full, domain and JSON-RPC methods on `CompositePane` and `WindowManager` were implemented inside `src/ui/hires_subcell.rs`, `src/ui/canvas_raster.rs`, and `src/ui/typography.rs`.
+2. **Bidirectional Layer Cycles**: Placing domain types (`FontFamilyPreset`, `PaneFontOptions`, `LineSizeAttr`, `CanvasResolution`) and RPC handlers (`handle_rpc_canvas`, `handle_rpc_fontsize`) inside `src/ui/` caused `vt`, `pane`, and `config` to import `ui`, while `ui` imports `api`, `action`, `wm`, `pane`, and `vt` (`14` two-node cycles).
+3. **Bypass of `SnapshotPolicy::Confined` in `:canvas export`**: Unlike `workspace.snapshot`, `:canvas export <path>` writes directly via `std::fs::write` after checking only `!path.contains("..")`, allowing arbitrary absolute-path `.ppm`/`.svg` writes when triggered via JSON-RPC/MCP commands.
 
 ### 1.2 Current System Topology Diagram
 
 ```mermaid
 flowchart TD
-    subgraph Entry["Entry points (main.rs)"]
-        TUI["TUI: App::run"]
-        MCP["--mcp stdio JSON-RPC"]
-        TCP["--headless --listen TCP JSON-RPC"]
-        PB["--playbook TOML"]
-        GUI["--gui-dump PPM"]
+    subgraph Entry ["Entry Points (src/main.rs)"]
+        CLI_TUI["Interactive TUI (App::run)"]
+        CLI_CTL["bilterm ctl (JSON-RPC Client)"]
+        CLI_PLOT["bilterm plot (CLI Graphics/Export)"]
+        CLI_DAEMON["--headless / --mcp / --playbook"]
     end
 
-    subgraph Loop["app.rs: tokio::select! + 16ms tick"]
-        App["App { wm, should_quit, last_viewport }"]
+    subgraph Adapters ["Input & Automation Adapters"]
+        Input["src/input/*\n(keymap, modal, mouse, encode)"]
+        Colon["src/colon_command/*\n(parse 732 LOC, execute 789 LOC)"]
+        Api["src/api/*\n(rpc, mcp, playbook, server, json)"]
     end
 
-    subgraph Input["input/ (2,263 LOC)"]
-        WMKey["handle_wm_key_event (411 lines)"]
-        PaneKey["handle_key_event (240 lines)"]
-        Mouse["handle_wm_mouse_event / handle_mouse_event"]
+    subgraph Core ["Application & Domain Core"]
+        Action["src/action.rs\n(Unified Action Enum)"]
+        WM["src/wm/*\n(WindowManager, SplitTree, ZStack, Drawer, Session)"]
+        Pane["src/pane/*\n(CompositePane, PromptEditor, CanvasScene, Modes)"]
     end
 
-    subgraph Cmd["Command dispatch (4 parallel paths)"]
-        Colon["pane/colon_command.rs\nparse 540 / exec 410+219 lines"]
-        RPC["api::dispatch_method (426 lines)"]
+    subgraph Terminal ["Terminal & OS Subsystem"]
+        VT["src/vt/*\n(VtParser, TerminalBackend, Scan, Tektronix, Graphics)"]
+        PTY["src/pty/*\n(PtySession, LineDiscipline, ShellIntegration)"]
+        Remote["src/remote & src/tmux & src/secure_fs"]
     end
 
-    subgraph Model["Mutable aggregate"]
-        WM["WindowManager (24 pub fields)"]
-        Pane["CompositePane (18 pub fields)"]
-        Prompt["FloatingPromptState"]
+    subgraph UI ["Rendering & Shaders (src/ui/*)"]
+        Compositor["WorkspaceWidget (mod.rs, status_bar, modals, drawer)"]
+        CanvasUI["Canvas & Subcell (pixel_canvas, canvas_raster, hires_subcell)"]
+        TypoUI["Typography & Shaders (typography, cursor, chrome, theme)"]
     end
 
-    subgraph Term["Terminal core"]
-        VT["VtParser (vt/mod.rs 2,394 LOC)\nwraps vt100_ctt, leaks Screen"]
-        PTY["PtySession (portable-pty + reader thread)"]
-        Worker["VtWorkerHandle ⚠ unused"]
-        Ghostty["ghostty_backend ⚠ feature broken"]
-    end
-
-    subgraph Render["ui/"]
-        Widget["WorkspaceWidget (Ratatui)"]
-        Soft["GuiWorkspaceRenderer (PPM)"]
-    end
-
-    Integr["tmux/ • remote/ (ssh) • config/ ⚠ never loaded"]
-
-    TUI --> App --> WMKey & Mouse
-    WMKey --> PaneKey --> Colon
-    MCP & TCP & PB --> RPC --> Colon
-    WMKey & PaneKey & Colon & RPC -->|"direct pub-field mutation"| WM
-    WM --> Pane --> VT & PTY & Prompt
-    App -->|"reaches into wm.panes / split_tree / z_stack"| WM
-    Widget & Soft -->|"pane.vt.screen() (vt100 types)"| VT
-    GUI --> Soft
-    WM --> Integr
+    CLI_TUI --> Input
+    CLI_CTL & CLI_DAEMON --> Api
+    CLI_PLOT --> Pane & CanvasUI
+    Input & Colon & Api --> Action --> WM
+    WM --> Pane --> VT & PTY
+    WM --> Remote
+    Compositor & CanvasUI & TypoUI --> WM & Pane & VT
+    Pane -.->|"cycle: imports FontOptions & CanvasResolution"| TypoUI & CanvasUI
+    VT -.->|"cycle: imports LineSizeAttr"| TypoUI
+    CanvasUI & TypoUI -.->|"cycle: impls WM/Pane RPC & Action methods"| Api & Action
 ```
 
-### 1.3 Target Architecture Blueprint
+### 1.3 Target Architecture Blueprint (Cycle-Free Layered DAG)
 
 ```mermaid
 flowchart TD
-    subgraph Adapters["Adapters"]
-        Keys["Keymap (config-driven table)"]
-        ColonP["Colon parser"]
-        RpcP["JSON-RPC (serde_json, auth, limits)"]
+    subgraph L4 ["Layer 4: Entrypoints & Transport Adapters"]
+        Main["src/main.rs & src/app.rs"]
+        API["src/api/* (JSON-RPC, MCP, Playbook, Server)"]
+        UI["src/ui/* (Pure Read-Only Renderers & Shaders)\nTakes &WindowManager / &CompositePane / &GridSnapshot"]
     end
 
-    Action["enum Action (single command vocabulary)"]
-    Reducer["Workspace::apply(Action) -> Effects"]
-
-    subgraph Domain["Domain (private fields, invariants enforced)"]
-        WS["Workspace: layout + focus + modals"]
-        CP["CompositePane: canvas + prompt + modes"]
+    subgraph L3 ["Layer 3: Command & Input Lowering"]
+        Input["src/input/* (Keymap, Mouse, Modal -> Action)"]
+        Colon["src/colon_command/* (Parser & Completer -> Action)"]
     end
 
-    subgraph Ports["Ports (traits)"]
-        TB["trait TerminalBackend\n(vt100-ctt | alacritty | ghostty)"]
-        PtyPort["trait PtyHandle"]
-        Clock["trait HistorySink / FileStore"]
+    subgraph L2 ["Layer 2: Workspace & Pane Domain"]
+        Action["src/action.rs (Typed Action + Subcommand Enums)"]
+        WM["src/wm/* (WindowManager::apply, SplitTree, ZStack, Drawer, Session)"]
+        Pane["src/pane/* (CompositePane, PromptEditor, CanvasScene, TypographyState)"]
     end
 
-    subgraph Runtime["Runtime"]
-        Ev["Event loop: select! over input, mpsc<PaneId, PtyEvent>, redraw-on-dirty"]
+    subgraph L1 ["Layer 1: Terminal Emulation, PTY & Core Primitives"]
+        VT["src/vt/* (TerminalBackend, VtParser, Tektronix, LineSizeAttr)"]
+        PTY["src/pty/* (PtySession, LineDiscipline)"]
+        Config["src/config/* (BiltermConfig + Theme/Font/Cursor Value Types)"]
+        Infra["src/secure_fs.rs • src/error.rs • src/remote • src/tmux"]
     end
 
-    Render2["Renderers consume GridSnapshot only"]
-
-    Keys & ColonP & RpcP --> Action --> Reducer --> WS --> CP
-    CP --> TB & PtyPort
-    Ev --> Reducer
-    Render2 -->|"read-only &Workspace"| WS
+    Main --> API & UI & Input & WM
+    API --> Colon & Action & WM & UI
+    UI --> WM & Pane & VT & Config
+    Input & Colon --> Action & WM & Pane & Config
+    WM --> Action & Pane & VT & PTY & Config & Infra
+    Pane --> VT & PTY & Config & Infra
+    VT --> Config & Infra
+    PTY --> Infra
 ```
 
-The key moves:
-1. **One `Action` enum** that every input surface lowers into.
-2. **Private fields plus methods** on `WindowManager` and `CompositePane`, so invariants such as "close pane ⇒ update tree, z-stack and zoom" live in exactly one place.
-3. **A `TerminalBackend` trait** so `vt100_ctt` types stop leaking into `ui/` and `pane/`.
-4. **An event-driven PTY path** with no byte dropping.
+### 1.4 Architectural Debt & Trade-Off Analysis
 
-### 1.4 Architectural Debt & Trade-off Analysis
-
-- **Intentional trade-offs**
-  - `vt100-ctt` was chosen over `alacritty_terminal` for speed of delivery, as `AGENTS.md` sanctions for Phase 1.
-  - A hand-rolled `JsonValue` avoids a `serde_json` dependency.
-  - A 16 ms polling tick replaces per-PTY async wakeups.
-  - Headless panes make the WM testable without a PTY (`new_headless`). This one is good.
-- **Accidental complexity**
-  - God structs: `WindowManager` (24 `pub` fields), `CompositePane` (18 `pub` fields) and `VtParser` (83 graph edges each for `VtParser`/`CompositePane`).
-  - Mega-functions: 13 functions over 150 lines; the top four are 410–541 lines.
-  - Five module cycles (§3.2).
-  - Duplicated state: `leader_pending` exists on both `WindowManager` and `CompositePane`.
-  - A magic sentinel: `PaneId 0` means "quick terminal".
-  - Dead seams: the worker, tmux `-CC` and the ghostty FFI.
-- **Scalability bottlenecks**
-  - An unconditional full redraw plus `resize_all` on every loop iteration.
-  - Every frame runs `detect_visible_urls()` and `search_canvas()` for each trigger.
-  - `TmuxEnv::detect()` (an env read) runs every frame inside `flush_osc52_to_host`.
-  - PTY output is **truncated, not throttled** (P0.1).
+- **Intentional Trade-Offs**:
+  - **Zero-dependency JSON parser (`src/api/json.rs`)**: Avoids heavy macro compile times while enforcing an explicit `MAX_JSON_DEPTH = 64` recursion guard.
+  - **Headless `CompositePane` constructor (`new_headless`)**: Enables 233 fast, deterministic unit and snapshot tests without spawning OS PTY processes.
+  - **Software TrueColor `PixelCanvasBuffer` (`src/ui/pixel_canvas.rs`)**: Provides identical anti-aliased rendering across local GUI framebuffers, `.ppm`/`.svg` exports, Kitty/Sixel/iTerm2 graphic streams, and SSH `2×4` Octant / `1×2` Half-Block fallbacks without requiring a hardware GPU context in CI.
+- **Accidental Complexity**:
+  - **Cross-layer `impl` blocks inside `src/ui/`**: `impl WindowManager` and `impl CompositePane` blocks live inside `src/ui/canvas_raster.rs`, `src/ui/hires_subcell.rs`, and `src/ui/typography.rs` solely to dodge the 800-line ceiling on `src/wm/mod.rs` and `src/pane/mod.rs`.
+  - **23 files between `700` and `789` LOC**: Minor bug fixes or single enum arms routinely collide with the 800-line ceiling test.
+  - **Stringly-typed subcommands inside `Action`**: `Action::CanvasCommand(String)`, `Action::FontCommand(String)`, and `Action::DrawerCommand(String)` defer parsing to execution time.
+- **Scalability & Runtime Bottlenecks**:
+  - **`App::run` redraws unconditionally every 16 ms**: Even when no key event or PTY byte has arrived, `terminal.draw` re-renders the entire workspace and calls `wm.resize_all(area)`.
+  - **Per-frame `PixelCanvasBuffer` allocation and rasterization**: When a canvas scene is active, `render_graphical_canvas` allocates and rasterizes a fresh RGBA buffer on every 16 ms tick instead of caching the rasterized buffer keyed by scene generation + viewport size.
+  - **Uncached `ioctl(TIOCGWINSZ)`**: `CanvasResolution::Auto` invokes `libc::ioctl(STDOUT_FILENO, TIOCGWINSZ)` on every resolution query rather than caching on `Event::Resize`.
 
 ---
 
@@ -160,72 +140,47 @@ The key moves:
 
 ### 2.1 Component Scorecard
 
-| Component / Module | Responsibility / Role | LOC | Cohesion | Complexity | Test Coverage | Health Grade |
-| :--- | :--- | ---: | :---: | :---: | :---: | :---: |
-| `wm/split_tree`, `wm/z_stack`, `wm/quick_terminal` | BSP layout, z-order, drop-down terminal | 440 | High | Low | Medium | **A-** |
-| `pty/` | PTY spawn, reader thread, termios line discipline | 732 | High | Low | Medium | **B** |
-| `ui/theme`, `glyphs`, `chrome`, `occlusion` | Palettes, box glyphs, window chrome | 744 | High | Low | Medium | **B+** |
-| `pane/history_store`, `fuzzy_history`, `highlight`, `completion` | Prompt services | 1,066 | High | Medium | Medium | **B** |
-| `config/` | TOML config schema | 375 | High | Low | Low | **C** (never loaded at runtime) |
-| `tmux/`, `remote/` | tmux env/DCS/layout parsing, SSH profiles | 742 | Medium | Medium | Low | **C+** (Mode B unwired) |
-| `vt/mod.rs` | VT parser wrapper, OSC/DCS/sixel/kitty, URL/hint detection, base64, recording | 2,394 | **Low** | **High** | Medium | **C-** |
-| `vt/worker.rs`, `vt/ghostty_backend.rs` | Threaded VT pipeline, Ghostty FFI | 934 | Medium | Medium | Tests only | **D** (unused / broken / unsound) |
-| `pane/mod.rs` | CompositePane + prompt editor + copy/hints/search modes | 1,639 | **Low** | High | Medium | **C** |
-| `pane/colon_command.rs` | `:command` parse + execute | 1,375 | Medium | **Very high** | Medium | **C-** |
-| `input/mod.rs` | All key/mouse/paste routing + key encoding | 2,263 | **Low** | **Very high** | Medium | **D+** |
-| `ui/mod.rs`, `ui/cursor.rs`, `ui/renderer.rs` | Ratatui compositor, modals, cursor shaders, PPM renderer | 3,317 | Low | High | Snapshot-tested | **C** |
-| `api/mod.rs` | JSON parser, JSON-RPC, MCP, playbooks, TCP server | 1,541 | **Low** | High | Medium | **D** (security/robustness) |
-| `app.rs` | Event loop | 164 | Medium | Low | Low | **C+** |
+| Component / Module | LOC | Files | Cohesion | Complexity | Test Coverage | Health Grade |
+| :--- | ---: | ---: | :---: | :---: | :---: | :---: |
+| `src/secure_fs.rs` & `src/error.rs` | 663 | 2 | High | Low | High | **A** |
+| `src/pty/*` (`mod`, `line_discipline`, `shell_integration`) | 824 | 3 | High | Low | High | **A-** |
+| `src/wm/*` (`mod`, `split_tree`, `z_stack`, `drawer`, `session`, `quick_terminal`) | 3,701 | 7 | High | Medium | High | **B+** |
+| `src/api/*` (`json`, `rpc`, `mcp`, `playbook`, `server`) | 2,917 | 7 | High | Medium | High | **B+** |
+| `src/input/*` (`mod`, `keymap`, `modal`, `mouse`, `encode`) | 2,885 | 5 | High | Medium | High | **B+** |
+| `src/config/mod.rs` & `src/remote/mod.rs` & `src/tmux/mod.rs` | 1,475 | 3 | High | Low | Medium | **B+** |
+| `src/pane/*` (`mod`, `prompt_editor`, `canvas_scene`, `completion`, `history_store`, `modes`, `highlight`, `fuzzy_history`) | 4,415 | 9 | Medium | Medium | High | **B** |
+| `src/vt/*` (`mod`, `backend`, `scan`, `scrollback`, `tektronix`, `ghostty_backend`, `worker`, `snapshot`, `detect`, `graphics`, `recording`, `codec`) | 5,863 | 14 | Medium | High | High | **B** |
+| `src/action.rs` & `src/colon_command/*` (`mod`, `parse`, `execute`) | 2,306 | 4 | Medium | **High** | High | **B-** |
+| `src/ui/*` (`mod`, `canvas_raster`, `pixel_canvas`, `status_bar`, `modals`, `cursor`, `typography`, `renderer`, `hires_subcell`, `chrome`, `drawer`, `theme`, `glyphs`, `occlusion`) | 6,858 | 14 | **Low** | **High** | High | **C+** |
+| `src/app.rs` & `src/main.rs` | 408 | 2 | Medium | Low | Medium | **B+** |
 
 ### 2.2 Component Deep Dive & Findings
 
-#### Component: `pane/` — `CompositePane`
-- **SRP:** One struct owns the VT emulator, the PTY, the editor, history persistence, line discipline, search, copy mode, hints mode, read-only lock, the leader state, the remote badge, the paste modal, the status message and OSC 52 output. Every feature adds a field and both constructors must be edited: `new_headless` and `spawn` repeat an 18-field literal (`src/pane/mod.rs:909-971`).
-- **Encapsulation:** All fields are `pub`. `api::dispatch_method` (`src/api/mod.rs:743-753`) re-implements "submit a command": it pushes history, records to the store, sets `running_command`, calls `record_command_submission` and writes to the PTY. The prompt's own submit path does the same, so the two can drift apart.
-- **Error handling:** `let _ = pty.write_all(&resp)` (`src/pane/mod.rs:1366`) and `let _ = history_store.record_command(..)` silently drop I/O errors. There are 68 `let _ =` sites crate-wide.
-- **Hotspots:**
-  - `src/pane/mod.rs:1335` `poll_pty_events`: **drops output** (P0.1).
-  - `src/pane/mod.rs:57-715` `FloatingPromptState`: a ~650-line editor that is a self-contained component and could become its own module.
+#### Component: `src/ui/*` (6,858 LOC across 14 files)
+- **Single Responsibility Principle (SRP)**: Violated in `src/ui/canvas_raster.rs`, `src/ui/hires_subcell.rs`, and `src/ui/typography.rs`. In addition to Ratatui buffer rendering and pixel supersampling, these files define domain state (`FontFamilyPreset`, `PaneFontOptions`, `LineSizeAttr`, `CanvasResolution`), VT escape sequence scanning (`scan_dec_line_size_escapes`), `CompositePane` command execution (`execute_canvas_command`, `execute_font_command`), and JSON-RPC request handlers (`WindowManager::handle_rpc_canvas`, `WindowManager::handle_rpc_fontsize`).
+- **Correctness Bugs / Resolution Mismatches**:
+  - [`src/ui/canvas_raster.rs:375-382`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs#L375-L382): `render_graphical_canvas` hardcodes `px_per_col = 4, px_per_row = 8` instead of calling `scene.resolution.resolve_px_per_cell(canvas.width, canvas.height)`.
+  - [`src/ui/hires_subcell.rs:329-330`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs#L329-L330): `execute_canvas_command("export ...")` hardcodes `(80, 24)` instead of using the pane's actual `(cols, rows)` from `self.vt.size()`.
+- **Security Gap**:
+  - [`src/ui/hires_subcell.rs:321-343`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs#L321-L343): `:canvas export <path>` writes via raw `std::fs::write(path, ...)` without confining `path` to `snapshot_dir` or `secure_fs::write_private_file_atomic`.
 
-#### Component: `vt/`
-- **SRP:** `vt/mod.rs` mixes several unrelated jobs:
-  - escape scanning (`scan_control_sequences`, **541 lines**)
-  - sixel and kitty image decoding (`decode_sixel_placement`, 167 lines)
-  - base64 and hex codecs
-  - JSON string escaping
-  - URL, IP, path and git-SHA tokenizers
-  - XTGETTCAP tables
-  - asciicast recording
-  - Ratatui style conversion (`cell_to_ratatui_style`), which couples `vt` to `ratatui`
-- **Abstraction leak:** `VtParser::screen() -> &vt100_ctt::Screen` is called 64 times outside `vt/`. That blocks the `TerminalBackend` swap the stack doc requires ("Wrap the terminal emulator behind an internal `TerminalBackend` trait").
-- **Unsoundness:** see P0.3.
-- **API smell:** `is_mouse_SGR_or_tracking` duplicates `is_mouse_sgr_or_tracking` (`src/vt/mod.rs:468,476`).
+#### Component: `src/colon_command/*` & `src/action.rs` (2,306 LOC)
+- **SRP & Complexity Hotspots**:
+  - [`src/colon_command/parse.rs:11-732`](file:///home/bill/src/ai/bilterm/src/colon_command/parse.rs#L11-L732): `parse_colon_command` is a **722-line** monolithic `match` function.
+  - [`src/colon_command/execute.rs:305-789`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs#L305-L789): `execute_wm_colon_command` is **485 lines**, and the file sits at **789/800 lines** (only 11 lines of headroom).
+  - [`src/action.rs:184-634`](file:///home/bill/src/ai/bilterm/src/action.rs#L184-L634): Test module inside `src/action.rs` imports `WindowManager`, `WorkspaceWidget`, `colon_command`, and `input`, creating compile-time module cycles with `action`.
 
-#### Component: `input/`
-- **SRP:** One file holds modal routing (help, inspector, palette, menubar, paste, copy, hints, leader…), mouse hit-testing, macOS Option normalization and the full xterm/Kitty key encoder.
-- **Complexity:**
-  - `handle_wm_key_event` is 411 lines: a cascade of `if wm.<modal>_visible { match … return }` blocks followed by hard-coded chords.
-  - `config.keybindings` is consulted only as a pre-filter (`src/input/mod.rs:1291`), and the defaults are not data.
-- **Testability:** Unit tests exist inline, but the encoder (`encode_key_to_pty_bytes_full`, 136 lines) is pure and deserves its own module plus table tests.
+#### Component: `src/vt/*` (5,863 LOC across 14 files)
+- **SRP & Performance Hotspots**:
+  - [`src/vt/scan.rs:23-563`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs#L23-L563): `scan_control_sequences` is **541 lines** and runs 14 separate substring scans (`match_indices`) over every PTY output chunk.
+  - [`src/vt/worker.rs:1-541`](file:///home/bill/src/ai/bilterm/src/vt/worker.rs#L1-L541): `VtWorkerHandle` provides a lock-free `tokio::sync::watch<Arc<GridSnapshot>>` pipeline, but production `CompositePane` still uses synchronous `VtParser` + `PtySession` directly.
+  - [`src/vt/mod.rs:129,229`](file:///home/bill/src/ai/bilterm/src/vt/mod.rs#L129): `VtParser` depends on `crate::ui::typography::{LineSizeAttr, scan_dec_line_size_escapes}`, inverting the `ui -> vt` layer boundary.
 
-#### Component: `api/`
-- **SRP:** Five components share one file:
-  - a hand-rolled JSON parser and serializer
-  - a JSON-RPC router
-  - an MCP adapter
-  - a playbook engine
-  - a TCP server
-- **Robustness (verified live):**
-  - The accept loop handles one client at a time, and any `?` inside the per-connection loop ends the daemon: a client reset was enough to make it exit (`src/api/mod.rs:1527-1540`).
-  - The recursive `parse_json_value` has no depth limit: nesting depth 200,000 aborts the process with a stack overflow.
-- **Security:** see §5 (no auth, arbitrary-path file write via `workspace.snapshot.ppm_path`).
-- **Contract strictness:** Methods are matched on strings, and parameters are pulled ad hoc with `params.get(..).and_then(..)`. No typed request structs exist.
-
-#### Component: `app.rs`
-- `poll_all_ptys` removes exited panes by mutating `wm.panes`, `wm.split_tree` and `wm.z_stack` directly (`src/app.rs:92-97`). That duplicates `WindowManager::close_focused_pane` (`src/wm/mod.rs:696`) and skips its `zoomed_pane` cleanup. It's harmless today only because `compute_workspace_rects` re-checks `contains_key`.
-- `refresh_line_discipline()` runs twice per tick for any pane that produced output: once inside `poll_pty_events`, then again in `poll_all_ptys`. Each call does `tcgetattr` and `tcgetpgrp` syscalls.
-- The loop has no dirty tracking: it redraws and calls `resize_all` every 16 ms even when idle.
-- `PtySession::output_rx_mut` exists "for consuming `PtyEvent`s in `tokio::select!`", but the loop polls instead.
+#### Component: `src/pane/*` (4,415 LOC across 9 files)
+- **Encapsulation**:
+  - [`src/pane/mod.rs:36-67`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs#L36-L67): `CompositePane` has `0` `pub` fields (`pub(crate)` on `vt`, `canvas_scene`, `font_options`), and `new_base` cleanly deduplicates construction.
+  - [`src/pane/prompt_editor.rs:42-73`](file:///home/bill/src/ai/bilterm/src/pane/prompt_editor.rs#L42-L73): `FloatingPromptState` still exposes **21 `pub` fields** directly mutated across modules.
+  - [`src/pane/mod.rs`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs) is at **788/800 lines** (12 lines of headroom).
 
 ---
 
@@ -233,213 +188,168 @@ The key moves:
 
 ### 3.1 Inter-Module Dependency Matrix
 
-Derived from `use crate::…` edges in `src/` (arrows = "imports from"):
-
 ```mermaid
 flowchart LR
-    api --> pane & wm & input & ui & vt & pty & remote & error
-    app --> wm & pane & input & ui & tmux & error
-    input --> pane & wm & ui & vt & pty & error
-    ui <-->|cycle| pane
-    ui <-->|cycle| config
-    ui --> wm & vt & pty
-    wm <-->|cycle| pane
-    wm --> pty & remote & config & error
-    pane <-->|cycle| remote
-    pane --> vt & pty & error
-    pty <-->|cycle| vt
-    remote --> tmux
-    tmux --> pane & wm
+    action <-->|"cycle"| colon_command
+    action <-->|"cycle"| wm
+    action <-->|"cycle"| ui
+    api <-->|"cycle"| ui
+    colon_command <-->|"cycle"| wm
+    config <-->|"cycle"| wm
+    config <-->|"cycle"| ui
+    input <-->|"cycle"| wm
+    pane <-->|"cycle"| ui
+    pane <-->|"cycle"| vt
+    pty <-->|"cycle"| vt
+    tmux <-->|"cycle"| wm
+    ui <-->|"cycle"| vt
 ```
 
-### 3.2 Coupling & Cohesion Assessment
-- **Afferent coupling (most depended on):** `pane` (7 importers), `wm` (6), `vt` (5), `error` (7). `pane` should be a leaf-ish domain module, but it imports `wm`, `ui` and `remote`, which inverts the direction.
-- **Efferent coupling:** `api` (8 modules), `input` (6) and `app` (6) are the "everything" modules. That is acceptable for adapters but not for `ui` (5) or `pane` (5).
-- **Circular dependencies (module level):**
-  1. `pane ↔ wm`: `colon_command.rs` lives under `pane/` but executes WM-level commands (`execute_wm_colon_command`).
-  2. `pane ↔ ui`: pane imports UI types (theme or rect helpers) while UI renders the pane.
-  3. `pane ↔ remote`
-  4. `pty ↔ vt`: `vt/worker.rs` spawns PTYs itself instead of composing `PtySession`.
-  5. `ui ↔ config`
+| Module | Incoming (`Ca`) | Outgoing (`Ce`) | Instability $I = \frac{Ce}{Ca+Ce}$ | Role Assessment |
+| :--- | :---: | :---: | :---: | :--- |
+| `error` | 9 | 0 | `0.00` | Clean foundational leaf (`A`) |
+| `secure_fs` | 6 | 0 | `0.00` | Clean security leaf (`A`) |
+| `pty` | 7 | 3 | `0.30` | Near-leaf OS abstraction (`pty <-> vt` 1-edge cycle) |
+| `tmux` | 4 | 2 | `0.33` | Protocol helper (`tmux -> wm` doc-link / bridge cycle) |
+| `pane` | 10 | 5 | `0.33` | Core pane domain (polluted by `pane -> ui` imports) |
+| `vt` | 8 | 5 | `0.38` | Terminal state machine (polluted by `vt -> ui` imports) |
+| `remote` | 4 | 3 | `0.43` | SSH/Fleet domain |
+| `ui` | 7 | 8 | `0.53` | **Inverted**: UI layer is imported by `vt`, `pane`, `config`, `action`, `api` |
+| `wm` | 8 | 11 | `0.58` | Workspace coordinator hub |
+| `action` | 4 | 7 | `0.64` | Command enum (imports `wm`, `ui`, `colon_command` in source + inline tests) |
+| `colon_command` | 4 | 7 | `0.64` | Command parser & executor |
+| `input` | 4 | 8 | `0.67` | Input adapter |
+| `config` | 2 | 5 | `0.71` | Config schema (imports value enums from `ui` and `wm`) |
+| `api` | 2 | 9 | `0.82` | Automation/RPC adapter (`ui -> api` cycle via `JsonValue`) |
+| `app` | 0 | 6 | `1.00` | Clean top-level event loop coordinator (`A`) |
 
-  Rust allows intra-crate cycles, but these block extracting crates such as a `bilterm-core` for a future GUI front end, and they show the layering isn't enforced.
+### 3.2 Root Causes of Inter-Module Cycles
 
-### 3.3 Interface & Boundary Integrity
-- **Contract strictness:** Commands cross boundaries as strings (colon text, JSON method names, keybinding strings). The `ColonCommand` enum (68 variants) is the closest thing to a typed command vocabulary, but key handlers and the RPC layer bypass it for many operations.
-- **Leaky abstractions:**
-  - `vt100_ctt::Screen` leaks into `ui/` and `pane/`.
-  - `WindowManager.panes` (a `BTreeMap`) is mutated directly by `app`, `api` and `input`.
-  - `PaneId 0` is overloaded as "quick terminal" (`src/wm/mod.rs:635`, `:816`).
-- **Cross-cutting concerns:**
-  - Errors use one `BiltermError` with `thiserror` (good), but they're often discarded.
-  - Logging with `tracing` is configured, but call sites are sparse.
-  - Terminal restore uses `TerminalRestoreGuard` (good).
+Almost every cycle stems from **four misplaced type/impl locations**:
+1. **Value/Config Enums Placed in `ui/` and `wm/` Instead of `config/` (or a leaf `types` module)**:
+   - `ThemePreset`, `GlyphPack`, `CaretStyle`, `SpotlightMode`, `OutlineStyle`, `ShadowStyle`, `FontFamilyPreset`, `PaneFontOptions`, `LineSizeAttr`, and `CanvasResolution` live in `src/ui/*`.
+   - `DrawerConfig`, `DrawerEdge`, `DrawerLayoutMode`, `DrawerVisibilityMode`, and `WorkspaceLayoutMode` live in `src/wm/*`.
+   - Because `config`, `action`, `pane`, and `vt` need these lightweight enums, they are forced to import `crate::ui::*` and `crate::wm::*`.
+2. **Domain & RPC `impl` Blocks Placed in `src/ui/`**:
+   - `src/ui/canvas_raster.rs` and `src/ui/typography.rs` import `crate::api::JsonValue` and `crate::action::Action` to implement `WindowManager::handle_rpc_canvas` and `WindowManager::handle_rpc_fontsize`.
+3. **`colon_command` Invoked Directly by `WindowManager`**:
+   - `WindowManager::apply` (`src/wm/mod.rs:25`) delegates to `crate::colon_command::execute_wm_colon_command`, while `colon_command` imports `WindowManager`.
+4. **Single-Line `pty <-> vt` Cycle**:
+   - `src/pty/line_discipline.rs:1` imports `crate::vt::Osc133Phase` (a 4-variant enum), while `src/vt/worker.rs:31` imports `crate::pty::{PtyConfig, shell_integration}`.
 
 ---
 
 ## 4. Recommended Improvements (Prioritized Roadmap)
 
-### Phase P0: Critical Stability & Correctness Fixes
+### Phase P0: Security Confinement & High-Res Canvas Correctness Fixes
 
-- [ ] **P0.1: Stop discarding PTY output under load**
-  - **Location:** `src/pane/mod.rs:1352-1358`, `src/pty/mod.rs:248-259`
-  - **Problem:** `drain_events` pulls up to 32 × 8 KB = 256 KB per tick. `poll_pty_events` then keeps only the **last 32 KB** and throws the rest away. Cutting the byte stream at an arbitrary offset splits escape sequences and loses mode changes (DECSET 1049, 2004, cursor moves, OSC 133 markers). The VT state then diverges from the child: alt-screen detection breaks, the prompt shows during `vim`, and command blocks are lost. The bounded `mpsc::channel(32)` plus `blocking_send` already provides backpressure, so the truncation isn't needed for safety.
-  - **Proposed solution:** Process every byte. Bound *work per frame* by leaving events in the channel, not by dropping them.
-  - **Effort:** Small
+- [x] **P0.1: Confine `:canvas export <path>` using `secure_fs` and `validate_safe_name`** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/ui/hires_subcell.rs`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs), [`src/api/rpc_handlers.rs`](file:///home/bill/src/ai/bilterm/src/api/rpc_handlers.rs)
+  - **Resolution:** Added `CompositePane::export_canvas_confined` and `AutomationControlPlane::execute_canvas_command_confined`, enforcing `validate_snapshot_name`, symlink rejection, and atomic `0600` `write_private_file` across RPC (`canvas.command`, `wm.command`) and confined Playbook execution.
+
+- [x] **P0.2: Wire `CanvasResolution` into Live TUI Rendering & Use Actual Pane Dimensions in Export/Encode** *(Completed 2026-10-25 — see [`docs/REFACTOR_LOG.md`](REFACTOR_LOG.md))*
+  - **Location:** [`src/ui/canvas_raster.rs`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs), [`src/ui/hires_subcell.rs`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs), [`src/app.rs`](file:///home/bill/src/ai/bilterm/src/app.rs)
+  - **Resolution:** Cached `probe_terminal_pixel_size()` in `CACHED_TERMINAL_PIXELS: AtomicU64` (refreshed on `Event::Resize`), wired `scene.resolution.resolve_px_per_cell(canvas.width, canvas.height)` into `render_graphical_canvas`, and replaced hardcoded `(80, 24)` in `:canvas export`/`encode` with `self.vt.size()`.
+
+### Phase P1: Layer Decoupling & 800-Line Ceiling Decompression
+
+- [ ] **P1.1: Relocate `WindowManager` and `CompositePane` Domain/RPC Impls Out of `src/ui/`**
+  - **Location:** [`src/ui/canvas_raster.rs:736-789`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs#L736-L789), [`src/ui/hires_subcell.rs:308-382`](file:///home/bill/src/ai/bilterm/src/ui/hires_subcell.rs#L308-L382), [`src/ui/typography.rs:205-393,624-661`](file:///home/bill/src/ai/bilterm/src/ui/typography.rs#L205-L393)
+  - **Problem:** `src/ui/` contains `impl WindowManager` and `impl CompositePane` blocks that import `crate::api::JsonValue` and `crate::action::Action`, inverting the presentation layer boundary.
+  - **Proposed Solution:**
+    - Move `handle_rpc_canvas` and `handle_rpc_fontsize` into `src/api/rpc.rs` (or `src/api/handlers.rs`).
+    - Move `FontFamilyPreset`, `PaneFontOptions`, `LineSizeAttr`, `scan_dec_line_size_escapes`, and `CanvasResolution` into domain modules (`src/pane/typography.rs`, `src/pane/canvas_scene.rs`, `src/vt/mod.rs`).
+  - **Code Transformation Example:**
 ```rust
-// ❌ BEFORE
-if coalesced.len() > MAX_BYTES_PER_FRAME && !self.vt.is_alternate_screen() {
-    let start = coalesced.len() - MAX_BYTES_PER_FRAME;
-    self.vt.process(&coalesced[start..]);   // silently drops `start` bytes
+// ❌ BEFORE: src/ui/typography.rs imports crate::api::JsonValue & crate::action::Action
+impl WindowManager {
+    pub fn handle_rpc_fontsize(
+        &mut self,
+        params: &crate::api::JsonValue,
+    ) -> std::result::Result<crate::api::JsonValue, String> { /* ... */ }
 }
-// ✅ AFTER: drain_events already caps chunk count; feed everything, in order
-self.vt.process(&coalesced);
+
+// ✅ AFTER: Domain state lives in src/pane/typography.rs; RPC serialization lives in src/api/rpc.rs
+// src/pane/typography.rs (pure domain, zero UI or API imports):
+pub struct PaneFontOptions { /* ... */ }
+
+// src/api/rpc.rs (adapter layer formats JsonValue response from domain state):
+fn handle_workspace_fontsize(wm: &mut WindowManager, params: &JsonValue) -> Result<JsonValue, String> { /* ... */ }
 ```
-  - **Test:** Feed `"\x1b[?1049h" + 300 KB of filler` into a headless pane via the channel path, then assert `is_alternate_screen()`.
+  - **Estimated Effort:** Medium
 
-- [ ] **P0.2: Actually load `~/.config/bilterm/config.toml`**
-  - **Location:** `src/wm/mod.rs:125`, `src/main.rs`, `src/config/mod.rs:142`
-  - **Problem:** `BiltermConfig::load_or_default` has no caller. `WindowManager` always uses `BiltermConfig::default()`, so themes, `leader_key`, `[keybindings]`, `[remotes.*]` and history settings documented in `docs/running.md` don't take effect.
-  - **Proposed solution:** Resolve the path in `main` (`$XDG_CONFIG_HOME/bilterm/config.toml`), pass the config into `App::spawn_default` and `WindowManager::spawn_default`, and show parse errors in the OIA status bar instead of silently falling back.
-  - **Effort:** Small
+- [ ] **P1.2: Decompress the 8 Near-Ceiling Files (`772..789` LOC) into Cohesive Submodules**
+  - **Location:**
+    - [`src/colon_command/execute.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs) (`789` LOC) $\rightarrow$ split into `execute_pane.rs` and `execute_wm.rs`
+    - [`src/colon_command/parse.rs`](file:///home/bill/src/ai/bilterm/src/colon_command/parse.rs) (`732` LOC, 722-line fn) $\rightarrow$ split by command family (`parse_pane.rs`, `parse_wm.rs`, `parse_visual.rs`)
+    - [`src/pane/mod.rs`](file:///home/bill/src/ai/bilterm/src/pane/mod.rs) (`788` LOC) $\rightarrow$ extract geometry/accessors into `src/pane/geometry.rs`
+    - [`src/wm/z_stack.rs`](file:///home/bill/src/ai/bilterm/src/wm/z_stack.rs) (`788` LOC) $\rightarrow$ move the 175-line inline test to `src/wm/tests.rs`
+    - [`src/input/keymap.rs`](file:///home/bill/src/ai/bilterm/src/input/keymap.rs) (`787` LOC) $\rightarrow$ move inline keymap tests to `src/input/tests.rs`
+    - [`src/vt/scan.rs`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs) (`776` LOC) $\rightarrow$ split CSI/DECSET scanning from OSC/DCS/APC scanning
+  - **Estimated Effort:** Medium
 
-- [ ] **P0.3: Remove the unsound `GhosttyCAbiTerminal` safe API**
-  - **Location:** `src/vt/ghostty_backend.rs:86-123`
-  - **Problem:** `with_vtable` is `pub` and safe and accepts any vtable. `snapshot()` and `take_query_responses()` then cast `raw_handle` to `*mut VtParser` regardless of which vtable produced it. Any non-fallback vtable (which is the point of the type) makes safe code dereference a foreign pointer as a Rust struct: undefined behaviour. Separately, `--features ghostty-vt` doesn't compile.
-  - **Proposed solution:** Either delete the FFI scaffold until a real `libghostty-vt` dependency exists, or add `snapshot` and `take_query_responses` to the vtable and mark `with_vtable` as `unsafe fn` with a documented contract. Gate the feature in CI (`cargo check --features ghostty-vt`) or remove it from `Cargo.toml`.
-  - **Effort:** Small (delete) / Medium (complete)
+- [ ] **P1.3: Encapsulate `FloatingPromptState` Fields (`src/pane/prompt_editor.rs`)**
+  - **Location:** [`src/pane/prompt_editor.rs:42-73`](file:///home/bill/src/ai/bilterm/src/pane/prompt_editor.rs#L42-L73)
+  - **Problem:** `FloatingPromptState` has 21 `pub` fields (`lines`, `cursor_row`, `cursor_col`, `manual_raw_override`, `force_command_prompt`), allowing external callers to mutate cursor/line indices out of sync.
+  - **Proposed Solution:** Make cursor/buffer fields private (`pub(crate)` only where needed inside `pane/`) and expose invariant-preserving accessors/mutators.
+  - **Estimated Effort:** Medium
 
-- [ ] **P0.4: Harden the headless JSON-RPC daemon**
-  - **Location:** `src/api/mod.rs:140-325` (parser), `:1521-1541` (server)
-  - **Problem (both reproduced):** (a) one client's I/O error ends the whole daemon; (b) nesting depth 200,000 stack-overflows and aborts. Also: it serves one client at a time with no line-length limit, so a newline-free stream grows memory without bound.
-  - **Proposed solution:** Handle each connection in its own task with errors logged rather than propagated, and share the `AutomationControlPlane` through an `Arc<Mutex<_>>` or an actor channel. Cap the line length (`take(1 MiB)`). Replace the hand-rolled parser with `serde_json`, which has a recursion limit and typed `#[derive(Deserialize)]` params, or add a depth counter.
-  - **Effort:** Medium
-```rust
-// ✅ AFTER (sketch)
-loop {
-    let (stream, peer) = listener.accept().await?;
-    let plane = plane.clone();                       // Arc<Mutex<AutomationControlPlane>>
-    tokio::spawn(async move {
-        if let Err(e) = serve_conn(stream, plane).await {
-            tracing::warn!(%peer, error = %e, "rpc connection closed");
-        }
-    });
-}
-```
+### Phase P2: Runtime Efficiency, Caching & Maintainability
 
-### Phase P1: High-Impact Modular Refactoring
+- [ ] **P2.1: Dirty-Driven Redraw & Cached Canvas Rasterization**
+  - **Location:** [`src/app.rs:54-81`](file:///home/bill/src/ai/bilterm/src/app.rs#L54-L81), [`src/ui/mod.rs:245-333`](file:///home/bill/src/ai/bilterm/src/ui/mod.rs#L245-L333), [`src/ui/canvas_raster.rs:358-480`](file:///home/bill/src/ai/bilterm/src/ui/canvas_raster.rs#L358-L480)
+  - **Problem:** `App::run` redraws and calls `wm.resize_all` every 16 ms even when idle, re-running URL regex/token scans, trigger searches, and full `PixelCanvasBuffer` rasterization every tick.
+  - **Proposed Solution:**
+    - Track a `dirty: bool` / generation counter on `WindowManager` and `CompositePane` (set on input, PTY output, resize, or active animation/blink).
+    - Call `wm.resize_all(area)` only when `area != self.last_viewport` or layout topology changes.
+    - Cache `PixelCanvasBuffer` on `(scene_generation, tek_generation, canvas.width, canvas.height, resolution, focal_cursor_pos)`.
+  - **Estimated Effort:** Medium
 
-- [ ] **P1.1: Introduce a single `Action` command vocabulary**
-  - **Location:** `src/input/mod.rs` (`handle_wm_key_event`, `handle_key_event`, leader handlers), `src/pane/colon_command.rs`, `src/api/mod.rs::dispatch_method`
-  - **Problem:** Four dispatch paths implement the same operations (split, zoom, prompt mode, exec, theme…), and each new feature must be added in up to four places.
-  - **Proposed solution:** Promote `ColonCommand` to `crate::action::Action`. Key chords map to `Action` through a data table seeded from defaults and overridden by `[keybindings]`. Colon text and JSON-RPC both parse into `Action`. One `fn apply(&mut WindowManager, Action) -> Effects` executes it.
-  - **Effort:** Large (do it incrementally, one action family per PR)
-```rust
-// ❌ BEFORE: chord hard-coded in a 411-line function, same op duplicated in colon + RPC
-if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Char('z') {
-    wm.toggle_zoom(); return Ok(AppAction::Handled);
-}
-// …and again in execute_wm_colon_command, and again in dispatch_method
+- [ ] **P2.2: Single-Pass Control Sequence Scanner (`src/vt/scan.rs`)**
+  - **Location:** [`src/vt/scan.rs:23-563`](file:///home/bill/src/ai/bilterm/src/vt/scan.rs#L23-L563)
+  - **Problem:** `scan_control_sequences` performs 14 separate `text.match_indices(...)` passes over every PTY output buffer.
+  - **Proposed Solution:** Scan for `ESC` (`\x1b`) once in a single pass and dispatch on the byte immediately following `\x1b` (`[`, `]`, `P`, `_`, `^`).
+  - **Estimated Effort:** Medium
 
-// ✅ AFTER
-pub enum Action { ToggleZoom, Split(SplitDirection), Exec { pane: Option<PaneId>, cmd: String }, /* … */ }
-
-static DEFAULT_KEYMAP: &[(&str, Action)] = &[("Alt+Z", Action::ToggleZoom), ("F5", Action::ToggleZoom), /* … */];
-
-fn handle_wm_key_event(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
-    if let Some(modal) = wm.active_modal_mut() { return modal.handle_key(key); }   // help/inspector/palette/menubar
-    match wm.keymap.lookup(key) {
-        Some(action) => wm.apply(action.clone()),
-        None => route_to_active_pane(wm, key),
-    }
-}
-```
-
-- [ ] **P1.2: Encapsulate `WindowManager` and `CompositePane` invariants**
-  - **Location:** `src/wm/mod.rs:61-97`, `src/pane/mod.rs:876-905`, `src/app.rs:85-101`
-  - **Problem:** `pub` fields let `app`, `api` and `input` bypass invariants. Exited-pane reaping duplicates `close_focused_pane` and skips `zoomed_pane` cleanup. Command submission is duplicated in `api` (`src/api/mod.rs:743-753`). `leader_pending` is duplicated on both structs.
-  - **Proposed solution:**
-    - Make the fields private.
-    - Add `WindowManager::remove_pane(id)`, used by close, reap and fleet.
-    - Add `CompositePane::submit_command(&str) -> Result<()>`, used by the prompt and RPC.
-    - Group modal flags into `enum Modal { None, Help { scroll }, Inspector { scroll }, Palette { query, selected }, Menubar { category, item } }`, which also makes "two modals open" impossible.
-    - Replace the `PaneId 0` sentinel with `enum Focus { Quick, Pane(PaneId) }`.
-  - **Effort:** Medium
-
-- [ ] **P1.3: Put the VT emulator behind `trait TerminalBackend`**
-  - **Location:** `src/vt/mod.rs`, plus the 64 `vt.screen()` call sites in `ui/` and `pane/`
-  - **Problem:** `vt100_ctt` types leak across the crate, which blocks the planned `alacritty_terminal` or Ghostty migration (stack doc §3) and the reflow-on-resize work.
-  - **Proposed solution:** Renderers consume `GridSnapshot` (which already exists in `vt/snapshot.rs`) or a `CellView` iterator. `VtParser` becomes `Vt100Backend: TerminalBackend`. Move `cell_to_ratatui_style` into `ui/`.
-  - **Effort:** Medium–Large
-
-- [ ] **P1.4: Split the mega-modules along existing seams**
-  - `vt/mod.rs` → `vt/scan.rs` (control-sequence scanner), `vt/graphics.rs` (sixel/kitty), `vt/detect.rs` (URL/hint/path/SHA), `vt/codec.rs` (base64/hex), `vt/recording.rs`.
-  - `pane/mod.rs` → `pane/prompt_editor.rs` (`FloatingPromptState`), `pane/modes.rs` (copy/hints/search).
-  - `input/mod.rs` → `input/encode.rs` (key → PTY bytes), `input/mouse.rs`, `input/modal.rs`, `input/keymap.rs`.
-  - `api/mod.rs` → `api/json.rs` (or delete for `serde_json`), `api/rpc.rs`, `api/mcp.rs`, `api/playbook.rs`, `api/server.rs`.
-  - Move `colon_command.rs` out of `pane/` (it's WM-level), which breaks the `pane ↔ wm` cycle.
-  - **Effort:** Medium (mechanical, behaviour-preserving; do it before P1.1 to shrink diffs)
-
-- [ ] **P1.5: Decide the fate of unwired subsystems**
-  - **Location:** `src/vt/worker.rs` (`VtWorkerHandle`, ARCH-02), `src/tmux/mod.rs:356` (`TmuxControlSubprocess`), the `gui` feature (an empty feature flag; the renderer compiles unconditionally)
-  - **Problem:** About 1,000 LOC is exercised only by tests. `vt/worker.rs` spawns its own PTY instead of composing `PtySession` (that's the `pty ↔ vt` cycle). Docs and `CHANGELOG` describe these as shipped.
-  - **Proposed solution:** Either wire `VtWorkerHandle` in as the real pane backend, which also fixes P0.1 and enables per-PTY wakeups, or mark these modules `#[doc(hidden)]` / experimental and correct the docs.
-  - **Effort:** Decision: Small; wiring: Large
-
-### Phase P2: Maintainability, Performance & Testability
-
-- [ ] **P2.1: Redraw on dirty only.** Have the PTY readers send `(PaneId, PtyEvent)` into one shared `mpsc` that `select!` awaits directly, and drop the 16 ms polling. Track a `dirty` flag. Call `resize_all` only on `Event::Resize` or layout changes, not inside `terminal.draw`.
-- [ ] **P2.2: Cache per-frame scans.** Memoize `detect_visible_urls()` and `search_canvas()` results on `(vt generation, query)`. Detect `TmuxEnv` once at startup.
-- [ ] **P2.3: Remove the double `refresh_line_discipline()`** per tick (`src/app.rs:89` vs `src/pane/mod.rs:1369`).
-- [ ] **P2.4: Audit the 68 `let _ =` sites.** Keep the deliberate ones with a comment. Surface the rest (PTY write failures, history persistence) through `status_message` or `tracing::warn!`.
-- [ ] **P2.5: Deduplicate `CompositePane` constructors** through a private `fn base(id, rows, cols, vt, pty, history)`.
-- [ ] **P2.6: Remove `is_mouse_SGR_or_tracking`**, the duplicate of `is_mouse_sgr_or_tracking`.
-- [ ] **P2.7: Add a CI feature matrix:** `cargo hack check --each-feature` would have caught the broken `ghostty-vt` feature.
-- [ ] **P2.8: Add regression tests** for P0.1 (large output with mode changes), P0.4 (deep JSON, client reset) and exited-pane reaping while zoomed.
+- [ ] **P2.3: Audit Remaining `let _ =` Sites in Command Execution (`src/colon_command/execute.rs`)**
+  - **Location:** [`src/colon_command/execute.rs:132,296,308,312,438,768`](file:///home/bill/src/ai/bilterm/src/colon_command/execute.rs#L296-L315)
+  - **Problem:** Several `execute_wm_colon_command` arms discard `Result` errors via `let _ = wm.split_focused(...)` or `let _ = wm.stop_workspace_recording()`, losing error context if PTY spawning or file flushing fails.
+  - **Proposed Solution:** Surface `Err(e)` into `wm.active_pane_mut().set_status_message(Some(format!("Error: {e}")))` and `tracing::warn!`.
+  - **Estimated Effort:** Small
 
 ### Phase P3: Future-Proofing & Extensibility
 
-- [ ] **P3.1: Extract a `bilterm-core` crate** (domain plus `TerminalBackend`) once the cycles are gone, so a native GUI front end can reuse it.
-- [ ] **P3.2: Migrate to `alacritty_terminal`** behind `TerminalBackend` for reflow on resize and damage tracking, per the stack doc's recommended primary.
-- [ ] **P3.3: Wire tmux Mode B** (`-CC`) through the `Action` and backend seams. Route `%output %pane_id` into per-pane backends.
-- [ ] **P3.4: Expand `tracing` spans** around the event loop, PTY throughput and RPC calls so `tokio-console` and log analysis become useful.
+- [ ] **P3.1: Wire `VtWorkerHandle` (`src/vt/worker.rs`) into Live `CompositePane`**
+  - Replace synchronous `PtySession::drain_events` polling with the existing `VtWorkerHandle` background thread + `tokio::sync::watch<Arc<GridSnapshot>>` channel so `App::run` wakes reactively via `tokio::select!`.
+- [ ] **P3.2: Enforce Module DAG Acyclicity in CI (`tests/vt_worker_and_snapshot_seam.rs`)**
+  - Add an automated architecture test asserting zero upward `use crate::ui` imports from `vt`, `pty`, `pane`, or `config`, and zero `use crate::api` imports from `ui`.
+- [ ] **P3.3: Extract `bilterm-core` Workspace Crate**
+  - Once P1.1 breaks the `ui <-> pane/vt/wm` cycles, split `bilterm-core` (VT, PTY, Pane, WM, Action, Config) from `bilterm-tui` / `bilterm-gui` frontends.
 
 ---
 
 ## 5. Security & Robustness Recommendations
 
 ### 5.1 Attack Surface & Input Validation Audit
-- **Unauthenticated network control plane:** `--headless --listen <ADDR>` binds any address the user supplies, including `0.0.0.0`, with no token and no peer check (`src/api/mod.rs:1521`).
-  - Through it, **`workspace.snapshot` writes a PPM to any client-chosen `ppm_path`** (`src/api/mod.rs:713-718`): a remote arbitrary file overwrite with the daemon user's permissions.
-  - In today's headless mode, panes have no PTY, so `pane.exec` doesn't run commands. If headless mode ever gains real PTYs, this becomes remote code execution.
-  - **Recommend:**
-    - Default to a Unix socket at `$XDG_RUNTIME_DIR/bilterm.sock` with mode `0600`. The `--help` text already claims Unix socket support, but only TCP is implemented.
-    - Refuse non-loopback TCP without `--allow-remote`.
-    - Require a bearer token from a `0600` file.
-    - Confine `ppm_path` to a designated output directory.
-- **Predictable shared-temp shell rc files:** `prepare_shell_integration` writes `--rcfile`, `ZDOTDIR/.zshrc` and fish `vendor_conf.d` scripts under `/tmp/bilterm-shell-integration-<pid>/` using `create_dir_all` + `fs::write` (`src/pty/shell_integration.rs:127-174`). On a multi-user host, another local user can pre-create that directory (PIDs are guessable) and swap the script, and **the victim's shell sources it**.
-  - **Recommend:** use `$XDG_RUNTIME_DIR`, or a `tempfile::Builder` directory created with mode `0700`. Verify ownership, and write files with `O_EXCL`.
-- **Same pattern elsewhere:**
-  - command-history exports to `/tmp/bilterm-commands-pane…` (`src/pane/history_store.rs:171`)
-  - the `/tmp/bilterm-history` fallback
-  - asciicast recordings (`src/pane/colon_command.rs:856`)
-  - the SSH `ControlPath=/tmp/bilterm-ssh-%r@%h:%p` (`src/remote/mod.rs:72,95`); prefer `~/.ssh/` or `$XDG_RUNTIME_DIR`
-
-  History can contain secrets.
-- **SSH argument injection:** `build_ssh_args` pushes `destination` without a preceding `--` (`src/remote/mod.rs:82`). A destination such as `-oProxyCommand=…` coming from config, `:ssh` or the fleet API is interpreted as an option. **Recommend:** reject a leading `-`, and push `--` before the destination.
-- **Positive controls already present:**
-  - unsafe-paste confirmation (FND-01)
-  - `sanitize_paste_bytes`, which blocks embedded `ESC[201~`
-  - the `!ECHO` password-lock gate on `pane.exec`
-  - the read-only pane lock
-  - `TerminalRestoreGuard` on panic
+- **Control Plane & IPC (`src/api/server.rs`, `src/api/rpc.rs`)**:
+  - ✅ **Strong**: Default endpoint is a Unix domain socket inside a `0700` runtime directory with `0600` socket permissions (`SEC-R01`).
+  - ✅ **Strong**: Non-loopback TCP requires explicit `--allow-remote` + `--token-file` (`0600` mode check) and verifies bearer tokens in constant time (`constant_time_eq`).
+  - ✅ **Strong**: JSON parser enforces `MAX_JSON_DEPTH = 64` and `MAX_RPC_LINE_BYTES = 1 MiB`.
+  - ⚠️ **Gap (P0.1)**: `:canvas export <path>` (`src/ui/hires_subcell.rs:321-343`) writes `.ppm`/`.svg` files via `std::fs::write` without confining paths to `snapshot_dir` or `secure_fs::write_private_file_atomic`.
+- **Terminal Escape Sequence Trust Boundary (`src/vt/scan.rs`, `src/pane/canvas_scene.rs`)**:
+  - ✅ **Strong**: In-band `OSC 1337;Canvas=<cmd>` (`scan_osc_canvas_sequences`) routes to `PaneCanvasScene::execute_command`, which only mutates in-memory scene primitives and does **not** expose the `"export"` filesystem subcommand.
+  - ✅ **Strong**: Bracketed paste sanitizes embedded `\x1b[201~` sequences and gates multi-line / control-char raw PTY pastes behind an interactive confirmation modal (`FND-01`).
+  - ✅ **Strong**: 3-signal `!ECHO LOCK` (`termios !ECHO` + `tcgetpgrp` + `OSC 133` + canvas password-prompt heuristic) prevents password leaks into command history or floating prompt echo.
+- **Filesystem & Subprocess Isolation (`src/secure_fs.rs`, `src/remote/mod.rs`)**:
+  - ✅ **Strong**: Session files, history logs, `.cast` recordings, and shell integration scripts use `0700` private directories and `0600` atomic `O_CREAT | O_EXCL` writes.
+  - ✅ **Strong**: `build_ssh_args` rejects leading `-` in destinations/options and inserts `--` before the target host.
 
 ### 5.2 Dependency & Supply Chain Integrity
-- The dependency set is small and mainstream (ratatui, crossterm, portable-pty, vt100-ctt, tokio, serde/toml, nucleo-matcher). No `cargo audit` or `cargo deny` is configured. **Recommend** adding both to CI.
-- The `ghostty-vt` feature names a crate (`libghostty_vt`) that isn't declared in `Cargo.toml`. Before adding it, pin it and review its `build.rs` (it needs a Zig toolchain).
+- Core dependencies (`ratatui 0.30.0`, `crossterm 0.29.0`, `portable-pty 0.9.0`, `vt100-ctt 0.17.1`, `tokio 1.52.1`, `nucleo-matcher 0.3.1`, `serde`, `toml`) are minimal and actively maintained.
+- Recommend adding `cargo audit` and `cargo deny check` to `.github/workflows/ci.yml`.
 
-### 5.3 Next Action: Recommended Security Auditing
+### 5.3 Next Action: Recommended Security & Refactoring Workflows
 > [!IMPORTANT]
-> - Run `cargo audit` and `cargo deny check` (install them first: `cargo install cargo-audit cargo-deny`).
-> - Run `/dependency-audit` for a CVE and licence sweep of `Cargo.lock`.
-> - `/security-scan` targets JS/TS/Python. For this Rust codebase, use `/security-review` on a branch or `hardening-trust-boundaries` against the findings in §5.1.
+> - **Immediate P0/P1 Execution**: Run `/refactor-execute` (or ask to execute Phase P0 & P1) to fix `:canvas export` confinement (P0.1), wire `CanvasResolution` into live rendering and exports (P0.2), and decouple `src/ui/` from domain/RPC impls (P1.1).
+> - **Dependency Audit**: Run `/dependency-audit` or `cargo audit` to verify `Cargo.lock` against the RustSec Advisory Database.
+> - **Task Breakdown**: Use `/plan` to turn Phases P1–P3 into tracked milestone plans under `.planning/`.

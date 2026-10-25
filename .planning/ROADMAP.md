@@ -349,6 +349,17 @@ Plans:
 - [x] 27-02-PLAN.md — Wire `CanvasRenderBackend` auto-detection, `:canvas backend|export|hires`, `GuiWorkspaceRenderer` pixel canvas blitting, and `bilterm plot` / `bilterm img` CLI commands (wave 2)
 - [x] 27-03-PLAN.md — `tests/high_res_pixel_and_ssh_canvas.rs` verification suite, documentation sync, and release (wave 3)
 
+### Phase 28: Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency
+
+**Goal**: As a maintainer, I want all `v1.10.0` architecture review findings (`docs/ARCHITECTURE_REVIEW.md`) resolved — confining `:canvas export`, wiring dynamic `CanvasResolution` & cached `TIOCGWINSZ`, eliminating upward `ui` dependency cycles, decompressing near-ceiling modules, and adding dirty-driven rendering.
+**Depends on**: Phase 27
+**Requirements**: ARCH-R01, ARCH-R02, ARCH-R04, SEC-R01
+
+**Plans**: 1 plan (Wave 1 complete; Waves 2–3 tracked)
+
+Plans:
+- [x] 28-01-PLAN.md — Wave 1 (P0.1 confined `:canvas export`, P0.2 cached `TIOCGWINSZ` & live `CanvasResolution`, P1.1a `src/api/rpc_handlers.rs` breaking `ui -> api` cycle, P1.2a `execute_wm.rs` / `pane/tests.rs` / `wm/tests.rs` ceiling decompression, and `Cargo.toml` `vt100-ctt` supply-chain pruning); Waves 2–3 roadmap (`docs/ARCHITECTURE_REVIEW.md`)
+
 ## Progress
 
 **Execution Order:**

@@ -17,7 +17,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::api::JsonValue;
 use crate::config::BiltermConfig;
 use crate::pane::{
     CanvasSubcellMode, CompositePane, DeclarativePlot, InteractiveImageView, PlotKind,
@@ -372,13 +371,16 @@ pub fn render_graphical_canvas(
 
     let mode = scene.subcell_mode;
     if matches!(mode, CanvasSubcellMode::HalfBlock | CanvasSubcellMode::Octant) {
+        let (px_c, px_r) = scene
+            .resolution
+            .resolve_px_per_cell(canvas.width, canvas.height);
         let px_buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
             pane,
             cfg,
             canvas.width,
             canvas.height,
-            4,
-            8,
+            px_c.clamp(4, 16),
+            px_r.clamp(8, 32),
         );
         px_buf.flush_truecolor_subcells_to_ratatui(mode, canvas, buf);
     } else {
@@ -739,51 +741,5 @@ impl WindowManager {
         match self.active_pane_mut().execute_canvas_command(subcommand) {
             Ok(msg) | Err(msg) => msg,
         }
-    }
-
-    /// Handles JSON-RPC `canvas.command` and `canvas.status` requests (`TEK-01`, `CANV-01`).
-    pub fn handle_rpc_canvas(
-        &mut self,
-        params: &JsonValue,
-    ) -> std::result::Result<JsonValue, String> {
-        if let Some(cmd) = params.get("command").and_then(JsonValue::as_str) {
-            self.active_pane_mut().execute_canvas_command(cmd)?;
-        }
-        let pane = self.active_pane();
-        let tek = pane.vt().tektronix();
-        let scene = pane.canvas_scene();
-        let collisions = scene.detect_sprite_collisions();
-        Ok(JsonValue::obj([
-            ("tektronix_active", JsonValue::Bool(tek.active)),
-            (
-                "tektronix_segments",
-                JsonValue::Number(tek.segments.len() as i64),
-            ),
-            (
-                "tektronix_decaying_segments",
-                JsonValue::Number(tek.decaying_segments.len() as i64),
-            ),
-            ("canvas_active", JsonValue::Bool(scene.active)),
-            (
-                "render_backend",
-                JsonValue::String(format!("{:?}", scene.render_backend)),
-            ),
-            (
-                "effective_backend",
-                JsonValue::String(format!("{:?}", scene.render_backend.resolve_auto())),
-            ),
-            (
-                "subcell_mode",
-                JsonValue::String(format!("{:?}", scene.subcell_mode)),
-            ),
-            (
-                "primitives",
-                JsonValue::Number(scene.primitives.len() as i64),
-            ),
-            ("sprites", JsonValue::Number(scene.sprites.len() as i64)),
-            ("plots", JsonValue::Number(scene.plots.len() as i64)),
-            ("has_image", JsonValue::Bool(scene.image_view.is_some())),
-            ("sprite_collisions", JsonValue::Number(collisions.len() as i64)),
-        ]))
     }
 }

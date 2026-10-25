@@ -1,8 +1,10 @@
 pub mod execute;
+pub mod execute_wm;
 pub mod parse;
 
 pub use crate::action::Action;
-pub use execute::{execute_colon_command, execute_wm_colon_command};
+pub use execute::execute_colon_command;
+pub use execute_wm::execute_wm_colon_command;
 pub use parse::parse_colon_command;
 
 /// Type alias preserving `ColonCommand` compatibility while unifying on [`crate::action::Action`] (`ARCH-R01`).

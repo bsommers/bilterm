@@ -124,6 +124,7 @@ impl App {
                 let _ = handle_paste_event(self.wm.active_pane_mut(), &text)?;
             }
             Event::Resize(cols, rows) => {
+                crate::ui::hires_subcell::refresh_terminal_pixel_size();
                 self.last_viewport = Rect::new(0, 0, cols, rows);
                 let _ = self.wm.resize_all(self.last_viewport);
                 self.wm.rebalance_scrollback(std::time::Instant::now());
