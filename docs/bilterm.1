@@ -1,4 +1,4 @@
-.TH BILTERM 1 "2026-10-23" "bilterm 1.7.0" "User Commands"
+.TH BILTERM 1 "2026-10-24" "bilterm 1.8.0" "User Commands"
 .SH NAME
 bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer, composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator
 .SH SYNOPSIS
@@ -59,6 +59,15 @@ Toggle zoom/maximize on focused composite pane.
 .TP
 \fBF6\fR (\fBAlt+Tab\fR) / \fBAlt+1..9\fR
 Shuffle Z-order window deck or selectively raise pane #1..#9.
+.TP
+\fBF7\fR (\fBAlt+Shift+D\fR) / \fB:drawer\fR
+Toggle \fBherdr\fR-style Slide-Out Sessions/Windows/Panes & Fleet Drawer (supports \fBLeft\fR/\fBRight\fR/\fBTop\fR/\fBBottom\fR docking, \fBOnDemand\fR/\fBFixed\fR/\fBAutoHide\fR, and \fBOverlay\fR/\fBPush\fR modes).
+.TP
+\fBCtrl++\fR / \fBCtrl+\-\fR / \fBCtrl+0\fR / \fB:fontsize\fR
+Dynamically scale terminal text and font size (\fB50%..=300%\fR) across GUI SVG/PPM and TUI DEC \fBDECDWL\fR/\fBDECDHL\fR views.
+.TP
+\fB:canvas\fR / \fB:tek\fR
+Drive Tektronix 4010/4014 vector storage-tube emulation and the modern retained scene-graph (2D sprites, live plots, interactive image inspector) rendered via Unicode Braille/Sextant/Quadrant sub-cells.
 .TP
 \fBF9\fR / \fB:inspector\fR
 Toggle Live 3270 Terminal Inspector modal.

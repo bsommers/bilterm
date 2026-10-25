@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-v1.8.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
-  <img src="https://img.shields.io/badge/tests-225%20passing-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-236%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
@@ -39,10 +39,12 @@
   - Binary H/V splits (`F2`/`Alt+H`, `Alt+V`), overlapping Borland Z-order cascade (`Alt+M`, `F6`/`Alt+Tab`, `Alt+1..9`), and a persistent Guake drop-down terminal (`F10` / `Alt+\``).
 - **Retro Mainframe & Borland Aesthetics + Focal Spotlight & Lens Shaders**:
   - 5 palettes (`turbo-blue`, `turbo-cyan`, `3278`, `3279`, `mono`), 8 border outlines, 4 drop-shadow styles, CRT scanlines (`:crt`), pane/full-screen IBM 3270 cross-hairs (`Alt+X`), **Focal Spotlight** (`Alt+O` / `:spotlight`) & **Focal Zoom Magnifying Lens** (`Alt+Shift+O` / `:focalzoom`) with smooth Hermite `smoothstep` or pixelated `2×1` character-block falloff, plus **Kitty (`APC G`)** and **DEC Sixel (`DCS q`)** graphics.
-- **First-Class Local & Remote `tmux` + `herdr`-Style SSH Fleet Management (`v1.4.0`)**:
-  - Spawn remote SSH composite panes (`:ssh <user@host> [port]`), attach to persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux <user@host> [session]`), and centrally fan out commands across local and remote nodes by `@tag` (`:remote add|list|exec|disconnect`).
+- **First-Class Local & Remote `tmux` + `herdr`-Style SSH Fleet Management & Slide-Out Drawer (`v1.4.0`–`v1.8.0`)**:
+  - Spawn remote SSH composite panes (`:ssh <user@host> [port]`), attach to persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux <user@host> [session]`), centrally fan out commands across local and remote nodes by `@tag` (`:remote add|list|exec|disconnect`), and inspect live session/window/pane telemetry in the 4-edge **`herdr`-Style Slide-Out Drawer** (`F7` / `Alt+Shift+D` / `<Leader> d` / `:drawer`).
+- **Tektronix 4010/4014 Vector Storage-Tube Emulation, Modern Graphical Canvas & Dynamic Typography (`v1.8.0`)**:
+  - Decode 10-bit/12-bit `4096×3120` Tektronix 4010/4014 vectors with green `3278` / amber `3279` phosphor persistence decay (`\x1b[?38h` / `:canvas tek`), render a modern retained scene-graph (vectors, 2D sprites with AABB collisions, live `line`/`scatter`/`bar`/`candlestick`/`heatmap` plots, and interactive image `pan`/`zoom`/`inspect`) via Unicode `2×4` Braille (`U+2800..U+28FF`), `2×3` Sextant (`U+1FB00..U+1FB3B`), and Quadrant blocks, and dynamically scale terminal typography (`Ctrl++`/`Ctrl+-`/`Ctrl+0` / `:fontsize` + DEC `DECDWL`/`DECDHL`).
 - **Full Robot / Agent Automation API, Native MCP Server & Playbooks (`v1.1.0`–`v1.8.0`)**:
-  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 9 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
+  - Drive 100% of Bilterm via JSON-RPC 2.0 (`bilterm --headless`, `bilterm ctl`), Model Context Protocol (`bilterm --mcp` with 10 agent tools), or declarative TOML playbooks (`bilterm --playbook <file.toml>`).
 
 ---
 
@@ -93,6 +95,8 @@ cargo clippy --all-targets -- -D warnings
 | **Read-Only Lock / Multi-Pane Broadcast** | `<L> l` (`Alt+L`) / — | `:lock [on\|off]` / `:broadcast [on\|off]` |
 | **Theme / Cross-Hairs / CRT Scanlines** | — / `<L> x` (`Alt+X`) / — | `:theme <name>` / `:crosshair full\|pane\|off` / `:crt` |
 | **Focal Spotlight / Focal Zoom Lens / Resize** | `Alt+O` (`<L> L`) / `Alt+Shift+O` / `Alt+Shift+]` & `[` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
+| **Slide-Out Drawer / Dynamic Font Scaling** | `F7` (`Alt+Shift+D` / `<L> d`) / `Ctrl++`, `Ctrl+-`, `Ctrl+0` | `:drawer [toggle\|left\|right\|top\|bottom\|float\|push]` / `:fontsize [+|-|reset|<pt>|<pct>%]` |
+| **Tektronix 4010/4014 & Graphical Canvas** | `\x1b[?38h` / `OSC 1337;Canvas=...` | `:canvas [tek\|mode\|line\|circle\|sprite\|plot\|image\|clear]` |
 | **SSH Pane / Remote `tmux -CC` over SSH** | — | `:ssh <user@host> [port]` / `:ssh-tmux <user@host> [sess]` |
 | **`herdr` Fleet Register / List / Tag Exec** | — | `:remote add <name> <host> [@tags]` / `:remote list` / `:remote exec <@tag\|all> <cmd>` |
 
@@ -120,5 +124,5 @@ All detailed engineering guides, user manual chapters, and architecture diagrams
   5. [First-Class `tmux` Integration, SSH Domains & `herdr` Fleet Management](docs/user-guide/05-tmux-integration.md)
   6. [Complete Keyboard, Mouse & `:command` Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)
   7. [Troubleshooting & FAQ](docs/user-guide/07-troubleshooting-and-faq.md)
-- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.7.0`).
+- **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)** — Full semantic versioning release history (`v0.1.0` – `v1.8.0`).
 - **[License (`LICENSE`)](LICENSE)** — Licensed under the Apache License, Version 2.0 (`Apache-2.0`).
