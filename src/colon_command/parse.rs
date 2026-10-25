@@ -638,12 +638,12 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 if parts.len() > 1 {
                     format!("tek {}", parts[1..].join(" "))
                 } else {
-                    "tek on".to_string()
+                    "tek".to_string()
                 }
             } else if parts.len() > 1 {
                 parts[1..].join(" ")
             } else {
-                "status".to_string()
+                "demo".to_string()
             };
             Some(Ok(ColonCommand::CanvasCommand(subcmd)))
         }

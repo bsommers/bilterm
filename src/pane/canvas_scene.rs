@@ -338,12 +338,29 @@ impl PaneCanvasScene {
                 Ok(format!("CANVAS SUBCELL MODE: {mode:?}"))
             }
             "tek" | "tektronix" => match parts.get(1).copied() {
-                None | Some("on" | "true") => {
-                    tektronix.active = true;
+                None => {
+                    if tektronix.active {
+                        tektronix.clear_all();
+                        Ok("TEKTRONIX 4010/4014 MODE: OFF".to_string())
+                    } else {
+                        if tektronix.segments.is_empty() {
+                            tektronix.load_demo_scene();
+                        } else {
+                            tektronix.active = true;
+                        }
+                        Ok("TEKTRONIX 4010/4014 MODE: ON (:tek erase | :tek off)".to_string())
+                    }
+                }
+                Some("on" | "true") => {
+                    if tektronix.segments.is_empty() {
+                        tektronix.load_demo_scene();
+                    } else {
+                        tektronix.active = true;
+                    }
                     Ok("TEKTRONIX 4010/4014 MODE: ON".to_string())
                 }
                 Some("off" | "false") => {
-                    tektronix.active = false;
+                    tektronix.clear_all();
                     Ok("TEKTRONIX 4010/4014 MODE: OFF".to_string())
                 }
                 Some("erase" | "ff") => {
@@ -360,6 +377,24 @@ impl PaneCanvasScene {
                 }
                 _ => Err("Usage: :canvas tek [on|off|erase|clear|demo]".to_string()),
             },
+            "demo" => {
+                tektronix.load_demo_scene();
+                self.active = true;
+                self.plots.clear();
+                self.plots.push(DeclarativePlot {
+                    title: "Plot (line)".to_string(),
+                    kind: PlotKind::Line(vec![12.0, 28.0, 19.0, 45.0, 38.0, 64.0, 52.0, 84.0]),
+                    rgb: (85, 255, 255),
+                });
+                self.primitives.push(VectorPrimitive::Circle {
+                    cx: 24.0,
+                    cy: 20.0,
+                    radius: 10.0,
+                    rgb: (255, 255, 85),
+                    filled: false,
+                });
+                Ok("CANVAS DEMO: loaded Tektronix 4014 wireframe + Braille vector/plot scene (:canvas clear to reset)".to_string())
+            }
             "line" => {
                 if parts.len() < 5 {
                     return Err("Usage: :canvas line <x0> <y0> <x1> <y1>".to_string());

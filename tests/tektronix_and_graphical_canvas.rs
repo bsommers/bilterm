@@ -209,3 +209,56 @@ fn colon_canvas_osc1337_and_rpc_mcp_canvas_endpoints_control_scene_end_to_end() 
         Some(true)
     );
 }
+
+#[test]
+fn interactive_typing_tek_and_canvas_in_floating_prompt_renders_immediately() {
+    use bilterm::input::handle_wm_key_event;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let mut wm = WindowManager::new_headless(24, 120);
+
+    // 1. Type ":tek" + Enter in the floating command prompt
+    for ch in ":tek".chars() {
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+            .expect("type :tek");
+    }
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("submit :tek");
+
+    assert!(wm.active_pane().vt().tektronix().active);
+    assert!(wm.active_pane().vt().tektronix().has_visible_content());
+
+    let area = Rect::new(0, 0, 120, 24);
+    let mut buf = Buffer::empty(area);
+    CompositePaneWidget::new(wm.active_pane(), true).render(area, &mut buf);
+
+    let full_text: String = (0..24)
+        .map(|y| {
+            (0..120)
+                .filter_map(|x| buf.cell((x, y)).map(|c| c.symbol()))
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(full_text.contains("TEK-4014"), "expected TEK-4014 badge in OIA bar");
+    assert!(
+        full_text.contains("TEKTRONIX 4010/4014 MODE: ON"),
+        "expected status message in OIA bar"
+    );
+
+    // 2. Type ":tek" + Enter again to toggle off
+    for ch in ":tek".chars() {
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+            .unwrap();
+    }
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert!(!wm.active_pane().vt().tektronix().active);
+
+    // 3. Type ":canvas" + Enter (or ":canvas demo") to load full demo scene
+    for ch in ":canvas".chars() {
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+            .unwrap();
+    }
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert!(wm.active_pane().canvas_scene().has_visible_content());
+}

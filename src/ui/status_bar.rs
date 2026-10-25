@@ -642,6 +642,32 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
+    if pane.vt().tektronix().active || pane.vt().tektronix().has_visible_content() {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            " 📈 TEK-4014 ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(0, 255, 102))
+                .add_modifier(Modifier::BOLD),
+        ));
+    } else if pane.canvas_scene().has_visible_content() {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            " 🎨 CANVAS ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(85, 255, 255))
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     if let Some(notif) = pane.vt().notifications().last() {
         spans.push(Span::styled(
             format!(" {sep}"),
@@ -699,6 +725,20 @@ pub fn render_oia_status_bar_themed(
         out_str,
         Style::default().fg(Color::Rgb(85, 255, 255)).bg(oia_bg),
     ));
+
+    if let Some(msg) = pane.status_message() {
+        spans.push(Span::styled(
+            format!(" {sep} "),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        spans.push(Span::styled(
+            msg.to_string(),
+            Style::default()
+                .fg(Color::Rgb(255, 255, 85))
+                .bg(oia_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
 
     let line = Line::from(spans);
 

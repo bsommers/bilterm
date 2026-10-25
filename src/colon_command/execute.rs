@@ -292,6 +292,10 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             }
             false
         }
+        ColonCommand::CanvasCommand(ref subcmd) => {
+            let _ = pane.execute_canvas_command(subcmd);
+            false
+        }
         ColonCommand::Quit => true,
         _ => false,
     }

@@ -148,6 +148,7 @@ impl TektronixState {
 
     /// Immediately clears all active and decaying vectors and labels.
     pub fn clear_all(&mut self) {
+        self.active = false;
         self.segments.clear();
         self.decaying_segments.clear();
         self.labels.clear();
@@ -157,8 +158,8 @@ impl TektronixState {
 
     /// Populates a classic Tektronix 4014 wireframe oscilloscope & geometric demo scene (`:canvas tek demo`).
     pub fn load_demo_scene(&mut self) {
-        self.active = true;
         self.clear_all();
+        self.active = true;
         // Outer 12-bit frame border
         self.segments.push(TekVectorSegment {
             x0: 200,
