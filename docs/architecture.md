@@ -183,5 +183,17 @@ Every frame in `src/ui/mod.rs` renders through a strict 3-pass pipeline directly
   - Automatically prunes the oldest `.log` files when the directory exceeds `history_max_files` (default `25`).
   - Supports instant export of the active pane's session commands to an executable shell script via `:history save [path]`.
 - **Dual-Mode `tmux` Bridge (`src/tmux/mod.rs`)**:
-  - **Mode A (Inside `$TMUX`)**: Wraps `OSC 52` clipboard sequences in `\x1bPtmux;\x1b...\x1b\\` (`wrap_tmux_dcs_passthrough`) and avoids `Ctrl+B` keybinding collisions.
+  - **Mode A (Inside `$TMUX`)**: Wraps `OSC 52` clipboard sequences and inline pixel graphics in `\x1bPtmux;\x1b...\x1b\\` (`wrap_tmux_dcs_passthrough`) and avoids `Ctrl+B` keybinding collisions.
   - **Mode B (`tmux -CC` Control Mode)**: Parses `%output %<pane_id>`, `%window-add`, `%layout-change`, and `%session-changed` notifications and formats prompt submissions as `send-keys -t %<id> -H <hex>`.
+
+---
+
+## 7. High-Resolution Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`v1.8.0`–`v1.9.1+`)
+
+Each `CompositePane` pairs a classic **Tektronix 4010/4014 vector storage-tube state machine** (`src/vt/tektronix.rs`) with a **modern retained scene-graph** (`PaneCanvasScene` in `src/pane/canvas_scene.rs`) and an **anti-aliased RGBA pixel/GPU rasterizer** (`PixelCanvasBuffer` in `src/ui/pixel_canvas.rs` and `SubcellBuffer` in `src/ui/canvas_raster.rs`):
+
+- **4-Tier Adaptive Graphics Transport (`CanvasRenderBackend`)**:
+  1. **Native GUI Surface (`GuiWorkspaceRenderer` in `src/ui/renderer.rs`)**: Attaches `PixelCanvasBuffer::render_pane_scene` as a full-resolution `GuiImageTexture` at the pane's exact pixel coordinates while clearing `prompt_rect` so the `FloatingCommandPrompt` remains composited on top.
+  2. **Pure SSH — Pixel-Capable Host Terminals (`Kitty`, `Ghostty`, `WezTerm`, `iTerm2`, `foot`, `Windows Terminal`)**: Encodes the anti-aliased RGBA framebuffer into in-band `Kitty APC G` (`encode_kitty_apc`), `DEC Sixel DCS q` (`encode_sixel_dcs`), or `iTerm2 OSC 1337` (`encode_iterm2_osc1337`), automatically wrapping in `\x1bPtmux;\x1b...\x1b\\` when inside `$TMUX`.
+  3. **Pure SSH — Standard 24-Bit TrueColor Terminals (`CanvasSubcellMode::HalfBlock` / `:canvas hires`)**: Blits `1×2` half-block characters (`▀`/`▄`) where each character cell carries two independent 24-bit RGB pixels (`fg` = top pixel, `bg` = bottom pixel), preserving non-space VT100 terminal text and keeping the floating command prompt occluded on top.
+  4. **Pure SSH — Legacy/Basic Terminals (`Braille`, `Sextant`, `Quadrant`)**: Renders `2×4` Unicode Braille (`U+2800..U+28FF`), `2×3` Sextant (`U+1FB00..U+1FB3B`), or `2×2` Quadrant sub-cell vectors.

@@ -68,6 +68,7 @@ src/
 ├── pane/
 │   ├── mod.rs                  # Encapsulated CompositePane (private fields, submit_command, effective_routing_mode)
 │   ├── prompt_editor.rs        # FloatingPromptState (multi-line editor, undo/redo, PromptAnchor, PromptMode)
+│   ├── canvas_scene.rs         # Retained PaneCanvasScene (vectors, 2D sprites, plots, images) & CanvasRenderBackend
 │   ├── modes.rs                # Vi CopyModeState, QuickSelect HintsModeState, CanvasSearchState, accessors
 │   ├── completion.rs           # Interactive Tab / Shift+Tab completion (:commands, $PATH, CWD files, $ENV)
 │   ├── fuzzy_history.rs        # nucleo-matcher Ctrl+R fuzzy history search state
@@ -83,6 +84,7 @@ src/
 │   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
 │   ├── scan.rs                 # Stream pre-scanner (DECSET traps, OSC 7/8/9/52/133/777, DECRPM/XTGETTCAP)
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
+│   ├── tektronix.rs            # Tektronix 4010/4014 10-bit/12-bit vector storage-tube state machine & phosphor decay
 │   ├── detect.rs               # Auto-detection of URLs and QuickSelect 3270 Field Hints (URLs, paths, IPs, SHAs)
 │   ├── codec.rs                # OSC 52 base64 clipboard encoder and paste control-byte sanitizer
 │   ├── recording.rs            # WorkspaceRecorder (whole-workspace Buffer->ANSI .cast) & single-pane .cast recorder
@@ -101,6 +103,9 @@ src/
 │   └── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal)
 ├── ui/
 │   ├── mod.rs                  # 3-pass Ratatui compositor (WorkspaceWidget, CompositePaneWidget) + cell_to_ratatui_style
+│   ├── canvas_raster.rs        # SubcellBuffer (Braille/Sextant/Quadrant) & GUI SVG/PPM canvas rasterizer (CANV-01)
+│   ├── pixel_canvas.rs         # Anti-aliased RGBA PixelCanvasBuffer, HalfBlock TrueColor blitter & SSH Kitty/Sixel/iTerm2 encoders
+│   ├── typography.rs           # Dynamic font scaling (50%..=300%), DEC DECDWL/DECDHL & host OSC 50 passthrough (FONT-01)
 │   ├── drawer.rs               # 4-edge slide-out drawer TUI/GUI renderer (Overlay drop shadow + Push reflow)
 │   ├── chrome.rs               # Borland borders (8 OutlineStyles), 4 DOS ShadowStyles, Top Menu Bar
 │   ├── cursor.rs               # IBM 3270 cross-hairs, software carets, Focal Spotlight & Focal Zoom lens shaders

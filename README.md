@@ -93,12 +93,40 @@ cargo clippy --all-targets -- -D warnings
 | `bilterm -t` / `--token-file <path>` | Path to 0600 file containing bearer token (or `BILTERM_TOKEN_FILE`) |
 | `bilterm -S` / `--snapshot-dir <path>` | Directory for confined workspace snapshots (default: XDG state dir) |
 | `bilterm ctl [-t <path>] [endpoint] <method> [json]` | Send JSON-RPC 2.0 command (`workspace.status`, `pane.exec`, `fleet.exec`, etc.; defaults to local Unix socket) |
+| `bilterm plot [kind] [csv] [-o <file>] [-b <mode>]` | Plot `hires`, `line`, `bar`, `scatter`, `candlestick`, or `heatmap` inline over SSH/terminal or export `.svg`/`.ppm` |
 | `bilterm -p` / `--playbook <file.toml>` | Execute declarative multi-step TOML robot playbook with assertions |
 | `bilterm -g` / `--gui-dump <path.ppm>` | Render workspace via `GuiWorkspaceRenderer` to a Netpbm `.ppm` framebuffer |
 | `bilterm -s` / `--session <name>` | Use named persistent command-history session |
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
+
+### High-Resolution Graphics, Live Plotting & Tektronix 4014 Examples (SSH & Native GUI)
+
+Inside any running `bilterm` pane, type these `:canvas` commands in the floating command prompt:
+
+```text
+:canvas hires                                                      # Anti-aliased TrueColor Half-Block/Pixel demo scene
+:canvas mode halfblock                                             # 24-bit TrueColor 1x2 pixel blocks (▀/▄)
+:canvas plot line 10,25,18,45,38,72,64,95                          # High-DPI line chart with area fill & gridlines
+:canvas plot candlestick 10,22,8,18,18,30,15,28,28,35,20,24        # OHLC financial candlestick chart
+:canvas plot heatmap 1,4,9,16,25,36,49,64,81                       # 2D thermal heatmap
+:canvas bezier 4 28 22 4 46 32 68 8                                # Anti-aliased cubic Bezier curve
+:canvas circle 40 16 10 filled                                     # Signed-distance-field anti-aliased disc
+:canvas image 32 20                                                # Interactive bilinear RGBA image viewer (:canvas zoom 2.0)
+:tek demo                                                          # Classic 1974 Tektronix 4014 green/amber storage-tube wireframe
+:focalzoom 2x circle                                               # Smooth radial magnifying lens over graphics (:focalzoom off)
+:canvas export /tmp/canvas.svg                                     # Export 640x384 high-res SVG or PPM (:canvas export /tmp/c.ppm)
+:canvas clear                                                      # Clear canvas and return to normal terminal text
+```
+
+Or run directly from your shell / SSH session using `bilterm plot`:
+
+```bash
+bilterm plot line 12,28,19,45,38,64,52,84                          # Plot onto active Bilterm pane canvas
+bilterm plot hires -b kitty                                        # Emit Kitty APC G RGBA pixels over SSH (or -b sixel / -b iterm2)
+bilterm plot hires -o /tmp/hires-demo.svg                          # Export standalone high-resolution SVG or PPM chart
+```
 
 ---
 

@@ -26,6 +26,7 @@ Welcome to the comprehensive documentation suite for **Bilterm** — the IBM 327
 
 ## Quick Navigation by Topic
 
+- **How do I see High-Resolution Graphics, Live Plots, or Tektronix 4014 Vectors in SSH & GUI modes (`:canvas hires`, `bilterm plot`)?** -> See **[`docs/how-to.md#recipe-11-high-resolution-graphics-live-plotting--adaptive-sshgui-canvas-v191`](how-to.md#recipe-11-high-resolution-graphics-live-plotting--adaptive-sshgui-canvas-v191)**
 - **How do I connect to remote SSH sessions (`:ssh`), persistent remote `tmux -CC` (`:ssh-tmux`), or federated `herdr`-style fleets (`:remote`)?** -> See **[`docs/how-to.md#recipe-8-remote-ssh-domains--herdr-style-fleet-federation-v140`](how-to.md#recipe-8-remote-ssh-domains--herdr-style-fleet-federation-v140)**
 - **How do I drive Bilterm via JSON-RPC 2.0 (`bilterm ctl`), MCP (`bilterm --mcp`), or TOML Playbooks (`--playbook`)?** -> See **[`docs/how-to.md#recipe-9-json-rpc-20-automation-api-mcp-server--playbooks-v130`](how-to.md#recipe-9-json-rpc-20-automation-api-mcp-server--playbooks-v130)**
 - **Which shell does Bilterm run, and how does `<Tab>` completion work?** -> See **[`docs/running.md#2-shells--tab-command-completions`](running.md#2-shells--tab-command-completions)**

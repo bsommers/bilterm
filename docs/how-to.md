@@ -203,6 +203,53 @@ awk 'ENDFILE { if (FNR > 800) { print FILENAME ": " FNR; bad=1 } } END { exit ba
 
 ---
 
+## Recipe 11: High-Resolution Graphics, Live Plotting & Adaptive SSH/GUI Canvas (`v1.9.1+`)
+
+Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emulation** and a **modern anti-aliased RGBA pixel/GPU canvas** (`PixelCanvasBuffer`) that works seamlessly across **Native GUI** (`GuiWorkspaceRenderer`) and **Pure SSH sessions** (auto-negotiating `Kitty APC G`, `DEC Sixel DCS q`, `iTerm2 OSC 1337`, `tmux` DCS passthrough `\x1bPtmux;...\x1b\\`, `1×2` 24-bit TrueColor `HalfBlock` `▀`/`▄`, or `2×4` Unicode `Braille`).
+
+1. **Interactive `:canvas` Commands Inside the Floating Command Prompt**:
+   ```text
+   :canvas hires
+   :canvas mode halfblock
+   :canvas plot line 10,25,18,45,38,72,64,95
+   :canvas plot candlestick 10,22,8,18,18,30,15,28,28,35,20,24,24,42,22,40
+   :canvas plot heatmap 1,4,9,16,25,36,49,64,81
+   :canvas bezier 4 28 22 4 46 32 68 8
+   :canvas circle 40 16 10 filled
+   :canvas image 32 20
+   :canvas zoom 2.0
+   ```
+2. **Compare Sub-Cell & Storage-Tube Rendering Modes Live**:
+   ```text
+   :canvas mode halfblock    # 24-bit TrueColor 1x2 pixel blocks (▀/▄) with anti-aliasing & shading
+   :canvas mode braille      # High-density 2x4 Unicode Braille vector dots (U+2800..U+28FF)
+   :canvas mode sextant      # 2x3 Unicode Sextant blocks (U+1FB00..U+1FB3B)
+   :canvas mode quadrant     # 2x2 Quadrant blocks
+   :tek demo                 # Classic Tektronix 4014 green/amber phosphor vector storage tube
+   :focalzoom 2x circle      # Smooth radial magnifying lens (:focalzoom off to disable)
+   ```
+3. **Export High-Resolution `.svg` or `.ppm` Framebuffers (`640×384` px) or Clear**:
+   ```text
+   :canvas export /tmp/canvas.svg
+   :canvas export /tmp/canvas.ppm
+   :canvas clear
+   ```
+4. **Plot & Export Directly from the Shell or SSH CLI (`bilterm plot`)**:
+   ```bash
+   # Render a live plot onto the current Bilterm pane canvas:
+   bilterm plot line 12,28,19,45,38,64,52,84
+
+   # Emit raw Kitty APC G or DEC Sixel pixel stream directly over SSH:
+   bilterm plot hires -b kitty
+   bilterm plot hires -b sixel
+
+   # Export a standalone high-res SVG or PPM chart directly from the CLI:
+   bilterm plot hires -o /tmp/hires-demo.svg
+   bilterm plot candlestick 10,22,8,18,18,30,15,28,28,40,22,38 -o /tmp/ohlc.svg
+   ```
+
+---
+
 ## Troubleshooting Matrix
 
 | Symptom | Root Cause | Remedy |
