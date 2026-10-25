@@ -137,6 +137,15 @@ pub enum Action {
     FontZoomReset,
     FontSetSize(u16),
     CanvasCommand(String),
+    PaneResize {
+        dw: i16,
+        dh: i16,
+    },
+    PaneMove {
+        dx: i16,
+        dy: i16,
+    },
+    WindowResetGeometry,
     Quit,
 }
 
@@ -283,6 +292,9 @@ mod tests {
             Action::FontZoomReset => Some(":fontsize reset"),
             Action::FontSetSize(_) => Some(":fontsize 18"),
             Action::CanvasCommand(_) => Some(":canvas tek demo"),
+            Action::PaneResize { .. } => Some(":resize +w"),
+            Action::PaneMove { .. } => Some(":move right"),
+            Action::WindowResetGeometry => Some(":cascade"),
             Action::Quit => Some(":quit"),
         };
 
@@ -405,6 +417,9 @@ mod tests {
             Action::FontZoomReset,
             Action::FontSetSize(18),
             Action::CanvasCommand("tek demo".to_string()),
+            Action::PaneResize { dw: 4, dh: 0 },
+            Action::PaneMove { dx: 4, dy: 0 },
+            Action::WindowResetGeometry,
             Action::Quit,
         ];
 

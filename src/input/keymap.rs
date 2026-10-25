@@ -113,8 +113,14 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('R'), Action::RecordWorkspaceStart(None)),
     (KeyCode::Up, Action::PromptMoveVertical(-1)),
     (KeyCode::Down, Action::PromptMoveVertical(1)),
+    (KeyCode::Left, Action::PaneResize { dw: -4, dh: 0 }),
+    (KeyCode::Right, Action::PaneResize { dw: 4, dh: 0 }),
+    (KeyCode::Char('<'), Action::PaneResize { dw: -4, dh: 0 }),
+    (KeyCode::Char('>'), Action::PaneResize { dw: 4, dh: 0 }),
+    (KeyCode::Char('J'), Action::PaneMove { dx: 0, dy: 2 }),
+    (KeyCode::Char('K'), Action::PaneMove { dx: 0, dy: -2 }),
     (KeyCode::Char('+'), Action::PromptResizeHeight(1)),
-    (KeyCode::Char('='), Action::PromptResizeHeight(1)),
+    (KeyCode::Char('='), Action::WindowResetGeometry),
     (KeyCode::Char('0'), Action::FontZoomReset),
     (KeyCode::Char(']'), Action::PromptResizeWidth(4)),
     (KeyCode::PageUp, Action::BlockPrev),
@@ -239,6 +245,88 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
         KeyModifiers::CONTROL,
         KeyCode::Char('0'),
         Action::FontZoomReset,
+    ),
+    // Window / Pane resizing (Z-Stack floating geometry & Tiled split ratios)
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Left,
+        Action::PaneResize { dw: -4, dh: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Right,
+        Action::PaneResize { dw: 4, dh: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Up,
+        Action::PaneResize { dw: 0, dh: -2 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Down,
+        Action::PaneResize { dw: 0, dh: 2 },
+    ),
+    (
+        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
+        KeyCode::Left,
+        Action::PaneResize { dw: -4, dh: 0 },
+    ),
+    (
+        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
+        KeyCode::Right,
+        Action::PaneResize { dw: 4, dh: 0 },
+    ),
+    (
+        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
+        KeyCode::Up,
+        Action::PaneResize { dw: 0, dh: -2 },
+    ),
+    (
+        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
+        KeyCode::Down,
+        Action::PaneResize { dw: 0, dh: 2 },
+    ),
+    // Window / Pane moving (Z-Stack floating position & Tiled pane swap)
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
+        KeyCode::Left,
+        Action::PaneMove { dx: -4, dy: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
+        KeyCode::Right,
+        Action::PaneMove { dx: 4, dy: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
+        KeyCode::Up,
+        Action::PaneMove { dx: 0, dy: -2 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
+        KeyCode::Down,
+        Action::PaneMove { dx: 0, dy: 2 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Char('h'),
+        Action::PaneMove { dx: -4, dy: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Char('l'),
+        Action::PaneMove { dx: 4, dy: 0 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Char('k'),
+        Action::PaneMove { dx: 0, dy: -2 },
+    ),
+    (
+        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
+        KeyCode::Char('j'),
+        Action::PaneMove { dx: 0, dy: 2 },
     ),
 ];
 

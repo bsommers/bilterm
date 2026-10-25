@@ -512,8 +512,7 @@ impl Widget for WorkspaceWidget<'_> {
         };
 
         let mut rects = self.wm.compute_workspace_rects(workspace_area);
-        let framed =
-            self.wm.pane_count() > 1 || self.wm.layout_mode() == WorkspaceLayoutMode::Stacked;
+        let framed = self.wm.is_framed();
         let top_workspace_id = self.wm.z_stack().top();
         let qt_visible = self.wm.is_quick_terminal_visible();
         if self.wm.layout_mode() == WorkspaceLayoutMode::Tiled {

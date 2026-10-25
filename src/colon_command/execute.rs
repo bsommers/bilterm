@@ -762,6 +762,18 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_canvas_action(subcmd);
             false
         }
+        ColonCommand::PaneResize { dw, dh } => {
+            wm.resize_focused_pane_or_window(dw, dh);
+            false
+        }
+        ColonCommand::PaneMove { dx, dy } => {
+            wm.move_focused_pane_or_window(dx, dy);
+            false
+        }
+        ColonCommand::WindowResetGeometry => {
+            wm.reset_window_geometries();
+            false
+        }
         other => execute_colon_command(wm.active_pane_mut(), other),
     }
 }

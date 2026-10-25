@@ -647,6 +647,77 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::CanvasCommand(subcmd)))
         }
+        "resize" | "winresize" => {
+            let amt = parts
+                .get(2)
+                .and_then(|s| s.parse::<i16>().ok())
+                .unwrap_or(4);
+            match parts.get(1).copied() {
+                None | Some("right" | "l" | "+w" | "wider" | ">") => {
+                    Some(Ok(ColonCommand::PaneResize { dw: amt, dh: 0 }))
+                }
+                Some("left" | "h" | "-w" | "narrower" | "<") => {
+                    Some(Ok(ColonCommand::PaneResize { dw: -amt, dh: 0 }))
+                }
+                Some("down" | "j" | "+h" | "taller" | "+") => Some(Ok(ColonCommand::PaneResize {
+                    dw: 0,
+                    dh: amt.clamp(1, 20),
+                })),
+                Some("up" | "k" | "-h" | "shorter" | "-") => Some(Ok(ColonCommand::PaneResize {
+                    dw: 0,
+                    dh: -amt.clamp(1, 20),
+                })),
+                Some("reset" | "equalize" | "=") => Some(Ok(ColonCommand::WindowResetGeometry)),
+                Some(raw_dw) => {
+                    if let Ok(dw) = raw_dw.parse::<i16>() {
+                        let dh = parts
+                            .get(2)
+                            .and_then(|s| s.parse::<i16>().ok())
+                            .unwrap_or(0);
+                        Some(Ok(ColonCommand::PaneResize { dw, dh }))
+                    } else {
+                        Some(Err(
+                            "Usage: :resize <left|right|up|down|+w|-w|+h|-h|reset|<dw> [dh]> [amount]"
+                                .to_string(),
+                        ))
+                    }
+                }
+            }
+        }
+        "move" | "winmove" => {
+            let amt = parts
+                .get(2)
+                .and_then(|s| s.parse::<i16>().ok())
+                .unwrap_or(4);
+            match parts.get(1).copied() {
+                None | Some("right" | "l") => Some(Ok(ColonCommand::PaneMove { dx: amt, dy: 0 })),
+                Some("left" | "h") => Some(Ok(ColonCommand::PaneMove { dx: -amt, dy: 0 })),
+                Some("down" | "j") => Some(Ok(ColonCommand::PaneMove {
+                    dx: 0,
+                    dy: amt.clamp(1, 20),
+                })),
+                Some("up" | "k") => Some(Ok(ColonCommand::PaneMove {
+                    dx: 0,
+                    dy: -amt.clamp(1, 20),
+                })),
+                Some("reset" | "cascade" | "=") => Some(Ok(ColonCommand::WindowResetGeometry)),
+                Some(raw_dx) => {
+                    if let Ok(dx) = raw_dx.parse::<i16>() {
+                        let dy = parts
+                            .get(2)
+                            .and_then(|s| s.parse::<i16>().ok())
+                            .unwrap_or(0);
+                        Some(Ok(ColonCommand::PaneMove { dx, dy }))
+                    } else {
+                        Some(Err(
+                            "Usage: :move <left|right|up|down|reset|<dx> [dy]> [amount]"
+                                .to_string(),
+                        ))
+                    }
+                }
+            }
+        }
+        "cascade" | "equalize" => Some(Ok(ColonCommand::WindowResetGeometry)),
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
     }

@@ -9,6 +9,7 @@ pub use drawer::{
     WorkspaceDrawer,
 };
 pub use session::{SavedPaneState, SavedWorkspaceSession};
+pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -100,6 +101,8 @@ pub struct WindowManager {
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
     pub(crate) drawer: WorkspaceDrawer,
+    /// Active mouse drag gesture for moving or resizing workspace windows/splits.
+    pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
 }
 
 impl WindowManager {
@@ -146,6 +149,7 @@ impl WindowManager {
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
+            wm_mouse_drag: None,
         }
     }
 
@@ -651,14 +655,14 @@ impl WindowManager {
     /// Resizes all visible panes' viewports to match `area`.
     pub fn resize_all(&mut self, area: Rect) -> Result<()> {
         self.default_size = (area.height.max(1), area.width.max(1));
+        let framed = self.is_framed();
         let rects = self.compute_workspace_rects(area);
         for (id, rect) in rects {
-            let inner =
-                if self.panes.len() > 1 || self.layout_mode == WorkspaceLayoutMode::Stacked {
-                    inset_window_frame(rect)
-                } else {
-                    rect
-                };
+            let inner = if framed {
+                inset_window_frame(rect)
+            } else {
+                rect
+            };
             if let Some(pane) = self.panes.get_mut(&id) {
                 pane.resize_viewport(inner)?;
             }
@@ -681,7 +685,7 @@ impl WindowManager {
         }
 
         let rects = self.compute_workspace_rects(area);
-        let framed = self.panes.len() > 1 || self.layout_mode == WorkspaceLayoutMode::Stacked;
+        let framed = self.is_framed();
         for &(id, outer) in rects.iter().rev() {
             if rect_contains(outer, col, row) {
                 let inner = if framed {
