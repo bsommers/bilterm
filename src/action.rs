@@ -136,6 +136,7 @@ pub enum Action {
     FontZoomOut,
     FontZoomReset,
     FontSetSize(u16),
+    PaneFontCommand(String),
     CanvasCommand(String),
     PaneResize {
         dw: i16,
@@ -291,6 +292,7 @@ mod tests {
             Action::FontZoomOut => Some(":fontsize -"),
             Action::FontZoomReset => Some(":fontsize reset"),
             Action::FontSetSize(_) => Some(":fontsize 18"),
+            Action::PaneFontCommand(_) => Some(":font ibm3270 16pt"),
             Action::CanvasCommand(_) => Some(":canvas tek demo"),
             Action::PaneResize { .. } => Some(":resize +w"),
             Action::PaneMove { .. } => Some(":move right"),
@@ -416,6 +418,7 @@ mod tests {
             Action::FontZoomOut,
             Action::FontZoomReset,
             Action::FontSetSize(18),
+            Action::PaneFontCommand("ibm3270 16pt".to_string()),
             Action::CanvasCommand("tek demo".to_string()),
             Action::PaneResize { dw: 4, dh: 0 },
             Action::PaneMove { dx: 4, dy: 0 },

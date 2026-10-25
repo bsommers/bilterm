@@ -3,6 +3,7 @@ pub mod chrome;
 pub mod cursor;
 pub mod drawer;
 pub mod glyphs;
+pub mod hires_subcell;
 pub mod modals;
 pub mod occlusion;
 pub mod pixel_canvas;
@@ -13,9 +14,13 @@ pub mod typography;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
+pub use hires_subcell::{CanvasResolution, probe_terminal_pixel_size, subcell_mask_to_octant};
 pub use pixel_canvas::{PixelCanvasBuffer, wrap_tmux_dcs_passthrough};
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
-pub use typography::{LineSizeAttr, encode_host_font_passthrough, scan_dec_line_size_escapes};
+pub use typography::{
+    FontFamilyPreset, LineSizeAttr, PaneFontOptions, encode_host_font_passthrough,
+    scan_dec_line_size_escapes,
+};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -168,8 +173,12 @@ fn render_output_canvas(
     let render_cols = canvas.width.min(vt_cols);
     let grapheme_2027 = vt.is_grapheme_cluster_2027();
 
+    let font_opts = pane.font_options();
     for r in 0..render_rows {
-        let line_attr = vt.line_size_attr(r);
+        let mut line_attr = vt.line_size_attr(r);
+        if !line_attr.is_double_width() && font_opts.double_width {
+            line_attr = LineSizeAttr::DoubleWidth;
+        }
         if line_attr.is_double_width() {
             typography::render_double_width_row(vt, r, canvas, render_cols, line_attr, buf);
             continue;
@@ -182,7 +191,13 @@ fn render_output_canvas(
             };
             let dst_x = canvas.x + c;
             let dst_y = canvas.y + r;
-            let style = vt_cell.to_ratatui_style();
+            let mut style = vt_cell.to_ratatui_style();
+            if font_opts.bold {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            if font_opts.italic {
+                style = style.add_modifier(Modifier::ITALIC);
+            }
 
             if skip_next_wide_continuation {
                 skip_next_wide_continuation = false;

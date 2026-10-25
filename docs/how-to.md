@@ -219,8 +219,12 @@ Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emu
    :canvas image 32 20
    :canvas zoom 2.0
    ```
-2. **Compare Sub-Cell & Storage-Tube Rendering Modes Live**:
+2. **Compare Sub-Cell, 2-Color TrueColor `Octant`, & Resolution Presets Live**:
    ```text
+   :canvas res auto          # Hardware TIOCGWINSZ pixel dimensions or 2x Retina HiDPI (1280x768)
+   :canvas res 1080p         # Full HD (1920x1080) framebuffer
+   :canvas res 4k            # 4K UHD (3840x2160) framebuffer (or :canvas res 2560x1440)
+   :canvas mode octant       # 2x4 (8 sub-pixels/cell) 2-Color TrueColor (fg+bg) partitioned supersampling
    :canvas mode halfblock    # 24-bit TrueColor 1x2 pixel blocks (▀/▄) with anti-aliasing & shading
    :canvas mode braille      # High-density 2x4 Unicode Braille vector dots (U+2800..U+28FF)
    :canvas mode sextant      # 2x3 Unicode Sextant blocks (U+1FB00..U+1FB3B)
@@ -228,7 +232,17 @@ Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emu
    :tek demo                 # Classic Tektronix 4014 green/amber phosphor vector storage tube
    :focalzoom 2x circle      # Smooth radial magnifying lens (:focalzoom off to disable)
    ```
-3. **Export High-Resolution `.svg` or `.ppm` Framebuffers (`640×384` px) or Clear**:
+3. **Selectable Per-Pane & Per-Window Font Options (`:font`)**:
+   ```text
+   :font list                # Presets: ibm3270 | vga | tek4014 | jetbrains | firacode | iosevka | cascadia | hack
+   :font ibm3270 16pt        # Set active pane to IBM 3270 Mainframe font at 16pt
+   :font pane 1 vga 16pt     # Set Pane #1 to Borland DOS VGA8 16pt
+   :font pane 2 jetbrains 150% # Set Pane #2 to JetBrains Mono at 150% scale
+   :font double on           # Expand active pane text to 2x1 double-width cells in TUI
+   :font bold on             # Toggle per-pane bold/italic (:font italic on)
+   :font reset               # Reset active pane font overrides
+   ```
+4. **Export High-Resolution `.svg` or `.ppm` Framebuffers (`1280×768` / `1080p` / `4K`) or Clear**:
    ```text
    :canvas export /tmp/canvas.svg
    :canvas export /tmp/canvas.ppm

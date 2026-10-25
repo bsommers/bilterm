@@ -28,7 +28,7 @@ use crate::ui::theme::ThemePreset;
 use crate::vt::{TEK_MAX_X, TEK_MAX_Y, TekLineStyle};
 use crate::wm::WindowManager;
 
-const QUADRANT_CHARS: [char; 16] = [
+pub const QUADRANT_CHARS: [char; 16] = [
     ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
 ];
 
@@ -320,7 +320,8 @@ impl SubcellBuffer {
                                     },
                                     CanvasSubcellMode::Sextant
                                     | CanvasSubcellMode::Quadrant
-                                    | CanvasSubcellMode::HalfBlock => 1u8 << (dy * 2 + dx),
+                                    | CanvasSubcellMode::HalfBlock
+                                    | CanvasSubcellMode::Octant => 1u8 << (dy * 2 + dx),
                                 };
                                 mask |= bit;
                             }
@@ -336,7 +337,7 @@ impl SubcellBuffer {
                             CanvasSubcellMode::Braille => braille_char_from_mask(mask),
                             CanvasSubcellMode::Sextant => sextant_char_from_mask(mask),
                             CanvasSubcellMode::Quadrant => QUADRANT_CHARS[usize::from(mask & 0x0f)],
-                            CanvasSubcellMode::HalfBlock => '▀',
+                            CanvasSubcellMode::HalfBlock | CanvasSubcellMode::Octant => '▀',
                         };
                         let mut sym_buf = [0u8; 4];
                         cell.set_symbol(ch.encode_utf8(&mut sym_buf));
@@ -370,7 +371,7 @@ pub fn render_graphical_canvas(
     }
 
     let mode = scene.subcell_mode;
-    if mode == CanvasSubcellMode::HalfBlock {
+    if matches!(mode, CanvasSubcellMode::HalfBlock | CanvasSubcellMode::Octant) {
         let px_buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
             pane,
             cfg,
@@ -379,7 +380,7 @@ pub fn render_graphical_canvas(
             4,
             8,
         );
-        px_buf.flush_halfblocks_to_ratatui(canvas, buf);
+        px_buf.flush_truecolor_subcells_to_ratatui(mode, canvas, buf);
     } else {
         let lens = SubcellFocalLens::from_config(cfg, canvas, pane.vt().cursor_position(), mode);
         let mut sub = SubcellBuffer::new(canvas.width, canvas.height, mode, lens);

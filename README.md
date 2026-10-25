@@ -107,6 +107,8 @@ Inside any running `bilterm` pane, type these `:canvas` commands in the floating
 
 ```text
 :canvas hires                                                      # Anti-aliased TrueColor Half-Block/Pixel demo scene
+:canvas res 4k                                                     # Set resolution: auto (TIOCGWINSZ/2x) | 1x | 2x | 4x | 720p | 1080p | 4k | <WxH>
+:canvas mode octant                                                # 2x4 (8 sub-pixels/cell) 2-Color TrueColor (fg+bg) partitioned supersampling
 :canvas mode halfblock                                             # 24-bit TrueColor 1x2 pixel blocks (▀/▄)
 :canvas plot line 10,25,18,45,38,72,64,95                          # High-DPI line chart with area fill & gridlines
 :canvas plot candlestick 10,22,8,18,18,30,15,28,28,35,20,24        # OHLC financial candlestick chart
@@ -116,8 +118,24 @@ Inside any running `bilterm` pane, type these `:canvas` commands in the floating
 :canvas image 32 20                                                # Interactive bilinear RGBA image viewer (:canvas zoom 2.0)
 :tek demo                                                          # Classic 1974 Tektronix 4014 green/amber storage-tube wireframe
 :focalzoom 2x circle                                               # Smooth radial magnifying lens over graphics (:focalzoom off)
-:canvas export /tmp/canvas.svg                                     # Export 640x384 high-res SVG or PPM (:canvas export /tmp/c.ppm)
+:canvas export /tmp/canvas.svg                                     # Export high-res SVG or PPM (:canvas export /tmp/c.ppm)
 :canvas clear                                                      # Clear canvas and return to normal terminal text
+```
+
+### Per-Pane & Per-Window Selectable Font Options (`:font`)
+
+Each split pane or Z-Stack window can have its own independent font family, point size, scale percentage, bold/italic style, and `2×1` double-width character expansion:
+
+```text
+:font list                                                         # List presets: ibm3270 | vga | tek4014 | jetbrains | firacode | iosevka | cascadia | hack
+:font ibm3270 16pt                                                 # Set active pane to IBM 3270 Mainframe font at 16pt
+:font vga 14pt                                                     # Set active pane to Borland DOS VGA8 bitmap font
+:font pane 1 vga 16pt                                              # Target Pane #1 specifically with DOS VGA8 16pt
+:font pane 2 jetbrains 150%                                        # Target Pane #2 with JetBrains Mono at 150% scale
+:font double on                                                    # Expand active pane text to 2x1 double-width cells in TUI
+:font bold on                                                      # Toggle per-pane bold or italic (:font italic on)
+:font all firacode 14pt                                            # Apply font across all open panes
+:font reset                                                        # Reset active pane font to workspace defaults
 ```
 
 Or run directly from your shell / SSH session using `bilterm plot`:

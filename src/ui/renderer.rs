@@ -29,6 +29,9 @@ pub struct PaneFrameSnapshot {
     pub status_bar_rect: Rect,
     pub active: bool,
     pub z_rank: Option<(usize, usize)>,
+    pub font_family: String,
+    pub font_size_pt: u16,
+    pub font_scale_pct: u16,
     pub grid: GridSnapshot,
     pub graphics: Vec<TerminalGraphicPlacement>,
 }
@@ -80,6 +83,9 @@ impl WorkspaceFrameSnapshot {
                 status_bar_rect,
                 active,
                 z_rank: wm.z_stack().rank_of(id),
+                font_family: pane.font_options().family.display_name().to_string(),
+                font_size_pt: pane.font_options().effective_size_pt(wm.config()),
+                font_scale_pct: pane.font_options().effective_scale_pct(wm.config()),
                 grid: pane.vt().snapshot(),
                 graphics: pane.vt().graphic_placements().to_vec(),
             });
@@ -99,6 +105,9 @@ impl WorkspaceFrameSnapshot {
                 status_bar_rect: qt_pane.status_bar_rect(qt_outer),
                 active: true,
                 z_rank: None,
+                font_family: qt_pane.font_options().family.display_name().to_string(),
+                font_size_pt: qt_pane.font_options().effective_size_pt(wm.config()),
+                font_scale_pct: qt_pane.font_options().effective_scale_pct(wm.config()),
                 grid: qt_pane.vt().snapshot(),
                 graphics: qt_pane.vt().graphic_placements().to_vec(),
             })

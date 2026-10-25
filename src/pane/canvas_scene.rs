@@ -24,6 +24,8 @@ pub enum CanvasSubcellMode {
     Quadrant,
     /// Unicode `1×2` Half-Blocks (`▀` / `▄` with independent 24-bit TrueColor fg=top, bg=bottom pixel).
     HalfBlock,
+    /// Unicode `2×4` 2-Color TrueColor Partitioned Octants (`8` sub-pixels per cell with dual `fg`+`bg` 24-bit RGB).
+    Octant,
 }
 
 impl CanvasSubcellMode {
@@ -31,7 +33,7 @@ impl CanvasSubcellMode {
     #[inline]
     pub const fn subcell_grid(self) -> (u16, u16) {
         match self {
-            Self::Braille => (2, 4),
+            Self::Braille | Self::Octant => (2, 4),
             Self::Sextant => (2, 3),
             Self::Quadrant => (2, 2),
             Self::HalfBlock => (1, 2),
@@ -41,6 +43,7 @@ impl CanvasSubcellMode {
     pub fn from_name(raw: &str) -> Option<Self> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "braille" | "2x4" => Some(Self::Braille),
+            "octant" | "octants" | "2x4-tc" | "ultra" => Some(Self::Octant),
             "sextant" | "sextants" | "2x3" => Some(Self::Sextant),
             "quadrant" | "quadrants" | "2x2" | "block" => Some(Self::Quadrant),
             "halfblock" | "half-block" | "half" | "1x2" | "truecolor" => Some(Self::HalfBlock),
@@ -63,6 +66,8 @@ pub enum CanvasRenderBackend {
     ITerm2,
     /// 24-bit TrueColor `1×2` Half-Block (`▀`) bitmap cells — universal over any SSH / `tmux` terminal.
     HalfBlock,
+    /// 24-bit TrueColor `2×4` Octant (`8` sub-pixels/cell with dual `fg`+`bg` TrueColor).
+    Octant,
     /// Unicode `2×4` Braille (`U+2800..U+28FF`) vector sub-cells.
     Braille,
     /// Unicode `2×3` Legacy Computing Sextants (`U+1FB00..U+1FB3B`).
@@ -79,6 +84,7 @@ impl CanvasRenderBackend {
             "sixel" => Some(Self::Sixel),
             "iterm" | "iterm2" | "osc1337" => Some(Self::ITerm2),
             "halfblock" | "half-block" | "half" | "1x2" | "truecolor" => Some(Self::HalfBlock),
+            "octant" | "octants" | "ultra" => Some(Self::Octant),
             "braille" | "2x4" => Some(Self::Braille),
             "sextant" | "2x3" => Some(Self::Sextant),
             "quadrant" | "2x2" => Some(Self::Quadrant),
@@ -356,13 +362,15 @@ impl InteractiveImageView {
     }
 }
 
-/// Complete retained scene-graph for a `CompositePane` (`CANV-01`, `CANV-02`, `SSH-GFX-01`).
+/// Complete retained scene-graph for a `CompositePane` (`CANV-01`, `CANV-02`, `CANV-03`, `SSH-GFX-01`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PaneCanvasScene {
     pub active: bool,
     pub subcell_mode: CanvasSubcellMode,
     #[serde(default)]
     pub render_backend: CanvasRenderBackend,
+    #[serde(default)]
+    pub resolution: crate::ui::hires_subcell::CanvasResolution,
     pub primitives: Vec<VectorPrimitive>,
     pub sprites: Vec<Sprite2D>,
     pub plots: Vec<DeclarativePlot>,
@@ -432,13 +440,35 @@ impl PaneCanvasScene {
             }
             "mode" | "subcell" => {
                 let Some(mode_str) = parts.get(1) else {
-                    return Err("Usage: :canvas mode <braille|sextant|quadrant|halfblock>".to_string());
+                    return Err("Usage: :canvas mode <octant|sextant|quadrant|halfblock|braille>".to_string());
                 };
                 let mode = CanvasSubcellMode::from_name(mode_str).ok_or_else(|| {
-                    "Usage: :canvas mode <braille|sextant|quadrant|halfblock>".to_string()
+                    "Usage: :canvas mode <octant|sextant|quadrant|halfblock|braille>".to_string()
                 })?;
                 self.subcell_mode = mode;
-                Ok(format!("CANVAS SUBCELL MODE: {mode:?}"))
+                Ok(format!("CANVAS SUBCELL MODE: {mode:?} ({}x{} sub-pixels/cell)", mode.subcell_grid().0, mode.subcell_grid().1))
+            }
+            "res" | "resolution" | "dpi" => {
+                let Some(res_str) = parts.get(1) else {
+                    let (px_c, px_r) = self.resolution.resolve_px_per_cell(80, 24);
+                    return Ok(format!(
+                        "CANVAS RESOLUTION: {} ({}x{} px at 80x24)",
+                        self.resolution.label(),
+                        80 * px_c,
+                        24 * px_r
+                    ));
+                };
+                let res = crate::ui::hires_subcell::CanvasResolution::from_name(res_str).ok_or_else(|| {
+                    "Usage: :canvas res <auto|1x|2x|4x|hd|720p|fhd|1080p|4k|2160p|<WxH>>".to_string()
+                })?;
+                self.resolution = res;
+                let (px_c, px_r) = self.resolution.resolve_px_per_cell(80, 24);
+                Ok(format!(
+                    "CANVAS RESOLUTION: {} ({}x{} px at 80x24)",
+                    self.resolution.label(),
+                    80 * px_c,
+                    24 * px_r
+                ))
             }
             "backend" | "transport" => {
                 let Some(b_str) = parts.get(1) else {
@@ -448,11 +478,12 @@ impl PaneCanvasScene {
                     ));
                 };
                 let backend = CanvasRenderBackend::from_name(b_str).ok_or_else(|| {
-                    "Usage: :canvas backend <auto|kitty|sixel|iterm2|halfblock|braille|sextant|quadrant>".to_string()
+                    "Usage: :canvas backend <auto|kitty|sixel|iterm2|octant|halfblock|braille|sextant|quadrant>".to_string()
                 })?;
                 self.render_backend = backend;
                 match backend {
                     CanvasRenderBackend::HalfBlock => self.subcell_mode = CanvasSubcellMode::HalfBlock,
+                    CanvasRenderBackend::Octant => self.subcell_mode = CanvasSubcellMode::Octant,
                     CanvasRenderBackend::Braille => self.subcell_mode = CanvasSubcellMode::Braille,
                     CanvasRenderBackend::Sextant => self.subcell_mode = CanvasSubcellMode::Sextant,
                     CanvasRenderBackend::Quadrant => self.subcell_mode = CanvasSubcellMode::Quadrant,
@@ -705,82 +736,6 @@ impl PaneCanvasScene {
                 i = end + 1;
             } else {
                 i += 1;
-            }
-        }
-    }
-}
-
-impl crate::pane::CompositePane {
-    pub fn canvas_scene(&self) -> &PaneCanvasScene {
-        &self.canvas_scene
-    }
-
-    pub fn canvas_scene_mut(&mut self) -> &mut PaneCanvasScene {
-        &mut self.canvas_scene
-    }
-
-    /// Executes a `:canvas <subcommand>` on this pane, updating `canvas_scene`, `vt.tektronix`, and `status_message` (`TEK-01`, `CANV-01`, `CANV-02`).
-    pub fn execute_canvas_command(&mut self, cmd: &str) -> std::result::Result<String, String> {
-        let parts: Vec<&str> = cmd.split_whitespace().collect();
-        let res = match parts.first().copied() {
-            Some("export") => {
-                let Some(path) = parts.get(1).copied() else {
-                    return Err("Usage: :canvas export <file.ppm|file.svg>".to_string());
-                };
-                if path.contains("..") || path.contains('\0') {
-                    return Err("Invalid export path (path traversal rejected)".to_string());
-                }
-                let cfg = crate::config::BiltermConfig::default();
-                let buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
-                    self, &cfg, 80, 24, 8, 16,
-                );
-                let write_res = if path.ends_with(".svg") {
-                    std::fs::write(path, buf.export_svg("Bilterm High-Res Canvas"))
-                } else {
-                    std::fs::write(path, buf.export_ppm())
-                };
-                match write_res {
-                    Ok(()) => Ok(format!(
-                        "CANVAS EXPORT: wrote {}x{} high-res image to {path}",
-                        buf.width, buf.height
-                    )),
-                    Err(e) => Err(format!("CANVAS EXPORT ERROR: {e}")),
-                }
-            }
-            Some("encode") => {
-                let req = parts
-                    .get(1)
-                    .and_then(|s| CanvasRenderBackend::from_name(s))
-                    .unwrap_or(self.canvas_scene.render_backend);
-                let eff = req.resolve_auto();
-                let in_tmux = std::env::var("TMUX").is_ok_and(|v| !v.is_empty());
-                let cfg = crate::config::BiltermConfig::default();
-                let buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
-                    self, &cfg, 40, 12, 4, 8,
-                );
-                let stream = match eff {
-                    CanvasRenderBackend::Sixel => buf.encode_sixel_dcs(in_tmux),
-                    CanvasRenderBackend::ITerm2 => buf.encode_iterm2_osc1337(40, 12, in_tmux),
-                    _ => buf.encode_kitty_apc(40, 12, in_tmux),
-                };
-                Ok(format!(
-                    "CANVAS ENCODE ({eff:?}, tmux_passthrough={in_tmux}): {} bytes ready",
-                    stream.len()
-                ))
-            }
-            _ => {
-                let (scene, vt) = (&mut self.canvas_scene, self.vt.tektronix_mut());
-                scene.execute_command(vt, cmd)
-            }
-        };
-        match res {
-            Ok(msg) => {
-                self.set_status_message(Some(msg.clone()));
-                Ok(msg)
-            }
-            Err(err) => {
-                self.set_status_message(Some(err.clone()));
-                Err(err)
             }
         }
     }

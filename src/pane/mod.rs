@@ -12,6 +12,7 @@ pub use canvas_scene::{
 };
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
+pub use crate::ui::typography::{FontFamilyPreset, PaneFontOptions};
 
 use std::path::PathBuf;
 
@@ -35,7 +36,7 @@ pub type PaneId = usize;
 pub struct CompositePane {
     id: PaneId,
     title: String,
-    vt: VtParser,
+    pub(crate) vt: VtParser,
     pty: Option<PtySession>,
     prompt: FloatingPromptState,
     history_store: HistoryStore,
@@ -49,6 +50,8 @@ pub struct CompositePane {
     hints_mode: HintsModeState,
     /// Modern 2026/2027 retained vector, 2D sprite, declarative plotting & image scene-graph (`CANV-01`).
     pub(crate) canvas_scene: PaneCanvasScene,
+    /// Per-pane / per-window selectable font family, size, scale, and style options (`FONT-02`).
+    pub(crate) font_options: PaneFontOptions,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     read_only: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
@@ -86,6 +89,7 @@ impl CompositePane {
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
             canvas_scene: PaneCanvasScene::default(),
+            font_options: PaneFontOptions::default(),
             read_only: false,
             remote_target: None,
             pending_unsafe_paste: None,
@@ -767,25 +771,12 @@ mod tests {
         assert_eq!(submitted, "echo from_prompt");
         assert_eq!(pane.prompt().text(), "");
         assert_eq!(pane.prompt().history, vec!["echo from_prompt".to_string()]);
-        assert_eq!(
-            pane.prompt().running_command.as_deref(),
-            Some("echo from_prompt")
-        );
+        assert_eq!(pane.prompt().running_command.as_deref(), Some("echo from_prompt"));
         assert_eq!(pane.vt().command_blocks().len(), 1);
 
-        pane.submit_command("echo programmatic")
-            .expect("submit_command");
-        assert_eq!(
-            pane.prompt().history,
-            vec![
-                "echo from_prompt".to_string(),
-                "echo programmatic".to_string()
-            ]
-        );
-        assert_eq!(
-            pane.prompt().running_command.as_deref(),
-            Some("echo programmatic")
-        );
+        pane.submit_command("echo programmatic").expect("submit_command");
+        assert_eq!(pane.prompt().history, vec!["echo from_prompt".to_string(), "echo programmatic".to_string()]);
+        assert_eq!(pane.prompt().running_command.as_deref(), Some("echo programmatic"));
         assert_eq!(pane.vt().command_blocks().len(), 2);
 
         pane.set_read_only(true);

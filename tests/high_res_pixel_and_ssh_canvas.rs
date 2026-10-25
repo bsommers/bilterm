@@ -190,9 +190,10 @@ fn canvas_hires_halfblock_mode_renders_truecolor_cells_and_preserves_floating_pr
 }
 
 #[test]
-fn canvas_export_encode_and_cli_bilterm_plot_work_end_to_end() {
+fn canvas_export_encode_resolutions_octant_and_cli_bilterm_plot_work_end_to_end() {
     let mut pane = CompositePane::new_headless(1, 24, 80);
     pane.execute_canvas_command("hires").unwrap();
+    pane.execute_canvas_command("res 2x").unwrap();
 
     let tmp_dir = tempfile::tempdir().unwrap();
     let ppm_path = tmp_dir.path().join("scene.ppm");
@@ -201,15 +202,36 @@ fn canvas_export_encode_and_cli_bilterm_plot_work_end_to_end() {
     let msg_ppm = pane
         .execute_canvas_command(&format!("export {}", ppm_path.display()))
         .unwrap();
-    assert!(msg_ppm.contains("CANVAS EXPORT: wrote 640x384"));
+    assert!(msg_ppm.contains("CANVAS EXPORT: wrote 1280x768"));
     assert!(ppm_path.exists());
 
+    // Switch to 1080p Full HD and 4K UHD resolutions
+    let res_fhd = pane.execute_canvas_command("res 1080p").unwrap();
+    assert!(res_fhd.contains("1080p Full HD (1920x1080)"));
     let msg_svg = pane
         .execute_canvas_command(&format!("export {}", svg_path.display()))
         .unwrap();
-    assert!(msg_svg.contains("CANVAS EXPORT: wrote 640x384"));
+    assert!(msg_svg.contains("CANVAS EXPORT: wrote 1920x1080"));
     let svg_content = std::fs::read_to_string(&svg_path).unwrap();
     assert!(svg_content.contains("<svg"));
+
+    let res_4k = pane.execute_canvas_command("res 4k").unwrap();
+    assert!(res_4k.contains("4K UHD (3840x2160)"));
+
+    // Test 2x4 2-Color TrueColor Partitioned Octant mode in Ratatui
+    let mut wm = WindowManager::new_headless(24, 80);
+    execute_wm_colon_command(&mut wm, parse_colon_command(":canvas hires").unwrap().unwrap());
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":canvas mode octant").unwrap().unwrap(),
+    );
+    assert_eq!(
+        wm.active_pane().canvas_scene().subcell_mode,
+        CanvasSubcellMode::Octant
+    );
+    let area = Rect::new(0, 0, 80, 24);
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&wm).render(area, &mut buf);
 
     let msg_enc = pane.execute_canvas_command("encode kitty").unwrap();
     assert!(msg_enc.contains("CANVAS ENCODE (Kitty"));
@@ -228,4 +250,62 @@ fn canvas_export_encode_and_cli_bilterm_plot_work_end_to_end() {
         .expect("run bilterm plot");
     assert!(out.status.success());
     assert!(cli_svg.exists());
+}
+
+#[test]
+fn selectable_per_pane_and_per_window_font_options_work_independently() {
+    use bilterm::ui::FontFamilyPreset;
+    use bilterm::ui::renderer::WorkspaceFrameSnapshot;
+
+    let mut wm = WindowManager::new_headless(24, 80);
+    // Split into Pane #1 and Pane #2
+    execute_wm_colon_command(&mut wm, parse_colon_command(":split v").unwrap().unwrap());
+    assert_eq!(wm.pane_count(), 2);
+
+    // Configure Pane #1 with Borland DOS VGA8 16pt bold
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":font pane 1 vga 16pt").unwrap().unwrap(),
+    );
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":font pane 1 bold on").unwrap().unwrap(),
+    );
+
+    // Configure Pane #2 (active) with JetBrains Mono 150% italic + double-width
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":font jetbrains 150%").unwrap().unwrap(),
+    );
+    execute_wm_colon_command(&mut wm, parse_colon_command(":font italic on").unwrap().unwrap());
+    execute_wm_colon_command(&mut wm, parse_colon_command(":font double on").unwrap().unwrap());
+
+    let p1 = wm.pane(1).unwrap().font_options();
+    assert_eq!(p1.family, FontFamilyPreset::BorlandDosVga);
+    assert_eq!(p1.effective_size_pt(wm.config()), 16);
+    assert!(p1.bold);
+    assert!(!p1.double_width);
+
+    let p2 = wm.pane(2).unwrap().font_options();
+    assert_eq!(p2.family, FontFamilyPreset::JetBrainsMono);
+    assert_eq!(p2.effective_scale_pct(wm.config()), 150);
+    assert!(p2.italic);
+    assert!(p2.double_width);
+
+    // Verify WorkspaceFrameSnapshot captures independent font metadata per pane
+    let area = Rect::new(0, 0, 80, 24);
+    let snap = WorkspaceFrameSnapshot::capture(&wm, area);
+    assert_eq!(snap.panes.len(), 2);
+    let s1 = snap.panes.iter().find(|p| p.id == 1).unwrap();
+    let s2 = snap.panes.iter().find(|p| p.id == 2).unwrap();
+    assert_eq!(s1.font_family, "PxPlus IBM VGA8");
+    assert_eq!(s1.font_size_pt, 16);
+    assert_eq!(s2.font_family, "JetBrains Mono");
+    assert_eq!(s2.font_scale_pct, 150);
+
+    // Render workspace to verify per-pane bold/italic/double-width TUI rendering succeeds
+    wm.pane_mut(1).unwrap().process_pty_output(b"PANE1_VGA\r\n");
+    wm.pane_mut(2).unwrap().process_pty_output(b"PANE2_JB\r\n");
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&wm).render(area, &mut buf);
 }

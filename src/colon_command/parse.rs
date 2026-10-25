@@ -616,7 +616,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                     .to_string(),
             )),
         },
-        "fontsize" | "font" | "textsize" => match parts.get(1).copied() {
+        "fontsize" | "textsize" => match parts.get(1).copied() {
             None | Some("reset" | "0" | "default") => Some(Ok(ColonCommand::FontZoomReset)),
             Some("+" | "in" | "up" | "grow" | "larger") => Some(Ok(ColonCommand::FontZoomIn)),
             Some("-" | "out" | "down" | "shrink" | "smaller") => {
@@ -633,6 +633,14 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 }
             }
         },
+        "font" | "panefont" | "winfont" => {
+            let subcmd = if parts.len() > 1 {
+                parts[1..].join(" ")
+            } else {
+                "status".to_string()
+            };
+            Some(Ok(ColonCommand::PaneFontCommand(subcmd)))
+        }
         "canvas" | "tek" => {
             let subcmd = if parts[0].eq_ignore_ascii_case("tek") {
                 if parts.len() > 1 {
