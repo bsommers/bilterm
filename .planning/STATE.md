@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.10.1
 milestone_name: milestone
-current_phase: 27
-current_phase_name: high-res-pixel-canvas-and-adaptive-ssh-gui-graphics
-status: completed_phase_27
-stopped_at: Phase 27 complete (all 44/44 requirements and all 27 phases complete)
+current_phase: 28
+current_phase_name: architecture-hardening-and-dag-decoupling
+status: released_v1_10_1_phase_28_planned
+stopped_at: Released v1.10.1 (P0/P1 review remediations, unified automation confinement, dependency audit) and planned Phase 28 (28-01-PLAN.md)
 last_updated: "2026-10-25"
 last_activity: 2026-10-25
-last_activity_desc: Completed Phase 27 (High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine)
+last_activity_desc: Released v1.10.1 with P0/P1 architecture & security remediations and dependency audit; planned Phase 28
 progress:
-  total_phases: 14
-  completed_phases: 14
-  total_plans: 48
-  completed_plans: 48
+  total_phases: 28
+  completed_phases: 27
+  total_plans: 52
+  completed_plans: 51
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-19)
+See: .planning/PROJECT.md (updated 2026-10-25)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 27 — High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) — COMPLETE
+**Current focus:** `v1.10.1` released; Phase 28 (`28-01-PLAN.md` — P2 Module DAG Decoupling & Dirty-Driven Rendering) planned and ready.
 
 ## Current Position
 
-Phase: 27 (high-res-pixel-canvas-and-adaptive-ssh-gui-graphics) — COMPLETE
-Plan: 3/3 complete (`27-01-PLAN.md`..`27-03-PLAN.md`)
-Status: All 27 phases and 44/44 requirements complete
-Last activity: 2026-10-25 — Completed Phase 27 (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`)
+Phase: 28 (architecture-hardening-and-dag-decoupling) — P0/P1 COMPLETE (`v1.10.1`), P2 PLANNED (`28-01-PLAN.md`)
+Plan: `28-01-PLAN.md` ready for execution
+Status: Phases 1–27 complete (`47/47` requirements shipped through `v1.10.1`); Phase 28 P0/P1 shipped in `v1.10.1`
+Last activity: 2026-10-25 — Released `v1.10.1` (`677b668`) with unified `SnapshotPolicy::Confined` (`WindowManager::apply_automation`), live `CanvasResolution` + cached `TIOCGWINSZ`, `ui <-> api` cycle removal, `ARCH-R04` module splits, and `vt100-ctt` dependency pruning.
 
 Progress: [██████████] 100%
 
@@ -89,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-22 23:22
-Stopped at: Released and pushed v1.5.0 (bfe59ef)
+Last session: 2026-10-25 16:12
+Stopped at: Released and pushed v1.10.1 (677b668) with P0/P1 architecture & security remediations; Phase 28 (28-01-PLAN.md) ready
 Resume file: .planning/CHECKPOINT.md
 
 ## Quick Tasks Completed

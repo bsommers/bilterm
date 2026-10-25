@@ -1,88 +1,89 @@
-# Session Checkpoint (Phase 19 PLANNED — ready to execute)
+# Session Checkpoint — `v1.10.1` Released & Phase 28 Planned — 2026-10-25
 
-**RESUME:** Phase 19 planning is complete. The plan-checker ran 3 of 3 iterations and ended with 0 blockers.
-- Iter-2 warnings were fixed by a planner revision, which also split 19-04 and 19-05 into more tasks.
-- Iter-3 warnings were fixed by hand. Explicit `--listen unix:PATH` does not require a private parent directory; it relies on socket mode 0600 plus the peer-uid check. The `list_sessions` test is now mandatory through a pure helper. ROADMAP and frontmatter were tidied.
-- Two items were deferred as executor guidance:
-  - Per-task verify commands run the full `cargo test` plus clippy (~90s). Executors may scope them to module tests and run the full suite once per wave.
-  - 19-04 has 4 tasks, which is at the threshold. This is acceptable.
-- Next step: `/gsd-execute-phase 19`, using Gemini GSD paths as below.
+**Status:** COMPLETE — `v1.10.1` released and pushed; ready for Phase 28 (`/gsd-execute-phase 28`) or next milestone work.
 
-(Older notes follow.)
-
-# (prior) Phase 19 planning notes
-
-**Updated:** `2026-10-23` (Phase 19 `/gsd-plan-phase` session)
-**Branch:** `main` @ `8083618` (local, not pushed). All Phase 19 planning docs committed. No background jobs.
-
-## 0. Phase 19 planning state (RESUME HERE)
-- **GSD runtime:** GSD is only installed for Gemini. The user chose "Adapt Gemini install":
-  - tools: `node ~/.gemini/config/plugins/gsd-core/gsd-core/bin/gsd-tools.cjs`
-  - workflow: `~/.gemini/config/plugins/gsd-core/gsd-core/workflows/plan-phase.md`
-  - roles: `~/.gemini/config/plugins/gsd-core/agents/gsd-*.md`, run as general-purpose subagents that are told to read their role file
-- **Done:**
-  - research (`19-RESEARCH.md`), validation (`19-VALIDATION.md`), context (`19-CONTEXT.md`, D-01..D-06 plus two user amendments), all committed in 59c65cf
-  - patterns (`19-PATTERNS.md`)
-  - 7 plans: 19-01 secure_fs (W1); 19-02 ssh, 19-03 temp files, 19-04 listener/auth (W2); 19-05 ppm confinement (W3); 19-06 CLI (W4); 19-07 docs/REQUIREMENTS (W5)
-  - checker iteration 1 found 2 blockers and 5 warnings. All are fixed, and a planner revision pass is done.
-- **User decisions this session (verbatim choices):**
-  - token: "auth.login handshake"
-  - playbooks: "Playbooks unconfined", later amended to "Confine RPC playbooks" (CLI `--playbook` stays trusted)
-  - snapshot dir: "$XDG_STATE_HOME + flag"
-  - loopback: "Token optional on loopback"
-  - ppm names: "Bare file names only"
-- **Things to tell the user at the end:**
-  - Breaking changes: `ctl` defaults to the Unix socket instead of `127.0.0.1:7370`, and the SSH builders take `control_dir` and return `Result`.
-  - Accepted risk T-19-13: RPC `wm.command` can still write to arbitrary paths via `:record start <path>` and `:history save <path>`. This is out of scope.
-- **Planner contributions file:** the session scratchpad copy is gone. Regenerate it with `node <gsd-tools> loop render-hooks plan:pre --raw`, taking the `activeHooks` entries where kind is contribution and into is planner. This matters only if a revision pass needs it.
-- **Skipped gates (tooling missing):** the UI gate (`ui plan-gate` command doesn't exist; the phase has no UI); the spec-less §A probe was run by the planner.
-- **Next:**
-  1. Spawn the plan-checker for iteration 2 of 3 (haiku). The prompt is the same as iteration 1: plans plus ROADMAP, REQUIREMENTS, CONTEXT, RESEARCH and VALIDATION; SEC-R01..04; ASVS L1 block-on-high.
-  2. Then workflow steps 13 (requirements and decision coverage), 13b (STATE.md), 13c, and 13d (commit the plans).
-  3. Then present the status and `/gsd-execute-phase 19`.
-- **Context-guard fix:** `.claude/settings.local.json` sets `SWE_SKILLS_CHECKPOINT_GLOBS` to include `.planning/CHECKPOINT.md`. The default globs had missed it. The nudge fired at 71%, which shows the hook works.
+- **Updated:** `2026-10-25`
+- **Branch:** `main` (synced with `origin/main`, tag `v1.10.1` @ `677b668`)
+- **Latest Releases:**
+  - `v1.10.1`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.1> (14 cross-platform release archives + `SHA256SUMS`)
+  - `v1.10.0`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.0>
+- **Baseline Verification:**
+  - `cargo clippy --all-features --all-targets -- -D warnings` → **0 warnings, 0 errors**
+  - `cargo test --quiet` → **235 passed, 0 failed** (`151` unit + `84` integration across 23 test binaries)
+  - `cargo audit` → **0 CVEs, 0 unsound crates** (`247` lockfile packages, `100%` permissive OSI licenses)
+  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `72` files in `src/**/*.rs`) → **100% compliant** (max file is `src/input/keymap.rs` at `787` LOC)
 
 ---
 
-## (prior) v1.6.0 release checkpoint
+## 1. User Decisions & Requests (Verbatim, This Session)
 
-**Updated:** `2026-10-23`
-**Branch:** `main` @ `ac7d82b` (= tag `v1.6.0`, synced with `origin/main`)
-**Release:** https://github.com/bsommers/bilterm/releases/tag/v1.6.0 (PR #1 merged by the user after review)
-**Baseline verification:** `cargo clippy --all-targets -- -D warnings` clean; `cargo test` 127 passed, 0 failed; `cargo audit` 0 vulnerabilities (4 inherited warnings: `lru`, `paste` via `vt100-ctt`/`ratatui-core`).
+1. `"update from remote - windows bug fixes v1.9.1."`
+2. `"what's next on the roadmap? i'm thinking we need also a high-resolution canvas for drawing graphs, images, plots, graphics, etc. Textronix is cool for retro vibe, we want also a modern equivalent of the goal utilizing all of the modern graphics, GPU, etc. need to be sure we can work in pure ssh sessions as well as native GUI (Linux, MacOS, Windows) modes. e.g. graphics probably won't work over an SSH session.right? or will they???"` → `"sweet! yes. LET'S DO IT!!!!"`
+3. `"how to see the hires graphics?"` → `"awesome. save this as examples in the documentation and readme. do we have full /docs architecture, using, purpose, motivation, how its built, developer guides, etc?"`
+4. `"- we need this : do we have full use of the highest resolutions available for graphics? - we need this : what about selectable font options per pane or window"`
+5. `"should we bump the version and tag?"` → `"YES!"` (shipped `v1.10.0`)
+6. `"/swe-skills:code-architecture-review"` → `"1, then, 2, then 3"` (1: Execute P0/P1 refactorings, 2: Dependency & supply-chain audit, 3: Phase 28 milestone plan)
+7. `"ok. The other Claude session just finished a code review and remediation check out what was done and update everything and do a release."` (shipped `v1.10.1`)
+8. `"checkpoint and compact so we can handoff"`
 
-## 1. User decisions (verbatim, this session)
-- Architecture review → "yes. do all 1,2,3" (fix P0s, dependency audit, P1 → GSD phases 19–23).
-- "1 - yes" (MSRV → 1.88), "2 - wire-up ghostty-vt feature…", "3 - commit and push".
-- "execute this as autonomously as possible … conserve tokens, pass minimal sufficient context to subagents".
-- Added persistent session-segmented history and dynamic RAM-scaled scrollback (both shipped in v1.6.0).
-- "do 1 - open the PR then I'll review it" → PR #1; the user merged it. Then the tag, push, and `gh release create v1.6.0`.
-- "add binaries for linux" and asked whether macOS Apple Silicon can be cross-compiled from Linux x86 (see §3).
-- **Next:** the user will run `/gsd-plan-phase 19`.
+---
 
-## 2. Phase 19 context (Security Hardening). Source: `.planning/ROADMAP.md` and `.planning/reviews/ARCHITECTURE_REVIEW_PLAN.md` §5.1
-- `--headless --listen` binds any address, with no auth (`src/api/mod.rs` `run_headless_tcp_server` / `serve_jsonrpc`). Target: a `0600` Unix socket in `$XDG_RUNTIME_DIR` by default; non-loopback TCP only with `--allow-remote` plus a bearer token from a `0600` file. (`--help` already claims Unix socket support, but it isn't implemented.)
-- `workspace.snapshot` `ppm_path` allows an arbitrary file write (`dispatch_method`). Confine it to an output directory and test that traversal is rejected.
-- Predictable `/tmp` paths: shell-integration rc files (`src/pty/shell_integration.rs` `shell_integration_root_dir`), history temp exports (`src/pane/history_store.rs` `export_to_temp_file`), `.cast` recordings (`src/pane/colon_command.rs`), and SSH `ControlPath=/tmp/bilterm-ssh-%r@%h:%p` (`src/remote/mod.rs`). Move them to a per-user `0700` directory and use `O_EXCL` writes.
-- SSH option injection: `build_ssh_args` / `build_ssh_tmux_cc_args` push the destination without `--`. Reject a leading `-` and emit `--` before the destination.
-- The P0 hardening is already done: per-connection RPC tasks, 1 MiB line cap, JSON depth 128.
+## 2. Done in This Session (With Evidence)
 
-## 3. Release binaries (DONE: 4 tarballs + SHA256SUMS uploaded to the v1.6.0 release)
-- Built with `cargo zigbuild --release`, using Zig 0.15.2 from the session scratchpad (not persistent). Targets: `x86_64-unknown-linux-gnu.2.28`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`.
-- The macOS binary is ad-hoc signed by zig's linker (`LC_CODE_SIGNATURE` present) but not notarized, so users need `xattr -d com.apple.quarantine`. It hasn't been run on a real Mac yet.
+- **Phase 27 (`v1.10.0` — High-Resolution Pixel Canvas, Adaptive SSH/GUI Graphics & Per-Pane Typography):**
+  - `src/ui/pixel_canvas.rs`: Anti-aliased RGBA framebuffer (`PixelCanvasBuffer`) with Xiaolin Wu lines/Beziers, SDF circles, high-DPI plots, radial focal lens, and `.ppm`/`.svg` export.
+  - `src/ui/hires_subcell.rs`: `CanvasResolution` (`Auto` via `ioctl(TIOCGWINSZ)` `ws_xpixel × ws_ypixel`, `1x`, `2x`, `4x`, `720p`, `1080p`, `4k`, `<W>x<H>`) and `CanvasSubcellMode::Octant` (`2×4` 2-color `fg`+`bg` 24-bit TrueColor supersampling), plus `Kitty`/`Sixel`/`iTerm2` in-band encoders with `tmux` DCS passthrough (`\x1bPtmux;...\x1b\\`).
+  - `src/ui/typography.rs`: Selectable per-pane/per-window font presets (`FontFamilyPreset`, `PaneFontOptions`, `:font ...`).
+  - `src/main.rs`: `bilterm plot <line|bar|scatter|candlestick|heatmap|hires>` CLI subcommand.
+- **Post-Review P0/P1 Hardening, Claude Cross-Review & `v1.10.1` Release (`276604c`, `677b668`):**
+  - **P0.1 (`SEC-R01` Automation Confinement & Atomic Private Writes):**
+    - Added `secure_fs::validate_plain_file_name`, `WindowManager::apply_automation(action, confine)`, `AutomationControlPlane::apply_with_policy(action, policy)`, and `CompositePane::execute_canvas_command_in(cmd, confine)`.
+    - Confined both `:canvas export <name>` and `:record start <name>` / `:record workspace <name>` under `SnapshotPolicy::Confined` (JSON-RPC `wm.command`, `canvas.command`, MCP, and confined Playbooks) to `snapshot_dir`, rejecting `..`, `/`, `\`, NUL, and symlinks, and writing exports atomically (`0600`) via `secure_fs::write_private_file`.
+    - Added `u16::try_from` bounds validation for `size` and `scale_pct` in `workspace.fontsize` (`src/api/rpc_handlers.rs`).
+  - **P0.2 (Live `CanvasResolution` Wiring, Exact Export Dimensions & Cached `TIOCGWINSZ`):**
+    - Wired `scene.resolution.resolve_px_per_cell(canvas.width, canvas.height)` into `render_graphical_canvas` (capped at `4..=16 × 8..=32` px/cell on-screen for 60 FPS `HalfBlock`/`Octant` rendering while preserving full uncapped resolution on `:canvas export`).
+    - Cached `probe_terminal_pixel_size()` in `CACHED_TERMINAL_PIXELS: AtomicU64`, refreshed on `Event::Resize` (`refresh_terminal_pixel_size` in `src/app.rs`).
+    - Updated `:canvas export` and `:canvas encode` to use exact `self.vt.size()` dimensions instead of hardcoded `(80, 24)`.
+  - **P1.1 (`ui <-> api` Cycle Elimination):**
+    - Extracted `handle_rpc_canvas` and `handle_rpc_fontsize` from `src/ui/` into `src/api/rpc_handlers.rs`. `src/ui/` now has **zero** imports from `crate::api`.
+  - **P1.2 & P2.3 (`ARCH-R04` Module Decompression & Split Error Surfacing):**
+    - Split `src/colon_command/execute.rs` (`789` → `298` LOC) + `src/colon_command/execute_wm.rs` (`505` LOC) and surfaced `wm.split_focused(...)` errors to the active pane status bar.
+    - Extracted unit tests to `src/pane/tests.rs` (`src/pane/mod.rs` `788` → `677` LOC) and `src/wm/tests.rs` (`src/wm/z_stack.rs` `788` → `611` LOC).
+  - **Dependency & Supply-Chain Audit (`docs/DEPENDENCY_AUDIT.md`):**
+    - Set `vt100-ctt = { version = "0.17.1", default-features = false }` in `Cargo.toml`, pruning 13 unused transitive crates (duplicate `ratatui 0.29.0`, `tui-term 0.3.4`, unmaintained `paste 1.0.15` `RUSTSEC-2024-0436`, and `lru 0.12.5` `RUSTSEC-2026-0002`).
 
-## 4. Known open items (carried)
-- `cargo fmt --check` already failed on `main` before this work (pre-existing).
-- Scrollback:
-  - Rebuild runs on the UI thread, so a pane of about 1M lines can stall it.
-  - A fast flood can drop the oldest lines before the 2 s rebalance.
-  - DECSTBM isn't restored after a rebuild.
-  - The worker and ghostty paths keep fixed capacity.
-- History: old per-run logs aren't migrated; two processes sharing one session can lose a line during compaction.
-- Ghostty: `zig_0_15` in `flake.nix` hasn't been checked with nix; palette-indexed underline colours map to `None`.
-- The test suite rewrites `docs/assets/screenshot-3278-inspector.svg`. Revert it before committing (`git checkout -- docs/assets/screenshot-3278-inspector.svg`).
-- Local and remote branch `fix/architecture-review-p0` still exist (merged); safe to delete.
-- The repo has no CI workflows.
+---
 
-## 5. Resume command
-`git switch main && git pull --ff-only && cargo test && cargo clippy --all-targets -- -D warnings` → then `/gsd-plan-phase 19`
+## 3. Bugs Fixed & Gotchas Discovered (Do Not Reintroduce)
+
+- **Bypassing `WindowManager::apply` in RPC/Playbook:** Confinement for file-writing `:colon` commands (`:canvas export`, `:record start`) must go through `WindowManager::apply_automation(action, confine)` (`AutomationControlPlane::apply_with_policy`) rather than ad-hoc string matching in `rpc.rs` so `wm.command`, `canvas.command`, and `Playbook` share identical policy and error surfacing.
+- **Off-by-one VT canvas height in `:canvas export`:** `self.vt.size()` returns `(canvas_rows, canvas_cols)` excluding the prompt row; do **not** add `.saturating_add(1)` to `canvas_rows` during export.
+- **Test side-effect on SVG screenshots:** Running `cargo test` rewrites `docs/assets/screenshot-3278-inspector.svg`, `docs/assets/screenshot-3279-palette.svg`, and `docs/assets/screenshot-workspace.svg`. Always revert them before committing if unchanged:
+  ```bash
+  git checkout -- docs/assets/screenshot-3278-inspector.svg docs/assets/screenshot-3279-palette.svg docs/assets/screenshot-workspace.svg
+  ```
+- **Untracked local scratch directories:** `.flowscope/`, `extra_prompt_session_panels_etc.txt`, and `tmp/` exist in the working directory; never stage them (`git add` explicit paths only).
+
+---
+
+## 4. Working-Tree State
+
+- **Branch:** `main` (clean tracked working tree; synced with `origin/main`)
+- **Latest Tag:** `v1.10.1`
+- **Background Processes / Stashes:** None (`0` background tasks, `0` git stashes)
+- **Untracked Local Files (Ignore):** `.flowscope/`, `extra_prompt_session_panels_etc.txt`, `tmp/`
+
+---
+
+## 5. Next Steps (Exact Commands to Resume)
+
+1. **Verify working tree & baseline test gates:**
+   ```bash
+   git status --short
+   cargo clippy --all-features --all-targets -- -D warnings
+   cargo test --quiet
+   git checkout -- docs/assets/screenshot-3278-inspector.svg docs/assets/screenshot-3279-palette.svg docs/assets/screenshot-workspace.svg
+   ```
+   *(Expect `0` warnings and `235` passing tests: `151` unit + `84` integration.)*
+2. **Execute Phase 28 (remaining P2 structural DAG decoupling & dirty-driven rendering) when ready:**
+   - Review plan: [`.planning/phases/28-architecture-hardening-and-dag-decoupling/28-01-PLAN.md`](phases/28-architecture-hardening-and-dag-decoupling/28-01-PLAN.md) and [`docs/ARCHITECTURE_REVIEW.md`](../docs/ARCHITECTURE_REVIEW.md) (`P2.1` `pane <-> wm` / `action <-> colon_command` DAG cycle breaking, `P2.2` typed `Action` variants for `:canvas` / `:fontsize`, and `P1.3` dirty-driven rendering).
