@@ -5,7 +5,7 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.10.0] - 2026-10-25
 
 ### Added
 - **High-Resolution Anti-Aliased Pixel/GPU Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`, `src/ui/pixel_canvas.rs`, `src/pane/canvas_scene.rs`, `src/ui/renderer.rs`, `src/main.rs`)**:

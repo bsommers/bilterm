@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.9.1-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.10.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
-  <img src="https://img.shields.io/badge/tests-236%20passing-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-233%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
