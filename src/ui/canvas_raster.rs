@@ -318,9 +318,9 @@ impl SubcellBuffer {
                                         (1, 3) => 0x80,
                                         _ => 0,
                                     },
-                                    CanvasSubcellMode::Sextant | CanvasSubcellMode::Quadrant => {
-                                        1u8 << (dy * 2 + dx)
-                                    }
+                                    CanvasSubcellMode::Sextant
+                                    | CanvasSubcellMode::Quadrant
+                                    | CanvasSubcellMode::HalfBlock => 1u8 << (dy * 2 + dx),
                                 };
                                 mask |= bit;
                             }
@@ -336,6 +336,7 @@ impl SubcellBuffer {
                             CanvasSubcellMode::Braille => braille_char_from_mask(mask),
                             CanvasSubcellMode::Sextant => sextant_char_from_mask(mask),
                             CanvasSubcellMode::Quadrant => QUADRANT_CHARS[usize::from(mask & 0x0f)],
+                            CanvasSubcellMode::HalfBlock => '▀',
                         };
                         let mut sym_buf = [0u8; 4];
                         cell.set_symbol(ch.encode_utf8(&mut sym_buf));
@@ -369,78 +370,92 @@ pub fn render_graphical_canvas(
     }
 
     let mode = scene.subcell_mode;
-    let lens = SubcellFocalLens::from_config(cfg, canvas, pane.vt().cursor_position(), mode);
-    let mut sub = SubcellBuffer::new(canvas.width, canvas.height, mode, lens);
-    let max_x = (sub.sub_w.saturating_sub(1)).max(1) as i32;
-    let max_y = (sub.sub_h.saturating_sub(1)).max(1) as i32;
+    if mode == CanvasSubcellMode::HalfBlock {
+        let px_buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
+            pane,
+            cfg,
+            canvas.width,
+            canvas.height,
+            4,
+            8,
+        );
+        px_buf.flush_halfblocks_to_ratatui(canvas, buf);
+    } else {
+        let lens = SubcellFocalLens::from_config(cfg, canvas, pane.vt().cursor_position(), mode);
+        let mut sub = SubcellBuffer::new(canvas.width, canvas.height, mode, lens);
+        let max_x = (sub.sub_w.saturating_sub(1)).max(1) as i32;
+        let max_y = (sub.sub_h.saturating_sub(1)).max(1) as i32;
 
-    // 1. Render Tektronix 4010/4014 storage-tube vectors (decaying afterglow first, then live bright beam)
-    if tek.has_visible_content() {
-        let is_amber = cfg.theme == ThemePreset::Ibm3279Amber;
-        let bright_color = if is_amber {
-            (255, 176, 0)
-        } else {
-            (51, 255, 51)
-        };
-        let decay_color = if is_amber {
-            (130, 82, 0)
-        } else {
-            (20, 130, 20)
-        };
-
-        for seg in tek.decaying_segments.iter().chain(tek.segments.iter()) {
-            let color = if seg.phosphor_age == 0 {
-                bright_color
+        // 1. Render Tektronix 4010/4014 storage-tube vectors (decaying afterglow first, then live bright beam)
+        if tek.has_visible_content() {
+            let is_amber = cfg.theme == ThemePreset::Ibm3279Amber;
+            let bright_color = if is_amber {
+                (255, 176, 0)
             } else {
-                decay_color
+                (51, 255, 51)
             };
-            let x0 = ((i32::from(seg.x0) * max_x) / i32::from(TEK_MAX_X - 1)).clamp(0, max_x);
-            let y0 = max_y
-                - ((i32::from(seg.y0) * max_y) / i32::from(TEK_MAX_Y - 1)).clamp(0, max_y);
-            let x1 = ((i32::from(seg.x1) * max_x) / i32::from(TEK_MAX_X - 1)).clamp(0, max_x);
-            let y1 = max_y
-                - ((i32::from(seg.y1) * max_y) / i32::from(TEK_MAX_Y - 1)).clamp(0, max_y);
-            if seg.point_only {
-                sub.plot(x0, y0, color);
+            let decay_color = if is_amber {
+                (130, 82, 0)
             } else {
-                sub.draw_line(x0, y0, x1, y1, seg.style, color);
+                (20, 130, 20)
+            };
+
+            for seg in tek.decaying_segments.iter().chain(tek.segments.iter()) {
+                let color = if seg.phosphor_age == 0 {
+                    bright_color
+                } else {
+                    decay_color
+                };
+                let x0 = ((i32::from(seg.x0) * max_x) / i32::from(TEK_MAX_X - 1)).clamp(0, max_x);
+                let y0 = max_y
+                    - ((i32::from(seg.y0) * max_y) / i32::from(TEK_MAX_Y - 1)).clamp(0, max_y);
+                let x1 = ((i32::from(seg.x1) * max_x) / i32::from(TEK_MAX_X - 1)).clamp(0, max_x);
+                let y1 = max_y
+                    - ((i32::from(seg.y1) * max_y) / i32::from(TEK_MAX_Y - 1)).clamp(0, max_y);
+                if seg.point_only {
+                    sub.plot(x0, y0, color);
+                } else {
+                    sub.draw_line(x0, y0, x1, y1, seg.style, color);
+                }
             }
         }
-    }
 
-    // 2. Render modern retained scene-graph (images, plots, vectors, and z-sorted 2D sprites)
-    if scene.has_visible_content() {
-        if let Some(img) = &scene.image_view {
-            render_image_to_subcells(&mut sub, img);
-        }
-        for plot in &scene.plots {
-            render_plot_to_subcells(&mut sub, plot);
-        }
-        for prim in &scene.primitives {
-            render_primitive_to_subcells(&mut sub, prim);
-        }
-        let mut sorted_sprites: Vec<_> = scene.sprites.iter().filter(|s| s.visible).collect();
-        sorted_sprites.sort_by_key(|s| s.z_index);
-        for sp in sorted_sprites {
-            let sx0 = sp.x.round() as i32;
-            let sy0 = sp.y.round() as i32;
-            let frame = sp.frames.get(sp.current_frame);
-            for dy in 0..i32::from(sp.height) {
-                for dx in 0..i32::from(sp.width) {
-                    let opaque = frame
-                        .and_then(|f| f.get((dy as usize) * usize::from(sp.width) + (dx as usize)))
-                        .copied()
-                        .unwrap_or(1)
-                        != 0;
-                    if opaque {
-                        sub.plot(sx0 + dx, sy0 + dy, sp.rgb);
+        // 2. Render modern retained scene-graph (images, plots, vectors, and z-sorted 2D sprites)
+        if scene.has_visible_content() {
+            if let Some(img) = &scene.image_view {
+                render_image_to_subcells(&mut sub, img);
+            }
+            for plot in &scene.plots {
+                render_plot_to_subcells(&mut sub, plot);
+            }
+            for prim in &scene.primitives {
+                render_primitive_to_subcells(&mut sub, prim);
+            }
+            let mut sorted_sprites: Vec<_> = scene.sprites.iter().filter(|s| s.visible).collect();
+            sorted_sprites.sort_by_key(|s| s.z_index);
+            for sp in sorted_sprites {
+                let sx0 = sp.x.round() as i32;
+                let sy0 = sp.y.round() as i32;
+                let frame = sp.frames.get(sp.current_frame);
+                for dy in 0..i32::from(sp.height) {
+                    for dx in 0..i32::from(sp.width) {
+                        let opaque = frame
+                            .and_then(|f| {
+                                f.get((dy as usize) * usize::from(sp.width) + (dx as usize))
+                            })
+                            .copied()
+                            .unwrap_or(1)
+                            != 0;
+                        if opaque {
+                            sub.plot(sx0 + dx, sy0 + dy, sp.rgb);
+                        }
                     }
                 }
             }
         }
-    }
 
-    sub.flush_to_ratatui(canvas, mode, buf);
+        sub.flush_to_ratatui(canvas, mode, buf);
+    }
 
     // 3. Overlay Tektronix Alpha labels and Scene TextLabels at cell coordinates
     for lbl in &tek.labels {
@@ -748,6 +763,14 @@ impl WindowManager {
                 JsonValue::Number(tek.decaying_segments.len() as i64),
             ),
             ("canvas_active", JsonValue::Bool(scene.active)),
+            (
+                "render_backend",
+                JsonValue::String(format!("{:?}", scene.render_backend)),
+            ),
+            (
+                "effective_backend",
+                JsonValue::String(format!("{:?}", scene.render_backend.resolve_auto())),
+            ),
             (
                 "subcell_mode",
                 JsonValue::String(format!("{:?}", scene.subcell_mode)),

@@ -176,7 +176,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":cascade", &[]),
     (":equalize", &[]),
     (":tek", &["on", "off", "demo", "erase", "clear"]),
-    (":canvas", &["demo", "tek", "mode", "line", "circle", "bezier", "sprite", "step", "plot", "image", "pan", "zoom", "clear", "status"]),
+    (":canvas", &["hires", "backend", "demo", "tek", "mode", "line", "circle", "bezier", "sprite", "step", "plot", "image", "pan", "zoom", "export", "encode", "clear", "status"]),
     (":record", &["start", "workspace", "pane", "stop"]),
     (":remote", &["list", "add ", "exec ", "disconnect "]),
     (":ssh", &[]),

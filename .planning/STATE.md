@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.8.0
+milestone: v1.9.1
 milestone_name: milestone
-current_phase: 26
-current_phase_name: tektronix-4010-4014-and-modern-graphical-canvas
-status: completed_phase_26
-stopped_at: Phase 26 complete (all 41/41 v1 requirements and all 26 phases complete)
-last_updated: "2026-10-24"
-last_activity: 2026-10-24
-last_activity_desc: Completed Phase 26 (Tektronix 4010/4014 & Modern Graphical Canvas)
+current_phase: 27
+current_phase_name: high-res-pixel-canvas-and-adaptive-ssh-gui-graphics
+status: completed_phase_27
+stopped_at: Phase 27 complete (all 44/44 requirements and all 27 phases complete)
+last_updated: "2026-10-25"
+last_activity: 2026-10-25
+last_activity_desc: Completed Phase 27 (High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine)
 progress:
-  total_phases: 13
-  completed_phases: 13
-  total_plans: 45
-  completed_plans: 45
+  total_phases: 14
+  completed_phases: 14
+  total_plans: 48
+  completed_plans: 48
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-19)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 26 — Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) — COMPLETE
+**Current focus:** Phase 27 — High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) — COMPLETE
 
 ## Current Position
 
-Phase: 26 (tektronix-4010-4014-and-modern-graphical-canvas) — COMPLETE
-Plan: 3/3 complete (`26-01-PLAN.md`..`26-03-PLAN.md`)
-Status: All 26 phases and 41/41 v1 requirements complete
-Last activity: 2026-10-24 — Completed Phase 26 (`TEK-01`, `CANV-01`)
+Phase: 27 (high-res-pixel-canvas-and-adaptive-ssh-gui-graphics) — COMPLETE
+Plan: 3/3 complete (`27-01-PLAN.md`..`27-03-PLAN.md`)
+Status: All 27 phases and 44/44 requirements complete
+Last activity: 2026-10-25 — Completed Phase 27 (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`)
 
 Progress: [██████████] 100%
 

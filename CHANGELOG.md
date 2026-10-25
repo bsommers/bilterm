@@ -5,6 +5,14 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **High-Resolution Anti-Aliased Pixel/GPU Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`, `src/ui/pixel_canvas.rs`, `src/pane/canvas_scene.rs`, `src/ui/renderer.rs`, `src/main.rs`)**:
+  - **`PixelCanvasBuffer` Anti-Aliased RGBA Framebuffer (`CANV-02`)**: Renders `PaneCanvasScene` and `TektronixState` with Xiaolin Wu anti-aliased lines and cubic Bezier curves, signed-distance-field anti-aliased circles/discs, high-DPI plots with gridlines and gradient area fill, bilinear RGBA image resampling, smooth pixel-space radial focal zoom lens (`apply_focal_lens`), and direct `.ppm` / `.svg` export (`:canvas export <path.ppm|path.svg>`).
+  - **Adaptive Pure-SSH & Native GUI Graphics Negotiation (`SSH-GFX-01`)**: `CanvasRenderBackend` (`Auto`, `Kitty`, `Sixel`, `ITerm2`, `HalfBlock`, `Braille`, `Sextant`, `Quadrant`) inspects `$TERM`, `$TERM_PROGRAM`, `$LC_TERMINAL`, `$KITTY_WINDOW_ID`, `$GHOSTTY_RESOURCES_DIR`, `$WEZTERM_EXECUTABLE`, and `$WT_SESSION`, encodes `Kitty APC G`, `DEC Sixel DCS q`, or `iTerm2 OSC 1337` streams with automatic `\x1bPtmux;\x1b...\x1b\\` DCS passthrough (`:canvas encode [kitty|sixel|iterm2]`), renders `1×2` 24-bit TrueColor `HalfBlock` (`▀`/`▄`) bitmaps (`:canvas hires` / `:canvas mode halfblock`) over any SSH session with `FloatingCommandPrompt` occlusion, and attaches full-resolution `GuiImageTexture` layers in `GuiWorkspaceRenderer`.
+  - **`bilterm plot` CLI Subcommand (`CLI-GFX-01`)**: Plot `line`, `bar`, `scatter`, `candlestick`, `heatmap`, or `hires` demo scenes directly from the CLI or SSH shell (`bilterm plot line 10,25,18,42 -o chart.svg` or `-b kitty|sixel|iterm2|halfblock`).
+
 ## [v1.9.1] - 2026-10-24
 
 ### Fixed

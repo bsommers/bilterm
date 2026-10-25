@@ -5,6 +5,7 @@ pub mod drawer;
 pub mod glyphs;
 pub mod modals;
 pub mod occlusion;
+pub mod pixel_canvas;
 pub mod renderer;
 pub mod status_bar;
 pub mod theme;
@@ -12,6 +13,7 @@ pub mod typography;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
+pub use pixel_canvas::{PixelCanvasBuffer, wrap_tmux_dcs_passthrough};
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
 pub use typography::{LineSizeAttr, encode_host_font_passthrough, scan_dec_line_size_escapes};
 

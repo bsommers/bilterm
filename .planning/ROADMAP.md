@@ -331,10 +331,28 @@ Plans:
 - [x] 26-02-PLAN.md — `src/ui/canvas_raster.rs` (Unicode 2×4 Braille / 2×3 Sextant / Quadrant TUI rasterizer + GUI SVG/PPM renderer), `Action::CanvasCommand`, `:canvas`, and JSON-RPC/MCP `canvas.*` (wave 2)
 - [x] 26-03-PLAN.md — `tests/tektronix_and_graphical_canvas.rs` integration suite, documentation updates, and Phase 26 state sync (wave 3)
 
+### Phase 27: High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`v2.0`)
+
+**Goal**: As a user operating Bilterm in either a pure SSH session (over Ghostty/Kitty/WezTerm/iTerm2/Windows Terminal/xterm/tmux or a plain character terminal) or Native GUI mode (`GuiWorkspaceRenderer`), I want a high-resolution anti-aliased RGBA pixel canvas (`PixelCanvasBuffer`) that automatically negotiates the best graphics transport (`Kitty`, `Sixel`, `iTerm2`, `tmux` passthrough, `1×2` 24-bit TrueColor `HalfBlock`, `2×4` `Braille`, or native GUI pixel surface) and provides CLI/colon commands (`bilterm plot`, `bilterm img`, `:canvas backend`, `:canvas export`, `:canvas hires`) for rich charts, graphs, and images.
+**Depends on**: Phase 26
+**Requirements**: CANV-02, SSH-GFX-01, CLI-GFX-01
+**Success Criteria** (what must be TRUE):
+
+  1. `PixelCanvasBuffer` (`src/ui/pixel_canvas.rs`) renders `PaneCanvasScene` and `TektronixState` into an anti-aliased RGBA pixel framebuffer (Xiaolin Wu anti-aliased lines/curves, filled circles/rects, high-DPI plot axes/grids, bilinear image blitting, and smooth `SubcellFocalLens` radial magnification) and exports directly to `.ppm` or `.svg` (`:canvas export <file>`).
+  2. `CanvasRenderBackend` (`Auto`, `Kitty`, `Sixel`, `ITerm2`, `HalfBlock`, `Braille`, `Sextant`, `Quadrant`) auto-detects host terminal pixel capabilities over SSH and local sessions, emits Kitty `APC G`, DEC Sixel `DCS q`, or iTerm2 `OSC 1337` pixel payloads (wrapped in `\x1bPtmux;...\x1b\\` when inside `$TMUX`), and renders 24-bit TrueColor `1×2` Half-Block (`▀`) bitmaps in Ratatui with clean `FloatingCommandPrompt` occlusion.
+  3. `bilterm plot` and `bilterm img` CLI commands plus `:canvas backend <mode>`, `:canvas hires`, and `:canvas export <file>` allow one-command high-res plotting and image rendering from any shell or SSH session.
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 27-01-PLAN.md — `src/ui/pixel_canvas.rs`: Anti-aliased RGBA `PixelCanvasBuffer`, `HalfBlock` 24-bit TrueColor cell renderer, and `Kitty`/`Sixel`/`iTerm2`/`tmux` passthrough encoders (wave 1)
+- [x] 27-02-PLAN.md — Wire `CanvasRenderBackend` auto-detection, `:canvas backend|export|hires`, `GuiWorkspaceRenderer` pixel canvas blitting, and `bilterm plot` / `bilterm img` CLI commands (wave 2)
+- [x] 27-03-PLAN.md — `tests/high_res_pixel_and_ssh_canvas.rs` verification suite, documentation sync, and release (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -364,3 +382,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 3/3 | Complete | 2026-10-24 |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 3/3 | Complete | 2026-10-24 |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 3/3 | Complete | 2026-10-24 |
+| 27. High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) | 3/3 | Complete | 2026-10-25 |

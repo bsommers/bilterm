@@ -7,8 +7,8 @@ pub mod modes;
 pub mod prompt_editor;
 
 pub use canvas_scene::{
-    CandlestickBar, CanvasSubcellMode, DeclarativePlot, InteractiveImageView, PaneCanvasScene,
-    PlotKind, Sprite2D, VectorPrimitive,
+    CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
+    PaneCanvasScene, PlotKind, Sprite2D, VectorPrimitive,
 };
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};

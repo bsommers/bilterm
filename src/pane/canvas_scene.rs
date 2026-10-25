@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::vt::tektronix::TektronixState;
 
-/// Sub-cell character rasterization mode for TUI rendering (`CANV-01`).
+/// Sub-cell character rasterization mode for TUI rendering (`CANV-01`, `CANV-02`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CanvasSubcellMode {
     /// Unicode `2×4` Braille patterns (`U+2800..U+28FF`, 8 sub-pixels per cell).
@@ -22,6 +22,8 @@ pub enum CanvasSubcellMode {
     Sextant,
     /// Unicode `2×2` Block Quadrants (`▘▝▖▗▚▞▛▜▙▟█`, 4 sub-pixels per cell).
     Quadrant,
+    /// Unicode `1×2` Half-Blocks (`▀` / `▄` with independent 24-bit TrueColor fg=top, bg=bottom pixel).
+    HalfBlock,
 }
 
 impl CanvasSubcellMode {
@@ -32,6 +34,7 @@ impl CanvasSubcellMode {
             Self::Braille => (2, 4),
             Self::Sextant => (2, 3),
             Self::Quadrant => (2, 2),
+            Self::HalfBlock => (1, 2),
         }
     }
 
@@ -40,8 +43,115 @@ impl CanvasSubcellMode {
             "braille" | "2x4" => Some(Self::Braille),
             "sextant" | "sextants" | "2x3" => Some(Self::Sextant),
             "quadrant" | "quadrants" | "2x2" | "block" => Some(Self::Quadrant),
+            "halfblock" | "half-block" | "half" | "1x2" | "truecolor" => Some(Self::HalfBlock),
             _ => None,
         }
+    }
+}
+
+/// Adaptive multi-transport graphics rendering backend across Native GUI, Pure SSH, `tmux`, and TUI (`SSH-GFX-01`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CanvasRenderBackend {
+    /// Automatically negotiate optimal transport from host terminal & SSH environment.
+    #[default]
+    Auto,
+    /// Kitty Graphics Protocol (`APC G`, `\x1b_Ga=T,f=32...\x1b\\`) — Ghostty, Kitty, WezTerm, Konsole (works over SSH!).
+    Kitty,
+    /// DEC Sixel Pixel Graphics (`DCS q`, `\x1bP0;1;q...\x1b\\`) — foot, xterm, Windows Terminal 1.22+, mlterm (works over SSH!).
+    Sixel,
+    /// iTerm2 Inline Images (`OSC 1337;File=inline=1:...`) — iTerm2, WezTerm, Warp (works over SSH!).
+    ITerm2,
+    /// 24-bit TrueColor `1×2` Half-Block (`▀`) bitmap cells — universal over any SSH / `tmux` terminal.
+    HalfBlock,
+    /// Unicode `2×4` Braille (`U+2800..U+28FF`) vector sub-cells.
+    Braille,
+    /// Unicode `2×3` Legacy Computing Sextants (`U+1FB00..U+1FB3B`).
+    Sextant,
+    /// Unicode `2×2` Quadrant blocks.
+    Quadrant,
+}
+
+impl CanvasRenderBackend {
+    pub fn from_name(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "kitty" | "ghostty" => Some(Self::Kitty),
+            "sixel" => Some(Self::Sixel),
+            "iterm" | "iterm2" | "osc1337" => Some(Self::ITerm2),
+            "halfblock" | "half-block" | "half" | "1x2" | "truecolor" => Some(Self::HalfBlock),
+            "braille" | "2x4" => Some(Self::Braille),
+            "sextant" | "2x3" => Some(Self::Sextant),
+            "quadrant" | "2x2" => Some(Self::Quadrant),
+            _ => None,
+        }
+    }
+
+    /// Resolves `Self::Auto` by inspecting terminal & SSH environment variables (`SSH-GFX-01`).
+    pub fn resolve_auto(self) -> Self {
+        if self != Self::Auto {
+            return self;
+        }
+        Self::detect_from_vars(
+            std::env::var("TERM").ok().as_deref(),
+            std::env::var("TERM_PROGRAM").ok().as_deref(),
+            std::env::var("LC_TERMINAL").ok().as_deref(),
+            std::env::var("KITTY_WINDOW_ID").ok().as_deref(),
+            std::env::var("GHOSTTY_RESOURCES_DIR").ok().as_deref(),
+            std::env::var("WEZTERM_EXECUTABLE").ok().as_deref(),
+            std::env::var("WT_SESSION").ok().as_deref(),
+        )
+    }
+
+    /// Pure, deterministic capability resolver for local and SSH sessions (`SSH-GFX-01`).
+    pub fn detect_from_vars(
+        term: Option<&str>,
+        term_program: Option<&str>,
+        lc_terminal: Option<&str>,
+        kitty_id: Option<&str>,
+        ghostty_dir: Option<&str>,
+        wezterm_exe: Option<&str>,
+        wt_session: Option<&str>,
+    ) -> Self {
+        let term_l = term.unwrap_or("").to_ascii_lowercase();
+        let prog_l = term_program.unwrap_or("").to_ascii_lowercase();
+        let lc_l = lc_terminal.unwrap_or("").to_ascii_lowercase();
+
+        if kitty_id.is_some_and(|s| !s.is_empty())
+            || ghostty_dir.is_some_and(|s| !s.is_empty())
+            || term_l.contains("kitty")
+            || term_l.contains("ghostty")
+            || prog_l.contains("ghostty")
+            || prog_l.contains("kitty")
+        {
+            return Self::Kitty;
+        }
+        if wezterm_exe.is_some_and(|s| !s.is_empty()) || prog_l.contains("wezterm") {
+            return Self::Kitty;
+        }
+        if prog_l.contains("iterm") || lc_l.contains("iterm") || prog_l.contains("warp") {
+            return Self::ITerm2;
+        }
+        if wt_session.is_some_and(|s| !s.is_empty())
+            || term_l.contains("foot")
+            || term_l.contains("sixel")
+            || term_l.contains("mlterm")
+            || prog_l.contains("foot")
+        {
+            return Self::Sixel;
+        }
+        if term_l.contains("256color")
+            || term_l.contains("direct")
+            || term_l.contains("truecolor")
+            || term_l.contains("alacritty")
+        {
+            return Self::HalfBlock;
+        }
+        Self::Braille
+    }
+
+    /// Returns whether this backend emits raw pixel escape sequences (`Kitty`, `Sixel`, `ITerm2`).
+    pub const fn is_pixel_protocol(self) -> bool {
+        matches!(self, Self::Kitty | Self::Sixel | Self::ITerm2)
     }
 }
 
@@ -240,24 +350,19 @@ impl InteractiveImageView {
             return None;
         }
         let idx = (usize::from(y) * usize::from(self.width) + usize::from(x)) * 4;
-        if idx + 3 < self.rgba.len() {
-            Some([
-                self.rgba[idx],
-                self.rgba[idx + 1],
-                self.rgba[idx + 2],
-                self.rgba[idx + 3],
-            ])
-        } else {
-            None
-        }
+        (idx + 3 < self.rgba.len()).then(|| {
+            [self.rgba[idx], self.rgba[idx + 1], self.rgba[idx + 2], self.rgba[idx + 3]]
+        })
     }
 }
 
-/// Complete retained scene-graph for a `CompositePane` (`CANV-01`).
+/// Complete retained scene-graph for a `CompositePane` (`CANV-01`, `CANV-02`, `SSH-GFX-01`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PaneCanvasScene {
     pub active: bool,
     pub subcell_mode: CanvasSubcellMode,
+    #[serde(default)]
+    pub render_backend: CanvasRenderBackend,
     pub primitives: Vec<VectorPrimitive>,
     pub sprites: Vec<Sprite2D>,
     pub plots: Vec<DeclarativePlot>,
@@ -314,12 +419,9 @@ impl PaneCanvasScene {
         let parts: Vec<&str> = raw.split_whitespace().collect();
         match parts.first().copied().unwrap_or("status") {
             "status" => Ok(format!(
-                "CANVAS: subcell={:?} primitives={} sprites={} plots={} tek_vecs={}",
-                self.subcell_mode,
-                self.primitives.len(),
-                self.sprites.len(),
-                self.plots.len(),
-                tektronix.segments.len()
+                "CANVAS: backend={:?}(eff={:?}) subcell={:?} primitives={} sprites={} plots={} tek_vecs={}",
+                self.render_backend, self.render_backend.resolve_auto(), self.subcell_mode,
+                self.primitives.len(), self.sprites.len(), self.plots.len(), tektronix.segments.len()
             )),
             "clear" | "reset" => {
                 self.clear();
@@ -330,12 +432,52 @@ impl PaneCanvasScene {
             }
             "mode" | "subcell" => {
                 let Some(mode_str) = parts.get(1) else {
-                    return Err("Usage: :canvas mode <braille|sextant|quadrant>".to_string());
+                    return Err("Usage: :canvas mode <braille|sextant|quadrant|halfblock>".to_string());
                 };
-                let mode = CanvasSubcellMode::from_name(mode_str)
-                    .ok_or_else(|| "Usage: :canvas mode <braille|sextant|quadrant>".to_string())?;
+                let mode = CanvasSubcellMode::from_name(mode_str).ok_or_else(|| {
+                    "Usage: :canvas mode <braille|sextant|quadrant|halfblock>".to_string()
+                })?;
                 self.subcell_mode = mode;
                 Ok(format!("CANVAS SUBCELL MODE: {mode:?}"))
+            }
+            "backend" | "transport" => {
+                let Some(b_str) = parts.get(1) else {
+                    return Ok(format!(
+                        "CANVAS BACKEND: {:?} (effective: {:?})",
+                        self.render_backend, self.render_backend.resolve_auto()
+                    ));
+                };
+                let backend = CanvasRenderBackend::from_name(b_str).ok_or_else(|| {
+                    "Usage: :canvas backend <auto|kitty|sixel|iterm2|halfblock|braille|sextant|quadrant>".to_string()
+                })?;
+                self.render_backend = backend;
+                match backend {
+                    CanvasRenderBackend::HalfBlock => self.subcell_mode = CanvasSubcellMode::HalfBlock,
+                    CanvasRenderBackend::Braille => self.subcell_mode = CanvasSubcellMode::Braille,
+                    CanvasRenderBackend::Sextant => self.subcell_mode = CanvasSubcellMode::Sextant,
+                    CanvasRenderBackend::Quadrant => self.subcell_mode = CanvasSubcellMode::Quadrant,
+                    _ => {}
+                }
+                Ok(format!("CANVAS BACKEND: {backend:?} (effective: {:?})", backend.resolve_auto()))
+            }
+            "hires" | "demo-hires" => {
+                self.clear();
+                self.active = true;
+                self.subcell_mode = CanvasSubcellMode::HalfBlock;
+                let wave: Vec<f32> = (0..32).map(|i| 50.0 + 38.0 * ((i as f32) * 0.32).sin()).collect();
+                self.plots.push(DeclarativePlot {
+                    title: "HiRes Sine Telemetry".to_string(),
+                    kind: PlotKind::Line(wave),
+                    rgb: (0, 230, 255),
+                });
+                self.primitives.push(VectorPrimitive::CubicBezier {
+                    p0: (4.0, 28.0), p1: (22.0, 4.0), p2: (46.0, 32.0), p3: (68.0, 8.0), rgb: (255, 180, 40),
+                });
+                self.primitives.push(VectorPrimitive::Circle {
+                    cx: 20.0, cy: 16.0, radius: 8.0, rgb: (120, 255, 140), filled: true,
+                });
+                self.image_view = Some(InteractiveImageView::new_test_pattern(24, 14));
+                Ok("CANVAS HIRES: loaded anti-aliased TrueColor Half-Block/Pixel scene (:canvas export <file.ppm> | :canvas clear)".to_string())
             }
             "tek" | "tektronix" => match parts.get(1).copied() {
                 None => {
@@ -387,11 +529,7 @@ impl PaneCanvasScene {
                     rgb: (85, 255, 255),
                 });
                 self.primitives.push(VectorPrimitive::Circle {
-                    cx: 24.0,
-                    cy: 20.0,
-                    radius: 10.0,
-                    rgb: (255, 255, 85),
-                    filled: false,
+                    cx: 24.0, cy: 20.0, radius: 10.0, rgb: (255, 255, 85), filled: false,
                 });
                 Ok("CANVAS DEMO: loaded Tektronix 4014 wireframe + Braille vector/plot scene (:canvas clear to reset)".to_string())
             }
@@ -399,18 +537,10 @@ impl PaneCanvasScene {
                 if parts.len() < 5 {
                     return Err("Usage: :canvas line <x0> <y0> <x1> <y1>".to_string());
                 }
-                let x0 = parts[1].parse::<f32>().unwrap_or(0.0);
-                let y0 = parts[2].parse::<f32>().unwrap_or(0.0);
-                let x1 = parts[3].parse::<f32>().unwrap_or(20.0);
-                let y1 = parts[4].parse::<f32>().unwrap_or(10.0);
+                let (x0, y0) = (parts[1].parse().unwrap_or(0.0), parts[2].parse().unwrap_or(0.0));
+                let (x1, y1) = (parts[3].parse().unwrap_or(20.0), parts[4].parse().unwrap_or(10.0));
                 self.active = true;
-                self.primitives.push(VectorPrimitive::Line {
-                    x0,
-                    y0,
-                    x1,
-                    y1,
-                    rgb: (85, 255, 255),
-                });
+                self.primitives.push(VectorPrimitive::Line { x0, y0, x1, y1, rgb: (85, 255, 255) });
                 Ok(format!("CANVAS: added line ({x0},{y0})->({x1},{y1})"))
             }
             "circle" => {
@@ -422,46 +552,19 @@ impl PaneCanvasScene {
                 let radius = parts[3].parse::<f32>().unwrap_or(8.0);
                 let filled = parts.get(4).is_some_and(|&s| s == "fill" || s == "filled");
                 self.active = true;
-                self.primitives.push(VectorPrimitive::Circle {
-                    cx,
-                    cy,
-                    radius,
-                    rgb: (255, 255, 85),
-                    filled,
-                });
+                self.primitives.push(VectorPrimitive::Circle { cx, cy, radius, rgb: (255, 255, 85), filled });
                 Ok(format!("CANVAS: added circle r={radius} at ({cx},{cy})"))
             }
             "bezier" => {
                 if parts.len() < 9 {
-                    return Err(
-                        "Usage: :canvas bezier <x0> <y0> <x1> <y1> <x2> <y2> <x3> <y3>"
-                            .to_string(),
-                    );
+                    return Err("Usage: :canvas bezier <x0> <y0> <x1> <y1> <x2> <y2> <x3> <y3>".to_string());
                 }
-                let p0 = (
-                    parts[1].parse().unwrap_or(0.0),
-                    parts[2].parse().unwrap_or(0.0),
-                );
-                let p1 = (
-                    parts[3].parse().unwrap_or(10.0),
-                    parts[4].parse().unwrap_or(0.0),
-                );
-                let p2 = (
-                    parts[5].parse().unwrap_or(20.0),
-                    parts[6].parse().unwrap_or(20.0),
-                );
-                let p3 = (
-                    parts[7].parse().unwrap_or(30.0),
-                    parts[8].parse().unwrap_or(20.0),
-                );
+                let p0 = (parts[1].parse().unwrap_or(0.0), parts[2].parse().unwrap_or(0.0));
+                let p1 = (parts[3].parse().unwrap_or(10.0), parts[4].parse().unwrap_or(0.0));
+                let p2 = (parts[5].parse().unwrap_or(20.0), parts[6].parse().unwrap_or(20.0));
+                let p3 = (parts[7].parse().unwrap_or(30.0), parts[8].parse().unwrap_or(20.0));
                 self.active = true;
-                self.primitives.push(VectorPrimitive::CubicBezier {
-                    p0,
-                    p1,
-                    p2,
-                    p3,
-                    rgb: (85, 255, 85),
-                });
+                self.primitives.push(VectorPrimitive::CubicBezier { p0, p1, p2, p3, rgb: (85, 255, 85) });
                 Ok("CANVAS: added cubic Bezier curve".to_string())
             }
             "sprite" => {
@@ -572,7 +675,7 @@ impl PaneCanvasScene {
                 }
             }
             other => Err(format!(
-                "Unknown :canvas subcommand '{other}'. Usage: :canvas <tek|mode|line|circle|bezier|sprite|step|plot|image|pan|zoom|clear>"
+                "Unknown :canvas subcommand '{other}'. Usage: :canvas <hires|backend|tek|mode|line|circle|bezier|sprite|step|plot|image|pan|zoom|export|encode|clear>"
             )),
         }
     }
@@ -616,10 +719,61 @@ impl crate::pane::CompositePane {
         &mut self.canvas_scene
     }
 
-    /// Executes a `:canvas <subcommand>` on this pane, updating `canvas_scene`, `vt.tektronix`, and `status_message` (`TEK-01`, `CANV-01`).
+    /// Executes a `:canvas <subcommand>` on this pane, updating `canvas_scene`, `vt.tektronix`, and `status_message` (`TEK-01`, `CANV-01`, `CANV-02`).
     pub fn execute_canvas_command(&mut self, cmd: &str) -> std::result::Result<String, String> {
-        let (scene, vt) = (&mut self.canvas_scene, self.vt.tektronix_mut());
-        match scene.execute_command(vt, cmd) {
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        let res = match parts.first().copied() {
+            Some("export") => {
+                let Some(path) = parts.get(1).copied() else {
+                    return Err("Usage: :canvas export <file.ppm|file.svg>".to_string());
+                };
+                if path.contains("..") || path.contains('\0') {
+                    return Err("Invalid export path (path traversal rejected)".to_string());
+                }
+                let cfg = crate::config::BiltermConfig::default();
+                let buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
+                    self, &cfg, 80, 24, 8, 16,
+                );
+                let write_res = if path.ends_with(".svg") {
+                    std::fs::write(path, buf.export_svg("Bilterm High-Res Canvas"))
+                } else {
+                    std::fs::write(path, buf.export_ppm())
+                };
+                match write_res {
+                    Ok(()) => Ok(format!(
+                        "CANVAS EXPORT: wrote {}x{} high-res image to {path}",
+                        buf.width, buf.height
+                    )),
+                    Err(e) => Err(format!("CANVAS EXPORT ERROR: {e}")),
+                }
+            }
+            Some("encode") => {
+                let req = parts
+                    .get(1)
+                    .and_then(|s| CanvasRenderBackend::from_name(s))
+                    .unwrap_or(self.canvas_scene.render_backend);
+                let eff = req.resolve_auto();
+                let in_tmux = std::env::var("TMUX").is_ok_and(|v| !v.is_empty());
+                let cfg = crate::config::BiltermConfig::default();
+                let buf = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
+                    self, &cfg, 40, 12, 4, 8,
+                );
+                let stream = match eff {
+                    CanvasRenderBackend::Sixel => buf.encode_sixel_dcs(in_tmux),
+                    CanvasRenderBackend::ITerm2 => buf.encode_iterm2_osc1337(40, 12, in_tmux),
+                    _ => buf.encode_kitty_apc(40, 12, in_tmux),
+                };
+                Ok(format!(
+                    "CANVAS ENCODE ({eff:?}, tmux_passthrough={in_tmux}): {} bytes ready",
+                    stream.len()
+                ))
+            }
+            _ => {
+                let (scene, vt) = (&mut self.canvas_scene, self.vt.tektronix_mut());
+                scene.execute_command(vt, cmd)
+            }
+        };
+        match res {
             Ok(msg) => {
                 self.set_status_message(Some(msg.clone()));
                 Ok(msg)

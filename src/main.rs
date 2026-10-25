@@ -48,7 +48,8 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
-               bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n\
+               bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
+               bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
@@ -110,6 +111,56 @@ async fn main() -> color_eyre::Result<()> {
         let resp =
             send_rpc_request_with_token(endpoint, method, params, ctl_token.as_deref()).await?;
         println!("{resp}");
+        return Ok(());
+    }
+    if args.first().map(String::as_str) == Some("plot") {
+        use bilterm::pane::{CanvasRenderBackend, CompositePane};
+        use bilterm::ui::pixel_canvas::PixelCanvasBuffer;
+
+        let kind = args
+            .get(1)
+            .filter(|s| !s.starts_with('-'))
+            .map(String::as_str)
+            .unwrap_or("line");
+        let csv = args
+            .get(2)
+            .filter(|s| !s.starts_with('-'))
+            .map(String::as_str)
+            .unwrap_or("12,28,19,45,38,64,52,84");
+        let mut pane = CompositePane::new_headless(1, 24, 80);
+        if kind == "hires" || kind == "demo" {
+            let _ = pane.execute_canvas_command("hires");
+        } else {
+            let _ = pane.execute_canvas_command(&format!("plot {kind} {csv}"));
+        }
+        let cfg = BiltermConfig::default();
+        if let Some(out_path) = switch_value(&args, &["-o", "--output"]) {
+            let msg = pane
+                .execute_canvas_command(&format!("export {out_path}"))
+                .map_err(|e| color_eyre::eyre::eyre!(e))?;
+            println!("{msg}");
+            return Ok(());
+        }
+        let req_backend = switch_value(&args, &["-b", "--backend"])
+            .and_then(CanvasRenderBackend::from_name)
+            .unwrap_or(CanvasRenderBackend::Auto)
+            .resolve_auto();
+        let in_tmux = std::env::var("TMUX").is_ok_and(|v| !v.is_empty());
+        let buf = PixelCanvasBuffer::render_pane_scene(&pane, &cfg, 60, 16, 4, 8);
+        match req_backend {
+            CanvasRenderBackend::Kitty => print!("{}", buf.encode_kitty_apc(60, 16, in_tmux)),
+            CanvasRenderBackend::Sixel => print!("{}", buf.encode_sixel_dcs(in_tmux)),
+            CanvasRenderBackend::ITerm2 => {
+                print!("{}", buf.encode_iterm2_osc1337(60, 16, in_tmux))
+            }
+            _ => {
+                print!("\x1b]1337;Canvas=plot {kind} {csv}\x07");
+                println!(
+                    "bilterm plot ({kind}, backend={req_backend:?}, {}x{} px)",
+                    buf.width, buf.height
+                );
+            }
+        }
         return Ok(());
     }
     if has_switch(&args, &["-m", "--mcp"]) {

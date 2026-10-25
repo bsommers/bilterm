@@ -542,9 +542,47 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
             }
         }
 
-        // Attach full-resolution Kitty / Sixel textures from each visible pane
+        // Attach full-resolution Kitty / Sixel textures and high-res PixelCanvasBuffer scenes from each visible pane
         let snap = WorkspaceFrameSnapshot::capture(wm, viewport);
         for pane_snap in snap.panes.iter().chain(snap.quick_terminal.iter()) {
+            let pane_ref = wm
+                .pane(pane_snap.id)
+                .or_else(|| (wm.quick_terminal().pane.id() == pane_snap.id).then_some(&wm.quick_terminal().pane));
+            if let Some(pane) = pane_ref
+                && (pane.canvas_scene().has_visible_content()
+                    || pane.vt().tektronix().has_visible_content())
+            {
+                let mut pix = crate::ui::pixel_canvas::PixelCanvasBuffer::render_pane_scene(
+                    pane,
+                    wm.config(),
+                    pane_snap.canvas_rect.width,
+                    pane_snap.canvas_rect.height,
+                    u32::from(eff_cw),
+                    u32::from(eff_ch),
+                );
+                if let Some(pr) = pane_snap.prompt_rect {
+                    let ox = u32::from(pr.x.saturating_sub(pane_snap.canvas_rect.x)) * u32::from(eff_cw);
+                    let oy = u32::from(pr.y.saturating_sub(pane_snap.canvas_rect.y)) * u32::from(eff_ch);
+                    let ow = u32::from(pr.width) * u32::from(eff_cw);
+                    let oh = u32::from(pr.height) * u32::from(eff_ch);
+                    for py in oy..(oy + oh).min(pix.height) {
+                        for px in ox..(ox + ow).min(pix.width) {
+                            let idx = ((py * pix.width + px) as usize) * 4;
+                            pix.rgba[idx..idx + 4].copy_from_slice(&[0, 0, 0, 0]);
+                        }
+                    }
+                }
+                surface.images.push(GuiImageTexture {
+                    id: 900_000 + (pane_snap.id as u32),
+                    x_px: u32::from(pane_snap.canvas_rect.x) * u32::from(eff_cw),
+                    y_px: u32::from(pane_snap.canvas_rect.y) * u32::from(eff_ch),
+                    width_px: pix.width,
+                    height_px: pix.height,
+                    pixel_width: pix.width.min(u32::from(u16::MAX)) as u16,
+                    pixel_height: pix.height.min(u32::from(u16::MAX)) as u16,
+                    rgba_bytes: pix.rgba,
+                });
+            }
             for gfx in &pane_snap.graphics {
                 let x_cell = pane_snap.canvas_rect.x.saturating_add(gfx.col);
                 let y_cell = pane_snap.canvas_rect.y.saturating_add(gfx.row);
