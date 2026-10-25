@@ -7,12 +7,17 @@ pub mod recording;
 pub mod scan;
 pub mod scrollback;
 pub mod snapshot;
+pub mod tektronix;
 pub mod worker;
 
 pub use backend::*;
 pub use codec::*;
 pub use detect::*;
 pub use graphics::*;
+pub use tektronix::{
+    TEK_MAX_X, TEK_MAX_Y, TekAlphaLabel, TekLineStyle, TekMode, TekVectorSegment, TektronixState,
+    encode_tek_10bit_point, encode_tek_12bit_point,
+};
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -122,6 +127,7 @@ pub struct VtParser {
     last_styled_underline_kind: UnderlineKind,
     last_styled_underline_color: Option<RgbTriplet>,
     line_size_attrs: std::collections::BTreeMap<u16, crate::ui::typography::LineSizeAttr>,
+    tektronix: TektronixState,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
@@ -183,6 +189,7 @@ impl VtParser {
             last_styled_underline_kind: UnderlineKind::None,
             last_styled_underline_color: None,
             line_size_attrs: std::collections::BTreeMap::new(),
+            tektronix: TektronixState::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
         }
@@ -213,20 +220,23 @@ impl VtParser {
         }
         let was_alt = self.is_alternate_screen();
         let (start_row, _) = self.parser.screen().cursor_position();
-        let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
+        let vt_bytes = self.tektronix.process_and_filter_vt100(bytes);
+        let newline_count = vt_bytes.iter().filter(|&&b| b == b'\n').count();
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
-        let normalized = normalize_extended_sgr_for_vt100(bytes);
-        self.parser.process(&normalized);
-        crate::ui::typography::scan_dec_line_size_escapes(
-            bytes,
-            start_row,
-            self.rows,
-            &mut self.line_size_attrs,
-        );
-        self.scan_control_sequences(bytes);
-        if !was_alt && !self.is_alternate_screen() {
-            self.append_primary_stream_log(&normalized);
+        if !vt_bytes.is_empty() {
+            let normalized = normalize_extended_sgr_for_vt100(&vt_bytes);
+            self.parser.process(&normalized);
+            crate::ui::typography::scan_dec_line_size_escapes(
+                &vt_bytes,
+                start_row,
+                self.rows,
+                &mut self.line_size_attrs,
+            );
+            if !was_alt && !self.is_alternate_screen() {
+                self.append_primary_stream_log(&normalized);
+            }
         }
+        self.scan_control_sequences(bytes);
     }
 
     fn append_primary_stream_log(&mut self, bytes: &[u8]) {
@@ -562,6 +572,8 @@ impl VtParser {
     pub fn line_size_attr(&self, row: u16) -> crate::ui::typography::LineSizeAttr {
         self.line_size_attrs.get(&row).copied().unwrap_or_default()
     }
+    pub fn tektronix(&self) -> &TektronixState { &self.tektronix }
+    pub fn tektronix_mut(&mut self) -> &mut TektronixState { &mut self.tektronix }
 
     #[cfg(test)]
     pub(in crate::vt) fn screen(&self) -> &vt100_ctt::Screen { self.parser.screen() }

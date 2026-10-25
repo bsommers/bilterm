@@ -1,3 +1,4 @@
+pub mod canvas_scene;
 pub mod completion;
 pub mod fuzzy_history;
 pub mod highlight;
@@ -5,6 +6,10 @@ pub mod history_store;
 pub mod modes;
 pub mod prompt_editor;
 
+pub use canvas_scene::{
+    CandlestickBar, CanvasSubcellMode, DeclarativePlot, InteractiveImageView, PaneCanvasScene,
+    PlotKind, Sprite2D, VectorPrimitive,
+};
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
 
@@ -40,6 +45,8 @@ pub struct CompositePane {
     copy_mode: CopyModeState,
     /// Keyboard-driven QuickSelect 3270 Field Hints state (`ECO-01`).
     hints_mode: HintsModeState,
+    /// Modern 2026/2027 retained vector, 2D sprite, declarative plotting & image scene-graph (`CANV-01`).
+    pub(crate) canvas_scene: PaneCanvasScene,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     read_only: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
@@ -76,6 +83,7 @@ impl CompositePane {
             canvas_search: CanvasSearchState::default(),
             copy_mode: CopyModeState::default(),
             hints_mode: HintsModeState::default(),
+            canvas_scene: PaneCanvasScene::default(),
             read_only: false,
             remote_target: None,
             pending_unsafe_paste: None,
@@ -555,6 +563,8 @@ impl CompositePane {
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
         self.vt.process(bytes);
+        self.canvas_scene
+            .scan_osc_canvas_sequences(self.vt.tektronix_mut(), bytes);
         if let Some(wt) = self.vt.window_title() {
             self.title = format!("{wt} [#{}]", self.id);
         }
@@ -595,6 +605,8 @@ impl CompositePane {
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
             self.vt.process(&coalesced);
+            self.canvas_scene
+                .scan_osc_canvas_sequences(self.vt.tektronix_mut(), &coalesced);
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }
