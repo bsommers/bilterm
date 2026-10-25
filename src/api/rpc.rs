@@ -676,6 +676,7 @@ impl AutomationControlPlane {
                 ]))
             }
             "workspace.fontsize" => self.wm.handle_rpc_fontsize(params),
+            "canvas.command" | "canvas.status" => self.wm.handle_rpc_canvas(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

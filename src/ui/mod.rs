@@ -1,3 +1,4 @@
+pub mod canvas_raster;
 pub mod chrome;
 pub mod cursor;
 pub mod drawer;
@@ -9,6 +10,7 @@ pub mod status_bar;
 pub mod theme;
 pub mod typography;
 
+pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
 pub use typography::{LineSizeAttr, encode_host_font_passthrough, scan_dec_line_size_escapes};
@@ -308,6 +310,9 @@ fn render_output_canvas(
             }
         }
     }
+
+    // Render Tektronix 4010/4014 storage-tube vectors and modern 2026/2027 graphical canvas (TEK-01, CANV-01)
+    canvas_raster::render_graphical_canvas(pane, canvas, cfg, buf);
 
     // Highlight active OutputCanvas search matches (VAL-02)
     if pane.canvas_search().active && !pane.canvas_search().matches.is_empty() {

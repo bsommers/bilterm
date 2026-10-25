@@ -136,6 +136,7 @@ pub enum Action {
     FontZoomOut,
     FontZoomReset,
     FontSetSize(u16),
+    CanvasCommand(String),
     Quit,
 }
 
@@ -281,6 +282,7 @@ mod tests {
             Action::FontZoomOut => Some(":fontsize -"),
             Action::FontZoomReset => Some(":fontsize reset"),
             Action::FontSetSize(_) => Some(":fontsize 18"),
+            Action::CanvasCommand(_) => Some(":canvas tek demo"),
             Action::Quit => Some(":quit"),
         };
 
@@ -402,6 +404,7 @@ mod tests {
             Action::FontZoomOut,
             Action::FontZoomReset,
             Action::FontSetSize(18),
+            Action::CanvasCommand("tek demo".to_string()),
             Action::Quit,
         ];
 

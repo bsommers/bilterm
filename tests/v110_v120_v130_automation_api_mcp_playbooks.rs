@@ -116,7 +116,7 @@ fn v120_mcp_server_protocol_exposes_and_executes_agent_tools() {
         .and_then(|r| r.get("tools"))
         .and_then(JsonValue::as_array)
         .expect("tools array");
-    assert_eq!(tools.len(), 9);
+    assert_eq!(tools.len(), 10);
 
     // 4. tools/call -> bilterm_colon_command (:theme 3278)
     let call_resp = plane

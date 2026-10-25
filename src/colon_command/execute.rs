@@ -754,6 +754,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_font_action(font_act);
             false
         }
+        ColonCommand::CanvasCommand(ref subcmd) => {
+            wm.execute_canvas_action(subcmd);
+            false
+        }
         other => execute_colon_command(wm.active_pane_mut(), other),
     }
 }

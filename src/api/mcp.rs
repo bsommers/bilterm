@@ -64,6 +64,7 @@ impl AutomationControlPlane {
                     "bilterm_remote_connect" => Some("remote.connect_ssh"),
                     "bilterm_fleet_exec" => Some("fleet.exec"),
                     "bilterm_workspace_fontsize" => Some("workspace.fontsize"),
+                    "bilterm_canvas" => Some("canvas.command"),
                     _ => None,
                 };
                 match mapped_method {
@@ -164,6 +165,15 @@ impl AutomationControlPlane {
                     ("action", "string", "Optional action: in, out, reset, or size/percentage string"),
                     ("size", "integer", "Optional font point size (6..49) or scale percentage (50..300)"),
                 ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_canvas",
+                "Control the Tektronix 4010/4014 storage-tube vector engine and modern retained graphical canvas (vectors, 2D sprites, plots, images).",
+                &[(
+                    "command",
+                    "string",
+                    "Optional canvas command (e.g. 'tek demo', 'line 0 0 20 10', 'sprite 1 4 4 2 0', 'plot candlestick', 'image 24 16', 'clear')",
+                )],
             ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])

@@ -633,6 +633,20 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 }
             }
         },
+        "canvas" | "tek" => {
+            let subcmd = if parts[0].eq_ignore_ascii_case("tek") {
+                if parts.len() > 1 {
+                    format!("tek {}", parts[1..].join(" "))
+                } else {
+                    "tek on".to_string()
+                }
+            } else if parts.len() > 1 {
+                parts[1..].join(" ")
+            } else {
+                "status".to_string()
+            };
+            Some(Ok(ColonCommand::CanvasCommand(subcmd)))
+        }
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
     }
