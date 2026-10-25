@@ -324,12 +324,12 @@ Plans:
   3. Dual-backend rasterizer renders the canvas into sub-cell Unicode 2×4 Braille (`U+2800..U+28FF`), 2×3 Sextant (`U+1FB00..U+1FB3B`), and Quadrant blocks with 24-bit TrueColor (plus Kitty/Sixel overlays) in TUI mode, and crisp full-resolution vector/pixel graphics in `GuiWorkspaceRenderer` (SVG/PPM), while keeping the floating command prompt cleanly composited on top.
   4. Controllable via in-band PTY escape sequences, `:canvas <subcommand>`, and JSON-RPC/MCP `canvas.*` automation endpoints, verified by deterministic vector/sprite/plot snapshot tests.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 26-01-PLAN.md — `src/vt/tektronix.rs` (`TektronixState` 4010/4014 vector state machine) and `src/pane/canvas_scene.rs` (`PaneCanvasScene` vectors, 2D sprites, declarative plots & image viewer) (wave 1)
-- [ ] 26-02-PLAN.md — `src/ui/canvas_raster.rs` (Unicode 2×4 Braille / 2×3 Sextant / Quadrant TUI rasterizer + GUI SVG/PPM renderer), `Action::CanvasCommand`, `:canvas`, and JSON-RPC/MCP `canvas.*` (wave 2)
-- [ ] 26-03-PLAN.md — `tests/tektronix_and_graphical_canvas.rs` integration suite, documentation updates, and Phase 26 state sync (wave 3)
+- [x] 26-01-PLAN.md — `src/vt/tektronix.rs` (`TektronixState` 4010/4014 vector state machine) and `src/pane/canvas_scene.rs` (`PaneCanvasScene` vectors, 2D sprites, declarative plots & image viewer) (wave 1)
+- [x] 26-02-PLAN.md — `src/ui/canvas_raster.rs` (Unicode 2×4 Braille / 2×3 Sextant / Quadrant TUI rasterizer + GUI SVG/PPM renderer), `Action::CanvasCommand`, `:canvas`, and JSON-RPC/MCP `canvas.*` (wave 2)
+- [x] 26-03-PLAN.md — `tests/tektronix_and_graphical_canvas.rs` integration suite, documentation updates, and Phase 26 state sync (wave 3)
 
 ## Progress
 
@@ -363,4 +363,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 23. `TerminalBackend` Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`) | 3/3 | Complete | 2026-10-24 |
 | 24. `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes (`DRW-01`, `DRW-02`) | 3/3 | Complete | 2026-10-24 |
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 3/3 | Complete | 2026-10-24 |
-| 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 0/3 | Planned | - |
+| 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 3/3 | Complete | 2026-10-24 |

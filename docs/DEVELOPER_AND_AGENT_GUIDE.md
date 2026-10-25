@@ -221,6 +221,10 @@ cargo run -- ctl wm.command '{"command":":split v"}'
 
 # Query or scale workspace font size dynamically (Phase 25 FONT-01)
 cargo run -- ctl workspace.fontsize '{"action":"150%"}'
+
+# Drive the Tektronix 4010/4014 & modern graphical canvas (Phase 26 TEK-01, CANV-01)
+cargo run -- ctl canvas.command '{"command":"line 0 0 120 60"}'
+cargo run -- ctl canvas.status
 ```
 
 ### 5.4 Deterministic Headless Reproduction in Rust Tests

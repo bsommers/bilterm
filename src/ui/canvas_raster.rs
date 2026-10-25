@@ -6,6 +6,7 @@
 //!    - `CanvasSubcellMode::Braille` (`2×4` sub-pixels per cell, `U+2800..U+28FF`)
 //!    - `CanvasSubcellMode::Sextant` (`2×3` sub-pixels per cell, `U+1FB00..U+1FB3B`)
 //!    - `CanvasSubcellMode::Quadrant` (`2×2` sub-pixels per cell, `▘▝▀▖▌▞▛▗▚▐▜▄▙▟█`)
+//!
 //!    Executed inside Pass 1 (`render_output_canvas`) so the `FloatingCommandPrompt` (Pass 2) and
 //!    `OiaStatusBar` (Pass 3) remain cleanly composited on top.
 //! 2. **GUI Full-Resolution Surface (`GuiFrameSurface`)**:

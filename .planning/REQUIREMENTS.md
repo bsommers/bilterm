@@ -75,8 +75,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DRW-01**: `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer supporting 4-edge docking (`Left`, `Right`, `Top`, `Bottom`), 3 visibility policies (`OnDemand` via hotkey/leader chord/`:drawer`, `Fixed` pinned, and `AutoHide` triggered on leader activation, mouse edge hover, or background pane alert), and 2 layout modes (`Overlay` floating over workspace with Borland drop shadow and zero `SIGWINCH`, or `Push` carving out `drawer_rect` from `workspace_area` and auto-resizing panes) (`Phase 24`).
 - [x] **DRW-02**: High-density telemetry status glyphs inside the slide-out drawer displaying hierarchical tree topology (`├─`, `╰─` for Sessions → Windows/Layouts → Panes & Fleet Nodes) alongside live per-pane badges: focus/z-order rank (`► [1] Z:1/4`), activity braille spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) + throughput sparkline (`▁▂▃▅▆▇`), last command exit status (`⚙ RUN`, `✓ 0`, `✗ 1`), mode/security badges (`🖥 ALT`, `🔑 !ECHO`, `🔒 PROT`, `⏺ REC`, `📡 BCAST`, `🔔 N` unread alerts), and transport badges (`🌐 SSH`, `🔗 TMUX`) (`Phase 24`).
 - [x] **FONT-01**: Dynamic terminal text and font size scaling (`Ctrl++`/`Ctrl+=`, `Ctrl+-`, `Ctrl+0`, `:fontsize <pt|pct|+|-|reset>`, `config.toml` `font_size_pt` / `font_scale_pct`) driving vector SVG / PPM pixel cell scaling and viewport `(rows, cols)` recalculation in `GuiWorkspaceRenderer`, DEC double-width/double-height line attributes (`DECDWL` `\x1b#6`, `DECDHL` `\x1b#3`/`\x1b#4`) and multi-cell banner glyphs on the TUI canvas, plus optional host-terminal `OSC 50` / Kitty remote font-size passthrough (`Phase 25`).
-- [ ] **TEK-01**: Classic Tektronix 4010/4014 vector graphics emulation (`\x1b[?38h` enter Tek mode, `\x1b[?38l` return to VT100, `:canvas tek`) decoding 10-bit/12-bit 4096×3120 vector coordinates (`GS` `0x1D` move/draw, `FS` point plot, `RS` incremental plot, `ESC` solid/dotted/dot-dash/short-dash/long-dash line styles, and `\x1b\x0c` screen erase with green 3278 / amber 3279 phosphor persistence decay) (`Phase 26`).
-- [ ] **CANV-01**: Modern 2026/2027 retained scene-graph, 2D sprite engine, declarative live plotting (`line`, `scatter`, `bar`, `candlestick`, `heatmap`), and interactive image viewer (`pan`/`zoom`/`inspect` for PNG/RGBA/PPM/SVG) controllable via OSC/APC escape sequences, `:canvas ...` commands, and JSON-RPC/MCP `canvas.*` methods, backed by a dual rasterizer (Unicode 2×4 Braille `U+2800..U+28FF` + 2×3 Sextant `U+1FB00..U+1FB3B` + Quadrant sub-cell TrueColor in TUI mode; full-resolution vector/pixel rendering in `GuiWorkspaceRenderer`) (`Phase 26`).
+- [x] **TEK-01**: Classic Tektronix 4010/4014 vector graphics emulation (`\x1b[?38h` enter Tek mode, `\x1b[?38l` return to VT100, `:canvas tek`) decoding 10-bit/12-bit 4096×3120 vector coordinates (`GS` `0x1D` move/draw, `FS` point plot, `RS` incremental plot, `ESC` solid/dotted/dot-dash/short-dash/long-dash line styles, and `\x1b\x0c` screen erase with green 3278 / amber 3279 phosphor persistence decay) (`Phase 26`).
+- [x] **CANV-01**: Modern 2026/2027 retained scene-graph, 2D sprite engine, declarative live plotting (`line`, `scatter`, `bar`, `candlestick`, `heatmap`), and interactive image viewer (`pan`/`zoom`/`inspect` for PNG/RGBA/PPM/SVG) controllable via OSC/APC escape sequences, `:canvas ...` commands, and JSON-RPC/MCP `canvas.*` methods, backed by a dual rasterizer (Unicode 2×4 Braille `U+2800..U+28FF` + 2×3 Sextant `U+1FB00..U+1FB3B` + Quadrant sub-cell TrueColor in TUI mode; full-resolution vector/pixel rendering in `GuiWorkspaceRenderer`) (`Phase 26`).
 
 ## v2 Requirements
 
@@ -144,8 +144,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DRW-01 | Phase 24 | Complete |
 | DRW-02 | Phase 24 | Complete |
 | FONT-01 | Phase 25 | Complete |
-| TEK-01 | Phase 26 | Pending |
-| CANV-01 | Phase 26 | Pending |
+| TEK-01 | Phase 26 | Complete |
+| CANV-01 | Phase 26 | Complete |
 
 **Coverage:**
 
