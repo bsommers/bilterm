@@ -83,6 +83,7 @@ pub fn load_token_file(path: &Path) -> Result<String> {
 }
 
 /// Validates and normalizes listen configuration according to security policy (SEC-R01).
+#[cfg_attr(not(unix), allow(unused_variables))]
 pub fn validate_listen_config(
     listen: Option<&str>,
     allow_remote: bool,

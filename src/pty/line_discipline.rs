@@ -40,7 +40,7 @@ impl LineDisciplineState {
     /// Returns `true` when password prompt protection (`!ECHO`, either in canonical `getpass`/`read -s`
     /// mode or non-canonical `sudo`/`sudo-rs`/`ssh` foreground subcommand mode) is active.
     pub fn is_password_prompt(&self) -> bool {
-        !self.echo_enabled && (self.canonical_mode || self.has_foreground_subcommand())
+        !self.echo_enabled
     }
 
     /// Returns `true` when a foreground child process group different from the shell owns the TTY.
@@ -117,16 +117,13 @@ pub fn inspect_pty_fd(
     };
 
     let effective_echo = if shell_owns_tty {
-        if !canonical_mode {
+        if !osc133_executing {
             // Interactive shell line editors (Bash Readline, Zsh ZLE, Fish) disable ICANON and ECHO
-            // simultaneously while the top-level shell itself owns the foreground process group (fg == sh).
-            true
-        } else if !osc133_executing {
-            // While the top-level shell itself owns the foreground process group and no command is
-            // executing (e.g. during .bashrc / .zshrc initialization), ignore transient stty !ECHO.
+            // while waiting at the prompt (!osc133_executing) or during .bashrc/.zshrc initialization.
             true
         } else {
-            // Canonical !ECHO inside the shell while a command is executing (e.g. `read -s` builtin).
+            // A command is actively executing (osc133_executing == true): respect !ECHO
+            // (whether canonical `read -s` or non-canonical `sudo` in a non-job-control subshell).
             echo_enabled
         }
     } else {

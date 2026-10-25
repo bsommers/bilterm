@@ -534,6 +534,62 @@ mod tests {
             wm.active_pane().effective_routing_mode(),
             InputRoutingMode::RawPtyPassthrough
         );
+
+        // Regression test (WSL `sudo apt install ...` from 3270 prompt after F4 mode cycle):
+        // Even if the shell was at PromptStart (OSC 133;A) and force_command_prompt was true from F4,
+        // submitting `sudo apt install htop` from the 3270 prompt and ticking refresh_line_discipline
+        // before `[sudo] password for user: ` arrives must switch to RawPtyPassthrough and route
+        // password keystrokes to the PTY instead of the 3270 prompt editor.
+        let mut wsl_wm = WindowManager::new_headless(24, 80);
+        wsl_wm
+            .active_pane_mut()
+            .process_pty_output(b"\x1b]133;A\x07bills@wsl:~$ ");
+        // User cycles F4 back to Floating Prompt (setting force_command_prompt = true)
+        for _ in 0..3 {
+            handle_wm_key_event(&mut wsl_wm, KeyEvent::new(KeyCode::F(4), KeyModifiers::NONE))
+                .unwrap();
+        }
+        assert!(wsl_wm.active_pane().is_prompt_visible());
+
+        for ch in "sudo apt install htop".chars() {
+            handle_wm_key_event(
+                &mut wsl_wm,
+                KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE),
+            )
+            .unwrap();
+        }
+        handle_wm_key_event(
+            &mut wsl_wm,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert!(!wsl_wm.active_pane().prompt().force_command_prompt);
+
+        // Simulate 16ms tick before sudo prints password prompt
+        wsl_wm.active_pane_mut().refresh_line_discipline();
+        assert_eq!(
+            wsl_wm.active_pane().prompt().running_command.as_deref(),
+            Some("sudo apt install htop")
+        );
+
+        // sudo prints password prompt on canvas
+        wsl_wm
+            .active_pane_mut()
+            .process_pty_output(b"\r\n[sudo] password for bills: ");
+        assert!(!wsl_wm.active_pane().is_prompt_visible());
+        assert_eq!(
+            wsl_wm.active_pane().effective_routing_mode(),
+            InputRoutingMode::RawPtyPassthrough
+        );
+
+        for ch in "my_wsl_pw".chars() {
+            handle_wm_key_event(
+                &mut wsl_wm,
+                KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE),
+            )
+            .unwrap();
+        }
+        assert_eq!(wsl_wm.active_pane().prompt().input, "");
     }
 
     #[test]

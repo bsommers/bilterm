@@ -392,7 +392,7 @@ impl CompositePane {
     }
 
     pub fn is_password_prompt(&self) -> bool {
-        self.line_discipline.is_password_prompt()
+        self.line_discipline.is_password_prompt() || self.is_active_canvas_password_prompt()
     }
 
     pub fn has_foreground_subcommand(&self) -> bool {

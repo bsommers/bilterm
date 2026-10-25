@@ -671,6 +671,7 @@ impl VtParser {
         let index = self.command_blocks.len();
         let now = Instant::now();
         self.last_command_started_at = Some(now);
+        self.osc133_phase = Some(Osc133Phase::CommandExecuted);
         self.command_blocks.push(CommandBlockRecord {
             index,
             command: command.into(),

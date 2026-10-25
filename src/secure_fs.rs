@@ -96,7 +96,7 @@ pub fn private_dir_in(base: &Path, name: &str) -> io::Result<PathBuf> {
             format!("invalid private dir leaf name: {:?}", name),
         ));
     }
-    let base_md = fs::symlink_metadata(base)?;
+    let base_md = fs::metadata(base)?;
     if !base_md.is_dir() {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,
@@ -118,7 +118,7 @@ pub fn resolve_runtime_base(
 ) -> (PathBuf, String) {
     if let Some(xdg) = xdg_runtime_dir
         && !xdg.is_empty()
-        && Path::new(xdg).is_absolute()
+        && (Path::new(xdg).is_absolute() || xdg.to_string_lossy().starts_with('/'))
     {
         return (PathBuf::from(xdg), "bilterm".to_string());
     }
@@ -267,6 +267,7 @@ pub fn unique_suffix() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::fs::Permissions;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;

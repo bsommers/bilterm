@@ -327,15 +327,18 @@ impl HistoryStore {
     /// Applies config-driven settings. Returns `true` when the session file location changed
     /// (callers should then reload prompt history).
     pub fn apply_settings(&mut self, settings: &HistorySettings) -> bool {
-        self.enabled = settings.enabled;
         self.max_files = settings.max_files.max(1);
         self.max_entries = settings.max_entries.max(1);
         self.load_limit = settings.load_limit;
         let custom_dir = settings.dir.as_deref().filter(|d| !d.trim().is_empty());
         if let Some(dir) = custom_dir {
             self.base_dir = PathBuf::from(dir);
+            self.enabled = settings.enabled;
         } else if !self.headless {
             self.base_dir = default_history_dir(None);
+            self.enabled = settings.enabled;
+        } else {
+            self.enabled = false;
         }
         self.session_name = sanitize_session_name(&settings.session);
         let new_path = if self.base_dir.as_os_str().is_empty() {

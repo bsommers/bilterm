@@ -2,8 +2,10 @@ use std::process::Command;
 use std::time::Instant;
 
 use bilterm::api::{
-    AutomationControlPlane, JsonValue, Playbook, parse_key_chord_str, send_rpc_request,
+    AutomationControlPlane, JsonValue, Playbook, parse_key_chord_str,
 };
+#[cfg(unix)]
+use bilterm::api::send_rpc_request;
 use bilterm::app::App;
 use bilterm::config::BiltermConfig;
 use bilterm::error::{BiltermError, TerminalRestoreGuard};

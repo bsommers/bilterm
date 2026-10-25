@@ -19,7 +19,9 @@ use ratatui::layout::Rect;
 
 use crate::error::Result;
 use crate::pane::history_store::HistoryStore;
-use crate::pty::line_discipline::{inspect_pty_fd, InputRoutingMode, LineDisciplineState};
+#[cfg(unix)]
+use crate::pty::line_discipline::inspect_pty_fd;
+use crate::pty::line_discipline::{InputRoutingMode, LineDisciplineState};
 use crate::pty::{PtyConfig, PtyEvent, PtySession};
 use crate::vt::VtParser;
 
@@ -152,6 +154,7 @@ impl CompositePane {
             }
             if !cmd_str.trim().starts_with(':') {
                 self.prompt.running_command = Some(cmd_str.replace('\n', " ; "));
+                self.prompt.force_command_prompt = false;
                 // Auto-dismiss interactive `:tek demo` / `:canvas demo` overlay when a shell command is executed
                 if cmd_str.trim() == "clear"
                     || self
@@ -478,11 +481,8 @@ impl CompositePane {
                 self.prompt.running_command = None;
             }
             // Fallback defense-in-depth: if the cursor line on the OutputCanvas is a password/passphrase
-            // prompt while a command is running (even if a subshell didn't change pgrp), enforce !ECHO lock.
-            if (self.prompt.running_command.is_some()
-                || self.line_discipline.has_foreground_subcommand())
-                && self.canvas_cursor_line_looks_like_password_prompt()
-            {
+            // prompt (even if a subshell/WSL/use_pty didn't change outer pgrp or ECHO), enforce !ECHO lock.
+            if self.canvas_cursor_line_looks_like_password_prompt() {
                 self.line_discipline.echo_enabled = false;
                 self.line_discipline.canonical_mode = true;
             }
@@ -493,9 +493,11 @@ impl CompositePane {
         if osc_finished {
             self.prompt.running_command = None;
         }
-        if self.prompt.running_command.is_some() && self.canvas_cursor_line_looks_like_password_prompt() {
+        if self.canvas_cursor_line_looks_like_password_prompt() {
             self.line_discipline.echo_enabled = false;
             self.line_discipline.canonical_mode = true;
+        } else if self.pty.is_some() {
+            self.line_discipline.echo_enabled = true;
         }
     }
 
@@ -504,30 +506,40 @@ impl CompositePane {
     /// `Password:`, `Enter passphrase for key ...:`).
     pub fn canvas_cursor_line_looks_like_password_prompt(&self) -> bool {
         let (cur_r, cur_c) = self.vt.cursor_position();
+        if cur_c == 0 {
+            return false;
+        }
+        let full_row = self.vt.row_text(cur_r);
+        if !full_row.contains(':') && !full_row.contains('：') {
+            return false;
+        }
         let (_, cols) = self.vt.size();
-        let end_col = (cur_c + 1).min(cols);
-        let mut line = String::with_capacity(usize::from(end_col));
-        for c in 0..end_col {
-            if let Some(cell) = self.vt.cell_snapshot(cur_r, c) {
-                if cell.grapheme.is_empty() {
-                    line.push(' ');
-                } else {
-                    line.push_str(&cell.grapheme);
-                }
+        let mut line = String::with_capacity(usize::from(cols));
+        if cur_r > 0 {
+            let prev = self.vt.row_text(cur_r - 1);
+            if prev.to_ascii_lowercase().contains("[sudo") {
+                line.push_str(prev.trim());
+                line.push(' ');
             }
         }
-        let lower = line.trim().to_ascii_lowercase();
-        (lower.ends_with(':') || lower.ends_with(": "))
-            && (lower.contains("password")
-                || lower.contains("passphrase")
-                || lower.contains("[sudo"))
+        for c in 0..(cur_c + 1).min(cols) {
+            if let Some(cell) = self.vt.cell_view(cur_r, c) {
+                line.push_str(if cell.grapheme.is_empty() { " " } else { cell.grapheme });
+            }
+        }
+        [line.trim(), full_row.trim()].into_iter().any(|cand| {
+            let lower = cand.to_ascii_lowercase();
+            (lower.ends_with(':') || lower.ends_with('：'))
+                && ["password", "passphrase", "[sudo", "doas (", "verification code"]
+                    .iter()
+                    .any(|kw| lower.contains(kw))
+        })
     }
 
     /// Returns `true` when an interactive password prompt (`[sudo] password...`, `Password:`)
     /// is actively running on the canvas and must never be bypassed by `force_command_prompt`.
     pub fn is_active_canvas_password_prompt(&self) -> bool {
-        (self.prompt.running_command.is_some() || self.line_discipline.has_foreground_subcommand())
-            && self.canvas_cursor_line_looks_like_password_prompt()
+        !self.vt.is_alternate_screen() && self.canvas_cursor_line_looks_like_password_prompt()
     }
 
     /// Determines the active keyboard routing mode (`PTY-02`, `PTY-03`, `REC-02`).
@@ -642,6 +654,11 @@ impl CompositePane {
 
     pub fn has_exited(&self) -> bool {
         self.exited
+    }
+
+    /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).
+    pub fn is_headless(&self) -> bool {
+        self.pty.is_none()
     }
 }
 

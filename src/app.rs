@@ -23,7 +23,8 @@ pub struct App {
 impl App {
     pub fn new(pane: CompositePane) -> Self {
         let (rows, cols) = pane.vt().size();
-        let wm = WindowManager::from_initial_pane(pane, false);
+        let headless = pane.is_headless();
+        let wm = WindowManager::from_initial_pane(pane, headless);
         Self {
             wm,
             should_quit: false,

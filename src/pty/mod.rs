@@ -76,8 +76,8 @@ pub enum PtyEvent {
 
 /// Live cross-platform PTY session wrapping `portable-pty` with deduplicated `SIGWINCH` resizing.
 pub struct PtySession {
-    master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
+    master: Mutex<Box<dyn MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     output_rx: mpsc::Receiver<PtyEvent>,
     current_size: Mutex<(u16, u16)>,
