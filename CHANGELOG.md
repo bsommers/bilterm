@@ -5,6 +5,23 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.11.0] - 2026-10-25
+
+### Added
+- **Standalone Native OS GUI Window & 1:1 HiDPI ClearType TrueType/OpenType Font Engine (`GPU-02`, `FONT-02`, `src/ui/gui_window.rs`, `src/ui/gui_font/`, `src/ui/bitmap_font.rs`, `src/pane/typography.rs`, `src/main.rs`)**:
+  - **Native Desktop Window (`bilterm --gui` / `-G`)**: Drives `App` + `GuiWorkspaceRenderer` + `GuiFrameSurface` in a native Win32 (`user32.dll` + `gdi32.dll`) desktop window with 1:1 `CreateDIBSection` + `BitBlt`, `SetProcessDpiAwarenessContext` (`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`), full keyboard (`WM_KEYDOWN` / `WM_SYSKEYDOWN` / `WM_CHAR`), mouse drag/click/scroll (`WM_LBUTTONDOWN`, `WM_MOUSEMOVE`, `WM_MOUSEWHEEL` + `Ctrl+Wheel` font zoom), and live pixel-to-cell window resizing (`WM_SIZE`).
+  - **1:1 ClearType TrueType/OpenType Font Engine & Runtime `.ttf`/`.otf` Loader (`src/ui/gui_font/win32_gdi.rs`, `src/pane/typography.rs`)**: Probes and renders installed monospace fonts (`Cascadia Mono`, `Cascadia Code`, `Consolas`, `JetBrains Mono`, `Fira Code`, `Iosevka Term`, `IBM Plex Mono`, `Hack`, `IBM 3270`, `PxPlus IBM VGA8`, `Lucida Console`, `Courier New`) via `CreateFontW(CLEARTYPE_NATURAL_QUALITY)` and loads custom `.ttf`/`.otf`/`.ttc` font files on the fly via `--font-file <PATH>`, `-F/--font <FAMILY>`, `--font-size <PT>`, `:font add <path.ttf>`, `:font cycle`, and `~/.config/bilterm/fonts/`.
+  - **Geometric Box-Drawing & IBM VGA 5×7 Bitmap Fallback (`src/ui/gui_font/geometric.rs`, `src/ui/bitmap_font.rs`)**: Draws edge-to-edge Borland double/single/rounded box borders (`U+2500..U+257F`), block elements (`U+2580..U+259F`), Braille (`U+2800..U+28FF`), and Sextant (`U+1FB00..U+1FB3B`) sub-cells with zero inter-cell gaps alongside a crisp 5×7 IBM VGA / CP437 bitmap glyph fallback for headless `.ppm` snapshots.
+- **OS Desktop Launcher Integration & Non-TTY Auto-Relaunch (`src/launcher.rs`, `scripts/install.sh`, `scripts/install.ps1`)**:
+  - Added `--desktop-file` flag and installer integration for freedesktop.org XDG `.desktop` entries (`~/.local/share/applications/bilterm.desktop`), macOS `.app` bundle `Info.plist`, and Windows Start Menu shortcuts (`Bilterm.lnk`), plus automatic terminal-emulator detection and relaunch when started from a desktop icon without an attached TTY.
+
+### Fixed
+- **Windows ConPTY 3270 Floating Prompt Command Submission (`src/pane/mod.rs`)**:
+  - Normalized submitted floating prompt command line endings to `\r` (`0x0D`) on Windows (`#[cfg(windows)]`) so `powershell.exe` and `cmd.exe` inside Windows ConPTY execute commands immediately on `Enter`.
+- **Linux Cross-Platform Parity & Per-Pane Font Size Isolation (`src/ui/gui_window.rs`, `src/ui/typography.rs`, `tests/vt_worker_and_snapshot_seam.rs`)**:
+  - Scoped Windows-only mouse/event imports in `src/ui/gui_window.rs` and imported `WorkspaceFrameRenderer` under `#[cfg(not(windows))]`.
+  - Preserved workspace-wide `config.font_size_pt` and `config.font_scale_pct` when running single-pane `:font` commands so per-pane font sizes/scales remain independent across split panes.
+
 ## [v1.10.2] - 2026-10-25
 
 ### Changed

@@ -49,6 +49,7 @@ src/
 ├── lib.rs                      # Crate root exporting public modules
 ├── main.rs                     # Binary entrypoint, CLI dispatch, tracing init, panic guard
 ├── app.rs                      # Async tokio::select! 60 FPS event & render loop
+├── launcher.rs                 # OS desktop launcher integration (.desktop / .plist / .lnk) & GUI-launch terminal auto-relaunch
 ├── cli.rs                      # CLI flag parser (--headless, --mcp, --playbook, ctl, --man, --completions)
 ├── error.rs                    # BiltermError enum & idempotent TerminalRestoreGuard (RAII)
 ├── secure_fs.rs                # 0700 private runtime dir, 0600 O_EXCL/O_NOFOLLOW files, constant_time_eq
@@ -109,6 +110,12 @@ src/
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── ui/
 │   ├── mod.rs                  # 3-pass Ratatui compositor (WorkspaceWidget, CompositePaneWidget) + cell_to_ratatui_style
+│   ├── gui_window.rs           # Standalone native OS GUI window runner (bilterm --gui / -G, Win32 GDI + Unix fallback)
+│   ├── bitmap_font.rs          # IBM VGA / CP437 5x7 fallback bitmap font & exact box-drawing/block rasterizer
+│   ├── gui_font/
+│   │   ├── mod.rs              # Native ClearType TrueType/OpenType GUI font subsystem exports
+│   │   ├── geometric.rs        # Pixel-perfect geometric box-drawing, block elements, Braille & Sextant renderer
+│   │   └── win32_gdi.rs        # Win32 ClearType HFONT engine, custom .ttf/.otf loader & 1:1 CreateDIBSection BitBlt
 │   ├── canvas_raster.rs        # SubcellBuffer (Braille/Sextant/Quadrant) & GUI SVG/PPM canvas rasterizer (CANV-01)
 │   ├── pixel_canvas.rs         # Anti-aliased RGBA PixelCanvasBuffer, HalfBlock TrueColor blitter & SSH Kitty/Sixel/iTerm2 encoders
 │   ├── typography.rs           # Dynamic font scaling (50%..=300%), DEC DECDWL/DECDHL & host OSC 50 passthrough (FONT-01)

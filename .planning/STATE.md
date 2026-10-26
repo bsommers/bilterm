@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10.2
+milestone: v1.11.0
 milestone_name: milestone
 current_phase: 28
 current_phase_name: architecture-hardening-and-dag-decoupling
-status: released_v1_10_2
-stopped_at: Completed Phase 28 Waves 1-3 and prepared v1.10.2 release
+status: released_v1_11_0
+stopped_at: Verified Linux/Windows cross-platform parity and prepared v1.11.0 release (Native OS GUI window, ClearType TTF/OTF font engine, desktop launcher integration, ConPTY 3270 prompt fix)
 last_updated: "2026-10-25"
 last_activity: 2026-10-25
-last_activity_desc: Completed Phase 28 Waves 1-3 (28-01-PLAN.md) and bumped version to v1.10.2
+last_activity_desc: Verified full Linux test suite (240 passed) and bumped version to v1.11.0
 progress:
   total_phases: 28
   completed_phases: 28

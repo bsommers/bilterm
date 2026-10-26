@@ -1,21 +1,22 @@
-# Session Checkpoint — Phase 28 + Desktop/GUI Launchers (`v1.10.2+`) — 2026-10-25
+# Session Checkpoint — Phase 28 + Desktop/GUI Launchers & ClearType Engine (`v1.11.0`) — 2026-10-25
 
-- **Desktop & Native GUI Launchers (`LAUNCH-01`, `GPU-02`)**: Added `src/launcher.rs` (non-TTY terminal auto-relaunch, system launch dir normalization, state log dir, `.desktop` & `Info.plist` generators), `src/ui/bitmap_font.rs` (CP437 5x7 + box-drawing/block/Braille rasterizer), `src/ui/gui_window.rs` (`bilterm --gui` / `-G` standalone Win32 GDI 60 FPS GUI window + key/mouse/resize translation), and desktop launcher registration in `scripts/install.ps1` (`Win+R` `App Paths` + Start Menu `.lnk`) & `scripts/install.sh` (`.desktop` + `Bilterm.app`).
+- **Desktop & Native GUI Launchers + ClearType TTF/OTF Font Engine (`LAUNCH-01`, `GPU-02`, `FONT-02`)**: Added `src/launcher.rs` (non-TTY terminal auto-relaunch, system launch dir normalization, state log dir, `.desktop` & `Info.plist` generators), `src/ui/bitmap_font.rs` (CP437 5x7 + box-drawing/block/Braille rasterizer), `src/ui/gui_window.rs` (`bilterm --gui` / `-G` standalone Win32 GDI 60 FPS GUI window + key/mouse/resize translation), `src/ui/gui_font/*` (1:1 HiDPI ClearType TTF/OTF engine, custom `.ttf`/`.otf` loader, geometric box-drawing), Windows ConPTY 3270 `\r` prompt submission fix (`src/pane/mod.rs`), and Linux cross-platform parity fixes.
 - **Token Optimizations (`PERF-CTX-01..03`)**: (1) `/compact` between tasks, (2) `cargo build -q` / `cargo clippy -q` / `cargo test -q`, (3) delegate build/test verification loops to a `flash` subagent.
 
-**Status:** COMPLETE — Phase 28 Waves 1–3 (`28-01-PLAN.md`) complete, verified, and tagged `v1.10.2`.
+**Status:** COMPLETE — Verified across Linux & Windows targets (`240` tests passing) and tagged `v1.11.0`.
 
 - **Updated:** `2026-10-25`
-- **Branch:** `main` (tagged `v1.10.2`)
+- **Branch:** `main` (tagged `v1.11.0`)
 - **Latest Releases:**
-  - `v1.10.2`: Phase 28 Waves 2 & 3 (`pty -> vt -> pane` strict acyclic DAG, `FloatingPromptState` encapsulation, dirty-driven redraw, cached `PixelCanvasBuffer`, single-pass `ESC` scanner, CI DAG gate)
+  - `v1.11.0`: Native OS GUI (`bilterm --gui` / `-G`), 1:1 HiDPI ClearType TTF/OTF Font Engine (`-F/--font`, `--font-file`, `:font add`), OS Desktop Launcher Integration (`--desktop-file`), Windows ConPTY 3270 prompt fix, and Linux cross-platform parity
+  - `v1.10.2`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.2>
   - `v1.10.1`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.1> (14 cross-platform release archives + `SHA256SUMS`)
   - `v1.10.0`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.0>
 - **Baseline Verification:**
   - `cargo clippy --all-features --all-targets -- -D warnings` → **0 warnings, 0 errors**
-  - `cargo test --quiet` → **235 passed, 0 failed** (`151` unit + `84` integration across 23 test binaries)
+  - `cargo test --quiet` → **240 passed, 0 failed** (`157` unit + `83` integration across 23 test binaries)
   - `cargo audit` → **0 CVEs, 0 unsound crates** (`247` lockfile packages, `100%` permissive OSI licenses)
-  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `75` files in `src/**/*.rs`) → **100% compliant**
+  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `81` files in `src/**/*.rs`) → **100% compliant**
   - Module DAG Gate (`tests/vt_worker_and_snapshot_seam.rs`) → **100% compliant** (`error/secure_fs -> pty -> vt -> pane` 0-cycle DAG, `ui -/-> api`)
 
 ---
