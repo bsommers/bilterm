@@ -51,6 +51,7 @@ async fn main() -> color_eyre::Result<()> {
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
+               -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
@@ -63,6 +64,7 @@ async fn main() -> color_eyre::Result<()> {
                -c, --config <FILE.toml>         Load configuration from custom TOML file path\n  \
                -C, --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
                -M, --man                        Print roff manpage (bilterm.1) to stdout\n  \
+                   --desktop-file               Print freedesktop.org .desktop launcher entry to stdout\n  \
                -v, -V, --version                Print version information\n  \
                -h, --help                       Print this help message",
             env!("CARGO_PKG_VERSION")
@@ -204,13 +206,13 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
         match shell {
             "bash" => println!(
-                "complete -W \"ctl -m --mcp -d --headless --daemon -l --listen -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man -s --session -c --config\" bilterm"
+                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
+                "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
             ),
             "fish" => println!(
-                "complete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
+                "complete -c bilterm -s G -l gui -d 'Launch standalone native GUI window'\ncomplete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -l desktop-file -d 'Print .desktop launcher entry'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }
@@ -218,6 +220,13 @@ async fn main() -> color_eyre::Result<()> {
     }
     if has_switch(&args, &["-M", "--man"]) {
         print!("{}", include_str!("../docs/bilterm.1"));
+        return Ok(());
+    }
+    if has_switch(&args, &["--desktop-file"]) {
+        let exe = std::env::current_exe()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| "bilterm".to_string());
+        print!("{}", bilterm::launcher::desktop_entry_contents(&exe, "bilterm"));
         return Ok(());
     }
     if let Some(out_path) = switch_value(&args, &["-g", "--gui-dump"]) {
@@ -229,17 +238,29 @@ async fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
+    let _ = bilterm::launcher::normalize_desktop_working_dir();
+    let gui_mode =
+        has_switch(&args, &["-G", "--gui"]) || std::env::var("BILTERM_GUI").as_deref() == Ok("1");
+    if !gui_mode && bilterm::launcher::ensure_terminal_or_relaunch(&args)? {
+        return Ok(());
+    }
+
     let guard = TerminalRestoreGuard::new();
     guard.install_panic_hook()?;
 
-    let file_appender = tracing_appender::rolling::never(".", "bilterm.log");
+    let log_dir = bilterm::launcher::resolve_log_directory();
+    let file_appender = tracing_appender::rolling::never(log_dir, "bilterm.log");
     let (non_blocking, _log_guard) = tracing_appender::non_blocking(file_appender);
     let _ = tracing_subscriber::fmt()
         .with_writer(non_blocking)
         .with_ansi(false)
         .try_init();
 
-    let (cols, rows) = terminal::size().unwrap_or((80, 24));
+    let (cols, rows) = if gui_mode {
+        (100, 32)
+    } else {
+        terminal::size().unwrap_or((80, 24))
+    };
     let mut app = App::spawn_default(rows, cols)?;
     let mut cfg = BiltermConfig::default();
     let mut cfg_error = None;
@@ -260,6 +281,11 @@ async fn main() -> color_eyre::Result<()> {
     app.wm.apply_config(cfg);
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
+    }
+
+    if gui_mode {
+        bilterm::ui::gui_window::run_native_gui_window(app)?;
+        return Ok(());
     }
 
     let host_guard = TerminalRestoreGuard::enter_host_tui()?;

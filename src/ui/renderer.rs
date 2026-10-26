@@ -4,8 +4,8 @@
 //! and virtual terminal core (`libghostty-vt` / `VtParser` -> [`GridSnapshot`]) from the concrete
 //! GUI/TUI toolkit so the same state can drive:
 //! - **Ratatui + Crossterm** (in-terminal TUI mode)
-//! - **GPUI** (Zed's hardware-accelerated GPU window framework)
-//! - **`winit` + `egui`** (immediate-mode native desktop GUI)
+//! - **Native OS GUI (`bilterm --gui`)** (`src/ui/gui_window.rs` + `src/ui/bitmap_font.rs`)
+//! - **GPUI / `winit` + `egui`** (immediate-mode or retained native desktop GUI)
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -269,7 +269,7 @@ impl GuiFrameSurface {
             }
         }
 
-        // Pass 3: Foreground glyph strokes (compact 5x7 pixel raster inside each cell)
+        // Pass 3: Foreground glyph strokes (IBM VGA / CP437 5x7 font + exact box-drawing/block rasterizer)
         let cw = u32::from(self.cell_width_px.max(4));
         let ch = u32::from(self.cell_height_px.max(8));
         for g in &self.glyphs {
@@ -278,18 +278,10 @@ impl GuiFrameSurface {
             }
             let x0 = (g.x_px.max(0.0) as u32).min(w_px);
             let y0 = (g.y_px.max(0.0) as u32).min(h_px);
-            let code = g.text.chars().next().unwrap_or(' ') as u32;
-            for gy in 1..ch.saturating_sub(1) {
-                for gx in 1..cw.saturating_sub(1) {
-                    let bit = ((code.wrapping_mul(gy + 3).wrapping_add(gx * 7)) & 3) != 0;
-                    if bit {
-                        let px = (x0 + gx).min(w_px.saturating_sub(1));
-                        let py = (y0 + gy).min(h_px.saturating_sub(1));
-                        let idx = ((py * w_px + px) * 4) as usize;
-                        fb[idx..idx + 4].copy_from_slice(&g.fg_rgba);
-                    }
-                }
-            }
+            let glyph = g.text.chars().next().unwrap_or(' ');
+            crate::ui::bitmap_font::rasterize_glyph_cell(
+                &mut fb, w_px, h_px, x0, y0, cw, ch, glyph, g.fg_rgba, g.bold,
+            );
         }
 
         // Pass 4: Optional CRT phosphor scanline attenuation on odd pixel rows (v0.6.0)

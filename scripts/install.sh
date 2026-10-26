@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Bilterm — Plain Binary & Multi-Scope Installer (Linux & macOS)
+# Bilterm — Plain Binary, Desktop Launcher & Multi-Scope Installer (Linux & macOS)
 # ==============================================================================
-# Installs the `bilterm` binary, manpage (`bilterm.1`), and shell completions
-# for users who just want to run Bilterm without managing a development setup.
+# Installs the `bilterm` binary, manpage (`bilterm.1`), shell completions, and
+# OS application launcher integration:
+#   - Linux (Ubuntu GNOME / KDE / Rofi): `bilterm.desktop` + `bilterm.png` icon
+#   - macOS (Spotlight / Launchpad / Finder): `Bilterm.app` bundle
 #
 # Scopes:
-#   --local (default)   ~/.local/bin/bilterm, ~/.local/share/man/man1/bilterm.1
+#   --local (default)   ~/.local/bin/bilterm, ~/.local/share/applications/bilterm.desktop
 #   --cargo             ~/.cargo/bin/bilterm
-#   --global            /usr/local/bin/bilterm, /usr/local/share/man/man1/bilterm.1
+#   --global            /usr/local/bin/bilterm, /usr/local/share/applications/bilterm.desktop
 #   --prefix <DIR>      <DIR>/bin/bilterm, <DIR>/share/man/man1/bilterm.1
-#
-# Can also be piped directly via curl:
-#   curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash
 # ==============================================================================
 
 set -euo pipefail
@@ -28,11 +27,12 @@ UNINSTALL=0
 FORCE=0
 FROM_SOURCE=0
 BINARY_ONLY=0
+NO_DESKTOP=0
 RELEASE_TAG="latest"
 
 usage() {
     cat <<'EOF'
-Bilterm Plain Binary Installer (Linux & macOS)
+Bilterm Plain Binary & Desktop Launcher Installer (Linux & macOS)
 
 Usage:
   ./scripts/install.sh [OPTIONS]
@@ -49,17 +49,11 @@ Source / Binary Selection:
   -t, --tag <TAG>         Release tag to download when fetching from GitHub (default: latest)
 
 Operations:
-  -u, --uninstall         Remove installed bilterm binary, manpage, and completions
+      --no-desktop        Skip Linux .desktop / macOS Bilterm.app launcher installation
+  -u, --uninstall         Remove installed bilterm binary, manpage, completions, and desktop launcher
   -f, --force             Overwrite existing unmanaged target files
   -n, --dry-run           Print actions without modifying the filesystem
   -h, --help              Print this help message
-
-Examples:
-  ./scripts/install.sh                        # Install to ~/.local/bin (uses local build, release, or cargo)
-  ./scripts/install.sh --cargo                # Install to ~/.cargo/bin/bilterm
-  ./scripts/install.sh --global               # Install system-wide to /usr/local/bin
-  ./scripts/install.sh --prefix /opt/bilterm  # Install into /opt/bilterm/bin
-  ./scripts/install.sh --uninstall            # Cleanly uninstall bilterm
 EOF
 }
 
@@ -120,6 +114,10 @@ while [[ $# -gt 0 ]]; do
             RELEASE_TAG="$2"
             shift 2
             ;;
+        --no-desktop)
+            NO_DESKTOP=1
+            shift
+            ;;
         -u|--uninstall)
             UNINSTALL=1
             shift
@@ -159,29 +157,36 @@ fi
 case "$SCOPE" in
     local)
         BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
-        DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/bilterm"
-        MAN_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
+        SHARE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}"
+        MAC_APPS_DIR="${HOME}/Applications"
         ;;
     cargo)
         BIN_DIR="${CARGO_HOME:-$HOME/.cargo}/bin"
-        DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/bilterm"
-        MAN_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
+        SHARE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}"
+        MAC_APPS_DIR="${HOME}/Applications"
         ;;
     global)
         BIN_DIR="/usr/local/bin"
-        DATA_DIR="/usr/local/share/bilterm"
-        MAN_DIR="/usr/local/share/man/man1"
+        SHARE_ROOT="/usr/local/share"
+        MAC_APPS_DIR="/Applications"
         ;;
     prefix)
         ABS_PREFIX="$(resolve_abs_path "$CUSTOM_PREFIX")"
         BIN_DIR="${ABS_PREFIX}/bin"
-        DATA_DIR="${ABS_PREFIX}/share/bilterm"
-        MAN_DIR="${ABS_PREFIX}/share/man/man1"
+        SHARE_ROOT="${ABS_PREFIX}/share"
+        MAC_APPS_DIR="${HOME}/Applications"
         ;;
 esac
 
+DATA_DIR="${SHARE_ROOT}/bilterm"
+MAN_DIR="${SHARE_ROOT}/man/man1"
+DESKTOP_DIR="${SHARE_ROOT}/applications"
+ICON_DIR="${SHARE_ROOT}/icons/hicolor/256x256/apps"
 TARGET_BIN="${BIN_DIR}/bilterm"
 TARGET_MAN="${MAN_DIR}/bilterm.1"
+TARGET_DESKTOP="${DESKTOP_DIR}/bilterm.desktop"
+TARGET_ICON="${ICON_DIR}/bilterm.png"
+TARGET_MAC_APP="${MAC_APPS_DIR}/Bilterm.app"
 COMP_DIR="${DATA_DIR}/completions"
 
 check_write_access() {
@@ -206,20 +211,18 @@ fi
 # Uninstall mode
 if [[ "$UNINSTALL" -eq 1 ]]; then
     log_info "Uninstalling bilterm from ${BIN_DIR}..."
-    if [[ -e "$TARGET_BIN" || -L "$TARGET_BIN" ]]; then
-        run_cmd rm -f "$TARGET_BIN"
-        log_ok "Removed ${TARGET_BIN}"
-    else
-        log_warn "Binary not found at ${TARGET_BIN}"
-    fi
-    if [[ -e "$TARGET_MAN" ]]; then
-        run_cmd rm -f "$TARGET_MAN"
-        log_ok "Removed ${TARGET_MAN}"
-    fi
-    if [[ -d "$DATA_DIR" ]]; then
-        run_cmd rm -rf "$DATA_DIR"
-        log_ok "Removed ${DATA_DIR}"
-    fi
+    for item in "$TARGET_BIN" "$TARGET_MAN" "$TARGET_DESKTOP" "$TARGET_ICON"; do
+        if [[ -e "$item" || -L "$item" ]]; then
+            run_cmd rm -f "$item"
+            log_ok "Removed ${item}"
+        fi
+    done
+    for dir_item in "$DATA_DIR" "$TARGET_MAC_APP"; do
+        if [[ -d "$dir_item" ]]; then
+            run_cmd rm -rf "$dir_item"
+            log_ok "Removed ${dir_item}"
+        fi
+    done
     log_ok "Uninstall complete."
     exit 0
 fi
@@ -285,7 +288,6 @@ try_download_prebuilt() {
 acquire_binary() {
     local dest_bin="$1"
 
-    # 1. If --binary-only is requested, only try prebuilt download
     if [[ "$BINARY_ONLY" -eq 1 ]]; then
         if try_download_prebuilt "$dest_bin"; then
             return 0
@@ -295,7 +297,6 @@ acquire_binary() {
         exit 1
     fi
 
-    # 2. If inside a local checkout and target/release/bilterm already exists (and not --from-source)
     if [[ "$FROM_SOURCE" -eq 0 && -f "${REPO_ROOT}/target/release/bilterm" ]]; then
         log_info "Using existing release binary at ${REPO_ROOT}/target/release/bilterm"
         run_cmd cp -f "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
@@ -303,14 +304,12 @@ acquire_binary() {
         return 0
     fi
 
-    # 3. If not --from-source, try downloading a prebuilt binary first if cargo isn't present or outside repo
     if [[ "$FROM_SOURCE" -eq 0 ]] && [[ ! -f "${REPO_ROOT}/Cargo.toml" ]]; then
         if try_download_prebuilt "$dest_bin"; then
             return 0
         fi
     fi
 
-    # 4. Build from local repo Cargo.toml or cargo install --git
     if [[ -f "$HOME/.cargo/env" ]]; then
         # shellcheck disable=SC1091
         source "$HOME/.cargo/env"
@@ -327,7 +326,7 @@ acquire_binary() {
 
     if [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
         log_info "Building optimized release binary from ${REPO_ROOT}/Cargo.toml..."
-        (cd "$REPO_ROOT" && run_cmd cargo build --release)
+        (cd "$REPO_ROOT" && run_cmd cargo build -q --release)
         run_cmd cp -f "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
         run_cmd chmod 0755 "$dest_bin"
     else
@@ -343,7 +342,6 @@ acquire_binary() {
     fi
 }
 
-# Prevent accidental overwrite of an unmanaged file unless --force is passed or it's already bilterm
 if [[ -e "$TARGET_BIN" && "$FORCE" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
     if ! "$TARGET_BIN" --version 2>/dev/null | grep -q "^bilterm "; then
         log_err "Target '${TARGET_BIN}' already exists and does not appear to be bilterm. Pass --force to overwrite."
@@ -373,7 +371,80 @@ fi
 log_ok "Installed manpage: ${TARGET_MAN}"
 log_ok "Installed shell completions: ${COMP_DIR}"
 
-# Check if BIN_DIR is on PATH
+# Install OS Desktop Launcher (Linux GNOME/KDE .desktop or macOS Bilterm.app)
+if [[ "$NO_DESKTOP" -eq 0 ]]; then
+    OS_NAME="$(uname -s 2>/dev/null || echo unknown)"
+    if [[ "$OS_NAME" == "Linux"* ]]; then
+        run_cmd mkdir -p "$DESKTOP_DIR" "$ICON_DIR"
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            printf '  [dry-run] install desktop launcher "%s"\n' "$TARGET_DESKTOP" >&2
+        else
+            if [[ -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" ]]; then
+                cp -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" "$TARGET_ICON"
+            fi
+            if ! "$TARGET_BIN" --desktop-file > "$TARGET_DESKTOP" 2>/dev/null; then
+                cat > "$TARGET_DESKTOP" <<DESK_EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Bilterm
+GenericName=Composite Terminal Multiplexer
+Comment=IBM 3270 Mainframe & Borland Turbo Vision Composite Terminal Multiplexer
+Exec=${TARGET_BIN}
+TryExec=${TARGET_BIN}
+Icon=bilterm
+Terminal=true
+Categories=System;TerminalEmulator;Utility;
+Keywords=terminal;tmux;3270;borland;multiplexer;shell;ssh;
+StartupNotify=true
+StartupWMClass=bilterm
+Actions=NativeGui;
+
+[Desktop Action NativeGui]
+Name=Launch Native GUI Window (--gui)
+Exec=${TARGET_BIN} --gui
+Terminal=false
+DESK_EOF
+            fi
+            chmod 0644 "$TARGET_DESKTOP"
+            command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+        fi
+        log_ok "Installed Linux desktop launcher: ${TARGET_DESKTOP}"
+    elif [[ "$OS_NAME" == "Darwin"* ]]; then
+        run_cmd mkdir -p "${TARGET_MAC_APP}/Contents/MacOS" "${TARGET_MAC_APP}/Contents/Resources"
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            printf '  [dry-run] create macOS app bundle "%s"\n' "$TARGET_MAC_APP" >&2
+        else
+            cat > "${TARGET_MAC_APP}/Contents/Info.plist" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Bilterm</string>
+  <key>CFBundleDisplayName</key>
+  <string>Bilterm</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.bilterm.app</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>bilterm-launcher</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST_EOF
+            cat > "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher" <<LAUNCH_EOF
+#!/usr/bin/env bash
+exec "${TARGET_BIN}" "\$@"
+LAUNCH_EOF
+            chmod 0755 "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher"
+        fi
+        log_ok "Installed macOS Spotlight / Launchpad bundle: ${TARGET_MAC_APP}"
+    fi
+fi
+
 case ":${PATH}:" in
     *":${BIN_DIR}:"*)
         PATH_HINT=""
@@ -392,6 +463,6 @@ cat >&2 <<EOF
 
 Next steps:
   1. bilterm -v                         # verify installed version
-  2. bilterm                            # launch interactive IBM 3270 x Borland TUI
-  3. bilterm -h                         # view CLI switches, headless daemon & MCP options
+  2. bilterm                            # launch interactive TUI (or open from GNOME / Spotlight launcher)
+  3. bilterm --gui                      # launch standalone Native GUI window
 EOF

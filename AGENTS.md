@@ -166,6 +166,10 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 4. **Filesystem & Credential Confinement (`SEC-R01..04`)**:
    - All runtime state, session TOMLs, history exports, `.cast` recordings,Unix RPC sockets, and snapshots MUST use `src/util/secure_fs.rs` (`ensure_private_dir` `0700`, `write_private_file_atomic` `0600`, `validate_safe_name` rejecting `..`, `/`, `\`, NUL).
    - Never pass secrets on CLI argv; use `--token-file <path>` (`0600`).
+5. **Context Window & Token-Efficiency Discipline (`PERF-CTX-01..03`)**:
+   - **Compact Between Tasks**: Recommend or run `/compact` after updating `.planning/CHECKPOINT.md` when switching between major tasks so tool turns do not replay large historical contexts.
+   - **Quiet Cargo Flags (`-q` / `--quiet`)**: Always pass `-q` (`cargo build -q`, `cargo clippy -q --all-targets -- -D warnings`, `cargo test -q`) to suppress routine `Compiling ...` and `test ... ok` lines (~90% token reduction).
+   - **Delegate Build/Test Loops to `flash` Subagent**: Run multi-step `cargo build -q` / `cargo clippy -q` / `cargo test -q` verification loops inside an isolated `flash` subagent (`invoke_subagent` with `Model: "flash"`) so compiler/test logs never bloat the main conversation history.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

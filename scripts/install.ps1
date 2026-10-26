@@ -1,8 +1,9 @@
 # ==============================================================================
-# Bilterm — Plain Binary Installer for Windows (PowerShell)
+# Bilterm — Plain Binary & Desktop Launcher Installer for Windows (PowerShell)
 # ==============================================================================
-# Installs `bilterm.exe` for users who just want to run the binary (from a
-# prebuilt GitHub Release, an existing local build, or `cargo build --release`).
+# Installs `bilterm.exe`, registers `Win+R` (`App Paths\bilterm.exe`), adds the
+# install directory to the User `PATH`, and creates Windows Start Menu shortcuts
+# (`Bilterm.lnk` and `Bilterm (Native GUI).lnk`).
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 [OPTIONS]
@@ -15,6 +16,7 @@ param(
     [switch]$BinaryOnly,
     [switch]$FromSource,
     [string]$Tag = "latest",
+    [switch]$NoDesktop,
     [switch]$Uninstall,
     [switch]$Force,
     [switch]$DryRun,
@@ -28,10 +30,10 @@ $RepoRoot = Split-Path -Parent $ScriptDir
 
 if ($Help) {
     Write-Host @"
-Bilterm Plain Binary Installer (Windows PowerShell)
+Bilterm Plain Binary & Desktop Launcher Installer (Windows PowerShell)
 
 Usage:
-  .\scripts\install.ps1 [-Local] [-Cargo] [-Prefix <DIR>] [-BinaryOnly] [-FromSource] [-Uninstall] [-DryRun]
+  .\scripts\install.ps1 [-Local] [-Cargo] [-Prefix <DIR>] [-BinaryOnly] [-FromSource] [-NoDesktop] [-Uninstall] [-DryRun]
 
 Options:
   -Local          Install to $HOME\.local\bin\bilterm.exe (default)
@@ -40,7 +42,8 @@ Options:
   -BinaryOnly     Download prebuilt binary from GitHub Releases (no Rust needed)
   -FromSource     Compile from source using Cargo
   -Tag <TAG>      Release tag to download (default: latest)
-  -Uninstall      Remove installed bilterm.exe
+  -NoDesktop      Skip Windows Run (App Paths) and Start Menu shortcut registration
+  -Uninstall      Remove installed bilterm.exe, App Paths entry, and Start Menu shortcuts
   -Force          Overwrite existing target binary
   -DryRun         Print actions without modifying the filesystem
   -Help           Show this help message
@@ -62,6 +65,10 @@ if ($Prefix) {
 }
 
 $TargetBin = Join-Path $BinDir "bilterm.exe"
+$AppPathsRegKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\bilterm.exe"
+$StartMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
+$ShortcutTui = Join-Path $StartMenuDir "Bilterm.lnk"
+$ShortcutGui = Join-Path $StartMenuDir "Bilterm (Native GUI).lnk"
 
 if ($Uninstall) {
     if (Test-Path $TargetBin) {
@@ -73,6 +80,24 @@ if ($Uninstall) {
         Write-Ok "Removed $TargetBin"
     } else {
         Write-Warn "Binary not found at $TargetBin"
+    }
+    if (Test-Path $AppPathsRegKey) {
+        if ($DryRun) {
+            Write-Host "  [dry-run] Remove-Item $AppPathsRegKey"
+        } else {
+            Remove-Item -Path $AppPathsRegKey -Force -ErrorAction SilentlyContinue
+        }
+        Write-Ok "Removed Windows Run (App Paths) registration"
+    }
+    foreach ($lnk in @($ShortcutTui, $ShortcutGui)) {
+        if (Test-Path $lnk) {
+            if ($DryRun) {
+                Write-Host "  [dry-run] Remove-Item $lnk"
+            } else {
+                Remove-Item -Force $lnk -ErrorAction SilentlyContinue
+            }
+            Write-Ok "Removed Start Menu shortcut: $lnk"
+        }
     }
     exit 0
 }
@@ -146,9 +171,9 @@ if ($BinaryOnly) {
         Push-Location $RepoRoot
         try {
             if ($DryRun) {
-                Write-Host "  [dry-run] cargo build --release"
+                Write-Host "  [dry-run] cargo build -q --release"
             } else {
-                & cargo build --release
+                & cargo build -q --release
                 Copy-Item -Path $localBuild -Destination $TargetBin -Force
             }
         } finally {
@@ -170,16 +195,59 @@ if ($BinaryOnly) {
 
 Write-Ok "Installed binary: $TargetBin"
 
-if ($env:PATH -notlike "*$BinDir*") {
-    Write-Warn "'$BinDir' is not currently in your PATH."
-    Write-Host "  Add it to your User PATH in PowerShell:"
-    Write-Host "    [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$BinDir', 'User')"
+if (-not $NoDesktop) {
+    if ($DryRun) {
+        Write-Host "  [dry-run] Register $AppPathsRegKey -> $TargetBin"
+        Write-Host "  [dry-run] Create Start Menu shortcuts: $ShortcutTui, $ShortcutGui"
+    } else {
+        try {
+            New-Item -Path $AppPathsRegKey -Force | Out-Null
+            Set-ItemProperty -Path $AppPathsRegKey -Name "(Default)" -Value $TargetBin
+            Set-ItemProperty -Path $AppPathsRegKey -Name "Path" -Value $BinDir
+            Write-Ok "Registered Windows Run (Win+R -> bilterm) via App Paths"
+        } catch {
+            Write-Warn "Could not register App Paths key: $_"
+        }
+
+        try {
+            if (Test-Path $StartMenuDir) {
+                $wsh = New-Object -ComObject WScript.Shell
+                $s1 = $wsh.CreateShortcut($ShortcutTui)
+                $s1.TargetPath = $TargetBin
+                $s1.WorkingDirectory = $HOME
+                $s1.Description = "Bilterm — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer"
+                $s1.Save()
+
+                $s2 = $wsh.CreateShortcut($ShortcutGui)
+                $s2.TargetPath = $TargetBin
+                $s2.Arguments = "--gui"
+                $s2.WorkingDirectory = $HOME
+                $s2.Description = "Bilterm (Native GUI Window)"
+                $s2.Save()
+                Write-Ok "Created Start Menu shortcuts: Bilterm & Bilterm (Native GUI)"
+            }
+        } catch {
+            Write-Warn "Could not create Start Menu shortcuts: $_"
+        }
+    }
+}
+
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($userPath -notlike "*$BinDir*") {
+    if ($DryRun) {
+        Write-Host "  [dry-run] Add '$BinDir' to User PATH"
+    } else {
+        $newPath = if ([string]::IsNullOrEmpty($userPath)) { $BinDir } else { "$userPath;$BinDir" }
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $env:PATH = "$BinDir;$env:PATH"
+        Write-Ok "Added '$BinDir' to User PATH"
+    }
 }
 
 Write-Host @"
 
 Next steps:
-  1. bilterm -v                         # verify installed version
-  2. bilterm                            # launch interactive IBM 3270 x Borland TUI
+  1. Win+R -> bilterm                   # launch directly from Windows Run or Start Menu
+  2. Win+R -> bilterm --gui             # launch standalone Native GUI window (no terminal needed)
   3. bilterm -h                         # view CLI switches & options
 "@

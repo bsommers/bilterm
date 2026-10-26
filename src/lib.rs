@@ -5,6 +5,7 @@ pub mod colon_command;
 pub mod config;
 pub mod error;
 pub mod input;
+pub mod launcher;
 pub mod pane;
 pub mod pty;
 pub mod remote;

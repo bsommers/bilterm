@@ -1,4 +1,7 @@
-# Session Checkpoint — Phase 28 Complete (`v1.10.2`) — 2026-10-25
+# Session Checkpoint — Phase 28 + Desktop/GUI Launchers (`v1.10.2+`) — 2026-10-25
+
+- **Desktop & Native GUI Launchers (`LAUNCH-01`, `GPU-02`)**: Added `src/launcher.rs` (non-TTY terminal auto-relaunch, system launch dir normalization, state log dir, `.desktop` & `Info.plist` generators), `src/ui/bitmap_font.rs` (CP437 5x7 + box-drawing/block/Braille rasterizer), `src/ui/gui_window.rs` (`bilterm --gui` / `-G` standalone Win32 GDI 60 FPS GUI window + key/mouse/resize translation), and desktop launcher registration in `scripts/install.ps1` (`Win+R` `App Paths` + Start Menu `.lnk`) & `scripts/install.sh` (`.desktop` + `Bilterm.app`).
+- **Token Optimizations (`PERF-CTX-01..03`)**: (1) `/compact` between tasks, (2) `cargo build -q` / `cargo clippy -q` / `cargo test -q`, (3) delegate build/test verification loops to a `flash` subagent.
 
 **Status:** COMPLETE — Phase 28 Waves 1–3 (`28-01-PLAN.md`) complete, verified, and tagged `v1.10.2`.
 

@@ -110,14 +110,25 @@ fn dedicated_vt_worker_thread_processes_stream_and_publishes_snapshots() {
 
 #[test]
 fn dedicated_vt_worker_thread_pipes_live_portable_pty_into_grid_snapshot() {
+    let (program, args) = if cfg!(windows) {
+        (
+            "cmd.exe".to_string(),
+            vec!["/C".to_string(), "echo LIVE_PTY_SNAPSHOT_OK".to_string()],
+        )
+    } else {
+        (
+            "/bin/sh".to_string(),
+            vec![
+                "-c".to_string(),
+                "printf 'LIVE_PTY_SNAPSHOT_OK\\r\\n'".to_string(),
+            ],
+        )
+    };
     let cfg = PtyConfig {
         rows: 10,
         cols: 60,
-        program: "/bin/sh".to_string(),
-        args: vec![
-            "-c".to_string(),
-            "printf 'LIVE_PTY_SNAPSHOT_OK\\r\\n'".to_string(),
-        ],
+        program,
+        args,
         ..Default::default()
     };
 
