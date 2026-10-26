@@ -1,5 +1,5 @@
 # ==============================================================================
-# Bilterm — Plain Binary & Desktop Launcher Installer for Windows (PowerShell)
+# Bilterm - Plain Binary & Desktop Launcher Installer for Windows (PowerShell)
 # ==============================================================================
 # Installs `bilterm.exe`, registers `Win+R` (`App Paths\bilterm.exe`), adds the
 # install directory to the User `PATH`, and creates Windows Start Menu shortcuts
@@ -215,7 +215,7 @@ if (-not $NoDesktop) {
                 $s1 = $wsh.CreateShortcut($ShortcutTui)
                 $s1.TargetPath = $TargetBin
                 $s1.WorkingDirectory = $HOME
-                $s1.Description = "Bilterm — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer"
+                $s1.Description = "Bilterm - IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer"
                 $s1.Save()
 
                 $s2 = $wsh.CreateShortcut($ShortcutGui)
@@ -224,7 +224,7 @@ if (-not $NoDesktop) {
                 $s2.WorkingDirectory = $HOME
                 $s2.Description = "Bilterm (Native GUI Window)"
                 $s2.Save()
-                Write-Ok "Created Start Menu shortcuts: Bilterm & Bilterm (Native GUI)"
+                Write-Ok "Created Start Menu shortcuts: Bilterm and Bilterm (Native GUI)"
             }
         } catch {
             Write-Warn "Could not create Start Menu shortcuts: $_"
