@@ -76,9 +76,9 @@ pub enum PtyEvent {
 
 /// Live cross-platform PTY session wrapping `portable-pty` with deduplicated `SIGWINCH` resizing.
 pub struct PtySession {
-    writer: Mutex<Box<dyn Write + Send>>,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    child: Mutex<Box<dyn Child + Send + Sync>>,
+    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
     output_rx: mpsc::Receiver<PtyEvent>,
     current_size: Mutex<(u16, u16)>,
     sigwinch_count: Arc<AtomicUsize>,
@@ -167,9 +167,9 @@ impl PtySession {
             .map_err(BiltermError::Io)?;
 
         Ok(Self {
-            master: Mutex::new(pair.master),
-            writer: Mutex::new(writer),
-            child: Mutex::new(child),
+            master: Mutex::new(Some(pair.master)),
+            writer: Mutex::new(Some(writer)),
+            child: Mutex::new(Some(child)),
             output_rx: rx,
             current_size: Mutex::new((initial_rows, initial_cols)),
             sigwinch_count: Arc::new(AtomicUsize::new(0)),
@@ -181,12 +181,14 @@ impl PtySession {
 
     /// Writes raw bytes to the PTY master input stream and flushes immediately.
     pub fn write_all(&self, bytes: &[u8]) -> Result<()> {
-        let mut writer = self
+        let mut guard = self
             .writer
             .lock()
             .map_err(|_| BiltermError::Pty("PTY writer mutex poisoned".to_string()))?;
-        writer.write_all(bytes)?;
-        writer.flush()?;
+        if let Some(writer) = guard.as_mut() {
+            writer.write_all(bytes)?;
+            writer.flush()?;
+        }
         Ok(())
     }
 
@@ -205,18 +207,20 @@ impl PtySession {
             return Ok(false);
         }
 
-        let master = self
+        let master_guard = self
             .master
             .lock()
             .map_err(|_| BiltermError::Pty("PTY master mutex poisoned".to_string()))?;
-        master
-            .resize(PtySize {
-                rows: clamped_rows,
-                cols: clamped_cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| BiltermError::Pty(format!("PTY resize failed: {e}")))?;
+        if let Some(master) = master_guard.as_ref() {
+            master
+                .resize(PtySize {
+                    rows: clamped_rows,
+                    cols: clamped_cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| BiltermError::Pty(format!("PTY resize failed: {e}")))?;
+        }
 
         *size_guard = (clamped_rows, clamped_cols);
         self.sigwinch_count.fetch_add(1, Ordering::SeqCst);
@@ -267,9 +271,20 @@ impl PtySession {
 
 impl Drop for PtySession {
     fn drop(&mut self) {
-        if let Ok(mut child) = self.child.lock() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        self.output_rx.close();
+        while self.output_rx.try_recv().is_ok() {}
+        let writer = self.writer.lock().ok().and_then(|mut g| g.take());
+        let child = self.child.lock().ok().and_then(|mut g| g.take());
+        let master = self.master.lock().ok().and_then(|mut g| g.take());
+        let _ = thread::Builder::new()
+            .name("bilterm-pty-reaper".to_string())
+            .spawn(move || {
+                drop(writer);
+                if let Some(mut c) = child {
+                    let _ = c.kill();
+                    let _ = c.wait();
+                }
+                drop(master);
+            });
     }
 }

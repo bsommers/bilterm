@@ -388,7 +388,10 @@ fn comprehensive_input_router_completion_and_colon_command_coverage() {
 
         pane.prompt_mut().set_text("echo ${PAT");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
-        assert!(pane.prompt().text().contains("${PATH}"));
+        if !pane.prompt().text().contains("${PATH}") {
+            handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
+        }
+        assert!(pane.prompt().text().contains("${PATH}") || pane.prompt().text().contains("${PATHEXT}"));
 
         pane.prompt_mut().set_text("cd ~");
         handle_key_event(pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();

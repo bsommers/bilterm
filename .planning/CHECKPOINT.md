@@ -1,12 +1,12 @@
-# Session Checkpoint — Phase 28 + Desktop/GUI Launchers & ClearType Engine (`v1.11.0`) — 2026-10-25
+# Session Checkpoint — Phase 28 + Desktop/GUI Launchers, ClearType Engine & Windows ConPTY Hardening (`v1.11.1`) — 2026-10-26
 
 - **Desktop & Native GUI Launchers + ClearType TTF/OTF Font Engine (`LAUNCH-01`, `GPU-02`, `FONT-02`)**: Added `src/launcher.rs` (non-TTY terminal auto-relaunch, system launch dir normalization, state log dir, `.desktop` & `Info.plist` generators), `src/ui/bitmap_font.rs` (CP437 5x7 + box-drawing/block/Braille rasterizer), `src/ui/gui_window.rs` (`bilterm --gui` / `-G` standalone Win32 GDI 60 FPS GUI window + key/mouse/resize translation), `src/ui/gui_font/*` (1:1 HiDPI ClearType TTF/OTF engine, custom `.ttf`/`.otf` loader, geometric box-drawing), Windows ConPTY 3270 `\r` prompt submission fix (`src/pane/mod.rs`), and Linux cross-platform parity fixes.
 - **Token Optimizations (`PERF-CTX-01..03`)**: (1) `/compact` between tasks, (2) `cargo build -q` / `cargo clippy -q` / `cargo test -q`, (3) delegate build/test verification loops to a `flash` subagent.
 
-**Status:** COMPLETE — Verified across Linux & Windows targets (`240` tests passing) and tagged `v1.11.0`.
+**Status:** COMPLETE — Verified across Linux & Windows targets (`240` tests passing) and tagged `v1.11.1`.
 
 - **Updated:** `2026-10-25`
-- **Branch:** `main` (tagged `v1.11.0`)
+- **Branch:** `main` (tagged `v1.11.1`)
 - **Latest Releases:**
   - `v1.11.0`: Native OS GUI (`bilterm --gui` / `-G`), 1:1 HiDPI ClearType TTF/OTF Font Engine (`-F/--font`, `--font-file`, `:font add`), OS Desktop Launcher Integration (`--desktop-file`), Windows ConPTY 3270 prompt fix, and Linux cross-platform parity
   - `v1.10.2`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.2>

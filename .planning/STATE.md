@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11.0
+milestone: v1.11.1
 milestone_name: milestone
 current_phase: 28
 current_phase_name: architecture-hardening-and-dag-decoupling
-status: released_v1_11_0
+status: released_v1_11_1
 stopped_at: Verified Linux/Windows cross-platform parity and prepared v1.11.0 release (Native OS GUI window, ClearType TTF/OTF font engine, desktop launcher integration, ConPTY 3270 prompt fix)
 last_updated: "2026-10-25"
 last_activity: 2026-10-25

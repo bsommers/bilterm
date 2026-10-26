@@ -369,7 +369,7 @@ pub fn compute_completions(
 }
 
 fn complete_filesystem_path(token: &str, cwd: &Path) -> Vec<CompletionCandidate> {
-    let home_dir = std::env::var_os("HOME").map(PathBuf::from);
+    let home_dir = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from);
 
     let (dir_prefix_for_replacement, search_dir, file_prefix) = if token == "~" {
         if home_dir.is_some() {

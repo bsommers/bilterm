@@ -5,6 +5,18 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.11.1] - 2026-10-26
+
+### Fixed
+- **Non-Blocking Windows ConPTY Session Reaper (`src/pty/mod.rs`)**:
+  - Updated `PtySession::drop` to close and drain `output_rx` immediately and offload `writer`, `child.kill()`/`child.wait()`, and `master` handle teardown to a background `bilterm-pty-reaper` thread so Windows ConPTY pipe closures never deadlock the UI or test runner thread.
+- **Windows `~` Home Directory Tab Completion Fallback (`src/pane/completion.rs`)**:
+  - Added `USERPROFILE` fallback when `HOME` is unset on Windows in `complete_filesystem_path` so `cd ~<Tab>` and `~/...` path completions work natively across Windows shells.
+- **Windows Integration Test Suite Parity (`tests/pty_lifecycle.rs`, `tests/terminal_torture_and_stress.rs`, `tests/v110_v120_v130_automation_api_mcp_playbooks.rs`)**:
+  - Updated `pty_lifecycle` on Windows to spawn `cmd.exe`, submit `\r`-terminated commands, and flush DSR query responses back to the ConPTY master.
+  - Updated `terminal_torture_and_stress` environment variable tab completion check to account for Windows `${PATHEXT}` alongside `${PATH}`.
+  - Switched playbook `.ppm` export path interpolation in `v110_v120_v130_automation_api_mcp_playbooks` to a single-quoted TOML literal string (`path = '{}'`) so Windows `\` path separators are not misinterpreted as `\U` Unicode escapes.
+
 ## [v1.11.0] - 2026-10-25
 
 ### Added

@@ -6,7 +6,9 @@ use bilterm::vt::VtParser;
 #[tokio::test]
 async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
     let mut cfg = PtyConfig::default();
-    if !cfg!(windows) {
+    if cfg!(windows) {
+        cfg.program = "cmd.exe".to_string();
+    } else {
         cfg.program = "/bin/sh".to_string();
     }
     cfg.rows = 24;
@@ -28,9 +30,12 @@ async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
     assert_eq!(session.sigwinch_count(), 1);
 
     // Execute a command and verify output arrives in VtParser
-    session
-        .write_all(b"printf 'BILTERM_PTY_OK_%d\\n' 3270\n")
-        .expect("write command");
+    let cmd_bytes: &[u8] = if cfg!(windows) {
+        b"echo BILTERM_PTY_OK_3270\r"
+    } else {
+        b"printf 'BILTERM_PTY_OK_%d\\n' 3270\n"
+    };
+    session.write_all(cmd_bytes).expect("write command");
 
     let mut vt = VtParser::new(30, 100, 500);
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -41,6 +46,9 @@ async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
             tokio::time::timeout(Duration::from_millis(100), session.output_rx_mut().recv()).await
         {
             vt.process(&bytes);
+            for resp in vt.take_query_responses() {
+                let _ = session.write_all(&resp);
+            }
             if vt.contents().contains("BILTERM_PTY_OK_3270") {
                 found = true;
                 break;

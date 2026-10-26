@@ -179,7 +179,7 @@ exit_code = 42
 
 [[steps]]
 action = "export_ppm"
-path = "{}"
+path = '{}'
 "#,
         ppm_path.display()
     );
