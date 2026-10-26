@@ -341,12 +341,12 @@ fn floating_prompt_submit_command_executes_in_live_shell_pty() {
     loop {
         pane.poll_pty_events();
         let contents = pane.vt().contents();
-        // Verify the command output line itself (not just the echoed input) appeared on a new line
+        // Verify the command output line itself (not the echoed `echo ...` input) appeared
         let output_lines = contents
             .lines()
             .filter(|line| {
                 let t = line.trim();
-                t == "FLOATING_3270_EXEC_OK" || t.starts_with("FLOATING_3270_EXEC_OK")
+                !t.contains("echo") && t.contains("FLOATING_3270_EXEC_OK")
             })
             .count();
         if output_lines >= 1 {

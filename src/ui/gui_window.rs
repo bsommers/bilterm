@@ -10,13 +10,15 @@
 //! - **Linux / macOS (`#[cfg(not(windows))]`)**: Renders initial [`GuiFrameSurface`] verification
 //!   and launches a dedicated standalone window via [`crate::launcher::ensure_terminal_or_relaunch`].
 
-use crossterm::event::{
-    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+#[cfg(windows)]
+use crossterm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use crate::app::App;
 use crate::error::Result;
+#[cfg(not(windows))]
+use crate::ui::renderer::WorkspaceFrameRenderer;
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
 
 /// Converts an RGBA `[R, G, B, A]` pixel buffer into a 32-bit `0x00RRGGBB` (`[B, G, R, 255]` in
