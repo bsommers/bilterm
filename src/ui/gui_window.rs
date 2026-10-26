@@ -2,10 +2,11 @@
 //!
 //! Drives [`App`] + [`GuiWorkspaceRenderer`] + [`GuiFrameSurface`] inside a native desktop window
 //! without requiring an external terminal emulator:
-//! - **Windows (`#[cfg(windows)]`)**: Native Win32 (`user32.dll` + `gdi32.dll`) window with 60 FPS
-//!   32-bit top-down DIB framebuffer blitting (`StretchDIBits`), full keyboard (`WM_KEYDOWN` /
+//! - **Windows (`#[cfg(windows)]`)**: Native HiDPI Win32 (`user32.dll` + `gdi32.dll`) window backed by
+//!   [`crate::ui::gui_font::win32_gdi::Win32GuiCanvas`] (ClearType TrueType/OpenType text rendering +
+//!   1:1 `CreateDIBSection` + `BitBlt` + edge-to-edge geometric box-drawing), full keyboard (`WM_KEYDOWN` /
 //!   `WM_SYSKEYDOWN` / `WM_CHAR`), mouse drag/click/scroll (`WM_LBUTTONDOWN`, `WM_MOUSEMOVE`,
-//!   `WM_MOUSEWHEEL`), and live pixel-to-cell window resizing (`WM_SIZE`).
+//!   `WM_MOUSEWHEEL` + `Ctrl+Wheel` font zoom), and live pixel-to-cell window resizing (`WM_SIZE`).
 //! - **Linux / macOS (`#[cfg(not(windows))]`)**: Renders initial [`GuiFrameSurface`] verification
 //!   and launches a dedicated standalone window via [`crate::launcher::ensure_terminal_or_relaunch`].
 
@@ -16,10 +17,10 @@ use ratatui::layout::Rect;
 
 use crate::app::App;
 use crate::error::Result;
-use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
+use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
 
 /// Converts an RGBA `[R, G, B, A]` pixel buffer into a 32-bit `0x00RRGGBB` (`[B, G, R, 255]` in
-/// little-endian) buffer suitable for Win32 `StretchDIBits` (`BI_RGB`) and X11 `XPutImage`.
+/// little-endian) buffer suitable for Win32 DIBs and X11 `XPutImage`.
 pub fn rgba_to_bgra_u32(rgba: &[u8], out: &mut Vec<u32>) {
     let pixel_count = rgba.len() / 4;
     out.clear();
@@ -116,13 +117,17 @@ pub fn translate_vk_to_key_event(
 /// Runs Bilterm inside a standalone native GUI window (`--gui` / `-G`).
 #[cfg(windows)]
 pub fn run_native_gui_window(mut app: App) -> Result<()> {
-    use std::collections::VecDeque;
     use std::cell::RefCell;
+    use std::collections::VecDeque;
     use std::ptr::{null, null_mut};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+
+    use crate::action::Action;
+    use crate::ui::gui_font::win32_gdi::{
+        Hwnd, Win32GuiCanvas, enable_hidpi_awareness, query_window_dpi,
+    };
 
     type Hinstance = *mut core::ffi::c_void;
-    type Hwnd = *mut core::ffi::c_void;
     type Hdc = *mut core::ffi::c_void;
     type Hicon = *mut core::ffi::c_void;
     type Hcursor = *mut core::ffi::c_void;
@@ -175,27 +180,6 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     }
 
     #[repr(C)]
-    struct BitmapInfoHeader {
-        bi_size: u32,
-        bi_width: i32,
-        bi_height: i32,
-        bi_planes: u16,
-        bi_bit_count: u16,
-        bi_compression: u32,
-        bi_size_image: u32,
-        bi_x_pels_per_meter: i32,
-        bi_y_pels_per_meter: i32,
-        bi_clr_used: u32,
-        bi_clr_important: u32,
-    }
-
-    #[repr(C)]
-    struct BitmapInfo {
-        bmi_header: BitmapInfoHeader,
-        bmi_colors: [u32; 1],
-    }
-
-    #[repr(C)]
     struct PaintStruct {
         hdc: Hdc,
         f_erase: i32,
@@ -233,7 +217,6 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     const VK_CONTROL: i32 = 0x11;
     const VK_MENU: i32 = 0x12;
     const IDC_ARROW: *const u16 = 32512 as *const u16;
-    const SRCCOPY: u32 = 0x00CC_0020;
 
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -274,33 +257,13 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         fn GetClientRect(h_wnd: Hwnd, lp_rect: *mut WinRect) -> i32;
         fn BeginPaint(h_wnd: Hwnd, lp_paint: *mut PaintStruct) -> Hdc;
         fn EndPaint(h_wnd: Hwnd, lp_paint: *const PaintStruct) -> i32;
-        fn GetDC(h_wnd: Hwnd) -> Hdc;
-        fn ReleaseDC(h_wnd: Hwnd, h_dc: Hdc) -> i32;
         fn LoadCursorW(h_instance: Hinstance, lp_cursor_name: *const u16) -> Hcursor;
         fn GetKeyState(n_virt_key: i32) -> i16;
     }
 
-    #[link(name = "gdi32")]
-    unsafe extern "system" {
-        fn StretchDIBits(
-            hdc: Hdc,
-            x_dest: i32,
-            y_dest: i32,
-            dest_width: i32,
-            dest_height: i32,
-            x_src: i32,
-            y_src: i32,
-            src_width: i32,
-            src_height: i32,
-            lp_bits: *const core::ffi::c_void,
-            lpbmi: *const BitmapInfo,
-            i_usage: u32,
-            rop: u32,
-        ) -> i32;
-    }
-
     enum GuiWinEvent {
         Crossterm(Event),
+        FontZoomDelta(i16),
         ResizePixels(u32, u32),
         Paint,
         Quit,
@@ -308,7 +271,7 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
 
     thread_local! {
         static EVENT_QUEUE: RefCell<VecDeque<GuiWinEvent>> = const { RefCell::new(VecDeque::new()) };
-        static CELL_GEOM: RefCell<(u16, u16, Rect)> = const { RefCell::new((8, 16, Rect::new(0, 0, 100, 30))) };
+        static CELL_GEOM: RefCell<(u16, u16, Rect)> = const { RefCell::new((10, 20, Rect::new(0, 0, 100, 30))) };
         static LEFT_DRAGGING: RefCell<bool> = const { RefCell::new(false) };
     }
 
@@ -370,7 +333,8 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
             }
             WM_CHAR => {
                 let (ctrl, alt, shift, _) = current_modifiers();
-                if !ctrl && !alt
+                if !ctrl
+                    && !alt
                     && let Some(ch) = char::from_u32(w_param as u32)
                     && !ch.is_control()
                 {
@@ -432,7 +396,12 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
             }
             WM_MOUSEWHEEL => {
                 let delta = ((w_param >> 16) & 0xFFFF) as i16;
-                let (_, _, _, modifiers) = current_modifiers();
+                let (ctrl, _, _, modifiers) = current_modifiers();
+                if ctrl {
+                    let step = if delta > 0 { 10 } else { -10 };
+                    EVENT_QUEUE.with(|q| q.borrow_mut().push_back(GuiWinEvent::FontZoomDelta(step)));
+                    return 0;
+                }
                 let (cw, ch, vp) = CELL_GEOM.with(|g| *g.borrow());
                 let px = (l_param & 0xFFFF) as i16 as i32;
                 let py = ((l_param >> 16) & 0xFFFF) as i16 as i32;
@@ -458,6 +427,8 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         }
     }
 
+    enable_hidpi_awareness();
+
     if std::env::var("BILTERM_KEEP_CONSOLE").as_deref() != Ok("1") {
         unsafe {
             let _ = FreeConsole();
@@ -466,7 +437,7 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
 
     let class_name: Vec<u16> = "BiltermGuiWindowClass\0".encode_utf16().collect();
     let title_str = format!(
-        "Bilterm v{} — IBM 3270 x Borland Turbo Vision [Native GUI]\0",
+        "Bilterm v{} — IBM 3270 x Borland Turbo Vision [Native ClearType GUI]\0",
         env!("CARGO_PKG_VERSION")
     );
     let window_title: Vec<u16> = title_str.encode_utf16().collect();
@@ -490,12 +461,9 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         RegisterClassExW(&wc);
     }
 
-    let mut gui_renderer = GuiWorkspaceRenderer::new(
-        app.wm.config().cell_width_px.max(8),
-        app.wm.config().cell_height_px.max(16),
-    );
-    let init_w = 1040;
-    let init_h = 640;
+    let dpi_init = 96u32;
+    let init_w = 1280;
+    let init_h = 800;
     let hwnd = unsafe {
         CreateWindowExW(
             0,
@@ -521,17 +489,31 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         UpdateWindow(hwnd);
     }
 
-    let mut surface = GuiFrameSurface::new(gui_renderer.cell_width_px, gui_renderer.cell_height_px);
-    let mut bgra_buf: Vec<u32> = Vec::new();
+    let mut gdi_canvas = Win32GuiCanvas::new(hwnd, &app.wm);
+    let mut gui_renderer = GuiWorkspaceRenderer::new(
+        gdi_canvas.cell_width_px,
+        gdi_canvas.cell_height_px,
+    );
+    let mut surface = GuiFrameSurface::new(gdi_canvas.cell_width_px, gdi_canvas.cell_height_px);
     let mut msg: WinMsg = unsafe { std::mem::zeroed() };
 
     let mut rect = WinRect::default();
     unsafe { GetClientRect(hwnd, &mut rect) };
-    let client_w = (rect.right - rect.left).max(640) as u32;
-    let client_h = (rect.bottom - rect.top).max(400) as u32;
-    let vp = gui_renderer.resize_workspace_for_pixel_window(&mut app.wm, client_w, client_h)?;
+    let mut client_w = (rect.right - rect.left).max(640) as u32;
+    let mut client_h = (rect.bottom - rect.top).max(400) as u32;
+    let cols = (client_w / u32::from(gdi_canvas.cell_width_px.max(1))).clamp(20, 500) as u16;
+    let rows = (client_h / u32::from(gdi_canvas.cell_height_px.max(1))).clamp(6, 200) as u16;
+    let vp = Rect::new(0, 0, cols, rows);
+    app.wm.resize_all(vp)?;
     app.last_viewport = vp;
+    let font_pt = app.wm.config().scaled_font_size_pt();
+    app.wm.active_pane_mut().set_status_message(Some(format!(
+        "GUI Font: {} ({}pt ClearType) — :font <cascadia|consolas|jetbrains|firacode|vga|cycle|add> or Ctrl+Wheel",
+        gdi_canvas.resolved_face_name,
+        font_pt
+    )));
     app.needs_redraw = true;
+    let _ = dpi_init;
 
     loop {
         while unsafe { PeekMessageW(&mut msg, null_mut(), 0, 0, PM_REMOVE) } != 0 {
@@ -551,9 +533,23 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
                     app.handle_crossterm_event(cev)?;
                     app.needs_redraw = true;
                 }
+                GuiWinEvent::FontZoomDelta(delta) => {
+                    let act = if delta > 0 {
+                        Action::FontZoomIn
+                    } else {
+                        Action::FontZoomOut
+                    };
+                    let _ = app.wm.apply(act);
+                    app.needs_redraw = true;
+                }
                 GuiWinEvent::ResizePixels(w, h) => {
-                    let vp = gui_renderer.resize_workspace_for_pixel_window(&mut app.wm, w, h)?;
-                    app.last_viewport = vp;
+                    client_w = w.max(64);
+                    client_h = h.max(64);
+                    let c = (client_w / u32::from(gdi_canvas.cell_width_px.max(1))).clamp(20, 500) as u16;
+                    let r = (client_h / u32::from(gdi_canvas.cell_height_px.max(1))).clamp(6, 200) as u16;
+                    let new_vp = Rect::new(0, 0, c, r);
+                    app.wm.resize_all(new_vp)?;
+                    app.last_viewport = new_vp;
                     app.needs_redraw = true;
                 }
                 GuiWinEvent::Paint => {
@@ -574,68 +570,41 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         }
 
         if app.needs_redraw {
-            let (eff_cw, eff_ch) = gui_renderer.scaled_cell_dimensions(&app.wm);
-            CELL_GEOM.with(|g| *g.borrow_mut() = (eff_cw, eff_ch, app.last_viewport));
-            gui_renderer.render_workspace(&app.wm, app.last_viewport, &mut surface);
-            let (w_px, h_px, rgba) = surface.rasterize_rgba();
-            if w_px > 0 && h_px > 0 {
-                rgba_to_bgra_u32(&rgba, &mut bgra_buf);
-                let mut client = WinRect::default();
-                unsafe { GetClientRect(hwnd, &mut client) };
-                let dst_w = (client.right - client.left).max(w_px as i32);
-                let dst_h = (client.bottom - client.top).max(h_px as i32);
-                let bmi = BitmapInfo {
-                    bmi_header: BitmapInfoHeader {
-                        bi_size: std::mem::size_of::<BitmapInfoHeader>() as u32,
-                        bi_width: w_px as i32,
-                        bi_height: -(h_px as i32), // top-down DIB
-                        bi_planes: 1,
-                        bi_bit_count: 32,
-                        bi_compression: 0,
-                        bi_size_image: 0,
-                        bi_x_pels_per_meter: 0,
-                        bi_y_pels_per_meter: 0,
-                        bi_clr_used: 0,
-                        bi_clr_important: 0,
-                    },
-                    bmi_colors: [0],
-                };
-                let hdc = unsafe { GetDC(hwnd) };
-                if !hdc.is_null() {
-                    unsafe {
-                        StretchDIBits(
-                            hdc,
-                            0,
-                            0,
-                            dst_w,
-                            dst_h,
-                            0,
-                            0,
-                            w_px as i32,
-                            h_px as i32,
-                            bgra_buf.as_ptr().cast(),
-                            &bmi,
-                            0,
-                            SRCCOPY,
-                        );
-                        ReleaseDC(hwnd, hdc);
-                    }
-                }
+            let dpi = query_window_dpi(hwnd);
+            let (cw, ch, font_changed) = gdi_canvas.sync_font(&app.wm, dpi);
+            if font_changed {
+                gui_renderer.cell_width_px = cw;
+                gui_renderer.cell_height_px = ch;
+                let c = (client_w / u32::from(cw.max(1))).clamp(20, 500) as u16;
+                let r = (client_h / u32::from(ch.max(1))).clamp(6, 200) as u16;
+                let new_vp = Rect::new(0, 0, c, r);
+                app.wm.resize_all(new_vp)?;
+                app.last_viewport = new_vp;
             }
+            CELL_GEOM.with(|g| *g.borrow_mut() = (cw, ch, app.last_viewport));
+            gui_renderer.render_workspace_with_cell_size(
+                &app.wm,
+                app.last_viewport,
+                cw,
+                ch,
+                &mut surface,
+            );
+            let pal = app.wm.config().palette();
+            let default_bg = match pal.window_frame_bg {
+                ratatui::style::Color::Rgb(r, g, b) => [r, g, b, 255],
+                _ => [0, 0, 0x84, 255],
+            };
+            gdi_canvas.present_frame(hwnd, &surface, default_bg);
             app.needs_redraw = false;
         }
 
         std::thread::sleep(Duration::from_millis(16));
-        let _ = Instant::now();
     }
 
     Ok(())
 }
 
 /// Runs Bilterm in standalone GUI mode on Unix platforms (`Linux` / `macOS`).
-///
-/// Renders the initial [`GuiFrameSurface`] and, if no controlling TTY is attached, spawns a
-/// dedicated host window via [`crate::launcher::ensure_terminal_or_relaunch`].
 #[cfg(not(windows))]
 pub fn run_native_gui_window(app: App) -> Result<()> {
     let mut renderer = GuiWorkspaceRenderer::new(

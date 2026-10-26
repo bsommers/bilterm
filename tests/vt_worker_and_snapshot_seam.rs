@@ -300,3 +300,62 @@ fn tmux_control_subprocess_polls_into_window_manager() {
     wm.poll_all_ptys();
     assert!(!wm.is_tmux_control_attached());
 }
+
+#[test]
+fn floating_prompt_submit_command_executes_in_live_shell_pty() {
+    use bilterm::input::handle_key_event;
+    use bilterm::pane::CompositePane;
+    use bilterm::pty::line_discipline::InputRoutingMode;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let program = if cfg!(windows) {
+        "cmd.exe".to_string()
+    } else {
+        "/bin/sh".to_string()
+    };
+    let mut pane = CompositePane::spawn(
+        1,
+        PtyConfig {
+            program,
+            args: Vec::new(),
+            rows: 24,
+            cols: 80,
+            ..Default::default()
+        },
+    )
+    .expect("spawn live shell pane");
+
+    assert_eq!(
+        pane.effective_routing_mode(),
+        InputRoutingMode::CommandPrompt
+    );
+
+    for ch in "echo FLOATING_3270_EXEC_OK".chars() {
+        handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+            .expect("type into floating prompt");
+    }
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("submit floating prompt via Enter");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        pane.poll_pty_events();
+        let contents = pane.vt().contents();
+        // Verify the command output line itself (not just the echoed input) appeared on a new line
+        let output_lines = contents
+            .lines()
+            .filter(|line| {
+                let t = line.trim();
+                t == "FLOATING_3270_EXEC_OK" || t.starts_with("FLOATING_3270_EXEC_OK")
+            })
+            .count();
+        if output_lines >= 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for floating prompt command execution in live shell; screen:\n{contents}"
+        );
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}

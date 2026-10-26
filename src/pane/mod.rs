@@ -181,8 +181,18 @@ impl CompositePane {
         self.vt.reset_scrollback();
         self.vt.record_command_submission(cmd_str.clone());
         let _ = self.history_store.record_command(&cmd_str);
-        let mut payload = cmd_str.into_bytes();
-        payload.push(b'\n');
+        #[cfg(windows)]
+        let payload = {
+            let mut bytes = cmd_str.replace("\r\n", "\r").replace('\n', "\r").into_bytes();
+            bytes.push(b'\r');
+            bytes
+        };
+        #[cfg(not(windows))]
+        let payload = {
+            let mut bytes = cmd_str.into_bytes();
+            bytes.push(b'\n');
+            bytes
+        };
         self.write_to_pty(&payload)
     }
 

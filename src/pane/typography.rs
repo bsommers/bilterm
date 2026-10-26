@@ -1,11 +1,16 @@
 //! Per-pane typography options (`FontFamilyPreset`, `PaneFontOptions`) and high-DPI canvas resolution presets (`CanvasResolution`) (`FONT-02`, `CANV-03`).
 
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
 /// Cached terminal pixel size (`(wx << 32) | wy`, `u64::MAX` = unprobed, `0` = unavailable).
 static CACHED_TERMINAL_PIXELS: AtomicU64 = AtomicU64::new(u64::MAX);
+
+/// Process-wide registry of user-added `.ttf` / `.otf` / `.ttc` font files (`(family_name, path)`).
+static CUSTOM_FONT_FILES: Mutex<Vec<(String, PathBuf)>> = Mutex::new(Vec::new());
 
 /// Target pixel resolution preset for high-DPI canvas rendering (`CANV-03`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,10 +156,18 @@ pub enum FontFamilyPreset {
     FiraCode,
     /// High-density slender terminal font (`"Iosevka Term"`).
     IosevkaTerm,
-    /// Microsoft terminal font (`"Cascadia Code"`).
+    /// Microsoft terminal font (`"Cascadia Code"` / `"Cascadia Mono"`).
     CascadiaCode,
+    /// Classic ClearType Windows programming font (`"Consolas"`).
+    Consolas,
+    /// IBM modern monospace family (`"IBM Plex Mono"`).
+    IbmPlexMono,
     /// Clean open-source monospace font (`"Hack"`).
     Hack,
+    /// Classic Windows console monospace font (`"Lucida Console"`).
+    LucidaConsole,
+    /// Classic slab-serif typewriter monospace font (`"Courier New"`).
+    CourierNew,
     /// User-specified custom font family name.
     Custom(String),
 }
@@ -165,11 +178,21 @@ impl FontFamilyPreset {
             "ibm3270" | "3270" | "ibm" | "mainframe" => Some(Self::Ibm3270),
             "vga" | "vga8" | "dos" | "borland" | "cp437" | "turbo" => Some(Self::BorlandDosVga),
             "tek" | "tek4014" | "tektronix" | "vector" => Some(Self::Tektronix4014),
-            "jetbrains" | "jetbrains-mono" | "jbmono" | "jb" => Some(Self::JetBrainsMono),
-            "fira" | "firacode" | "fira-code" => Some(Self::FiraCode),
-            "iosevka" | "iosevka-term" => Some(Self::IosevkaTerm),
-            "cascadia" | "cascadia-code" => Some(Self::CascadiaCode),
+            "jetbrains" | "jetbrains-mono" | "jetbrains mono" | "jbmono" | "jb" => {
+                Some(Self::JetBrainsMono)
+            }
+            "fira" | "firacode" | "fira-code" | "fira code" => Some(Self::FiraCode),
+            "iosevka" | "iosevka-term" | "iosevka term" => Some(Self::IosevkaTerm),
+            "cascadia" | "cascadia-code" | "cascadia code" | "cascadia-mono" | "cascadia mono" => {
+                Some(Self::CascadiaCode)
+            }
+            "consolas" => Some(Self::Consolas),
+            "plex" | "ibm-plex" | "ibm-plex-mono" | "ibm plex mono" | "ibmplex" => {
+                Some(Self::IbmPlexMono)
+            }
             "hack" => Some(Self::Hack),
+            "lucida" | "lucida-console" | "lucida console" => Some(Self::LucidaConsole),
+            "courier" | "courier-new" | "courier new" => Some(Self::CourierNew),
             _ => None,
         }
     }
@@ -183,7 +206,11 @@ impl FontFamilyPreset {
             Self::FiraCode => "Fira Code",
             Self::IosevkaTerm => "Iosevka Term",
             Self::CascadiaCode => "Cascadia Code",
+            Self::Consolas => "Consolas",
+            Self::IbmPlexMono => "IBM Plex Mono",
             Self::Hack => "Hack",
+            Self::LucidaConsole => "Lucida Console",
+            Self::CourierNew => "Courier New",
             Self::Custom(name) => name.as_str(),
         }
     }
@@ -197,10 +224,254 @@ impl FontFamilyPreset {
             Self::FiraCode => "Fira",
             Self::IosevkaTerm => "Iosevka",
             Self::CascadiaCode => "Cascadia",
+            Self::Consolas => "Consolas",
+            Self::IbmPlexMono => "Plex",
             Self::Hack => "Hack",
+            Self::LucidaConsole => "Lucida",
+            Self::CourierNew => "Courier",
             Self::Custom(name) => name.as_str(),
         }
     }
+
+    /// Ordered candidate OS TrueType font family names to probe when rendering in `--gui` mode.
+    pub fn candidate_os_font_faces(&self) -> Vec<&str> {
+        match self {
+            Self::CascadiaCode => vec![
+                "Cascadia Mono",
+                "Cascadia Code",
+                "Cascadia Mono NF",
+                "CascadiaCode NF",
+                "Consolas",
+                "Lucida Console",
+                "Courier New",
+            ],
+            Self::Consolas => vec!["Consolas", "Cascadia Mono", "Lucida Console", "Courier New"],
+            Self::JetBrainsMono => vec![
+                "JetBrains Mono",
+                "JetBrainsMono Nerd Font Mono",
+                "JetBrainsMono Nerd Font",
+                "JetBrainsMono NF",
+                "Cascadia Mono",
+                "Consolas",
+            ],
+            Self::FiraCode => vec![
+                "Fira Code",
+                "FiraCode Nerd Font Mono",
+                "FiraCode Nerd Font",
+                "FiraCode NF",
+                "Cascadia Code",
+                "Consolas",
+            ],
+            Self::IosevkaTerm => vec![
+                "Iosevka Term",
+                "Iosevka",
+                "Iosevka Nerd Font Mono",
+                "Iosevka NF",
+                "Cascadia Mono",
+                "Consolas",
+            ],
+            Self::IbmPlexMono => vec![
+                "IBM Plex Mono",
+                "BlexMono Nerd Font Mono",
+                "BlexMono NF",
+                "Cascadia Mono",
+                "Consolas",
+            ],
+            Self::Hack => vec![
+                "Hack",
+                "Hack Nerd Font Mono",
+                "Hack NF",
+                "Cascadia Mono",
+                "Consolas",
+            ],
+            Self::Ibm3270 => vec![
+                "3270 Nerd Font Mono",
+                "3270 Nerd Font",
+                "IBM 3270",
+                "IBM Plex Mono",
+                "Cascadia Mono",
+                "Consolas",
+            ],
+            Self::BorlandDosVga => vec![
+                "PxPlus IBM VGA8",
+                "Perfect DOS VGA 437",
+                "More Perfect DOS VGA",
+                "Consolas",
+                "Lucida Console",
+            ],
+            Self::Tektronix4014 => vec!["Tektronix 4014", "Cascadia Mono", "Consolas"],
+            Self::LucidaConsole => vec!["Lucida Console", "Consolas", "Courier New"],
+            Self::CourierNew => vec!["Courier New", "Consolas"],
+            Self::Custom(name) => vec![
+                name.as_str(),
+                "Cascadia Mono",
+                "Cascadia Code",
+                "Consolas",
+                "Courier New",
+            ],
+        }
+    }
+
+    /// Cycles to the next built-in font family preset (`:font cycle`).
+    pub fn next_preset(&self) -> Self {
+        match self {
+            Self::CascadiaCode => Self::Consolas,
+            Self::Consolas => Self::JetBrainsMono,
+            Self::JetBrainsMono => Self::FiraCode,
+            Self::FiraCode => Self::IosevkaTerm,
+            Self::IosevkaTerm => Self::IbmPlexMono,
+            Self::IbmPlexMono => Self::Hack,
+            Self::Hack => Self::Ibm3270,
+            Self::Ibm3270 => Self::BorlandDosVga,
+            Self::BorlandDosVga => Self::LucidaConsole,
+            Self::LucidaConsole => Self::CourierNew,
+            Self::CourierNew | Self::Tektronix4014 | Self::Custom(_) => Self::CascadiaCode,
+        }
+    }
+}
+
+/// Parses a TrueType (`.ttf`) or OpenType (`.otf`) binary `name` table to extract the internal
+/// Font Family Name (`nameID == 1` or `nameID == 16`).
+pub fn extract_ttf_family_name(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    let num_tables = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+    let mut name_offset = None;
+    let mut name_len = 0usize;
+    for i in 0..num_tables {
+        let rec = 12 + i.checked_mul(16)?;
+        if rec + 16 > bytes.len() {
+            break;
+        }
+        if &bytes[rec..rec + 4] == b"name" {
+            let off = u32::from_be_bytes([
+                bytes[rec + 8],
+                bytes[rec + 9],
+                bytes[rec + 10],
+                bytes[rec + 11],
+            ]) as usize;
+            let len = u32::from_be_bytes([
+                bytes[rec + 12],
+                bytes[rec + 13],
+                bytes[rec + 14],
+                bytes[rec + 15],
+            ]) as usize;
+            name_offset = Some(off);
+            name_len = len;
+            break;
+        }
+    }
+    let base = name_offset?;
+    if base + 6 > bytes.len() || base.saturating_add(name_len) > bytes.len() {
+        return None;
+    }
+    let count = u16::from_be_bytes([bytes[base + 2], bytes[base + 3]]) as usize;
+    let str_offset = u16::from_be_bytes([bytes[base + 4], bytes[base + 5]]) as usize;
+    let storage_base = base.checked_add(str_offset)?;
+
+    let mut fallback_ascii: Option<String> = None;
+    for i in 0..count {
+        let r = base + 6 + i.checked_mul(12)?;
+        if r + 12 > bytes.len() {
+            break;
+        }
+        let platform_id = u16::from_be_bytes([bytes[r], bytes[r + 1]]);
+        let name_id = u16::from_be_bytes([bytes[r + 6], bytes[r + 7]]);
+        let length = u16::from_be_bytes([bytes[r + 8], bytes[r + 9]]) as usize;
+        let offset = u16::from_be_bytes([bytes[r + 10], bytes[r + 11]]) as usize;
+        if name_id != 1 && name_id != 16 {
+            continue;
+        }
+        let s_start = storage_base.checked_add(offset)?;
+        let s_end = s_start.checked_add(length)?;
+        if s_end > bytes.len() || length == 0 {
+            continue;
+        }
+        let raw = &bytes[s_start..s_end];
+        if (platform_id == 3 || platform_id == 0) && length.is_multiple_of(2) {
+            let utf16: Vec<u16> = raw
+                .chunks_exact(2)
+                .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                .collect();
+            if let Ok(s) = String::from_utf16(&utf16) {
+                let trimmed = s.trim().trim_matches('\0').to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        } else if platform_id == 1
+            && let Ok(s) = std::str::from_utf8(raw)
+        {
+            let trimmed = s.trim().trim_matches('\0').to_string();
+            if !trimmed.is_empty() && fallback_ascii.is_none() {
+                fallback_ascii = Some(trimmed);
+            }
+        }
+    }
+    fallback_ascii
+}
+
+/// Returns the default user custom fonts directory (`~/.config/bilterm/fonts` or `%APPDATA%\bilterm\fonts`).
+pub fn default_custom_fonts_dir() -> Option<PathBuf> {
+    if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(xdg).join("bilterm").join("fonts"));
+    }
+    if let Some(home) = std::env::var_os("HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(home).join(".config").join("bilterm").join("fonts"));
+    }
+    if let Some(appdata) = std::env::var_os("APPDATA").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(appdata).join("bilterm").join("fonts"));
+    }
+    if let Some(up) = std::env::var_os("USERPROFILE").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(up).join(".config").join("bilterm").join("fonts"));
+    }
+    None
+}
+
+/// Registers a `.ttf`, `.otf`, or `.ttc` font file in the runtime font registry and returns its resolved family name.
+pub fn register_custom_font_file(path: &Path) -> std::result::Result<String, String> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| format!("Cannot read font file '{}': {e}", path.display()))?;
+    let family = extract_ttf_family_name(&bytes).unwrap_or_else(|| {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Custom Font")
+            .replace(['_', '-'], " ")
+    });
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if let Ok(mut guard) = CUSTOM_FONT_FILES.lock()
+        && !guard.iter().any(|(_, p)| p == &canonical)
+    {
+        guard.push((family.clone(), canonical));
+    }
+    Ok(family)
+}
+
+/// Returns all custom `(family_name, path)` font files registered during this session.
+pub fn registered_custom_fonts() -> Vec<(String, PathBuf)> {
+    CUSTOM_FONT_FILES
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+}
+
+/// Scans `dir` for `.ttf`, `.otf`, and `.ttc` files and registers them in [`CUSTOM_FONT_FILES`].
+pub fn scan_and_register_fonts_dir(dir: &Path) -> Vec<(String, PathBuf)> {
+    let mut added = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return added;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if let Some(ext) = p.extension().and_then(|e| e.to_str())
+            && matches!(ext.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc")
+            && let Ok(fam) = register_custom_font_file(&p)
+        {
+            added.push((fam, p));
+        }
+    }
+    added
 }
 
 /// Per-pane / per-window selectable typography options (`FONT-02`).
@@ -258,10 +529,46 @@ impl PaneFontOptions {
                 "PANE FONT: {}",
                 self.summary_with_defaults(default_size_pt, default_scale_pct)
             )),
-            "list" | "presets" => Ok(
-                "FONT PRESETS: ibm3270 | vga (Borland DOS) | tek4014 | jetbrains | firacode | iosevka | cascadia | hack | custom <name>"
-                    .to_string(),
-            ),
+            "list" | "presets" => {
+                let custom = registered_custom_fonts();
+                let custom_suffix = if custom.is_empty() {
+                    String::new()
+                } else {
+                    let names: Vec<String> = custom.into_iter().map(|(f, _)| f).collect();
+                    format!(" | loaded: [{}]", names.join(", "))
+                };
+                Ok(format!(
+                    "FONT PRESETS: cascadia | consolas | jetbrains | firacode | iosevka | plex | hack | ibm3270 | vga (Borland DOS) | tek4014 | lucida | courier | custom <name> | add <path.ttf>{custom_suffix}"
+                ))
+            }
+            "cycle" | "next" => {
+                self.family = self.family.next_preset();
+                Ok(format!(
+                    "PANE FONT: {}",
+                    self.summary_with_defaults(default_size_pt, default_scale_pct)
+                ))
+            }
+            "add" | "file" | "load" => {
+                let raw_path = parts
+                    .get(1..)
+                    .map(|s| s.join(" "))
+                    .unwrap_or_default()
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if raw_path.is_empty() {
+                    return Err("Usage: :font add <path/to/font.ttf>".to_string());
+                }
+                let fam = register_custom_font_file(Path::new(&raw_path))?;
+                self.family = FontFamilyPreset::from_name(&fam)
+                    .unwrap_or_else(|| FontFamilyPreset::Custom(fam.clone()));
+                Ok(format!(
+                    "LOADED FONT FILE '{}' -> {}",
+                    raw_path,
+                    self.summary_with_defaults(default_size_pt, default_scale_pct)
+                ))
+            }
             "reset" | "default" => {
                 *self = Self::default();
                 Ok(format!(
@@ -345,8 +652,15 @@ impl PaneFontOptions {
                 ))
             }
             "custom" | "family" => {
-                let name = parts.get(1..).map(|s| s.join(" ")).unwrap_or_default();
-                if name.trim().is_empty() {
+                let name = parts
+                    .get(1..)
+                    .map(|s| s.join(" "))
+                    .unwrap_or_default()
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if name.is_empty() {
                     return Err("Usage: :font custom <Font Family Name>".to_string());
                 }
                 if let Some(preset) = FontFamilyPreset::from_name(&name) {
@@ -407,8 +721,16 @@ impl PaneFontOptions {
                         self.summary_with_defaults(default_size_pt, default_scale_pct)
                     ));
                 }
+                let joined = parts.join(" ");
+                if let Some(preset) = FontFamilyPreset::from_name(&joined) {
+                    self.family = preset;
+                    return Ok(format!(
+                        "PANE FONT: {}",
+                        self.summary_with_defaults(default_size_pt, default_scale_pct)
+                    ));
+                }
                 Err(format!(
-                    "Unknown :font option '{other}'. Usage: :font <ibm3270|vga|tek4014|jetbrains|firacode|iosevka|cascadia|hack|custom <name>|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
+                    "Unknown :font option '{other}'. Usage: :font <cascadia|consolas|jetbrains|firacode|iosevka|plex|hack|ibm3270|vga|tek4014|lucida|courier|custom <name>|add <path.ttf>|cycle|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
                 ))
             }
         }

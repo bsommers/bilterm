@@ -471,13 +471,18 @@ impl GuiWorkspaceRenderer {
         wm.resize_all(vp)?;
         Ok(vp)
     }
-}
 
-impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
-    type Surface = GuiFrameSurface;
-
-    fn render_workspace(&mut self, wm: &WindowManager, viewport: Rect, surface: &mut Self::Surface) {
-        let (eff_cw, eff_ch) = self.scaled_cell_dimensions(wm);
+    /// Renders `wm` onto `surface` using exact pre-measured TrueType cell pixel dimensions `(eff_cw, eff_ch)`.
+    pub fn render_workspace_with_cell_size(
+        &mut self,
+        wm: &WindowManager,
+        viewport: Rect,
+        eff_cw: u16,
+        eff_ch: u16,
+        surface: &mut GuiFrameSurface,
+    ) {
+        let eff_cw = eff_cw.max(4);
+        let eff_ch = eff_ch.max(8);
         surface.viewport_cells = viewport;
         surface.cell_width_px = eff_cw;
         surface.cell_height_px = eff_ch;
@@ -599,6 +604,15 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
                 });
             }
         }
+    }
+}
+
+impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
+    type Surface = GuiFrameSurface;
+
+    fn render_workspace(&mut self, wm: &WindowManager, viewport: Rect, surface: &mut Self::Surface) {
+        let (eff_cw, eff_ch) = self.scaled_cell_dimensions(wm);
+        self.render_workspace_with_cell_size(wm, viewport, eff_cw, eff_ch, surface);
     }
 }
 

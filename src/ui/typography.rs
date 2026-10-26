@@ -185,9 +185,29 @@ impl WindowManager {
                     last_msg = p.execute_font_command(&cfg, &sub)?;
                 }
             }
+            if let Some(opts) = self.active_pane().font_options().clone().into() {
+                self.config_mut().font_family = opts.family.display_name().to_string();
+                if let Some(pt) = opts.size_pt {
+                    self.config_mut().font_size_pt = pt;
+                }
+                if let Some(pct) = opts.scale_pct {
+                    self.config_mut().font_scale_pct = pct;
+                }
+            }
             return Ok(format!("ALL PANES {last_msg}"));
         }
-        self.active_pane_mut().execute_font_command(&cfg, raw)
+        let res = self.active_pane_mut().execute_font_command(&cfg, raw);
+        if res.is_ok() {
+            let opts = self.active_pane().font_options().clone();
+            self.config_mut().font_family = opts.family.display_name().to_string();
+            if let Some(pt) = opts.size_pt {
+                self.config_mut().font_size_pt = pt;
+            }
+            if let Some(pct) = opts.scale_pct {
+                self.config_mut().font_scale_pct = pct;
+            }
+        }
+        res
     }
 }
 

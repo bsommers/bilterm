@@ -99,6 +99,10 @@ pub struct BiltermConfig {
     pub scrollback: ScrollbackConfig,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
+    /// Primary GUI / terminal font family or preset (`"Cascadia Mono"`, `"Consolas"`, `"JetBrains Mono"`, `"IBM 3270"`, etc., `FONT-01`).
+    pub font_family: String,
+    /// Optional paths to custom `.ttf` / `.otf` / `.ttc` font files loaded automatically on GUI startup (`FONT-02`).
+    pub font_files: Vec<String>,
     /// Base terminal font size in points (`6..=72`, default `14`, `FONT-01`).
     pub font_size_pt: u16,
     /// Dynamic terminal font zoom scale percentage (`50..=300`, default `100`, `FONT-01`).
@@ -158,6 +162,8 @@ impl Default for BiltermConfig {
             remotes: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
             drawer: DrawerConfig::default(),
+            font_family: "Cascadia Mono".to_string(),
+            font_files: Vec::new(),
             font_size_pt: 14,
             font_scale_pct: 100,
             cell_width_px: 8,

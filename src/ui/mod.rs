@@ -1,5 +1,6 @@
 pub mod bitmap_font;
 pub mod canvas_raster;
+pub mod gui_font;
 pub mod gui_window;
 pub mod chrome;
 pub mod cursor;

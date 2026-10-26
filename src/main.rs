@@ -52,6 +52,9 @@ async fn main() -> color_eyre::Result<()> {
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
                -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
+               -F, --font <FAMILY>              Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
+                   --font-size <PT>             Set base font size in points (6..72, default 14)\n  \
+                   --font-file <PATH.ttf>       Load and activate a custom .ttf/.otf/.ttc font file\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
@@ -277,6 +280,23 @@ async fn main() -> color_eyre::Result<()> {
     }
     if let Some(name) = switch_value(&args, &["-s", "--session"]) {
         cfg.history_session = name.to_string();
+    }
+    if let Some(font_file) = switch_value(&args, &["--font-file"]) {
+        cfg.font_files.push(font_file.to_string());
+        if let Ok(fam) = bilterm::pane::typography::register_custom_font_file(Path::new(font_file)) {
+            cfg.font_family = fam;
+        }
+    }
+    if let Some(font_fam) = switch_value(&args, &["-F", "--font"]) {
+        let resolved = bilterm::pane::FontFamilyPreset::from_name(font_fam)
+            .map(|p| p.display_name().to_string())
+            .unwrap_or_else(|| font_fam.to_string());
+        cfg.font_family = resolved;
+    }
+    if let Some(pt_str) = switch_value(&args, &["--font-size"])
+        && let Ok(pt) = pt_str.trim_end_matches("pt").parse::<u16>()
+    {
+        cfg.font_size_pt = pt.clamp(6, 72);
     }
     app.wm.apply_config(cfg);
     if cfg_error.is_some() {
