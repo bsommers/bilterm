@@ -437,7 +437,8 @@ DESK_EOF
 PLIST_EOF
             cat > "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher" <<LAUNCH_EOF
 #!/usr/bin/env bash
-exec "${TARGET_BIN}" "\$@"
+export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH"
+exec "${TARGET_BIN}" --gui "\$@"
 LAUNCH_EOF
             chmod 0755 "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher"
         fi

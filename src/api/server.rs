@@ -366,7 +366,10 @@ pub async fn run_headless_server(config: ListenConfig, plane: AutomationControlP
                             path.display()
                         )));
                     }
-                    Err(_) => {
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::ConnectionRefused
+                            || e.kind() == std::io::ErrorKind::NotFound =>
+                    {
                         let meta = std::fs::symlink_metadata(&path)?;
                         if !meta.file_type().is_socket() {
                             return Err(BiltermError::Config(format!(
@@ -375,6 +378,12 @@ pub async fn run_headless_server(config: ListenConfig, plane: AutomationControlP
                             )));
                         }
                         std::fs::remove_file(&path)?;
+                    }
+                    Err(e) => {
+                        return Err(BiltermError::Config(format!(
+                            "another bilterm daemon is already listening on {} (or socket probe failed: {e})",
+                            path.display()
+                        )));
                     }
                 }
             }

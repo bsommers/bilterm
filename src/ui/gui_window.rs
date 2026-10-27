@@ -26,7 +26,7 @@ pub fn rgba_to_bgra_u32(rgba: &[u8], out: &mut Vec<u32>) {
     let pixel_count = rgba.len() / 4;
     out.clear();
     out.reserve(pixel_count);
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         let r = u32::from(px[0]);
         let g = u32::from(px[1]);
         let b = u32::from(px[2]);
@@ -605,8 +605,14 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     Ok(())
 }
 
-/// Runs Bilterm in standalone GUI mode on Unix platforms (`Linux` / `macOS`).
-#[cfg(not(windows))]
+/// Runs Bilterm inside a standalone native macOS Cocoa / CoreText GUI window (`--gui` / `-G`).
+#[cfg(target_os = "macos")]
+pub fn run_native_gui_window(app: App) -> Result<()> {
+    crate::ui::gui_macos::run_macos_gui_window(app)
+}
+
+/// Runs Bilterm in standalone GUI mode on Unix platforms other than macOS (`Linux`).
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn run_native_gui_window(app: App) -> Result<()> {
     crate::ui::gui_font::linux_x11::run_x11_gui_window(app)
 }

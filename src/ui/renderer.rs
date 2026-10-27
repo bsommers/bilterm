@@ -310,7 +310,7 @@ impl GuiFrameSurface {
         let header = format!("P6\n{w} {h}\n255\n");
         let mut out = Vec::with_capacity(header.len() + (w * h * 3) as usize);
         out.extend_from_slice(header.as_bytes());
-        for px in rgba.chunks_exact(4) {
+        for px in rgba.as_chunks::<4>().0 {
             out.push(px[0]);
             out.push(px[1]);
             out.push(px[2]);

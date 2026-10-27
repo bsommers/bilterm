@@ -14,7 +14,10 @@ pub use geometric::*;
 #[cfg(windows)]
 pub mod win32_gdi;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub mod macos_ct;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub mod linux_x11;
 
 #[cfg(test)]

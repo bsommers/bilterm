@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 28
 current_phase_name: architecture-hardening-and-dag-decoupling
 status: released_v1_11_1
-stopped_at: Verified Linux/Windows cross-platform parity and prepared v1.11.0 release (Native OS GUI window, ClearType TTF/OTF font engine, desktop launcher integration, ConPTY 3270 prompt fix)
-last_updated: "2026-10-25"
-last_activity: 2026-10-25
-last_activity_desc: Verified full Linux test suite (240 passed) and bumped version to v1.11.0
+stopped_at: Installed v1.11.1 on macOS (~/.local/bin/bilterm + ~/Applications/Bilterm.app) and verified all 248/248 tests passing
+last_updated: "2026-10-27"
+last_activity: 2026-10-27
+last_activity_desc: Installed Bilterm v1.11.1 on macOS and verified full 248-test suite (157 unit + 91 integration) with atomic write_private_file and Unix socket probe fixes
 progress:
   total_phases: 28
   completed_phases: 28
@@ -89,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-25 16:12
-Stopped at: Released and pushed v1.10.1 (677b668) with P0/P1 architecture & security remediations; Phase 28 (28-01-PLAN.md) ready
+Last session: 2026-10-27 09:40
+Stopped at: Installed v1.11.1 on macOS (`~/.local/bin/bilterm` + `~/Applications/Bilterm.app`) and verified 248/248 tests passing
 Resume file: .planning/CHECKPOINT.md
 
 ## Quick Tasks Completed

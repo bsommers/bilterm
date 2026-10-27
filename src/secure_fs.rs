@@ -155,8 +155,8 @@ pub fn create_private_file(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-/// Replaces any existing file or dangling/planted symlink at `path` by unlinking it first,
-/// then atomically creating a fresh 0600 file and writing `bytes`.
+/// Replaces any existing file or dangling/planted symlink at `path` by writing a fresh 0600
+/// temporary sibling file (`O_CREAT | O_EXCL | O_NOFOLLOW`) and atomically renaming it into place.
 pub fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     match fs::symlink_metadata(path) {
         Ok(md) => {
@@ -177,16 +177,30 @@ pub fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
                         ));
                     }
                 }
-                fs::remove_file(path)?;
             }
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {}
         Err(e) => return Err(e),
     }
 
-    let mut file = create_private_file(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "tmp".to_string());
+    let tmp_path = parent.join(format!(".{}.tmp.{}", file_name, unique_suffix()));
+
+    let mut file = create_private_file(&tmp_path)?;
+    if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+    drop(file);
+
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e);
+    }
     Ok(())
 }
 

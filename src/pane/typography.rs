@@ -391,8 +391,10 @@ pub fn extract_ttf_family_name(bytes: &[u8]) -> Option<String> {
         let raw = &bytes[s_start..s_end];
         if (platform_id == 3 || platform_id == 0) && length.is_multiple_of(2) {
             let utf16: Vec<u16> = raw
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&c| u16::from_be_bytes(c))
                 .collect();
             if let Ok(s) = String::from_utf16(&utf16) {
                 let trimmed = s.trim().trim_matches('\0').to_string();

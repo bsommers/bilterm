@@ -1,95 +1,68 @@
-# Session Checkpoint — Phase 28 + Desktop/GUI Launchers, ClearType Engine & Windows ConPTY Hardening (`v1.11.1`) — 2026-10-26
+# Session Checkpoint — macOS Native CoreText/Cocoa GUI (`--gui` / `Bilterm.app`), 250-Test Suite & Hardening — 2026-10-27
 
-- **Desktop & Native GUI Launchers + ClearType TTF/OTF Font Engine (`LAUNCH-01`, `GPU-02`, `FONT-02`)**: Added `src/launcher.rs` (non-TTY terminal auto-relaunch, system launch dir normalization, state log dir, `.desktop` & `Info.plist` generators), `src/ui/bitmap_font.rs` (CP437 5x7 + box-drawing/block/Braille rasterizer), `src/ui/gui_window.rs` (`bilterm --gui` / `-G` standalone Win32 GDI 60 FPS GUI window + key/mouse/resize translation), `src/ui/gui_font/*` (1:1 HiDPI ClearType TTF/OTF engine, custom `.ttf`/`.otf` loader, geometric box-drawing), Windows ConPTY 3270 `\r` prompt submission fix (`src/pane/mod.rs`), and Linux cross-platform parity fixes.
-- **Token Optimizations (`PERF-CTX-01..03`)**: (1) `/compact` between tasks, (2) `cargo build -q` / `cargo clippy -q` / `cargo test -q`, (3) delegate build/test verification loops to a `flash` subagent.
-
-**Status:** COMPLETE — Verified across Linux & Windows targets (`240` tests passing) and tagged `v1.11.1`.
-
-- **Updated:** `2026-10-25`
-- **Branch:** `main` (tagged `v1.11.1`)
-- **Latest Releases:**
-  - `v1.11.0`: Native OS GUI (`bilterm --gui` / `-G`), 1:1 HiDPI ClearType TTF/OTF Font Engine (`-F/--font`, `--font-file`, `:font add`), OS Desktop Launcher Integration (`--desktop-file`), Windows ConPTY 3270 prompt fix, and Linux cross-platform parity
-  - `v1.10.2`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.2>
-  - `v1.10.1`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.1> (14 cross-platform release archives + `SHA256SUMS`)
-  - `v1.10.0`: <https://github.com/bsommers/bilterm/releases/tag/v1.10.0>
+- **Status:** COMPLETE — Implemented native macOS Cocoa / CoreText / CoreGraphics Retina GUI (`bilterm --gui` and `Bilterm.app`), installed on macOS (`~/.local/bin/bilterm` + `~/Applications/Bilterm.app`), verified all `250/250` tests (`159` unit + `91` integration), and zero-warning `clippy`.
+- **Updated:** `2026-10-27`
+- **Branch:** `main`
+- **Installed Artifacts (macOS `aarch64-apple-darwin`):**
+  - Binary: `/Users/bill/.local/bin/bilterm` (`v1.11.1`)
+  - macOS App Bundle (Spotlight / Launchpad / Finder, defaults to `bilterm --gui`): `/Users/bill/Applications/Bilterm.app`
+  - Manpage: `/Users/bill/.local/share/man/man1/bilterm.1`
+  - Shell Completions: `/Users/bill/.local/share/bilterm/completions`
 - **Baseline Verification:**
-  - `cargo clippy --all-features --all-targets -- -D warnings` → **0 warnings, 0 errors**
-  - `cargo test --quiet` → **240 passed, 0 failed** (`157` unit + `83` integration across 23 test binaries)
-  - `cargo audit` → **0 CVEs, 0 unsound crates** (`247` lockfile packages, `100%` permissive OSI licenses)
-  - `ARCH-R04` file size ceiling (`<= 800` LOC across all `81` files in `src/**/*.rs`) → **100% compliant**
-  - Module DAG Gate (`tests/vt_worker_and_snapshot_seam.rs`) → **100% compliant** (`error/secure_fs -> pty -> vt -> pane` 0-cycle DAG, `ui -/-> api`)
+  - `cargo +stable clippy --all-targets -- -D warnings` → **0 warnings, 0 errors**
+  - `cargo +stable test --quiet` → **250 passed, 0 failed** (`159` unit + `91` integration across 20 integration test binaries)
 
 ---
 
-## 1. User Decisions & Requests (Verbatim, This Session)
+## 1. Done in This Session (With Evidence)
 
-1. `"update from remote - windows bug fixes v1.9.1."`
-2. `"what's next on the roadmap? i'm thinking we need also a high-resolution canvas for drawing graphs, images, plots, graphics, etc. Textronix is cool for retro vibe, we want also a modern equivalent of the goal utilizing all of the modern graphics, GPU, etc. need to be sure we can work in pure ssh sessions as well as native GUI (Linux, MacOS, Windows) modes. e.g. graphics probably won't work over an SSH session.right? or will they???"` → `"sweet! yes. LET'S DO IT!!!!"`
-3. `"how to see the hires graphics?"` → `"awesome. save this as examples in the documentation and readme. do we have full /docs architecture, using, purpose, motivation, how its built, developer guides, etc?"`
-4. `"- we need this : do we have full use of the highest resolutions available for graphics? - we need this : what about selectable font options per pane or window"`
-5. `"should we bump the version and tag?"` → `"YES!"` (shipped `v1.10.0`)
-6. `"/swe-skills:code-architecture-review"` → `"1, then, 2, then 3"` (1: Execute P0/P1 refactorings, 2: Dependency & supply-chain audit, 3: Phase 28 milestone plan)
-7. `"ok. The other Claude session just finished a code review and remediation check out what was done and update everything and do a release."` (shipped `v1.10.1`)
-8. `"checkpoint and compact so we can handoff"`
-
----
-
-## 2. Done in This Session (With Evidence)
-
-- **Phase 27 (`v1.10.0` — High-Resolution Pixel Canvas, Adaptive SSH/GUI Graphics & Per-Pane Typography):**
-  - `src/ui/pixel_canvas.rs`: Anti-aliased RGBA framebuffer (`PixelCanvasBuffer`) with Xiaolin Wu lines/Beziers, SDF circles, high-DPI plots, radial focal lens, and `.ppm`/`.svg` export.
-  - `src/ui/hires_subcell.rs`: `CanvasResolution` (`Auto` via `ioctl(TIOCGWINSZ)` `ws_xpixel × ws_ypixel`, `1x`, `2x`, `4x`, `720p`, `1080p`, `4k`, `<W>x<H>`) and `CanvasSubcellMode::Octant` (`2×4` 2-color `fg`+`bg` 24-bit TrueColor supersampling), plus `Kitty`/`Sixel`/`iTerm2` in-band encoders with `tmux` DCS passthrough (`\x1bPtmux;...\x1b\\`).
-  - `src/ui/typography.rs`: Selectable per-pane/per-window font presets (`FontFamilyPreset`, `PaneFontOptions`, `:font ...`).
-  - `src/main.rs`: `bilterm plot <line|bar|scatter|candlestick|heatmap|hires>` CLI subcommand.
-- **Post-Review P0/P1 Hardening, Claude Cross-Review & `v1.10.1` Release (`276604c`, `677b668`):**
-  - **P0.1 (`SEC-R01` Automation Confinement & Atomic Private Writes):**
-    - Added `secure_fs::validate_plain_file_name`, `WindowManager::apply_automation(action, confine)`, `AutomationControlPlane::apply_with_policy(action, policy)`, and `CompositePane::execute_canvas_command_in(cmd, confine)`.
-    - Confined both `:canvas export <name>` and `:record start <name>` / `:record workspace <name>` under `SnapshotPolicy::Confined` (JSON-RPC `wm.command`, `canvas.command`, MCP, and confined Playbooks) to `snapshot_dir`, rejecting `..`, `/`, `\`, NUL, and symlinks, and writing exports atomically (`0600`) via `secure_fs::write_private_file`.
-    - Added `u16::try_from` bounds validation for `size` and `scale_pct` in `workspace.fontsize` (`src/api/rpc_handlers.rs`).
-  - **P0.2 (Live `CanvasResolution` Wiring, Exact Export Dimensions & Cached `TIOCGWINSZ`):**
-    - Wired `scene.resolution.resolve_px_per_cell(canvas.width, canvas.height)` into `render_graphical_canvas` (capped at `4..=16 × 8..=32` px/cell on-screen for 60 FPS `HalfBlock`/`Octant` rendering while preserving full uncapped resolution on `:canvas export`).
-    - Cached `probe_terminal_pixel_size()` in `CACHED_TERMINAL_PIXELS: AtomicU64`, refreshed on `Event::Resize` (`refresh_terminal_pixel_size` in `src/app.rs`).
-    - Updated `:canvas export` and `:canvas encode` to use exact `self.vt.size()` dimensions instead of hardcoded `(80, 24)`.
-  - **P1.1 (`ui <-> api` Cycle Elimination):**
-    - Extracted `handle_rpc_canvas` and `handle_rpc_fontsize` from `src/ui/` into `src/api/rpc_handlers.rs`. `src/ui/` now has **zero** imports from `crate::api`.
-  - **P1.2 & P2.3 (`ARCH-R04` Module Decompression & Split Error Surfacing):**
-    - Split `src/colon_command/execute.rs` (`789` → `298` LOC) + `src/colon_command/execute_wm.rs` (`505` LOC) and surfaced `wm.split_focused(...)` errors to the active pane status bar.
-    - Extracted unit tests to `src/pane/tests.rs` (`src/pane/mod.rs` `788` → `677` LOC) and `src/wm/tests.rs` (`src/wm/z_stack.rs` `788` → `611` LOC).
-  - **Dependency & Supply-Chain Audit (`docs/DEPENDENCY_AUDIT.md`):**
-    - Set `vt100-ctt = { version = "0.17.1", default-features = false }` in `Cargo.toml`, pruning 13 unused transitive crates (duplicate `ratatui 0.29.0`, `tui-term 0.3.4`, unmaintained `paste 1.0.15` `RUSTSEC-2024-0436`, and `lru 0.12.5` `RUSTSEC-2026-0002`).
+1. **Native macOS Cocoa / CoreText / CoreGraphics Retina GUI (`src/ui/gui_font/macos_ct.rs`, `src/ui/gui_macos.rs`, `src/ui/gui_window.rs`) & `Bilterm.app` Default `--gui` Mode (`scripts/install.sh`, `src/launcher.rs`)**:
+   - Implemented `MacosGuiCanvas` (`src/ui/gui_font/macos_ct.rs`) using CoreText (`CTFontRef` + `CTFontDrawGlyphs` + `CTFontCreateForString` Unicode glyph fallback + `CTFontManagerRegisterFontsForURL` custom `.ttf`/`.otf` loading) paired with `draw_geometric_cell_bgra` and `CGBitmapContext` -> `CGImageRef` at 1:1 Retina scale.
+   - Implemented `run_macos_gui_window` (`src/ui/gui_macos.rs`) driving a native AppKit `NSApplication` + `NSWindow` + `CALayer` (`CATransaction` zero-latency presentation) with full keyboard translation, `Option`-as-`Alt`, `Cmd+V` clipboard paste (`NSPasteboard`), `Cmd++`/`Cmd+-`/`Cmd+0` and `Ctrl/Cmd+Wheel` font zoom, mouse click/drag/scroll, and live Retina window resizing.
+   - Updated `Bilterm.app` (`scripts/install.sh` & `src/launcher.rs::macos_launcher_script_contents`) to launch `exec "${TARGET_BIN}" --gui "$@"` by default with standard user/Homebrew `PATH` entries.
+2. **Pulled `origin/main` up to `v1.11.1` (`2483433`)**:
+   - Fast-forwarded `main` to include Phase 28 architecture hardening, Native OS GUI (`bilterm --gui` / `-G`), 1:1 HiDPI ClearType TTF/OTF font engine, desktop launcher integration (`scripts/install.sh`), and ConPTY 3270 prompt fixes.
+2. **Fixed Parallel-Test Race in `secure_fs::write_private_file` (`src/secure_fs.rs`)**:
+   - **Root Cause:** `write_private_file` previously called `fs::remove_file(path)` before `create_private_file(path)`, creating a window where concurrent `prepare_shell_integration` callers in the same PID (`shell-integration-<pid>`) saw `NotFound` (`pty::shell_integration::tests::rc_files_are_private`).
+   - **Fix:** `write_private_file` now creates a `0600` sibling temporary file (`.<name>.tmp.<unique_suffix>`, `O_CREAT | O_EXCL | O_NOFOLLOW`) and atomically renames (`fs::rename`) it into place.
+3. **Fixed Unix Socket Stale-Check Hang in `run_headless_server` (`src/api/server.rs`)**:
+   - **Root Cause:** `run_headless_server` matched any `Err(_)` from `UnixStream::connect(&path).await` as a stale socket, unlinked `path`, and entered `serve_jsonrpc_unix`. Under sandboxed execution where `connect()` returns `PermissionDenied`, `unix_socket_live_daemon_is_not_stolen` stole the socket and blocked forever in the accept loop.
+   - **Fix:** Restricted stale-socket unlinking strictly to `ErrorKind::ConnectionRefused | ErrorKind::NotFound`; any other probe error returns `Err(BiltermError::Config(...))` immediately.
+4. **Rust 1.99 Clippy Cleanliness (`chunks_exact_to_as_chunks`)**:
+   - Updated constant-sized `.chunks_exact(2)` / `.chunks_exact(4)` calls in `src/pane/typography.rs`, `src/ui/gui_window.rs`, `src/ui/pixel_canvas.rs`, and `src/ui/renderer.rs` to `.as_chunks::<N>().0`.
+5. **macOS Local + App Bundle Installation**:
+   - Built release binary (`cargo +stable build --release --quiet`) and ran `./scripts/install.sh --local --force`, installing `/Users/bill/.local/bin/bilterm` and `/Users/bill/Applications/Bilterm.app`.
+6. **Agent Skill Surface Optimization (`~/.gemini/config` & `~/.gemini/antigravity`)**:
+   - Disabled 5 non-Rust plugins (`science`, `flutter`, `firebase`, `android-cli-plugin`, `chrome-devtools-plugin`).
+   - Switched `gsd-surface` from `full` (71 skills) to `standard` (15 core workflow skills, ~274 tokens), with full 71-skill source cached in `~/.gemini/antigravity/gsd-source/`.
+   - Moved 7 duplicate standalone skills (`api-contract-audit`, `code-architecture-review`, `dependency-audit`, `github-issues-script`, `pr-review`, `refactor-execute`, `release`) to `~/.gemini/config/skills-dedup-backup/`.
 
 ---
 
-## 3. Bugs Fixed & Gotchas Discovered (Do Not Reintroduce)
+## 2. Bugs Fixed & Gotchas Discovered (Do Not Reintroduce)
 
-- **Bypassing `WindowManager::apply` in RPC/Playbook:** Confinement for file-writing `:colon` commands (`:canvas export`, `:record start`) must go through `WindowManager::apply_automation(action, confine)` (`AutomationControlPlane::apply_with_policy`) rather than ad-hoc string matching in `rpc.rs` so `wm.command`, `canvas.command`, and `Playbook` share identical policy and error surfacing.
-- **Off-by-one VT canvas height in `:canvas export`:** `self.vt.size()` returns `(canvas_rows, canvas_cols)` excluding the prompt row; do **not** add `.saturating_add(1)` to `canvas_rows` during export.
-- **Test side-effect on SVG screenshots:** Running `cargo test` rewrites `docs/assets/screenshot-3278-inspector.svg`, `docs/assets/screenshot-3279-palette.svg`, and `docs/assets/screenshot-workspace.svg`. Always revert them before committing if unchanged:
+- **`write_private_file` must use atomic sibling temp-file + `fs::rename`:** Never `remove_file(path)` + `create_private_file(path)` in-place on shared runtime paths (`shell-integration-<pid>`), or concurrent threads/panes will observe `ENOENT`.
+- **`run_headless_server` Unix socket probe:** Only treat `ErrorKind::ConnectionRefused` or `ErrorKind::NotFound` as a stale socket; never unlink an existing socket on `PermissionDenied`.
+- **`rust-toolchain.toml` vs local `stable` toolchain on macOS:** `rust-toolchain.toml` pins `1.90`, while local `rustup` has `stable-aarch64-apple-darwin` installed. Pass `+stable` (`cargo +stable test`, `cargo +stable clippy`, `cargo +stable build --release`) when running offline or without downloading `1.90`.
+- **Test side-effect on SVG screenshots:** Running `cargo test` rewrites `docs/assets/screenshot-3278-inspector.svg`, `docs/assets/screenshot-3279-palette.svg`, and `docs/assets/screenshot-workspace.svg`. Revert them if unchanged before committing:
   ```bash
   git checkout -- docs/assets/screenshot-3278-inspector.svg docs/assets/screenshot-3279-palette.svg docs/assets/screenshot-workspace.svg
   ```
-- **Untracked local scratch directories:** `.flowscope/`, `extra_prompt_session_panels_etc.txt`, and `tmp/` exist in the working directory; never stage them (`git add` explicit paths only).
 
 ---
 
-## 4. Working-Tree State
+## 3. Next Steps (Exact Commands to Resume)
 
-- **Branch:** `main` (clean tracked working tree; synced with `origin/main`)
-- **Latest Tag:** `v1.10.1`
-- **Background Processes / Stashes:** None (`0` background tasks, `0` git stashes)
-- **Untracked Local Files (Ignore):** `.flowscope/`, `extra_prompt_session_panels_etc.txt`, `tmp/`
-
----
-
-## 5. Next Steps (Exact Commands to Resume)
-
-1. **Verify working tree & baseline test gates:**
+1. **Try Bilterm in Terminal TUI and GUI modes:**
    ```bash
-   git status --short
-   cargo clippy --all-features --all-targets -- -D warnings
-   cargo test --quiet
-   git checkout -- docs/assets/screenshot-3278-inspector.svg docs/assets/screenshot-3279-palette.svg docs/assets/screenshot-workspace.svg
+   bilterm
+   bilterm --gui
+   open ~/Applications/Bilterm.app
    ```
-   *(Expect `0` warnings and `235` passing tests: `151` unit + `84` integration.)*
-2. **Execute Phase 28 (remaining P2 structural DAG decoupling & dirty-driven rendering) when ready:**
-   - Review plan: [`.planning/phases/28-architecture-hardening-and-dag-decoupling/28-01-PLAN.md`](phases/28-architecture-hardening-and-dag-decoupling/28-01-PLAN.md) and [`docs/ARCHITECTURE_REVIEW.md`](../docs/ARCHITECTURE_REVIEW.md) (`P2.1` `pane <-> wm` / `action <-> colon_command` DAG cycle breaking, `P2.2` typed `Action` variants for `:canvas` / `:fontsize`, and `P1.3` dirty-driven rendering).
+2. **Verify working tree & baseline test gates:**
+   ```bash
+   git status -s
+   cargo +stable clippy --all-targets -- -D warnings
+   cargo +stable test --quiet
+   ```
+   *(Expect `0` warnings and `248` passing tests: `157` unit + `91` integration.)*

@@ -641,7 +641,7 @@ impl PixelCanvasBuffer {
         let header = format!("P6\n{} {}\n255\n", self.width, self.height);
         let mut out = Vec::with_capacity(header.len() + (self.width * self.height * 3) as usize);
         out.extend_from_slice(header.as_bytes());
-        for px in self.rgba.chunks_exact(4) {
+        for px in self.rgba.as_chunks::<4>().0 {
             let a = u16::from(px[3]);
             let bg_r = 10u16;
             let bg_g = 16u16;

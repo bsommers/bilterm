@@ -277,6 +277,16 @@ pub fn macos_info_plist_contents(version: &str) -> String {
     )
 }
 
+/// Generates the `Contents/MacOS/bilterm-launcher` script for a macOS `Bilterm.app` bundle,
+/// defaulting to standalone native GUI mode (`bilterm --gui`).
+pub fn macos_launcher_script_contents(exec_path: &str) -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\n\
+         exec \"{exec_path}\" --gui \"$@\"\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +322,8 @@ mod tests {
         let plist = macos_info_plist_contents("1.10.2");
         assert!(plist.contains("<string>dev.bilterm.app</string>"));
         assert!(plist.contains("<string>bilterm-launcher</string>"));
+
+        let mac_launcher = macos_launcher_script_contents("/Users/bill/.local/bin/bilterm");
+        assert!(mac_launcher.contains("exec \"/Users/bill/.local/bin/bilterm\" --gui \"$@\""));
     }
 }
