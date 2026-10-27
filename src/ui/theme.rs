@@ -18,6 +18,9 @@ pub enum ThemePreset {
     Ibm3279Amber,
     /// High-contrast monochrome mainframe palette.
     IbmMono,
+    /// Cyberpunk Neon high-contrast magenta/cyan/violet palette.
+    #[serde(rename = "cyberpunk-neon", alias = "cyberpunk", alias = "neon")]
+    CyberpunkNeon,
 }
 
 impl ThemePreset {
@@ -28,6 +31,7 @@ impl ThemePreset {
             "ibm-3278-green" | "3278" | "green" | "ibm-green" => Some(Self::Ibm3278Green),
             "ibm-3279-amber" | "3279" | "amber" | "ibm-amber" => Some(Self::Ibm3279Amber),
             "ibm-mono" | "mono" | "monochrome" => Some(Self::IbmMono),
+            "cyberpunk-neon" | "cyberpunk" | "neon" => Some(Self::CyberpunkNeon),
             _ => None,
         }
     }
@@ -39,6 +43,7 @@ impl ThemePreset {
             Self::Ibm3278Green => "IBM-3278-GRN",
             Self::Ibm3279Amber => "IBM-3279-AMB",
             Self::IbmMono => "IBM-MONO",
+            Self::CyberpunkNeon => "CYBER-NEON",
         }
     }
 
@@ -133,6 +138,24 @@ impl ThemePreset {
                 fkey_num_fg: Color::Gray,
                 shadow_fg: Color::DarkGray,
                 shadow_bg: Color::Black,
+            },
+            Self::CyberpunkNeon => ThemePalette {
+                name: self.label().to_string(),
+                prompt_surface_bg: Color::Rgb(18, 8, 36),
+                window_frame_bg: Color::Rgb(12, 4, 24),
+                active_border_fg: Color::Rgb(0, 245, 212),
+                inactive_border_fg: Color::Rgb(155, 93, 229),
+                title_fg: Color::Rgb(255, 42, 133),
+                prompt_prefix_fg: Color::Rgb(0, 245, 212),
+                oia_bg: Color::Rgb(26, 10, 48),
+                oia_badge_bg: Color::Rgb(255, 42, 133),
+                oia_badge_fg: Color::Black,
+                crosshair_bg: Color::Rgb(36, 14, 68),
+                fkey_bar_bg: Color::Rgb(24, 8, 44),
+                fkey_bar_fg: Color::Rgb(0, 245, 212),
+                fkey_num_fg: Color::Rgb(255, 42, 133),
+                shadow_fg: Color::Rgb(90, 30, 140),
+                shadow_bg: Color::Rgb(6, 2, 12),
             },
         }
     }

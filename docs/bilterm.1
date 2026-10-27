@@ -1,12 +1,39 @@
-.TH BILTERM 1 "2026-10-26" "bilterm 1.11.1" "User Commands"
+.TH BILTERM 1 "2026-10-26" "bilterm 1.12.0" "User Commands"
 .SH NAME
-bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer, composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator
+bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexer, native desktop GUI terminal, composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator
 .SH SYNOPSIS
 .B bilterm
 [\fIOPTIONS\fR]
+.br
+.B bilterm
+\fB\-\-gui\fR [\fB\-\-gui\-font\fR \fIFAMILY\fR] [\fB\-\-gui\-font\-size\fR \fIPT\fR] [\fB\-\-theme\fR \fITHEME\fR]
+.br
+.B bilterm
+\fBrun\fR \fIPLAYBOOK.toml\fR
+.br
+.B bilterm
+\fBctl\fR [\fB\-t\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
+.br
+.B bilterm
+\fBplot\fR [\fIKIND\fR] [\fICSV\fR] [\fB\-o\fR \fIFILE\fR] [\fB\-b\fR \fIMODE\fR]
 .SH DESCRIPTION
-\fBbilterm\fR is a terminal user interface (TUI) multiplexer, shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing.
+\fBbilterm\fR is a terminal user interface (TUI) multiplexer, native desktop GUI terminal (\fB\-\-gui\fR), shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing, independent per-pane font scaling (\fBCtrl++\fR / \fBCtrl+\-\fR / \fBCtrl+0\fR / \fBCtrl+Wheel\fR), and all-border/corner mouse frame drag resizing.
 .SH OPTIONS
+.TP
+\fB\-G\fR, \fB\-\-gui\fR
+Launch a standalone native desktop GUI window (X11 on Linux, Win32 GDI on Windows, Cocoa/AppKit on macOS).
+.TP
+\fB\-\-gui\-font\fR, \fB\-F\fR, \fB\-\-font\fR \fIFAMILY\fR
+Font family name or preset for native \fB\-\-gui\fR window or \fB\-\-gui\-dump\fR (e.g., \fI"JetBrains Mono"\fR, \fI"IBM 3270"\fR, \fI"Fira Code"\fR, \fI"ibm3270"\fR, \fI"vga"\fR, \fI"tek4014"\fR).
+.TP
+\fB\-\-gui\-font\-size\fR, \fB\-\-font\-size\fR \fIPT\fR
+Base font size in points (\fB6..=72\fR, default \fB16\fR) for \fB\-\-gui\fR and \fB\-\-gui\-dump\fR.
+.TP
+\fB\-\-gui\-font\-file\fR, \fB\-\-font\-file\fR \fIPATH\fR
+Load a custom TrueType (\fB.ttf\fR) or OpenType (\fB.otf\fR) font file directly from disk.
+.TP
+\fB\-T\fR, \fB\-\-theme\fR \fITHEME\fR
+Override active color theme preset (\fIturbo-blue\fR, \fIturbo-cyan\fR, \fIibm-3278-green\fR, \fIibm-3279-amber\fR, \fIibm-mono\fR, \fIcyberpunk-neon\fR, \fIsolarized-dark\fR, \fIdracula\fR, \fIgruvbox-dark\fR, \fItokyo-night\fR).
 .TP
 \fB\-m\fR, \fB\-\-mcp\fR
 Run the Model Context Protocol (MCP \fB2024-11-05\fR) JSON-RPC 2.0 server over standard input/output for AI agents.
@@ -29,11 +56,14 @@ Directory for confined workspace snapshots (defaults to $XDG_STATE_HOME/bilterm/
 \fBctl\fR [\fB\-t\fR, \fB\-\-token\-file\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
 Send a JSON-RPC 2.0 request to a running Bilterm instance and print the JSON result. Default endpoint is the local private Unix domain socket.
 .TP
-\fB\-p\fR, \fB\-\-playbook\fR \fIPATH.toml\fR
+\fBrun\fR \fIPATH.toml\fR, \fB\-p\fR, \fB\-\-playbook\fR \fIPATH.toml\fR
 Execute a declarative TOML automation playbook against an embedded workspace and exit.
 .TP
-\fB\-g\fR, \fB\-\-gui\-dump\fR \fIPATH.ppm\fR
-Render the workspace via \fBGuiWorkspaceRenderer\fR to a Netpbm P6 \fB.ppm\fR pixel framebuffer.
+\fBplot\fR [\fIKIND\fR] [\fICSV\fR] [\fB\-o\fR \fIFILE\fR] [\fB\-b\fR \fIMODE\fR]
+Render high-resolution chart (\fIhires\fR, \fIline\fR, \fIbar\fR, \fIscatter\fR, \fIcandlestick\fR, \fIheatmap\fR) inline over SSH/terminal or export standalone \fB.svg\fR / \fB.ppm\fR.
+.TP
+\fB\-g\fR, \fB\-\-gui\-dump\fR \fIPATH.ppm|.svg\fR
+Render the workspace via \fBGuiWorkspaceRenderer\fR to a Netpbm P6 \fB.ppm\fR or vector \fB.svg\fR framebuffer.
 .TP
 \fB\-s\fR, \fB\-\-session\fR \fINAME\fR
 Use named persistent command-history session (overrides \fBhistory_session\fR).
@@ -72,11 +102,11 @@ Shuffle Z-order window deck or selectively raise pane #1..#9.
 \fBF7\fR (\fBAlt+Shift+D\fR) / \fB:drawer\fR
 Toggle \fBherdr\fR-style Slide-Out Sessions/Windows/Panes & Fleet Drawer (supports \fBLeft\fR/\fBRight\fR/\fBTop\fR/\fBBottom\fR docking, \fBOnDemand\fR/\fBFixed\fR/\fBAutoHide\fR, and \fBOverlay\fR/\fBPush\fR modes).
 .TP
-\fBCtrl++\fR / \fBCtrl+\-\fR / \fBCtrl+0\fR / \fB:fontsize\fR
-Dynamically scale terminal text and font size (\fB50%..=300%\fR) across GUI SVG/PPM and TUI DEC \fBDECDWL\fR/\fBDECDHL\fR views.
+\fBCtrl++\fR / \fBCtrl+\-\fR / \fBCtrl+0\fR / \fBCtrl+Wheel\fR / \fB:fontsize\fR / \fB:font\fR
+Independently scale the focused pane's font size (\fB50%..=300%\fR) and dynamically adjust its terminal \fBcols x rows\fR PTY grid (\fBTIOCSWINSZ\fR), including inside interactive full-screen TUIs (\fBnmon\fR, \fBhtop\fR, \fBvim\fR).
 .TP
 \fB:canvas\fR / \fB:tek\fR
-Drive Tektronix 4010/4014 vector storage-tube emulation and the modern retained scene-graph (2D sprites, live plots, interactive image inspector) rendered via Unicode Braille/Sextant/Quadrant sub-cells.
+Drive Tektronix 4010/4014 vector storage-tube emulation and the modern retained scene-graph (2D sprites, live plots, interactive image inspector) rendered via RGBA pixels or Unicode Braille/Sextant/Quadrant sub-cells.
 .TP
 \fBF9\fR / \fB:inspector\fR
 Toggle Live 3270 Terminal Inspector modal.
@@ -87,7 +117,7 @@ Toggle persistent Guake/Quake drop-down quick terminal.
 \fBF12\fR / \fBCtrl+G\fR / \fB:raw\fR
 Toggle between \fBINPUT: CMD BOX\fR and \fBINPUT: RAW PTY\fR.
 .TP
-\fBAlt+F\fR / \fB:hints\fR
+\fBF3\fR / \fBAlt+F\fR / \fB:hints\fR
 Activate QuickSelect 3270 Field Hints (\fB[a]..[z]\fR) for URLs, paths, IPv4s, and Git SHAs.
 .TP
 \fBAlt+C\fR / \fB:copy\fR
@@ -101,17 +131,17 @@ Cleanly exit Bilterm.
 .SH FILES
 .TP
 \fI~/.config/bilterm/config.toml\fR
-Declarative user configuration file (themes, outlines, shadows, keybindings, triggers).
+Declarative user configuration file (themes, outlines, shadows, keybindings, triggers, remotes).
 .TP
 \fI~/.local/state/bilterm/history/\fR
-Per-session, per-pane timestamped command history logs.
+Per-session, per-pane timestamped command history logs (mode 0600).
 .TP
 \fI~/.local/state/bilterm/sessions/\fR
-Saved multi-pane workspace session snapshots (\fB:session save|restore|list\fR).
+Saved multi-pane workspace session snapshots (\fB:session save|restore|list\fR, mode 0600).
 .SH SECURITY
 Bilterm enforces defense-in-depth across automation and shell integration surfaces:
 .IP \(bu 2
-\fBHeadless Daemon Defaults\fR: Serves on a private 0600 Unix domain socket by default, restricting access to the owning user and verifying peer credentials on every connection.
+\fBHeadless Daemon Defaults\fR: Serves on a private 0600 Unix domain socket by default, restricting access to the owning user and verifying kernel \fBSO_PEERCRED\fR peer credentials on every connection.
 .IP \(bu 2
 \fBNetwork Listen Policy\fR: Non-loopback TCP listeners strictly require \fB\-\-allow\-remote\fR and a bearer token loaded from a mode 0600 file. The bearer token is validated via an initial \fBauth.login\fR handshake before any request is processed. Note that \fB\-\-allow\-remote\fR transmits the bearer token in plaintext; an SSH tunnel or VPN is strongly recommended when accessing Bilterm over untrusted networks.
 .IP \(bu 2

@@ -1,0 +1,16 @@
+# IBM 3279 Gas-Plasma Amber Mainframe CRT Workstation
+# Launch: bilterm --gui -c starter-packs/05-retro-crt-workstation/ibm-3279-amber.toml
+theme = "Ibm3279Amber"
+glyph_tier = "UnicodeBox"
+window_outline = "Double"
+shadow_style = "Checker"
+drop_shadows = true
+show_top_menubar = true
+show_dos_fkey_bar = true
+crosshair_cursor = true
+crosshair_fullscreen = false
+crt_scanlines = true
+font_family = "JetBrains Mono"
+font_size_pt = 15
+font_scale_pct = 100
+leader_key = "Ctrl+X"

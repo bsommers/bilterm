@@ -1,0 +1,25 @@
+name = "robot-scripting-and-headless-qa"
+
+[[steps]]
+action = "colon"
+command = ":theme green"
+
+[[steps]]
+action = "exec"
+pane_id = 1
+command = "echo 'BUILD_ARTIFACT_SHA256=9f86d081884c7d659a2feaa0c55ad015'"
+
+[[steps]]
+action = "feed_output"
+pane_id = 1
+data = "\u001b]133;C\u0007BUILD_ARTIFACT_SHA256=9f86d081884c7d659a2feaa0c55ad015\r\nQA_GATE=PASSED\r\n\u001b]133;D;0\u0007"
+
+[[steps]]
+action = "assert_screen_contains"
+pane_id = 1
+expected = "BUILD_ARTIFACT_SHA256=9f86d081884c7d659a2feaa0c55ad015"
+
+[[steps]]
+action = "assert_exit_code"
+pane_id = 1
+exit_code = 0

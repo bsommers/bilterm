@@ -1,0 +1,16 @@
+# Classic 1990 Borland Turbo Vision / Turbo C++ DOS IDE Workstation
+# Launch: bilterm --gui -c starter-packs/05-retro-crt-workstation/borland-turbo-vision.toml
+theme = "BorlandBlue"
+glyph_tier = "UnicodeBox"
+window_outline = "Double"
+shadow_style = "Checker"
+drop_shadows = true
+show_top_menubar = true
+show_dos_fkey_bar = true
+crosshair_cursor = true
+crosshair_fullscreen = false
+crt_scanlines = false
+font_family = "PxPlus IBM VGA8"
+font_size_pt = 16
+font_scale_pct = 100
+leader_key = "Ctrl+X"

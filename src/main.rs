@@ -48,13 +48,15 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
+               bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
                -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
-               -F, --font <FAMILY>              Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
-                   --font-size <PT>             Set base font size in points (6..72, default 14)\n  \
-                   --font-file <PATH.ttf>       Load and activate a custom .ttf/.otf/.ttc font file\n  \
+               -F, --font, --gui-font <FAMILY>  Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
+                   --font-size, --gui-font-size <PT> Set base font size in points (6..72, default 14)\n  \
+                   --font-file, --gui-font-file <PATH.ttf> Load and activate a custom .ttf/.otf/.ttc font file\n  \
+               -T, --theme <THEME>              Set color theme preset (borland, green, amber,mono, solarized, dracula, cyberpunk)\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
@@ -176,7 +178,12 @@ async fn main() -> color_eyre::Result<()> {
         run_mcp_stdio_server_with_plane(plane).await?;
         return Ok(());
     }
-    if let Some(pb_path) = switch_value(&args, &["-p", "--playbook"]) {
+    let pb_arg = switch_value(&args, &["-p", "--playbook"]).or_else(|| {
+        (args.first().map(String::as_str) == Some("run"))
+            .then(|| args.get(1).map(String::as_str))
+            .flatten()
+    });
+    if let Some(pb_path) = pb_arg {
         let raw_toml = std::fs::read_to_string(pb_path)?;
         let pb = Playbook::from_toml_str(&raw_toml)?;
         let mut plane = AutomationControlPlane::new_headless(24, 80);
@@ -281,19 +288,24 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(name) = switch_value(&args, &["-s", "--session"]) {
         cfg.history_session = name.to_string();
     }
-    if let Some(font_file) = switch_value(&args, &["--font-file"]) {
+    if let Some(theme_str) = switch_value(&args, &["-T", "--theme"])
+        && let Some(preset) = bilterm::ui::theme::ThemePreset::from_name(theme_str)
+    {
+        cfg.theme = preset;
+    }
+    if let Some(font_file) = switch_value(&args, &["--font-file", "--gui-font-file"]) {
         cfg.font_files.push(font_file.to_string());
         if let Ok(fam) = bilterm::pane::typography::register_custom_font_file(Path::new(font_file)) {
             cfg.font_family = fam;
         }
     }
-    if let Some(font_fam) = switch_value(&args, &["-F", "--font"]) {
+    if let Some(font_fam) = switch_value(&args, &["-F", "--font", "--gui-font"]) {
         let resolved = bilterm::pane::FontFamilyPreset::from_name(font_fam)
             .map(|p| p.display_name().to_string())
             .unwrap_or_else(|| font_fam.to_string());
         cfg.font_family = resolved;
     }
-    if let Some(pt_str) = switch_value(&args, &["--font-size"])
+    if let Some(pt_str) = switch_value(&args, &["--font-size", "--gui-font-size"])
         && let Ok(pt) = pt_str.trim_end_matches("pt").parse::<u16>()
     {
         cfg.font_size_pt = pt.clamp(6, 72);

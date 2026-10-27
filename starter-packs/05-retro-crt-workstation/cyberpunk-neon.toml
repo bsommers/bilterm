@@ -1,0 +1,16 @@
+# Cyberpunk Neon / High-Contrast Developer Workstation
+# Launch: bilterm --gui -c starter-packs/05-retro-crt-workstation/cyberpunk-neon.toml
+theme = "CyberpunkNeon"
+glyph_tier = "UnicodeBox"
+window_outline = "Rounded"
+shadow_style = "Translucent"
+drop_shadows = true
+show_top_menubar = true
+show_dos_fkey_bar = true
+crosshair_cursor = true
+crosshair_fullscreen = false
+crt_scanlines = false
+font_family = "Fira Code"
+font_size_pt = 15
+font_scale_pct = 100
+leader_key = "Ctrl+X"

@@ -1,11 +1,13 @@
 # Chapter 7: Troubleshooting & FAQ
 
-[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 6: Reference](06-keyboard-mouse-and-command-reference.md)
+[← Back to Project README](../../README.md) | [User Guide Home](README.md) | [← Chapter 6: Reference](06-keyboard-mouse-and-command-reference.md) | [Chapter 8: Extended CLI & GUI Examples →](08-extended-cli-and-gui-examples.md)
 
 ## Table of Contents
 
 - [1. Common Symptoms & Solutions](#1-common-symptoms--solutions)
   - [Floating Command Prompt Disappeared](#floating-command-prompt-disappeared)
+  - [Per-Pane Font Zoom (`Ctrl++` / `Ctrl+-`) Inside `nmon`, `htop`, or `vim`](#per-pane-font-zoom-ctrl--ctrl--inside-nmon-htop-or-vim)
+  - [Resizing Panes in 3-Way or Multi-Pane Splits by Mouse](#resizing-panes-in-3-way-or-multi-pane-splits-by-mouse)
   - [Top Lines of Output Are Hidden Behind the Floating Prompt](#top-lines-of-output-are-hidden-behind-the-floating-prompt)
   - [Streaming Binary Output (`tail -f /dev/random` / `cat binary`)](#streaming-binary-output-tail--f-devrandom--cat-binary)
   - [Wide Characters (CJK / Emoji / Nerd Fonts) Near Window Borders](#wide-characters-cjk--emoji--nerd-fonts-near-window-borders)
@@ -20,14 +22,26 @@
 
 ### Floating Command Prompt Disappeared
 
-- **Symptom**: You started `vim`, `nvim`, `htop`, `less`, `sudo`, or `ssh`, or pressed `F12` / `Ctrl+G`, and the floating command prompt box (`╔═╣ BILTERM 3270 ... ╠═╗`) vanished.
+- **Symptom**: You started `vim`, `nvim`, `htop`, `nmon`, `less`, `sudo`, or `ssh`, or pressed `F12` / `Ctrl+G`, and the floating command prompt box (`╔═╣ BILTERM 3270 ... ╠═╗`) vanished.
 - **Cause**:
   1. **Alternate Screen (`▣ ALT SCR`)**: The foreground program entered `DECSET 47/1047/1049`. Bilterm automatically hides the floating prompt and switches to `INPUT: RAW PTY` so full-screen TUIs receive every keystroke and mouse event directly.
   2. **Password Lock (`♦ !ECHO LOCK`)**: The foreground process (`sudo`, `ssh`, `gpg`) disabled terminal `ECHO` (`termios !ECHO`). Bilterm hides the prompt so your password is never echoed or recorded in command history.
   3. **Manual Raw Mode (`F12` / `Ctrl+G`)**: You toggled `INPUT: RAW PTY` manually.
 - **Solution**:
   - Exit the interactive TUI or finish entering your password — the floating prompt automatically reappears when the shell returns to normal canonical/echo mode.
-  - Or press **`F12`** / **`Ctrl+G`** (or run `:raw`) to toggle back to `INPUT: CMD BOX`.
+  - Or press **`F12`** / **`Ctrl+G`** (or **`F4`** / `:raw` / `:mode float`) to toggle back to `INPUT: CMD BOX`.
+
+### Per-Pane Font Zoom (`Ctrl++` / `Ctrl+-`) Inside `nmon`, `htop`, or `vim`
+
+- **How it works (`v1.12.0+`)**:
+  - Pressing **`Ctrl++`** (`Ctrl+=`), **`Ctrl+-`** (`Ctrl+_`), or **`Ctrl+0`**, or holding **`Ctrl` + Mouse Scroll Wheel** scales **only the focused (or hovered) pane's font** (`50%..=300%`) and dynamically recalculates that pane's `cols × rows` PTY grid (`TIOCSWINSZ`).
+  - Even when `nmon`, `htop`, or `vim` is running in `INPUT: RAW PTY` / `DECSET 1049` mode, Bilterm intercepts `Ctrl++`, `Ctrl+-`, `Ctrl+0`, and `Ctrl+Wheel` at the Window Manager layer so interactive TUI dashboards immediately resize and reflow to the new font scale.
+
+### Resizing Panes in 3-Way or Multi-Pane Splits by Mouse
+
+- **How it works (`v1.12.0+`)**:
+  - Every border (`Top`, `Bottom`, `Left`, `Right`) and every corner (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`) of every pane is draggable with the mouse in both `Tiled` and `Stacked` modes.
+  - If a pane's geometry ever feels skewed after heavy resizing, press **`Ctrl+B =`** (or **`Ctrl+X =`**) or run **`:equalize`** (`:resize reset`) to restore balanced 50/50 split ratios.
 
 ### Top Lines of Output Are Hidden Behind the Floating Prompt
 
@@ -73,7 +87,7 @@ Because Bilterm runs inside the host terminal's alternate screen in raw mode, wr
 To run Bilterm with debug-level tracing enabled:
 
 ```bash
-RUST_LOG=bilterm=debug ./target/release/bilterm
+RUST_LOG=bilterm=debug bilterm
 ```
 
 In a second terminal (or inside a Bilterm composite pane!), inspect the live log stream:
@@ -98,12 +112,16 @@ printf '\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?2004l\033[?1049l\033[?
 
 ## 4. Frequently Asked Questions (FAQ)
 
+- **Q: How do I launch Bilterm as a standalone desktop GUI window with a custom font and size?**
+  - **A:** Run `bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16` (or pass `--gui-font-file /path/to/font.ttf`). See **[Chapter 8: Extended CLI, Native `--gui` & Typography Examples](08-extended-cli-and-gui-examples.md)** for full details.
+- **Q: How do I zoom the font size of a single pane without changing the rest of the workspace?**
+  - **A:** Focus the pane and press **`Ctrl++`** / **`Ctrl+-`** / **`Ctrl+0`**, or hold **`Ctrl` + Mouse Wheel** over that pane, or run `:fontsize 130%` / `:font pane 2 jetbrains 125%`.
 - **Q: How do I turn on full-screen horizontal and vertical cursor cross-hairs?**
   - **A:** Press **`Alt+X`** twice (1st press = Pane-Local cross-hairs, 2nd press = Full-Screen cross-hairs, 3rd press = Off), or run **`:crosshair full`**. To enable by default on startup, set `crosshair_cursor = true` and `crosshair_fullscreen = true` in `~/.config/bilterm/config.toml`.
 - **Q: Where are my session command history files saved, and how do I turn history persistence off?**
   - **A:** By default (`history_enabled = true`), commands are saved to `$XDG_STATE_HOME/bilterm/history/sessions/<name>/history.log` (or `~/.local/state/bilterm/history/`), where `<name>` is `history_session` / `--session` (default `default`), and restored into new panes on the next run. Run **`:history off`** to disable persistence at runtime, **`:history runs`** to list recorded runs, **`:history max-files <N>`** to limit retained session directories, or **`:history save /tmp/commands.sh`** (or **`Alt+P`** then **`s`**) to export the current pane's commands to a shell script.
 - **Q: Why does `bilterm ctl` fail with error code -32001 ("authentication required: send auth.login first")?**
-  - **A:** The target Bilterm daemon has a bearer token configured. Supply the token file using `bilterm ctl --token-file <path>` or set the `BILTERM_TOKEN_FILE` environment variable. The token file must have `0600` permissions (read/write by owner only).
+  - **A:** The target Bilterm daemon has a bearer token configured. Supply the token file using `bilterm ctl --token-file <path>` or set the `BILTERM_TOKEN_FILE` environment variable. The token file must have `0600` permissions (read/write by owner only). See **[Chapter 10: Security Architecture & Operational Best Practices](10-security-and-best-practices.md)**.
 - **Q: Why does `bilterm --headless --listen <addr>` exit with "refusing to listen on non-loopback address"?**
   - **A:** Bilterm restricts TCP listeners to loopback (`127.0.0.1`, `::1`, `localhost`) by default. To listen on all interfaces or a LAN IP, pass `--allow-remote` along with `--token-file <path>`. Note that tokens travel over plaintext TCP, so an SSH tunnel is strongly recommended.
 - **Q: Can I use different border styles for workspace windows vs. the floating command prompt?**
@@ -111,4 +129,4 @@ printf '\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?2004l\033[?1049l\033[?
 
 ---
 
-[← Chapter 6: Reference](06-keyboard-mouse-and-command-reference.md) | [User Guide Home](README.md) | [← Back to Project README](../../README.md)
+[← Chapter 6: Reference](06-keyboard-mouse-and-command-reference.md) | [User Guide Home](README.md) | [Chapter 8: Extended CLI & GUI Examples →](08-extended-cli-and-gui-examples.md)

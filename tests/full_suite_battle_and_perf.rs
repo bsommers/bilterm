@@ -915,7 +915,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg1 = surface.export_svg(
-        "BILTERM v1.4.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
+        "BILTERM v1.12.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
     );
     let svg1_path = Path::new("docs/assets/screenshot-workspace.svg");
     std::fs::write(svg1_path, &svg1).expect("write screenshot-workspace.svg");
@@ -929,7 +929,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg2 = surface.export_svg(
-        "BILTERM v1.4.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
+        "BILTERM v1.12.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
     );
     let svg2_path = Path::new("docs/assets/screenshot-3278-inspector.svg");
     std::fs::write(svg2_path, &svg2).expect("write screenshot-3278-inspector.svg");
@@ -942,9 +942,95 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg3 = surface.export_svg(
-        "BILTERM v1.4.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
+        "BILTERM v1.12.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
     );
     let svg3_path = Path::new("docs/assets/screenshot-3279-palette.svg");
     std::fs::write(svg3_path, &svg3).expect("write screenshot-3279-palette.svg");
     assert!(svg3_path.exists());
+
+    // 4. Screenshot 4: 3-Way Split with Per-Pane Independent Font Scaling & nmon Telemetry HUD
+    let mut plane2 = AutomationControlPlane::new_headless(32, 128);
+    plane2.wm.config_mut().show_top_menubar = true;
+    plane2.wm.config_mut().show_dos_fkey_bar = true;
+    plane2.wm.resize_all(viewport).unwrap();
+    let p2 = plane2.wm.split_focused(bilterm::wm::split_tree::SplitDirection::Vertical).unwrap();
+    let p3 = plane2.wm.split_focused(bilterm::wm::split_tree::SplitDirection::Horizontal).unwrap();
+    plane2.wm.resize_all(viewport).unwrap();
+    plane2.wm.focus_and_raise(1);
+    plane2.wm.font_zoom_in();
+    plane2.wm.font_zoom_in();
+    if let Some(pane1) = plane2.wm.pane_mut(1) {
+        pane1.set_title("INCIDENT COMMAND [120% ZOOM]".to_string());
+        pane1.process_pty_output(
+            "\x1b[1;32m$ bilterm --gui --gui-font \"JetBrains Mono\" --gui-font-size 16\x1b[0m\r\n\x1b[1;36m[WARN]\x1b[0m High IOPS on nvme0n1 — scaling top-right nmon pane to 80%\r\n\x1b[1;32m[OK]\x1b[0m All 4 borders & corners draggable; per-pane PTY SIGWINCH active\r\n"
+                .as_bytes(),
+        );
+        pane1.prompt_mut().set_text("iostat -xz 1");
+    }
+    plane2.wm.focus_and_raise(p2);
+    plane2.wm.font_zoom_out();
+    plane2.wm.font_zoom_out();
+    if let Some(pane2) = plane2.wm.pane_mut(p2) {
+        pane2.set_title("nmon — CPU/DISK TELEMETRY [80% COMPACT]".to_string());
+        pane2.process_pty_output(
+            "\x1b[?1049h\x1b[1;33m┌─nmon-16p──────[H for help]───Hostname=prod-node-01──┐\x1b[0m\r\n\x1b[1;32m│ CPU  User%  Sys% Wait%   |████████████░░░░░░  68.4% │\x1b[0m\r\n\x1b[1;36m│ Disk nvme0n1 Busy  82%   |████████████████░░  940MB/s│\x1b[0m\r\n\x1b[1;35m│ Mem  Used: 48.2G / 64.0G | Cache: 12.1G | Free: 3.7G│\x1b[0m\r\n\x1b[1;33m└─────────────────────────────────────────────────────┘\x1b[0m"
+                .as_bytes(),
+        );
+        pane2.line_discipline_mut().echo_enabled = false;
+    }
+    if let Some(pane3) = plane2.wm.pane_mut(p3) {
+        pane3.set_title("LIVE JOURNALCTL STREAM [100%]".to_string());
+        pane3.process_pty_output(b"\x1b[1;32m20:31:02\x1b[0m kernel: nvme0n1: queue depth=128 latency=0.41ms\r\n\x1b[1;33m20:31:04\x1b[0m systemd[1]: Reloaded PostgreSQL connection pooler.\r\n");
+        pane3.prompt_mut().set_text("journalctl -fu postgresql -n 50");
+    }
+    plane2.wm.focus_and_raise(1);
+    renderer.render_workspace_with_cell_size(&plane2.wm, viewport, 9, 18, &mut surface);
+    let svg4 = surface.export_svg(
+        "BILTERM v1.12.0 — 3-Way Split with Independent Per-Pane Font Scaling (120% / 80% nmon / 100%)",
+    );
+    let svg4_path = Path::new("docs/assets/screenshot-per-pane-scaling.svg");
+    std::fs::write(svg4_path, &svg4).expect("write screenshot-per-pane-scaling.svg");
+    assert!(svg4_path.exists());
+
+    // 5. Screenshot 5: 4-Pane Multi-Agent Swarm + Slide-Out Fleet Drawer (Cyberpunk Neon)
+    let mut plane3 = AutomationControlPlane::new_headless(32, 128);
+    plane3.wm.config_mut().theme = ThemePreset::CyberpunkNeon;
+    plane3.wm.config_mut().show_top_menubar = true;
+    plane3.wm.config_mut().show_dos_fkey_bar = true;
+    plane3.wm.toggle_drawer();
+    plane3.wm.resize_all(viewport).unwrap();
+    let a2 = plane3.wm.split_focused(bilterm::wm::split_tree::SplitDirection::Vertical).unwrap();
+    plane3.wm.focus_and_raise(1);
+    let a3 = plane3.wm.split_focused(bilterm::wm::split_tree::SplitDirection::Horizontal).unwrap();
+    plane3.wm.focus_and_raise(a2);
+    let a4 = plane3.wm.split_focused(bilterm::wm::split_tree::SplitDirection::Horizontal).unwrap();
+    plane3.wm.resize_all(viewport).unwrap();
+    if let Some(p) = plane3.wm.pane_mut(1) {
+        p.set_title("AGENT #1: ARCHITECT (MCP)".to_string());
+        p.process_pty_output(b"\x1b[1;36m[MCP]\x1b[0m Dispatched task plan to Agent #2 (Implementer) & Agent #3 (Verifier)\r\n");
+        p.prompt_mut().set_text("bilterm ctl workspace.status");
+    }
+    if let Some(p) = plane3.wm.pane_mut(a2) {
+        p.set_title("AGENT #2: IMPLEMENTER".to_string());
+        p.process_pty_output(b"\x1b[1;32m[EDIT]\x1b[0m Patched src/ui/typography.rs & src/input/mouse.rs (+142/-38)\r\n");
+        p.prompt_mut().set_text("cargo clippy --all-targets -- -D warnings");
+    }
+    if let Some(p) = plane3.wm.pane_mut(a3) {
+        p.set_title("AGENT #3: TEST & QA".to_string());
+        p.process_pty_output(b"\x1b[1;32m[PASS]\x1b[0m 242/242 tests green | Playbook assertions: 100%\r\n");
+        p.prompt_mut().set_text("bilterm run starter-packs/03-robot-scripting-and-qa/playbook.toml");
+    }
+    if let Some(p) = plane3.wm.pane_mut(a4) {
+        p.set_title("AGENT #4: SECURITY & FLEET".to_string());
+        p.process_pty_output(b"\x1b[1;33m[SEC]\x1b[0m SEC-R01..04 verified: 0700 state dir, 0600 unix socket\r\n");
+        p.prompt_mut().set_text(":lock on");
+    }
+    plane3.wm.focus_and_raise(1);
+    renderer.render_workspace_with_cell_size(&plane3.wm, viewport, 9, 18, &mut surface);
+    let svg5 = surface.export_svg(
+        "BILTERM v1.12.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)",
+    );
+    let svg5_path = Path::new("docs/assets/screenshot-multi-agent-swarm.svg");
+    std::fs::write(svg5_path, &svg5).expect("write screenshot-multi-agent-swarm.svg");
+    assert!(svg5_path.exists());
 }

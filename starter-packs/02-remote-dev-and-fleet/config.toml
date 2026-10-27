@@ -1,0 +1,24 @@
+# Starter Pack 02: Remote Development & SSH / tmux -CC Fleet
+# Launch: bilterm --gui -c starter-packs/02-remote-dev-and-fleet/config.toml
+
+theme = "BorlandBlue"
+glyph_tier = "UnicodeBox"
+window_outline = "Double"
+shadow_style = "Checker"
+drop_shadows = true
+show_top_menubar = true
+show_dos_fkey_bar = true
+crosshair_cursor = true
+font_family = "Cascadia Mono"
+font_size_pt = 14
+font_scale_pct = 100
+leader_key = "Ctrl+X"
+history_session = "remote-fleet"
+triggers = ["CRITICAL", "DISCONNECTED", "READY"]
+
+[drawer]
+visible = true
+edge = "Left"
+layout = "Dock"
+visibility = "Pinned"
+size = 30

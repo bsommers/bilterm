@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **All-Border & All-Corner Multi-Pane Frame Mouse Resizing (`src/input/mouse.rs`, `src/wm/split_tree.rs`, `src/wm/z_stack.rs`)**:
   - Added `WindowResizeEdge::TopLeft` and `TopRight` and enabled dragging all 4 borders (`Top`, `Bottom`, `Left`, `Right`) and all 4 corners across both `Tiled` and `Stacked` multi-pane layouts.
   - Added `SplitTree::set_split_ratio_for_border` and outer-border delta mapping so dragging top borders in `Tiled` mode resizes the horizontal divider instead of swapping panes, and dragging outer borders or corners resizes the corresponding split without collapsing sibling axes.
+- **Extended CLI Flags, 10-Chapter User Guide, SVG Screen Renders & 5 Starter Packs (`src/main.rs`, `docs/user-guide/`, `starter-packs/`, `tests/full_suite_battle_and_perf.rs`)**:
+  - Added `--gui-font`, `--gui-font-size`, `--gui-font-file`, `-T`/`--theme`, and `bilterm run <PLAYBOOK.toml>` CLI aliases in `src/main.rs`.
+  - Added Chapters 08 (`08-extended-cli-and-gui-examples.md`), 09 (`09-use-cases-and-workflows.md`), and 10 (`10-security-and-best-practices.md`) plus two new SVG workspace screen renders (`screenshot-per-pane-scaling.svg` and `screenshot-multi-agent-swarm.svg`) and 5 ready-to-run starter packs (`starter-packs/01..05`).
 
 ### Fixed
 - **Small-Canvas Floating Prompt Clamp Panic (`src/pane/prompt_editor.rs`)**:

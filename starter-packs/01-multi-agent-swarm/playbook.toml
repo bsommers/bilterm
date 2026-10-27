@@ -1,0 +1,59 @@
+name = "multi-agent-coding-swarm"
+
+[[steps]]
+action = "colon"
+command = ":theme cyberpunk"
+
+[[steps]]
+action = "colon"
+command = ":menubar"
+
+[[steps]]
+action = "colon"
+command = ":vsplit"
+
+[[steps]]
+action = "colon"
+command = ":focus 1"
+
+[[steps]]
+action = "colon"
+command = ":split"
+
+[[steps]]
+action = "colon"
+command = ":focus 2"
+
+[[steps]]
+action = "colon"
+command = ":split"
+
+[[steps]]
+action = "feed_output"
+pane_id = 1
+data = "\u001b]133;C\u0007[AGENT #1: ARCHITECT] Plan synthesized. Dispatched subtasks to Panes #2, #3, #4.\r\n\u001b]133;D;0\u0007"
+
+[[steps]]
+action = "feed_output"
+pane_id = 2
+data = "\u001b]133;C\u0007[AGENT #2: IMPLEMENTER] Applied patch to src/ui/typography.rs (+120/-18).\r\n\u001b]133;D;0\u0007"
+
+[[steps]]
+action = "feed_output"
+pane_id = 3
+data = "\u001b]133;C\u0007[AGENT #3: VERIFIER] PASS: 242/242 tests green (0 warnings).\r\n\u001b]133;D;0\u0007"
+
+[[steps]]
+action = "feed_output"
+pane_id = 4
+data = "\u001b]133;C\u0007[AGENT #4: SECURITY] SECURED: All trust boundaries verified.\r\n\u001b]133;D;0\u0007"
+
+[[steps]]
+action = "assert_screen_contains"
+pane_id = 1
+expected = "AGENT #1: ARCHITECT"
+
+[[steps]]
+action = "assert_screen_contains"
+pane_id = 3
+expected = "PASS: 242/242"

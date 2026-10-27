@@ -1,10 +1,10 @@
-# Running Bilterm: Shells, Tab Completions, Configuration & CLI Reference
+# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v1.12.0`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 
 ## Table of Contents
 
-- [1. Prerequisites & Installation](#1-prerequisites--installation)
+- [1. Prerequisites, Installation & Complete CLI Reference](#1-prerequisites-installation--complete-cli-reference)
 - [2. Shells & Tab Command Completions](#2-shells--tab-command-completions)
   - [Which Shell Does Bilterm Run?](#which-shell-does-bilterm-run)
   - [How Does Tab Command Completion Work?](#how-does-tab-command-completion-work)
@@ -13,11 +13,11 @@
 
 ---
 
-## 1. Prerequisites & Installation
+## 1. Prerequisites, Installation & Complete CLI Reference
 
 ### System Requirements
 - **Rust**: `1.88+` (Edition 2024)
-- **OS**: Linux (primary POSIX PTY), macOS, or Windows (`ConPTY`)
+- **OS**: Linux (primary POSIX PTY + native X11 `--gui`), macOS (POSIX PTY + Cocoa `--gui`), or Windows (`ConPTY` + Win32 GDI `--gui`)
 
 ### Build & Run
 ```bash
@@ -25,30 +25,37 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### CLI Options (`v1.9.0`)
+### Complete CLI Options (`v1.12.0`)
 ```bash
-bilterm                                         # Launch interactive TUI multiplexer
-bilterm -m / --mcp                              # Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio
-bilterm -d / --headless                         # Run headless JSON-RPC 2.0 daemon (default: private Unix socket)
+bilterm                                         # Launch interactive TUI multiplexer in current terminal
+bilterm -G / --gui                              # Launch standalone native desktop GUI window (X11 / Win32 / Cocoa)
+bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16 # Native GUI with custom font family & point size
+bilterm --gui --gui-font-file /path/to/font.ttf --gui-font-size 15 # Native GUI with explicit TTF/OTF file
+bilterm -T / --theme ibm-3278-green             # Launch with a specific color palette preset
+bilterm -m / --mcp                              # Run Model Context Protocol (MCP 2024-11-05) server over stdio
+bilterm -d / --headless                         # Run headless JSON-RPC 2.0 daemon (default: private 0600 Unix socket)
 bilterm -d -l 127.0.0.1:7370                    # Run headless daemon on loopback TCP
-bilterm -d -l 0.0.0.0:7370 -r -t ~/.config/bilterm/token # Listen on remote TCP
+bilterm -d -l 0.0.0.0:7370 -r -t ~/.config/bilterm/token # Listen on remote TCP (requires -r and 0600 token file)
 bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
 bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP
 bilterm ctl -t ~/.config/bilterm/token 10.0.0.1:7370 workspace.status # Query authenticated instance
 bilterm -S ~/.local/state/bilterm/snapshots     # Set directory for confined workspace snapshots
-bilterm -p <playbook.toml>                      # Execute a declarative TOML automation playbook and exit
-bilterm -g <path.ppm>                           # Render GPU/GUI framebuffer snapshot (Netpbm P6 .ppm)
-bilterm -C bash|zsh|fish                        # Generate shell completions for bash, zsh, or fish
-bilterm -s <name>                               # Use (and restore) a named persistent command-history session
-bilterm -c <config.toml>                        # Load configuration from custom TOML file path
+bilterm run <playbook.toml>                     # Execute a declarative TOML automation playbook and exit (or -p / --playbook)
+bilterm plot [kind] [csv] [-o <file>] [-b <mode>] # Render high-res chart inline over SSH/terminal or export .svg/.ppm
+bilterm -g / --gui-dump <path.ppm|path.svg>     # Render workspace framebuffer snapshot (.ppm or .svg)
+bilterm -C / --completions bash|zsh|fish        # Generate shell completions for bash, zsh, or fish
+bilterm -s / --session <name>                   # Use (and restore) a named persistent command-history session
+bilterm -c / --config <config.toml>             # Load configuration from custom TOML file path
 bilterm -M / --man                              # Print roff(7) manual page (docs/bilterm.1)
-bilterm -v / -V / --version                     # Print version (bilterm 1.9.0)
+bilterm -v / -V / --version                     # Print version (bilterm 1.12.0)
 bilterm -h / --help                             # Print CLI usage summary
 ```
 
+*(See **[Chapter 8: Extended CLI, Native `--gui` Mode & Typography Examples](user-guide/08-extended-cli-and-gui-examples.md)** for comprehensive CLI examples).*
+
 ### Daemon Security & Authentication
 
-- **Default Unix Domain Socket**: `bilterm --headless` binds a private Unix domain socket located at `$XDG_RUNTIME_DIR/bilterm/bilterm.sock` (or `/tmp/bilterm-<uid>/bilterm.sock` if `$XDG_RUNTIME_DIR` is unset) created with file permissions `0600` inside a `0700` directory. Peer credentials are verified on every connection, dropping non-matching UIDs.
+- **Default Unix Domain Socket**: `bilterm --headless` binds a private Unix domain socket located at `$XDG_RUNTIME_DIR/bilterm/bilterm.sock` (or `/tmp/bilterm-<uid>/bilterm.sock` if `$XDG_RUNTIME_DIR` is unset) created with file permissions `0600` inside a `0700` directory. Peer credentials (`SO_PEERCRED`) are verified on every connection, dropping non-matching UIDs.
 - **Listen Policy**: TCP listener endpoints are restricted to loopback (`127.0.0.1`, `::1`, `localhost`) by default. Binding non-loopback addresses (`0.0.0.0`, LAN IPs) is refused unless `--allow-remote` is passed alongside a mandatory `--token-file` containing a bearer token.
 - **Bearer Token Authentication**: When a token is configured (via `--token-file <path>` or `BILTERM_TOKEN_FILE`), all connections must complete an `auth.login` handshake as their first request. Any unauthenticated command is rejected with error code `-32001` and the connection is closed.
 - **Generating a Token File**:
@@ -77,8 +84,8 @@ Bilterm is **shell-agnostic**: it spawns your real interactive system shell insi
 To launch Bilterm with a specific shell for a session, set `SHELL` when invoking `bilterm`:
 
 ```bash
-SHELL=/bin/zsh ./target/release/bilterm
-SHELL=/usr/bin/fish ./target/release/bilterm
+SHELL=/bin/zsh bilterm
+SHELL=/usr/bin/fish bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16
 ```
 
 ---
@@ -92,11 +99,11 @@ Bilterm supports **two complementary `<Tab>` completion modes** depending on whe
 When typing inside Bilterm's floating or split command prompt (`==> `), pressing **`Tab`** (or **`Shift+Tab`** to cycle backwards) invokes Bilterm's zero-latency completion engine (`compute_completions`):
 
 1. **`:colon` Commands & Sub-Arguments**:
-   - If the line begins with `:`, Bilterm completes all built-in multiplexer commands (`:prompt`, `:split`, `:vsplit`, `:layout`, `:deck`, `:focus`, `:zoom`, `:quake`, `:theme`, `:outline`, `:border`, `:shadows`, `:glyphs`, `:cursor`, `:crosshair`, `:fkeybar`, `:history`, `:block`, `:yank`, `:clear`, `:raw`, `:help`, `:quit`).
-   - Pressing `Tab` after a command space (e.g., `:prompt <Tab>`, `:outline <Tab>`, `:theme <Tab>`, `:shadows <Tab>`, `:history <Tab>`, `:crosshair <Tab>`) completes valid sub-arguments (`split-top`, `split-bottom`, `double`, `rounded`, `dotted`, `tinted`, `save`, `max-files`, `full`, etc.).
+   - If the line begins with `:`, Bilterm completes all built-in multiplexer commands (`:prompt`, `:split`, `:vsplit`, `:layout`, `:deck`, `:focus`, `:zoom`, `:quake`, `:theme`, `:outline`, `:border`, `:shadows`, `:glyphs`, `:cursor`, `:crosshair`, `:fkeybar`, `:history`, `:block`, `:yank`, `:clear`, `:raw`, `:help`, `:quit`, `:fontsize`, `:font`, `:canvas`, `:drawer`, `:ssh`, `:ssh-tmux`, `:remote`, `:session`, `:record`, `:spotlight`, `:focalzoom`, `:resize`, `:move`, `:equalize`).
+   - Pressing `Tab` after a command space (e.g., `:prompt <Tab>`, `:outline <Tab>`, `:theme <Tab>`, `:shadows <Tab>`, `:history <Tab>`, `:crosshair <Tab>`, `:font <Tab>`, `:canvas <Tab>`, `:drawer <Tab>`) completes valid sub-arguments.
 2. **Command Position (First Token on a Line or After `|` / `;` / `&&`)**:
    - **Explicit Paths**: If the token starts with `./`, `../`, `/`, or `~/`, Bilterm completes matching filesystem entries relative to the child shell's live working directory.
-   - **Shell Builtins & Keywords**: Matches standard shell builtins (`cd`, `echo`, `export`, `source`, `alias`, `unalias`, `history`, `jobs`, `fg`, `bg`, `kill`, `pwd`, `read`, `set`, `unset`, `shift`, `test`, `time`, `trap`, `type`, `ulimit`, `umask`, `wait`, ` which`, `sudo`, `env`, `exec`, `eval`, `exit`, `return`, `true`, `false`).
+   - **Shell Builtins & Keywords**: Matches standard shell builtins (`cd`, `echo`, `export`, `source`, `alias`, `unalias`, `history`, `jobs`, `fg`, `bg`, `kill`, `pwd`, `read`, `set`, `unset`, `shift`, `test`, `time`, `trap`, `type`, `ulimit`, `umask`, `wait`, `which`, `sudo`, `env`, `exec`, `eval`, `exit`, `return`, `true`, `false`).
    - **`$PATH` Executables**: Scans every directory in your `$PATH` environment variable, verifying POSIX executable permission bits (`mode & 0o111 != 0` on Unix), and deduplicates matching binary names.
 3. **Argument Position (Subsequent Tokens)**:
    - **Live Working Directory Tracking**: Resolves relative paths against the child shell's actual current working directory — tracked automatically via `OSC 7` (`\x1b]7;file://hostname/path\x07`) and Linux `/proc/<shell_pid>/cwd` inspection!
@@ -122,7 +129,7 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 
 | Key | Type | Allowed Values | Default |
 |-----|------|----------------|---------|
-| `theme` | `string` | `"turbo-blue"`, `"turbo-cyan"`, `"ibm-3278-green"`, `"ibm-3279-amber"`, `"ibm-mono"` | `"turbo-blue"` |
+| `theme` | `string` | `"turbo-blue"`, `"turbo-cyan"`, `"ibm-3278-green"`, `"ibm-3279-amber"`, `"ibm-mono"`, `"cyberpunk-neon"`, `"solarized-dark"`, `"dracula"`, `"gruvbox-dark"`, `"tokyo-night"` | `"turbo-blue"` |
 | `glyphs` | `string` | `"unicode"`, `"cp437"`, `"nerd-font"`, `"ascii"` | `"unicode"` |
 | `cursor_style` | `string` | `"solid-block"`, `"blinking-hollow-block"`, `"underscore"`, `"vertical-bar"` | `"solid-block"` |
 | `window_outline` | `string` | `"double"`, `"solid"`, `"rounded"`, `"thick"`, `"dotted"`, `"dashed"`, `"quadruple"`, `"ascii"` | `"double"` |
@@ -160,8 +167,10 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `SHELL` | Default POSIX shell spawned on Linux/macOS (fallback: `/bin/sh`) |
 | `COMSPEC` | Default shell spawned on Windows (fallback: `powershell.exe`) |
 | `TMUX` | Auto-detected for outer `tmux` coexistence and `DCS tmux;` clipboard passthrough |
+| `BILTERM_TOKEN_FILE` | Path to a mode `0600` bearer token file for JSON-RPC 2.0 authentication |
 | `XDG_CONFIG_HOME` | Override base directory for `bilterm/config.toml` |
-| `XDG_STATE_HOME` | Override base directory for `bilterm/history/*.log` session history files |
+| `XDG_STATE_HOME` | Override base directory for `bilterm/history/*.log` and `bilterm/snapshots/*.ppm` |
+| `XDG_RUNTIME_DIR` | Override base directory for private `0700` Unix RPC socket, shell hooks, exports, and recordings |
 | `RUST_LOG` | Tracing filter written to `./bilterm.log` (e.g., `RUST_LOG=bilterm=debug`) |
-| **Exit Code `0`** | Clean exit (`:quit`, `:q`, `Ctrl+Q`, or last pane closed) |
-| **Exit Code `1`** | Initialization or fatal runtime I/O error (after `TerminalRestoreGuard` restores host terminal state) |
+| **Exit Code `0`** | Clean exit (`:quit`, `:q`, `Ctrl+Q`, playbook success, or last pane closed) |
+| **Exit Code `1`** | Initialization, playbook assertion failure, or fatal runtime I/O error (after `TerminalRestoreGuard` restores host terminal state) |

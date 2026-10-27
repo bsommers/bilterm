@@ -1,4 +1,4 @@
-# Operational How-To Recipes & Troubleshooting Matrix
+# Operational How-To Recipes & Troubleshooting Matrix (`v1.12.0`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 
@@ -12,8 +12,10 @@
 - [Recipe 6: Customizing Window Outlines, DOS Drop Shadows & Palettes](#recipe-6-customizing-window-outlines-dos-drop-shadows--palettes)
 - [Recipe 7: Fuzzy Command Palette, Output Triggers & Session Recording (`v0.6.0`–`v1.0.0`)](#recipe-7-fuzzy-command-palette-output-triggers--session-recording-v060v100)
 - [Recipe 8: Remote SSH Domains & `herdr`-Style Fleet Federation (`v1.4.0`)](#recipe-8-remote-ssh-domains--herdr-style-fleet-federation-v140)
-- [Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`)](#recipe-9-json-rpc-20-automation-api-mcp-server--playbooks-v130)
-- [Recipe 10: Local Verification & Coverage Gate (CI Conservation)](#recipe-10-local-verification--coverage-gate-ci-conservation)
+- [Recipe 9: JSON-RPC 2.0 Automation API, MCP Server & Playbooks (`v1.3.0`–`v1.6.0`)](#recipe-9-json-rpc-20-automation-api-mcp-server--playbooks-v130v160)
+- [Recipe 10: Live Inspection, Debugging & Local Verification Gate](#recipe-10-live-inspection-debugging--local-verification-gate)
+- [Recipe 11: High-Resolution Graphics, Live Plotting & Adaptive SSH/GUI Canvas (`v1.9.1+`)](#recipe-11-high-resolution-graphics-live-plotting--adaptive-sshgui-canvas-v191)
+- [Recipe 12: Native Desktop `--gui` Mode, Per-Pane Font Scaling & All-Border Mouse Resizing (`v1.12.0`)](#recipe-12-native-desktop---gui-mode-per-pane-font-scaling--all-border-mouse-resizing-v1120)
 - [Troubleshooting Matrix](#troubleshooting-matrix)
 
 ---
@@ -140,7 +142,7 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
 1. **Connect Focused Pane or Split Directly to an SSH Host (`:ssh`)**:
    ```text
    ==> :ssh deploy@prod-web-01
-   ==> :ssh split v admin@db-primary:2222
+   ==> :ssh admin@db-primary 2222
    ```
    *(The OIA status bar automatically displays a bright cyan `SSH:deploy@prod-web-01` domain badge).*
 2. **Attach to a Persistent Remote `tmux -CC` Session Over SSH (`:ssh-tmux`)**:
@@ -150,10 +152,9 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
    *(Hydrates remote `tmux` panes 1:1 into local Bilterm Composite Panes with local floating command prompts).*
 3. **Centrally Manage Local & Remote Nodes (`herdr`-Style Fleet Federation)**:
    ```text
-   ==> :remote add prod deploy@prod-web-01 127.0.0.1:7370 main
+   ==> :remote add prod deploy@prod-web-01 @web,@us-east
    ==> :remote list
-   ==> :remote exec prod workspace.status
-   ==> :remote exec prod command.execute {"command":":split v"}
+   ==> :remote exec @web uptime
    ==> :remote disconnect prod
    ```
 
@@ -176,9 +177,10 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
    *(Note: `workspace.snapshot` `ppm_path` must be a bare file name confined to the snapshot directory, e.g. `frame.ppm` inside `$XDG_STATE_HOME/bilterm/snapshots` or `--snapshot-dir <path>`).*
 2. **Expose Bilterm as an AI Agent MCP Server (`bilterm --mcp`)**:
    Configure your MCP client (Claude Desktop, Cursor, Antigravity) to invoke `bilterm --mcp` over stdio to expose 11 native tools (`bilterm_workspace_status`, `bilterm_pane_read`, `bilterm_prompt_submit`, `bilterm_pane_wait_for`, `bilterm_command_execute`, `bilterm_remote_list`, `bilterm_remote_add`, `bilterm_remote_exec`, etc.).
-3. **Run a Declarative TOML Automation Playbook (`--playbook`)**:
+3. **Run a Declarative TOML Automation Playbook (`bilterm run` / `--playbook`)**:
    ```bash
-   bilterm --playbook deploy-check.toml
+   bilterm run starter-packs/01-multi-agent-swarm/playbook.toml
+   bilterm --playbook starter-packs/04-sysadmin-incident-war-room/playbook.toml
    ```
 
 ---
@@ -192,7 +194,7 @@ Or toggle with **`Alt+S`**. In both modes, `CompositePane::layout_rects` allocat
    RUST_LOG=bilterm=debug cargo run
    tail -f bilterm.log
    ```
-3. **FullVerification & Architecture Gate (CI Conservation)**:
+3. **Full Verification & Architecture Gate (CI Conservation)**:
    Run the full test, torture, clippy, and line-budget suite locally before committing or pushing (see [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](DEVELOPER_AND_AGENT_GUIDE.md) for the complete architecture & debugging manual):
 
 ```bash
@@ -232,17 +234,7 @@ Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emu
    :tek demo                 # Classic Tektronix 4014 green/amber phosphor vector storage tube
    :focalzoom 2x circle      # Smooth radial magnifying lens (:focalzoom off to disable)
    ```
-3. **Selectable Per-Pane & Per-Window Font Options (`:font`)**:
-   ```text
-   :font list                # Presets: ibm3270 | vga | tek4014 | jetbrains | firacode | iosevka | cascadia | hack
-   :font ibm3270 16pt        # Set active pane to IBM 3270 Mainframe font at 16pt
-   :font pane 1 vga 16pt     # Set Pane #1 to Borland DOS VGA8 16pt
-   :font pane 2 jetbrains 150% # Set Pane #2 to JetBrains Mono at 150% scale
-   :font double on           # Expand active pane text to 2x1 double-width cells in TUI
-   :font bold on             # Toggle per-pane bold/italic (:font italic on)
-   :font reset               # Reset active pane font overrides
-   ```
-4. **Export High-Resolution `.svg` or `.ppm` Framebuffers (`1280×768` / `1080p` / `4K`) or Clear**:
+3. **Export High-Resolution `.svg` or `.ppm` Framebuffers (`1280×768` / `1080p` / `4K`) or Clear**:
    ```text
    :canvas export /tmp/canvas.svg
    :canvas export /tmp/canvas.ppm
@@ -250,17 +242,33 @@ Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emu
    ```
 4. **Plot & Export Directly from the Shell or SSH CLI (`bilterm plot`)**:
    ```bash
-   # Render a live plot onto the current Bilterm pane canvas:
    bilterm plot line 12,28,19,45,38,64,52,84
-
-   # Emit raw Kitty APC G or DEC Sixel pixel stream directly over SSH:
    bilterm plot hires -b kitty
-   bilterm plot hires -b sixel
-
-   # Export a standalone high-res SVG or PPM chart directly from the CLI:
    bilterm plot hires -o /tmp/hires-demo.svg
-   bilterm plot candlestick 10,22,8,18,18,30,15,28,28,40,22,38 -o /tmp/ohlc.svg
    ```
+
+---
+
+## Recipe 12: Native Desktop `--gui` Mode, Per-Pane Font Scaling & All-Border Mouse Resizing (`v1.12.0`)
+
+1. **Launch Native Desktop GUI Window with Custom Font & Point Size**:
+   ```bash
+   bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16
+   bilterm --gui --gui-font "IBM 3270" --gui-font-size 18 --theme ibm-3278-green
+   ```
+2. **Scale Font Size Independently Per-Pane (`Ctrl++`, `Ctrl+-`, `Ctrl+0`, `Ctrl+Wheel`)**:
+   - Press **`Ctrl++`** (`Ctrl+=`) or **`Ctrl+-`** (`Ctrl+_`) or **`Ctrl+0`** in any focused pane (including inside `nmon`, `htop`, or `vim`), or hold **`Ctrl` + Mouse Wheel** over any pane.
+   - Or configure per-pane typography via `:colon` commands:
+     ```text
+     :fontsize 125%
+     :font pane 1 jetbrains 125%
+     :font pane 2 vga 80%
+     :font reset
+     ```
+   - Each pane's character grid (`cols × rows`) dynamically rescales and sends `TIOCSWINSZ` (`SIGWINCH`) to that pane's child PTY.
+3. **Resize Any Pane Frame by Dragging Any Border or Corner**:
+   - Drag **any** border (`Top`, `Bottom`, `Left`, `Right`) or **any** corner (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`) with the mouse in 2-pane, 3-pane, or N-pane `Tiled` or `Stacked` layouts.
+   - Reset all split dividers to equal 50/50 ratios at any time via `:equalize` (or `Ctrl+B =` / `Ctrl+X =`).
 
 ---
 
@@ -268,7 +276,8 @@ Bilterm supports both **classic 1974 Tektronix 4010/4014 vector storage-tube emu
 
 | Symptom | Root Cause | Remedy |
 |---------|------------|--------|
-| Floating prompt hidden while running `vim`, `htop`, or `less` | Alternate Screen (`DECSET 47/1047/1049`) auto-hide (`▣ ALT SCR`) | Exit the TUI app, or press `F12` / `Ctrl+G` (`:raw`) to toggle manually |
+| Floating prompt hidden while running `vim`, `htop`, `nmon`, or `less` | Alternate Screen (`DECSET 47/1047/1049`) auto-hide (`▣ ALT SCR`) | Exit the TUI app, or press `F12` / `Ctrl+G` (`:raw`) to toggle manually |
+| Want to zoom font size inside `nmon` or `htop` | Pane is in `INPUT: RAW PTY` mode | Press `Ctrl++`, `Ctrl+-`, `Ctrl+0`, or `Ctrl+MouseWheel` directly — WM intercepts font zoom before raw PTY passthrough |
 | Floating prompt hidden inside `asciinema rec` | `asciinema` puts its inner sub-PTY into non-canonical `!ECHO` raw mode | Press `F4`, `F12`, or `Ctrl+X e` / `Ctrl+B e` (`:mode float`) to restore the floating command prompt |
 | `Ctrl+X <key>` or `Ctrl+B <key>` chord ignored when `Ctrl` stays held | Second key arrives with `KeyModifiers::CONTROL` | Supported natively: `Ctrl+X Ctrl+<key>` and `Ctrl+B Ctrl+<key>` normalize automatically to leader chords |
 | Floating prompt hidden with red `♦ !ECHO LOCK` badge | Foreground process (`sudo`, `ssh`) disabled `termios ECHO` | Type your password and press `Enter`; prompt reappears automatically once `ECHO` is restored |
