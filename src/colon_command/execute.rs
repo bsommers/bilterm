@@ -170,7 +170,31 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         ColonCommand::Clear => {
             pane.process_pty_output(b"\x1b[2J\x1b[H");
             pane.vt_mut().reset_scrollback();
+            pane.reset_page_anchor();
             pane.set_status_message(Some("Canvas cleared".to_string()));
+            false
+        }
+        ColonCommand::ScrollModeSet(mode_opt) => {
+            match mode_opt {
+                Some(mode) => pane.set_scroll_mode(mode),
+                None => {
+                    pane.cycle_scroll_mode();
+                }
+            }
+            false
+        }
+        ColonCommand::ScrollModeTogglePage => {
+            pane.toggle_block_page_scroll_mode();
+            false
+        }
+        ColonCommand::ScrollPageAdvance => {
+            if !pane.scroll_page_advance() {
+                pane.set_status_message(Some("Already at live output tail".to_string()));
+            }
+            false
+        }
+        ColonCommand::ScrollPageBack => {
+            let _ = pane.scroll_page_back();
             false
         }
         ColonCommand::RawToggle => {

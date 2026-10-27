@@ -11,6 +11,7 @@ pub mod glyphs;
 pub mod hires_subcell;
 pub mod modals;
 pub mod occlusion;
+pub mod oia;
 pub mod pixel_canvas;
 pub mod renderer;
 pub mod status_bar;

@@ -1,6 +1,6 @@
 use crate::colon_command::ColonCommand;
 use crate::colon_command::parse_visual::parse_visual_colon_command;
-use crate::pane::PromptMode;
+use crate::pane::{PaneScrollMode, PromptMode};
 use crate::wm::WorkspaceLayoutMode;
 
 /// Parses an input string starting with `:` into a `ColonCommand`.
@@ -287,6 +287,30 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some("clear") => Some(Ok(ColonCommand::Scrollback { clear: true })),
             _ => Some(Err("Usage: :scrollback [clear]".to_string())),
         },
+        "scroll" | "scrl" | "pager" => match parts.get(1).copied() {
+            None | Some("cycle") => Some(Ok(ColonCommand::ScrollModeSet(None))),
+            Some("toggle" | "hold") => Some(Ok(ColonCommand::ScrollModeTogglePage)),
+            Some("next" | "advance" | "down" | "fwd") => Some(Ok(ColonCommand::ScrollPageAdvance)),
+            Some("prev" | "back" | "up") => Some(Ok(ColonCommand::ScrollPageBack)),
+            Some("mode") => match parts.get(2).copied() {
+                None | Some("cycle") => Some(Ok(ColonCommand::ScrollModeSet(None))),
+                Some(tok) => match PaneScrollMode::parse(tok) {
+                    Some(m) => Some(Ok(ColonCommand::ScrollModeSet(Some(m)))),
+                    None => Some(Err(
+                        "Usage: :scroll [smooth | page | block | instant | toggle | next | prev]"
+                            .to_string(),
+                    )),
+                },
+            },
+            Some(tok) => match PaneScrollMode::parse(tok) {
+                Some(m) => Some(Ok(ColonCommand::ScrollModeSet(Some(m)))),
+                None => Some(Err(
+                    "Usage: :scroll [smooth | page | block | instant | toggle | next | prev]"
+                        .to_string(),
+                )),
+            },
+        },
+        "more" => Some(Ok(ColonCommand::ScrollPageAdvance)),
         "raw" => Some(Ok(ColonCommand::RawToggle)),
         "resize" | "winresize" => {
             let amt = parts

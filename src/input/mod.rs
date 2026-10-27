@@ -323,6 +323,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
 
     match key.code {
         KeyCode::Enter => {
+            if pane.is_page_holding() && pane.prompt().input.is_empty() {
+                pane.scroll_page_advance();
+                return Ok(AppAction::Handled);
+            }
             let current_text = pane.prompt().text();
             // Check for in-prompt :command execution first (PANE-03, PANE-05)
             if let Some(cmd_res) = parse_colon_command(&current_text) {
@@ -399,14 +403,40 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             Ok(AppAction::Handled)
         }
         KeyCode::PageUp => {
-            pane.vt_mut().scroll_up(5);
+            if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage {
+                pane.scroll_page_back();
+            } else {
+                pane.scroll_up_in_mode(5);
+            }
             Ok(AppAction::Handled)
         }
         KeyCode::PageDown => {
-            pane.vt_mut().scroll_down(5);
+            if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage {
+                pane.scroll_page_advance();
+            } else {
+                pane.scroll_down_in_mode(5);
+            }
             Ok(AppAction::Handled)
         }
         KeyCode::Char(ch) => {
+            if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+                && pane.prompt().input.is_empty()
+            {
+                if ch == ' ' && pane.is_page_holding() {
+                    pane.scroll_page_advance();
+                    return Ok(AppAction::Handled);
+                }
+                if ch == 'b'
+                    && (pane.is_page_holding() || pane.vt_mut().scrollback_used_rows() > 0)
+                {
+                    pane.scroll_page_back();
+                    return Ok(AppAction::Handled);
+                }
+                if ch == 'c' && pane.is_page_holding() {
+                    pane.clear_page_hold();
+                    return Ok(AppAction::Handled);
+                }
+            }
             pane.prompt_mut().insert_char(ch);
             Ok(AppAction::Handled)
         }

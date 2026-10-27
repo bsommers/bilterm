@@ -68,6 +68,10 @@ impl WindowManager {
             (":inspector", "Ctrl+X i / F9", "Open Live 3270 Terminal Inspector modal"),
             (":hints", "Ctrl+X f / F3", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
             (":copy", "F8 / Alt+C / Ctrl+Up", "Focus OutputCanvas to move cursor & select text"),
+            (":scroll page", "Ctrl+X PgDn", "Toggle IBM 3270 / Timeshare Block/Page-Hold Scroller (MORE...)"),
+            (":scroll smooth", "—", "Switch pane to Smooth Sub-Cell / Kinetic Velocity Scroller"),
+            (":scroll instant", "—", "Switch pane to Discrete Line-by-Line Scroller"),
+            (":more", "PF8 / PA2 / Space", "Advance 1 full page in Mainframe Block/Page-Hold Mode"),
             (":version", "—", "Toggle version number badge in 3270-OIA status bar"),
             (":lock", "Ctrl+X l / Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
             (":broadcast", "—", "Toggle Synchronized Multi-Pane Input Broadcast"),
@@ -175,7 +179,12 @@ impl WindowManager {
 
     /// Replaces the active configuration (theme + history persistence settings) at startup or reload.
     pub fn apply_config(&mut self, config: BiltermConfig) {
+        let scroll_mode = config.scroll_mode;
         self.config = config;
+        for pane in self.panes.values_mut() {
+            pane.set_scroll_mode_from_config(scroll_mode);
+        }
+        self.quick_terminal.pane.set_scroll_mode_from_config(scroll_mode);
         self.notify_theme_changed();
         self.sync_history_config();
         self.rebalance_scrollback(Instant::now());

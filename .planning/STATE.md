@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Herdr Daemon, Session Trees, Mainframe Paging, Open Color Themes & TRON MCP Root Terminal
-current_phase: 29
-current_phase_name: smooth-and-block-page-mode-scrolling
-status: planning_complete_ready_for_phase_29
-stopped_at: Completed v1.12.0 features (mouse/keyboard cut-copy-paste, Powerline/PUA font rendering, bil;*term icons, persistent scrollable Herdr Drawer) and scoped Milestone v2.0 (Phases 29-34)
+current_phase: 30
+current_phase_name: explicit-exit-guard-and-root-protection
+status: phase_29_complete_ready_for_phase_30
+stopped_at: Completed Phase 29 (Smooth Scrolling & Mainframe Block/Page-Mode Scroller), authored docs/LESSONS_LEARNED.md, and expanded regression test suite
 last_updated: "2026-10-27"
 last_activity: 2026-10-27
-last_activity_desc: Scoped Milestone v2.0 (Phases 29-34: Smooth/Block-Page Scrolling, Exit Guard, iTerm2/Open Color & Font Engine, Herdr Daemon, Session Trees & Crash-Safe Journaling, TRON MCP Root Terminal)
+last_activity_desc: Completed Phase 29 (SCRL-01, SCRL-02), authored docs/LESSONS_LEARNED.md, and added tests/session_lessons_and_regression_suite.rs
 progress:
   total_phases: 34
-  completed_phases: 28
+  completed_phases: 29
   total_plans: 64
-  completed_plans: 52
+  completed_plans: 55
 ---
 
 # Project State

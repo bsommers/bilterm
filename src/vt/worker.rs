@@ -29,8 +29,9 @@ use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::error::{BiltermError, Result};
 use crate::pty::{PtyConfig, shell_integration};
-use crate::vt::VtParser;
+use crate::vt::scrollback::PaneScrollMode;
 use crate::vt::snapshot::GridSnapshot;
+use crate::vt::VtParser;
 
 /// Commands sent from the UI/Window layer to the dedicated terminal emulation worker thread (`ARCH-02`).
 #[derive(Clone, Debug)]
@@ -45,6 +46,12 @@ pub enum VtWorkerCommand {
     Scroll(isize),
     /// Resets the scrollback viewport to the live bottom (`0`).
     ResetScrollback,
+    /// Configures the worker's scroll discipline (`Smooth`, `Instant`, or `BlockPage` page-gate).
+    SetScrollMode(PaneScrollMode),
+    /// Advances one full viewport page in `BlockPage` mode (`Enter`, `Space`, `PageDown`, `PF8`/`PA2`).
+    PageAdvance,
+    /// Steps backward one full viewport page in `BlockPage` mode (`b`, `PageUp`, `PF7`).
+    PageBack,
     /// Updates the default theme foreground, background, and cursor RGB colors for `OSC 10/11/12` queries.
     SetThemeColors {
         fg: (u8, u8, u8),
@@ -75,6 +82,9 @@ pub struct SharedGridSnapshot {
     generation: AtomicU64,
     rows: AtomicU16,
     cols: AtomicU16,
+    page_holding: AtomicBool,
+    holding_inspected: AtomicBool,
+    pending_page_lines: AtomicU64,
 }
 
 impl SharedGridSnapshot {
@@ -85,7 +95,29 @@ impl SharedGridSnapshot {
             generation: AtomicU64::new(0),
             rows: AtomicU16::new(rows.max(1)),
             cols: AtomicU16::new(cols.max(1)),
+            page_holding: AtomicBool::new(false),
+            holding_inspected: AtomicBool::new(false),
+            pending_page_lines: AtomicU64::new(0),
         }
+    }
+
+    pub fn update_page_telemetry(&self, holding: bool, inspected: bool, pending: usize) {
+        self.page_holding.store(holding, Ordering::Release);
+        self.holding_inspected.store(inspected, Ordering::Release);
+        self.pending_page_lines
+            .store(pending as u64, Ordering::Release);
+    }
+
+    pub fn is_page_holding(&self) -> bool {
+        self.page_holding.load(Ordering::Acquire)
+    }
+
+    pub fn is_holding_inspected(&self) -> bool {
+        self.holding_inspected.load(Ordering::Acquire)
+    }
+
+    pub fn pending_page_lines(&self) -> usize {
+        self.pending_page_lines.load(Ordering::Acquire) as usize
     }
 
     /// Returns a cloned point-in-time [`GridSnapshot`] without blocking the PTY reader.
@@ -338,6 +370,33 @@ impl VtWorkerHandle {
         self.send(VtWorkerCommand::Resize { rows, cols });
     }
 
+    /// Configures the worker's scroll mode (`Smooth`, `Instant`, or `BlockPage` page-gate).
+    pub fn set_scroll_mode(&self, mode: PaneScrollMode) {
+        self.send(VtWorkerCommand::SetScrollMode(mode));
+    }
+
+    /// Advances one full viewport page in `BlockPage` mode.
+    pub fn page_advance(&self) {
+        self.send(VtWorkerCommand::PageAdvance);
+    }
+
+    /// Steps backward one full viewport page in `BlockPage` mode.
+    pub fn page_back(&self) {
+        self.send(VtWorkerCommand::PageBack);
+    }
+
+    pub fn is_page_holding(&self) -> bool {
+        self.shared.is_page_holding()
+    }
+
+    pub fn is_holding_inspected(&self) -> bool {
+        self.shared.is_holding_inspected()
+    }
+
+    pub fn pending_page_lines(&self) -> usize {
+        self.shared.pending_page_lines()
+    }
+
     /// Reads the latest point-in-time [`GridSnapshot`] produced by the worker thread.
     pub fn snapshot(&self) -> GridSnapshot {
         self.shared.read_snapshot()
@@ -394,6 +453,10 @@ fn worker_loop(
     let mut vt = VtParser::new(initial_rows, initial_cols, scrollback_capacity);
     let mut last_title: Option<String> = None;
     let mut last_cwd: Option<PathBuf> = None;
+    let mut scroll_mode = PaneScrollMode::Smooth;
+    let mut page_anchor_global_row = 0usize;
+    let mut page_hold_active = false;
+    let mut holding_inspected = false;
 
     // Publish initial snapshot
     shared.publish(vt.snapshot());
@@ -446,6 +509,60 @@ fn worker_loop(
                         eng.scroll_to_bottom();
                     }
                     vt.reset_scrollback();
+                    page_anchor_global_row =
+                        vt.scrollback_used_rows() + usize::from(vt.cursor_position().0);
+                    page_hold_active = false;
+                    holding_inspected = false;
+                    needs_snapshot = true;
+                }
+                VtWorkerCommand::SetScrollMode(mode) => {
+                    scroll_mode = mode;
+                    let used = vt.scrollback_used_rows();
+                    let off = vt.scrollback_offset();
+                    if mode == PaneScrollMode::BlockPage {
+                        if off > 0 {
+                            page_anchor_global_row = used.saturating_sub(off);
+                            page_hold_active = true;
+                            holding_inspected = true;
+                        } else {
+                            page_anchor_global_row = used;
+                            page_hold_active = false;
+                            holding_inspected = false;
+                        }
+                    } else {
+                        page_hold_active = false;
+                        holding_inspected = false;
+                    }
+                    needs_snapshot = true;
+                }
+                VtWorkerCommand::PageAdvance => {
+                    let page_rows = usize::from(vt.size().0.max(1));
+                    let used = vt.scrollback_used_rows();
+                    let cur_r = usize::from(vt.cursor_position().0);
+                    if page_hold_active || vt.scrollback_offset() > 0 {
+                        let next_anchor = page_anchor_global_row.saturating_add(page_rows);
+                        if next_anchor < used {
+                            page_anchor_global_row = next_anchor;
+                            vt.set_scrollback_offset(used - next_anchor);
+                            page_hold_active = true;
+                            holding_inspected = false;
+                        } else {
+                            vt.reset_scrollback();
+                            page_anchor_global_row = used + cur_r;
+                            page_hold_active = false;
+                            holding_inspected = false;
+                        }
+                        needs_snapshot = true;
+                    }
+                }
+                VtWorkerCommand::PageBack => {
+                    let page_rows = usize::from(vt.size().0.max(1));
+                    let used = vt.scrollback_used_rows();
+                    let new_off = vt.scrollback_offset().saturating_add(page_rows).min(used);
+                    vt.set_scrollback_offset(new_off);
+                    page_anchor_global_row = used.saturating_sub(new_off);
+                    page_hold_active = true;
+                    holding_inspected = true;
                     needs_snapshot = true;
                 }
                 VtWorkerCommand::SetThemeColors { fg, bg, cursor } => {
@@ -516,8 +633,32 @@ fn worker_loop(
             let _ = event_tx.send(VtWorkerEvent::Osc52Clipboard(osc52));
         }
 
-        // 5. Publish updated point-in-time GridSnapshot
+        // 5. Publish updated point-in-time GridSnapshot (with BlockPage MORE.../HOLDING freeze when active)
         if needs_snapshot {
+            if scroll_mode == PaneScrollMode::BlockPage && !vt.is_alternate_screen() {
+                let page_rows = usize::from(vt.size().0.max(1));
+                let used = vt.scrollback_used_rows();
+                let cur_r = usize::from(vt.cursor_position().0);
+                let total_written = used + cur_r;
+                if page_hold_active || total_written.saturating_sub(page_anchor_global_row) >= page_rows {
+                    if used > page_anchor_global_row {
+                        page_hold_active = true;
+                        vt.set_scrollback_offset(used - page_anchor_global_row);
+                    } else if cur_r >= page_rows.saturating_sub(1)
+                        && total_written.saturating_sub(page_anchor_global_row) >= page_rows.saturating_sub(1)
+                    {
+                        page_hold_active = true;
+                    }
+                }
+                shared.update_page_telemetry(
+                    page_hold_active,
+                    holding_inspected,
+                    vt.scrollback_offset(),
+                );
+            } else {
+                shared.update_page_telemetry(false, false, 0);
+            }
+
             #[cfg(feature = "ghostty-vt")]
             let snap = if let Some(eng) = &mut ghostty_engine {
                 eng.snapshot()

@@ -83,8 +83,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Smooth Scrolling, Mainframe Block/Page-Mode Paging & Exit Protection (`Phases 29–30`)
 
-- [ ] **SCRL-01**: Default smooth scrolling across all terminal panes (sub-cell/interpolated kinetic scrolling in Native GUI mode and inertial velocity-damped scrolling in TUI mode, configurable via `scroll_mode = "smooth" | "instant" | "page"` in `config.toml` and `:scroll smooth`) (`Phase 29`).
-- [ ] **SCRL-02**: Per-pane Mainframe / Timeshare Block & Page-Mode Scroller (`:scroll page` / `:scroll block`, `Ctrl+X PageDown`, OIA status toggle) inspired by IBM 3270 / VM/CMS `MORE...` / `HOLDING` and TOPS-20 page-mode terminals: fills one viewport page of output and pauses display with an OIA `MORE...` / `HOLDING` indicator (while buffering incoming PTY bytes in the background worker without loss) until the user advances a page (`Enter`, `Space`, `PageDown`, `PF8`/`PA2`) or steps back a block (`b`, `PageUp`, `PF7`) (`Phase 29`).
+- [x] **SCRL-01**: Default smooth scrolling across all terminal panes (sub-cell/interpolated kinetic scrolling in Native GUI mode and inertial velocity-damped scrolling in TUI mode, configurable via `scroll_mode = "smooth" | "instant" | "page"` in `config.toml` and `:scroll smooth`) (`Phase 29`).
+- [x] **SCRL-02**: Per-pane Mainframe / Timeshare Block & Page-Mode Scroller (`:scroll page` / `:scroll block`, `Ctrl+X PageDown`, OIA status toggle) inspired by IBM 3270 / VM/CMS `MORE...` / `HOLDING` and TOPS-20 page-mode terminals: fills one viewport page of output and pauses display with an OIA `MORE...` / `HOLDING` indicator (while buffering incoming PTY bytes in the background worker without loss) until the user advances a page (`Enter`, `Space`, `PageDown`, `PF8`/`PA2`) or steps back a block (`b`, `PageUp`, `PF7`) (`Phase 29`).
 - [ ] **SAFE-01**: Accidental `exit` / `logout` / `Ctrl+D` protection on the final pane of a session or on a Root Session: intercepts `exit`/`logout`/`Ctrl+D` in `FloatingCommandPrompt` and holds/guards exited child shells in `RawPtyPassthrough` on the last/root pane with an interactive Borland/3270 guard (`[EXIT GUARD: (r)espawn shell, (d)etach client, (q)uit client, (K)ill session, (Esc) cancel]`) so "one-too-many `exit`s" never accidentally terminates the final or root session (`Phase 30`).
 - [ ] **SAFE-02**: Explicit Bilterm exit semantics (`:quit!`, `:detach`, `:mcp shutdown --confirm`, and confirmed `Ctrl+Q` modal when active sessions/subtrees exist), separating client window closure/detachment from session or daemon termination (`Phase 30`).
 
@@ -165,8 +165,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CANV-02 | Phase 27 | Complete |
 | SSH-GFX-01 | Phase 27 | Complete |
 | CLI-GFX-01 | Phase 27 | Complete |
-| SCRL-01 | Phase 29 | Planned |
-| SCRL-02 | Phase 29 | Planned |
+| SCRL-01 | Phase 29 | Complete |
+| SCRL-02 | Phase 29 | Complete |
 | SAFE-01 | Phase 30 | Planned |
 | SAFE-02 | Phase 30 | Planned |
 | THM-01 | Phase 31 | Planned |

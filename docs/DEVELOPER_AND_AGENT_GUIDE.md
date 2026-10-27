@@ -1,6 +1,6 @@
 # Developer, Maintainer & AI Agent Engineering Guide
 
-[← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
+[← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md) | [Lessons Learned (`v0.1` → `v2.0`)](LESSONS_LEARNED.md)
 
 This guide is the authoritative technical reference for human developers, maintainers, and autonomous AI coding agents working on **Bilterm**. It documents the complete crate dependency stack, the 48-file modular source tree, core architectural invariants (`ARCH-R01..04`, `SEC-R01..04`, `REC-02`), runtime inspectability and debugging tools, and step-by-step extension workflows.
 

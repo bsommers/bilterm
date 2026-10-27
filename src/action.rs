@@ -3,7 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
-use crate::pane::PromptMode;
+use crate::pane::{PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
@@ -31,6 +31,14 @@ pub enum Action {
     Clear,
     /// `:scrollback` (report) / `:scrollback clear` (free history).
     Scrollback { clear: bool },
+    /// `:scroll [smooth|page|block|instant]` (`SCRL-01`, `SCRL-02`).
+    ScrollModeSet(Option<PaneScrollMode>),
+    /// `Ctrl+X PageDown` / `:scroll toggle`: toggles `BlockPage` (`3270 MORE...`) vs `Smooth` (`SCRL-02`).
+    ScrollModeTogglePage,
+    /// `:scroll next` / `:more` / `PF8` / `PA2`: advances one full page in `BlockPage` mode (`SCRL-02`).
+    ScrollPageAdvance,
+    /// `:scroll prev` / `:scroll back` / `PF7`: steps backward one full page in `BlockPage` mode (`SCRL-02`).
+    ScrollPageBack,
     RawToggle,
     SplitHorizontal,
     SplitVertical,
@@ -225,6 +233,13 @@ mod tests {
             Action::Clear => Some(":clear"),
             Action::Scrollback { clear: false } => Some(":scrollback"),
             Action::Scrollback { clear: true } => Some(":scrollback clear"),
+            Action::ScrollModeSet(None) => Some(":scroll"),
+            Action::ScrollModeSet(Some(PaneScrollMode::Smooth)) => Some(":scroll smooth"),
+            Action::ScrollModeSet(Some(PaneScrollMode::BlockPage)) => Some(":scroll page"),
+            Action::ScrollModeSet(Some(PaneScrollMode::Instant)) => Some(":scroll instant"),
+            Action::ScrollModeTogglePage => Some(":scroll toggle"),
+            Action::ScrollPageAdvance => Some(":scroll next"),
+            Action::ScrollPageBack => Some(":scroll prev"),
             Action::RawToggle => Some(":raw"),
             Action::SplitHorizontal => Some(":split h"),
             Action::SplitVertical => Some(":split v"),
@@ -333,6 +348,13 @@ mod tests {
             Action::Clear,
             Action::Scrollback { clear: false },
             Action::Scrollback { clear: true },
+            Action::ScrollModeSet(None),
+            Action::ScrollModeSet(Some(PaneScrollMode::Smooth)),
+            Action::ScrollModeSet(Some(PaneScrollMode::BlockPage)),
+            Action::ScrollModeSet(Some(PaneScrollMode::Instant)),
+            Action::ScrollModeTogglePage,
+            Action::ScrollPageAdvance,
+            Action::ScrollPageBack,
             Action::RawToggle,
             Action::SplitHorizontal,
             Action::SplitVertical,
