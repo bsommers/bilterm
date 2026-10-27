@@ -387,7 +387,19 @@ if [[ "$NO_DESKTOP" -eq 0 ]]; then
         if [[ "$DRY_RUN" -eq 1 ]]; then
             printf '  [dry-run] install desktop launcher "%s"\n' "$TARGET_DESKTOP" >&2
         else
-            if [[ -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" ]]; then
+            if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm-256.png" ]]; then
+                cp -f "${REPO_ROOT}/docs/assets/icons/bilterm-256.png" "$TARGET_ICON"
+                for sz in 16 32 48 64 128 256 512; do
+                    if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm-${sz}.png" ]]; then
+                        mkdir -p "${SHARE_DIR}/icons/hicolor/${sz}x${sz}/apps"
+                        cp -f "${REPO_ROOT}/docs/assets/icons/bilterm-${sz}.png" "${SHARE_DIR}/icons/hicolor/${sz}x${sz}/apps/bilterm.png"
+                    fi
+                done
+                if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm.svg" ]]; then
+                    mkdir -p "${SHARE_DIR}/icons/hicolor/scalable/apps"
+                    cp -f "${REPO_ROOT}/docs/assets/icons/bilterm.svg" "${SHARE_DIR}/icons/hicolor/scalable/apps/bilterm.svg"
+                fi
+            elif [[ -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" ]]; then
                 cp -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" "$TARGET_ICON"
             fi
             if ! "$TARGET_BIN" --desktop-file > "$TARGET_DESKTOP" 2>/dev/null; then
@@ -416,6 +428,7 @@ DESK_EOF
             fi
             chmod 0644 "$TARGET_DESKTOP"
             command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+            command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t "${SHARE_DIR}/icons/hicolor" 2>/dev/null || true
         fi
         log_ok "Installed Linux desktop launcher: ${TARGET_DESKTOP}"
     elif [[ "$OS_NAME" == "Darwin"* ]]; then
@@ -423,6 +436,9 @@ DESK_EOF
         if [[ "$DRY_RUN" -eq 1 ]]; then
             printf '  [dry-run] create macOS app bundle "%s"\n' "$TARGET_MAC_APP" >&2
         else
+            if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm.icns" ]]; then
+                cp -f "${REPO_ROOT}/docs/assets/icons/bilterm.icns" "${TARGET_MAC_APP}/Contents/Resources/Bilterm.icns"
+            fi
             cat > "${TARGET_MAC_APP}/Contents/Info.plist" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -438,6 +454,10 @@ DESK_EOF
   <string>APPL</string>
   <key>CFBundleExecutable</key>
   <string>bilterm-launcher</string>
+  <key>CFBundleIconFile</key>
+  <string>Bilterm</string>
+  <key>CFBundleIconName</key>
+  <string>Bilterm</string>
   <key>NSHighResolutionCapable</key>
   <true/>
 </dict>
@@ -449,6 +469,10 @@ export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bi
 exec "${TARGET_BIN}" --gui "\$@"
 LAUNCH_EOF
             chmod 0755 "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher"
+            touch "${TARGET_MAC_APP}" 2>/dev/null || true
+            if [[ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]]; then
+                /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${TARGET_MAC_APP}" >/dev/null 2>&1 || true
+            fi
         fi
         log_ok "Installed macOS Spotlight / Launchpad bundle: ${TARGET_MAC_APP}"
     fi

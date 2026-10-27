@@ -564,16 +564,29 @@ pub(super) fn handle_drawer_mouse_event(
                 return Some(AppAction::Handled);
             }
 
-            if mouse.row == dr.y {
+            if mouse.row == dr.y || (edge.is_vertical() && mouse.row == dr.y + 1) {
                 let rel_x = mouse.column.saturating_sub(dr.x);
-                if rel_x >= dr.width.saturating_sub(5) {
-                    wm.close_drawer();
-                } else if rel_x < 17 {
+                if mouse.row == dr.y && rel_x >= dr.width.saturating_sub(5) {
+                    wm.toggle_drawer();
+                } else if edge.is_vertical()
+                    && mouse.row == dr.y + 1
+                    && rel_x >= dr.width.saturating_sub(8)
+                {
+                    let _ = wm.split_focused(SplitDirection::Horizontal);
+                } else if rel_x < 12 {
                     wm.set_drawer_edge(None);
-                } else if rel_x < 26 {
+                } else if rel_x < 22 {
                     wm.set_drawer_layout(None);
                 } else {
-                    wm.set_drawer_visibility(None);
+                    let next_vis = if wm.drawer_config().visibility
+                        == crate::wm::DrawerVisibilityMode::Fixed
+                    {
+                        crate::wm::DrawerVisibilityMode::OnDemand
+                    } else {
+                        crate::wm::DrawerVisibilityMode::Fixed
+                    };
+                    wm.set_drawer_visibility(Some(next_vis));
+                    wm.drawer_mut().open = true;
                 }
                 let _ = wm.resize_all(workspace_area);
                 return Some(AppAction::Handled);
@@ -581,11 +594,24 @@ pub(super) fn handle_drawer_mouse_event(
 
             wm.drawer_mut().focused = true;
             if edge.is_vertical() {
-                let rel_row = usize::from(mouse.row.saturating_sub(dr.y + 1));
-                let rows_len = wm.drawer_rows().len();
-                if rel_row < rows_len {
-                    wm.drawer_mut().selected_index = rel_row;
-                    wm.drawer_activate_selected(false);
+                if mouse.row >= dr.y + 2 && mouse.row < dr.y + dr.height.saturating_sub(2) {
+                    let rows_len = wm.drawer_rows().len();
+                    let list_h = usize::from(dr.height.saturating_sub(4)).max(1);
+                    let selected = wm.drawer().selected_index.min(rows_len.saturating_sub(1));
+                    let mut scroll = wm.drawer().scroll_offset;
+                    if selected < scroll {
+                        scroll = selected;
+                    } else if selected >= scroll + list_h {
+                        scroll = selected + 1 - list_h;
+                    }
+                    scroll = scroll.min(rows_len.saturating_sub(list_h));
+                    let vis_row = usize::from(mouse.row.saturating_sub(dr.y + 2));
+                    let row_idx = scroll + vis_row;
+                    if row_idx < rows_len {
+                        wm.drawer_mut().selected_index = row_idx;
+                        wm.drawer_mut().scroll_offset = scroll;
+                        wm.drawer_activate_selected(false);
+                    }
                 }
             } else {
                 wm.drawer_select_next();

@@ -17,6 +17,59 @@ pub mod win32_gdi;
 #[cfg(target_os = "macos")]
 pub mod macos_ct;
 
+/// Embedded 256×256 RGBA PNG of the `bil;*` / `==> term█` application icon.
+pub const EMBEDDED_APP_ICON_PNG: &[u8] =
+    include_bytes!("../../../docs/assets/icons/bilterm-256.png");
+
+/// Sets the running macOS `NSApplication` Dock & Cmd+Tab icon from [`EMBEDDED_APP_ICON_PNG`].
+#[cfg(target_os = "macos")]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn apply_macos_dock_icon(ns_app: *mut std::ffi::c_void) {
+    use std::ffi::{c_char, c_void};
+    unsafe extern "C" {
+        fn objc_getClass(name: *const c_char) -> *mut c_void;
+        fn sel_registerName(name: *const c_char) -> *mut c_void;
+        fn objc_msgSend();
+    }
+    if ns_app.is_null() {
+        return;
+    }
+    unsafe {
+        let cls_data = objc_getClass(c"NSData".as_ptr());
+        let cls_image = objc_getClass(c"NSImage".as_ptr());
+        if cls_data.is_null() || cls_image.is_null() {
+            return;
+        }
+        let sel_data: *mut c_void = sel_registerName(c"dataWithBytes:length:".as_ptr());
+        let f_data: unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8, usize) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let ns_data = f_data(
+            cls_data,
+            sel_data,
+            EMBEDDED_APP_ICON_PNG.as_ptr(),
+            EMBEDDED_APP_ICON_PNG.len(),
+        );
+        if ns_data.is_null() {
+            return;
+        }
+        let f_alloc: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let f_init_data: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let f_set_icon: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) =
+            std::mem::transmute(objc_msgSend as *const ());
+        let raw_img = f_alloc(cls_image, sel_registerName(c"alloc".as_ptr()));
+        let ns_img = f_init_data(raw_img, sel_registerName(c"initWithData:".as_ptr()), ns_data);
+        if !ns_img.is_null() {
+            f_set_icon(
+                ns_app,
+                sel_registerName(c"setApplicationIconImage:".as_ptr()),
+                ns_img,
+            );
+        }
+    }
+}
+
 #[cfg(not(any(windows, target_os = "macos")))]
 pub mod linux_x11;
 

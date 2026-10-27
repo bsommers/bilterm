@@ -107,7 +107,7 @@ pub fn render_workspace_drawer(
 
     if dcfg.edge.is_vertical() {
         let header_line = format!(
-            "[D:{}] [M:{}] [P:{}]",
+            "[D:{}] [M:{}] [P:{}] [+New]",
             dcfg.edge.label(),
             dcfg.layout.label(),
             dcfg.visibility.label()
@@ -121,10 +121,18 @@ pub fn render_workspace_drawer(
 
         let list_y = inner.y + 1;
         let list_h = inner.height.saturating_sub(2).max(1) as usize;
-        let scroll = if selected >= list_h {
-            selected + 1 - list_h
+        let mut scroll = drawer.scroll_offset;
+        if selected < scroll {
+            scroll = selected;
+        } else if selected >= scroll + list_h {
+            scroll = selected + 1 - list_h;
+        }
+        scroll = scroll.min(rows.len().saturating_sub(list_h));
+        let show_scrollbar = rows.len() > list_h && inner.width >= 8;
+        let row_text_w = if show_scrollbar {
+            inner.width.saturating_sub(1)
         } else {
-            0
+            inner.width
         };
 
         for (vis_idx, (row_idx, row)) in rows
@@ -157,12 +165,40 @@ pub fn render_workspace_drawer(
                 row_style = row_style.add_modifier(Modifier::REVERSED);
                 fill_rect(
                     buf,
-                    Rect::new(inner.x, y, inner.width, 1),
+                    Rect::new(inner.x, y, row_text_w, 1),
                     row_style,
                 );
             }
             let line = row.formatted_line();
-            write_clipped_line(buf, inner.x, y, inner.width, &line, row_style);
+            write_clipped_line(buf, inner.x, y, row_text_w, &line, row_style);
+        }
+
+        if show_scrollbar {
+            let sb_x = inner.x + inner.width - 1;
+            let sb_style = Style::default()
+                .fg(palette.active_border_fg)
+                .bg(palette.window_frame_bg);
+            let thumb_pos = if rows.len() <= 1 {
+                0
+            } else {
+                (selected * list_h.saturating_sub(1)) / (rows.len() - 1)
+            };
+            for r in 0..list_h {
+                let y = list_y + r as u16;
+                let sym = if r == 0 && scroll > 0 {
+                    "▲"
+                } else if r + 1 == list_h && scroll + list_h < rows.len() {
+                    "▼"
+                } else if r == thumb_pos {
+                    "█"
+                } else {
+                    "░"
+                };
+                if let Some(cell) = buf.cell_mut((sb_x, y)) {
+                    cell.set_symbol(sym);
+                    cell.set_style(sb_style);
+                }
+            }
         }
 
         // Bottom 1-row hotkey hint bar inside vertical drawer
@@ -181,7 +217,7 @@ pub fn render_workspace_drawer(
                 inner.x,
                 footer_y,
                 inner.width,
-                "j/k:Nav Ent:Go Spc:Peek x:Close z:Zoom d:Edge m:Mode p:Pin",
+                "↑↓/jk:Scroll Ent:Select Tab:Pane n:New m:Push F7:Hide",
                 footer_style,
             );
         }

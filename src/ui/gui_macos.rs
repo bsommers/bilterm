@@ -388,6 +388,7 @@ pub fn run_macos_gui_window(mut app: App) -> Result<()> {
         msg_send_void_bool(content_view, sel(c"setWantsLayer:"), true);
         msg_send_void_id(window, sel(c"makeKeyAndOrderFront:"), null_mut());
         msg_send_void_0(window, sel(c"display"));
+        crate::ui::gui_font::apply_macos_dock_icon(ns_app);
         msg_send_void_bool(ns_app, sel(c"activateIgnoringOtherApps:"), true);
         msg_send_void_0(ns_app, sel(c"finishLaunching"));
     }

@@ -274,3 +274,50 @@ fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
     assert_eq!(wm.pane_count(), 1);
     assert_eq!(wm.active_pane_id(), p2);
 }
+
+#[test]
+fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_terminal() {
+    let mut wm = WindowManager::new_headless(24, 100);
+    let area = Rect::new(0, 0, 100, 24);
+    let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
+    let p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
+    assert_eq!(wm.active_pane_id(), p3);
+
+    // Open drawer with F7 (default OnDemand mode)
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
+    assert!(wm.is_drawer_effectively_visible());
+    assert!(wm.drawer().open);
+    assert!(wm.drawer().focused);
+
+    // Scroll up with Up arrow to select Pane #2 and press Enter:
+    // Drawer MUST remain visible and focused in place!
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)).unwrap();
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert_eq!(wm.active_pane_id(), p2);
+    assert!(wm.is_drawer_effectively_visible(), "drawer must not disappear on Enter");
+    assert!(wm.drawer().open);
+    assert!(wm.drawer().focused);
+
+    // Scroll up again to Pane #1 and press Enter:
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)).unwrap();
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert_eq!(wm.active_pane_id(), 1);
+    assert!(wm.is_drawer_effectively_visible());
+
+    // Click row for Pane #3 (dr.y + 2 is row 0 SessionHeader, +3 is LayoutGroup, +4 is Pane 1, +5 is Pane 2, +6 is Pane 3)
+    let dr = wm.drawer_rect(area).unwrap();
+    let click_p3 = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: dr.x + 4,
+        row: dr.y + 6,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_wm_mouse_event(&mut wm, click_p3, area).unwrap();
+    assert_eq!(wm.active_pane_id(), p3);
+    assert!(wm.is_drawer_effectively_visible(), "drawer must not disappear when clicking a row");
+
+    // Press Tab to move keyboard focus to the active terminal pane while keeping drawer open in place
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
+    assert!(!wm.drawer().focused);
+    assert!(wm.is_drawer_effectively_visible(), "drawer must remain visible in place when typing in pane");
+}

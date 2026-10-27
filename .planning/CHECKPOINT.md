@@ -1,41 +1,39 @@
-# Session Checkpoint — macOS Native CoreText/Cocoa GUI (`--gui` / `Bilterm.app`), 250-Test Suite & Hardening — 2026-10-27
+# Session Checkpoint — v1.12.0 Interactive UX, Powerline/PUA Fonts, `"bil;*term"` Icons, Persistent Herdr Drawer & Milestone v2.0 Roadmap (Phases 29–34) — 2026-10-27
 
-- **Status:** COMPLETE — Implemented native macOS Cocoa / CoreText / CoreGraphics Retina GUI (`bilterm --gui` and `Bilterm.app`), installed on macOS (`~/.local/bin/bilterm` + `~/Applications/Bilterm.app`), verified all `250/250` tests (`159` unit + `91` integration), and zero-warning `clippy`.
+- **Status:** COMPLETE — Implemented mouse/keyboard cut-copy-paste with visual selection highlights, pixel-perfect Powerline (`U+E0A0..=U+E0D7`) & Nerd Font PUA rendering, cross-platform `"bil;*` / `==> term█"` icons (`icns`/`ico`/`png`/`svg`), persistent in-place scrollable `Herdr` Drawer, and scoped Milestone `v2.0` (`Phases 29–34`).
 - **Updated:** `2026-10-27`
 - **Branch:** `main`
 - **Installed Artifacts (macOS `aarch64-apple-darwin`):**
-  - Binary: `/Users/bill/.local/bin/bilterm` (`v1.11.1`)
-  - macOS App Bundle (Spotlight / Launchpad / Finder, defaults to `bilterm --gui`): `/Users/bill/Applications/Bilterm.app`
-  - Manpage: `/Users/bill/.local/share/man/man1/bilterm.1`
-  - Shell Completions: `/Users/bill/.local/share/bilterm/completions`
+  - Binary: `/Users/bill/.local/bin/bilterm`
+  - macOS App Bundle (with `Bilterm.icns` Dock/Finder icon, defaults to `bilterm --gui`): `/Users/bill/Applications/Bilterm.app`
+  - Cross-Platform Icons: `docs/assets/icons/bilterm.{icns,ico,svg,png}` + `bilterm-{16..1024}.png`
 - **Baseline Verification:**
-  - `cargo +stable clippy --all-targets -- -D warnings` → **0 warnings, 0 errors**
-  - `cargo +stable test --quiet` → **250 passed, 0 failed** (`159` unit + `91` integration across 20 integration test binaries)
+  - `cargo +stable clippy -q --all-targets -- -D warnings` → **0 warnings, 0 errors**
+  - `cargo +stable test -q` → **All unit & integration tests passing**
 
 ---
 
 ## 1. Done in This Session (With Evidence)
 
-1. **Native macOS Cocoa / CoreText / CoreGraphics Retina GUI (`src/ui/gui_font/macos_ct.rs`, `src/ui/gui_macos.rs`, `src/ui/gui_window.rs`) & `Bilterm.app` Default `--gui` Mode (`scripts/install.sh`, `src/launcher.rs`)**:
-   - Implemented `MacosGuiCanvas` (`src/ui/gui_font/macos_ct.rs`) using CoreText (`CTFontRef` + `CTFontDrawGlyphs` + `CTFontCreateForString` Unicode glyph fallback + `CTFontManagerRegisterFontsForURL` custom `.ttf`/`.otf` loading) paired with `draw_geometric_cell_bgra` and `CGBitmapContext` -> `CGImageRef` at 1:1 Retina scale.
-   - Implemented `run_macos_gui_window` (`src/ui/gui_macos.rs`) driving a native AppKit `NSApplication` + `NSWindow` + `CALayer` (`CATransaction` zero-latency presentation) with full keyboard translation, `Option`-as-`Alt`, `Cmd+V` clipboard paste (`NSPasteboard`), `Cmd++`/`Cmd+-`/`Cmd+0` and `Ctrl/Cmd+Wheel` font zoom, mouse click/drag/scroll, and live Retina window resizing.
-   - Updated `Bilterm.app` (`scripts/install.sh` & `src/launcher.rs::macos_launcher_script_contents`) to launch `exec "${TARGET_BIN}" --gui "$@"` by default with standard user/Homebrew `PATH` entries.
-2. **Pulled `origin/main` up to `v1.11.1` (`2483433`)**:
-   - Fast-forwarded `main` to include Phase 28 architecture hardening, Native OS GUI (`bilterm --gui` / `-G`), 1:1 HiDPI ClearType TTF/OTF font engine, desktop launcher integration (`scripts/install.sh`), and ConPTY 3270 prompt fixes.
-2. **Fixed Parallel-Test Race in `secure_fs::write_private_file` (`src/secure_fs.rs`)**:
-   - **Root Cause:** `write_private_file` previously called `fs::remove_file(path)` before `create_private_file(path)`, creating a window where concurrent `prepare_shell_integration` callers in the same PID (`shell-integration-<pid>`) saw `NotFound` (`pty::shell_integration::tests::rc_files_are_private`).
-   - **Fix:** `write_private_file` now creates a `0600` sibling temporary file (`.<name>.tmp.<unique_suffix>`, `O_CREAT | O_EXCL | O_NOFOLLOW`) and atomically renames (`fs::rename`) it into place.
-3. **Fixed Unix Socket Stale-Check Hang in `run_headless_server` (`src/api/server.rs`)**:
-   - **Root Cause:** `run_headless_server` matched any `Err(_)` from `UnixStream::connect(&path).await` as a stale socket, unlinked `path`, and entered `serve_jsonrpc_unix`. Under sandboxed execution where `connect()` returns `PermissionDenied`, `unix_socket_live_daemon_is_not_stolen` stole the socket and blocked forever in the accept loop.
-   - **Fix:** Restricted stale-socket unlinking strictly to `ErrorKind::ConnectionRefused | ErrorKind::NotFound`; any other probe error returns `Err(BiltermError::Config(...))` immediately.
-4. **Rust 1.99 Clippy Cleanliness (`chunks_exact_to_as_chunks`)**:
-   - Updated constant-sized `.chunks_exact(2)` / `.chunks_exact(4)` calls in `src/pane/typography.rs`, `src/ui/gui_window.rs`, `src/ui/pixel_canvas.rs`, and `src/ui/renderer.rs` to `.as_chunks::<N>().0`.
-5. **macOS Local + App Bundle Installation**:
-   - Built release binary (`cargo +stable build --release --quiet`) and ran `./scripts/install.sh --local --force`, installing `/Users/bill/.local/bin/bilterm` and `/Users/bill/Applications/Bilterm.app`.
-6. **Agent Skill Surface Optimization (`~/.gemini/config` & `~/.gemini/antigravity`)**:
-   - Disabled 5 non-Rust plugins (`science`, `flutter`, `firebase`, `android-cli-plugin`, `chrome-devtools-plugin`).
-   - Switched `gsd-surface` from `full` (71 skills) to `standard` (15 core workflow skills, ~274 tokens), with full 71-skill source cached in `~/.gemini/antigravity/gsd-source/`.
-   - Moved 7 duplicate standalone skills (`api-contract-audit`, `code-architecture-review`, `dependency-audit`, `github-issues-script`, `pr-review`, `refactor-execute`, `release`) to `~/.gemini/config/skills-dedup-backup/`.
+1. **Mouse & Keyboard Cut/Copy/Paste + Visual Selection Highlights + Focus Switcher + Toggleable Version Badge (`d766d7e`)**:
+   - Full mouse click/drag selection and keyboard selection (`Shift+Arrows`, `Ctrl+A`, `Ctrl+X`/`Cmd+X`, `Ctrl+C`/`Cmd+C`, `Ctrl+V`/`Cmd+V`, `Alt+W`, `Ctrl+W`, `Ctrl+K`, `Ctrl+U`, `Ctrl+Y`) with bright cyan selection highlight in `FloatingCommandPrompt` (`src/pane/prompt.rs`) and `OutputCanvas` `CopyMode` (`src/pane/selection.rs`).
+   - Direct focus toggling between `FloatingCommandPrompt` and `OutputCanvas` via `F8`, `Ctrl+Up` / `Ctrl+Down`, `Tab`, and mouse click.
+   - Toggleable version badge (`:version`) in the top menu bar, 3270 OIA status bar, and `<F1>` Help modal.
+2. **Powerline (`U+E0A0..=U+E0D7`) & Nerd Font PUA Rendering (`3910635`)**:
+   - Added edge-to-edge procedural scanline rasterization for all Powerline & Powerline Extra symbols (``, ``, ``, ``, ``, ``, ``, `..`, `..`) in `src/ui/gui_font/geometric.rs` and `src/ui/bitmap_font.rs`.
+   - Suppressed macOS CoreText `LastResort` (`[?]`) fallback boxes in `src/ui/gui_font/macos_ct.rs`, prioritized `"SF Mono"` / `"Menlo"` over `"Courier New"` in `src/pane/typography.rs`, and added TUI host PUA sanitization in `src/app.rs`.
+3. **Cross-Platform `"bil;*` / `==> term█"` Icons (`docs/assets/icons/`, `src/ui/gui_font/mod.rs`, `src/ui/gui_macos.rs`, `scripts/install.sh`)**:
+   - Packaged alpha-transparent squircle icons for macOS (`bilterm.icns`), Windows (`bilterm.ico`), and Linux (`bilterm-{16..1024}.png`, `bilterm.svg`), wired runtime `NSApplication setApplicationIconImage:` for `bilterm --gui`, and bundled `Bilterm.icns` into `Bilterm.app`.
+4. **Persistent In-Place Scrollable `Herdr` Drawer (`src/wm/drawer.rs`, `src/ui/drawer.rs`, `src/input/modal.rs`, `src/input/mouse_wm.rs`)**:
+   - Selecting a pane or saved session via `Enter` or mouse click switches to it while keeping the drawer open and focused in place (`Esc`, `F3`, `Alt+D`, or `[×]` closes it).
+   - Added `Up`/`Down`/`j`/`k`/`PageUp`/`PageDown`/`Home`/`End` and Mouse Wheel scrolling with a visual scrollbar (`▲ █ ░ ▼`), saved-session listing, and `[+New]` session creation (`n`/`+`/`v`).
+5. **Milestone `v2.0` Multi-Phase Plan (`Phases 29–34` in `.planning/REQUIREMENTS.md` & `.planning/ROADMAP.md`)**:
+   - **Phase 29 (`SCRL-01`, `SCRL-02`)**: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`MORE...` / `HOLDING`).
+   - **Phase 30 (`SAFE-01`, `SAFE-02`)**: Explicit Exit Guard & Root/Final Session Protection.
+   - **Phase 31 (`THM-01`, `THM-02`)**: Universal Open Color Scheme & Font Engine (`mbadolato/iterm2-color-schemes` `.itermcolors` + Alacritty/WezTerm/Ghostty/Base16 TOML/YAML without lock-in).
+   - **Phase 32 (`DAEM-01`, `DAEM-02`)**: Persistent Background Multiplexer Daemon (`Herdr`-style multi-client attach/detach/reconnect).
+   - **Phase 33 (`TREE-01`, `TREE-02`, `PERS-01`, `PERS-02`)**: Independent, Rooted & Tree/Subtree Sessions + Crash-Safe Layout & State Persistence.
+   - **Phase 34 (`MCP-01`, `MCP-02`)**: TRON-Inspired Master Control Program (`MCP`) Root Terminal.
 
 ---
 

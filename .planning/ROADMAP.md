@@ -21,11 +21,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 19: Security Hardening of the Automation & Shell-Integration Surfaces** - `0600` Unix socket default, bearer token gate for remote TCP, confined snapshot paths, `0700`/`0600` private temp files, and hardened SSH argv builders (completed 2026-10-23)
 - [x] **Phase 20: Mega-Module Decomposition** - Split `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams (`<= 800` lines per file, no `pane ↔ wm` cycle) (completed 2026-10-23)
 - [x] **Phase 21: Encapsulated Workspace Invariants** - Private `WindowManager` and `CompositePane` fields, unified `remove_pane`/`submit_command`, `enum Modal`, and `enum Focus` (completed 2026-10-24)
-- [ ] **Phase 22: Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback, held-`Ctrl` chord normalization, `asciinema` PTY-wrapper harmony), `tmux`/`herdr` chord parity, and whole-workspace Asciicast v2 (`.cast`) compositor recorder (`ARCH-R01`, `REC-02`)
-- [ ] **Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution** - Decouple `vt100_ctt` behind `TerminalBackend`, resolve `VtWorkerHandle`/`TmuxControlSubprocess`/`ghostty-vt`, and CI feature matrix
-- [ ] **Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes** - 4-edge (`Left`/`Right`/`Top`/`Bottom`) slide-out drawer with `OnDemand`/`Fixed`/`AutoHide` policies, `Overlay` (float) vs `Push` (auto-resize) layout modes, and live telemetry glyphs (`DRW-01`, `DRW-02`)
-- [ ] **Phase 25: Dynamic Terminal Text & Font Size Scaling** - Runtime `Ctrl++`/`Ctrl+-`/`Ctrl+0`/`:fontsize` scaling across `GuiWorkspaceRenderer` pixel/SVG cells, DEC double-width/height (`DECDWL`/`DECDHL`) TUI canvas lines, and host-terminal font-zoom OSC passthrough (`FONT-01`)
-- [ ] **Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas** - Classic Tektronix 4010/4014 4096×3120 vector mode (`\x1b[?38h`) with phosphor decay plus modern retained scene-graph, 2D sprites, declarative plotting, and image viewer over Braille/Sextant/Quadrant TUI & full-res GUI rasterizers (`TEK-01`, `CANV-01`)
+- [x] **Phase 22: Unified `Action` Command Vocabulary, Data-Driven Keymap & Whole-Workspace `.cast` Recorder** - Typed `Action` vocabulary, `[keybindings]` data table, `Ctrl+B`/`Ctrl+X` dual leader (`$TMUX` auto-fallback, held-`Ctrl` chord normalization, `asciinema` PTY-wrapper harmony), `tmux`/`herdr` chord parity, and whole-workspace Asciicast v2 (`.cast`) compositor recorder (`ARCH-R01`, `REC-02`) (completed 2026-10-24)
+- [x] **Phase 23: `TerminalBackend` Trait & Unwired-Subsystem Resolution** - Decouple `vt100_ctt` behind `TerminalBackend`, resolve `VtWorkerHandle`/`TmuxControlSubprocess`/`ghostty-vt`, and CI feature matrix (completed 2026-10-24)
+- [x] **Phase 24: `herdr`-Style Slide-Out Sessions/Windows/Panes Drawer with Status Glyphs & Float/Push Modes** - 4-edge (`Left`/`Right`/`Top`/`Bottom`) slide-out drawer with `OnDemand`/`Fixed`/`AutoHide` policies, `Overlay` (float) vs `Push` (auto-resize) layout modes, and live telemetry glyphs (`DRW-01`, `DRW-02`) (completed 2026-10-24)
+- [x] **Phase 25: Dynamic Terminal Text & Font Size Scaling** - Runtime `Ctrl++`/`Ctrl+-`/`Ctrl+0`/`:fontsize` scaling across `GuiWorkspaceRenderer` pixel/SVG cells, DEC double-width/height (`DECDWL`/`DECDHL`) TUI canvas lines, and host-terminal font-zoom OSC passthrough (`FONT-01`) (completed 2026-10-24)
+- [x] **Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas** - Classic Tektronix 4010/4014 4096×3120 vector mode (`\x1b[?38h`) with phosphor decay plus modern retained scene-graph, 2D sprites, declarative plotting, and image viewer over Braille/Sextant/Quadrant TUI & full-res GUI rasterizers (`TEK-01`, `CANV-01`) (completed 2026-10-24)
+- [x] **Phase 27: High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine** - Anti-aliased RGBA `PixelCanvasBuffer`, adaptive `Kitty`/`Sixel`/`iTerm2`/`HalfBlock` transport, and `bilterm plot` / `bilterm img` CLI (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) (completed 2026-10-25)
+- [x] **Phase 28: Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency** - Strict acyclic DAG, module ceiling decompression, macOS CoreText/Cocoa GUI (`Bilterm.app`), mouse/keyboard selection & clipboard, and Powerline/PUA geometric font rendering (`ARCH-R01..04`, `SEC-R01`) (completed 2026-10-27)
+- [ ] **Phase 29: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller** - Kinetic sub-cell/inertial smooth scrolling by default plus per-pane IBM 3270 / VM/CMS `MORE...` / `HOLDING` block/page-mode output paging (`SCRL-01`, `SCRL-02`)
+- [ ] **Phase 30: Explicit Exit Guard & Root/Final Session Protection** - Accidental `exit` / `logout` / `Ctrl+D` interception on final/root panes with interactive `Respawn / Detach / Quit / Cancel` guard and explicit `:quit!` / `:detach` semantics (`SAFE-01`, `SAFE-02`)
+- [ ] **Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility)** - Native `.itermcolors` XML plist importer (`mbadolato/iterm2-color-schemes`), Alacritty/WezTerm/Ghostty/Base16 TOML/YAML theme loaders, automatic Borland/3270 chrome synthesis, and per-theme typography profiles without lock-in (`THM-01`, `THM-02`)
+- [ ] **Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach)** - Auto-spawned background daemon (`bilterm daemon`) hosting all PTYs, `VtWorkerHandle` state machines, and session trees over a `0600` Unix socket for seamless multi-client connect/disconnect/reconnect (`DAEM-01`, `DAEM-02`)
+- [ ] **Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence** - Forest of independent workspaces, rooted daemon sessions, and parent/child session trees & subtrees with continuous atomic crash/restart layout journaling (`TREE-01`, `TREE-02`, `PERS-01`, `PERS-02`)
+- [ ] **Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal** - Non-destructive `MCP` root terminal interfacing to the background daemon with TRON grid aesthetics, global session tree routing, broadcast, freeze/thaw, and `derez` controls (`MCP-01`, `MCP-02`)
 
 ## Phase Details
 
@@ -360,10 +368,116 @@ Plans:
 Plans:
 - [x] 28-01-PLAN.md — Wave 1 (P0.1 confined `:canvas export`, P0.2 cached `TIOCGWINSZ` & live `CanvasResolution`, P1.1a `src/api/rpc_handlers.rs` breaking `ui -> api` cycle, P1.2a `execute_wm.rs` / `pane/tests.rs` / `wm/tests.rs` ceiling decompression, and `Cargo.toml` `vt100-ctt` supply-chain pruning); Wave 2 (`error/secure_fs -> pty -> vt -> pane` strict acyclic DAG, `parse_visual.rs` & `scan_osc_dcs.rs` decompression, `FloatingPromptState` encapsulation); Wave 3 (dirty-driven `App::run` redraw, cached `PixelCanvasBuffer` rasterization, single-pass `ESC` scanner, and CI DAG acyclicity gate)
 
+### Phase 29: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`v2.0`)
+
+**Goal**: As a terminal user, I want smooth kinetic scrolling enabled by default across all terminal panes, plus an optional per-pane Mainframe / Timeshare Block & Page-Mode Scroller (inspired by IBM 3270 / VM/CMS `MORE...` / `HOLDING` and TOPS-20 page-mode terminals) so that high-volume output can either glide smoothly or pause cleanly at full-page boundaries awaiting explicit page advance.
+**Depends on**: Phase 28
+**Requirements**: SCRL-01, SCRL-02
+**Success Criteria** (what must be TRUE):
+
+  1. Default `PaneScrollMode::Smooth` provides interpolated sub-cell pixel scrolling in Native GUI mode (`GuiWorkspaceRenderer` / `MacosGuiCanvas` / `LinuxGuiCanvas` / `Win32GuiCanvas`) and velocity-damped kinetic scrollback in TUI mode (`scroll_mode = "smooth"` default in `BiltermConfig`).
+  2. Toggling per-pane `PaneScrollMode::BlockPage` (`:scroll page` / `:scroll block`, `Ctrl+X PageDown`, or clicking the `SCRL:SMOOTH/PAGE` OIA badge) causes incoming PTY output after a command submission or page clear to pause rendering once a full viewport page (`canvas.height` rows) is filled, displaying an authentic IBM 3270 `MORE...` (or `HOLDING` when inspected) indicator in the OIA status bar while continuing to buffer PTY output in `VtWorkerHandle` without dropping bytes.
+  3. In `BlockPage` mode, pressing `Enter`, `Space`, `PageDown`, or `PF8`/`PA2` advances cleanly by one full page (returning to live tail when caught up), while `b` / `PageUp` / `PF7` steps backward by one full block/page.
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 29-01-PLAN.md — `PaneScrollMode` (`Smooth`, `Instant`, `BlockPage`), kinetic scroll velocity/sub-pixel state in `CompositePane`, and `VtWorkerHandle` page-gate snapshot freeze with `MORE...`/`HOLDING` telemetry (wave 1)
+- [ ] 29-02-PLAN.md — `Action::ScrollModeSet` / `:scroll [smooth|page|block|instant]`, `PF7`/`PF8`/`Space` page-advance bindings, OIA `MORE...`/`HOLDING` status badge, and GUI sub-cell smooth scroll rendering (wave 2)
+- [ ] 29-03-PLAN.md — `tests/smooth_and_mainframe_page_scrolling.rs` deterministic verification suite (wave 3)
+
+### Phase 30: Explicit Exit Guard & Root/Final Session Protection (`v2.0`)
+
+**Goal**: As a user running multi-pane or persistent sessions, I want exiting Bilterm to be explicit so that typing one-too-many `exit` commands or pressing `Ctrl+D` never accidentally kills the final terminal pane or root session.
+**Depends on**: Phase 29
+**Requirements**: SAFE-01, SAFE-02
+**Success Criteria** (what must be TRUE):
+
+  1. Submitting `exit` or `logout` (or pressing `Ctrl+D` on an empty prompt) in `FloatingCommandPrompt` when on the **final pane of a session** or inside a **Root Session** intercepts the command before killing the shell and opens an interactive Borland/3270 Exit Guard modal (`[EXIT GUARD: (r)espawn shell, (d)etach client, (q)uit client, (K)ill session, (Esc) cancel]`).
+  2. When a child shell in the final/root pane terminates via raw PTY (`RawPtyPassthrough` `Ctrl+D` or subshell exit), Bilterm does not exit the application; instead it holds the pane open (`🔒 [SHELL EXITED — Enter/r: Respawn Shell | d: Detach | :quit!: Exit]`) or auto-respawns according to `exit_protection = "guard" | "respawn" | "detach"`.
+  3. Explicit exit commands (`:quit!`, `:detach`, `:mcp shutdown --confirm`) and `Ctrl+Q` confirmation cleanly separate detaching a UI client from terminating a session or daemon.
+
+**Plans**: 2 plans
+
+Plans:
+- [ ] 30-01-PLAN.md — `ExitProtectionPolicy` (`Guard`, `Respawn`, `Detach`), `FloatingCommandPrompt` `exit`/`logout`/`Ctrl+D` interception on final/root panes, and PTY process-exit hold/respawn lifecycle (wave 1)
+- [ ] 30-02-PLAN.md — Borland/3270 Exit Guard confirmation modal, `:quit!` / `:detach` actions, and `tests/exit_guard_and_root_protection.rs` verification suite (wave 2)
+
+### Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility without Lock-In, `v2.0`)
+
+**Goal**: As a user customizing Bilterm's look and feel, I want first-class compatibility with [`mbadolato/iterm2-color-schemes`](https://github.com/mbadolato/iterm2-color-schemes) (`.itermcolors`) alongside open TOML/YAML/JSON theme formats (Alacritty, WezTerm, Ghostty, Base16) and per-theme typography profiles without being locked into any single format.
+**Depends on**: Phase 30
+**Requirements**: THM-01, THM-02
+**Success Criteria** (what must be TRUE):
+
+  1. Native `.itermcolors` Apple XML plist parser loads any color scheme from `mbadolato/iterm2-color-schemes` (`Ansi 0 Color`..`Ansi 15 Color`, `Foreground Color`, `Background Color`, `Bold Color`, `Cursor Color`, `Cursor Text Color`, `Selection Color`, `Selected Text Color`, `Badge Color`, `Link Color`) and automatically derives harmonious Borland Turbo Vision double-border, drop-shadow, floating-prompt, and 3270 OIA status bar colors.
+  2. Multi-format open theme loader also parses Alacritty/WezTerm/Ghostty/Base16 TOML & YAML palettes and Bilterm `[theme.custom]` definitions so users can mix, import, and export themes freely without lock-in.
+  3. `:theme import <path_or_dir>`, `:theme <name>`, and `Ctrl+P` Fuzzy Command Palette support live theme switching and per-theme/per-pane font family + size profiles (`~/.config/bilterm/themes/` auto-discovery).
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 31-01-PLAN.md — `src/ui/theme_import.rs`: Native `.itermcolors` XML plist parser + Alacritty/WezTerm/Ghostty/Base16 TOML/YAML adapter + automatic Borland/3270 chrome palette synthesizer (wave 1)
+- [ ] 31-02-PLAN.md — `:theme import|load|save|list`, `~/.config/bilterm/themes/` directory scanner, bundled popular `iterm2-color-schemes` presets, and per-theme font profile binding (wave 2)
+- [ ] 31-03-PLAN.md — `tests/iterm2_and_open_theme_compatibility.rs` verification suite and documentation updates (wave 3)
+
+### Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach, `v2.0`)
+
+**Goal**: As a power user, I want Bilterm to run a persistent `herdr`-style background daemon so that I can connect multiple TUI/GUI sessions Simultaneously, or disconnect and reconnect at will without ever losing running shells, PTY state, or layouts.
+**Depends on**: Phase 30
+**Requirements**: DAEM-01, DAEM-02
+**Success Criteria** (what must be TRUE):
+
+  1. Launching `bilterm` or `bilterm --gui` (`Bilterm.app`) automatically spawns or connects to a persistent per-user background daemon (`bilterm daemon` listening on `0700`/`0600` `~/.local/state/bilterm/daemon.sock`) that owns all PTYs, `VtWorkerHandle` state machines, and workspace sessions.
+  2. Clients can detach (`Ctrl+X d` / `:detach` / closing GUI window) while all background sessions continue running, and reattach at any time via `bilterm attach [session]`, `bilterm --gui`, or the `Herdr` Drawer.
+  3. Multiple TUI and Native GUI clients can connect concurrently to the same daemon — either sharing a live session in real time or operating independent sessions hosted by the same daemon (`bilterm ls`, `bilterm attach`).
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 32-01-PLAN.md — `src/daemon/`: Background daemon process supervisor, auto-spawn/handshake over `0600` Unix domain socket, and multi-session `SessionRegistry` hosting `WindowManager` instances (wave 1)
+- [ ] 32-02-PLAN.md — Streaming frame/snapshot delta subscription & input forwarding protocol for attached TUI and Native GUI (`--gui`) clients, plus `bilterm attach|detach|ls` CLI subcommands (wave 2)
+- [ ] 32-03-PLAN.md — `tests/background_daemon_multi_client.rs` integration suite verifying concurrent multi-client attach, detach, and reconnect survival (wave 3)
+
+### Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`v2.0`)
+
+**Goal**: As a user managing complex workflows, I want sessions organized as independent workspaces, rooted daemon sessions, or hierarchical trees/subtrees, with automatic crash-safe layout & state journaling that restores everything after a crash, intentional exit, or new connection (like `herdr`).
+**Depends on**: Phase 32
+**Requirements**: TREE-01, TREE-02, PERS-01, PERS-02
+**Success Criteria** (what must be TRUE):
+
+  1. `SessionTree` models sessions as **Independent** roots, **Rooted** children of the `MCP` daemon root, or nested **Parent → Child Trees & Subtrees** (`:session branch <parent>/<child>`, `:session graft <src> <dst>`, `:session detach-subtree <node>`), rendered with collapsible tree folding and rollup telemetry in the `Herdr` Drawer.
+  2. Subtree-scoped actions allow broadcasting commands, searching scrollback, or recording `.cast` files across an entire session subtree.
+  3. Continuous debounced atomic state journaling (`~/.local/state/bilterm/journal/`) saves the full session forest, split tree ratios, Z-order stack coordinates, floating prompt geometries, themes/fonts, per-pane working directories (`OSC 7` / OS CWD), command histories, and scrollback tails, automatically restoring them on restart after a crash, intentional exit, or fresh connection.
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 33-01-PLAN.md — `src/wm/session_tree.rs`: Independent, Rooted, and Parent/Child Tree & Subtree session DAG, `:session branch|graft|tree` commands, and collapsible tree rendering in `Herdr` Drawer (wave 1)
+- [ ] 33-02-PLAN.md — `src/wm/journal.rs`: Continuous crash-safe atomic layout, CWD, history & scrollback-tail journaling + automatic resurrection on daemon startup or reconnect (wave 2)
+- [ ] 33-03-PLAN.md — `tests/session_trees_and_crash_recovery.rs` verification suite (wave 3)
+
+### Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal (`v2.0`)
+
+**Goal**: As a systems operator, I want a dedicated TRON-inspired **Master Control Program (`MCP`)** root terminal that interfaces with the overall background daemon to monitor, route, spawn, graft, broadcast, freeze/thaw, or `derez` sessions and programs — without ever killing the daemon when closed.
+**Depends on**: Phase 33
+**Requirements**: MCP-01, MCP-02
+**Success Criteria** (what must be TRUE):
+
+  1. Opening the **Root Terminal (`MCP`)** (`bilterm --mcp-console`, `:mcp`, or selecting `◈ ROOT [MCP — MASTER CONTROL PROGRAM]` at the root of the `Herdr` Drawer) connects to the background daemon's control plane; closing or exiting the `MCP` root terminal window never terminates the daemon or user sessions.
+  2. The `MCP` Root Terminal provides a TRON / 3270 high-contrast cyber-grid dashboard and interactive command shell supporting `mcp status`, `mcp tree`, `mcp attach <node>`, `mcp spawn <tree/path>`, `mcp graft <src> <dst>`, `mcp broadcast <subtree> <cmd>`, `mcp freeze <target>`, `mcp thaw <target>`, `mcp derez <session|pane>` (clean termination with confirmation), `mcp checkpoint`, and `mcp shutdown --confirm` (`END OF LINE.`).
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 34-01-PLAN.md — `src/mcp_console/`: Non-destructive Root `MCP` terminal session type, TRON Master Control Program command interpreter (`status`, `tree`, `spawn`, `graft`, `broadcast`, `freeze`, `thaw`, `derez`, `checkpoint`, `shutdown`), and daemon RPC bindings (wave 1)
+- [ ] 34-02-PLAN.md — TRON Red/Cyan/Gold cyber-grid visual theme & live daemon telemetry dashboard inside the `MCP` Root Terminal and `Herdr` Drawer root node (wave 2)
+- [ ] 34-03-PLAN.md — `tests/tron_mcp_root_console.rs` end-to-end verification suite and User Manual documentation (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -394,4 +508,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 25. Dynamic Terminal Text & Font Size Scaling (`FONT-01`) | 3/3 | Complete | 2026-10-24 |
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 3/3 | Complete | 2026-10-24 |
 | 27. High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) | 3/3 | Complete | 2026-10-25 |
-| 28. Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency (`ARCH-R01..04`, `SEC-R01`) | 1/1 | Complete | 2026-10-25 |
+| 28. Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency (`ARCH-R01..04`, `SEC-R01`) | 1/1 | Complete | 2026-10-27 |
+| 29. Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`) | 0/3 | Planned | - |
+| 30. Explicit Exit Guard & Root/Final Session Protection (`SAFE-01`, `SAFE-02`) | 0/2 | Planned | - |
+| 31. Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility) (`THM-01`, `THM-02`) | 0/3 | Planned | - |
+| 32. Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach) (`DAEM-01`, `DAEM-02`) | 0/3 | Planned | - |
+| 33. Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`TREE-01..02`, `PERS-01..02`) | 0/3 | Planned | - |
+| 34. TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`) | 0/3 | Planned | - |

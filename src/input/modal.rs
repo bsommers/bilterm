@@ -373,15 +373,35 @@ pub(super) fn handle_wm_modal_key(
 ) -> Result<Option<AppAction>> {
     if wm.drawer().focused {
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => wm.close_drawer(),
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Right | KeyCode::Char('l') => {
+            KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),
+            KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
+                wm.drawer_mut().focused = false;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
                 wm.drawer_select_next();
             }
-            KeyCode::Up | KeyCode::Char('k') | KeyCode::Left | KeyCode::Char('h') => {
+            KeyCode::Up | KeyCode::Char('k') => {
                 wm.drawer_select_prev();
             }
-            KeyCode::Enter => wm.drawer_activate_selected(true),
-            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::PageDown => {
+                wm.drawer_scroll_by(5);
+            }
+            KeyCode::PageUp => {
+                wm.drawer_scroll_by(-5);
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                wm.drawer_mut().selected_index = 0;
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                wm.drawer_scroll_by(10_000);
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Char('n') | KeyCode::Char('+') => {
+                let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+            }
+            KeyCode::Char('v') => {
+                let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical);
+            }
             KeyCode::Char('x') | KeyCode::Delete => {
                 wm.drawer_close_selected_pane();
             }

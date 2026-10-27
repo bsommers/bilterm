@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11.1
-milestone_name: milestone
-current_phase: 28
-current_phase_name: architecture-hardening-and-dag-decoupling
-status: released_v1_11_1
-stopped_at: Installed v1.11.1 on macOS (~/.local/bin/bilterm + ~/Applications/Bilterm.app) and verified all 248/248 tests passing
+milestone: v2.0
+milestone_name: Herdr Daemon, Session Trees, Mainframe Paging, Open Color Themes & TRON MCP Root Terminal
+current_phase: 29
+current_phase_name: smooth-and-block-page-mode-scrolling
+status: planning_complete_ready_for_phase_29
+stopped_at: Completed v1.12.0 features (mouse/keyboard cut-copy-paste, Powerline/PUA font rendering, bil;*term icons, persistent scrollable Herdr Drawer) and scoped Milestone v2.0 (Phases 29-34)
 last_updated: "2026-10-27"
 last_activity: 2026-10-27
-last_activity_desc: Installed Bilterm v1.11.1 on macOS and verified full 248-test suite (157 unit + 91 integration) with atomic write_private_file and Unix socket probe fixes
+last_activity_desc: Scoped Milestone v2.0 (Phases 29-34: Smooth/Block-Page Scrolling, Exit Guard, iTerm2/Open Color & Font Engine, Herdr Daemon, Session Trees & Crash-Safe Journaling, TRON MCP Root Terminal)
 progress:
-  total_phases: 28
+  total_phases: 34
   completed_phases: 28
-  total_plans: 52
+  total_plans: 64
   completed_plans: 52
 ---
 
@@ -20,19 +20,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-25)
+See: .planning/PROJECT.md (updated 2026-10-27)
 
-**Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux`.
-**Current focus:** Phase 28 (`28-01-PLAN.md` — Architecture Hardening, Module DAG Decoupling & Runtime Efficiency) complete.
+**Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
+**Current focus:** Milestone `v2.0` (`Phases 29–34`) — Starting with **Phase 29: Smooth Scrolling & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`)**.
 
 ## Current Position
 
-Phase: 28 (architecture-hardening-and-dag-decoupling) — COMPLETE (Waves 1–3)
-Plan: `28-01-PLAN.md` complete
-Status: Phases 1–28 complete (`47/47` requirements + Phase 28 architecture hardening complete)
-Last activity: 2026-10-25 — Completed Phase 28 Waves 2 & 3 (`pty -> vt -> pane` strict acyclic DAG, `parse_visual.rs` & `scan_osc_dcs.rs` decompression, `FloatingPromptState` encapsulation, dirty-driven redraw, cached `PixelCanvasBuffer` rasterization, single-pass `ESC` scanner, and CI DAG acyclicity gate).
+Phase: 29 (smooth-and-block-page-mode-scrolling) — READY TO PLAN / EXECUTE
+Plan: `29-01-PLAN.md` & `29-02-PLAN.md` scoped in `ROADMAP.md`
+Status: Phases 1–28 complete (`47/47` v1 requirements complete); Phases 29–34 (`14` v2.0 requirements: `SCRL-01..02`, `SAFE-01..02`, `THM-01..02`, `DAEM-01..02`, `TREE-01..02`, `PERS-01..02`, `MCP-01..02`) scoped and dependency-sorted.
+Last activity: 2026-10-27 — Completed mouse & keyboard cut/copy/paste with cyan visual selection highlights, pixel-perfect Powerline (`U+E0A0..=U+E0D7`) & Nerd Font PUA geometric rendering, cross-platform `"bil;*term"` icons (`icns`/`ico`/`png`/`svg`), persistent in-place scrollable `Herdr` Drawer, and Milestone `v2.0` (`Phases 29–34`) roadmap & requirements.
 
-Progress: [██████████] 100%
+Progress: [████████░░] 82% (28/34 Phases)
 
 ## Performance Metrics
 

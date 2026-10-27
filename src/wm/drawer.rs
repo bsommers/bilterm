@@ -539,6 +539,22 @@ impl WindowManager {
                 is_focused_pane: false,
             });
         }
+        for saved in self.list_sessions() {
+            if saved != self.config.history_session {
+                rows.push(DrawerRow {
+                    kind: DrawerRowKind::SessionHeader(saved.clone()),
+                    connector: "",
+                    focus_rank_badge: String::new(),
+                    spinner: '◈',
+                    sparkline: String::new(),
+                    cmd_badge: "SAVED".to_string(),
+                    mode_badges: vec!["[SAVED]".to_string()],
+                    transport_badges: Vec::new(),
+                    title: saved,
+                    is_focused_pane: false,
+                });
+            }
+        }
         rows
     }
 
@@ -599,6 +615,15 @@ impl WindowManager {
         }
     }
 
+    pub fn drawer_scroll_by(&mut self, delta: isize) {
+        let len = self.drawer_rows().len();
+        if len > 0 {
+            let cur = self.drawer.selected_index as isize;
+            let max_idx = (len - 1) as isize;
+            self.drawer.selected_index = (cur.saturating_add(delta)).clamp(0, max_idx) as usize;
+        }
+    }
+
     pub fn selected_drawer_pane_id(&self) -> Option<PaneId> {
         let rows = self.drawer_rows();
         let row = rows.get(self.drawer.selected_index)?;
@@ -613,11 +638,16 @@ impl WindowManager {
         }
     }
 
-    pub fn drawer_activate_selected(&mut self, close_after: bool) {
+    pub fn drawer_activate_selected(&mut self, unfocus_after: bool) {
         let rows = self.drawer_rows();
         if let Some(row) = rows.get(self.drawer.selected_index) {
             match &row.kind {
-                DrawerRowKind::Pane(id) => { self.focus_and_raise(*id); }
+                DrawerRowKind::Pane(id) => {
+                    self.focus_and_raise(*id);
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Selected Pane #{id} (Tab/Esc to type in pane, ↑/↓ to keep browsing drawer)"
+                    )));
+                }
                 DrawerRowKind::QuickTerminal => { self.quick_terminal.visible = true; }
                 DrawerRowKind::LayoutGroup(_) => { self.toggle_layout_mode(); }
                 DrawerRowKind::FleetNode(name) => {
@@ -628,14 +658,23 @@ impl WindowManager {
                         self.active_pane_mut().set_status_message(Some(format!("Selected fleet node @{name_clone}")));
                     }
                 }
-                DrawerRowKind::SessionHeader(_) => {}
+                DrawerRowKind::SessionHeader(name) => {
+                    if name != &self.config.history_session {
+                        let name_clone = name.clone();
+                        if self.restore_session(&name_clone).is_ok() {
+                            self.config.history_session = name_clone.clone();
+                            self.active_pane_mut().set_status_message(Some(format!(
+                                "Restored session '{name_clone}'"
+                            )));
+                        }
+                    } else if let Some(top_id) = self.z_stack.top() {
+                        self.focus_and_raise(top_id);
+                    }
+                }
             }
         }
-        if close_after {
+        if unfocus_after {
             self.drawer.focused = false;
-            if self.config.drawer.visibility != DrawerVisibilityMode::Fixed {
-                self.drawer.open = false;
-            }
             self.reflow_default_viewport();
         }
     }
@@ -717,53 +756,31 @@ impl WindowManager {
     /// Executes any `Action::Drawer*` variant (`ARCH-R01`, `DRW-01`).
     pub fn execute_drawer_action(&mut self, action: &crate::action::Action) -> bool {
         use crate::action::Action;
-        match action {
+        let msg = match action {
             Action::DrawerToggle => {
                 self.toggle_drawer();
-                let vis = self.is_drawer_effectively_visible();
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "Slide-Out Drawer: {}",
-                    if vis { "OPEN" } else { "HIDDEN" }
-                )));
-                true
+                format!("Slide-Out Drawer: {}", if self.is_drawer_effectively_visible() { "OPEN" } else { "HIDDEN" })
             }
             Action::DrawerFocus => {
                 self.focus_drawer();
-                self.active_pane_mut()
-                    .set_status_message(Some("Slide-Out Drawer: FOCUSED".to_string()));
-                true
+                "Slide-Out Drawer: FOCUSED".to_string()
             }
             Action::DrawerDock(edge_opt) => {
-                let edge = self.set_drawer_edge(*edge_opt);
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "Slide-Out Drawer Dock Edge: {}",
-                    edge.label()
-                )));
-                true
+                format!("Slide-Out Drawer Dock Edge: {}", self.set_drawer_edge(*edge_opt).label())
             }
             Action::DrawerVisibility(vis_opt) => {
-                let vis = self.set_drawer_visibility(*vis_opt);
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "Slide-Out Drawer Visibility: {}",
-                    vis.label()
-                )));
-                true
+                format!("Slide-Out Drawer Visibility: {}", self.set_drawer_visibility(*vis_opt).label())
             }
             Action::DrawerLayout(layout_opt) => {
-                let layout = self.set_drawer_layout(*layout_opt);
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "Slide-Out Drawer Layout Mode: {}",
-                    layout.label()
-                )));
-                true
+                format!("Slide-Out Drawer Layout Mode: {}", self.set_drawer_layout(*layout_opt).label())
             }
             Action::DrawerSize(size) => {
                 self.resize_drawer(*size);
-                self.active_pane_mut()
-                    .set_status_message(Some(format!("Slide-Out Drawer Size: {size}")));
-                true
+                format!("Slide-Out Drawer Size: {size}")
             }
-            _ => false,
-        }
+            _ => return false,
+        };
+        self.active_pane_mut().set_status_message(Some(msg));
+        true
     }
 }

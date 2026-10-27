@@ -81,15 +81,28 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SSH-GFX-01**: Adaptive multi-transport graphics engine (`CanvasRenderBackend`: `Auto`, `Kitty`, `Sixel`, `ITerm2`, `HalfBlock`, `Braille`, `Sextant`, `Quadrant`) that auto-detects host terminal capabilities over pure SSH and local sessions (`$TERM`, `$TERM_PROGRAM`, `$KITTY_WINDOW_ID`, `$GHOSTTY_RESOURCES_DIR`, `$WEZTERM_EXECUTABLE`, `$TMUX`), encodes RGBA pixel frames into Kitty (`APC G`), DEC Sixel (`DCS q`), iTerm2 (`OSC 1337`), or `tmux` passthrough (`\x1bPtmux;...\x1b\\`), and provides a 24-bit TrueColor `1×2` Half-Block (`▀`) bitmap mode alongside `2×4` Braille and `2×3` Sextant sub-cells with floating-prompt occlusion (`Phase 27`).
 - [x] **CLI-GFX-01**: Built-in CLI and colon-command helpers (`bilterm plot`, `bilterm img`, `:canvas backend <mode>`, `:canvas export <path>`, `:canvas hires`) for plotting data series and rendering high-resolution graphics across SSH and local GUI/TUI sessions (`Phase 27`).
 
-## v2 Requirements
+### Smooth Scrolling, Mainframe Block/Page-Mode Paging & Exit Protection (`Phases 29–30`)
 
-Deferred to future release. Tracked but not in current roadmap.
+- [ ] **SCRL-01**: Default smooth scrolling across all terminal panes (sub-cell/interpolated kinetic scrolling in Native GUI mode and inertial velocity-damped scrolling in TUI mode, configurable via `scroll_mode = "smooth" | "instant" | "page"` in `config.toml` and `:scroll smooth`) (`Phase 29`).
+- [ ] **SCRL-02**: Per-pane Mainframe / Timeshare Block & Page-Mode Scroller (`:scroll page` / `:scroll block`, `Ctrl+X PageDown`, OIA status toggle) inspired by IBM 3270 / VM/CMS `MORE...` / `HOLDING` and TOPS-20 page-mode terminals: fills one viewport page of output and pauses display with an OIA `MORE...` / `HOLDING` indicator (while buffering incoming PTY bytes in the background worker without loss) until the user advances a page (`Enter`, `Space`, `PageDown`, `PF8`/`PA2`) or steps back a block (`b`, `PageUp`, `PF7`) (`Phase 29`).
+- [ ] **SAFE-01**: Accidental `exit` / `logout` / `Ctrl+D` protection on the final pane of a session or on a Root Session: intercepts `exit`/`logout`/`Ctrl+D` in `FloatingCommandPrompt` and holds/guards exited child shells in `RawPtyPassthrough` on the last/root pane with an interactive Borland/3270 guard (`[EXIT GUARD: (r)espawn shell, (d)etach client, (q)uit client, (K)ill session, (Esc) cancel]`) so "one-too-many `exit`s" never accidentally terminates the final or root session (`Phase 30`).
+- [ ] **SAFE-02**: Explicit Bilterm exit semantics (`:quit!`, `:detach`, `:mcp shutdown --confirm`, and confirmed `Ctrl+Q` modal when active sessions/subtrees exist), separating client window closure/detachment from session or daemon termination (`Phase 30`).
 
-### Workspace & Multiplayer Extensions
+### Universal Color Schemes (`iterm2-color-schemes`) & Typography Profiles (`Phase 31`)
 
-- **WKSP-01**: Declarative saved workspace layout templates (auto-spawning pre-split and pre-stacked composite panes per project directory).
-- **WKSP-02**: Synchronized broadcast input mode (type once in a floating prompt to execute across multiple selected composite panes simultaneously).
-- **DAEM-01**: Standalone native background session daemon (independent of `tmux`) for headless detach/reattach.
+- [ ] **THM-01**: Native zero-lock-in compatibility with [`mbadolato/iterm2-color-schemes`](https://github.com/mbadolato/iterm2-color-schemes) (`.itermcolors` Apple XML plist parser extracting ANSI 0–15, Foreground, Background, Bold, Cursor, Cursor Text, Selection, Selected Text, Badge, and Link colors) alongside open TOML/YAML/JSON theme importers (Alacritty, WezTerm, Ghostty, Base16/Base24, and Bilterm native `[theme.custom]`), automatically synthesizing cohesive Borland Turbo Vision borders, drop shadows, floating prompt, and 3270 OIA status bar palettes (`Phase 31`).
+- [ ] **THM-02**: Live theme & font profile management (`:theme import <file_or_dir>`, `:theme <name>`, `Ctrl+P` Fuzzy Palette preview, auto-discovery from `~/.config/bilterm/themes/` and `~/.config/iterm2/colors/`) allowing themes to pair 24-bit color schemes with per-session or per-pane font family, size, and CRT shader preferences (`Phase 31`).
+
+### Persistent `herdr`-Style Background Daemon, Session Trees, Crash Recovery & TRON `MCP` Root Console (`Phases 32–34`)
+
+- [ ] **DAEM-01**: Persistent `herdr`-style background multiplexer daemon (`bilterm daemon` / auto-spawned background server over `0700`/`0600` Unix domain socket) hosting all PTYs, `VtWorkerHandle` state machines, scrollback buffers, and session trees independently of any UI client process (`Phase 32`).
+- [ ] **DAEM-02**: Multi-client attach, detach, disconnect, and reconnect at will (`bilterm attach [session]`, `bilterm detach`, `bilterm ls`, and seamless `Bilterm.app` / `bilterm --gui` + TUI simultaneous multi-seat or independent-session connections) (`Phase 32`).
+- [ ] **TREE-01**: Independent, Rooted, and Hierarchical Tree/Subtree session model allowing sessions to exist as independent workspaces, rooted daemon sessions, or nested parent/child session trees & subtrees (`:session tree`, `:session branch <parent>/<child>`, `:session graft <src> <dst>`, collapsible tree nodes in the `Herdr` Drawer) (`Phase 33`).
+- [ ] **TREE-02**: Subtree-scoped operations (subtree broadcast input, subtree search, subtree `.cast` recording, and subtree status rollup badges in the `Herdr` Drawer and `MCP` root console) (`Phase 33`).
+- [ ] **PERS-01**: Continuous crash-safe atomic session layout & state journaling (`~/.local/state/bilterm/journal/`) persisting session trees, H/V BSP split ratios, Z-order stack coordinates, floating prompt geometry/mode, per-pane working directories (`OSC 7` / OS CWD probe), command history, and scrollback tail (`Phase 33`).
+- [ ] **PERS-02**: Automatic layout and session tree restoration after crash, system reboot, intentional exit/restart, or new client attachment (`herdr`-style session resurrection) (`Phase 33`).
+- [ ] **MCP-01**: Dedicated Root Terminal interfacing to the overall background daemon — the **Master Control Program (`MCP`)** (classic TRON homage; accessible via `bilterm --mcp-console`, `:mcp`, or `◈ ROOT [MCP]` in the `Herdr` Drawer) that never kills the daemon when closed (`Phase 34`).
+- [ ] **MCP-02**: TRON-inspired `MCP` control-plane commands and live system grid monitor (`mcp status`, `mcp tree`, `mcp attach`, `mcp spawn`, `mcp graft`, `mcp broadcast`, `mcp freeze`/`thaw`, `mcp derez <session|pane>`, `mcp checkpoint`, `mcp shutdown --confirm`) with optional TRON Red/Cyan/Gold grid theme (`Phase 34`).
 
 ## Out of Scope
 
@@ -149,13 +162,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FONT-01 | Phase 25 | Complete |
 | TEK-01 | Phase 26 | Complete |
 | CANV-01 | Phase 26 | Complete |
+| CANV-02 | Phase 27 | Complete |
+| SSH-GFX-01 | Phase 27 | Complete |
+| CLI-GFX-01 | Phase 27 | Complete |
+| SCRL-01 | Phase 29 | Planned |
+| SCRL-02 | Phase 29 | Planned |
+| SAFE-01 | Phase 30 | Planned |
+| SAFE-02 | Phase 30 | Planned |
+| THM-01 | Phase 31 | Planned |
+| THM-02 | Phase 31 | Planned |
+| DAEM-01 | Phase 32 | Planned |
+| DAEM-02 | Phase 32 | Planned |
+| TREE-01 | Phase 33 | Planned |
+| TREE-02 | Phase 33 | Planned |
+| PERS-01 | Phase 33 | Planned |
+| PERS-02 | Phase 33 | Planned |
+| MCP-01 | Phase 34 | Planned |
+| MCP-02 | Phase 34 | Planned |
 
 **Coverage:**
 
-- v1 requirements: 41 total
-- Mapped to phases: 41
+- Total tracked requirements: 58 total
+- Mapped to phases: 58 (44 Complete, 14 Planned in Phases 29–34)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-10-23 for Phases 24–26 (Slide-Out Drawer, Dynamic Font Scaling & Tektronix/Modern Graphical Canvas)*
+*Last updated: 2026-10-27 for Milestone v2.0 Phases 29–34 (Smooth/Block-Page Scrolling, Exit Guard, iTerm2 Color Schemes, Herdr Background Daemon, Session Trees & Crash Recovery, and TRON Master Control Program Root Console)*
