@@ -1,6 +1,6 @@
 # Bilterm Engineering & Architecture Lessons Learned (`v0.1` → `v2.0`)
 
-> **Scope:** A living engineering retrospective distilled from building **Bilterm** across 29 phases (`v0.1.0` through `v2.0` Phase 29) and live interactive debugging sessions on macOS, Linux, and Windows.
+> **Scope:** A living engineering retrospective distilled from building **Bilterm** across 29 phases (`v0.1.0` through `v2.0` Phase 29) and live interactive debugging sessions on macOS, Linux, and Windows. See also the companion **[`docs/LESSONS_LEARNED_LINUX.md`](LESSONS_LEARNED_LINUX.md)** sourced from the Linux X11/Xft & POSIX session.
 
 ---
 
