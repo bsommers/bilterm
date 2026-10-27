@@ -178,13 +178,38 @@ impl SplitTree {
         row: u16,
         area: Rect,
     ) -> bool {
-        Self::set_ratio_at_point_recursive(&mut self.root, target_pane, target_dir, col, row, area)
+        Self::set_ratio_at_point_recursive(&mut self.root, target_pane, target_dir, None, col, row, area)
+    }
+
+    /// Updates the split ratio (`10%..=90%`) of the ancestor split divider corresponding to a specific
+    /// border of `target_pane`:
+    /// - `pane_in_second = false`: Right (`Vertical`) or Bottom (`Horizontal`) border (`target_pane` is in `first`).
+    /// - `pane_in_second = true`: Left (`Vertical`) or Top (`Horizontal`) border (`target_pane` is in `second`).
+    pub fn set_split_ratio_for_border(
+        &mut self,
+        target_pane: PaneId,
+        target_dir: SplitDirection,
+        pane_in_second: bool,
+        col: u16,
+        row: u16,
+        area: Rect,
+    ) -> bool {
+        Self::set_ratio_at_point_recursive(
+            &mut self.root,
+            target_pane,
+            target_dir,
+            Some(pane_in_second),
+            col,
+            row,
+            area,
+        )
     }
 
     fn set_ratio_at_point_recursive(
         node: &mut SplitNode,
         target_pane: PaneId,
         target_dir: SplitDirection,
+        want_in_second: Option<bool>,
         col: u16,
         row: u16,
         area: Rect,
@@ -218,6 +243,7 @@ impl SplitTree {
                         first,
                         target_pane,
                         target_dir,
+                        want_in_second,
                         col,
                         row,
                         chunks[0],
@@ -230,6 +256,7 @@ impl SplitTree {
                         second,
                         target_pane,
                         target_dir,
+                        want_in_second,
                         col,
                         row,
                         chunks[1],
@@ -237,14 +264,20 @@ impl SplitTree {
                 {
                     return true;
                 }
-                if *direction == target_dir {
+                let side_matches = match want_in_second {
+                    Some(true) => in_second,
+                    Some(false) => in_first,
+                    None => true,
+                };
+                if *direction == target_dir && side_matches {
+                    let add_one = u16::from(in_first && want_in_second == Some(false));
                     let pct = match direction {
                         SplitDirection::Vertical => {
-                            let rel = col.saturating_sub(area.x);
+                            let rel = col.saturating_add(add_one).saturating_sub(area.x);
                             ((u32::from(rel) * 100) / u32::from(area.width.max(1))) as i32
                         }
                         SplitDirection::Horizontal => {
-                            let rel = row.saturating_sub(area.y);
+                            let rel = row.saturating_add(add_one).saturating_sub(area.y);
                             ((u32::from(rel) * 100) / u32::from(area.height.max(1))) as i32
                         }
                     };

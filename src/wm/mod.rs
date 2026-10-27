@@ -90,7 +90,7 @@ pub struct WindowManager {
     fleet: FleetRegistry,
     next_pane_id: PaneId,
     headless_mode: bool,
-    default_size: (u16, u16),
+    pub(crate) default_size: (u16, u16),
     /// Dynamic scrollback budget governor (`[scrollback]`).
     scrollback: ScrollbackGovernor,
     /// Whole-workspace Asciicast v2 (`.cast`) compositor frame recorder (`REC-02`).
@@ -107,6 +107,8 @@ pub struct WindowManager {
     pub(crate) drawer: WorkspaceDrawer,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
+    /// Scale percentage at which `default_size` viewport was computed (`100` by default).
+    pub(crate) viewport_scale_pct: u16,
 }
 
 impl WindowManager {
@@ -156,6 +158,7 @@ impl WindowManager {
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
             wm_mouse_drag: None,
+            viewport_scale_pct: 100,
         }
     }
 
@@ -502,11 +505,13 @@ impl WindowManager {
             )?
         };
         Self::attach_history(&mut new_pane, &self.config.history_settings());
+        new_pane.font_options_mut().scale_pct = Some(100);
 
         self.panes.insert(new_id, new_pane);
         self.split_tree.split_leaf(target_id, new_id, direction);
         self.z_stack.push(new_id);
         self.zoomed_pane = None;
+        self.sync_config_scale_from_active_pane();
         self.rebalance_scrollback(Instant::now());
         Ok(new_id)
     }
@@ -637,7 +642,9 @@ impl WindowManager {
     pub fn focus_and_raise(&mut self, pane_id: PaneId) -> bool {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
-            self.z_stack.raise(pane_id)
+            let changed = self.z_stack.raise(pane_id);
+            self.sync_config_scale_from_active_pane();
+            changed
         } else {
             false
         }
@@ -646,13 +653,17 @@ impl WindowManager {
     /// Shuffles the pane deck top-to-bottom (`Alt+Tab` / `F6` / `:deck next`, `WM-02`).
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.z_stack.shuffle_top_to_bottom()
+        let top = self.z_stack.shuffle_top_to_bottom();
+        self.sync_config_scale_from_active_pane();
+        top
     }
 
     /// Shuffles the pane deck bottom-to-top (`Alt+Shift+Tab` / `:deck prev`, `WM-02`).
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.z_stack.shuffle_bottom_to_top()
+        let top = self.z_stack.shuffle_bottom_to_top();
+        self.sync_config_scale_from_active_pane();
+        top
     }
 
     /// Toggles zoom/maximize on the currently focused workspace pane (`F5` / `Alt+Z` / `:zoom`, `WM-03`).
@@ -697,14 +708,20 @@ impl WindowManager {
                 self.z_stack
                     .order()
                     .iter()
-                    .filter_map(|id| rect_map.get(id).copied().map(|r| (*id, r)))
+                    .filter_map(|id| {
+                        rect_map
+                            .get(id)
+                            .copied()
+                            .map(|r| (*id, self.z_stack.apply_tiled_rect(*id, r)))
+                    })
                     .collect()
             }
             WorkspaceLayoutMode::Stacked => self.z_stack.compute_cascade_rects(area),
         }
     }
 
-    /// Resizes all visible panes' viewports to match `area`.
+    /// Resizes all visible panes' viewports to match `area`, scaling each pane's `(rows, cols)`
+    /// inversely by its per-pane font scale so larger fonts have fewer cols/rows and smaller fonts have more.
     pub fn resize_all(&mut self, area: Rect) -> Result<()> {
         self.default_size = (area.height.max(1), area.width.max(1));
         let framed = self.is_framed();
@@ -715,8 +732,9 @@ impl WindowManager {
             } else {
                 rect
             };
+            let scaled_inner = self.pane_scaled_inner_rect(id, inner);
             if let Some(pane) = self.panes.get_mut(&id) {
-                pane.resize_viewport(inner)?;
+                pane.resize_viewport(scaled_inner)?;
             }
         }
         if self.quick_terminal.visible {

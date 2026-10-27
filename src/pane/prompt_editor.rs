@@ -675,11 +675,11 @@ impl FloatingPromptState {
             (self.fuzzy_search.matches.len().min(4) as u16 + 3).max(self.height)
         } else if self.completion.is_active() {
             // Command lines + 1 completion bar row + running banner + 2 border rows
-            (self.lines.len() as u16 + 3 + running_extra).clamp(self.height.max(4), 12)
+            (self.lines.len() as u16 + 3 + running_extra).clamp(self.height.clamp(4, 12), 12)
         } else {
-            (self.lines.len() as u16 + 2 + running_extra).clamp(self.height, 12)
+            (self.lines.len() as u16 + 2 + running_extra).clamp(self.height.min(12), 12)
         };
-        content_rows.clamp(3, canvas_height.max(1)).min(canvas_height)
+        content_rows.clamp(3, canvas_height.max(3)).min(canvas_height)
     }
 
     /// Scrolls the command prompt's multi-line viewport up by `rows`.

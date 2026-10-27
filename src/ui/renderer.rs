@@ -163,6 +163,9 @@ pub struct GuiGlyphRun {
     pub col: u16,
     pub x_px: f32,
     pub y_px: f32,
+    pub cell_width_px: u16,
+    pub cell_height_px: u16,
+    pub font_size_pt: u16,
     pub text: String,
     pub fg_rgba: [u8; 4],
     pub bold: bool,
@@ -278,9 +281,11 @@ impl GuiFrameSurface {
             }
             let x0 = (g.x_px.max(0.0) as u32).min(w_px);
             let y0 = (g.y_px.max(0.0) as u32).min(h_px);
+            let g_cw = u32::from(g.cell_width_px.max(4)).max(cw.min(4));
+            let g_ch = u32::from(g.cell_height_px.max(8)).max(ch.min(8));
             let glyph = g.text.chars().next().unwrap_or(' ');
             crate::ui::bitmap_font::rasterize_glyph_cell(
-                &mut fb, w_px, h_px, x0, y0, cw, ch, glyph, g.fg_rgba, g.bold,
+                &mut fb, w_px, h_px, x0, y0, g_cw, g_ch, glyph, g.fg_rgba, g.bold,
             );
         }
 
@@ -371,12 +376,22 @@ impl GuiFrameSurface {
             let [r, gr, b, _] = g.fg_rgba;
             let weight = if g.bold { "bold" } else { "normal" };
             let style = if g.italic { "italic" } else { "normal" };
+            let g_font_size = if g.font_size_pt > 0 {
+                f32::from(g.font_size_pt)
+            } else {
+                font_size
+            };
+            let g_baseline = if g.cell_height_px > 0 {
+                (f32::from(g.cell_height_px) * 0.78).round()
+            } else {
+                baseline_offset
+            };
             let escaped = xml_escape(&g.text);
             let _ = writeln!(
                 svg,
-                r#"  <text x="{:.1}" y="{:.1}" font-family="'DejaVu Sans Mono','Droid Sans Mono for Powerline',monospace" font-size="{font_size}" font-weight="{weight}" font-style="{style}" fill="rgb({r},{gr},{b})">{escaped}</text>"#,
+                r#"  <text x="{:.1}" y="{:.1}" font-family="'DejaVu Sans Mono','Droid Sans Mono for Powerline',monospace" font-size="{g_font_size}" font-weight="{weight}" font-style="{style}" fill="rgb({r},{gr},{b})">{escaped}</text>"#,
                 ox + g.x_px + 0.5,
-                oy + g.y_px + baseline_offset
+                oy + g.y_px + g_baseline
             );
         }
 
@@ -468,6 +483,7 @@ impl GuiWorkspaceRenderer {
         height_px: u32,
     ) -> crate::error::Result<Rect> {
         let vp = self.viewport_for_pixel_window(wm, width_px, height_px);
+        wm.set_viewport_scale_pct(wm.config().font_scale_pct);
         wm.resize_all(vp)?;
         Ok(vp)
     }
@@ -483,10 +499,12 @@ impl GuiWorkspaceRenderer {
     ) {
         let eff_cw = eff_cw.max(4);
         let eff_ch = eff_ch.max(8);
+        let vp_scale = wm.viewport_scale_pct().clamp(50, 300);
+        let base_pt = wm.config().font_size_pt.clamp(6, 72);
         surface.viewport_cells = viewport;
         surface.cell_width_px = eff_cw;
         surface.cell_height_px = eff_ch;
-        surface.font_size_pt = wm.config().scaled_font_size_pt();
+        surface.font_size_pt = ((u32::from(base_pt) * u32::from(vp_scale) + 50) / 100).clamp(6, 72) as u16;
         surface.font_scale_pct = wm.config().font_scale_pct;
         surface.crt_scanlines = wm.config().crt_scanlines;
         surface.quads.clear();
@@ -502,48 +520,109 @@ impl GuiWorkspaceRenderer {
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
 
+        let top_off = u16::from(wm.config().show_top_menubar && viewport.height > 3);
+        let bot_off = u16::from(wm.config().show_dos_fkey_bar && viewport.height > 2 + top_off);
+        let ws_area = Rect::new(
+            viewport.x,
+            viewport.y + top_off,
+            viewport.width,
+            viewport.height.saturating_sub(top_off + bot_off).max(1),
+        );
+        let pane_rects = wm.compute_workspace_rects(ws_area);
+        let vp_scale = wm.viewport_scale_pct();
+        let can_scale_panes =
+            *wm.modal() == crate::wm::Modal::None && !wm.is_quick_terminal_visible();
+        let drawer_rect = wm.drawer_rect(ws_area);
+
+        let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
+            if !can_scale_panes || drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r)) {
+                return false;
+            }
+            for &(id, outer) in pane_rects.iter().rev() {
+                if crate::wm::rect_contains(outer, abs_c, abs_r) {
+                    return wm.pane_effective_scale_pct(id) != vp_scale;
+                }
+            }
+            false
+        };
+
+        let mut push_cell = |cell: &ratatui::buffer::Cell, r: u16, c: u16, x_px: f32, y_px: f32, w_f: f32, h_f: f32, cw_u: u16, ch_u: u16, pt: u16| {
+            let mut fg = ratatui_color_to_rgba(cell.fg, default_fg);
+            let mut bg = ratatui_color_to_rgba(cell.bg, default_bg);
+            if cell.modifier.contains(Modifier::REVERSED) {
+                std::mem::swap(&mut fg, &mut bg);
+            }
+            surface.quads.push(GuiQuadPrimitive { x_px, y_px, width_px: w_f, height_px: h_f, rgba: bg });
+            let underlined = cell.modifier.contains(Modifier::UNDERLINED);
+            if underlined {
+                surface.quads.push(GuiQuadPrimitive { x_px, y_px: y_px + h_f - 2.0, width_px: w_f, height_px: 1.0, rgba: fg });
+            }
+            let sym = cell.symbol();
+            if !sym.is_empty() && sym != " " {
+                surface.glyphs.push(GuiGlyphRun {
+                    row: r, col: c, x_px, y_px, cell_width_px: cw_u, cell_height_px: ch_u, font_size_pt: pt,
+                    text: sym.to_string(), fg_rgba: fg, bold: cell.modifier.contains(Modifier::BOLD),
+                    italic: cell.modifier.contains(Modifier::ITALIC), underlined,
+                });
+            }
+        };
+
         for r in 0..viewport.height {
             for c in 0..viewport.width {
-                let Some(cell) = cell_buf.cell((viewport.x + c, viewport.y + r)) else {
+                let (abs_c, abs_r) = (viewport.x + c, viewport.y + r);
+                if cell_in_scaled_pane(abs_c, abs_r) {
                     continue;
-                };
-                let mut fg = ratatui_color_to_rgba(cell.fg, default_fg);
-                let mut bg = ratatui_color_to_rgba(cell.bg, default_bg);
-                if cell.modifier.contains(Modifier::REVERSED) {
-                    std::mem::swap(&mut fg, &mut bg);
                 }
-                let x_px = f32::from(c) * cw;
-                let y_px = f32::from(r) * ch;
-                surface.quads.push(GuiQuadPrimitive {
-                    x_px,
-                    y_px,
-                    width_px: cw,
-                    height_px: ch,
-                    rgba: bg,
-                });
-                let sym = cell.symbol();
-                let underlined = cell.modifier.contains(Modifier::UNDERLINED);
-                if underlined {
-                    surface.quads.push(GuiQuadPrimitive {
-                        x_px,
-                        y_px: y_px + ch - 2.0,
-                        width_px: cw,
-                        height_px: 1.0,
-                        rgba: fg,
-                    });
+                if let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
+                    push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
                 }
-                if !sym.is_empty() && sym != " " {
-                    surface.glyphs.push(GuiGlyphRun {
-                        row: r,
-                        col: c,
-                        x_px,
-                        y_px,
-                        text: sym.to_string(),
-                        fg_rgba: fg,
-                        bold: cell.modifier.contains(Modifier::BOLD),
-                        italic: cell.modifier.contains(Modifier::ITALIC),
-                        underlined,
-                    });
+            }
+        }
+
+        if can_scale_panes {
+            let (framed, top_id, glyphs_set) = (wm.is_framed(), wm.z_stack().top(), wm.config().glyph_set());
+            for (idx, &(id, outer)) in pane_rects.iter().enumerate() {
+                let pane_scale = wm.pane_effective_scale_pct(id);
+                if pane_scale == vp_scale {
+                    continue;
+                }
+                let Some(pane) = wm.pane(id) else { continue };
+                let scaled_outer = wm.pane_scaled_outer_rect(id, outer);
+                let local_outer = Rect::new(0, 0, scaled_outer.width.max(1), scaled_outer.height.max(1));
+                let mut pane_buf = Buffer::empty(local_outer);
+                let is_active = top_id == Some(id);
+                if framed {
+                    let z_badge = wm.z_stack().rank_of(id).map(|(rk, tot)| format!("Z:{rk}/{tot}")).unwrap_or_default();
+                    let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
+                    crate::ui::chrome::render_borland_frame_styled(
+                        local_outer, &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title()),
+                        is_active, wm.config().window_outline, &palette, &glyphs_set, &mut pane_buf,
+                    );
+                    let local_inner = crate::wm::inset_window_frame(local_outer);
+                    crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config()).render(local_inner, &mut pane_buf);
+                } else {
+                    crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config()).render(local_outer, &mut pane_buf);
+                }
+                let pane_x0 = f32::from(outer.x.saturating_sub(viewport.x)) * cw;
+                let pane_y0 = f32::from(outer.y.saturating_sub(viewport.y)) * ch;
+                let pane_cw_f = (f32::from(outer.width) * cw) / f32::from(local_outer.width.max(1));
+                let pane_ch_f = (f32::from(outer.height) * ch) / f32::from(local_outer.height.max(1));
+                let (pane_cw_u16, pane_ch_u16) = (pane_cw_f.round().clamp(4.0, 64.0) as u16, pane_ch_f.round().clamp(8.0, 128.0) as u16);
+                let pane_pt = ((u32::from(wm.config().font_size_pt.clamp(6, 72)) * u32::from(pane_scale) + 50) / 100).clamp(6, 72) as u16;
+                for sr in 0..local_outer.height {
+                    for sc in 0..local_outer.width {
+                        let (x_px, y_px) = (pane_x0 + f32::from(sc) * pane_cw_f, pane_y0 + f32::from(sr) * pane_ch_f);
+                        let abs_c = viewport.x + ((x_px + pane_cw_f * 0.5) / cw) as u16;
+                        let abs_r = viewport.y + ((y_px + pane_ch_f * 0.5) / ch) as u16;
+                        if drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r))
+                            || pane_rects[idx + 1..].iter().any(|&(_, higher)| crate::wm::rect_contains(higher, abs_c, abs_r))
+                        {
+                            continue;
+                        }
+                        if let Some(cell) = pane_buf.cell((sc, sr)) {
+                            push_cell(cell, sr, sc, x_px, y_px, pane_cw_f, pane_ch_f, pane_cw_u16, pane_ch_u16, pane_pt);
+                        }
+                    }
                 }
             }
         }

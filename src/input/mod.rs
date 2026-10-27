@@ -703,4 +703,42 @@ mod tests {
             .unwrap();
         assert!(wm.is_help_visible());
     }
+
+    #[test]
+    fn leader_ctrl_minus_zooms_font_and_repeated_splits_do_not_panic() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        assert_eq!(wm.config().font_scale_pct, 100);
+
+        // Ctrl+X followed by Ctrl+- zooms font out repeatedly without panicking
+        for _ in 0..8 {
+            handle_wm_key_event(
+                &mut wm,
+                KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            )
+            .unwrap();
+            handle_wm_key_event(
+                &mut wm,
+                KeyEvent::new(KeyCode::Char('-'), KeyModifiers::CONTROL),
+            )
+            .unwrap();
+        }
+        assert_eq!(wm.config().font_scale_pct, 50);
+
+        // Repeated horizontal splits (Ctrl+X then '-') shrinking panes below 3 rows must not panic
+        for _ in 0..12 {
+            handle_wm_key_event(
+                &mut wm,
+                KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+            )
+            .unwrap();
+            handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE))
+                .unwrap();
+            wm.resize_all(ratatui::layout::Rect::new(0, 0, 80, 24))
+                .unwrap();
+        }
+        for pane in wm.panes().values() {
+            let _ = pane.prompt_rect(ratatui::layout::Rect::new(0, 0, 80, 1));
+            let _ = pane.prompt_rect(ratatui::layout::Rect::new(0, 0, 80, 2));
+        }
+    }
 }

@@ -17,8 +17,7 @@ use ratatui::layout::Rect;
 
 use crate::app::App;
 use crate::error::Result;
-#[cfg(not(windows))]
-use crate::ui::renderer::WorkspaceFrameRenderer;
+#[cfg(windows)]
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
 
 /// Converts an RGBA `[R, G, B, A]` pixel buffer into a 32-bit `0x00RRGGBB` (`[B, G, R, 255]` in
@@ -609,15 +608,7 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
 /// Runs Bilterm in standalone GUI mode on Unix platforms (`Linux` / `macOS`).
 #[cfg(not(windows))]
 pub fn run_native_gui_window(app: App) -> Result<()> {
-    let mut renderer = GuiWorkspaceRenderer::new(
-        app.wm.config().cell_width_px.max(8),
-        app.wm.config().cell_height_px.max(16),
-    );
-    let mut surface = GuiFrameSurface::new(renderer.cell_width_px, renderer.cell_height_px);
-    renderer.render_workspace(&app.wm, app.last_viewport, &mut surface);
-    let _ = surface.rasterize_rgba();
-    let _ = crate::launcher::ensure_terminal_or_relaunch(&[])?;
-    Ok(())
+    crate::ui::gui_font::linux_x11::run_x11_gui_window(app)
 }
 
 #[cfg(test)]

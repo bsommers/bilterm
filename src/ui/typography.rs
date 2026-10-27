@@ -75,14 +75,100 @@ pub fn render_double_width_row(
 }
 
 impl WindowManager {
-    /// Applies the current font scale to the active pane's OIA status bar and queues an `OSC 50`
-    /// host-terminal font passthrough sequence when `config.host_font_passthrough` is enabled (`FONT-01`).
+    /// Returns the scale percentage at which the workspace's outer viewport was computed (`100` by default).
+    pub fn viewport_scale_pct(&self) -> u16 {
+        self.viewport_scale_pct.clamp(50, 400)
+    }
+
+    /// Sets the scale percentage at which the workspace's outer viewport was computed.
+    pub fn set_viewport_scale_pct(&mut self, pct: u16) {
+        self.viewport_scale_pct = pct.clamp(50, 400);
+    }
+
+    /// Returns the effective font scale percentage (`50..=400`) for pane `id` (independent per pane).
+    pub fn pane_effective_scale_pct(&self, id: usize) -> u16 {
+        let Some(pane) = self.pane(id) else {
+            return self.config().font_scale_pct.clamp(50, 400);
+        };
+        let opts = pane.font_options();
+        let base_pt = self.config().font_size_pt.clamp(6, 72);
+        let pct = opts.scale_pct.unwrap_or(100).clamp(50, 400);
+        if let Some(custom_pt) = opts.size_pt {
+            let eff_pt = opts.effective_size_pt_with_defaults(custom_pt, pct);
+            ((u32::from(eff_pt) * 100 + u32::from(base_pt) / 2) / u32::from(base_pt)).clamp(50, 400)
+                as u16
+        } else if self.panes().len() == 1 && opts.scale_pct.is_none() {
+            self.config().font_scale_pct.clamp(50, 400)
+        } else {
+            pct
+        }
+    }
+
+    /// Scales a pane's `inner` character rect inversely by `pane_effective_scale_pct(id)` relative
+    /// to `viewport_scale_pct()` so zooming a pane's font changes that pane's terminal screen `(rows, cols)`.
+    pub fn pane_scaled_inner_rect(&self, id: usize, inner: Rect) -> Rect {
+        let vp_scale = u32::from(self.viewport_scale_pct());
+        let pane_scale = u32::from(self.pane_effective_scale_pct(id));
+        if pane_scale == vp_scale {
+            return inner;
+        }
+        let w = ((u32::from(inner.width) * vp_scale + pane_scale / 2) / pane_scale).clamp(4, 500)
+            as u16;
+        let h = ((u32::from(inner.height) * vp_scale + pane_scale / 2) / pane_scale).clamp(2, 200)
+            as u16;
+        Rect::new(inner.x, inner.y, w, h)
+    }
+
+    /// Scales a pane's `outer` bounding rect so `inset_window_frame(scaled_outer)` matches `pane_scaled_inner_rect` (`FONT-01`).
+    pub fn pane_scaled_outer_rect(&self, id: usize, outer: Rect) -> Rect {
+        let vp_scale = u32::from(self.viewport_scale_pct());
+        let pane_scale = u32::from(self.pane_effective_scale_pct(id));
+        if pane_scale == vp_scale {
+            return outer;
+        }
+        if self.is_framed() {
+            let scaled_inner = self.pane_scaled_inner_rect(id, crate::wm::inset_window_frame(outer));
+            Rect::new(
+                outer.x,
+                outer.y,
+                scaled_inner.width.saturating_add(2),
+                scaled_inner.height.saturating_add(2),
+            )
+        } else {
+            self.pane_scaled_inner_rect(id, outer)
+        }
+    }
+
+    /// Synchronizes `config.font_scale_pct` with the focused pane's independent scale percentage.
+    pub fn sync_config_scale_from_active_pane(&mut self) {
+        let pct = self.pane_effective_scale_pct(self.active_pane_id());
+        self.config_mut().font_scale_pct = pct.clamp(50, 300);
+    }
+
+    fn pin_other_panes_default_scale(&mut self) {
+        let active_id = self.active_pane_id();
+        for (&id, pane) in self.panes_mut().iter_mut() {
+            if id != active_id && pane.font_options().scale_pct.is_none() {
+                pane.font_options_mut().scale_pct = Some(100);
+            }
+        }
+    }
+
+    /// Applies the current font scale to the active pane's OIA status bar, resizes its PTY/VT screen
+    /// grid to match the new font scale, and queues an `OSC 50` host-terminal font passthrough sequence (`FONT-01`).
     fn notify_font_scale_changed(&mut self) -> String {
+        let active_id = self.active_pane_id();
+        let pct = self.pane_effective_scale_pct(active_id);
+        self.config_mut().font_scale_pct = pct.clamp(50, 300);
         let pt = self.config().scaled_font_size_pt();
-        let pct = self.config().font_scale_pct;
         let (cw, ch) = self.config().scaled_cell_dimensions_px();
         let passthrough = self.config().host_font_passthrough;
-        let msg = format!("FONT SIZE: {pt}pt ({pct}%) [cell {cw}x{ch}px]");
+        let (rows, cols) = self.default_size;
+        let _ = self.resize_all(Rect::new(0, 0, cols.max(1), rows.max(1)));
+        let (vt_rows, vt_cols) = self.active_pane().vt().size();
+        let msg = format!(
+            "PANE #{active_id} FONT SIZE: {pt}pt ({pct}%) [cell {cw}x{ch}px, screen {vt_cols}x{vt_rows}]"
+        );
         let pane = self.active_pane_mut();
         if passthrough {
             pane.set_last_osc52_sequence(Some(encode_host_font_passthrough(pt, pct)));
@@ -91,27 +177,44 @@ impl WindowManager {
         msg
     }
 
-    /// Increases workspace font scale by `+10%` (`Ctrl++` / `Ctrl+=` / `:fontsize +`) (`FONT-01`).
+    /// Increases the active pane's font scale by `+10%` (`Ctrl++` / `Ctrl+=` / `:fontsize +`) (`FONT-01`).
     pub fn font_zoom_in(&mut self) -> String {
-        self.config_mut().step_font_scale(10);
+        self.pin_other_panes_default_scale();
+        let cur = self.pane_effective_scale_pct(self.active_pane_id());
+        let next = (cur + 10).clamp(50, 300);
+        self.active_pane_mut().font_options_mut().scale_pct = Some(next);
+        self.config_mut().font_scale_pct = next;
         self.notify_font_scale_changed()
     }
 
-    /// Decreases workspace font scale by `-10%` (`Ctrl+-` / `:fontsize -`) (`FONT-01`).
+    /// Decreases the active pane's font scale by `-10%` (`Ctrl+-` / `:fontsize -`) (`FONT-01`).
     pub fn font_zoom_out(&mut self) -> String {
-        self.config_mut().step_font_scale(-10);
+        self.pin_other_panes_default_scale();
+        let cur = self.pane_effective_scale_pct(self.active_pane_id());
+        let next = cur.saturating_sub(10).clamp(50, 300);
+        self.active_pane_mut().font_options_mut().scale_pct = Some(next);
+        self.config_mut().font_scale_pct = next;
         self.notify_font_scale_changed()
     }
 
-    /// Resets workspace font scale to `100%` (`Ctrl+0` / `:fontsize reset`) (`FONT-01`).
+    /// Resets the active pane's font scale to `100%` (`Ctrl+0` / `:fontsize reset`) (`FONT-01`).
     pub fn font_zoom_reset(&mut self) -> String {
+        self.pin_other_panes_default_scale();
+        let opts = self.active_pane_mut().font_options_mut();
+        opts.scale_pct = Some(100);
+        opts.size_pt = None;
         self.config_mut().reset_font_scale();
         self.notify_font_scale_changed()
     }
 
-    /// Sets workspace font size in points (`6..=49`) or scale percentage (`50..=300`) (`:fontsize <val>`) (`FONT-01`).
+    /// Sets the active pane's font size in points (`6..=49`) or scale percentage (`50..=300`) (`:fontsize <val>`) (`FONT-01`).
     pub fn font_set_size(&mut self, value: u16) -> String {
+        self.pin_other_panes_default_scale();
         self.config_mut().set_font_size_or_scale(value);
+        let next = self.config().font_scale_pct;
+        let opts = self.active_pane_mut().font_options_mut();
+        opts.scale_pct = Some(next);
+        opts.size_pt = None;
         self.notify_font_scale_changed()
     }
 
@@ -144,6 +247,7 @@ impl WindowManager {
         let cols = (width_px / u32::from(cw.max(1))).clamp(20, 500) as u16;
         let rows = (height_px / u32::from(ch.max(1))).clamp(6, 200) as u16;
         let area = Rect::new(0, 0, cols, rows);
+        self.set_viewport_scale_pct(self.config().font_scale_pct);
         self.resize_all(area)?;
         Ok(area)
     }
@@ -200,6 +304,8 @@ impl WindowManager {
         if res.is_ok() {
             let opts = self.active_pane().font_options().clone();
             self.config_mut().font_family = opts.family.display_name().to_string();
+            let (rows, cols) = self.default_size;
+            let _ = self.resize_all(Rect::new(0, 0, cols.max(1), rows.max(1)));
         }
         res
     }
@@ -263,5 +369,108 @@ impl crate::pane::CompositePane {
                 Err(err)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use ratatui::layout::Rect;
+
+    use crate::input::{handle_wm_key_event, handle_wm_mouse_event};
+    use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
+    use crate::wm::WindowManager;
+    use crate::wm::split_tree::SplitDirection;
+
+    #[test]
+    fn per_pane_font_zoom_scales_screen_and_glyphs_independently_including_nmon_raw_pane() {
+        let mut wm = WindowManager::new_headless(40, 120);
+        let vp = Rect::new(0, 0, 120, 40);
+        wm.resize_all(vp).unwrap();
+        // 3-way split: left = p1, top-right = p2 (nmon), bottom-right = p3
+        let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
+        let p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
+        wm.resize_all(vp).unwrap();
+        let p1 = 1;
+
+        // Put top-right pane (p2) into DECSET 1049 ALT_SCREEN + !ECHO (simulating `nmon`)
+        wm.focus_and_raise(p2);
+        wm.active_pane_mut().process_pty_output(b"\x1b[?1049hNMON_TOP_RIGHT");
+        wm.active_pane_mut().line_discipline_mut().echo_enabled = false;
+        wm.active_pane_mut().line_discipline_mut().canonical_mode = false;
+
+        let p1_initial = wm.pane(p1).unwrap().vt().size();
+        let p2_initial = wm.pane(p2).unwrap().vt().size();
+        let p3_initial = wm.pane(p3).unwrap().vt().size();
+
+        // Press Ctrl++ twice on the active `nmon` pane (p2)
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('+'), KeyModifiers::CONTROL)).unwrap();
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('='), KeyModifiers::CONTROL)).unwrap();
+
+        assert_eq!(wm.pane_effective_scale_pct(p1), 100);
+        assert_eq!(wm.pane_effective_scale_pct(p2), 120);
+        assert_eq!(wm.pane_effective_scale_pct(p3), 100);
+        assert_eq!(wm.pane(p1).unwrap().vt().size(), p1_initial);
+        assert_eq!(wm.pane(p3).unwrap().vt().size(), p3_initial);
+        let p2_zoomed = wm.pane(p2).unwrap().vt().size();
+        assert!(p2_zoomed.0 < p2_initial.0 && p2_zoomed.1 < p2_initial.1);
+
+        // Press Ctrl+- three times on `nmon` pane (p2) -> 90% (more rows & cols than initial)
+        for _ in 0..3 {
+            handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('-'), KeyModifiers::CONTROL)).unwrap();
+        }
+        assert_eq!(wm.pane_effective_scale_pct(p2), 90);
+        let p2_shrunk = wm.pane(p2).unwrap().vt().size();
+        assert!(p2_shrunk.0 > p2_initial.0 && p2_shrunk.1 > p2_initial.1);
+
+        // Render GUI workspace and verify p2 emits scaled font_size_pt while p1 stays at base pt
+        let mut renderer = GuiWorkspaceRenderer::new(10, 20);
+        let mut surface = GuiFrameSurface::new(10, 20);
+        renderer.render_workspace_with_cell_size(&wm, vp, 10, 20, &mut surface);
+        let base_pt = wm.config().font_size_pt;
+        let scaled_pt = ((u32::from(base_pt) * 90 + 50) / 100) as u16;
+        assert!(surface.glyphs.iter().any(|g| g.x_px < 500.0 && g.font_size_pt == base_pt));
+        assert!(surface.glyphs.iter().any(|g| g.x_px > 650.0 && g.y_px < 350.0 && g.font_size_pt == scaled_pt));
+    }
+
+    #[test]
+    fn all_pane_frame_borders_and_corners_resize_in_three_pane_layout() {
+        let mut wm = WindowManager::new_headless(40, 120);
+        let vp = Rect::new(0, 0, 120, 40);
+        wm.resize_all(vp).unwrap();
+        let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
+        let p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
+        wm.resize_all(vp).unwrap();
+        let p1 = 1;
+
+        let rects0 = wm.compute_workspace_rects(vp);
+        let r2 = rects0.iter().find(|(id, _)| *id == p2).unwrap().1;
+        let r3 = rects0.iter().find(|(id, _)| *id == p3).unwrap().1;
+
+        // 1. Drag bottom-right corner of top-right pane (p2) straight down: grows p2 height without collapsing width!
+        let br_x = r2.x + r2.width - 1;
+        let br_y = r2.y + r2.height - 1;
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: br_x, row: br_y, modifiers: KeyModifiers::NONE }, vp).unwrap();
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Drag(MouseButton::Left), column: br_x, row: br_y + 8, modifiers: KeyModifiers::NONE }, vp).unwrap();
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Up(MouseButton::Left), column: br_x, row: br_y + 8, modifiers: KeyModifiers::NONE }, vp).unwrap();
+
+        let rects1 = wm.compute_workspace_rects(vp);
+        let r2_after = rects1.iter().find(|(id, _)| *id == p2).unwrap().1;
+        assert_eq!(r2_after.width, r2.width, "vertical split must not collapse when dragging BottomRight straight down");
+        assert!(r2_after.height > r2.height, "top-right pane height must grow");
+
+        // 2. Drag top border of bottom-right pane (p3) upward: grows p3 without swapping panes
+        let r3_cur = rects1.iter().find(|(id, _)| *id == p3).unwrap().1;
+        let mid_col = r3_cur.x + r3_cur.width / 2;
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: mid_col, row: r3_cur.y, modifiers: KeyModifiers::NONE }, vp).unwrap();
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Drag(MouseButton::Left), column: mid_col, row: r3.y - 4, modifiers: KeyModifiers::NONE }, vp).unwrap();
+        handle_wm_mouse_event(&mut wm, MouseEvent { kind: MouseEventKind::Up(MouseButton::Left), column: mid_col, row: r3.y - 4, modifiers: KeyModifiers::NONE }, vp).unwrap();
+
+        let rects2 = wm.compute_workspace_rects(vp);
+        let r2_final = rects2.iter().find(|(id, _)| *id == p2).unwrap().1;
+        let r3_final = rects2.iter().find(|(id, _)| *id == p3).unwrap().1;
+        let r1_final = rects2.iter().find(|(id, _)| *id == p1).unwrap().1;
+        assert!(r2_final.y < r3_final.y && r1_final.x < r2_final.x);
+        assert!(r3_final.height > r3.height);
     }
 }

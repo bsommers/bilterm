@@ -191,6 +191,7 @@ pub struct Win32GuiCanvas {
     hfont_bold: Hfont,
     hfont_italic: Hfont,
     hfont_bold_italic: Hfont,
+    scaled_fonts: std::collections::BTreeMap<(i32, bool, bool), Hfont>,
     loaded_paths: Vec<PathBuf>,
 }
 
@@ -225,6 +226,7 @@ impl Win32GuiCanvas {
             hfont_bold: null_mut(),
             hfont_italic: null_mut(),
             hfont_bold_italic: null_mut(),
+            scaled_fonts: std::collections::BTreeMap::new(),
             loaded_paths: Vec::new(),
         };
         let dpi = query_window_dpi(hwnd);
@@ -245,6 +247,13 @@ impl Win32GuiCanvas {
     }
 
     fn destroy_fonts(&mut self) {
+        for (_, h) in std::mem::take(&mut self.scaled_fonts) {
+            if !h.is_null() {
+                unsafe {
+                    let _ = DeleteObject(h);
+                }
+            }
+        }
         for h in [
             self.hfont_regular,
             self.hfont_bold,
@@ -277,7 +286,7 @@ impl Win32GuiCanvas {
             "Cascadia Mono".to_string()
         };
 
-        let eff_pt = wm.active_pane().font_options().effective_size_pt(wm.config());
+        let eff_pt = wm.config().font_size_pt.clamp(6, 72);
         let px_height = ((u32::from(eff_pt) * dpi + 36) / 72).clamp(11, 96) as i32;
 
         if desired_fam == self.active_family_req
@@ -487,14 +496,16 @@ impl Win32GuiCanvas {
                     continue;
                 };
                 if is_geometric_glyph(ch) {
+                    let gw = u32::from(g.cell_width_px.max(4)).max(cell_w.min(4));
+                    let gh = u32::from(g.cell_height_px.max(8)).max(cell_h.min(8));
                     draw_geometric_cell_bgra(
                         pixels,
                         fb_w,
                         fb_h,
                         g.x_px.max(0.0) as u32,
                         g.y_px.max(0.0) as u32,
-                        cell_w,
-                        cell_h,
+                        gw,
+                        gh,
                         ch,
                         g.fg_rgba,
                     );
@@ -503,13 +514,14 @@ impl Win32GuiCanvas {
         }
 
         // Pass 4: Hardware ClearType TrueType text rendering via GDI ExtTextOutW
+        let dpi = query_window_dpi(hwnd);
         unsafe {
             let _ = GdiFlush();
             let _ = SetBkMode(self.mem_dc, TRANSPARENT);
         }
         let cell_w_i = i32::from(surface.cell_width_px.max(4));
         let cell_h_i = i32::from(surface.cell_height_px.max(8));
-        let mut cur_font_key = (false, false);
+        let mut cur_font_key = (self.active_px_height, false, false);
         let mut old_font = unsafe { SelectObject(self.mem_dc, self.hfont_regular) };
         let mut utf16_buf: Vec<u16> = Vec::with_capacity(8);
 
@@ -520,13 +532,23 @@ impl Win32GuiCanvas {
             if ch == ' ' || is_geometric_glyph(ch) {
                 continue;
             }
-            let key = (g.bold, g.italic);
+            let g_px_h = ((u32::from(g.font_size_pt.max(6)) * dpi + 36) / 72).clamp(9, 96) as i32;
+            let key = (g_px_h, g.bold, g.italic);
             if key != cur_font_key {
-                let hf = match key {
-                    (false, false) => self.hfont_regular,
-                    (true, false) => self.hfont_bold,
-                    (false, true) => self.hfont_italic,
-                    (true, true) => self.hfont_bold_italic,
+                let hf = if g_px_h == self.active_px_height {
+                    match (g.bold, g.italic) {
+                        (false, false) => self.hfont_regular,
+                        (true, false) => self.hfont_bold,
+                        (false, true) => self.hfont_italic,
+                        (true, true) => self.hfont_bold_italic,
+                    }
+                } else if let Some(&cached) = self.scaled_fonts.get(&key) {
+                    cached
+                } else {
+                    let created = Self::create_gdi_font(&self.resolved_face_name, g_px_h, g.bold, g.italic);
+                    let use_hf = if !created.is_null() { created } else { self.hfont_regular };
+                    self.scaled_fonts.insert(key, use_hf);
+                    use_hf
                 };
                 if !hf.is_null() {
                     unsafe {
@@ -540,11 +562,13 @@ impl Win32GuiCanvas {
                 | (u32::from(g.fg_rgba[2]) << 16);
             let x = g.x_px.max(0.0) as i32;
             let y = g.y_px.max(0.0) as i32;
+            let gw_i = i32::from(g.cell_width_px.max(4)).max(cell_w_i.min(4));
+            let gh_i = i32::from(g.cell_height_px.max(8)).max(cell_h_i.min(8));
             let clip = WinRect {
                 left: x,
                 top: y,
-                right: x + cell_w_i * 2,
-                bottom: y + cell_h_i,
+                right: x + gw_i * 2,
+                bottom: y + gh_i,
             };
             utf16_buf.clear();
             utf16_buf.extend(g.text.encode_utf16());

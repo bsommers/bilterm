@@ -226,103 +226,30 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('8'), Action::FocusPane(8)),
     (KeyModifiers::ALT, KeyCode::Char('9'), Action::FocusPane(9)),
     // Dynamic terminal font & text scaling (FONT-01)
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('+'),
-        Action::FontZoomIn,
-    ),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('='),
-        Action::FontZoomIn,
-    ),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('-'),
-        Action::FontZoomOut,
-    ),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('0'),
-        Action::FontZoomReset,
-    ),
+    (KeyModifiers::CONTROL, KeyCode::Char('+'), Action::FontZoomIn),
+    (KeyModifiers::CONTROL, KeyCode::Char('='), Action::FontZoomIn),
+    (KeyModifiers::CONTROL, KeyCode::Char('-'), Action::FontZoomOut),
+    (KeyModifiers::CONTROL, KeyCode::Char('_'), Action::FontZoomOut),
+    (KeyModifiers::CONTROL, KeyCode::Char('\x1f'), Action::FontZoomOut),
+    (KeyModifiers::CONTROL, KeyCode::Char('0'), Action::FontZoomReset),
+    (KeyModifiers::CONTROL, KeyCode::Char(')'), Action::FontZoomReset),
     // Window / Pane resizing (Z-Stack floating geometry & Tiled split ratios)
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Left,
-        Action::PaneResize { dw: -4, dh: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Right,
-        Action::PaneResize { dw: 4, dh: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Up,
-        Action::PaneResize { dw: 0, dh: -2 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Down,
-        Action::PaneResize { dw: 0, dh: 2 },
-    ),
-    (
-        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
-        KeyCode::Left,
-        Action::PaneResize { dw: -4, dh: 0 },
-    ),
-    (
-        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
-        KeyCode::Right,
-        Action::PaneResize { dw: 4, dh: 0 },
-    ),
-    (
-        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
-        KeyCode::Up,
-        Action::PaneResize { dw: 0, dh: -2 },
-    ),
-    (
-        KeyModifiers::ALT.union(KeyModifiers::SHIFT),
-        KeyCode::Down,
-        Action::PaneResize { dw: 0, dh: 2 },
-    ),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Left, Action::PaneResize { dw: -4, dh: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Right, Action::PaneResize { dw: 4, dh: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Up, Action::PaneResize { dw: 0, dh: -2 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Down, Action::PaneResize { dw: 0, dh: 2 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Left, Action::PaneResize { dw: -4, dh: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Right, Action::PaneResize { dw: 4, dh: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Up, Action::PaneResize { dw: 0, dh: -2 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Down, Action::PaneResize { dw: 0, dh: 2 }),
     // Window / Pane moving (Z-Stack floating position & Tiled pane swap)
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
-        KeyCode::Left,
-        Action::PaneMove { dx: -4, dy: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
-        KeyCode::Right,
-        Action::PaneMove { dx: 4, dy: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
-        KeyCode::Up,
-        Action::PaneMove { dx: 0, dy: -2 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::SHIFT),
-        KeyCode::Down,
-        Action::PaneMove { dx: 0, dy: 2 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Char('h'),
-        Action::PaneMove { dx: -4, dy: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Char('l'),
-        Action::PaneMove { dx: 4, dy: 0 },
-    ),
-    (
-        KeyModifiers::CONTROL.union(KeyModifiers::ALT),
-        KeyCode::Char('k'),
-        Action::PaneMove { dx: 0, dy: -2 },
-    ),
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Left, Action::PaneMove { dx: -4, dy: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Right, Action::PaneMove { dx: 4, dy: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Up, Action::PaneMove { dx: 0, dy: -2 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Down, Action::PaneMove { dx: 0, dy: 2 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('h'), Action::PaneMove { dx: -4, dy: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('l'), Action::PaneMove { dx: 4, dy: 0 }),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('k'), Action::PaneMove { dx: 0, dy: -2 }),
     (
         KeyModifiers::CONTROL.union(KeyModifiers::ALT),
         KeyCode::Char('j'),
@@ -615,6 +542,12 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
         if c.eq_ignore_ascii_case(&'q') {
             return wm.apply(Action::Quit);
         }
+        match c {
+            '+' | '=' => return wm.apply(Action::FontZoomIn),
+            '-' | '_' => return wm.apply(Action::FontZoomOut),
+            '0' => return wm.apply(Action::FontZoomReset),
+            _ => {}
+        }
         if wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
             && matches!(c.to_ascii_lowercase(), 'x' | 'b' | 'a')
         {
@@ -679,6 +612,24 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
             "⌨ LEADER [{leader_label}]: \"/-=SplitH %/|=SplitV z=Zoom n/p/o=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
         )));
         return Ok(Some(AppAction::Handled));
+    }
+
+    // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`) and WM pane focus/resize chords
+    // even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`).
+    if let Some(action) = default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
+        && matches!(
+            action,
+            Action::FontZoomIn
+                | Action::FontZoomOut
+                | Action::FontZoomReset
+                | Action::PaneResize { .. }
+                | Action::PaneMove { .. }
+                | Action::FocusPane(_)
+                | Action::DeckNext
+                | Action::DeckPrev
+        )
+    {
+        return Ok(Some(wm.apply(action)?));
     }
 
     Ok(None)

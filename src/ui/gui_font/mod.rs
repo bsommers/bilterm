@@ -14,6 +14,9 @@ pub use geometric::*;
 #[cfg(windows)]
 pub mod win32_gdi;
 
+#[cfg(not(windows))]
+pub mod linux_x11;
+
 #[cfg(test)]
 mod tests {
     use super::*;

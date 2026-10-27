@@ -5,6 +5,23 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.12.0] - 2026-10-26
+
+### Added
+- **Native Linux/Unix X11 + Xft/Fontconfig Desktop GUI Window (`src/ui/gui_font/linux_x11.rs`, `src/ui/gui_font/mod.rs`, `src/ui/gui_window.rs`)**:
+  - Added runtime `dlopen`-loaded `libX11`, `libXft`, and `libfontconfig` native desktop GUI backend for `bilterm --gui` (`-G`) on Linux/Unix with zero hard build-time C library dependencies.
+  - Supports anti-aliased TrueType/OpenType monospace font rendering (`XftFontOpenName` / `XftDrawStringUtf8`), custom `.ttf`/`.otf` registration (`FcConfigAppFontAddFile` / `FcConfigAppFontAddDir`), crisp geometric box-drawing/Braille/Sextant rasterization, full keyboard/mouse/wheel event routing, and live window resize (`ConfigureNotify`).
+- **Independent Per-Pane Font Scaling & Inverse PTY/VT Screen Resizing (`src/ui/typography.rs`, `src/ui/renderer.rs`, `src/wm/mod.rs`, `src/input/keymap.rs`)**:
+  - `Ctrl++` / `Ctrl+=`, `Ctrl+-` / `Ctrl+_`, `Ctrl+0`, and `Ctrl+Wheel` now scale each pane's font independently (`PaneFontOptions::scale_pct`), including when focused on interactive `RawPtyPassthrough` / `DECSET 1049` TUI apps (`nmon`, `htop`, `vim`) or after a `Ctrl+X`/`Ctrl+B` leader prefix.
+  - Each pane's PTY (`SIGWINCH`) and `VtParser` viewport `(rows, cols)` dynamically scales inversely to its font scale (`pane_scaled_inner_rect`), and `GuiWorkspaceRenderer` + `X11GuiCanvas` / `Win32GuiCanvas` render each pane at its own scaled cell dimensions and cached TrueType point size (`GuiGlyphRun::font_size_pt`).
+- **All-Border & All-Corner Multi-Pane Frame Mouse Resizing (`src/input/mouse.rs`, `src/wm/split_tree.rs`, `src/wm/z_stack.rs`)**:
+  - Added `WindowResizeEdge::TopLeft` and `TopRight` and enabled dragging all 4 borders (`Top`, `Bottom`, `Left`, `Right`) and all 4 corners across both `Tiled` and `Stacked` multi-pane layouts.
+  - Added `SplitTree::set_split_ratio_for_border` and outer-border delta mapping so dragging top borders in `Tiled` mode resizes the horizontal divider instead of swapping panes, and dragging outer borders or corners resizes the corresponding split without collapsing sibling axes.
+
+### Fixed
+- **Small-Canvas Floating Prompt Clamp Panic (`src/pane/prompt_editor.rs`)**:
+  - Guarded `FloatingCommandPrompt::effective_height` with `.clamp(3, canvas_height.max(3)).min(canvas_height)` so panes shrunk below 3 canvas rows never panic in `core::cmp::Ord::clamp`.
+
 ## [v1.11.1] - 2026-10-26
 
 ### Fixed

@@ -14,6 +14,8 @@ pub enum WindowResizeEdge {
     Right,
     Top,
     Bottom,
+    TopLeft,
+    TopRight,
     BottomLeft,
     BottomRight,
 }
@@ -259,6 +261,16 @@ impl ZStack {
         self.compute_cascade_rects(area)
             .into_iter()
             .find_map(|(id, r)| (id == pane_id).then_some(r))
+    }
+
+    /// Applies minimized state (`[_]`) to `tile_rect` in `Tiled` mode without pinning width/height.
+    pub fn apply_tiled_rect(&self, pane_id: PaneId, tile_rect: Rect) -> Rect {
+        if let Some(&geom) = self.geometries.get(&pane_id)
+            && geom.minimized
+        {
+            return Rect::new(tile_rect.x, tile_rect.y, tile_rect.width, 3.min(tile_rect.height.max(1)));
+        }
+        tile_rect
     }
 
     /// Sets the exact floating `rect` for `pane_id` clamped inside `area`.
