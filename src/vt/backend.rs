@@ -195,6 +195,11 @@ impl VtParser {
         line.trim_end().to_string()
     }
 
+    /// Returns the trimmed plain-text contents of viewport `row`. Alias for [`row_text`].
+    pub fn viewport_line_text(&self, row: u16) -> String {
+        self.row_text(row)
+    }
+
     /// Returns the formatted plain-text contents of the screen (`ARCH-R03`).
     pub fn contents(&self) -> String {
         self.parser.screen().contents()

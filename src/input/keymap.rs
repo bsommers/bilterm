@@ -125,7 +125,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('0'), Action::FontZoomReset),
     (KeyCode::Char(']'), Action::PromptResizeWidth(4)),
     (KeyCode::PageUp, Action::BlockPrev),
-    (KeyCode::PageDown, Action::BlockNext),
+    (KeyCode::PageDown, Action::ScrollModeTogglePage),
 ];
 
 /// Declarative global workspace shortcut table (`F1`..`F10`, `Alt+<key>`, `Ctrl+P`, `Ctrl+\\`, `ARCH-R01.2`).
@@ -642,6 +642,15 @@ pub(super) fn handle_wm_shortcut_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
+    if wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && key.modifiers.is_empty()
+    {
+        match key.code {
+            KeyCode::F(7) => return Ok(Some(wm.apply(Action::ScrollPageBack)?)),
+            KeyCode::F(8) => return Ok(Some(wm.apply(Action::ScrollPageAdvance)?)),
+            _ => {}
+        }
+    }
     let fuzzy_active = wm.active_pane().prompt().fuzzy_search.active;
     if let Some(action) = default_global_action(key, fuzzy_active) {
         return Ok(Some(wm.apply(action)?));
@@ -663,6 +672,9 @@ pub(super) fn handle_wm_enter_submission(
         && !wm.active_pane().hints_mode().active
         && wm.active_pane().pending_unsafe_paste().is_none()
     {
+        if wm.active_pane().is_page_holding() && wm.active_pane().prompt().input.is_empty() {
+            return Ok(Some(wm.apply(Action::ScrollPageAdvance)?));
+        }
         let text = wm.active_pane().prompt().text();
         if let Some(cmd_res) = parse_colon_command(&text) {
             let _ = wm.active_pane_mut().prompt_mut().take_submission();
@@ -747,6 +759,20 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
             }
             KeyCode::Enter => {
                 pane.prompt_mut().insert_newline();
+                return Ok(Some(AppAction::Handled));
+            }
+            _ => {}
+        }
+    }
+
+    if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage {
+        match (key.modifiers, key.code) {
+            (KeyModifiers::NONE, KeyCode::F(7)) | (KeyModifiers::ALT, KeyCode::PageUp) => {
+                let _ = pane.scroll_page_back();
+                return Ok(Some(AppAction::Handled));
+            }
+            (KeyModifiers::NONE, KeyCode::F(8)) | (KeyModifiers::ALT, KeyCode::PageDown) => {
+                let _ = pane.scroll_page_advance();
                 return Ok(Some(AppAction::Handled));
             }
             _ => {}

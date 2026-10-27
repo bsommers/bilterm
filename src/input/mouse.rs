@@ -72,7 +72,14 @@ pub fn handle_mouse_event(
         && mouse.column >= status_rect.x
         && mouse.column < status_rect.x + status_rect.width
     {
-        pane.cycle_prompt_mode();
+        let rel_col = mouse.column.saturating_sub(status_rect.x);
+        if rel_col >= (status_rect.width * 2) / 3 {
+            pane.toggle_block_page_scroll_mode();
+        } else if pane.is_page_holding() && rel_col < 22 {
+            pane.scroll_page_advance();
+        } else {
+            pane.cycle_prompt_mode();
+        }
         return Ok(AppAction::Handled);
     }
 
@@ -359,7 +366,7 @@ pub fn handle_mouse_event(
             if in_prompt && pane.prompt().lines.len() > 1 {
                 pane.prompt_mut().scroll_up(1);
             } else {
-                pane.vt_mut().scroll_up(3);
+                pane.scroll_up_in_mode(3);
             }
             return Ok(AppAction::Handled);
         }
@@ -367,7 +374,7 @@ pub fn handle_mouse_event(
             if in_prompt && pane.prompt().lines.len() > 1 {
                 pane.prompt_mut().scroll_down(1);
             } else {
-                pane.vt_mut().scroll_down(3);
+                pane.scroll_down_in_mode(3);
             }
             return Ok(AppAction::Handled);
         }
@@ -451,11 +458,11 @@ fn handle_canvas_only_mouse_event(
             Ok(AppAction::Continue)
         }
         MouseEventKind::ScrollUp => {
-            pane.vt_mut().scroll_up(3);
+            pane.scroll_up_in_mode(3);
             Ok(AppAction::Handled)
         }
         MouseEventKind::ScrollDown => {
-            pane.vt_mut().scroll_down(3);
+            pane.scroll_down_in_mode(3);
             Ok(AppAction::Handled)
         }
         _ => Ok(AppAction::Continue),

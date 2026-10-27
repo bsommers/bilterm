@@ -195,6 +195,28 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 .set_status_message(Some(format!("{note}{report}")));
             false
         }
+        ColonCommand::ScrollModeSet(mode_opt) => {
+            let resolved = match mode_opt {
+                Some(mode) => {
+                    wm.active_pane_mut().set_scroll_mode(mode);
+                    mode
+                }
+                None => wm.active_pane_mut().cycle_scroll_mode(),
+            };
+            wm.config_mut().scroll_mode = resolved;
+            false
+        }
+        ColonCommand::ScrollModeTogglePage => {
+            let resolved = wm.active_pane_mut().toggle_block_page_scroll_mode();
+            wm.config_mut().scroll_mode = resolved;
+            false
+        }
+        ColonCommand::ScrollPageAdvance => {
+            execute_colon_command(wm.active_pane_mut(), ColonCommand::ScrollPageAdvance)
+        }
+        ColonCommand::ScrollPageBack => {
+            execute_colon_command(wm.active_pane_mut(), ColonCommand::ScrollPageBack)
+        }
         ColonCommand::HistoryMaxFiles(max_f) => {
             wm.config_mut().history_max_files = max_f.max(1);
             wm.sync_history_config();

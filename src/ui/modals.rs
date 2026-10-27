@@ -331,6 +331,9 @@ pub(super) fn render_help_modal(
         (":history save [path]", "Export session commands to a temporary script"),
         (":history on | off", "Enable or disable disk history persistence"),
         ("═══ OUTPUT CANVAS CURSOR, COPY/SELECT & LINKS ═══", ""),
+        ("Ctrl+X PgDn / :scroll page", "Toggle Mainframe Block/Page-Hold Scroller (MORE... / HOLDING)"),
+        ("PF8/PA2/Space/PgDn / PF7/b", "Advance 1 page (MORE...) / Step back 1 page (HOLDING)"),
+        (":scroll smooth | instant", "Switch pane between Smooth Kinetic & Discrete Line Scroller"),
         ("F8 / Alt+C / Ctrl+Up / :copy", "Switch focus to OutputCanvas to move cursor & select text"),
         ("Shift+Arrows / v / Space / b", "Select char stream or rectangular block on OutputCanvas"),
         ("Enter / y / Ctrl+C / x", "Copy selection to clipboard (x = copy & insert into prompt)"),
@@ -688,6 +691,16 @@ pub(super) fn render_inspector_modal(
                 on_off(pane.line_discipline().echo_enabled),
                 on_off(pane.has_foreground_subcommand()),
                 vt.osc133_phase(),
+            ),
+        ),
+        (
+            "SCROLL & PAGE".to_string(),
+            format!(
+                "Mode:{} | Hold:{} | Inspected:{} | Pending:+{}L",
+                pane.scroll_mode().label(),
+                on_off(pane.is_page_holding()),
+                on_off(pane.is_holding_inspected()),
+                pane.pending_page_lines(),
             ),
         ),
         (

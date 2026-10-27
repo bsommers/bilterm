@@ -625,6 +625,86 @@ fn push_color(s: &mut String, color: vt100_ctt::Color, base: u8, bright: u8, ext
     }
 }
 
+/// Per-pane scrolling discipline (`SCRL-01`, `SCRL-02`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaneScrollMode {
+    /// Smooth kinetic velocity-damped scrolling with sub-cell pixel interpolation in GUI mode (`SCRL-01`, default).
+    #[default]
+    Smooth,
+    /// Immediate discrete line/page scrolling without kinetic inertia.
+    Instant,
+    /// Mainframe / Timeshare Block & Page-Mode Scroller (`IBM 3270` / `VM/CMS` `MORE...` / `HOLDING`, `SCRL-02`).
+    #[serde(
+        rename = "page",
+        alias = "block",
+        alias = "blockpage",
+        alias = "block-page",
+        alias = "page-hold"
+    )]
+    BlockPage,
+}
+
+impl PaneScrollMode {
+    /// Parses a user-supplied mode token (`"smooth"`, `"page"`, `"block"`, `"instant"`).
+    pub fn parse(token: &str) -> Option<Self> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "smooth" | "kinetic" | "glide" => Some(Self::Smooth),
+            "page" | "block" | "blockpage" | "block-page" | "page-hold" | "more" | "3270"
+            | "mainframe" => Some(Self::BlockPage),
+            "instant" | "discrete" | "step" | "jump" | "off" => Some(Self::Instant),
+            _ => None,
+        }
+    }
+
+    /// Short uppercase label for status messages.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Smooth => "SMOOTH",
+            Self::Instant => "INSTANT",
+            Self::BlockPage => "PAGE/BLOCK (3270 MORE...)",
+        }
+    }
+
+    /// Compact OIA status bar badge (`SCRL:SMOOTH`, `SCRL:PAGE`, `SCRL:INST`).
+    pub fn oia_badge(
+        self,
+        page_holding: bool,
+        holding_inspected: bool,
+        pending_lines: usize,
+    ) -> String {
+        match self {
+            Self::Smooth => "SCRL:SMOOTH".to_string(),
+            Self::Instant => "SCRL:INST".to_string(),
+            Self::BlockPage => {
+                if page_holding {
+                    let state = if holding_inspected {
+                        "HOLDING"
+                    } else {
+                        "MORE..."
+                    };
+                    if pending_lines > 0 {
+                        format!("SCRL:PAGE [{state} +{pending_lines}]")
+                    } else {
+                        format!("SCRL:PAGE [{state}]")
+                    }
+                } else {
+                    "SCRL:PAGE".to_string()
+                }
+            }
+        }
+    }
+
+    /// Cycles `Smooth -> BlockPage -> Instant -> Smooth`.
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Smooth => Self::BlockPage,
+            Self::BlockPage => Self::Instant,
+            Self::Instant => Self::Smooth,
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "scrollback_tests.rs"]
 mod tests;

@@ -32,7 +32,8 @@ use crate::remote::FleetRegistry;
 use crate::vt::recording::WorkspaceRecorder;
 use crate::vt::scrollback::{FixedMemoryProbe, ScrollbackGovernor, SystemMemoryProbe};
 use crate::wm::quick_terminal::QuickTerminal;
-use crate::wm::split_tree::{SplitDirection, SplitTree};
+pub use crate::wm::split_tree::SplitDirection;
+use crate::wm::split_tree::SplitTree;
 use crate::wm::z_stack::ZStack;
 
 /// Workspace window arrangement mode (`WM-01`, `WM-02`).
@@ -505,6 +506,7 @@ impl WindowManager {
             )?
         };
         Self::attach_history(&mut new_pane, &self.config.history_settings());
+        new_pane.set_scroll_mode_from_config(self.config.scroll_mode);
         new_pane.font_options_mut().scale_pct = Some(100);
 
         self.panes.insert(new_id, new_pane);
@@ -555,6 +557,9 @@ impl WindowManager {
             if pane.poll_pty_events() {
                 changed = true;
             }
+            if pane.tick_smooth_scroll() {
+                changed = true;
+            }
             pane.refresh_line_discipline();
             if *pane.line_discipline() != prev_ld {
                 changed = true;
@@ -570,6 +575,9 @@ impl WindowManager {
         }
         let prev_qt_ld = *self.quick_terminal.pane.line_discipline();
         if self.quick_terminal.pane.poll_pty_events() {
+            changed = true;
+        }
+        if self.quick_terminal.pane.tick_smooth_scroll() {
             changed = true;
         }
         self.quick_terminal.pane.refresh_line_discipline();
@@ -628,6 +636,7 @@ impl WindowManager {
         let (rows, cols) = self.active_pane().vt().size();
         let mut pane = CompositePane::new_headless(new_id, rows + 1, cols);
         pane.set_title(format!("TMUX %{tmux_pane_id}"));
+        pane.set_scroll_mode_from_config(self.config.scroll_mode);
         Self::attach_history(&mut pane, &self.config.history_settings());
         let top = self.z_stack.top().unwrap_or(1);
         self.panes.insert(new_id, pane);

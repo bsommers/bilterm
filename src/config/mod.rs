@@ -13,7 +13,7 @@ use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
-use crate::vt::scrollback::ScrollbackConfig;
+use crate::vt::scrollback::{PaneScrollMode, ScrollbackConfig};
 use crate::wm::DrawerConfig;
 
 /// Declarative Bilterm configuration loaded from `~/.config/bilterm/config.toml` (`CFG-01`).
@@ -99,6 +99,8 @@ pub struct BiltermConfig {
     pub remotes: BTreeMap<String, RemoteHostProfile>,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
+    /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
+    pub scroll_mode: PaneScrollMode,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
     /// Primary GUI / terminal font family or preset (`"Cascadia Mono"`, `"Consolas"`, `"JetBrains Mono"`, `"IBM 3270"`, etc., `FONT-01`).
@@ -164,6 +166,7 @@ impl Default for BiltermConfig {
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
+            scroll_mode: PaneScrollMode::Smooth,
             drawer: DrawerConfig::default(),
             font_family: "Cascadia Mono".to_string(),
             font_files: Vec::new(),

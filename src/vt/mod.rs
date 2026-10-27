@@ -25,6 +25,7 @@ use std::time::Instant;
 
 use crate::vt::codec::{is_binary_noise_chunk, sanitize_binary_noise_chunk};
 use crate::vt::scan::normalize_extended_sgr_for_vt100;
+pub use crate::vt::scrollback::PaneScrollMode;
 pub use crate::vt::snapshot::{LineSizeAttr, scan_dec_line_size_escapes};
 use crate::vt::snapshot::{
     CellColor, CellSnapshot, CursorShape, CursorSnapshot, GridSnapshot, RgbTriplet, RowSnapshot,
@@ -728,6 +729,14 @@ impl VtParser {
 
     pub fn scrollback_offset(&self) -> usize {
         self.parser.screen().scrollback()
+    }
+
+    pub fn set_scrollback_offset(&mut self, offset: usize) {
+        let clamped = offset.min(self.scrollback_capacity);
+        self.parser.screen_mut().set_scrollback(clamped);
+        if self.scrollback_offset() == 0 {
+            self.selected_block_index = None;
+        }
     }
 
     pub fn scroll_up(&mut self, lines: usize) {

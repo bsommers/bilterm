@@ -1,6 +1,6 @@
-# Session Checkpoint — v1.12.0 Interactive UX, Powerline/PUA Fonts, `"bil;*term"` Icons, Persistent Herdr Drawer & Milestone v2.0 Roadmap (Phases 29–34) — 2026-10-27
+# Session Checkpoint — Phase 29 Complete (Smooth & Mainframe Block/Page-Mode Scroller), `docs/LESSONS_LEARNED.md` & Expanded Regression Suite — 2026-10-27
 
-- **Status:** COMPLETE — Implemented mouse/keyboard cut-copy-paste with visual selection highlights, pixel-perfect Powerline (`U+E0A0..=U+E0D7`) & Nerd Font PUA rendering, cross-platform `"bil;*` / `==> term█"` icons (`icns`/`ico`/`png`/`svg`), persistent in-place scrollable `Herdr` Drawer, and scoped Milestone `v2.0` (`Phases 29–34`).
+- **Status:** COMPLETE — Completed **Phase 29 (`SCRL-01`, `SCRL-02`)**, authored **[`docs/LESSONS_LEARNED.md`](../docs/LESSONS_LEARNED.md)**, and expanded the integration test suite with **[`tests/smooth_and_mainframe_page_scrolling.rs`](../tests/smooth_and_mainframe_page_scrolling.rs)** (`5/5` passing) and **[`tests/session_lessons_and_regression_suite.rs`](../tests/session_lessons_and_regression_suite.rs)** (`7/7` passing).
 - **Updated:** `2026-10-27`
 - **Branch:** `main`
 - **Installed Artifacts (macOS `aarch64-apple-darwin`):**
@@ -9,7 +9,7 @@
   - Cross-Platform Icons: `docs/assets/icons/bilterm.{icns,ico,svg,png}` + `bilterm-{16..1024}.png`
 - **Baseline Verification:**
   - `cargo +stable clippy -q --all-targets -- -D warnings` → **0 warnings, 0 errors**
-  - `cargo +stable test -q` → **All unit & integration tests passing**
+  - `cargo +stable test -q` → **All unit & 26 integration test suites passing**
 
 ---
 

@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 26: Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas** - Classic Tektronix 4010/4014 4096×3120 vector mode (`\x1b[?38h`) with phosphor decay plus modern retained scene-graph, 2D sprites, declarative plotting, and image viewer over Braille/Sextant/Quadrant TUI & full-res GUI rasterizers (`TEK-01`, `CANV-01`) (completed 2026-10-24)
 - [x] **Phase 27: High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine** - Anti-aliased RGBA `PixelCanvasBuffer`, adaptive `Kitty`/`Sixel`/`iTerm2`/`HalfBlock` transport, and `bilterm plot` / `bilterm img` CLI (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) (completed 2026-10-25)
 - [x] **Phase 28: Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency** - Strict acyclic DAG, module ceiling decompression, macOS CoreText/Cocoa GUI (`Bilterm.app`), mouse/keyboard selection & clipboard, and Powerline/PUA geometric font rendering (`ARCH-R01..04`, `SEC-R01`) (completed 2026-10-27)
-- [ ] **Phase 29: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller** - Kinetic sub-cell/inertial smooth scrolling by default plus per-pane IBM 3270 / VM/CMS `MORE...` / `HOLDING` block/page-mode output paging (`SCRL-01`, `SCRL-02`)
+- [x] **Phase 29: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller** - Kinetic sub-cell/inertial smooth scrolling by default plus per-pane IBM 3270 / VM/CMS `MORE...` / `HOLDING` block/page-mode output paging (`SCRL-01`, `SCRL-02`) (completed 2026-10-27)
 - [ ] **Phase 30: Explicit Exit Guard & Root/Final Session Protection** - Accidental `exit` / `logout` / `Ctrl+D` interception on final/root panes with interactive `Respawn / Detach / Quit / Cancel` guard and explicit `:quit!` / `:detach` semantics (`SAFE-01`, `SAFE-02`)
 - [ ] **Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility)** - Native `.itermcolors` XML plist importer (`mbadolato/iterm2-color-schemes`), Alacritty/WezTerm/Ghostty/Base16 TOML/YAML theme loaders, automatic Borland/3270 chrome synthesis, and per-theme typography profiles without lock-in (`THM-01`, `THM-02`)
 - [ ] **Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach)** - Auto-spawned background daemon (`bilterm daemon`) hosting all PTYs, `VtWorkerHandle` state machines, and session trees over a `0600` Unix socket for seamless multi-client connect/disconnect/reconnect (`DAEM-01`, `DAEM-02`)
@@ -379,12 +379,12 @@ Plans:
   2. Toggling per-pane `PaneScrollMode::BlockPage` (`:scroll page` / `:scroll block`, `Ctrl+X PageDown`, or clicking the `SCRL:SMOOTH/PAGE` OIA badge) causes incoming PTY output after a command submission or page clear to pause rendering once a full viewport page (`canvas.height` rows) is filled, displaying an authentic IBM 3270 `MORE...` (or `HOLDING` when inspected) indicator in the OIA status bar while continuing to buffer PTY output in `VtWorkerHandle` without dropping bytes.
   3. In `BlockPage` mode, pressing `Enter`, `Space`, `PageDown`, or `PF8`/`PA2` advances cleanly by one full page (returning to live tail when caught up), while `b` / `PageUp` / `PF7` steps backward by one full block/page.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 29-01-PLAN.md — `PaneScrollMode` (`Smooth`, `Instant`, `BlockPage`), kinetic scroll velocity/sub-pixel state in `CompositePane`, and `VtWorkerHandle` page-gate snapshot freeze with `MORE...`/`HOLDING` telemetry (wave 1)
-- [ ] 29-02-PLAN.md — `Action::ScrollModeSet` / `:scroll [smooth|page|block|instant]`, `PF7`/`PF8`/`Space` page-advance bindings, OIA `MORE...`/`HOLDING` status badge, and GUI sub-cell smooth scroll rendering (wave 2)
-- [ ] 29-03-PLAN.md — `tests/smooth_and_mainframe_page_scrolling.rs` deterministic verification suite (wave 3)
+- [x] 29-01-PLAN.md — `PaneScrollMode` (`Smooth`, `Instant`, `BlockPage`), kinetic scroll velocity/sub-pixel state in `CompositePane`, and `VtWorkerHandle` page-gate snapshot freeze with `MORE...`/`HOLDING` telemetry (wave 1)
+- [x] 29-02-PLAN.md — `Action::ScrollModeSet` / `:scroll [smooth|page|block|instant]`, `PF7`/`PF8`/`Space` page-advance bindings, OIA `MORE...`/`HOLDING` status badge, and GUI sub-cell smooth scroll rendering (wave 2)
+- [x] 29-03-PLAN.md — `tests/smooth_and_mainframe_page_scrolling.rs` deterministic verification suite (wave 3)
 
 ### Phase 30: Explicit Exit Guard & Root/Final Session Protection (`v2.0`)
 
@@ -509,7 +509,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 26. Tektronix 4010/4014 × Modern 2026/2027 Vector, Sprite, Plotting & Image Graphical Canvas (`TEK-01`, `CANV-01`) | 3/3 | Complete | 2026-10-24 |
 | 27. High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) | 3/3 | Complete | 2026-10-25 |
 | 28. Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency (`ARCH-R01..04`, `SEC-R01`) | 1/1 | Complete | 2026-10-27 |
-| 29. Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`) | 0/3 | Planned | - |
+| 29. Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`) | 3/3 | Complete | 2026-10-27 |
 | 30. Explicit Exit Guard & Root/Final Session Protection (`SAFE-01`, `SAFE-02`) | 0/2 | Planned | - |
 | 31. Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility) (`THM-01`, `THM-02`) | 0/3 | Planned | - |
 | 32. Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach) (`DAEM-01`, `DAEM-02`) | 0/3 | Planned | - |

@@ -1,6 +1,8 @@
 pub mod line_discipline;
 pub mod shell_integration;
 
+pub use line_discipline::LineDisciplineState;
+
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};

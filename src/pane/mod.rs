@@ -6,6 +6,7 @@ pub mod history_store;
 pub mod modes;
 pub mod prompt_editor;
 pub mod prompt_selection;
+pub mod scroll;
 pub mod typography;
 
 pub use canvas_scene::{
@@ -14,6 +15,7 @@ pub use canvas_scene::{
 };
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
+pub use scroll::{PaneScrollMode, PaneScrollState};
 pub use typography::{
     CanvasResolution, FontFamilyPreset, PaneFontOptions, probe_terminal_pixel_size,
     refresh_terminal_pixel_size,
@@ -57,6 +59,8 @@ pub struct CompositePane {
     pub(crate) canvas_scene: PaneCanvasScene,
     /// Per-pane / per-window selectable font family, size, scale, and style options (`FONT-02`).
     pub(crate) font_options: PaneFontOptions,
+    /// Per-pane smooth kinetic scrolling & mainframe block/page-mode (`MORE...`/`HOLDING`) state (`SCRL-01..02`).
+    pub(crate) scroll: PaneScrollState,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     read_only: bool,
     /// Displays the Bilterm version badge (`vX.Y.Z`) in the 3270 OIA status bar (`:version [on|off]`).
@@ -98,6 +102,7 @@ impl CompositePane {
             hints_mode: HintsModeState::default(),
             canvas_scene: PaneCanvasScene::default(),
             font_options: PaneFontOptions::default(),
+            scroll: PaneScrollState::default(),
             read_only: false,
             show_version_badge: is_live,
             remote_target: None,
@@ -184,6 +189,7 @@ impl CompositePane {
             }
         }
         self.vt.reset_scrollback();
+        self.reset_page_anchor();
         self.vt.record_command_submission(cmd_str.clone());
         let _ = self.history_store.record_command(&cmd_str);
         #[cfg(windows)]
@@ -628,6 +634,7 @@ impl CompositePane {
                 let _ = pty.write_all(&resp);
             }
         }
+        self.sync_page_hold_after_output();
         self.refresh_line_discipline();
     }
 
@@ -672,6 +679,7 @@ impl CompositePane {
                     let _ = pty.write_all(&resp);
                 }
             }
+            self.sync_page_hold_after_output();
             self.refresh_line_discipline();
             return true;
         }

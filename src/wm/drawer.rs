@@ -284,6 +284,7 @@ fn pane_cmd_badge(pane: &CompositePane) -> String {
 impl WindowManager {
     pub fn drawer(&self) -> &WorkspaceDrawer { &self.drawer }
     pub fn drawer_mut(&mut self) -> &mut WorkspaceDrawer { &mut self.drawer }
+    pub fn drawer_is_open(&self) -> bool { self.drawer.open || self.drawer.focused }
     pub fn drawer_config(&self) -> &DrawerConfig { &self.config.drawer }
     pub fn drawer_config_mut(&mut self) -> &mut DrawerConfig { &mut self.config.drawer }
 

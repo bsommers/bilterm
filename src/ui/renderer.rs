@@ -32,6 +32,7 @@ pub struct PaneFrameSnapshot {
     pub font_family: String,
     pub font_size_pt: u16,
     pub font_scale_pct: u16,
+    pub subcell_scroll_offset_px: f32,
     pub grid: GridSnapshot,
     pub graphics: Vec<TerminalGraphicPlacement>,
 }
@@ -86,6 +87,7 @@ impl WorkspaceFrameSnapshot {
                 font_family: pane.font_options().family.display_name().to_string(),
                 font_size_pt: pane.font_options().effective_size_pt(wm.config()),
                 font_scale_pct: pane.font_options().effective_scale_pct(wm.config()),
+                subcell_scroll_offset_px: pane.scroll_state().subcell_offset_px(16),
                 grid: pane.vt().snapshot(),
                 graphics: pane.vt().graphic_placements().to_vec(),
             });
@@ -108,6 +110,7 @@ impl WorkspaceFrameSnapshot {
                 font_family: qt_pane.font_options().family.display_name().to_string(),
                 font_size_pt: qt_pane.font_options().effective_size_pt(wm.config()),
                 font_scale_pct: qt_pane.font_options().effective_scale_pct(wm.config()),
+                subcell_scroll_offset_px: qt_pane.scroll_state().subcell_offset_px(16),
                 grid: qt_pane.vt().snapshot(),
                 graphics: qt_pane.vt().graphic_placements().to_vec(),
             })
@@ -567,6 +570,27 @@ impl GuiWorkspaceRenderer {
             }
         };
 
+        let subcell_y_offset = |abs_c: u16, abs_r: u16| -> f32 {
+            if !can_scale_panes || drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r)) {
+                return 0.0;
+            }
+            for &(id, outer) in pane_rects.iter().rev() {
+                if crate::wm::rect_contains(outer, abs_c, abs_r) {
+                    let Some(pane) = wm.pane(id) else { return 0.0 };
+                    let inner = if wm.is_framed() { crate::wm::inset_window_frame(outer) } else { outer };
+                    let canvas = pane.canvas_rect(inner);
+                    if !crate::wm::rect_contains(canvas, abs_c, abs_r) {
+                        return 0.0;
+                    }
+                    if pane.is_prompt_visible() && crate::wm::rect_contains(pane.prompt_rect(inner), abs_c, abs_r) {
+                        return 0.0;
+                    }
+                    return pane.scroll_state().subcell_offset_px(eff_ch);
+                }
+            }
+            0.0
+        };
+
         for r in 0..viewport.height {
             for c in 0..viewport.width {
                 let (abs_c, abs_r) = (viewport.x + c, viewport.y + r);
@@ -574,7 +598,8 @@ impl GuiWorkspaceRenderer {
                     continue;
                 }
                 if let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
-                    push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
+                    let y_off = subcell_y_offset(abs_c, abs_r);
+                    push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch + y_off, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
                 }
             }
         }
