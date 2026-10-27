@@ -97,14 +97,25 @@ impl Widget for CompositePaneWidget<'_> {
 
         // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 2 {
-            let prompt_rect = self.pane.prompt_rect(area);
+            let mut prompt_rect = self.pane.prompt_rect(area);
+            if self.pane.copy_mode().active && !self.pane.prompt().anchor.is_split() {
+                let cr = canvas.y + self.pane.copy_mode().cursor_row;
+                if cr >= prompt_rect.y && cr < prompt_rect.y + prompt_rect.height {
+                    if prompt_rect.y <= canvas.y + canvas.height / 2 {
+                        prompt_rect.y =
+                            canvas.y + canvas.height.saturating_sub(prompt_rect.height);
+                    } else {
+                        prompt_rect.y = canvas.y;
+                    }
+                }
+            }
             if cfg.drop_shadows && !self.pane.prompt().anchor.is_split() {
                 render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
             occlude_rect(buf, prompt_rect);
             render_floating_prompt(
                 self.pane,
-                self.active,
+                self.active && !self.pane.copy_mode().active,
                 prompt_rect,
                 canvas,
                 cfg,
@@ -360,8 +371,8 @@ fn render_output_canvas(
         }
     }
 
-    // Highlight Vi Copy Mode selection and cursor (VAL-04)
-    if pane.copy_mode().active {
+    // Highlight Vi Copy Mode or mouse drag selection and cursor (VAL-04)
+    if pane.copy_mode().active || pane.copy_mode().has_selection() {
         for r in 0..render_rows {
             for c in 0..render_cols {
                 if pane.copy_mode().is_cell_selected(r, c)
@@ -376,15 +387,21 @@ fn render_output_canvas(
                 }
             }
         }
-        let cr = pane.copy_mode().cursor_row.min(render_rows.saturating_sub(1));
-        let cc = pane.copy_mode().cursor_col.min(render_cols.saturating_sub(1));
-        render_caret(
-            buf,
-            canvas.x + cc,
-            canvas.y + cr,
-            cfg.cursor_style,
-            Color::Rgb(255, 255, 85),
-        );
+        if pane.copy_mode().active {
+            let cr = pane.copy_mode().cursor_row.min(render_rows.saturating_sub(1));
+            let cc = pane.copy_mode().cursor_col.min(render_cols.saturating_sub(1));
+            let cx = canvas.x + cc;
+            let cy = canvas.y + cr;
+            if active && cfg.crosshair_cursor {
+                let target_rect = if cfg.crosshair_fullscreen {
+                    buf.area
+                } else {
+                    canvas
+                };
+                render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
+            }
+            render_caret(buf, cx, cy, cfg.cursor_style, Color::Rgb(255, 255, 85));
+        }
     }
 
     // Render QuickSelect 3270 Field Hints badges ([a], [b], ...) when active (ECO-01)

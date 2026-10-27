@@ -75,23 +75,83 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
     let max_r = rows.saturating_sub(1);
     let max_c = cols.saturating_sub(1);
 
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('v') {
-        let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
-        pane.copy_mode_mut().anchor = Some(cur);
-        pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
-        pane.set_status_message(Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string()));
+    if key.modifiers.contains(KeyModifiers::ALT)
+        && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
+    {
+        pane.exit_copy_mode();
         return Ok(AppAction::Handled);
     }
 
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        match key.code {
+            KeyCode::Down => {
+                pane.exit_copy_mode();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('v') => {
+                let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+                pane.copy_mode_mut().anchor = Some(cur);
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+                pane.copy_mode_mut().visual_lock = true;
+                pane.set_status_message(Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string()));
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                let _ = pane.yank_copy_selection();
+                return Ok(AppAction::Handled);
+            }
+            KeyCode::Char('x') | KeyCode::Char('X') => {
+                let _ = pane.cut_copy_selection_to_prompt();
+                return Ok(AppAction::Handled);
+            }
+            _ => {}
+        }
+    }
+
+    let is_nav_key = matches!(
+        key.code,
+        KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+    );
+
+    if is_nav_key {
+        if key.modifiers.contains(KeyModifiers::SHIFT) {
+            if pane.copy_mode().anchor.is_none() {
+                let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+                pane.copy_mode_mut().anchor = Some(cur);
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Char;
+                pane.copy_mode_mut().visual_lock = false;
+                pane.set_status_message(Some(
+                    "CANVAS SELECT: Shift+Arrows selecting (Enter/y/Ctrl+C=Copy, x=To Prompt)"
+                        .to_string(),
+                ));
+            }
+        } else if !pane.copy_mode().visual_lock && pane.copy_mode().anchor.is_some() {
+            pane.copy_mode_mut().anchor = None;
+            pane.copy_mode_mut().selection_kind = CopySelectionKind::None;
+        }
+    }
+
+    let word_mod = key.modifiers.contains(KeyModifiers::ALT)
+        || key.modifiers.contains(KeyModifiers::CONTROL);
+
     match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => {
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Tab | KeyCode::F(8) => {
             pane.exit_copy_mode();
         }
         KeyCode::Left | KeyCode::Char('h') => {
-            pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(1);
+            let step = if word_mod { 5 } else { 1 };
+            pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(step);
         }
         KeyCode::Right | KeyCode::Char('l') => {
-            pane.copy_mode_mut().cursor_col = (pane.copy_mode().cursor_col + 1).min(max_c);
+            let step = if word_mod { 5 } else { 1 };
+            pane.copy_mode_mut().cursor_col = (pane.copy_mode().cursor_col + step).min(max_c);
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if pane.copy_mode().cursor_row > 0 {
@@ -107,6 +167,22 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
                 pane.vt_mut().scroll_down(1);
             }
         }
+        KeyCode::PageUp => {
+            if pane.copy_mode().cursor_row >= 8 {
+                pane.copy_mode_mut().cursor_row -= 8;
+            } else {
+                pane.copy_mode_mut().cursor_row = 0;
+                pane.vt_mut().scroll_up(8);
+            }
+        }
+        KeyCode::PageDown => {
+            if pane.copy_mode().cursor_row + 8 <= max_r {
+                pane.copy_mode_mut().cursor_row += 8;
+            } else {
+                pane.copy_mode_mut().cursor_row = max_r;
+                pane.vt_mut().scroll_down(8);
+            }
+        }
         KeyCode::Home | KeyCode::Char('0') => {
             pane.copy_mode_mut().cursor_col = 0;
         }
@@ -116,31 +192,51 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
         KeyCode::Char('w') => {
             pane.copy_mode_mut().cursor_col = (pane.copy_mode().cursor_col + 5).min(max_c);
         }
+        KeyCode::Char('B') => {
+            pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(5);
+        }
         KeyCode::Char('b') => {
-            // 'b' toggles Rectangular Block selection when no modifier or moves word back if already in char mode
             if pane.copy_mode().selection_kind != CopySelectionKind::Block {
                 let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
                 pane.copy_mode_mut().anchor = Some(cur);
                 pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+                pane.copy_mode_mut().visual_lock = true;
                 pane.set_status_message(Some("COPY MODE: VISUAL BLOCK (rectangular)".to_string()));
             } else {
                 pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(5);
             }
         }
-        KeyCode::Char('v') => {
-            let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
-            pane.copy_mode_mut().anchor = Some(cur);
-            pane.copy_mode_mut().selection_kind = CopySelectionKind::Char;
-            pane.set_status_message(Some("COPY MODE: VISUAL CHAR".to_string()));
+        KeyCode::Char('v') | KeyCode::Char(' ') => {
+            if pane.copy_mode().visual_lock
+                && pane.copy_mode().selection_kind == CopySelectionKind::Char
+            {
+                pane.copy_mode_mut().anchor = None;
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::None;
+                pane.copy_mode_mut().visual_lock = false;
+                pane.set_status_message(Some("COPY MODE: selection cleared".to_string()));
+            } else {
+                let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+                pane.copy_mode_mut().anchor = Some(cur);
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Char;
+                pane.copy_mode_mut().visual_lock = true;
+                pane.set_status_message(Some(
+                    "COPY MODE: VISUAL CHAR (move with Arrows/hjkl, Enter/y=Copy, x=To Prompt)"
+                        .to_string(),
+                ));
+            }
         }
         KeyCode::Char('V') => {
             let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
             pane.copy_mode_mut().anchor = Some(cur);
             pane.copy_mode_mut().selection_kind = CopySelectionKind::Line;
+            pane.copy_mode_mut().visual_lock = true;
             pane.set_status_message(Some("COPY MODE: VISUAL LINE".to_string()));
         }
-        KeyCode::Char('y') | KeyCode::Enter => {
+        KeyCode::Char('y') | KeyCode::Char('c') | KeyCode::Enter => {
             pane.yank_copy_selection();
+        }
+        KeyCode::Char('x') => {
+            pane.cut_copy_selection_to_prompt();
         }
         _ => {}
     }

@@ -232,6 +232,16 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             pane.set_read_only(next);
             false
         }
+        ColonCommand::VersionToggle(val) => {
+            let next = val.unwrap_or(!pane.show_version_badge());
+            pane.set_show_version_badge(next);
+            pane.set_status_message(Some(format!(
+                "Bilterm v{} — status bar version badge: {}",
+                env!("CARGO_PKG_VERSION"),
+                if next { "ON" } else { "OFF" }
+            )));
+            false
+        }
         ColonCommand::NotificationsClear => {
             let count = pane.vt().notifications().len();
             pane.vt_mut().clear_notifications();

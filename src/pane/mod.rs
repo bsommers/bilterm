@@ -5,6 +5,7 @@ pub mod highlight;
 pub mod history_store;
 pub mod modes;
 pub mod prompt_editor;
+pub mod prompt_selection;
 pub mod typography;
 
 pub use canvas_scene::{
@@ -58,6 +59,8 @@ pub struct CompositePane {
     pub(crate) font_options: PaneFontOptions,
     /// Read-Only / Protected 3270 Field Lock (`:lock` / `Alt+L`, `ECO-04`).
     read_only: bool,
+    /// Displays the Bilterm version badge (`vX.Y.Z`) in the 3270 OIA status bar (`:version [on|off]`).
+    show_version_badge: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
     remote_target: Option<String>,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
@@ -80,6 +83,7 @@ impl CompositePane {
         pty: Option<PtySession>,
         history_store: HistoryStore,
     ) -> Self {
+        let is_live = pty.is_some();
         Self {
             id,
             title,
@@ -95,6 +99,7 @@ impl CompositePane {
             canvas_scene: PaneCanvasScene::default(),
             font_options: PaneFontOptions::default(),
             read_only: false,
+            show_version_badge: is_live,
             remote_target: None,
             pending_unsafe_paste: None,
             status_message: None,

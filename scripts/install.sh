@@ -285,6 +285,17 @@ try_download_prebuilt() {
     return 1
 }
 
+install_bin_file() {
+    local src_bin="$1"
+    local dest_bin="$2"
+    run_cmd rm -f "$dest_bin"
+    run_cmd cp -f "$src_bin" "$dest_bin"
+    run_cmd chmod 0755 "$dest_bin"
+    if [[ "$DRY_RUN" -eq 0 && "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1; then
+        codesign --force --sign - "$dest_bin" >/dev/null 2>&1 || true
+    fi
+}
+
 acquire_binary() {
     local dest_bin="$1"
 
@@ -299,8 +310,7 @@ acquire_binary() {
 
     if [[ "$FROM_SOURCE" -eq 0 && -f "${REPO_ROOT}/target/release/bilterm" ]]; then
         log_info "Using existing release binary at ${REPO_ROOT}/target/release/bilterm"
-        run_cmd cp -f "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
-        run_cmd chmod 0755 "$dest_bin"
+        install_bin_file "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
         return 0
     fi
 
@@ -327,16 +337,14 @@ acquire_binary() {
     if [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
         log_info "Building optimized release binary from ${REPO_ROOT}/Cargo.toml..."
         (cd "$REPO_ROOT" && run_cmd cargo build -q --release)
-        run_cmd cp -f "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
-        run_cmd chmod 0755 "$dest_bin"
+        install_bin_file "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
     else
         log_info "Building bilterm from https://github.com/${GITHUB_REPO}.git via cargo..."
         local tmp_root
         tmp_root="$(mktemp -d)"
         run_cmd cargo install --git "https://github.com/${GITHUB_REPO}.git" --root "$tmp_root"
         if [[ "$DRY_RUN" -eq 0 ]]; then
-            cp -f "${tmp_root}/bin/bilterm" "$dest_bin"
-            chmod 0755 "$dest_bin"
+            install_bin_file "${tmp_root}/bin/bilterm" "$dest_bin"
             rm -rf "$tmp_root"
         fi
     fi

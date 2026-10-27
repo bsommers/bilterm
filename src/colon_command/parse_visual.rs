@@ -86,6 +86,14 @@ pub(super) fn parse_visual_colon_command(
             };
             Some(Ok(ColonCommand::MenuBarToggle(arg)))
         }
+        "version" | "ver" => {
+            let arg = match parts.get(1).copied() {
+                Some("on" | "true" | "show") => Some(true),
+                Some("off" | "false" | "hide") => Some(false),
+                _ => None,
+            };
+            Some(Ok(ColonCommand::VersionToggle(arg)))
+        }
         "crt" | "scanlines" => {
             let arg = match parts.get(1).copied() {
                 Some("on" | "true") => Some(true),

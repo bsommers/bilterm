@@ -280,6 +280,44 @@ pub(super) fn render_floating_prompt(
 
     Paragraph::new(rendered_lines).render(inner, buf);
 
+    // Highlight active visual selection inside the command prompt editor
+    if pane.prompt().has_selection() {
+        let banner_off = u16::from(has_running_banner);
+        let sel_style = Style::default()
+            .fg(Color::Black)
+            .bg(Color::Rgb(85, 255, 255))
+            .add_modifier(Modifier::BOLD);
+        for (vis_r, (rel_idx, line_str)) in lines_slice
+            .iter()
+            .enumerate()
+            .skip(start_row)
+            .take(editor_rows)
+            .enumerate()
+        {
+            let dst_y = inner.y + banner_off + vis_r as u16;
+            if dst_y >= inner.y + inner.height {
+                break;
+            }
+            let row_h_scroll = if h_scroll > 0 && rel_idx == pane.prompt().cursor_row {
+                h_scroll
+            } else {
+                0
+            };
+            let line_chars = line_str.chars().count();
+            for vis_c in 0..avail_text_cols {
+                let char_col = row_h_scroll + vis_c;
+                if char_col <= line_chars && pane.prompt().is_char_selected(rel_idx, char_col) {
+                    let dst_x = inner.x + (prefix_len + vis_c) as u16;
+                    if dst_x < inner.x + inner.width
+                        && let Some(cell) = buf.cell_mut((dst_x, dst_y))
+                    {
+                        cell.set_style(sel_style);
+                    }
+                }
+            }
+        }
+    }
+
     // Draw vertical scrollbar indicator on right border when lines_slice.len() > editor_rows
     if lines_slice.len() > editor_rows && inner.height >= 1 {
         let sb_x = prompt_rect.x + prompt_rect.width.saturating_sub(1);
@@ -352,7 +390,9 @@ pub(super) fn render_floating_prompt(
         };
         render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
     }
-    render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
+    if !pane.copy_mode().active {
+        render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
+    }
 }
 
 fn build_completion_bar_line<'a>(
@@ -509,9 +549,13 @@ pub fn render_oia_status_bar_themed(
         )
     };
 
-    let routing_badge = match pane.effective_routing_mode() {
-        InputRoutingMode::CommandPrompt => (" INPUT: CMD BOX ", Color::Rgb(0, 255, 102)),
-        InputRoutingMode::RawPtyPassthrough => (" INPUT: RAW PTY ", Color::Rgb(255, 200, 0)),
+    let routing_badge = if pane.copy_mode().active {
+        (" INPUT: CANVAS [F8/Tab/Esc] ", Color::Rgb(85, 255, 255))
+    } else {
+        match pane.effective_routing_mode() {
+            InputRoutingMode::CommandPrompt => (" INPUT: CMD BOX ", Color::Rgb(0, 255, 102)),
+            InputRoutingMode::RawPtyPassthrough => (" INPUT: RAW PTY ", Color::Rgb(255, 200, 0)),
+        }
     };
 
     let anchor_label = match pane.prompt().anchor {
@@ -528,20 +572,24 @@ pub fn render_oia_status_bar_themed(
         }
     };
 
-    // Row/Col counter reflects active input focus: editor cursor in CommandPrompt mode, VT100 cursor in RawPtyPassthrough
-    let (disp_r, disp_c) = match pane.effective_routing_mode() {
-        InputRoutingMode::CommandPrompt => {
-            (pane.prompt().cursor_row + 1, pane.prompt().cursor_col + 1)
-        }
-        InputRoutingMode::RawPtyPassthrough => {
-            let (vr, vc) = pane.vt().cursor_position();
-            (usize::from(vr) + 1, usize::from(vc) + 1)
+    // Row/Col counter reflects active input focus: canvas cursor in CopyMode, editor cursor in CommandPrompt, VT100 in RawPtyPassthrough
+    let (disp_r, disp_c) = if pane.copy_mode().active {
+        (
+            usize::from(pane.copy_mode().cursor_row) + 1,
+            usize::from(pane.copy_mode().cursor_col) + 1,
+        )
+    } else {
+        match pane.effective_routing_mode() {
+            InputRoutingMode::CommandPrompt => {
+                (pane.prompt().cursor_row + 1, pane.prompt().cursor_col + 1)
+            }
+            InputRoutingMode::RawPtyPassthrough => {
+                let (vr, vc) = pane.vt().cursor_position();
+                (usize::from(vr) + 1, usize::from(vc) + 1)
+            }
         }
     };
-    let coord_str = format!(
-        " {} R:{:02} C:{:03} ",
-        glyphs.cursor_pos_icon, disp_r, disp_c
-    );
+    let coord_str = format!(" {} R:{:02} C:{:03} ", glyphs.cursor_pos_icon, disp_r, disp_c);
     let out_lines = pane.vt().output_line_count();
     let out_bytes = pane.vt().total_bytes_processed();
     let out_bytes_label = if out_bytes >= 1_048_576 {
@@ -551,14 +599,16 @@ pub fn render_oia_status_bar_themed(
     } else {
         format!("{out_bytes}B")
     };
-    let out_str = format!(
-        " {} OUT:{out_lines}L/{out_bytes_label}",
-        glyphs.output_len_icon
-    );
+    let out_str = format!(" {} OUT:{out_lines}L/{out_bytes_label}", glyphs.output_len_icon);
+    let oia_title = if pane.show_version_badge() {
+        concat!("3270-OIA v", env!("CARGO_PKG_VERSION"))
+    } else {
+        "3270-OIA"
+    };
 
     let mut spans = vec![
         Span::styled(
-            "3270-OIA",
+            oia_title,
             Style::default()
                 .fg(palette.oia_badge_fg)
                 .bg(palette.oia_badge_bg)
@@ -567,27 +617,15 @@ pub fn render_oia_status_bar_themed(
         Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)),
         Span::styled(
             system_state.0,
-            Style::default()
-                .fg(system_state.1)
-                .bg(oia_bg)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(system_state.1).bg(oia_bg).add_modifier(Modifier::BOLD),
         ),
         Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)),
         Span::styled(
             routing_badge.0,
-            Style::default()
-                .fg(routing_badge.1)
-                .bg(oia_bg)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(routing_badge.1).bg(oia_bg).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            format!("{sep} "),
-            Style::default().fg(Color::White).bg(oia_bg),
-        ),
-        Span::styled(
-            anchor_label,
-            Style::default().fg(Color::White).bg(oia_bg),
-        ),
+        Span::styled(format!("{sep} "), Style::default().fg(Color::White).bg(oia_bg)),
+        Span::styled(anchor_label, Style::default().fg(Color::White).bg(oia_bg)),
     ];
 
     if pane.is_read_only() {

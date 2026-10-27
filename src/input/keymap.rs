@@ -102,6 +102,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('c'), Action::CopyModeToggle),
     (KeyCode::Char('C'), Action::CopyModeToggle),
     (KeyCode::Char('['), Action::CopyModeToggle),
+    (KeyCode::F(8), Action::CopyModeToggle),
     (KeyCode::Char('f'), Action::HintsToggle),
     (KeyCode::Char('F'), Action::HintsToggle),
     (KeyCode::F(3), Action::HintsToggle),
@@ -260,6 +261,7 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
 /// Declarative intra-pane shortcut table (`F3` and `Alt+<key>` in `CommandPrompt` mode, `ARCH-R01.2`).
 pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::NONE, KeyCode::F(3), Action::HintsToggle),
+    (KeyModifiers::NONE, KeyCode::F(8), Action::CopyModeToggle),
     (KeyModifiers::ALT, KeyCode::Char('t'), Action::PromptTop),
     (KeyModifiers::ALT, KeyCode::Char('T'), Action::PromptTop),
     (KeyModifiers::ALT, KeyCode::Char('B'), Action::PromptBottom),
@@ -688,18 +690,32 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
     if key.modifiers.contains(KeyModifiers::ALT) {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         match key.code {
-            KeyCode::Char('b') => {
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                pane.prompt_mut().select_all();
+                pane.set_status_message(Some("Selected all prompt text".to_string()));
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('b') | KeyCode::Char('B') => {
                 if !pane.prompt().input.is_empty() {
-                    pane.prompt_mut().move_word_left();
+                    if shift || key.code == KeyCode::Char('B') {
+                        pane.prompt_mut().select_word_left();
+                    } else {
+                        pane.prompt_mut().move_word_left();
+                    }
                 } else {
                     let _ = execute_colon_command(pane, Action::PromptBottom);
                 }
                 return Ok(Some(AppAction::Handled));
             }
-            KeyCode::Char('f') => {
+            KeyCode::Char('f') | KeyCode::Char('F') => {
                 if !pane.prompt().input.is_empty() {
-                    pane.prompt_mut().move_word_right();
+                    if shift || key.code == KeyCode::Char('F') {
+                        pane.prompt_mut().select_word_right();
+                    } else {
+                        pane.prompt_mut().move_word_right();
+                    }
                 } else {
                     let _ = execute_colon_command(pane, Action::HintsToggle);
                 }
@@ -714,11 +730,19 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Left => {
-                pane.prompt_mut().move_word_left();
+                if shift {
+                    pane.prompt_mut().select_word_left();
+                } else {
+                    pane.prompt_mut().move_word_left();
+                }
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Right => {
-                pane.prompt_mut().move_word_right();
+                if shift {
+                    pane.prompt_mut().select_word_right();
+                } else {
+                    pane.prompt_mut().move_word_right();
+                }
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Enter => {

@@ -226,6 +226,20 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
+        ColonCommand::VersionToggle(val) => {
+            let next = val.unwrap_or(!wm.config().show_version_badge);
+            wm.config_mut().show_version_badge = next;
+            for p in wm.panes_mut().values_mut() {
+                p.set_show_version_badge(next);
+            }
+            wm.quick_terminal_mut().pane.set_show_version_badge(next);
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "Bilterm v{} — status bar version badge: {}",
+                env!("CARGO_PKG_VERSION"),
+                if next { "ON" } else { "OFF" }
+            )));
+            false
+        }
         ColonCommand::SessionSave(name) => {
             match wm.save_session(&name) {
                 Ok(path) => {

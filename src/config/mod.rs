@@ -65,6 +65,8 @@ pub struct BiltermConfig {
     pub show_dos_fkey_bar: bool,
     /// Enables the top 1-row Borland Turbo Vision Menu Bar (`≡ System  Window  Prompt  View  Theme  Tmux  Help`, `ECO-03`).
     pub show_top_menubar: bool,
+    /// Displays the Bilterm version badge (`vX.Y.Z`) in the 3270 OIA status bar (`:version [on|off]`).
+    pub show_version_badge: bool,
     /// Enables automatic command history persistence (`true` by default).
     pub history_enabled: bool,
     /// Maximum number of named history session directories to retain (default `25`).
@@ -145,6 +147,7 @@ impl Default for BiltermConfig {
             drop_shadows: false,
             show_dos_fkey_bar: false,
             show_top_menubar: false,
+            show_version_badge: true,
             history_enabled: true,
             history_max_files: 25,
             history_dir: None,

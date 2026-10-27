@@ -1,6 +1,7 @@
 pub mod action;
 pub mod api;
 pub mod app;
+pub mod clipboard;
 pub mod colon_command;
 pub mod config;
 pub mod error;

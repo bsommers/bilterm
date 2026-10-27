@@ -56,6 +56,8 @@ pub struct FloatingPromptState {
     pub(crate) cursor_col: usize,
     /// Global character offset across `input` (`lines.join("\n")`).
     pub(crate) cursor_char_idx: usize,
+    /// Optional selection anchor `(row, col)` for visual Shift+Arrow or mouse drag selection.
+    pub(crate) selection_anchor: Option<(usize, usize)>,
     pub anchor: PromptAnchor,
     /// Minimum/base prompt box height in rows (default `3`, range `3..=12`).
     pub height: u16,
@@ -99,6 +101,7 @@ impl Default for FloatingPromptState {
             cursor_row: 0,
             cursor_col: 0,
             cursor_char_idx: 0,
+            selection_anchor: None,
             anchor: PromptAnchor::Top,
             height: 3,
             width_cols: None,
@@ -130,7 +133,7 @@ impl FloatingPromptState {
         }
     }
 
-    fn record_undo(&mut self) {
+    pub(crate) fn record_undo(&mut self) {
         self.completion.clear();
         let snap = self.snapshot();
         if self.undo_stack.last() != Some(&snap) {
@@ -142,7 +145,7 @@ impl FloatingPromptState {
         self.redo_stack.clear();
     }
 
-    fn sync_from_lines(&mut self) {
+    pub(crate) fn sync_from_lines(&mut self) {
         if self.lines.is_empty() {
             self.lines.push(String::new());
         }
@@ -217,6 +220,7 @@ impl FloatingPromptState {
             return;
         }
         self.record_undo();
+        let _ = self.remove_selected_span_raw();
         let byte_idx = Self::char_to_byte(&self.lines[self.cursor_row], self.cursor_col);
         self.lines[self.cursor_row].insert(byte_idx, ch);
         self.cursor_col += 1;
@@ -229,6 +233,7 @@ impl FloatingPromptState {
             return;
         }
         self.record_undo();
+        let _ = self.remove_selected_span_raw();
         let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
         for ch in normalized.chars() {
             if ch == '\n' {
@@ -249,6 +254,7 @@ impl FloatingPromptState {
     /// Inserts a newline (`Shift+Enter` or `Alt+Enter`) splitting the current line at `cursor_col`.
     pub fn insert_newline(&mut self) {
         self.record_undo();
+        let _ = self.remove_selected_span_raw();
         let byte_idx = Self::char_to_byte(&self.lines[self.cursor_row], self.cursor_col);
         let tail = self.lines[self.cursor_row].split_off(byte_idx);
         self.cursor_row += 1;
@@ -258,6 +264,9 @@ impl FloatingPromptState {
     }
 
     pub fn backspace(&mut self) {
+        if self.delete_selection().is_some() {
+            return;
+        }
         if self.cursor_col > 0 {
             self.record_undo();
             let prev_col = self.cursor_col - 1;
@@ -277,6 +286,9 @@ impl FloatingPromptState {
     }
 
     pub fn delete_char(&mut self) {
+        if self.delete_selection().is_some() {
+            return;
+        }
         let row_len = self.lines[self.cursor_row].chars().count();
         if self.cursor_col < row_len {
             self.record_undo();
@@ -293,6 +305,7 @@ impl FloatingPromptState {
 
     pub fn move_cursor_left(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         if self.cursor_col > 0 {
             self.cursor_col -= 1;
         } else if self.cursor_row > 0 {
@@ -304,6 +317,7 @@ impl FloatingPromptState {
 
     pub fn move_cursor_right(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         let row_len = self.lines[self.cursor_row].chars().count();
         if self.cursor_col < row_len {
             self.cursor_col += 1;
@@ -317,6 +331,7 @@ impl FloatingPromptState {
     /// Moves cursor up one row in multi-line input, or returns `false` if already at row 0.
     pub fn move_cursor_up(&mut self) -> bool {
         self.completion.clear();
+        self.selection_anchor = None;
         if self.cursor_row > 0 {
             self.cursor_row -= 1;
             let len = self.lines[self.cursor_row].chars().count();
@@ -331,6 +346,7 @@ impl FloatingPromptState {
     /// Moves cursor down one row in multi-line input, or returns `false` if already at the last row.
     pub fn move_cursor_down(&mut self) -> bool {
         self.completion.clear();
+        self.selection_anchor = None;
         if self.cursor_row + 1 < self.lines.len() {
             self.cursor_row += 1;
             let len = self.lines[self.cursor_row].chars().count();
@@ -344,18 +360,21 @@ impl FloatingPromptState {
 
     pub fn move_cursor_home(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         self.cursor_col = 0;
         self.sync_from_lines();
     }
 
     pub fn move_cursor_end(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         self.cursor_col = self.lines[self.cursor_row].chars().count();
         self.sync_from_lines();
     }
 
     pub fn move_word_left(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         let chars: Vec<char> = self.lines[self.cursor_row].chars().collect();
         let mut col = self.cursor_col.min(chars.len());
         while col > 0 && chars[col - 1].is_whitespace() {
@@ -370,6 +389,7 @@ impl FloatingPromptState {
 
     pub fn move_word_right(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         let chars: Vec<char> = self.lines[self.cursor_row].chars().collect();
         let n = chars.len();
         let mut col = self.cursor_col.min(n);
@@ -383,19 +403,34 @@ impl FloatingPromptState {
         self.sync_from_lines();
     }
 
-    /// `Ctrl+K`: kills from cursor to end of current line and stores in `yank_buffer`.
+    /// `Ctrl+K`: kills active selection (or from cursor to end of current line) and stores in `yank_buffer` + OS clipboard.
     pub fn kill_to_end_of_line(&mut self) {
+        if let Some(killed) = self.delete_selection() {
+            if !killed.is_empty() {
+                self.yank_buffer = killed.clone();
+                crate::clipboard::set_system_clipboard(&killed);
+            }
+            return;
+        }
         self.record_undo();
         let byte_idx = Self::char_to_byte(&self.lines[self.cursor_row], self.cursor_col);
         let killed = self.lines[self.cursor_row].split_off(byte_idx);
         if !killed.is_empty() {
-            self.yank_buffer = killed;
+            self.yank_buffer = killed.clone();
+            crate::clipboard::set_system_clipboard(&killed);
         }
         self.sync_from_lines();
     }
 
-    /// `Ctrl+W`: deletes the word preceding the cursor and stores it in `yank_buffer`.
+    /// `Ctrl+W`: deletes active selection (or the word preceding the cursor) and stores it in `yank_buffer` + OS clipboard.
     pub fn kill_prev_word(&mut self) {
+        if let Some(killed) = self.delete_selection() {
+            if !killed.is_empty() {
+                self.yank_buffer = killed.clone();
+                crate::clipboard::set_system_clipboard(&killed);
+            }
+            return;
+        }
         let orig_col = self.cursor_col;
         if orig_col == 0 {
             return;
@@ -412,6 +447,7 @@ impl FloatingPromptState {
         let start_byte = Self::char_to_byte(&self.lines[self.cursor_row], start_col);
         let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], orig_col);
         self.yank_buffer = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        crate::clipboard::set_system_clipboard(&self.yank_buffer);
         self.lines[self.cursor_row].replace_range(start_byte..end_byte, "");
         self.cursor_col = start_col;
         self.sync_from_lines();
@@ -436,18 +472,24 @@ impl FloatingPromptState {
         let start_byte = Self::char_to_byte(&self.lines[self.cursor_row], orig_col);
         let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], end_col);
         self.yank_buffer = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        crate::clipboard::set_system_clipboard(&self.yank_buffer);
         self.lines[self.cursor_row].replace_range(start_byte..end_byte, "");
         self.sync_from_lines();
     }
 
-    /// `Ctrl+Y`: yanks the last killed text at the cursor.
+    /// `Ctrl+Y`: yanks the last killed/copied text at the cursor.
     pub fn yank(&mut self) {
-        let text = self.yank_buffer.clone();
+        let text = if !self.yank_buffer.is_empty() {
+            self.yank_buffer.clone()
+        } else {
+            crate::clipboard::get_system_clipboard().unwrap_or_default()
+        };
         self.insert_str(&text);
     }
 
     pub fn undo(&mut self) -> bool {
         self.completion.clear();
+        self.selection_anchor = None;
         let Some(prev) = self.undo_stack.pop() else {
             return false;
         };
@@ -461,6 +503,7 @@ impl FloatingPromptState {
 
     pub fn redo(&mut self) -> bool {
         self.completion.clear();
+        self.selection_anchor = None;
         let Some(next) = self.redo_stack.pop() else {
             return false;
         };
@@ -474,9 +517,11 @@ impl FloatingPromptState {
 
     pub fn clear_line(&mut self) {
         self.completion.clear();
+        self.selection_anchor = None;
         if !self.input.is_empty() {
             self.record_undo();
             self.yank_buffer = self.input.clone();
+            crate::clipboard::set_system_clipboard(&self.yank_buffer);
         }
         self.lines = vec![String::new()];
         self.cursor_row = 0;
@@ -486,6 +531,7 @@ impl FloatingPromptState {
 
     pub fn take_submission(&mut self) -> String {
         self.completion.clear();
+        self.selection_anchor = None;
         let full = self.text();
         self.lines = vec![String::new()];
         self.cursor_row = 0;
@@ -723,7 +769,7 @@ impl FloatingPromptState {
         }
     }
 
-    fn char_to_byte(s: &str, char_idx: usize) -> usize {
+    pub(crate) fn char_to_byte(s: &str, char_idx: usize) -> usize {
         s.char_indices()
             .nth(char_idx)
             .map(|(i, _)| i)
@@ -732,7 +778,7 @@ impl FloatingPromptState {
 }
 
 /// Active mouse drag state for moving or resizing a pane's `FloatingCommandPrompt` (`PANE-03`),
-/// or dragging a rectangular/character selection on the `OutputCanvas` (`VAL-04`).
+/// or dragging a character/rectangular selection on the `OutputCanvas` or inside the prompt (`VAL-04`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptMouseDrag {
     /// Dragging the top border of the floating prompt vertically and/or horizontally.
@@ -745,6 +791,10 @@ pub enum PromptMouseDrag {
     ResizePromptRight,
     /// Dragging the bottom-right corner (`◢`) to resize both width and height simultaneously.
     ResizePromptCorner,
+    /// Dragging a character-stream selection (`LeftDrag`) on the `OutputCanvas`.
+    CanvasCharSelect,
     /// Dragging a rectangular block selection (`Alt+LeftDrag`) on the `OutputCanvas` (`VAL-04`).
     CanvasRectSelect,
+    /// Dragging a character selection (`LeftDrag`) inside the `FloatingCommandPrompt` editor.
+    PromptTextSelect,
 }

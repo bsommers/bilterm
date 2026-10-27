@@ -58,9 +58,24 @@ pub struct CopyModeState {
     pub cursor_col: u16,
     pub anchor: Option<(u16, u16)>,
     pub selection_kind: CopySelectionKind,
+    /// When `true`, selection was anchored via `v`/`V`/`b`/`Space` so plain arrow/`hjkl` keys extend it.
+    pub visual_lock: bool,
 }
 
 impl CopyModeState {
+    /// Returns `true` if a visual selection (`Char`, `Line`, or `Block`) is currently anchored.
+    pub fn has_selection(&self) -> bool {
+        self.anchor.is_some() && self.selection_kind != CopySelectionKind::None
+    }
+
+    /// Clears any active selection and exits Copy Mode.
+    pub fn clear_selection(&mut self) {
+        self.active = false;
+        self.anchor = None;
+        self.selection_kind = CopySelectionKind::None;
+        self.visual_lock = false;
+    }
+
     /// Returns `true` if cell `(row, col)` lies inside the current selection (`Char`, `Line`, or `Block`).
     pub fn is_cell_selected(&self, row: u16, col: u16) -> bool {
         let Some((ar, ac)) = self.anchor else {
@@ -206,7 +221,7 @@ impl CompositePane {
         self.canvas_search.selected = 0;
     }
 
-    /// Enters keyboard-driven Vi Copy Mode on the `OutputCanvas` (`Alt+C` / `:copy`, `VAL-04`).
+    /// Enters keyboard-driven Vi Copy Mode on the `OutputCanvas` (`F8` / `Alt+C` / `:copy`, `VAL-04`).
     pub fn enter_copy_mode(&mut self) {
         let (r, c) = self.vt.cursor_position();
         self.copy_mode.active = true;
@@ -214,8 +229,11 @@ impl CompositePane {
         self.copy_mode.cursor_col = c;
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
-        self.status_message =
-            Some("COPY MODE: hjkl move | v char | V line | b block | y yank | Esc exit".to_string());
+        self.copy_mode.visual_lock = false;
+        self.status_message = Some(
+            "CANVAS SELECT: Arrows/hjkl move | Shift+Arrows or v/Space select | Enter/y copy | x to prompt | Tab/F8/Esc exit"
+                .to_string(),
+        );
     }
 
     /// Exits Vi Copy Mode (`VAL-04`).
@@ -223,24 +241,64 @@ impl CompositePane {
         self.copy_mode.active = false;
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
-        self.status_message = Some("Exited Copy Mode".to_string());
+        self.copy_mode.visual_lock = false;
+        self.status_message = Some("Returned focus to Command Prompt".to_string());
     }
 
-    /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer and `OSC 52` (`VAL-04`).
+    /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer,
+    /// OS system clipboard, and `OSC 52` (`VAL-04`).
     pub fn yank_copy_selection(&mut self) -> Option<String> {
         let snap = self.vt.snapshot();
         let text = self.copy_mode.extract_selected_text(&snap);
         self.copy_mode.active = false;
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
+        self.copy_mode.visual_lock = false;
         if text.is_empty() {
             self.status_message = Some("Copy Mode: empty selection".to_string());
             return None;
         }
         self.prompt.yank_buffer = text.clone();
+        crate::clipboard::set_system_clipboard(&text);
         let seq = encode_osc52_clipboard(&text);
         self.last_osc52_sequence = Some(seq);
-        self.status_message = Some(format!("Yanked {} chars via Copy Mode", text.len()));
+        self.status_message = Some(format!("Yanked {} chars to clipboard", text.len()));
+        Some(text)
+    }
+
+    /// Yanks a mouse-dragged canvas selection into the prompt yank buffer, OS system clipboard,
+    /// and `OSC 52` while keeping the visual highlight and canvas cursor active.
+    pub fn yank_mouse_canvas_selection(&mut self) -> Option<String> {
+        let snap = self.vt.snapshot();
+        let text = self.copy_mode.extract_selected_text(&snap);
+        if text.is_empty() {
+            self.copy_mode.anchor = None;
+            self.copy_mode.selection_kind = CopySelectionKind::None;
+            self.copy_mode.visual_lock = false;
+            return None;
+        }
+        self.prompt.yank_buffer = text.clone();
+        crate::clipboard::set_system_clipboard(&text);
+        let seq = encode_osc52_clipboard(&text);
+        self.last_osc52_sequence = Some(seq);
+        self.status_message = Some(format!(
+            "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
+            text.len()
+        ));
+        Some(text)
+    }
+
+    /// Yanks the active `CopyModeState` selection to the clipboard AND inserts it into the
+    /// `FloatingCommandPrompt` at the cursor (`x` / `Ctrl+X` in Copy Mode).
+    pub fn cut_copy_selection_to_prompt(&mut self) -> Option<String> {
+        let text = self.yank_copy_selection()?;
+        if !self.read_only {
+            self.prompt.insert_str(&text);
+            self.status_message = Some(format!(
+                "Transferred {} chars from canvas to command prompt",
+                text.len()
+            ));
+        }
         Some(text)
     }
 
@@ -433,6 +491,14 @@ impl CompositePane {
 
     pub fn is_read_only(&self) -> bool {
         self.read_only
+    }
+
+    pub fn show_version_badge(&self) -> bool {
+        self.show_version_badge
+    }
+
+    pub fn set_show_version_badge(&mut self, enabled: bool) {
+        self.show_version_badge = enabled;
     }
 
     pub fn remote_target(&self) -> Option<&str> {

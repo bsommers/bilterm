@@ -99,12 +99,6 @@ unsafe fn msg_send_void_id(obj: Id, s: Sel, a: Id) {
     unsafe { f(obj, s, a) }
 }
 
-unsafe fn msg_send_id_id(obj: Id, s: Sel, a: Id) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(obj, s, a) }
-}
-
 unsafe fn msg_send_void_bool(obj: Id, s: Sel, a: bool) {
     let f: unsafe extern "C" fn(Id, Sel, bool) =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
@@ -203,6 +197,9 @@ pub enum MacGuiKeyAction {
     FontZoomIn,
     FontZoomOut,
     FontZoomReset,
+    CopySelection,
+    CutSelection,
+    SelectAll,
     PasteClipboard,
     Quit,
 }
@@ -228,6 +225,9 @@ pub fn translate_macos_key_event(
             .to_ascii_lowercase();
         return match ch {
             'q' => Some(MacGuiKeyAction::Quit),
+            'c' => Some(MacGuiKeyAction::CopySelection),
+            'x' => Some(MacGuiKeyAction::CutSelection),
+            'a' => Some(MacGuiKeyAction::SelectAll),
             'v' => Some(MacGuiKeyAction::PasteClipboard),
             '=' | '+' => Some(MacGuiKeyAction::FontZoomIn),
             '-' | '_' => Some(MacGuiKeyAction::FontZoomOut),
@@ -325,27 +325,7 @@ pub fn translate_macos_key_event(
 }
 
 fn read_macos_pasteboard() -> Option<String> {
-    let pb_cls = class(c"NSPasteboard");
-    if pb_cls.is_null() {
-        return None;
-    }
-    let pb = unsafe { msg_send_id_0(pb_cls, sel(c"generalPasteboard")) };
-    if pb.is_null() {
-        return None;
-    }
-    let pb_type = create_cfstring("public.utf8-plain-text");
-    if pb_type.is_null() {
-        return None;
-    }
-    let ns_str = unsafe { msg_send_id_id(pb, sel(c"stringForType:"), pb_type as Id) };
-    unsafe {
-        crate::ui::gui_font::macos_ct::CFRelease(pb_type);
-    }
-    if ns_str.is_null() {
-        return None;
-    }
-    let s = cfstring_to_string(ns_str.cast());
-    (!s.is_empty()).then_some(s)
+    crate::clipboard::get_system_clipboard()
 }
 
 /// Runs Bilterm inside a standalone native macOS Cocoa / CoreText GUI window (`--gui` / `Bilterm.app`).
@@ -512,6 +492,41 @@ pub fn run_macos_gui_window(mut app: App) -> Result<()> {
                             }
                             MacGuiKeyAction::FontZoomReset => {
                                 let _ = app.wm.apply(Action::FontZoomReset);
+                                app.needs_redraw = true;
+                            }
+                            MacGuiKeyAction::CopySelection => {
+                                let pane = app.wm.active_pane_mut();
+                                if pane.prompt().has_selection() {
+                                    if let Some(copied) = pane.prompt_mut().copy_selection() {
+                                        pane.prompt_mut().clear_selection();
+                                        pane.set_status_message(Some(format!(
+                                            "Copied {} chars to clipboard",
+                                            copied.chars().count()
+                                        )));
+                                    }
+                                } else if pane.copy_mode().has_selection() {
+                                    let _ = pane.yank_copy_selection();
+                                }
+                                app.needs_redraw = true;
+                            }
+                            MacGuiKeyAction::CutSelection => {
+                                let pane = app.wm.active_pane_mut();
+                                if pane.prompt().has_selection() {
+                                    if let Some(cut) = pane.prompt_mut().cut_selection_or_line() {
+                                        pane.set_status_message(Some(format!(
+                                            "Cut {} chars to clipboard",
+                                            cut.chars().count()
+                                        )));
+                                    }
+                                } else if pane.copy_mode().has_selection() {
+                                    let _ = pane.cut_copy_selection_to_prompt();
+                                }
+                                app.needs_redraw = true;
+                            }
+                            MacGuiKeyAction::SelectAll => {
+                                let pane = app.wm.active_pane_mut();
+                                pane.prompt_mut().select_all();
+                                pane.set_status_message(Some("Selected all prompt text".to_string()));
                                 app.needs_redraw = true;
                             }
                             MacGuiKeyAction::PasteClipboard => {
