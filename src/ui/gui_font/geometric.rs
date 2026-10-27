@@ -1,20 +1,139 @@
 use crate::pane::typography::FontFamilyPreset;
+use crate::ui::glyphs::GlyphPack;
 
-/// Returns `true` for box-drawing, block/shade, and Braille characters that should be drawn
-/// geometrically from cell edge to cell edge so window frames and plots never have gaps.
+/// Returns `true` for box-drawing, block/shade, Braille, and Powerline (`U+E0A0..=U+E0D7`)
+/// characters that should be drawn geometrically from cell edge to cell edge so window frames,
+/// statusline capsules, and plots never have gaps or missing-glyph boxes.
 pub fn is_geometric_glyph(ch: char) -> bool {
     matches!(
         ch,
         '\u{2500}'..='\u{257F}'
             | '\u{2580}'..='\u{259F}'
             | '\u{2800}'..='\u{28FF}'
+            | '\u{E0A0}'..='\u{E0D7}'
             | '▪'
             | '◢'
             | '►'
+            | '▶'
             | '◄'
+            | '◀'
             | '▲'
             | '▼'
     )
+}
+
+/// Returns `true` if `ch` is in a Unicode Private Use Area (`U+E000..=U+F8FF` or `U+F0000..=U+10FFFF`).
+pub fn is_private_use_area(ch: char) -> bool {
+    matches!(ch, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{10FFFF}')
+}
+
+/// Maps Nerd Font / Powerline Private Use Area icons to either a geometric glyph (`\u{E0A0}..=\u{E0D7}`)
+/// or a standard Unicode symbol present in system fonts (`Menlo`, `SF Mono`, `Apple Symbols`, `Consolas`,
+/// `DejaVu Sans Mono`) when no Nerd Font is installed.
+pub fn map_pua_icon_fallback(ch: char) -> char {
+    match ch {
+        '\u{E0A0}'..='\u{E0D7}' => ch,
+        // Git branch / merge icons (Devicons, FontAwesome, Octicons, Material)
+        '\u{E702}' | '\u{E725}' | '\u{E726}' | '\u{E727}' | '\u{E728}' | '\u{F126}'
+        | '\u{F1D3}' | '\u{F1D2}' | '\u{F418}' | '\u{F062C}' => '\u{E0A0}',
+        // Lock / read-only icons
+        '\u{F023}' | '\u{F084}' | '\u{F13E}' | '\u{F456}' | '\u{F033E}' | '\u{F0341}' => '\u{E0A2}',
+        // Apple / macOS icons
+        '\u{F179}' | '\u{F302}' | '\u{E711}' | '\u{F0035}' => '⌘',
+        // Linux / Tux / BSD / distro icons
+        '\u{F17C}' | '\u{E712}' | '\u{F300}'..='\u{F32F}' => '◆',
+        // Windows icons
+        '\u{F17A}' | '\u{E70F}' | '\u{F05B3}' => '⊞',
+        // Home directory icons
+        '\u{F015}' | '\u{F46D}' | '\u{F02DC}' => '~',
+        // Folder / directory icons
+        '\u{E5FE}' | '\u{E5FF}' | '\u{F07B}' | '\u{F07C}' | '\u{F114}' | '\u{F115}'
+        | '\u{F413}' | '\u{F4D3}' | '\u{F024B}' | '\u{F0256}' => '▸',
+        // Check / success icons
+        '\u{F00C}' | '\u{F058}' | '\u{F05D}' | '\u{F42E}' | '\u{F012C}' => '✓',
+        // Cross / failure / error icons
+        '\u{F00D}' | '\u{F057}' | '\u{F05C}' | '\u{F467}' | '\u{F0156}' => '✗',
+        // Warning / lightning / alert icons
+        '\u{F071}' | '\u{F06A}' | '\u{F0E7}' | '\u{F421}' => '!',
+        // Clock / duration / history icons
+        '\u{F017}' | '\u{F43A}' | '\u{F51F}' | '\u{F0150}' => '◷',
+        // Gear / settings / jobs icons
+        '\u{F013}' | '\u{F085}' | '\u{F423}' => '⚙',
+        // Prompt right chevrons
+        '\u{F054}' | '\u{F105}' | '\u{F101}' | '\u{F460}' => '❯',
+        // Prompt left chevrons
+        '\u{F053}' | '\u{F104}' | '\u{F100}' | '\u{F45F}' => '❮',
+        // Terminal / shell icons
+        '\u{F120}' | '\u{F489}' | '\u{E795}' => '$',
+        // Star / dirty status icons
+        '\u{F005}' | '\u{F006}' | '\u{F41E}' => '★',
+        _ => '•',
+    }
+}
+
+/// Maps Powerline and Nerd Font PUA codepoints to standard Unicode strings for TUI host terminals
+/// when `GlyphPack::NerdFont` is not enabled.
+pub fn map_tui_pua_fallback(ch: char) -> &'static str {
+    match ch {
+        '\u{E0A0}' => "⎇",
+        '\u{E0A1}' => "ℓ",
+        '\u{E0A2}' => "*",
+        '\u{E0A3}' => "⋮",
+        '\u{E0B0}' | '\u{E0C0}' | '\u{E0C4}' | '\u{E0C6}' | '\u{E0C8}' | '\u{E0CC}'
+        | '\u{E0CE}' | '\u{E0D2}' => "▶",
+        '\u{E0B1}' | '\u{E0C1}' | '\u{E0C5}' | '\u{E0CD}' => "❯",
+        '\u{E0B2}' | '\u{E0C2}' | '\u{E0C7}' | '\u{E0CA}' | '\u{E0CF}' | '\u{E0D4}' => "◀",
+        '\u{E0B3}' | '\u{E0C3}' | '\u{E0CB}' => "❮",
+        '\u{E0B4}' => "◗",
+        '\u{E0B5}' => ")",
+        '\u{E0B6}' => "◖",
+        '\u{E0B7}' => "(",
+        '\u{E0B8}' | '\u{E0BC}' => "◣",
+        '\u{E0B9}' | '\u{E0BF}' => "╲",
+        '\u{E0BA}' | '\u{E0BE}' => "◢",
+        '\u{E0BB}' | '\u{E0BD}' => "╱",
+        '\u{E0C9}'..='\u{E0D7}' => "▶",
+        other => match map_pua_icon_fallback(other) {
+            '\u{E0A0}' => "⎇",
+            '\u{E0A2}' => "*",
+            '⌘' => "⌘",
+            '◆' => "◆",
+            '⊞' => "⊞",
+            '~' => "~",
+            '▸' => "▸",
+            '✓' => "✓",
+            '✗' => "✗",
+            '!' => "!",
+            '◷' => "◷",
+            '⚙' => "⚙",
+            '❯' => "❯",
+            '❮' => "❮",
+            '$' => "$",
+            '★' => "★",
+            _ => "•",
+        },
+    }
+}
+
+/// Replaces Private Use Area characters in a TUI `ratatui::buffer::Buffer` when `glyphs` is not
+/// `GlyphPack::NerdFont` so host terminals without Nerd Fonts never show `[?]` LastResort boxes.
+pub fn sanitize_tui_pua_buffer(buf: &mut ratatui::buffer::Buffer, glyphs: GlyphPack) {
+    if glyphs == GlyphPack::NerdFont {
+        return;
+    }
+    let area = buf.area;
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                let sym = cell.symbol();
+                if let Some(ch) = sym.chars().next()
+                    && is_private_use_area(ch)
+                {
+                    cell.set_symbol(map_tui_pua_fallback(ch));
+                }
+            }
+        }
+    }
 }
 
 /// Resolves the ordered list of candidate OS TrueType font family names for `family_str`.
@@ -34,8 +153,11 @@ pub fn resolve_candidate_font_faces(family_str: &str) -> Vec<String> {
         for fb in [
             "Cascadia Mono",
             "Cascadia Code",
-            "Consolas",
+            "MesloLGS NF",
             "JetBrains Mono",
+            "SF Mono",
+            "Menlo",
+            "Consolas",
             "Lucida Console",
             "Courier New",
         ] {
@@ -73,6 +195,26 @@ pub fn draw_geometric_cell_bgra(
         if px < fb_w && py < fb_h {
             buf[(py * fb_w + px) as usize] = color;
         }
+    };
+    let blend_px = |buf: &mut [u32], px: u32, py: u32, cov: f32| {
+        if px >= fb_w || py >= fb_h || cov <= 0.01 {
+            return;
+        }
+        let idx = (py * fb_w + px) as usize;
+        if cov >= 0.99 {
+            buf[idx] = color;
+            return;
+        }
+        let a = (cov * 256.0).clamp(0.0, 256.0) as u32;
+        let inv = 256 - a;
+        let dst = buf[idx];
+        let dr = (dst >> 16) & 0xFF;
+        let dg = (dst >> 8) & 0xFF;
+        let db = dst & 0xFF;
+        let r = (u32::from(fg_rgba[0]) * a + dr * inv) >> 8;
+        let g = (u32::from(fg_rgba[1]) * a + dg * inv) >> 8;
+        let b = (u32::from(fg_rgba[2]) * a + db * inv) >> 8;
+        buf[idx] = 0xFF00_0000 | (r << 16) | (g << 8) | b;
     };
     let fill_rect = |buf: &mut [u32], rx0: u32, ry0: u32, rx1: u32, ry1: u32| {
         let x_end = rx1.min(cw);
@@ -317,6 +459,235 @@ pub fn draw_geometric_cell_bgra(
                     fill_rect(pixels, dx, dy, dx + dw, dy + dh);
                 }
             }
+        }
+        // Powerline solid right triangle `` (U+E0B0) & flame/pixelated/trapezoid right separators
+        '\u{E0B0}' | '\u{E0C0}' | '\u{E0C4}' | '\u{E0C6}' | '\u{E0C8}' | '\u{E0CC}'
+        | '\u{E0CE}' | '\u{E0D2}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            for dy in 0..ch {
+                let dist = ((dy as f32) - cy).abs() / half;
+                let x_limit = (1.0 - dist).max(0.0) * (cw as f32);
+                for dx in 0..cw {
+                    let cov = (x_limit - (dx as f32)).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline thin right chevron `` (U+E0B1)
+        '\u{E0B1}' | '\u{E0C1}' | '\u{E0C5}' | '\u{E0CD}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            let sw = (stroke as f32).max(1.4);
+            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            for dy in 0..ch {
+                let dist = ((dy as f32) - cy).abs() / half;
+                let xc = (1.0 - dist).max(0.0) * span;
+                for dx in 0..cw {
+                    let d = ((dx as f32) - xc).abs();
+                    let cov = (sw - d).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline solid left triangle `` (U+E0B2) & left flame/pixelated/trapezoid separators
+        '\u{E0B2}' | '\u{E0C2}' | '\u{E0C7}' | '\u{E0CA}' | '\u{E0CF}' | '\u{E0D4}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            for dy in 0..ch {
+                let dist = ((dy as f32) - cy).abs() / half;
+                let x_start = dist * (cw as f32);
+                for dx in 0..cw {
+                    let cov = ((dx as f32 + 1.0) - x_start).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline thin left chevron `` (U+E0B3)
+        '\u{E0B3}' | '\u{E0C3}' | '\u{E0CB}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            let sw = (stroke as f32).max(1.4);
+            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            for dy in 0..ch {
+                let dist = ((dy as f32) - cy).abs() / half;
+                let xc = dist * span;
+                for dx in 0..cw {
+                    let d = ((dx as f32) - xc).abs();
+                    let cov = (sw - d).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline solid right rounded pill cap `` (U+E0B4)
+        '\u{E0B4}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            for dy in 0..ch {
+                let ny = ((dy as f32) - cy) / half;
+                let x_limit = (1.0 - ny * ny).max(0.0).sqrt() * (cw as f32);
+                for dx in 0..cw {
+                    let cov = (x_limit - (dx as f32)).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline thin right rounded arc `` (U+E0B5)
+        '\u{E0B5}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            let sw = (stroke as f32).max(1.4);
+            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            for dy in 0..ch {
+                let ny = ((dy as f32) - cy) / half;
+                let xc = (1.0 - ny * ny).max(0.0).sqrt() * span;
+                for dx in 0..cw {
+                    let cov = (sw - ((dx as f32) - xc).abs()).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline solid left rounded pill cap `` (U+E0B6)
+        '\u{E0B6}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            for dy in 0..ch {
+                let ny = ((dy as f32) - cy) / half;
+                let x_start = (cw as f32) * (1.0 - (1.0 - ny * ny).max(0.0).sqrt());
+                for dx in 0..cw {
+                    let cov = ((dx as f32 + 1.0) - x_start).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline thin left rounded arc `` (U+E0B7)
+        '\u{E0B7}' => {
+            let cy = (ch as f32 - 1.0) * 0.5;
+            let half = cy.max(1.0);
+            let sw = (stroke as f32).max(1.4);
+            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            for dy in 0..ch {
+                let ny = ((dy as f32) - cy) / half;
+                let xc = span * (1.0 - (1.0 - ny * ny).max(0.0).sqrt());
+                for dx in 0..cw {
+                    let cov = (sw - ((dx as f32) - xc).abs()).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline lower-left solid triangle `` (U+E0B8)
+        '\u{E0B8}' => {
+            for dy in 0..ch {
+                let x_limit = ((dy as f32 + 1.0) * (cw as f32)) / (ch.max(1) as f32);
+                for dx in 0..cw {
+                    let cov = (x_limit - (dx as f32)).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline lower-right solid triangle `` (U+E0BA)
+        '\u{E0BA}' => {
+            for dy in 0..ch {
+                let x_start = (cw as f32) - ((dy as f32 + 1.0) * (cw as f32)) / (ch.max(1) as f32);
+                for dx in 0..cw {
+                    let cov = ((dx as f32 + 1.0) - x_start).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline upper-left solid triangle `` (U+E0BC)
+        '\u{E0BC}' => {
+            for dy in 0..ch {
+                let x_limit = ((ch - dy) as f32 * (cw as f32)) / (ch.max(1) as f32);
+                for dx in 0..cw {
+                    let cov = (x_limit - (dx as f32)).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline upper-right solid triangle `` (U+E0BE)
+        '\u{E0BE}' => {
+            for dy in 0..ch {
+                let x_start = ((dy as f32) * (cw as f32)) / (ch.max(1) as f32);
+                for dx in 0..cw {
+                    let cov = ((dx as f32 + 1.0) - x_start).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline diagonal slashes `` (U+E0B9), `` (U+E0BB), `` (U+E0BD), `` (U+E0BF)
+        '\u{E0B9}' | '\u{E0BF}' | '\u{E0BB}' | '\u{E0BD}' => {
+            let forward = matches!(glyph, '\u{E0BB}' | '\u{E0BD}');
+            let sw = (stroke as f32).max(1.4);
+            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            for dy in 0..ch {
+                let t = (dy as f32) / (ch.saturating_sub(1).max(1) as f32);
+                let xc = if forward { (1.0 - t) * span } else { t * span };
+                for dx in 0..cw {
+                    let cov = (sw - ((dx as f32) - xc).abs()).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        // Powerline Git branch icon `` (U+E0A0)
+        '\u{E0A0}' => {
+            let sx = (cw / 4).max(1);
+            let bx = ((cw * 3) / 4).min(cw.saturating_sub(stroke + 1));
+            let top_y = (ch / 5).max(1);
+            let bot_y = ((ch * 4) / 5).min(ch.saturating_sub(stroke + 1));
+            // Left vertical stem + top/bottom nodes
+            v_seg(pixels, sx, top_y, bot_y + stroke);
+            fill_rect(pixels, sx.saturating_sub(1), top_y.saturating_sub(1), sx + stroke + 1, top_y + stroke + 1);
+            fill_rect(pixels, sx.saturating_sub(1), bot_y.saturating_sub(1), sx + stroke + 1, bot_y + stroke + 1);
+            // Right branch node + connector
+            fill_rect(pixels, bx.saturating_sub(1), top_y.saturating_sub(1), bx + stroke + 1, top_y + stroke + 1);
+            v_seg(pixels, bx, top_y, my + stroke);
+            h_seg(pixels, sx, bx + stroke, my);
+        }
+        // Powerline Padlock icon `` (U+E0A2)
+        '\u{E0A2}' => {
+            let bx0 = (cw / 5).max(1);
+            let bx1 = ((cw * 4) / 5).min(cw.saturating_sub(1));
+            let by0 = my.saturating_sub(1);
+            let by1 = ((ch * 4) / 5).min(ch.saturating_sub(1));
+            fill_rect(pixels, bx0, by0, bx1, by1);
+            let sx0 = (cw / 3).max(bx0);
+            let sx1 = ((cw * 2) / 3).min(bx1).max(sx0 + stroke);
+            let sy0 = (ch / 5).max(1);
+            v_seg(pixels, sx0, sy0, by0);
+            v_seg(pixels, sx1.saturating_sub(stroke), sy0, by0);
+            h_seg(pixels, sx0, sx1, sy0);
+        }
+        // Powerline Line/Column icons `` (U+E0A1), `` (U+E0A3), and remaining E0C0..E0D7
+        '\u{E0A1}' | '\u{E0A3}' | '\u{E0C0}'..='\u{E0D7}' => {
+            v_seg(pixels, lx, ch / 4, (ch * 3) / 4);
+            h_seg(pixels, lx, rx + stroke, (ch * 3) / 4);
         }
         _ => {}
     }

@@ -179,12 +179,68 @@ fn rasterize_box_or_block(
                 fg,
             );
         }
-        '◢' => {
+        '◢' | '\u{E0BA}' => {
             for gy in 0..ch {
                 let start_gx = cw.saturating_sub(((gy + 1) * cw) / ch.max(1));
                 for gx in start_gx..cw {
                     put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
                 }
+            }
+        }
+        '◣' | '\u{E0B8}' => {
+            for gy in 0..ch {
+                let end_gx = (((gy + 1) * cw) / ch.max(1)).min(cw);
+                for gx in 0..end_gx {
+                    put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
+                }
+            }
+        }
+        '◤' | '\u{E0BC}' => {
+            for gy in 0..ch {
+                let end_gx = (((ch - gy) * cw) / ch.max(1)).min(cw);
+                for gx in 0..end_gx {
+                    put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
+                }
+            }
+        }
+        '◥' | '\u{E0BE}' => {
+            for gy in 0..ch {
+                let start_gx = ((gy * cw) / ch.max(1)).min(cw);
+                for gx in start_gx..cw {
+                    put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
+                }
+            }
+        }
+        '\u{E0B0}' | '\u{E0B4}' | '\u{E0C0}' | '\u{E0C4}' | '\u{E0C6}' | '\u{E0C8}' => {
+            let half = (ch / 2).max(1);
+            for gy in 0..ch {
+                let dist = gy.abs_diff(half);
+                let span = ((half.saturating_sub(dist) + 1) * cw) / (half + 1);
+                fill_rect(fb, w_px, h_px, x0, y0 + gy, span.clamp(1, cw), 1, fg);
+            }
+        }
+        '\u{E0B2}' | '\u{E0B6}' | '\u{E0C2}' | '\u{E0C7}' | '\u{E0CA}' => {
+            let half = (ch / 2).max(1);
+            for gy in 0..ch {
+                let dist = gy.abs_diff(half);
+                let span = (((half.saturating_sub(dist) + 1) * cw) / (half + 1)).clamp(1, cw);
+                fill_rect(fb, w_px, h_px, x0 + cw - span, y0 + gy, span, 1, fg);
+            }
+        }
+        '\u{E0B1}' | '\u{E0B5}' => {
+            let half = (ch / 2).max(1);
+            for gy in 0..ch {
+                let dist = gy.abs_diff(half);
+                let gx = ((half.saturating_sub(dist) * cw.saturating_sub(1)) / half).min(cw.saturating_sub(1));
+                put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
+            }
+        }
+        '\u{E0B3}' | '\u{E0B7}' => {
+            let half = (ch / 2).max(1);
+            for gy in 0..ch {
+                let dist = gy.abs_diff(half);
+                let gx = ((dist * cw.saturating_sub(1)) / half).min(cw.saturating_sub(1));
+                put_px(fb, w_px, h_px, x0 + gx, y0 + gy, fg);
             }
         }
         '─' | '━' | '╌' | '┄' => fill_rect(fb, w_px, h_px, x0, my, cw, 1, fg),

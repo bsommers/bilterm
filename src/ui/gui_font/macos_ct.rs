@@ -15,7 +15,10 @@ use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use std::ptr::{null, null_mut};
 
-use super::geometric::{draw_geometric_cell_bgra, is_geometric_glyph, resolve_candidate_font_faces};
+use super::geometric::{
+    draw_geometric_cell_bgra, is_geometric_glyph, map_pua_icon_fallback,
+    resolve_candidate_font_faces,
+};
 use crate::pane::typography::{
     FontFamilyPreset, default_custom_fonts_dir, register_custom_font_file,
     registered_custom_fonts, scan_and_register_fonts_dir,
@@ -187,6 +190,82 @@ pub fn cfstring_to_string(cf: CFStringRef) -> String {
         );
     }
     String::from_utf16_lossy(&buf)
+}
+
+fn is_last_resort_font(font: CTFontRef) -> bool {
+    if font.is_null() {
+        return true;
+    }
+    let cf = unsafe { CTFontCopyFamilyName(font) };
+    let name = cfstring_to_string(cf);
+    if !cf.is_null() {
+        unsafe { CFRelease(cf) };
+    }
+    name.to_ascii_lowercase().contains("lastresort")
+}
+
+fn try_draw_with_coretext_fallback(
+    font: CTFontRef,
+    text: &str,
+    pos: CGPoint,
+    ctx: CGContextRef,
+) -> bool {
+    let utf16: Vec<u16> = text.encode_utf16().collect();
+    if utf16.is_empty() {
+        return false;
+    }
+    let mut glyphs = vec![0u16; utf16.len()];
+    let primary_ok = unsafe {
+        CTFontGetGlyphsForCharacters(
+            font,
+            utf16.as_ptr(),
+            glyphs.as_mut_ptr(),
+            utf16.len() as isize,
+        )
+    };
+    if primary_ok && glyphs[0] != 0 && !is_last_resort_font(font) {
+        unsafe {
+            CTFontDrawGlyphs(font, glyphs.as_ptr(), &pos, 1, ctx);
+        }
+        return true;
+    }
+    let cf_str = create_cfstring(text);
+    if cf_str.is_null() {
+        return false;
+    }
+    let cf_len = unsafe { CFStringGetLength(cf_str) };
+    let fb_font = unsafe {
+        CTFontCreateForString(
+            font,
+            cf_str,
+            CFRange {
+                location: 0,
+                length: cf_len,
+            },
+        )
+    };
+    let mut drew = false;
+    if !fb_font.is_null() {
+        if !is_last_resort_font(fb_font) {
+            let fb_ok = unsafe {
+                CTFontGetGlyphsForCharacters(
+                    fb_font,
+                    utf16.as_ptr(),
+                    glyphs.as_mut_ptr(),
+                    utf16.len() as isize,
+                )
+            };
+            if fb_ok && glyphs[0] != 0 {
+                unsafe {
+                    CTFontDrawGlyphs(fb_font, glyphs.as_ptr(), &pos, 1, ctx);
+                }
+                drew = true;
+            }
+        }
+        unsafe { CFRelease(fb_font) };
+    }
+    unsafe { CFRelease(cf_str) };
+    drew
 }
 
 /// CoreText + CoreGraphics 1:1 Retina HiDPI canvas for `bilterm --gui` on macOS.
@@ -582,6 +661,7 @@ impl MacosGuiCanvas {
                 pos_buf.clear();
                 pos_buf.resize(count, CGPoint { x, y: baseline_y });
 
+                let pos = CGPoint { x, y: baseline_y };
                 let found = unsafe {
                     CTFontGetGlyphsForCharacters(
                         font,
@@ -594,43 +674,36 @@ impl MacosGuiCanvas {
                     unsafe {
                         CTFontDrawGlyphs(font, glyph_buf.as_ptr(), pos_buf.as_ptr(), 1, ctx);
                     }
-                } else {
-                    let cf_str = create_cfstring(&g.text);
-                    if !cf_str.is_null() {
-                        let cf_len = unsafe { CFStringGetLength(cf_str) };
-                        let fb_font = unsafe {
-                            CTFontCreateForString(
-                                font,
-                                cf_str,
-                                CFRange {
-                                    location: 0,
-                                    length: cf_len,
-                                },
-                            )
+                } else if !try_draw_with_coretext_fallback(font, &g.text, pos, ctx) {
+                    let mapped = map_pua_icon_fallback(ch);
+                    if is_geometric_glyph(mapped) {
+                        let cw = if g.cell_width_px > 0 {
+                            u32::from(g.cell_width_px)
+                        } else {
+                            default_cw
                         };
-                        if !fb_font.is_null() {
-                            let fb_ok = unsafe {
-                                CTFontGetGlyphsForCharacters(
-                                    fb_font,
-                                    utf16_buf.as_ptr(),
-                                    glyph_buf.as_mut_ptr(),
-                                    count as isize,
-                                )
-                            };
-                            if fb_ok && glyph_buf[0] != 0 {
-                                unsafe {
-                                    CTFontDrawGlyphs(
-                                        fb_font,
-                                        glyph_buf.as_ptr(),
-                                        pos_buf.as_ptr(),
-                                        1,
-                                        ctx,
-                                    );
-                                }
-                            }
-                            unsafe { CFRelease(fb_font) };
+                        let ch_px = if g.cell_height_px > 0 {
+                            u32::from(g.cell_height_px)
+                        } else {
+                            default_ch
+                        };
+                        draw_geometric_cell_bgra(
+                            &mut self.pixels,
+                            fb_w,
+                            fb_h,
+                            g.x_px.max(0.0) as u32,
+                            g.y_px.max(0.0) as u32,
+                            cw,
+                            ch_px,
+                            mapped,
+                            g.fg_rgba,
+                        );
+                    } else {
+                        let mut buf_s = [0u8; 4];
+                        let mapped_str = mapped.encode_utf8(&mut buf_s);
+                        if !try_draw_with_coretext_fallback(font, mapped_str, pos, ctx) {
+                            let _ = try_draw_with_coretext_fallback(font, "•", pos, ctx);
                         }
-                        unsafe { CFRelease(cf_str) };
                     }
                 }
             }

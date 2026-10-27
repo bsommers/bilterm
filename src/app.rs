@@ -61,6 +61,10 @@ impl App {
                     self.last_viewport = area;
                     let _ = self.wm.resize_all(area);
                     frame.render_widget(WorkspaceWidget::new(&self.wm), area);
+                    crate::ui::gui_font::geometric::sanitize_tui_pua_buffer(
+                        frame.buffer_mut(),
+                        self.wm.config().glyphs,
+                    );
                 })?;
                 self.needs_redraw = false;
             }

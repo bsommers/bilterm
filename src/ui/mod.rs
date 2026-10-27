@@ -150,8 +150,14 @@ fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: 
     if s.is_empty() {
         return false;
     }
-    if unicode_width::UnicodeWidthStr::width(s) != expected_width {
-        return false;
+    let w = unicode_width::UnicodeWidthStr::width(s);
+    if w != expected_width {
+        let is_single_pua = expected_width == 1
+            && s.chars().count() == 1
+            && s.chars().next().is_some_and(gui_font::geometric::is_private_use_area);
+        if !is_single_pua {
+            return false;
+        }
     }
     for ch in s.chars() {
         let code = ch as u32;

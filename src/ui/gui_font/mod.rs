@@ -42,4 +42,26 @@ mod tests {
         assert_eq!(custom[0], "My Custom Monospace");
         assert!(custom.contains(&"Cascadia Mono".to_string()));
     }
+
+    #[test]
+    fn powerline_and_pua_glyphs_render_without_missing_boxes() {
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+
+        use crate::ui::glyphs::GlyphPack;
+
+        for ch in ['\u{E0B0}', '\u{E0B1}', '\u{E0B2}', '\u{E0B3}', '\u{E0B4}', '\u{E0B6}', '\u{E0A0}', '\u{E0A2}'] {
+            assert!(is_geometric_glyph(ch));
+            let mut pixels = vec![0xFF00_0000u32; 16 * 32];
+            draw_geometric_cell_bgra(&mut pixels, 16, 32, 0, 0, 16, 32, ch, [85, 255, 255, 255]);
+            assert!(pixels.iter().any(|&p| p != 0xFF00_0000), "expected drawn pixels for {ch:?}");
+        }
+
+        let area = Rect::new(0, 0, 24, 1);
+        let mut buf = Buffer::empty(area);
+        buf.set_string(0, 0, " bill@bigmac \u{e0b0} ~ \u{e0b0}", ratatui::style::Style::default());
+        sanitize_tui_pua_buffer(&mut buf, GlyphPack::Unicode);
+        assert_eq!(buf.cell((13, 0)).unwrap().symbol(), "▶");
+        assert_eq!(buf.cell((17, 0)).unwrap().symbol(), "▶");
+    }
 }
