@@ -524,6 +524,21 @@ pub fn handle_wm_mouse_event(
         wm.focus_and_raise(hit_id);
     }
 
+    if mouse.modifiers.contains(KeyModifiers::CONTROL)
+        && matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+    {
+        if let Focus::Pane(hit_id) = hit_focus {
+            wm.focus_and_raise(hit_id);
+        }
+        if matches!(mouse.kind, MouseEventKind::ScrollUp) {
+            wm.font_zoom_in();
+        } else {
+            wm.font_zoom_out();
+        }
+        wm.resize_all(workspace_area)?;
+        return Ok(AppAction::Handled);
+    }
+
     if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
         && !rect_contains(inner, mouse.column, mouse.row)
     {
