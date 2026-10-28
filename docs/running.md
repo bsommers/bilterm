@@ -1,4 +1,4 @@
-# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v1.12.0`)
+# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v2.1.0`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 
@@ -25,9 +25,11 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### Complete CLI Options (`v1.12.0`)
+### Complete CLI Options (`v2.1.0`)
 ```bash
-bilterm                                         # Launch interactive TUI multiplexer in current terminal
+bilterm                                         # Launch interactive TUI multiplexer (auto-resumes detached session)
+bilterm attach [session] / -a / --attach        # Re-attach to live background daemon or restore saved multi-pane layout
+bilterm ls / sessions / --list-sessions         # List live background daemon sockets & saved .toml session layouts
 bilterm -G / --gui                              # Launch standalone native desktop GUI window (X11 / Win32 / Cocoa)
 bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16 # Native GUI with custom font family & point size
 bilterm --gui --gui-font-file /path/to/font.ttf --gui-font-size 15 # Native GUI with explicit TTF/OTF file
@@ -47,7 +49,7 @@ bilterm -C / --completions bash|zsh|fish        # Generate shell completions for
 bilterm -s / --session <name>                   # Use (and restore) a named persistent command-history session
 bilterm -c / --config <config.toml>             # Load configuration from custom TOML file path
 bilterm -M / --man                              # Print roff(7) manual page (docs/bilterm.1)
-bilterm -v / -V / --version                     # Print version (bilterm 1.12.0)
+bilterm -v / -V / --version                     # Print version (bilterm 2.1.0)
 bilterm -h / --help                             # Print CLI usage summary
 ```
 
@@ -99,8 +101,8 @@ Bilterm supports **two complementary `<Tab>` completion modes** depending on whe
 When typing inside Bilterm's floating or split command prompt (`==> `), pressing **`Tab`** (or **`Shift+Tab`** to cycle backwards) invokes Bilterm's zero-latency completion engine (`compute_completions`):
 
 1. **`:colon` Commands & Sub-Arguments**:
-   - If the line begins with `:`, Bilterm completes all built-in multiplexer commands (`:prompt`, `:split`, `:vsplit`, `:layout`, `:deck`, `:focus`, `:zoom`, `:quake`, `:theme`, `:outline`, `:border`, `:shadows`, `:glyphs`, `:cursor`, `:crosshair`, `:fkeybar`, `:history`, `:block`, `:yank`, `:clear`, `:raw`, `:help`, `:quit`, `:fontsize`, `:font`, `:canvas`, `:drawer`, `:ssh`, `:ssh-tmux`, `:remote`, `:session`, `:record`, `:spotlight`, `:focalzoom`, `:resize`, `:move`, `:equalize`).
-   - Pressing `Tab` after a command space (e.g., `:prompt <Tab>`, `:outline <Tab>`, `:theme <Tab>`, `:shadows <Tab>`, `:history <Tab>`, `:crosshair <Tab>`, `:font <Tab>`, `:canvas <Tab>`, `:drawer <Tab>`) completes valid sub-arguments.
+   - If the line begins with `:`, Bilterm completes all built-in multiplexer commands (`:mcp`, `:detach`, `:attach`, `:exit-guard`, `:respawn-pane`, `:scroll`, `:more`, `:prompt`, `:split`, `:vsplit`, `:layout`, `:deck`, `:focus`, `:zoom`, `:quake`, `:theme`, `:outline`, `:border`, `:shadows`, `:glyphs`, `:cursor`, `:crosshair`, `:fkeybar`, `:history`, `:block`, `:yank`, `:clear`, `:raw`, `:help`, `:quit`, `:quit!`, `:fontsize`, `:font`, `:canvas`, `:drawer`, `:ssh`, `:ssh-tmux`, `:remote`, `:session`, `:record`, `:spotlight`, `:focalzoom`, `:resize`, `:move`, `:equalize`).
+   - Pressing `Tab` after a command space (e.g., `:mcp <Tab>`, `:exit-guard <Tab>`, `:scroll <Tab>`, `:session <Tab>`, `:prompt <Tab>`, `:outline <Tab>`, `:theme <Tab>`, `:shadows <Tab>`, `:history <Tab>`, `:crosshair <Tab>`, `:font <Tab>`, `:canvas <Tab>`, `:drawer <Tab>`) completes valid sub-arguments.
 2. **Command Position (First Token on a Line or After `|` / `;` / `&&`)**:
    - **Explicit Paths**: If the token starts with `./`, `../`, `/`, or `~/`, Bilterm completes matching filesystem entries relative to the child shell's live working directory.
    - **Shell Builtins & Keywords**: Matches standard shell builtins (`cd`, `echo`, `export`, `source`, `alias`, `unalias`, `history`, `jobs`, `fg`, `bg`, `kill`, `pwd`, `read`, `set`, `unset`, `shift`, `test`, `time`, `trap`, `type`, `ulimit`, `umask`, `wait`, `which`, `sudo`, `env`, `exec`, `eval`, `exit`, `return`, `true`, `false`).

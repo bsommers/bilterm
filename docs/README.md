@@ -39,7 +39,8 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 | Command | Description |
 |---------|-------------|
 | `bilterm` | Launch interactive IBM 3270 × Borland Turbo Vision TUI multiplexer (auto-resumes detached session) |
-| `bilterm attach [session]` (`-a` / `--attach`) | Re-attach & restore saved/detached multi-pane window layout intact |
+| `bilterm attach [session]` (`-a` / `--attach`) | Re-attach & restore saved/detached multi-pane window layout intact (via live daemon RPC or saved session) |
+| `bilterm ls` (`bilterm sessions` / `--list-sessions`) | List live background daemon sockets (`LIVE DAEMON`) & saved `.toml` layouts (`SAVED LAYOUT`) |
 | `bilterm -G` / `--gui` | Launch standalone native desktop GUI window (X11 / Win32 GDI / Cocoa) |
 | `bilterm --gui-font <NAME>` (`-F` / `--font`) | Set font family or preset (`"JetBrains Mono"`, `"IBM 3270"`, `"Fira Code"`, `"vga"`, etc.) |
 | `bilterm --gui-font-size <PT>` (`--font-size`) | Set base font size in points (`6..=72`, default `16`) |
@@ -58,7 +59,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.0.0`) |
+| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.1.0`) |
 | `bilterm -h` / `--help` | Print CLI help summary |
 
 ---
@@ -69,7 +70,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 |--------|----------|------------|
 | **Help / Command Palette / 3270 Inspector** | `F1` (`<L> ?`) / `Ctrl+P` (`<L> :`) / `F9` (`<L> i`) | `:help` / `:palette` / `:inspector` |
 | **Detach & Leave Window Layout Intact / Re-Attach** | `Ctrl+X D` / Exit Guard `[d]` | `:detach [name]` / `:attach [name]` |
-| **MCP Root Console (Floating vs. Push-Out)** | `m` (Float↔Push), `d` (Edge), `Esc` (Close) | `:mcp [status \| tree \| float \| push [edge] \| spawn \| graft \| broadcast \| freeze \| thaw \| derez --confirm \| checkpoint \| shutdown --confirm]` |
+| **MCP Root Console (Floating vs. Push-Out)** | `↑`/`↓`/`j`/`k`/`Enter`/Click (Select & Activate), `r` (Refresh), `f` (Freeze/Thaw), `n` (Branch), `m` (Float↔Push), `d` (Edge), `Esc` | `:mcp [status \| tree \| float \| push [edge] \| spawn \| graft \| broadcast \| freeze \| thaw \| derez --confirm \| checkpoint \| shutdown --confirm]` |
 | **Exit Guard & In-Place Shell Respawn** | `[r]` Respawn, `[d]` Detach, `[q]` Quit | `:exit-guard [guard \| respawn \| detach \| off]` / `:respawn-pane` |
 | **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> -` / `Alt+H`) / `<L> \|` (`Alt+V`) / `F5` (`<L> z`) | `:split h` / `:split v` / `:zoom` |
 | **Per-Pane Font Zoom In / Out / Reset** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset \| <pt> \| <pct>%]` / `:font` |

@@ -25,7 +25,9 @@
 
 | CLI Option / Subcommand | Short / Alias | Arguments | Description |
 |-------------------------|---------------|-----------|-------------|
-| `bilterm` | — | *(none)* | Launch interactive TUI multiplexer inside the current host terminal |
+| `bilterm` | — | *(none)* | Launch interactive TUI multiplexer inside the current host terminal (auto-resumes detached session) |
+| `attach` | `-a`, `--attach` | `[SESSION]` | Re-attach to live background daemon (`daemon-<session>.sock`) or restore saved multi-pane layout |
+| `ls` / `sessions` | `--list-sessions` | *(none)* | List live background daemon sockets (`LIVE DAEMON`) & saved `.toml` layouts (`SAVED LAYOUT`) |
 | `--gui` | `-G` | *(none)* | Launch standalone native desktop GUI window (X11 on Linux, Win32 GDI on Windows, Cocoa/AppKit on macOS) |
 | `--gui-font` | `-F`, `--font` | `<FAMILY>` | Font family or preset for native `--gui` window or `--gui-dump` (e.g. `"JetBrains Mono"`, `"IBM 3270"`, `"Fira Code"`, `"ibm3270"`, `"vga"`, `"tek4014"`, `"iosevka"`, `"cascadia"`, `"hack"`) |
 | `--gui-font-size` | `--font-size` | `<PT>` | Base font size in points (`6..=72`, default `16`) for `--gui` and `--gui-dump` |
@@ -45,7 +47,7 @@
 | `--gui-dump` | `-g` | `<PATH.ppm\|.svg>` | Render workspace via `GuiWorkspaceRenderer` to a standalone `.ppm` or `.svg` file and exit |
 | `--completions` | `-C` | `<bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `--man` | `-M` | *(none)* | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `--version` | `-v`, `-V` | *(none)* | Print version string (`bilterm 1.12.0`) |
+| `--version` | `-v`, `-V` | *(none)* | Print version string (`bilterm 2.1.0`) |
 | `--help` | `-h` | *(none)* | Print CLI usage summary |
 
 ---
@@ -80,7 +82,10 @@
 | `Alt+O` | `<L> L` | `:spotlight` | Cycle Focal Spotlight shader around active cursor (`Circle` -> `Ellipse` -> `Pixel` -> `Off`) |
 | `Alt+Shift+O` | — | `:focalzoom` | Cycle Focal Zoom Magnifying Lens (`1.25x` -> `1.5x` -> `2.0x` -> `Off`) |
 | `Alt+}` / `Alt+{` | `<L> }` / `<L> {` | `:spotlight +\|-` | Expand or shrink Focal Spotlight / Focal Zoom lens radius |
-| **`Ctrl+Q`** | `<L> Ctrl+Q` | `:quit` / `:q` | Cleanly exit Bilterm |
+| — | `Ctrl+X D` | `:detach [name]` | Detach client & spawn background daemon keeping full multi-pane layout intact |
+| — | — | `:attach [name]` | Re-attach & restore saved/detached multi-pane window layout in-place |
+| — | — | `:mcp [status\|tree\|...]` | Open interactive Master Control Program Console (`↑`/`↓`/`j`/`k`/`Enter`/Click, `r`, `f`, `n`, `m`, `d`) |
+| **`Ctrl+Q`** | `<L> Ctrl+Q` | `:quit` / `:q` / `:quit!` | Exit Bilterm (`:quit` honors Exit Guard; `:quit!` forces immediate exit) |
 
 ---
 
@@ -259,11 +264,17 @@
 | `:ssh-tmux` | `:sshtmux` | `<user@host \| profile> [session]` | Attach or spawn persistent remote `tmux -CC` session over SSH |
 | `:remote` | `:fleet`, `:herdr` | `list \| add <name> <user@host> [@tag1,@tag2] \| exec <all\|local\|remote\|@tag\|node> <cmd> \| disconnect <name>` | Register remote fleet nodes, inspect fleet status, fan out commands by `@tag`, or disconnect nodes |
 
-### 6.8 Workspace Sessions, Recording, Triggers & Inspection
+### 6.8 Workspace Sessions, Master Control Program (`:mcp`), Exit Guard, Recording & Inspection
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:session` | `:workspace` | `save [name] \| restore [name] \| list` | Save or restore multi-pane workspace topology and pane metadata (`$XDG_STATE_HOME/bilterm/sessions/<name>.toml`) |
+| `:detach` | — | `[name]` | Save full multi-pane layout (`SplitTree` + `ZStack` + prompts + screen lines), spawn background daemon (`daemon-<session>.sock`), and detach |
+| `:attach` | — | `[name]` | Re-attach to live background daemon via JSON-RPC or restore saved `.toml` workspace layout |
+| `:mcp` | — | `[status \| tree \| float \| push [edge] \| attach <node> \| spawn <parent/child> \| graft <src> <dst> \| detach-subtree <node> \| broadcast <node> <cmd> \| freeze <node> \| thaw <node> \| derez <node> --confirm \| checkpoint \| shutdown --confirm]` | Master Control Program Root Console (`↑`/`↓`/`j`/`k`/`Enter`/Click to activate row, `r`=Refresh, `f`=Freeze/Thaw, `n`=Branch, `m`=Float↔Push, `d`=Edge, `Esc`=Close) |
+| `:exit-guard` | `:exitguard` | `[guard \| respawn \| detach \| off]` | Configure final/root shell exit protection (`[r]` Respawn, `[d]` Detach, `[q]` Quit) |
+| `:respawn-pane` | `:respawn` | *(none)* | Respawn an exited shell in-place inside a held pane |
+| `:scroll` | `:more`, `:pagehold` | `[smooth \| page \| instant \| toggle \| next \| prev \| release \| clear]` | Configure Mainframe Page-Hold (`MORE...`) & Smooth Scroller (`PF8`/`PA2`/`Space`/Click OIA `SCRL`) |
+| `:session` | `:workspace` | `save [name] \| restore [name] \| list \| tree \| branch <parent/child> \| graft <src> <dst> \| detach-subtree <node> \| checkpoint [slot]` | Save/restore multi-pane workspace topology and manage hierarchical `SessionTree` (`$XDG_STATE_HOME/bilterm/sessions/<name>.toml`) |
 | `:record` | `:rec`, `:asciinema` | `[start [path.cast] \| workspace [path.cast] \| pane [path.cast] \| stop]` | Start/stop whole-workspace (`WorkspaceRecorder`) or single-pane (`SessionRecorder`) Asciicast v2 `.cast` recording |
 | `:trigger` | `:triggers` | `add <pattern> \| clear` | Highlight matching case-insensitive tokens on the `OutputCanvas` and increment OIA trigger counter |
 | `:notifications` | `:notify`, `:bell` | `clear` | Clear `OSC 9` / `OSC 777` desktop notification and bell counter (`🔔`) |

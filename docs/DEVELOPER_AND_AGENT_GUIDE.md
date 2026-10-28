@@ -102,14 +102,24 @@ src/
 │   └── scrollback_tests.rs     # ScrollbackGovernor unit tests
 ├── wm/
 │   ├── mod.rs                  # Encapsulated WindowManager (private fields, apply(Action), remove_pane, Modal, Focus)
-│   ├── session.rs              # Workspace session save/restore/list, SSH/fleet helpers, palette items, scrollback sync
+│   ├── v2_runtime.rs           # v2.1 runtime handlers (:detach, :attach, :mcp interactive actions, :exit-guard, :scroll)
+│   ├── session.rs              # Workspace session save/restore/list (SplitTree + ZStack + prompts + lines), SSH/fleet helpers
 │   ├── split_tree.rs           # Recursive H/V binary space partitioning (SplitTree, SplitDirection)
 │   ├── z_stack.rs              # Overlapping Borland Turbo Vision z-order window deck (ZStack)
 │   ├── drawer.rs               # herdr-style slide-out Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
 │   ├── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal) & frame helpers
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
+├── daemon/
+│   ├── mod.rs                  # Background Multiplexer Daemon exports, DaemonAction & DaemonHandshake
+│   ├── process.rs              # Live OS process daemonization (daemon-<session>.sock, stale cleanup, session discovery)
+│   ├── journal.rs              # Atomic WorkspaceJournal & crash-safe checkpoint rotation
+│   └── session_tree.rs         # Hierarchical SessionTree (root -> branch -> leaf, graft, freeze/thaw, derez)
+├── mcp_console/
+│   └── mod.rs                  # Master Control Program (:mcp) state, McpDisplayMode (Float/Push), McpRowAction & parser
 ├── ui/
 │   ├── mod.rs                  # 3-pass Ratatui compositor (WorkspaceWidget, CompositePaneWidget) + cell_to_ratatui_style
+│   ├── mcp_ui.rs               # Interactive :mcp Floating/Push-Out Console & Exit Guard banner renderer
+│   ├── help_catalog.rs         # Complete <F1>/:help reference lines & Ctrl+P/:palette command catalog
 │   ├── gui_window.rs           # Standalone native OS GUI window runner (bilterm --gui / -G, Win32 GDI + Unix fallback)
 │   ├── bitmap_font.rs          # IBM VGA / CP437 5x7 fallback bitmap font & exact box-drawing/block rasterizer
 │   ├── gui_font/
@@ -136,6 +146,7 @@ src/
     ├── mod.rs                  # Public automation API exports & ListenConfig/ListenEndpoint policy
     ├── json.rs                 # Zero-dependency recursive-descent JSON parser/serializer (depth-guarded <= 64)
     ├── rpc.rs                  # AutomationControlPlane JSON-RPC 2.0 method dispatcher & confined PPM snapshots
+    ├── rpc_handlers.rs         # JSON-RPC 2.0 workspace/pane/session.save/session.restore/fleet handlers
     ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (11 agent tools)
     ├── playbook.rs             # AutomationEvent bus & declarative TOML Playbook runner
     ├── server.rs               # Async Unix domain socket (0600 + peer UID) & TCP bearer-token RPC server/client
