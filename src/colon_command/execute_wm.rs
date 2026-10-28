@@ -619,6 +619,32 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.reset_window_geometries();
             false
         }
+        ColonCommand::ForceQuit => true,
+        ColonCommand::DetachClient => wm.detach_client(),
+        ColonCommand::ExitProtectionSet(policy) => {
+            wm.config_mut().exit_protection = policy;
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "Exit protection policy set to {}",
+                policy.label()
+            )));
+            false
+        }
+        ColonCommand::ThemeCommand(ref subcmd) => {
+            wm.execute_theme_command(subcmd);
+            false
+        }
+        ColonCommand::SessionTreeCommand(ref subcmd) => {
+            wm.execute_session_tree_command(subcmd);
+            false
+        }
+        ColonCommand::McpCommand(ref subcmd) => wm.execute_mcp_command(subcmd),
+        ColonCommand::Quit => {
+            if wm.intercept_prompt_exit_if_needed("exit") {
+                wm.is_client_detached()
+            } else {
+                true
+            }
+        }
         other => execute_colon_command(wm.active_pane_mut(), other),
     }
 }

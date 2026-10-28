@@ -1,5 +1,6 @@
 pub mod canvas_scene;
 pub mod completion;
+pub mod exit_guard;
 pub mod fuzzy_history;
 pub mod highlight;
 pub mod history_store;
@@ -13,6 +14,7 @@ pub use canvas_scene::{
     CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
     PaneCanvasScene, PlotKind, Sprite2D, VectorPrimitive,
 };
+pub use exit_guard::{ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, HeldExitedShellState};
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
 pub use scroll::{PaneScrollMode, PaneScrollState};
@@ -75,6 +77,8 @@ pub struct CompositePane {
     last_osc52_sequence: Option<String>,
     last_canvas_size: (u16, u16),
     exited: bool,
+    /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
+    pub(crate) held_exited_shell: Option<HeldExitedShellState>,
 }
 
 impl CompositePane {
@@ -111,6 +115,7 @@ impl CompositePane {
             last_osc52_sequence: None,
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
+            held_exited_shell: None,
         }
     }
 
@@ -696,6 +701,44 @@ impl CompositePane {
 
     pub fn has_exited(&self) -> bool {
         self.exited
+    }
+
+    /// Returns the active hold-on-exit banner state if this pane's shell exited under `ExitProtectionPolicy::Guard` (`SAFE-01`).
+    pub fn held_exited_shell(&self) -> Option<&HeldExitedShellState> {
+        self.held_exited_shell.as_ref()
+    }
+
+    /// Transitions this pane into hold-on-exit mode (`🔒 [SHELL EXITED ...]`) instead of closing it (`SAFE-01`).
+    pub fn hold_exited_shell(&mut self, exit_code: Option<i32>) {
+        // Drop live PTY handle so the background `bilterm-pty-reaper` reaps it non-blockingly.
+        self.pty = None;
+        self.exited = false;
+        let held = HeldExitedShellState::new(exit_code);
+        self.status_message = Some(held.banner_message.clone());
+        self.held_exited_shell = Some(held);
+    }
+
+    /// Resets stale `TerminalBackend` state (`DECSET 1049`, `BlockPage` `MORE...` anchor, line discipline)
+    /// and respawns or resets the shell inside this pane (`SAFE-01`).
+    pub fn respawn_shell_in_place(&mut self) -> Result<()> {
+        self.held_exited_shell = None;
+        self.exited = false;
+        // Leave alternate screen & reset scrollback/page anchor so stale TUI/page-hold state never leaks.
+        self.process_pty_output(b"\x1b[?1049l\r\n[SHELL RESPAWNED]\r\n");
+        self.line_discipline = LineDisciplineState::default();
+        let _ = self.prompt.take_submission();
+        self.reset_page_anchor();
+        if !self.is_headless() {
+            let (rows, cols) = self.vt.size();
+            let pty_cfg = PtyConfig {
+                rows: rows.max(1),
+                cols: cols.max(1),
+                ..PtyConfig::default()
+            };
+            self.pty = Some(PtySession::spawn(pty_cfg)?);
+        }
+        self.status_message = Some("Shell respawned cleanly".to_string());
+        Ok(())
     }
 
     /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).

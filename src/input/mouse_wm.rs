@@ -114,6 +114,37 @@ pub(super) fn handle_modal_mouse_event(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
+    if let Some(mcp_rect) = wm.mcp_console().panel_rect(workspace_area)
+        && rect_contains(mcp_rect, mouse.column, mouse.row)
+    {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let rel_col = mouse.column.saturating_sub(mcp_rect.x);
+                if mouse.row == mcp_rect.y {
+                    if rel_col >= mcp_rect.width.saturating_sub(6) {
+                        wm.mcp_console_mut().close_root_terminal();
+                    } else if rel_col >= mcp_rect.width / 2 {
+                        wm.mcp_console_mut().toggle_layout_mode();
+                    }
+                    let _ = wm.resize_all(workspace_area);
+                } else if mouse.row == mcp_rect.y + mcp_rect.height.saturating_sub(1) {
+                    if (16..31).contains(&rel_col) {
+                        wm.mcp_console_mut().toggle_layout_mode();
+                    } else if (31..40).contains(&rel_col) {
+                        wm.mcp_console_mut().cycle_edge();
+                    } else if (40..55).contains(&rel_col) {
+                        wm.mcp_console_mut().close_root_terminal();
+                    }
+                    let _ = wm.resize_all(workspace_area);
+                }
+            }
+            MouseEventKind::ScrollUp => wm.mcp_console_mut().scroll_up(2),
+            MouseEventKind::ScrollDown => wm.mcp_console_mut().scroll_down(2),
+            _ => {}
+        }
+        return Some(AppAction::Handled);
+    }
+
     let modal_outer = wm.active_modal_rect(workspace_area)?;
     if !rect_contains(modal_outer, mouse.column, mouse.row) {
         return None;

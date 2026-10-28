@@ -3,7 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
-use crate::pane::{PaneScrollMode, PromptMode};
+use crate::pane::{ExitProtectionPolicy, PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
@@ -156,6 +156,18 @@ pub enum Action {
         dy: i16,
     },
     WindowResetGeometry,
+    /// `:quit!` / `:q!`: Force immediate application exit bypassing Exit Guard (`SAFE-02`).
+    ForceQuit,
+    /// `:detach` / `:d`: Detach client while preserving background session (`SAFE-02`, `DAEM-02`).
+    DetachClient,
+    /// `:exit-guard [guard|respawn|detach|off]` (`SAFE-01`).
+    ExitProtectionSet(ExitProtectionPolicy),
+    /// `:theme import|load|export|list|<name>` (`THM-01`, `THM-02`).
+    ThemeCommand(String),
+    /// `:session branch|graft|detach-subtree|tree|checkpoint ...` (`TREE-01..02`, `PERS-01..02`).
+    SessionTreeCommand(String),
+    /// `:mcp [status|tree|attach|spawn|graft|broadcast|freeze|thaw|derez|checkpoint|shutdown ...]` (`MCP-01..02`).
+    McpCommand(String),
     Quit,
 }
 
@@ -314,6 +326,12 @@ mod tests {
             Action::PaneResize { .. } => Some(":resize +w"),
             Action::PaneMove { .. } => Some(":move right"),
             Action::WindowResetGeometry => Some(":cascade"),
+            Action::ForceQuit => Some(":quit!"),
+            Action::DetachClient => Some(":detach"),
+            Action::ExitProtectionSet(_) => Some(":exit-guard guard"),
+            Action::ThemeCommand(_) => Some(":theme list"),
+            Action::SessionTreeCommand(_) => Some(":session tree"),
+            Action::McpCommand(_) => Some(":mcp status"),
             Action::Quit => Some(":quit"),
         };
 
@@ -448,6 +466,12 @@ mod tests {
             Action::PaneResize { dw: 4, dh: 0 },
             Action::PaneMove { dx: 4, dy: 0 },
             Action::WindowResetGeometry,
+            Action::ForceQuit,
+            Action::DetachClient,
+            Action::ExitProtectionSet(ExitProtectionPolicy::Guard),
+            Action::ThemeCommand("list".to_string()),
+            Action::SessionTreeCommand("tree".to_string()),
+            Action::McpCommand("status".to_string()),
             Action::Quit,
         ];
 

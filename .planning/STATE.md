@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Herdr Daemon, Session Trees, Mainframe Paging, Open Color Themes & TRON MCP Root Terminal
-current_phase: 30
-current_phase_name: explicit-exit-guard-and-root-protection
-status: phase_29_complete_ready_for_phase_30
-stopped_at: Completed Phase 29 (Smooth Scrolling & Mainframe Block/Page-Mode Scroller), authored docs/LESSONS_LEARNED.md, and expanded regression test suite
+current_phase: 34
+current_phase_name: tron-inspired-mcp-root-terminal
+status: milestone_v2_0_complete
+stopped_at: Completed Phases 30-34 (Exit Guard, Universal Open Theme Engine, Persistent Herdr Daemon, SessionTree + Atomic WorkspaceJournal, and TRON MCP Root Terminal) via parallel subagent waves
 last_updated: "2026-10-27"
 last_activity: 2026-10-27
-last_activity_desc: Completed Phase 29 (SCRL-01, SCRL-02), authored docs/LESSONS_LEARNED.md, and added tests/session_lessons_and_regression_suite.rs
+last_activity_desc: Completed Phases 30-34 (SAFE-01..02, THM-01..02, DAEM-01..02, TREE-01..02, PERS-01..02, MCP-01..02) — Milestone v2.0 100% complete
 progress:
   total_phases: 34
-  completed_phases: 29
-  total_plans: 64
-  completed_plans: 55
+  completed_phases: 34
+  total_plans: 69
+  completed_plans: 69
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-27)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.0` (`Phases 29–34`) — Starting with **Phase 29: Smooth Scrolling & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`)**.
+**Current focus:** Milestone `v2.0` (`Phases 29–34`) — **COMPLETE (`34/34` Phases)**.
 
 ## Current Position
 
-Phase: 29 (smooth-and-block-page-mode-scrolling) — READY TO PLAN / EXECUTE
-Plan: `29-01-PLAN.md` & `29-02-PLAN.md` scoped in `ROADMAP.md`
-Status: Phases 1–28 complete (`47/47` v1 requirements complete); Phases 29–34 (`14` v2.0 requirements: `SCRL-01..02`, `SAFE-01..02`, `THM-01..02`, `DAEM-01..02`, `TREE-01..02`, `PERS-01..02`, `MCP-01..02`) scoped and dependency-sorted.
-Last activity: 2026-10-27 — Completed mouse & keyboard cut/copy/paste with cyan visual selection highlights, pixel-perfect Powerline (`U+E0A0..=U+E0D7`) & Nerd Font PUA geometric rendering, cross-platform `"bil;*term"` icons (`icns`/`ico`/`png`/`svg`), persistent in-place scrollable `Herdr` Drawer, and Milestone `v2.0` (`Phases 29–34`) roadmap & requirements.
+Phase: 34 (tron-inspired-mcp-root-terminal) — COMPLETE
+Plan: All `v2.0` plans (`29-01` through `34-03`) complete
+Status: Phases 1–34 complete (`47/47` v1 requirements + `14/14` v2.0 requirements: `SCRL-01..02`, `SAFE-01..02`, `THM-01..02`, `DAEM-01..02`, `TREE-01..02`, `PERS-01..02`, `MCP-01..02`).
+Last activity: 2026-10-27 — Completed Phases 30–34 via parallel subagents (`src/pane/exit_guard.rs`, `src/ui/exit_guard_ui.rs`, `src/ui/theme_import.rs`, `src/daemon/mod.rs`, `src/wm/session_tree.rs`, `src/wm/journal.rs`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`, and `tests/v2_phases_30_to_34_integration.rs`).
 
-Progress: [████████░░] 82% (28/34 Phases)
+Progress: [██████████] 100% (34/34 Phases)
 
 ## Performance Metrics
 

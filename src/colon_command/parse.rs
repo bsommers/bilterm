@@ -1,6 +1,6 @@
 use crate::colon_command::ColonCommand;
 use crate::colon_command::parse_visual::parse_visual_colon_command;
-use crate::pane::{PaneScrollMode, PromptMode};
+use crate::pane::{ExitProtectionPolicy, PaneScrollMode, PromptMode};
 use crate::wm::WorkspaceLayoutMode;
 
 /// Parses an input string starting with `:` into a `ColonCommand`.
@@ -169,9 +169,14 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 let name = parts.get(2).copied().unwrap_or("default").to_string();
                 Some(Ok(ColonCommand::SessionRestore(name)))
             }
+            Some("branch" | "spawn" | "graft" | "detach-subtree" | "promote" | "tree" | "checkpoint" | "journal") => {
+                let sub = parts[1..].join(" ");
+                Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+            }
             None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
             _ => Some(Err(
-                "Usage: :session save [name] | restore [name] | list".to_string(),
+                "Usage: :session save [name] | restore [name] | list | tree | branch <p>/<c> | graft <s> <d> | detach-subtree <n> | checkpoint [slot]"
+                    .to_string(),
             )),
         },
         "palette" | "commands" | "cmd" => Some(Ok(ColonCommand::PaletteToggle)),
@@ -383,6 +388,25 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
         }
         "cascade" | "equalize" => Some(Ok(ColonCommand::WindowResetGeometry)),
+        "exit-guard" | "exitguard" | "exit-protection" => {
+            let tok = parts.get(1).copied().unwrap_or("guard");
+            match ExitProtectionPolicy::from_name(tok) {
+                Some(pol) => Some(Ok(ColonCommand::ExitProtectionSet(pol))),
+                None => Some(Err(
+                    "Usage: :exit-guard [guard | respawn | detach | off]".to_string(),
+                )),
+            }
+        }
+        "mcp" | "master-control" => {
+            let sub = if parts.len() > 1 {
+                parts[1..].join(" ")
+            } else {
+                String::new()
+            };
+            Some(Ok(ColonCommand::McpCommand(sub)))
+        }
+        "detach" | "d" => Some(Ok(ColonCommand::DetachClient)),
+        "quit!" | "q!" | "exit!" => Some(Ok(ColonCommand::ForceQuit)),
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,
     }

@@ -13,11 +13,19 @@ pub(super) fn parse_visual_colon_command(
     parts: &[&str],
 ) -> Option<Result<ColonCommand, String>> {
     match head {
-        "theme" => match parts.get(1).and_then(|s| ThemePreset::from_name(s)) {
-            Some(preset) => Some(Ok(ColonCommand::Theme(preset))),
-            None => Some(Err(
-                "Usage: :theme turbo-blue | turbo-cyan | 3278 | 3279 | mono".to_string(),
-            )),
+        "theme" => match parts.get(1).copied() {
+            None | Some("list" | "ls") => Some(Ok(ColonCommand::ThemeCommand("list".to_string()))),
+            Some("import" | "load" | "export" | "save") => {
+                let sub = parts[1..].join(" ");
+                Some(Ok(ColonCommand::ThemeCommand(sub)))
+            }
+            Some(tok) => match ThemePreset::from_name(tok) {
+                Some(preset) => Some(Ok(ColonCommand::Theme(preset))),
+                None => Some(Err(
+                    "Usage: :theme <preset> | list | import <path> | export [file.toml]"
+                        .to_string(),
+                )),
+            },
         },
         "glyphs" => match parts.get(1).and_then(|s| GlyphPack::from_name(s)) {
             Some(pack) => Some(Ok(ColonCommand::Glyphs(pack))),

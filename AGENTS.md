@@ -150,7 +150,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 
 ## Conventions
 
-> **Full Engineering & Agent Reference:** Always consult [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md) before modifying state, keybindings, commands, or security boundaries.
+> **Full Engineering & Agent Reference:** Always consult [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md), [`docs/LESSONS_LEARNED_COMPOUNDED.md`](docs/LESSONS_LEARNED_COMPOUNDED.md), and [`docs/AGENT_AUTONOMY_AND_PERMISSIONS.md`](docs/AGENT_AUTONOMY_AND_PERMISSIONS.md) before modifying state, keybindings, commands, security boundaries, or agent execution permissions.
 
 1. **Module & Function Size Ceilings (`ARCH-R04`, `ARCH-R01`)**:
    - Every Rust source file under `src/**/*.rs` MUST remain **`<= 800` lines**. Split cohesive submodules (`foo/mod.rs` + children) rather than growing monolithic files.

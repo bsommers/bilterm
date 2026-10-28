@@ -3,7 +3,7 @@
 > **Source Environment Provenance:**
 > - **Sourced From:** **Linux** (`x86_64-unknown-linux-gnu`, POSIX PTY + Native X11 / Xft / Fontconfig `--gui` + Ratatui TUI)
 > - **Scope:** Cross-platform engineering, architecture, debugging, UI/UX, typography, mouse window management, security, and testing lessons learned across the development of Bilterm (`v0.1.0` → `v1.12.0+`) and the Linux interactive debugging/documentation sessions.
-> - **Companion Document:** Designed to coexist cleanly in the repository alongside the macOS-sourced lessons learned document with zero file path collisions.
+> - **Companion Documents:** See **[`docs/LESSONS_LEARNED_COMPOUNDED.md`](LESSONS_LEARNED_COMPOUNDED.md)** (unified cross-platform synthesis & Milestone `v2.0` roadmap mapping) and **[`docs/LESSONS_LEARNED.md`](LESSONS_LEARNED.md)** (macOS-sourced retrospective).
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 

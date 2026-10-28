@@ -424,6 +424,18 @@ impl WindowManager {
                     .clamp(6, 14)
                     .min(workspace_area.height),
             ),
+            super::Modal::ExitGuard { .. } => (
+                workspace_area
+                    .width
+                    .saturating_sub(4)
+                    .clamp(24, 68)
+                    .min(workspace_area.width),
+                workspace_area
+                    .height
+                    .saturating_sub(2)
+                    .clamp(6, 12)
+                    .min(workspace_area.height),
+            ),
             super::Modal::None | super::Modal::Menubar { .. } => return None,
         };
         if self.z_stack.modal_maximized {

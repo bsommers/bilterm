@@ -281,6 +281,15 @@ fn pane_cmd_badge(pane: &CompositePane) -> String {
     "✓ 0".to_string()
 }
 
+fn subtract_dock_rect(area: Rect, edge: DrawerEdge, dr: Rect) -> Rect {
+    match edge {
+        DrawerEdge::Left => Rect::new(area.x + dr.width, area.y, area.width.saturating_sub(dr.width).max(1), area.height),
+        DrawerEdge::Right => Rect::new(area.x, area.y, area.width.saturating_sub(dr.width).max(1), area.height),
+        DrawerEdge::Top => Rect::new(area.x, area.y + dr.height, area.width, area.height.saturating_sub(dr.height).max(1)),
+        DrawerEdge::Bottom => Rect::new(area.x, area.y, area.width, area.height.saturating_sub(dr.height).max(1)),
+    }
+}
+
 impl WindowManager {
     pub fn drawer(&self) -> &WorkspaceDrawer { &self.drawer }
     pub fn drawer_mut(&mut self) -> &mut WorkspaceDrawer { &mut self.drawer }
@@ -341,40 +350,21 @@ impl WindowManager {
         })
     }
 
-    /// Returns the effective workspace area available for panes (`Overlay` leaves `workspace_area` unchanged; `Push` subtracts `drawer_rect`).
+    /// Returns the effective workspace area available for panes (`Overlay` leaves `workspace_area` unchanged; `Push` subtracts `drawer_rect` and/or `mcp_console` push rect).
     pub fn effective_workspace_area(&self, workspace_area: Rect) -> Rect {
-        if self.config.drawer.layout != DrawerLayoutMode::Push {
-            return workspace_area;
+        let mut area = workspace_area;
+        if self.config.drawer.layout == DrawerLayoutMode::Push
+            && let Some(dr) = self.drawer_rect(area)
+        {
+            area = subtract_dock_rect(area, self.config.drawer.edge, dr);
         }
-        let Some(dr) = self.drawer_rect(workspace_area) else {
-            return workspace_area;
-        };
-        match self.config.drawer.edge {
-            DrawerEdge::Left => Rect::new(
-                workspace_area.x + dr.width,
-                workspace_area.y,
-                workspace_area.width.saturating_sub(dr.width).max(1),
-                workspace_area.height,
-            ),
-            DrawerEdge::Right => Rect::new(
-                workspace_area.x,
-                workspace_area.y,
-                workspace_area.width.saturating_sub(dr.width).max(1),
-                workspace_area.height,
-            ),
-            DrawerEdge::Top => Rect::new(
-                workspace_area.x,
-                workspace_area.y + dr.height,
-                workspace_area.width,
-                workspace_area.height.saturating_sub(dr.height).max(1),
-            ),
-            DrawerEdge::Bottom => Rect::new(
-                workspace_area.x,
-                workspace_area.y,
-                workspace_area.width,
-                workspace_area.height.saturating_sub(dr.height).max(1),
-            ),
+        if self.mcp_console.active
+            && self.mcp_console.layout_mode == DrawerLayoutMode::Push
+            && let Some(mr) = self.mcp_console.panel_rect(area)
+        {
+            area = subtract_dock_rect(area, self.mcp_console.edge, mr);
         }
+        area
     }
 
     /// Updates rolling throughput sparklines and spinner ticks across all panes (`DRW-02`).
@@ -559,7 +549,7 @@ impl WindowManager {
         rows
     }
 
-    fn reflow_default_viewport(&mut self) {
+    pub fn reflow_default_viewport(&mut self) {
         let area = Rect::new(0, 0, self.default_size.1, self.default_size.0);
         let _ = self.resize_all(area);
     }

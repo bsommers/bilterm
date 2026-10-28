@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::pane::PromptAnchor;
+use crate::pane::{ExitProtectionPolicy, PromptAnchor};
 use crate::pane::history_store::{
     DEFAULT_HISTORY_LOAD_LIMIT, DEFAULT_HISTORY_MAX_ENTRIES, DEFAULT_HISTORY_SESSION,
     HistorySettings,
@@ -101,6 +101,10 @@ pub struct BiltermConfig {
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
     pub scroll_mode: PaneScrollMode,
+    /// Policy for accidental `exit`/`logout`/`Ctrl+D` on the final pane or root session (`"guard"`, `"respawn"`, `"detach"`, `"off"`, `SAFE-01`).
+    pub exit_protection: ExitProtectionPolicy,
+    /// Marks this workspace session as a protected Root Session (`SAFE-02`).
+    pub is_root_session: bool,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
     /// Primary GUI / terminal font family or preset (`"Cascadia Mono"`, `"Consolas"`, `"JetBrains Mono"`, `"IBM 3270"`, etc., `FONT-01`).
@@ -167,6 +171,8 @@ impl Default for BiltermConfig {
             remotes: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
+            exit_protection: ExitProtectionPolicy::Guard,
+            is_root_session: false,
             drawer: DrawerConfig::default(),
             font_family: "Cascadia Mono".to_string(),
             font_files: Vec::new(),

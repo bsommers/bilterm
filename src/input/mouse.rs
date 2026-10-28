@@ -56,6 +56,80 @@ fn prompt_editor_coords_from_mouse(
     (editor_row, editor_col)
 }
 
+fn handle_oia_status_bar_mouse(
+    pane: &mut CompositePane,
+    mouse: MouseEvent,
+    status_rect: Rect,
+    viewport: Rect,
+) -> Result<AppAction> {
+    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+        let rel_col = usize::from(mouse.column.saturating_sub(status_rect.x));
+        let title_w = if pane.show_version_badge() {
+            concat!("3270-OIA v", env!("CARGO_PKG_VERSION")).chars().count()
+        } else {
+            "3270-OIA".chars().count()
+        };
+        let state_w = if pane.is_password_prompt() {
+            15
+        } else if pane.vt().is_alternate_screen()
+            || pane.is_holding_inspected()
+            || pane.is_page_holding()
+            || pane.has_foreground_subcommand()
+        {
+            11
+        } else if pane.vt().scrollback_offset() > 0 {
+            10
+        } else {
+            9
+        };
+        let routing_w = if pane.copy_mode().active { 28 } else { 16 };
+        let anchor_w = match pane.prompt().anchor {
+            PromptAnchor::SplitTop | PromptAnchor::SplitBottom => 9,
+            _ => 7,
+        };
+        let title_end = title_w;
+        let state_end = title_end + 1 + state_w;
+        let routing_end = state_end + 1 + routing_w;
+        let pin_end = routing_end + 2 + anchor_w;
+        let prot_end = if pane.is_read_only() { pin_end + 11 } else { pin_end };
+
+        if pane.is_page_holding() && rel_col <= state_end.max(21) {
+            pane.scroll_page_advance();
+        } else if rel_col < title_end {
+            let next = !pane.show_version_badge();
+            pane.set_show_version_badge(next);
+            pane.set_status_message(Some(format!(
+                "OIA Version Badge: {}",
+                if next { "ON" } else { "OFF" }
+            )));
+        } else if rel_col < state_end && pane.vt().scrollback_offset() > 0 {
+            pane.clear_page_hold();
+        } else if rel_col < routing_end {
+            if pane.copy_mode().active {
+                pane.exit_copy_mode();
+            } else {
+                pane.cycle_prompt_mode();
+                let _ = pane.resize_viewport(viewport);
+            }
+        } else if rel_col < pin_end {
+            let next_anchor = match pane.prompt().anchor {
+                PromptAnchor::Top => PromptAnchor::Bottom,
+                PromptAnchor::Bottom => PromptAnchor::SplitTop,
+                PromptAnchor::SplitTop => PromptAnchor::SplitBottom,
+                PromptAnchor::SplitBottom | PromptAnchor::Floating { .. } => PromptAnchor::Top,
+            };
+            pane.set_prompt_anchor(next_anchor);
+            let _ = pane.resize_viewport(viewport);
+            pane.set_status_message(Some(format!("Prompt anchor: {next_anchor:?}")));
+        } else if pane.is_read_only() && rel_col < prot_end {
+            pane.toggle_read_only();
+        } else {
+            pane.toggle_block_page_scroll_mode();
+        }
+    }
+    Ok(AppAction::Handled)
+}
+
 /// Routes SGR mouse events for intra-pane floating prompt dragging, height resizing,
 /// `[▲][▼]` pin badge clicks, prompt text selection, `Ctrl+Click` URL yanking (`VAL-03`),
 /// `LeftDrag` character selection and `Alt+LeftDrag` rectangular canvas selection (`VAL-04`),
@@ -63,24 +137,26 @@ fn prompt_editor_coords_from_mouse(
 /// and canvas scrollback (`PANE-02`, `PANE-03`).
 pub fn handle_mouse_event(
     pane: &mut CompositePane,
-    mouse: MouseEvent,
+    mut mouse: MouseEvent,
     viewport: Rect,
 ) -> Result<AppAction> {
     let status_rect = pane.status_bar_rect(viewport);
-    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+    if status_rect.height > 0
         && mouse.row == status_rect.y
         && mouse.column >= status_rect.x
         && mouse.column < status_rect.x + status_rect.width
     {
-        let rel_col = mouse.column.saturating_sub(status_rect.x);
-        if rel_col >= (status_rect.width * 2) / 3 {
-            pane.toggle_block_page_scroll_mode();
-        } else if pane.is_page_holding() && rel_col < 22 {
-            pane.scroll_page_advance();
+        if pane.mouse_drag().is_some() {
+            match mouse.kind {
+                MouseEventKind::Drag(MouseButton::Left) => {
+                    mouse.row = status_rect.y.saturating_sub(1);
+                }
+                MouseEventKind::Up(MouseButton::Left) => {}
+                _ => return Ok(AppAction::Handled),
+            }
         } else {
-            pane.cycle_prompt_mode();
+            return handle_oia_status_bar_mouse(pane, mouse, status_rect, viewport);
         }
-        return Ok(AppAction::Handled);
     }
 
     // Right-click or Middle-click pastes from OS clipboard / yank_buffer
@@ -477,28 +553,6 @@ pub fn handle_wm_mouse_event(
     mouse: MouseEvent,
     screen_area: Rect,
 ) -> Result<AppAction> {
-    if wm.config().show_top_menubar
-        && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-        && mouse.row == screen_area.y
-    {
-        let rel_col = mouse.column.saturating_sub(screen_area.x);
-        let cat = match rel_col {
-            0..=10 => 0,
-            11..=19 => 1,
-            20..=28 => 2,
-            29..=35 => 3,
-            36..=43 => 4,
-            44..=50 => 5,
-            _ => 6,
-        };
-        if wm.menubar_open_category() == Some(cat) {
-            wm.set_menubar_open_category(None);
-        } else {
-            wm.set_menubar_open_category(Some(cat));
-        }
-        return Ok(AppAction::Handled);
-    }
-
     let top_off = u16::from(wm.config().show_top_menubar && screen_area.height > 3);
     let bot_off = u16::from(wm.config().show_dos_fkey_bar && screen_area.height > 2 + top_off);
     let workspace_area = Rect {
@@ -507,6 +561,53 @@ pub fn handle_wm_mouse_event(
         width: screen_area.width,
         height: screen_area.height.saturating_sub(top_off + bot_off).max(1),
     };
+
+    if top_off > 0 && mouse.row == screen_area.y {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+            let rel_col = mouse.column.saturating_sub(screen_area.x);
+            let cat = match rel_col {
+                0..=10 => 0,
+                11..=19 => 1,
+                20..=28 => 2,
+                29..=35 => 3,
+                36..=43 => 4,
+                44..=50 => 5,
+                _ => 6,
+            };
+            if wm.menubar_open_category() == Some(cat) {
+                wm.set_menubar_open_category(None);
+            } else {
+                wm.set_menubar_open_category(Some(cat));
+            }
+        }
+        return Ok(AppAction::Handled);
+    }
+
+    if bot_off > 0 && mouse.row == screen_area.y + screen_area.height.saturating_sub(1) {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+            let rel_col = mouse.column.saturating_sub(screen_area.x);
+            match rel_col {
+                0..=8 => wm.toggle_help(),
+                9..=18 => {
+                    let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+                }
+                19..=27 => wm.toggle_zoom(),
+                28..=36 => {
+                    let _ = wm.shuffle_deck_next();
+                }
+                37..=47 => wm.toggle_quick_terminal(),
+                48..=56 => wm.active_pane_mut().toggle_manual_raw_override(),
+                _ => {
+                    let all = crate::ui::theme::ThemePreset::all();
+                    let cur = wm.config().theme;
+                    let idx = all.iter().position(|&t| t == cur).unwrap_or(0);
+                    wm.config_mut().theme = all[(idx + 1) % all.len()];
+                }
+            }
+            wm.resize_all(workspace_area)?;
+        }
+        return Ok(AppAction::Handled);
+    }
 
     if let Some(action) = handle_drawer_mouse_event(wm, mouse, workspace_area) {
         return Ok(action);
@@ -568,6 +669,11 @@ pub fn handle_wm_mouse_event(
         }
     }
 
+    let on_pane_status_bar = inner.height > 0
+        && mouse.row == inner.y + inner.height.saturating_sub(1)
+        && mouse.column >= inner.x
+        && mouse.column < inner.x + inner.width;
+
     let (pane_inner, pane_mouse) = if let Focus::Pane(hit_id) = hit_focus {
         let scaled = wm.pane_scaled_inner_rect(hit_id, inner);
         if scaled != inner && inner.width > 0 && inner.height > 0 {
@@ -581,8 +687,13 @@ pub fn handle_wm_mouse_event(
                 .min(inner.height.saturating_sub(1));
             let sc = scaled.x
                 + ((u32::from(rel_c) * u32::from(scaled.width)) / u32::from(inner.width)) as u16;
-            let sr = scaled.y
-                + ((u32::from(rel_r) * u32::from(scaled.height)) / u32::from(inner.height)) as u16;
+            let sr = if on_pane_status_bar {
+                scaled.y + scaled.height.saturating_sub(1)
+            } else {
+                scaled.y
+                    + ((u32::from(rel_r) * u32::from(scaled.height)) / u32::from(inner.height))
+                        as u16
+            };
             (
                 scaled,
                 MouseEvent {
@@ -602,7 +713,7 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Continue);
     };
 
-    if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+    if !on_pane_status_bar && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
         // If the child app has not enabled mouse tracking (?1000..1006), check DECSET ?1007 Alternate Scroll first
         if !pane.vt().is_mouse_sgr_or_tracking() {
             if let Some(scroll_bytes) = encode_alternate_scroll_wheel(pane, pane_mouse.kind) {

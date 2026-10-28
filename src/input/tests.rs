@@ -480,3 +480,109 @@ fn keyboard_and_mouse_cut_copy_paste_with_visual_selection_highlights_work() {
     assert_eq!(pane.prompt().selected_text().as_deref(), Some("hello"));
     assert_eq!(pane.prompt().yank_buffer, "hello");
 }
+
+#[test]
+fn mcp_tree_and_status_open_floating_or_push_popup_window_without_polluting_canvas() {
+    let mut wm = WindowManager::new_headless(24, 100);
+    let area = Rect::new(0, 0, 100, 24);
+
+    let cmd_tree = crate::colon_command::parse_colon_command(":mcp tree").unwrap().unwrap();
+    wm.apply(cmd_tree).unwrap();
+    assert!(wm.mcp_console().active);
+    assert_eq!(wm.mcp_console().layout_mode, crate::wm::DrawerLayoutMode::Overlay);
+    assert!(!wm.mcp_console().view_lines.is_empty());
+    // Canvas remains clean (not polluted with tree output)
+    assert_eq!(wm.active_pane().vt().output_line_count(), 0);
+
+    // Press 'm' to switch from Floating Overlay to Push-Out mode
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
+    assert_eq!(wm.mcp_console().layout_mode, crate::wm::DrawerLayoutMode::Push);
+    let eff = wm.effective_workspace_area(area);
+    assert!(eff.height < area.height || eff.width < area.width);
+
+    // Press 'd' to cycle Push dock edge
+    let prev_edge = wm.mcp_console().edge;
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
+    assert_ne!(wm.mcp_console().edge, prev_edge);
+
+    // Press Esc to close MCP window
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
+    assert!(!wm.mcp_console().active);
+
+    // :mcp status also opens the pop-up window
+    let cmd_status = crate::colon_command::parse_colon_command(":mcp status").unwrap().unwrap();
+    wm.apply(cmd_status).unwrap();
+    assert!(wm.mcp_console().active);
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("DAEMON"))
+    );
+}
+
+#[test]
+fn status_bar_mouse_clicks_control_status_items_and_never_leak_into_canvas_selection_or_paste() {
+    let mut wm = WindowManager::new_headless(24, 100);
+    wm.config_mut().show_top_menubar = false;
+    wm.config_mut().show_dos_fkey_bar = false;
+    // Zoom font out to 50% so scaled.height > inner.height (regression test for rounding bug)
+    wm.config_mut().font_scale_pct = 50;
+    let screen = Rect::new(0, 0, 100, 24);
+    wm.resize_all(screen).unwrap();
+
+    wm.active_pane_mut().prompt_mut().yank_buffer = "SHOULD_NOT_PASTE".to_string();
+    crate::clipboard::set_system_clipboard("SHOULD_NOT_PASTE");
+
+    // 1. Right-click on the OIA status bar row (y = 23) must NOT paste into prompt or canvas
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column: 15,
+            row: 23,
+            modifiers: KeyModifiers::NONE,
+        },
+        screen,
+    )
+    .unwrap();
+    assert_eq!(wm.active_pane().prompt().text(), "");
+    assert!(!wm.active_pane().copy_mode().active);
+
+    // 2. Left-click + drag on the OIA status bar row (y = 23) must NOT start a canvas selection
+    //    and instead controls the clicked status bar item (col 0..8 toggles 3270-OIA version badge)
+    let initial_ver = wm.active_pane().show_version_badge();
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 3,
+            row: 23,
+            modifiers: KeyModifiers::NONE,
+        },
+        screen,
+    )
+    .unwrap();
+    assert_eq!(wm.active_pane().show_version_badge(), !initial_ver);
+    assert!(!wm.active_pane().copy_mode().active);
+    assert!(wm.active_pane().mouse_drag().is_none());
+
+    // 3. Clicking PIN:TOP badge on OIA status bar cycles prompt anchor (Top -> Bottom)
+    //    Without version badge: title(8) + sep(1) + state(9) + sep(1) + routing(16) + sep+space(2) = 37..44
+    wm.active_pane_mut().set_show_version_badge(false);
+    let viewport = Rect::new(0, 0, 100, 24);
+    assert_eq!(wm.active_pane().prompt().anchor, PromptAnchor::Top);
+    handle_mouse_event(
+        wm.active_pane_mut(),
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 39,
+            row: 23,
+            modifiers: KeyModifiers::NONE,
+        },
+        viewport,
+    )
+    .unwrap();
+    assert_eq!(wm.active_pane().prompt().anchor, PromptAnchor::Bottom);
+    assert!(!wm.active_pane().copy_mode().active);
+}

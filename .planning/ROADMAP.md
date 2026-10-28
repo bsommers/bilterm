@@ -29,11 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 27: High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine** - Anti-aliased RGBA `PixelCanvasBuffer`, adaptive `Kitty`/`Sixel`/`iTerm2`/`HalfBlock` transport, and `bilterm plot` / `bilterm img` CLI (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) (completed 2026-10-25)
 - [x] **Phase 28: Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency** - Strict acyclic DAG, module ceiling decompression, macOS CoreText/Cocoa GUI (`Bilterm.app`), mouse/keyboard selection & clipboard, and Powerline/PUA geometric font rendering (`ARCH-R01..04`, `SEC-R01`) (completed 2026-10-27)
 - [x] **Phase 29: Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller** - Kinetic sub-cell/inertial smooth scrolling by default plus per-pane IBM 3270 / VM/CMS `MORE...` / `HOLDING` block/page-mode output paging (`SCRL-01`, `SCRL-02`) (completed 2026-10-27)
-- [ ] **Phase 30: Explicit Exit Guard & Root/Final Session Protection** - Accidental `exit` / `logout` / `Ctrl+D` interception on final/root panes with interactive `Respawn / Detach / Quit / Cancel` guard and explicit `:quit!` / `:detach` semantics (`SAFE-01`, `SAFE-02`)
-- [ ] **Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility)** - Native `.itermcolors` XML plist importer (`mbadolato/iterm2-color-schemes`), Alacritty/WezTerm/Ghostty/Base16 TOML/YAML theme loaders, automatic Borland/3270 chrome synthesis, and per-theme typography profiles without lock-in (`THM-01`, `THM-02`)
-- [ ] **Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach)** - Auto-spawned background daemon (`bilterm daemon`) hosting all PTYs, `VtWorkerHandle` state machines, and session trees over a `0600` Unix socket for seamless multi-client connect/disconnect/reconnect (`DAEM-01`, `DAEM-02`)
-- [ ] **Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence** - Forest of independent workspaces, rooted daemon sessions, and parent/child session trees & subtrees with continuous atomic crash/restart layout journaling (`TREE-01`, `TREE-02`, `PERS-01`, `PERS-02`)
-- [ ] **Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal** - Non-destructive `MCP` root terminal interfacing to the background daemon with TRON grid aesthetics, global session tree routing, broadcast, freeze/thaw, and `derez` controls (`MCP-01`, `MCP-02`)
+- [x] **Phase 30: Explicit Exit Guard & Root/Final Session Protection** - Accidental `exit` / `logout` / `Ctrl+D` interception on final/root panes with interactive `Respawn / Detach / Quit / Cancel` guard and explicit `:quit!` / `:detach` semantics (`SAFE-01`, `SAFE-02`) (completed 2026-10-27)
+- [x] **Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility)** - Native `.itermcolors` XML plist importer (`mbadolato/iterm2-color-schemes`), Alacritty/WezTerm/Ghostty/Base16 TOML/YAML theme loaders, automatic Borland/3270 chrome synthesis, and per-theme typography profiles without lock-in (`THM-01`, `THM-02`) (completed 2026-10-27)
+- [x] **Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach)** - Auto-spawned background daemon (`bilterm daemon`) hosting all PTYs, `VtWorkerHandle` state machines, and session trees over a `0600` Unix socket for seamless multi-client connect/disconnect/reconnect (`DAEM-01`, `DAEM-02`) (completed 2026-10-27)
+- [x] **Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence** - Forest of independent workspaces, rooted daemon sessions, and parent/child session trees & subtrees with continuous atomic crash/restart layout journaling (`TREE-01`, `TREE-02`, `PERS-01`, `PERS-02`) (completed 2026-10-27)
+- [x] **Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal** - Non-destructive `MCP` root terminal interfacing to the background daemon with TRON grid aesthetics, global session tree routing, broadcast, freeze/thaw, and `derez` controls (`MCP-01`, `MCP-02`) (completed 2026-10-27)
 
 ## Phase Details
 
@@ -394,14 +394,15 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
   1. Submitting `exit` or `logout` (or pressing `Ctrl+D` on an empty prompt) in `FloatingCommandPrompt` when on the **final pane of a session** or inside a **Root Session** intercepts the command before killing the shell and opens an interactive Borland/3270 Exit Guard modal (`[EXIT GUARD: (r)espawn shell, (d)etach client, (q)uit client, (K)ill session, (Esc) cancel]`).
-  2. When a child shell in the final/root pane terminates via raw PTY (`RawPtyPassthrough` `Ctrl+D` or subshell exit), Bilterm does not exit the application; instead it holds the pane open (`🔒 [SHELL EXITED — Enter/r: Respawn Shell | d: Detach | :quit!: Exit]`) or auto-respawns according to `exit_protection = "guard" | "respawn" | "detach"`.
-  3. Explicit exit commands (`:quit!`, `:detach`, `:mcp shutdown --confirm`) and `Ctrl+Q` confirmation cleanly separate detaching a UI client from terminating a session or daemon.
+  2. Context-aware passthrough safety (from Compounded Lessons Learned): `Ctrl+D` inside `DECSET 1049` (`ALT_SCREEN` TUIs like `vim`, `nmon`, `less`) or during 3-signal `!ECHO LOCK` (`sudo` password prompts) passes cleanly to the foreground process without triggering false-positive Exit Guard modals.
+  3. When a child shell in the final/root pane terminates via raw PTY (`RawPtyPassthrough` `Ctrl+D` or subshell exit), Bilterm does not exit the application; instead it reaps the exited child on the non-blocking background `bilterm-pty-reaper` thread, resets stale `TerminalBackend` modes (`ALT_SCREEN`, `BlockPage` `MORE...` anchor, mouse reporting), and holds the pane open (`🔒 [SHELL EXITED — Enter/r: Respawn Shell | d: Detach | :quit!: Exit]`) or auto-respawns according to `exit_protection = "guard" | "respawn" | "detach"`.
+  4. Explicit exit commands (`:quit!`, `:detach`, `:mcp shutdown --confirm`) and `Ctrl+Q` confirmation cleanly separate detaching a UI client from terminating a session or daemon.
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans complete
 
 Plans:
-- [ ] 30-01-PLAN.md — `ExitProtectionPolicy` (`Guard`, `Respawn`, `Detach`), `FloatingCommandPrompt` `exit`/`logout`/`Ctrl+D` interception on final/root panes, and PTY process-exit hold/respawn lifecycle (wave 1)
-- [ ] 30-02-PLAN.md — Borland/3270 Exit Guard confirmation modal, `:quit!` / `:detach` actions, and `tests/exit_guard_and_root_protection.rs` verification suite (wave 2)
+- [x] 30-01-PLAN.md — `ExitProtectionPolicy` (`Guard`, `Respawn`, `Detach`), `FloatingCommandPrompt` `exit`/`logout`/`Ctrl+D` interception on final/root panes (with `ALT_SCREEN` & `!ECHO LOCK` passthrough guards), and non-blocking PTY process-exit hold/reset/respawn lifecycle (wave 1)
+- [x] 30-02-PLAN.md — Borland/3270 Exit Guard confirmation modal, `:quit!` / `:detach` actions, and `tests/v2_phases_30_to_34_integration.rs` verification suite (wave 2)
 
 ### Phase 31: Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility without Lock-In, `v2.0`)
 
@@ -410,16 +411,16 @@ Plans:
 **Requirements**: THM-01, THM-02
 **Success Criteria** (what must be TRUE):
 
-  1. Native `.itermcolors` Apple XML plist parser loads any color scheme from `mbadolato/iterm2-color-schemes` (`Ansi 0 Color`..`Ansi 15 Color`, `Foreground Color`, `Background Color`, `Bold Color`, `Cursor Color`, `Cursor Text Color`, `Selection Color`, `Selected Text Color`, `Badge Color`, `Link Color`) and automatically derives harmonious Borland Turbo Vision double-border, drop-shadow, floating-prompt, and 3270 OIA status bar colors.
+  1. Native `.itermcolors` Apple XML plist parser loads any color scheme from `mbadolato/iterm2-color-schemes` (`Ansi 0 Color`..`Ansi 15 Color`, `Foreground Color`, `Background Color`, `Bold Color`, `Cursor Color`, `Cursor Text Color`, `Selection Color`, `Selected Text Color`, `Badge Color`, `Link Color`) and automatically derives harmonious, contrast-verified Borland Turbo Vision double-border, drop-shadow, floating-prompt, cyan selection highlight, and 3270 OIA (`MORE...` / `HOLDING` / `!ECHO LOCK`) status bar colors.
   2. Multi-format open theme loader also parses Alacritty/WezTerm/Ghostty/Base16 TOML & YAML palettes and Bilterm `[theme.custom]` definitions so users can mix, import, and export themes freely without lock-in.
-  3. `:theme import <path_or_dir>`, `:theme <name>`, and `Ctrl+P` Fuzzy Command Palette support live theme switching and per-theme/per-pane font family + size profiles (`~/.config/bilterm/themes/` auto-discovery).
+  3. `:theme import <path_or_dir>`, `:theme <name>`, and `Ctrl+P` Fuzzy Command Palette support live theme switching and per-theme/per-pane font family + size profiles (`~/.config/bilterm/themes/` auto-discovery), preserving geometric Powerline/PUA (`U+E0A0..=U+E0D7`) rasterization priority, macOS CoreText `.LastResort` rejection, and per-pane inverse `(cols, rows)` `TIOCSWINSZ` grid scaling.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 31-01-PLAN.md — `src/ui/theme_import.rs`: Native `.itermcolors` XML plist parser + Alacritty/WezTerm/Ghostty/Base16 TOML/YAML adapter + automatic Borland/3270 chrome palette synthesizer (wave 1)
-- [ ] 31-02-PLAN.md — `:theme import|load|save|list`, `~/.config/bilterm/themes/` directory scanner, bundled popular `iterm2-color-schemes` presets, and per-theme font profile binding (wave 2)
-- [ ] 31-03-PLAN.md — `tests/iterm2_and_open_theme_compatibility.rs` verification suite and documentation updates (wave 3)
+- [x] 31-01-PLAN.md — `src/ui/theme_import.rs`: Native `.itermcolors` XML plist parser + Alacritty/WezTerm/Ghostty/Base16 TOML/YAML adapter + automatic Borland/3270 chrome palette synthesizer (wave 1)
+- [x] 31-02-PLAN.md — `:theme import|load|save|list`, `~/.config/bilterm/themes/` directory scanner, bundled popular `iterm2-color-schemes` presets, and per-theme/per-pane font profile binding with `TIOCSWINSZ` grid resize (wave 2)
+- [x] 31-03-PLAN.md — `tests/v2_phases_30_to_34_integration.rs` verification suite and documentation updates (wave 3)
 
 ### Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach, `v2.0`)
 
@@ -428,16 +429,16 @@ Plans:
 **Requirements**: DAEM-01, DAEM-02
 **Success Criteria** (what must be TRUE):
 
-  1. Launching `bilterm` or `bilterm --gui` (`Bilterm.app`) automatically spawns or connects to a persistent per-user background daemon (`bilterm daemon` listening on `0700`/`0600` `~/.local/state/bilterm/daemon.sock`) that owns all PTYs, `VtWorkerHandle` state machines, and workspace sessions.
+  1. Launching `bilterm` or `bilterm --gui` (`Bilterm.app`) automatically spawns or connects to a persistent per-user background daemon (`bilterm daemon` listening on `0700`/`0600` `~/.local/state/bilterm/daemon.sock` with `SO_PEERCRED` UID verification and `ConnectionRefused`-only stale socket recovery) that owns all PTYs, `VtWorkerHandle` state machines, and workspace sessions.
   2. Clients can detach (`Ctrl+X d` / `:detach` / closing GUI window) while all background sessions continue running, and reattach at any time via `bilterm attach [session]`, `bilterm --gui`, or the `Herdr` Drawer.
-  3. Multiple TUI and Native GUI clients can connect concurrently to the same daemon — either sharing a live session in real time or operating independent sessions hosted by the same daemon (`bilterm ls`, `bilterm attach`).
+  3. Multiple TUI and Native GUI clients (including heterogeneous viewports and per-pane font scales) can connect concurrently to the same daemon — either sharing a live session in real time with `Ord::clamp`-safe viewport negotiation or operating independent sessions hosted by the same daemon (`bilterm ls`, `bilterm attach`).
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 32-01-PLAN.md — `src/daemon/`: Background daemon process supervisor, auto-spawn/handshake over `0600` Unix domain socket, and multi-session `SessionRegistry` hosting `WindowManager` instances (wave 1)
-- [ ] 32-02-PLAN.md — Streaming frame/snapshot delta subscription & input forwarding protocol for attached TUI and Native GUI (`--gui`) clients, plus `bilterm attach|detach|ls` CLI subcommands (wave 2)
-- [ ] 32-03-PLAN.md — `tests/background_daemon_multi_client.rs` integration suite verifying concurrent multi-client attach, detach, and reconnect survival (wave 3)
+- [x] 32-01-PLAN.md — `src/daemon/`: Background daemon process supervisor, auto-spawn/handshake over `0600` Unix domain socket (`SO_PEERCRED` + `ConnectionRefused`-only stale socket unlink), and multi-session `SessionRegistry` hosting `WindowManager` instances (wave 1)
+- [x] 32-02-PLAN.md — Streaming frame/snapshot delta subscription, heterogeneous multi-client viewport/font-scale negotiation, and input forwarding protocol for attached TUI and Native GUI (`--gui`) clients, plus `bilterm attach|detach|ls` CLI subcommands (wave 2)
+- [x] 32-03-PLAN.md — `tests/v2_phases_30_to_34_integration.rs` integration suite verifying concurrent multi-client attach, detach, and reconnect survival (wave 3)
 
 ### Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`v2.0`)
 
@@ -448,14 +449,14 @@ Plans:
 
   1. `SessionTree` models sessions as **Independent** roots, **Rooted** children of the `MCP` daemon root, or nested **Parent → Child Trees & Subtrees** (`:session branch <parent>/<child>`, `:session graft <src> <dst>`, `:session detach-subtree <node>`), rendered with collapsible tree folding and rollup telemetry in the `Herdr` Drawer.
   2. Subtree-scoped actions allow broadcasting commands, searching scrollback, or recording `.cast` files across an entire session subtree.
-  3. Continuous debounced atomic state journaling (`~/.local/state/bilterm/journal/`) saves the full session forest, split tree ratios, Z-order stack coordinates, floating prompt geometries, themes/fonts, per-pane working directories (`OSC 7` / OS CWD), command histories, and scrollback tails, automatically restoring them on restart after a crash, intentional exit, or fresh connection.
+  3. Continuous debounced atomic state journaling (`~/.local/state/bilterm/journal/` via `secure_fs` sibling `.tmp-<pid>-<seq>` `0600` atomic `fs::rename`) saves the full session forest, strictly separated `SplitTree` ratios vs. `ZStack` coordinates (never cross-contaminating `Tiled` mode), floating prompt geometries, themes, per-pane `PaneFontOptions` (`scale_pct`), per-pane `PaneScrollMode` (`Smooth` / `BlockPage`), working directories (`OSC 7` / OS CWD), command histories, and scrollback tails, automatically restoring them on restart after a crash, intentional exit, or fresh connection.
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 33-01-PLAN.md — `src/wm/session_tree.rs`: Independent, Rooted, and Parent/Child Tree & Subtree session DAG, `:session branch|graft|tree` commands, and collapsible tree rendering in `Herdr` Drawer (wave 1)
-- [ ] 33-02-PLAN.md — `src/wm/journal.rs`: Continuous crash-safe atomic layout, CWD, history & scrollback-tail journaling + automatic resurrection on daemon startup or reconnect (wave 2)
-- [ ] 33-03-PLAN.md — `tests/session_trees_and_crash_recovery.rs` verification suite (wave 3)
+- [x] 33-01-PLAN.md — `src/wm/session_tree.rs`: Independent, Rooted, and Parent/Child Tree & Subtree session DAG, `:session branch|graft|tree` commands, and collapsible tree rendering in `Herdr` Drawer (wave 1)
+- [x] 33-02-PLAN.md — `src/wm/journal.rs`: Continuous crash-safe atomic sibling-temp-rename layout, `SplitTree`/`ZStack`, per-pane font/scroll mode, CWD, history & scrollback-tail journaling + automatic resurrection on daemon startup or reconnect (wave 2)
+- [x] 33-03-PLAN.md — `tests/v2_phases_30_to_34_integration.rs` verification suite (wave 3)
 
 ### Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal (`v2.0`)
 
@@ -465,14 +466,14 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
   1. Opening the **Root Terminal (`MCP`)** (`bilterm --mcp-console`, `:mcp`, or selecting `◈ ROOT [MCP — MASTER CONTROL PROGRAM]` at the root of the `Herdr` Drawer) connects to the background daemon's control plane; closing or exiting the `MCP` root terminal window never terminates the daemon or user sessions.
-  2. The `MCP` Root Terminal provides a TRON / 3270 high-contrast cyber-grid dashboard and interactive command shell supporting `mcp status`, `mcp tree`, `mcp attach <node>`, `mcp spawn <tree/path>`, `mcp graft <src> <dst>`, `mcp broadcast <subtree> <cmd>`, `mcp freeze <target>`, `mcp thaw <target>`, `mcp derez <session|pane>` (clean termination with confirmation), `mcp checkpoint`, and `mcp shutdown --confirm` (`END OF LINE.`).
+  2. The `MCP` Root Terminal provides a TRON / 3270 high-contrast cyber-grid dashboard and interactive command shell supporting `mcp status`, `mcp tree`, `mcp attach <node>`, `mcp spawn <tree/path>`, `mcp graft <src> <dst>`, `mcp broadcast <subtree> <cmd>`, `mcp freeze <target>` / `mcp thaw <target>` (backed by zero-drop `VtWorkerHandle` `HOLDING` page-lock buffering), `mcp derez <session|pane>` (clean termination with confirmation), `mcp checkpoint`, and `mcp shutdown --confirm` (`END OF LINE.`), with all operations unified under `crate::action::Action` (`ARCH-R01`) and `<= 800`-line modules (`ARCH-R04`).
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 34-01-PLAN.md — `src/mcp_console/`: Non-destructive Root `MCP` terminal session type, TRON Master Control Program command interpreter (`status`, `tree`, `spawn`, `graft`, `broadcast`, `freeze`, `thaw`, `derez`, `checkpoint`, `shutdown`), and daemon RPC bindings (wave 1)
-- [ ] 34-02-PLAN.md — TRON Red/Cyan/Gold cyber-grid visual theme & live daemon telemetry dashboard inside the `MCP` Root Terminal and `Herdr` Drawer root node (wave 2)
-- [ ] 34-03-PLAN.md — `tests/tron_mcp_root_console.rs` end-to-end verification suite and User Manual documentation (wave 3)
+- [x] 34-01-PLAN.md — `src/mcp_console/`: Non-destructive Root `MCP` terminal session type, TRON Master Control Program command interpreter (`status`, `tree`, `spawn`, `graft`, `broadcast`, `freeze`, `thaw`, `derez`, `checkpoint`, `shutdown`), and daemon RPC bindings (wave 1)
+- [x] 34-02-PLAN.md — TRON Red/Cyan/Gold cyber-grid visual theme & live daemon telemetry dashboard inside the `MCP` Root Terminal and `Herdr` Drawer root node (wave 2)
+- [x] 34-03-PLAN.md — `tests/v2_phases_30_to_34_integration.rs` end-to-end verification suite and User Manual documentation (wave 3)
 
 ## Progress
 
@@ -510,8 +511,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 27. High-Resolution Anti-Aliased Pixel Canvas & Adaptive SSH/GUI Graphics Engine (`CANV-02`, `SSH-GFX-01`, `CLI-GFX-01`) | 3/3 | Complete | 2026-10-25 |
 | 28. Post-`v1.10.0` Architecture Hardening, Module DAG Decoupling & Runtime Efficiency (`ARCH-R01..04`, `SEC-R01`) | 1/1 | Complete | 2026-10-27 |
 | 29. Smooth Scrolling by Default & Mainframe/Timeshare Block/Page-Mode Scroller (`SCRL-01`, `SCRL-02`) | 3/3 | Complete | 2026-10-27 |
-| 30. Explicit Exit Guard & Root/Final Session Protection (`SAFE-01`, `SAFE-02`) | 0/2 | Planned | - |
-| 31. Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility) (`THM-01`, `THM-02`) | 0/3 | Planned | - |
-| 32. Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach) (`DAEM-01`, `DAEM-02`) | 0/3 | Planned | - |
-| 33. Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`TREE-01..02`, `PERS-01..02`) | 0/3 | Planned | - |
-| 34. TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`) | 0/3 | Planned | - |
+| 30. Explicit Exit Guard & Root/Final Session Protection (`SAFE-01`, `SAFE-02`) | 2/2 | Complete | 2026-10-27 |
+| 31. Universal Open Color Scheme & Font Engine (`iterm2-color-schemes` Compatibility) (`THM-01`, `THM-02`) | 3/3 | Complete | 2026-10-27 |
+| 32. Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach) (`DAEM-01`, `DAEM-02`) | 3/3 | Complete | 2026-10-27 |
+| 33. Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`TREE-01..02`, `PERS-01..02`) | 3/3 | Complete | 2026-10-27 |
+| 34. TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`) | 3/3 | Complete | 2026-10-27 |

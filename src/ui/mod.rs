@@ -1,5 +1,6 @@
 pub mod bitmap_font;
 pub mod canvas_raster;
+pub mod exit_guard_ui;
 pub mod gui_font;
 #[cfg(target_os = "macos")]
 pub mod gui_macos;
@@ -16,13 +17,16 @@ pub mod pixel_canvas;
 pub mod renderer;
 pub mod status_bar;
 pub mod theme;
+pub mod theme_import;
 pub mod typography;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
+pub use exit_guard_ui::{render_exit_guard_modal, render_held_shell_exited_banner};
 pub use hires_subcell::{CanvasResolution, probe_terminal_pixel_size, subcell_mask_to_octant};
 pub use pixel_canvas::{PixelCanvasBuffer, wrap_tmux_dcs_passthrough};
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
+pub use theme_import::{OpenColorScheme, ThemeTypographyProfile};
 pub use typography::{
     FontFamilyPreset, LineSizeAttr, PaneFontOptions, encode_host_font_passthrough,
     scan_dec_line_size_escapes,
@@ -517,6 +521,9 @@ fn render_output_canvas(
             }
             render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
         }
+        if let Some(held) = pane.held_exited_shell() {
+            render_held_shell_exited_banner(buf, canvas, palette, held);
+        }
     }
 }
 
@@ -696,6 +703,31 @@ impl Widget for WorkspaceWidget<'_> {
         // Render interactive Fuzzy Command Palette modal on top of the workspace (v0.6.0)
         if self.wm.is_palette_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_palette_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+
+        if let Some(exit_state) = self.wm.exit_guard_state() {
+            render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
+        }
+
+        if let Some(mcp_rect) = self.wm.mcp_console().panel_rect(workspace_area) {
+            if self.wm.mcp_console().layout_mode == crate::wm::DrawerLayoutMode::Overlay
+                && cfg.drop_shadows
+            {
+                render_drop_shadow_styled(
+                    buf,
+                    mcp_rect,
+                    workspace_area,
+                    cfg.shadow_style,
+                    &palette,
+                );
+            }
+            occlude_rect(buf, mcp_rect);
+            crate::mcp_console::render_mcp_console(
+                buf,
+                mcp_rect,
+                self.wm.mcp_console(),
+                self.wm.daemon_state(),
+            );
         }
 
         // Capture full composited workspace frame if Whole-Workspace Asciicast v2 recording is active (REC-02)

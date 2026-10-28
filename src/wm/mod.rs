@@ -1,15 +1,20 @@
 pub mod drawer;
+pub mod journal;
 pub mod quick_terminal;
 pub mod session;
+pub mod session_tree;
 pub mod split_tree;
+pub mod v2_runtime;
 pub mod z_stack;
 
 pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
     WorkspaceDrawer,
 };
+pub use journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 pub use quick_terminal::{encode_sgr_mouse_local, inset_window_frame, rect_contains};
 pub use session::{SavedPaneState, SavedWorkspaceSession};
+pub use session_tree::{SessionNodeKind, SessionTree, SessionTreeNode};
 pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 
 use std::collections::BTreeMap;
@@ -59,6 +64,8 @@ pub enum Modal {
     Palette { query: String, selected: usize },
     /// Active pull-down category (`0..7`) and selected row inside the top Borland Menu Bar (`ECO-03`).
     Menubar { category: usize, item: usize },
+    /// Interactive Borland/3270 Exit Guard confirmation modal (`SAFE-01`).
+    ExitGuard(crate::pane::ExitGuardState),
 }
 
 /// Workspace focus target without `PaneId 0` sentinel collision (`ARCH-R02.4`).
@@ -110,6 +117,12 @@ pub struct WindowManager {
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
     pub(crate) viewport_scale_pct: u16,
+    /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
+    pub(crate) daemon_state: crate::daemon::DaemonServerState,
+    /// TRON Master Control Program (`MCP`) root terminal state (`MCP-01..02`).
+    pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
+    /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
+    pub(crate) client_detached: bool,
 }
 
 impl WindowManager {
@@ -160,6 +173,9 @@ impl WindowManager {
             drawer: WorkspaceDrawer::new(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
+            daemon_state: crate::daemon::DaemonServerState::new(),
+            mcp_console: crate::mcp_console::McpConsoleState::new(),
+            client_detached: false,
         }
     }
 
@@ -595,56 +611,6 @@ impl WindowManager {
     /// Returns `true` when every workspace pane has exited.
     pub fn all_panes_exited(&self) -> bool {
         self.panes.values().all(CompositePane::has_exited)
-    }
-
-    /// Drains any outbound OSC 52 clipboard payloads queued across workspace panes and the quick terminal.
-    pub fn drain_outbound_osc52(&mut self) -> Vec<String> {
-        let mut out = Vec::new();
-        for pane in self
-            .panes
-            .values_mut()
-            .chain(std::iter::once(&mut self.quick_terminal.pane))
-        {
-            out.extend(pane.take_all_outbound_osc52());
-        }
-        out
-    }
-
-    /// Submits `cmd` through [`CompositePane::submit_command`] across all writable workspace panes.
-    pub fn broadcast_command(&mut self, cmd: &str) -> Result<usize> {
-        let mut count = 0;
-        for pane in self.panes.values_mut() {
-            if !pane.is_read_only() && !pane.is_password_prompt() {
-                pane.submit_command(cmd)?;
-                count += 1;
-            }
-        }
-        Ok(count)
-    }
-
-    /// Allocates and registers a new headless pane mapped to a `tmux -CC` `%pane_id`.
-    pub fn insert_tmux_pane(&mut self, tmux_pane_id: usize) -> PaneId {
-        let new_id = self
-            .panes
-            .keys()
-            .max()
-            .copied()
-            .unwrap_or(1)
-            .max(self.next_pane_id.saturating_sub(1))
-            + 1;
-        self.next_pane_id = new_id + 1;
-        let (rows, cols) = self.active_pane().vt().size();
-        let mut pane = CompositePane::new_headless(new_id, rows + 1, cols);
-        pane.set_title(format!("TMUX %{tmux_pane_id}"));
-        pane.set_scroll_mode_from_config(self.config.scroll_mode);
-        Self::attach_history(&mut pane, &self.config.history_settings());
-        let top = self.z_stack.top().unwrap_or(1);
-        self.panes.insert(new_id, pane);
-        self.split_tree
-            .split_leaf(top, new_id, SplitDirection::Vertical);
-        self.z_stack.push(new_id);
-        self.rebalance_scrollback(Instant::now());
-        new_id
     }
 
     /// Selectively raises `pane_id` to the top of the z-order stack (`Alt+1..9` or mouse click, `WM-02`).

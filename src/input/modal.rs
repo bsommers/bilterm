@@ -420,8 +420,141 @@ pub(super) fn handle_wm_modal_key(
         return Ok(Some(AppAction::Handled));
     }
 
+    if wm.mcp_console().active && key.modifiers.is_empty() {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                wm.mcp_console_mut().close_root_terminal();
+                wm.reflow_default_viewport();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('m') | KeyCode::Char('M') => {
+                let mode = wm.mcp_console_mut().toggle_layout_mode();
+                wm.reflow_default_viewport();
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "MCP Window Mode: {} (Press 'd' to cycle dock edge)",
+                    mode.label()
+                )));
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                let edge = wm.mcp_console_mut().cycle_edge();
+                wm.mcp_console_mut().layout_mode = crate::wm::DrawerLayoutMode::Push;
+                wm.reflow_default_viewport();
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "MCP Window Docked (Push): {}",
+                    edge.label()
+                )));
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                wm.mcp_console_mut().scroll_up(1);
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                wm.mcp_console_mut().scroll_down(1);
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::PageUp => {
+                wm.mcp_console_mut().scroll_up(5);
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::PageDown => {
+                wm.mcp_console_mut().scroll_down(5);
+                return Ok(Some(AppAction::Handled));
+            }
+            _ => {}
+        }
+    }
+
+    if wm.active_pane().held_exited_shell().is_some() && !wm.is_leader_pending() {
+        match key.code {
+            KeyCode::Enter | KeyCode::Char('r') | KeyCode::Char('R') if key.modifiers.is_empty() => {
+                let _ = wm.active_pane_mut().respawn_shell_in_place();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') if key.modifiers.is_empty() => {
+                wm.detach_client();
+                return Ok(Some(AppAction::Quit));
+            }
+            _ => {}
+        }
+    }
+
     match wm.modal_mut() {
-        Modal::None => Ok(None),
+        Modal::None => {
+            if !wm.is_leader_pending() {
+                if key.modifiers == KeyModifiers::CONTROL
+                    && matches!(key.code, KeyCode::Char('d') | KeyCode::Char('D'))
+                    && wm.intercept_ctrl_d_if_needed()
+                {
+                    return Ok(Some(if wm.is_client_detached() {
+                        AppAction::Quit
+                    } else {
+                        AppAction::Handled
+                    }));
+                }
+                if key.code == KeyCode::Enter
+                    && key.modifiers.is_empty()
+                    && wm.active_pane().effective_routing_mode()
+                        == crate::pty::line_discipline::InputRoutingMode::CommandPrompt
+                    && !wm.active_pane().prompt().fuzzy_search.active
+                    && !wm.active_pane().copy_mode().active
+                    && !wm.active_pane().hints_mode().active
+                    && wm.active_pane().pending_unsafe_paste().is_none()
+                {
+                    let text = wm.active_pane().prompt().text();
+                    if wm.intercept_prompt_exit_if_needed(&text) {
+                        let _ = wm.active_pane_mut().prompt_mut().take_submission();
+                        return Ok(Some(if wm.is_client_detached() {
+                            AppAction::Quit
+                        } else {
+                            AppAction::Handled
+                        }));
+                    }
+                }
+            }
+            Ok(None)
+        }
+        Modal::ExitGuard(_) => {
+            match key.code {
+                KeyCode::Left | KeyCode::BackTab => {
+                    if let Some(st) = wm.exit_guard_state_mut() {
+                        st.select_prev();
+                    }
+                    Ok(Some(AppAction::Handled))
+                }
+                KeyCode::Right | KeyCode::Tab => {
+                    if let Some(st) = wm.exit_guard_state_mut() {
+                        st.select_next();
+                    }
+                    Ok(Some(AppAction::Handled))
+                }
+                KeyCode::Enter => {
+                    let choice = wm
+                        .exit_guard_state()
+                        .map(|s| s.selected_choice())
+                        .unwrap_or(crate::pane::ExitGuardChoice::RespawnShell);
+                    if wm.apply_exit_guard_choice(choice) {
+                        Ok(Some(AppAction::Quit))
+                    } else {
+                        Ok(Some(AppAction::Handled))
+                    }
+                }
+                _ => {
+                    if let Some(choice) =
+                        crate::pane::ExitGuardChoice::from_key(key.code, key.modifiers)
+                    {
+                        if wm.apply_exit_guard_choice(choice) {
+                            Ok(Some(AppAction::Quit))
+                        } else {
+                            Ok(Some(AppAction::Handled))
+                        }
+                    } else {
+                        Ok(Some(AppAction::Handled))
+                    }
+                }
+            }
+        }
         Modal::Help { scroll } => {
             match key.code {
                 KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => {
