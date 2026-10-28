@@ -35,6 +35,17 @@ impl Default for PtyConfig {
         let mut env = BTreeMap::new();
         env.insert("TERM".to_string(), "xterm-256color".to_string());
         env.insert("COLORTERM".to_string(), "truecolor".to_string());
+        if std::env::var("LANG")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .is_none()
+            && std::env::var("LC_ALL")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_none()
+        {
+            env.insert("LANG".to_string(), "en_US.UTF-8".to_string());
+        }
         Self {
             rows: 24,
             cols: 80,

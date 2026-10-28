@@ -66,6 +66,12 @@ else
     unset ZDOTDIR
 fi
 
+if [ -f "${ZDOTDIR:-$HOME}/.zshenv" ]; then
+    source "${ZDOTDIR:-$HOME}/.zshenv"
+fi
+if [ -f "${ZDOTDIR:-$HOME}/.zprofile" ]; then
+    source "${ZDOTDIR:-$HOME}/.zprofile"
+fi
 if [ -f "${ZDOTDIR:-$HOME}/.zshrc" ]; then
     source "${ZDOTDIR:-$HOME}/.zshrc"
 fi

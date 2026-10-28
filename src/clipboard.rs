@@ -57,6 +57,7 @@ mod macos_pb {
     }
 
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+    const K_CF_STRING_ENCODING_MAC_ROMAN: u32 = 0;
 
     #[link(name = "objc")]
     unsafe extern "C" {
@@ -87,13 +88,24 @@ mod macos_pb {
     }
     fn cfstring(s: &str) -> CFStringRef {
         unsafe {
-            CFStringCreateWithBytes(
+            let cf = CFStringCreateWithBytes(
                 null(),
                 s.as_ptr(),
                 s.len() as isize,
                 K_CF_STRING_ENCODING_UTF8,
                 0,
-            )
+            );
+            if !cf.is_null() {
+                cf
+            } else {
+                CFStringCreateWithBytes(
+                    null(),
+                    s.as_ptr(),
+                    s.len() as isize,
+                    K_CF_STRING_ENCODING_MAC_ROMAN,
+                    0,
+                )
+            }
         }
     }
     fn from_cfstring(cf: CFStringRef) -> String {

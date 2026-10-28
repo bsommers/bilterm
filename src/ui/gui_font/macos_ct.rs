@@ -64,6 +64,7 @@ pub struct CFRange {
 }
 
 const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+const K_CF_STRING_ENCODING_MAC_ROMAN: u32 = 0;
 const K_CG_IMAGE_ALPHA_NONE_SKIP_FIRST: u32 = 6;
 const K_CG_BITMAP_BYTE_ORDER_32_LITTLE: u32 = 2 << 12;
 const K_CT_FONT_TRAIT_ITALIC: u32 = 1 << 0;
@@ -160,13 +161,24 @@ unsafe extern "C" {
 
 pub fn create_cfstring(s: &str) -> CFStringRef {
     unsafe {
-        CFStringCreateWithBytes(
+        let cf = CFStringCreateWithBytes(
             null(),
             s.as_ptr(),
             s.len() as isize,
             K_CF_STRING_ENCODING_UTF8,
             0,
-        )
+        );
+        if !cf.is_null() {
+            cf
+        } else {
+            CFStringCreateWithBytes(
+                null(),
+                s.as_ptr(),
+                s.len() as isize,
+                K_CF_STRING_ENCODING_MAC_ROMAN,
+                0,
+            )
+        }
     }
 }
 
