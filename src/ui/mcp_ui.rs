@@ -208,16 +208,11 @@ fn write_clipped(
     text: &str,
     style: Style,
 ) {
-    let mut x = start_x;
-    for ch in text.chars() {
-        if x >= max_x {
-            break;
-        }
+    for (x, ch) in (start_x..max_x).zip(text.chars()) {
         if let Some(cell) = buf.cell_mut((x, y)) {
             let mut s = [0u8; 4];
             cell.set_symbol(ch.encode_utf8(&mut s));
             cell.set_style(style);
         }
-        x += 1;
     }
 }

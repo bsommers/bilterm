@@ -343,11 +343,10 @@ fn extract_plist_component(dict_body: &str, comp_key: &str) -> Option<u8> {
     let raw_val = if let Some(r) = after.strip_prefix("<real>") {
         let end = r.find("</real>")?;
         &r[..end]
-    } else if let Some(i) = after.strip_prefix("<integer>") {
+    } else {
+        let i = after.strip_prefix("<integer>")?;
         let end = i.find("</integer>")?;
         &i[..end]
-    } else {
-        return None;
     };
     let v: f64 = raw_val.trim().parse().ok()?;
     let scaled = if v > 1.0 {
