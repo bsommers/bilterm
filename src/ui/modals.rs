@@ -1,5 +1,9 @@
 //! Modal overlays and Borland Turbo Vision top menubar renderers.
 
+#[path = "help_catalog.rs"]
+pub mod help_catalog;
+pub use help_catalog::{HELP_LINES, PALETTE_CATALOG};
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -295,71 +299,6 @@ pub(super) fn render_help_modal(
         return;
     }
 
-    const HELP_LINES: &[(&str, &str)] = &[
-        ("═══ LEADER PREFIX (Ctrl+X) & GLOBAL HOTKEYS ═══", ""),
-        ("Ctrl+X <key>", "Universal Leader Prefix (works in Command Box & Raw PTY)"),
-        ("Ctrl+X ? / F1 / :help", "Toggle this interactive Help reference window"),
-        (":version [on|off]", "Toggle version number badge in 3270-OIA status bar"),
-        ("Ctrl+X - / F2 / Alt+H", "Split focused composite pane horizontally"),
-        ("Ctrl+X | / Alt+V", "Split focused composite pane vertically"),
-        ("Ctrl+X z / F5 / Alt+Z", "Toggle maximize/zoom on focused pane"),
-        ("Ctrl+X o / F6 / Alt+Tab", "Shuffle pane deck top-to-bottom (cycle focus)"),
-        ("Ctrl+X 1..9 / Alt+1..9", "Selectively raise & focus pane #1..#9"),
-        ("Ctrl+X M / Alt+M", "Toggle Tiled Splits vs Z-Order Stacked Windows"),
-        ("Ctrl+X q / Ctrl+\\ / F10", "Toggle persistent Guake Quick Terminal (macOS-safe)"),
-        ("Ctrl+X e / F4 / Alt+E", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
-        ("Ctrl+X g / F12 / Ctrl+G", "Toggle Command Box vs Regular Terminal (Raw PTY)"),
-        ("Ctrl+X x / Alt+X", "Cycle IBM 3270 Cross-Hair (Pane -> Full -> Off)"),
-        ("Alt+O / :spotlight", "Cycle Focal Spotlight (Circle/Ellipse × Fuzzy/Pixelated)"),
-        ("Alt+Shift+O / :focalzoom", "Cycle Focal Zoom Lens (1.25x -> 1.50x -> 2.00x -> 3.00x -> Off)"),
-        ("Alt+Shift+] / Alt+Shift+[", "Grow / shrink Focal Spotlight or Focal Zoom radius"),
-        ("Ctrl+Q / :quit", "Cleanly exit Bilterm"),
-        ("═══ COMMAND PROMPT, READLINE & HISTORY ═══", ""),
-        ("Shift+Arrows / Shift+Home/End", "Select text in command prompt with visual highlight"),
-        ("Ctrl+C / Ctrl+V / Shift+Del", "Copy / Paste / Cut selected text in command prompt"),
-        ("Alt+Left/Right / Alt+B/F", "Move cursor word left / right (macOS Option+Arrows)"),
-        ("Alt+Bksp / Alt+D / Ctrl+W", "Delete previous word / next word in command prompt"),
-        ("Ctrl+X t/b / Alt+T/Shift+B", "Pin floating prompt to Top / Bottom of canvas"),
-        ("Ctrl+X s / Alt+S", "Toggle Fixed (Non-Overlapping) vs Floating prompt"),
-        ("Alt+Up / Alt+Down", "Float prompt vertically row-by-row"),
-        ("Alt+Plus / Alt+Minus", "Increase / decrease command prompt height"),
-        ("Alt+] / Alt+[", "Increase / decrease command prompt width"),
-        ("Shift+PgUp / Shift+PgDn", "Scroll multi-line command prompt content"),
-        ("Tab / Shift+Tab", "Tab-complete paths, commands, $ENV, and :commands"),
-        ("Ctrl+R", "Fuzzy search command history (nucleo-matcher)"),
-        ("Alt+P / :history", "Open Command History Pop-up Window (s = Save tmp)"),
-        (":history save [path]", "Export session commands to a temporary script"),
-        (":history on | off", "Enable or disable disk history persistence"),
-        ("═══ OUTPUT CANVAS CURSOR, COPY/SELECT & LINKS ═══", ""),
-        ("Ctrl+X PgDn / :scroll page", "Toggle Mainframe Block/Page-Hold Scroller (MORE... / HOLDING)"),
-        ("PF8/PA2/Space/PgDn / PF7/b", "Advance 1 page (MORE...) / Step back 1 page (HOLDING)"),
-        (":scroll smooth | instant", "Switch pane between Smooth Kinetic & Discrete Line Scroller"),
-        ("F8 / Alt+C / Ctrl+Up / :copy", "Switch focus to OutputCanvas to move cursor & select text"),
-        ("Shift+Arrows / v / Space / b", "Select char stream or rectangular block on OutputCanvas"),
-        ("Enter / y / Ctrl+C / x", "Copy selection to clipboard (x = copy & insert into prompt)"),
-        ("Tab / F8 / Esc / Click Prompt", "Return focus from OutputCanvas back to Floating Prompt"),
-        ("Ctrl+X / / Alt+/", "Search OutputCanvas & highlight matches"),
-        ("Alt+n / Alt+N", "Jump to next / previous canvas search match"),
-        ("LeftDrag / Alt+LeftDrag", "Mouse char selection / rectangular block selection on canvas"),
-        ("RightClick / MiddleClick", "Paste from OS clipboard into active pane"),
-        ("Ctrl+Click / :links", "Yank URL under mouse or last OSC 8/visible URL via OSC 52"),
-        ("═══ 3270 INSPECTOR, FIELD HINTS & SESSIONS (v0.3.0) ═══", ""),
-        ("Ctrl+X i / F9 / :inspector", "Toggle Live 3270 Terminal Inspector modal"),
-        ("Ctrl+X f / F3 / Alt+Shift+F", "QuickSelect 3270 Field Hints (URLs, paths, SHAs, IPs)"),
-        ("Ctrl+X l / Alt+L / :lock", "Toggle Read-Only Protected 3270 Field Lock (🔒 PROT)"),
-        (":broadcast [on|off]", "Synchronized Multi-Pane Input Broadcast (📡 BCAST)"),
-        (":session save|restore", "Save or restore named workspace layout & sessions"),
-        (":menubar [on|off]", "Toggle interactive top Borland Turbo Vision Menu Bar"),
-        ("═══ THEMES, BORDERS & SHADOWS ═══", ""),
-        (":theme <name>", "turbo-blue | turbo-cyan | 3278 | 3279 | mono"),
-        (":outline <style>", "double | solid | rounded | thick | dotted | dashed | quadruple | ascii"),
-        (":shadows <style>", "on | off | translucent | tinted | solid"),
-        (":glyphs <pack>", "unicode | cp437 | nerd-font | ascii"),
-        (":cursor <style>", "block | hollow | underscore | bar"),
-        (":crosshair full|pane|off", "Configure full-screen or pane-local cross-hairs"),
-        (":spotlight <mode>", "circle | ellipse | pixel | fuzzy | size <rx> [ry] | + | - | off"),
-    ];
-
     let max_scroll = HELP_LINES.len().saturating_sub(usize::from(inner.height));
     let start = scroll.min(max_scroll);
     let mut rendered = Vec::with_capacity(usize::from(inner.height));
@@ -375,7 +314,7 @@ pub(super) fn render_help_modal(
         } else {
             rendered.push(Line::from(vec![
                 Span::styled(
-                    format!(" {:<24}", lhs),
+                    format!(" {:<32}", lhs),
                     Style::default()
                         .fg(Color::Rgb(85, 255, 255))
                         .bg(palette.window_frame_bg)

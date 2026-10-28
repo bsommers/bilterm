@@ -915,7 +915,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg1 = surface.export_svg(
-        "BILTERM v1.12.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
+        "BILTERM v2.0.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
     );
     let svg1_path = Path::new("docs/assets/screenshot-workspace.svg");
     std::fs::write(svg1_path, &svg1).expect("write screenshot-workspace.svg");
@@ -929,7 +929,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg2 = surface.export_svg(
-        "BILTERM v1.12.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
+        "BILTERM v2.0.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
     );
     let svg2_path = Path::new("docs/assets/screenshot-3278-inspector.svg");
     std::fs::write(svg2_path, &svg2).expect("write screenshot-3278-inspector.svg");
@@ -942,7 +942,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
 
     renderer.render_workspace(&plane1.wm, viewport, &mut surface);
     let svg3 = surface.export_svg(
-        "BILTERM v1.12.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
+        "BILTERM v2.0.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
     );
     let svg3_path = Path::new("docs/assets/screenshot-3279-palette.svg");
     std::fs::write(svg3_path, &svg3).expect("write screenshot-3279-palette.svg");
@@ -986,7 +986,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     plane2.wm.focus_and_raise(1);
     renderer.render_workspace_with_cell_size(&plane2.wm, viewport, 9, 18, &mut surface);
     let svg4 = surface.export_svg(
-        "BILTERM v1.12.0 — 3-Way Split with Independent Per-Pane Font Scaling (120% / 80% nmon / 100%)",
+        "BILTERM v2.0.0 — 3-Way Split with Independent Per-Pane Font Scaling (120% / 80% nmon / 100%)",
     );
     let svg4_path = Path::new("docs/assets/screenshot-per-pane-scaling.svg");
     std::fs::write(svg4_path, &svg4).expect("write screenshot-per-pane-scaling.svg");
@@ -1028,7 +1028,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     plane3.wm.focus_and_raise(1);
     renderer.render_workspace_with_cell_size(&plane3.wm, viewport, 9, 18, &mut surface);
     let svg5 = surface.export_svg(
-        "BILTERM v1.12.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)",
+        "BILTERM v2.0.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)",
     );
     let svg5_path = Path::new("docs/assets/screenshot-multi-agent-swarm.svg");
     std::fs::write(svg5_path, &svg5).expect("write screenshot-multi-agent-swarm.svg");

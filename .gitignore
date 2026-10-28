@@ -1,3 +1,6 @@
 /target
 bilterm.log
 .tmp/
+tmp/
+.flowscope/
+extra_prompt_session_panels_etc.txt

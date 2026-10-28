@@ -406,6 +406,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some(Ok(ColonCommand::McpCommand(sub)))
         }
         "detach" | "d" => Some(Ok(ColonCommand::DetachClient)),
+        "attach" | "a" | "resume" => {
+            let name = parts.get(1).copied().unwrap_or("default").to_string();
+            Some(Ok(ColonCommand::SessionRestore(name)))
+        }
+        "respawn-pane" | "respawn" => Some(Ok(ColonCommand::RespawnPaneInPlace)),
         "quit!" | "q!" | "exit!" => Some(Ok(ColonCommand::ForceQuit)),
         "quit" | "q" => Some(Ok(ColonCommand::Quit)),
         _ => None,

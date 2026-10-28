@@ -162,6 +162,8 @@ pub enum Action {
     DetachClient,
     /// `:exit-guard [guard|respawn|detach|off]` (`SAFE-01`).
     ExitProtectionSet(ExitProtectionPolicy),
+    /// `:respawn-pane` / `:respawn`: Respawn exited shell in-place inside held pane (`SAFE-03`).
+    RespawnPaneInPlace,
     /// `:theme import|load|export|list|<name>` (`THM-01`, `THM-02`).
     ThemeCommand(String),
     /// `:session branch|graft|detach-subtree|tree|checkpoint ...` (`TREE-01..02`, `PERS-01..02`).
@@ -329,6 +331,7 @@ mod tests {
             Action::ForceQuit => Some(":quit!"),
             Action::DetachClient => Some(":detach"),
             Action::ExitProtectionSet(_) => Some(":exit-guard guard"),
+            Action::RespawnPaneInPlace => Some(":respawn-pane"),
             Action::ThemeCommand(_) => Some(":theme list"),
             Action::SessionTreeCommand(_) => Some(":session tree"),
             Action::McpCommand(_) => Some(":mcp status"),
@@ -469,6 +472,7 @@ mod tests {
             Action::ForceQuit,
             Action::DetachClient,
             Action::ExitProtectionSet(ExitProtectionPolicy::Guard),
+            Action::RespawnPaneInPlace,
             Action::ThemeCommand("list".to_string()),
             Action::SessionTreeCommand("tree".to_string()),
             Action::McpCommand("status".to_string()),

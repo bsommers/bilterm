@@ -48,10 +48,12 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
+               bilterm attach [SESSION] / bilterm -a [SESSION]\n  \
                bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
+               -a, --attach [SESSION]           Re-attach & restore saved/detached multi-pane window layout\n  \
                -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
                -F, --font, --gui-font <FAMILY>  Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
                    --font-size, --gui-font-size <PT> Set base font size in points (6..72, default 14)\n  \
@@ -285,7 +287,16 @@ async fn main() -> color_eyre::Result<()> {
             }
         }
     }
-    if let Some(name) = switch_value(&args, &["-s", "--session"]) {
+    let attach_subcmd = matches!(args.first().map(String::as_str), Some("attach" | "a" | "resume"));
+    let attach_flag = has_switch(&args, &["-a", "--attach"]);
+    let explicit_attach_session = if attach_subcmd {
+        args.get(1)
+            .filter(|s| !s.starts_with('-'))
+            .map(String::as_str)
+    } else {
+        switch_value(&args, &["-a", "--attach"]).filter(|s| !s.starts_with('-'))
+    };
+    if let Some(name) = switch_value(&args, &["-s", "--session"]).or(explicit_attach_session) {
         cfg.history_session = name.to_string();
     }
     if let Some(theme_str) = switch_value(&args, &["-T", "--theme"])
@@ -310,7 +321,23 @@ async fn main() -> color_eyre::Result<()> {
     {
         cfg.font_size_pt = pt.clamp(6, 72);
     }
+    let session_to_restore = cfg.history_session.clone();
     app.wm.apply_config(cfg);
+    if attach_subcmd || attach_flag || app.wm.has_detached_session(&session_to_restore) {
+        match app.wm.restore_session(&session_to_restore) {
+            Ok(count) => {
+                app.wm.active_pane_mut().set_status_message(Some(format!(
+                    "Re-attached session '{session_to_restore}' ({count} pane(s) window layout restored)"
+                )));
+            }
+            Err(err) if attach_subcmd || attach_flag => {
+                app.wm.active_pane_mut().set_status_message(Some(format!(
+                    "Attach '{session_to_restore}': {err} (started fresh session)"
+                )));
+            }
+            Err(_) => {}
+        }
+    }
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
     }
@@ -327,5 +354,14 @@ async fn main() -> color_eyre::Result<()> {
     let run_res = app.run(&mut terminal).await;
     host_guard.restore();
     run_res?;
+    if app.wm.is_client_detached() {
+        let sess = &app.wm.config().history_session;
+        println!(
+            "[bilterm: detached session '{}' ({} pane(s) window layout intact) — run 'bilterm' or 'bilterm attach {}' to resume]",
+            sess,
+            app.wm.pane_count(),
+            sess
+        );
+    }
     Ok(())
 }

@@ -104,6 +104,23 @@ impl ZStack {
         }
     }
 
+    pub fn from_order_and_geometries(
+        order: Vec<PaneId>,
+        geometries: BTreeMap<PaneId, FloatingWindowGeometry>,
+    ) -> Self {
+        Self {
+            order: if order.is_empty() { vec![1] } else { order },
+            geometries,
+            modal_rect: None,
+            modal_maximized: false,
+        }
+    }
+
+    /// Returns the per-window floating geometry map (`WM-02`).
+    pub fn geometries(&self) -> &BTreeMap<PaneId, FloatingWindowGeometry> {
+        &self.geometries
+    }
+
     /// Returns panes ordered from bottom (`0`) to top (`len - 1`).
     pub fn order(&self) -> &[PaneId] {
         &self.order

@@ -572,6 +572,12 @@ pub(super) fn handle_wm_modal_key(
                 KeyCode::PageDown => {
                     *scroll = scroll.saturating_add(8);
                 }
+                KeyCode::Home => {
+                    *scroll = 0;
+                }
+                KeyCode::End => {
+                    *scroll = 500;
+                }
                 _ => {}
             }
             Ok(Some(AppAction::Handled))

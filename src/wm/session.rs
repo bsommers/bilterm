@@ -29,6 +29,16 @@ pub struct SavedPaneState {
     pub prompt_anchor: PromptAnchor,
     pub prompt_height: u16,
     pub prompt_width_cols: Option<u16>,
+    #[serde(default)]
+    pub prompt_x_offset: Option<u16>,
+    #[serde(default)]
+    pub prompt_input: String,
+    #[serde(default)]
+    pub font_scale_pct: Option<u16>,
+    #[serde(default)]
+    pub scroll_mode: Option<crate::pane::PaneScrollMode>,
+    #[serde(default)]
+    pub scrollback_lines: Vec<String>,
     pub read_only: bool,
     pub history: Vec<String>,
 }
@@ -40,108 +50,27 @@ pub struct SavedWorkspaceSession {
     pub layout_mode: WorkspaceLayoutMode,
     pub split_tree: SplitTree,
     pub z_order: Vec<PaneId>,
+    #[serde(default)]
+    pub z_geometries: BTreeMap<String, crate::wm::FloatingWindowGeometry>,
     pub zoomed_pane: Option<PaneId>,
+    #[serde(default)]
+    pub detached: bool,
     pub panes: Vec<SavedPaneState>,
 }
 
 impl WindowManager {
     /// Returns `(colon_cmd, shortcut, description)` entries matching `palette_query` ranked by `nucleo-matcher` (`v0.6.0`).
     pub fn filtered_palette_items(&self) -> Vec<(&'static str, &'static str, &'static str)> {
+        use crate::ui::modals::PALETTE_CATALOG;
         use nucleo_matcher::{Config, Matcher, Utf32Str};
-        const CATALOG: &[(&str, &str, &str)] = &[
-            (":split h", "Ctrl+X - / F2", "Split focused pane horizontally (Top/Bottom)"),
-            (":split v", "Ctrl+X | / Alt+V", "Split focused pane vertically (Left/Right)"),
-            (":zoom", "Ctrl+X z / F5", "Toggle zoom/maximize on focused pane"),
-            (":layout stack", "Ctrl+X M / Alt+M", "Switch workspace to Z-Order Stacked Cascade"),
-            (":layout tile", "Ctrl+X M / Alt+M", "Switch workspace to Tiled Binary Split Tree"),
-            (":resize right", "Ctrl+Alt+Right / Ctrl+X >", "Widen active pane split or Z-Stack floating window"),
-            (":resize left", "Ctrl+Alt+Left / Ctrl+X <", "Narrow active pane split or Z-Stack floating window"),
-            (":resize down", "Ctrl+Alt+Down", "Grow height of active pane split or Z-Stack window"),
-            (":resize up", "Ctrl+Alt+Up", "Shrink height of active pane split or Z-Stack window"),
-            (":move right", "Ctrl+Shift+Right / Ctrl+Alt+L", "Move Z-Stack window right or swap Tiled panes"),
-            (":move left", "Ctrl+Shift+Left / Ctrl+Alt+H", "Move Z-Stack window left or swap Tiled panes"),
-            (":move down", "Ctrl+Shift+Down / Ctrl+X J", "Move Z-Stack window down or swap Tiled panes"),
-            (":move up", "Ctrl+Shift+Up / Ctrl+X K", "Move Z-Stack window up or swap Tiled panes"),
-            (":cascade", "Ctrl+X =", "Reset custom Z-Stack window positions & equalize splits"),
-            (":deck next", "Ctrl+X o / F6", "Shuffle Z-order window deck top-to-bottom"),
-            (":quake", "Ctrl+X q / Ctrl+\\", "Toggle persistent Guake drop-down quick terminal"),
-            (":inspector", "Ctrl+X i / F9", "Open Live 3270 Terminal Inspector modal"),
-            (":hints", "Ctrl+X f / F3", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
-            (":copy", "F8 / Alt+C / Ctrl+Up", "Focus OutputCanvas to move cursor & select text"),
-            (":scroll page", "Ctrl+X PgDn", "Toggle IBM 3270 / Timeshare Block/Page-Hold Scroller (MORE...)"),
-            (":scroll smooth", "—", "Switch pane to Smooth Sub-Cell / Kinetic Velocity Scroller"),
-            (":scroll instant", "—", "Switch pane to Discrete Line-by-Line Scroller"),
-            (":more", "PF8 / PA2 / Space", "Advance 1 full page in Mainframe Block/Page-Hold Mode"),
-            (":version", "—", "Toggle version number badge in 3270-OIA status bar"),
-            (":lock", "Ctrl+X l / Alt+L", "Toggle Read-Only Protected 3270 Field Lock"),
-            (":broadcast", "—", "Toggle Synchronized Multi-Pane Input Broadcast"),
-            (":menubar", "—", "Toggle Top Borland Turbo Vision Menu Bar"),
-            (":crt", "—", "Toggle Retro CRT Phosphor Scanline Effect"),
-            (":mode cycle", "Ctrl+X e / F4", "Cycle Floating Prompt -> Fixed Prompt -> Regular Terminal"),
-            (":mode fixed", "Ctrl+X s / Alt+S", "Switch to Fixed (Non-Overlapping Docked) Command Prompt"),
-            (":mode float", "Ctrl+X t / Alt+T", "Switch to Floating Command Prompt over Terminal Canvas"),
-            (":mode terminal", "F12 / Ctrl+G", "Switch to Regular Terminal (Hide Command Prompt Box)"),
-            (":prompt split-top", "Ctrl+X s / Alt+S", "Non-overlapping Split Command Prompt at Top"),
-            (":prompt top", "Ctrl+X t / Alt+T", "Pin Floating Command Prompt to Top"),
-            (":prompt bottom", "Ctrl+X b / Alt+B", "Pin Floating Command Prompt to Bottom"),
-            (":crosshair full", "Ctrl+X x / Alt+X", "Enable Full-Screen IBM 3270 Cross-Hair Cursor"),
-            (":spotlight", "Alt+O", "Cycle Focal Spotlight (Circle/Ellipse × Fuzzy/Pixelated)"),
-            (":spotlight ellipse fuzzy", "Alt+O", "Enable Elliptical Fuzzy Focal Spotlight"),
-            (":spotlight ellipse pixel", "Alt+O", "Enable Elliptical Pixelated Character-Block Spotlight"),
-            (":spotlight circle pixel", "Alt+O", "Enable Circular Pixelated Character-Block Spotlight"),
-            (":spotlight +", "Alt+Shift+]", "Grow Focal Spotlight Radius (+4 cols, +1 row)"),
-            (":spotlight -", "Alt+Shift+[", "Shrink Focal Spotlight Radius (-4 cols, -1 row)"),
-            (":spotlight off", "—", "Disable Focal Spotlight"),
-            (":focalzoom", "Alt+Shift+O", "Cycle Focal Zoom Lens (1.25x -> 1.50x -> 2.00x -> 3.00x -> Off)"),
-            (":focalzoom 1.5x fuzzy", "Alt+Shift+O", "Enable 1.50x Smooth Fuzzy Focal Zoom Lens"),
-            (":focalzoom 2x fuzzy", "Alt+Shift+O", "Enable 2.00x High Magnification Focal Zoom Lens"),
-            (":focalzoom 2x pixel", "—", "Enable 2.00x Pixelated Character-Block Focal Zoom Lens"),
-            (":focalzoom +", "—", "Step Focal Zoom Magnification Up (+0.25x)"),
-            (":focalzoom -", "—", "Step Focal Zoom Magnification Down (-0.25x)"),
-            (":focalzoom off", "—", "Disable Focal Zoom Lens"),
-            (":theme turbo-blue", "—", "Switch palette to Borland Turbo Vision Blue"),
-            (":theme 3278", "—", "Switch palette to IBM 3278 Phosphor Green"),
-            (":theme 3279", "—", "Switch palette to IBM 3279 Amber CRT"),
-            (":session save default", "—", "Save multi-pane workspace session to TOML"),
-            (":session restore default", "—", "Restore saved multi-pane workspace session"),
-            (":record start", "Ctrl+X R", "Start Asciicast v2 (.cast) terminal recording"),
-            (":record stop", "—", "Stop Asciicast v2 (.cast) terminal recording"),
-            (":drawer toggle", "F7 / Ctrl+X d", "Toggle herdr-style Slide-Out Sessions/Windows/Panes Drawer"),
-            (":fontsize +", "Ctrl++", "Zoom terminal font & text size in (+10%)"),
-            (":fontsize -", "Ctrl+-", "Zoom terminal font & text size out (-10%)"),
-            (":fontsize reset", "Ctrl+0", "Reset terminal font & text size to 100%"),
-            (":font cycle", "—", "Cycle terminal & GUI font family preset"),
-            (":font cascadia", "—", "Switch font family to Microsoft Cascadia Mono / Code"),
-            (":font consolas", "—", "Switch font family to ClearType Consolas"),
-            (":font jetbrains", "—", "Switch font family to JetBrains Mono"),
-            (":font firacode", "—", "Switch font family to Fira Code"),
-            (":font iosevka", "—", "Switch font family to Iosevka Term"),
-            (":font plex", "—", "Switch font family to IBM Plex Mono"),
-            (":font hack", "—", "Switch font family to Hack"),
-            (":font ibm3270", "—", "Switch font family to IBM 3270 / 3270 Nerd Font"),
-            (":font vga", "—", "Switch font family to Borland DOS PxPlus IBM VGA8"),
-            (":font list", "—", "List available font presets and loaded .ttf/.otf font files"),
-            (":tek", "—", "Toggle Tektronix 4010/4014 storage-tube vector mode"),
-            (":tek demo", "—", "Render Tektronix 4014 storage-tube wireframe vector demo"),
-            (":tek erase", "—", "Erase Tektronix 4014 screen with phosphor afterglow decay"),
-            (":tek off", "—", "Exit Tektronix 4010/4014 mode"),
-            (":canvas demo", "—", "Render modern Braille/Sextant vector + live plot demo"),
-            (":canvas mode braille", "—", "Set canvas rasterizer to 2x4 Unicode Braille sub-cells"),
-            (":canvas mode sextant", "—", "Set canvas rasterizer to 2x3 Unicode Sextant sub-cells"),
-            (":canvas clear", "—", "Clear all Tektronix vectors and modern canvas primitives"),
-            (":notifications clear", "—", "Clear OSC 9 / OSC 777 desktop notifications"),
-            (":remote list", "—", "List local and remote SSH / tmux-CC fleet sessions"),
-            (":help", "Ctrl+X ? / F1", "Open Borland Turbo Vision Quick Reference Help"),
-            (":quit", "Ctrl+Q", "Cleanly exit Bilterm"),
-        ];
         let q = self.palette_state().map(|(q, _)| q).unwrap_or("").trim();
         if q.is_empty() {
-            return CATALOG.to_vec();
+            return PALETTE_CATALOG.to_vec();
         }
         let mut matcher = Matcher::new(Config::DEFAULT);
         let mut needle_buf = Vec::new();
         let needle = Utf32Str::new(q, &mut needle_buf);
-        let mut scored: Vec<(u16, (&'static str, &'static str, &'static str))> = CATALOG
+        let mut scored: Vec<(u16, (&'static str, &'static str, &'static str))> = PALETTE_CATALOG
             .iter()
             .filter_map(|&item| {
                 let combined = format!("{} {} {}", item.0, item.1, item.2);
@@ -421,15 +350,31 @@ impl WindowManager {
         let panes = self
             .panes
             .values()
-            .map(|p| SavedPaneState {
-                id: p.id(),
-                title: p.title().to_string(),
-                cwd: p.resolve_cwd().to_string_lossy().into_owned(),
-                prompt_anchor: p.prompt().anchor,
-                prompt_height: p.prompt().height,
-                prompt_width_cols: p.prompt().width_cols,
-                read_only: p.is_read_only(),
-                history: p.prompt().history.clone(),
+            .map(|p| {
+                let (rows, _cols) = p.vt().size();
+                let mut scrollback_lines = Vec::new();
+                for r in 0..rows {
+                    let line = p.vt().row_text(r);
+                    let trimmed = line.trim_end();
+                    if !trimmed.is_empty() {
+                        scrollback_lines.push(trimmed.to_string());
+                    }
+                }
+                SavedPaneState {
+                    id: p.id(),
+                    title: p.title().to_string(),
+                    cwd: p.resolve_cwd().to_string_lossy().into_owned(),
+                    prompt_anchor: p.prompt().anchor,
+                    prompt_height: p.prompt().height,
+                    prompt_width_cols: p.prompt().width_cols,
+                    prompt_x_offset: p.prompt().x_offset,
+                    prompt_input: p.prompt().text(),
+                    font_scale_pct: p.font_options().scale_pct,
+                    scroll_mode: Some(p.scroll_mode()),
+                    scrollback_lines,
+                    read_only: p.is_read_only(),
+                    history: p.prompt().history.clone(),
+                }
             })
             .collect();
         SavedWorkspaceSession {
@@ -437,9 +382,40 @@ impl WindowManager {
             layout_mode: self.layout_mode,
             split_tree: self.split_tree.clone(),
             z_order: self.z_stack.order().to_vec(),
+            z_geometries: self
+                .z_stack
+                .geometries()
+                .iter()
+                .map(|(k, v)| (k.to_string(), *v))
+                .collect(),
             zoomed_pane: self.zoomed_pane,
+            detached: self.client_detached,
             panes,
         }
+    }
+
+    /// Returns `true` if a detached workspace session `<name>.toml` is waiting to be resumed (`DAEM-02`).
+    pub fn has_detached_session(&self, name: &str) -> bool {
+        let safe_name: String = name
+            .trim()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            .collect();
+        let file_stem = if safe_name.is_empty() {
+            "default"
+        } else {
+            &safe_name
+        };
+        let Ok(dir) = self.resolve_session_dir() else {
+            return false;
+        };
+        let path = dir.join(format!("{file_stem}.toml"));
+        let Ok(raw) = std::fs::read_to_string(path) else {
+            return false;
+        };
+        toml::from_str::<SavedWorkspaceSession>(&raw)
+            .map(|s| s.detached)
+            .unwrap_or(false)
     }
 
     /// Saves the current workspace layout and pane states to `<session_dir>/<name>.toml` (`:session save <name>`, `ECO-02`).
@@ -478,8 +454,9 @@ impl WindowManager {
         };
         let path = self.resolve_session_dir()?.join(format!("{file_stem}.toml"));
         let raw = std::fs::read_to_string(&path)?;
-        let saved: SavedWorkspaceSession = toml::from_str(&raw)
+        let mut saved: SavedWorkspaceSession = toml::from_str(&raw)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+        let was_detached = saved.detached;
 
         let (rows, cols) = self.default_size;
         let mut new_panes = BTreeMap::new();
@@ -504,6 +481,18 @@ impl WindowManager {
             pane.prompt_mut().anchor = sp.prompt_anchor;
             pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
             pane.prompt_mut().width_cols = sp.prompt_width_cols;
+            pane.prompt_mut().x_offset = sp.prompt_x_offset;
+            if !sp.prompt_input.is_empty() {
+                pane.prompt_mut().set_text(&sp.prompt_input);
+            }
+            pane.font_options_mut().scale_pct = sp.font_scale_pct;
+            if let Some(sm) = sp.scroll_mode {
+                pane.set_scroll_mode(sm);
+            }
+            if !sp.scrollback_lines.is_empty() {
+                let replayed = format!("{}\r\n", sp.scrollback_lines.join("\r\n"));
+                pane.process_pty_output(replayed.as_bytes());
+            }
             pane.set_read_only(sp.read_only);
             // Configure the store first so the later sync does not overwrite the saved history.
             Self::attach_history(&mut pane, &self.config.history_settings());
@@ -517,12 +506,27 @@ impl WindowManager {
 
         let pane_count = new_panes.len();
         self.panes = new_panes;
-        self.split_tree = saved.split_tree;
-        self.z_stack = ZStack::from_order(saved.z_order);
+        self.split_tree = saved.split_tree.clone();
+        let geom_map: BTreeMap<PaneId, crate::wm::FloatingWindowGeometry> = saved
+            .z_geometries
+            .iter()
+            .filter_map(|(k, v)| k.parse::<PaneId>().ok().map(|id| (id, *v)))
+            .collect();
+        self.z_stack = ZStack::from_order_and_geometries(saved.z_order.clone(), geom_map);
         self.layout_mode = saved.layout_mode;
         self.zoomed_pane = saved.zoomed_pane;
         self.next_pane_id = max_id + 1;
+        self.client_detached = false;
+        self.daemon_state
+            .session_panes
+            .insert(file_stem.to_string(), pane_count);
         self.sync_history_config();
+        if was_detached {
+            saved.detached = false;
+            if let Ok(toml_str) = toml::to_string_pretty(&saved) {
+                let _ = std::fs::write(&path, toml_str);
+            }
+        }
         Ok(pane_count)
     }
 

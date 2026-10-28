@@ -325,6 +325,10 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             let _ = pane.execute_canvas_command(subcmd);
             false
         }
+        ColonCommand::RespawnPaneInPlace => {
+            let _ = pane.respawn_shell_in_place();
+            false
+        }
         ColonCommand::Quit => true,
         _ => false,
     }

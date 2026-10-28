@@ -5,6 +5,32 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.0] - 2026-10-27
+
+### Added
+- **TRON-Inspired Master Control Program (`MCP`) Root Console & Floating/Push-Out Window (`MCP-01..02`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`, `src/wm/drawer.rs`, `src/ui/mod.rs`)**:
+  - Added `:mcp` (`:mcp status`, `:mcp tree`, `:mcp float`, `:mcp push [top|bottom|left|right]`, `:mcp attach <node>`, `:mcp spawn <parent/child>`, `:mcp graft <src> <dst>`, `:mcp detach-subtree <node>`, `:mcp broadcast <node> <cmd>`, `:mcp freeze <node>`, `:mcp thaw <node>`, `:mcp derez <node> --confirm`, `:mcp checkpoint`, `:mcp shutdown --confirm`).
+  - Renders `:mcp status`, `:mcp tree`, `:session tree`, and `:theme list` in a dedicated Borland/TRON console window that switches between **Floating Overlay (`Overlay`)** and **Push-Out (`Push`, shrinking pane geometry on `Top`, `Bottom`, `Left`, or `Right`)** via `:mcp float` / `:mcp push [edge]`, keyboard (`m` = toggle Float↔Push, `d` = cycle edge, `Up`/`Down`/`PgUp`/`PgDn` = scroll, `Esc`/`q` = close), or clickable header badges (`[FLOAT]`, `[PUSH:EDGE]`, `[EDGE]`, `[×]`).
+- **Full Multi-Pane Window Layout Detach & Seamless Re-Attach (`DAEM-01..02`, `PERS-01..02`, `src/wm/session.rs`, `src/wm/z_stack.rs`, `src/wm/v2_runtime.rs`, `src/main.rs`)**:
+  - `Ctrl+X D`, `:detach`, and Exit Guard `[d] Detach` persist the complete multi-pane workspace (`SplitTree` ratios, `ZStack` order + custom `FloatingWindowGeometry` positions/sizes/minimized state, `layout_mode`, `zoomed_pane`, and per-pane `cwd`, `title`, prompt anchor/height/width/offset/input, history, font scale, scroll mode, read-only state, and visible screen lines) to `<session_dir>/<session>.toml` (`detached = true`) alongside an atomic `WorkspaceJournal` (`0600`) checkpoint.
+  - Added `bilterm attach [session]`, `bilterm -a [session]`, `:attach [session]`, and automatic detached-session layout restoration on `bilterm` startup.
+- **Root Shell Exit Guard & Remain-on-Exit Pane Protection (`SAFE-01..02`, `src/pane/exit_guard.rs`, `src/ui/exit_guard_ui.rs`)**:
+  - Intercepts `exit`, `logout`, `Ctrl+D`, `:quit`, and root PTY exits on the final pane with a Borland modal (`[r] Respawn Shell`, `[d] Detach Session`, `[q] Quit Client`, `[x] Kill Session`, `[Esc] Cancel`), configurable via `:exit-guard [guard|respawn|detach|off]` and `:respawn-pane`.
+- **Hierarchical `SessionTree` & Crash-Safe `WorkspaceJournal` (`TREE-01..02`, `PERS-01..02`, `src/wm/session_tree.rs`, `src/wm/journal.rs`, `src/daemon/mod.rs`)**:
+  - Parent/child session hierarchy (`root -> project -> agent-worker`) supporting `:session branch`, `:session graft`, `:session detach-subtree`, `:session tree`, and `:session checkpoint`.
+- **Universal Open Color Scheme & Theme Typography Engine (`THM-01..02`, `src/ui/theme_import.rs`, `src/ui/theme.rs`)**:
+  - Added 22 built-in presets (`Dracula`, `GruvboxDark`, `GruvboxLight`, `Nord`, `CatppuccinMocha`, `CatppuccinLatte`, `TokyoNight`, `TokyoNightStorm`, `KanagawaWave`, `RosePine`, `EverforestDark`, `OneDarkPro`, `MonokaiPro`, `Nightfox`, `AyuMirage`, `tron-legacy`) plus `:theme import <path>` (`.itermcolors`, Alacritty/WezTerm/Foot/Windows Terminal/Base16/Bilterm TOML) and `:theme export [file.toml]`.
+- **Mainframe Block/Page-Hold (`MORE...`) & Smooth Kinetic Scroller (`SCRL-01..02`, `src/pane/mod.rs`, `src/ui/oia.rs`)**:
+  - Added `PaneScrollMode` (`Smooth`, `BlockPage`, `Instant`) with `:scroll [smooth|page|instant|toggle|next|prev]`, `:more`, and `PF8`/`PA2`/`Space` page advance.
+- **Comprehensive `<F1>` / `:help` Reference, Command Palette & `<Tab>` Completion (`src/ui/help_catalog.rs`, `src/ui/modals.rs`, `src/pane/completion.rs`)**:
+  - Expanded `<F1>` / `:help`, `Ctrl+P` / `:palette`, and `<Tab>` completion to document and complete every `:colon` command and `:mcp` directive.
+- **Compounded Lessons Learned & Agent Autonomy Guides (`docs/LESSONS_LEARNED_COMPOUNDED.md`, `docs/AGENT_AUTONOMY_AND_PERMISSIONS.md`)**:
+  - Synthesized 15 engineering invariants (`INV-01..15`) and cross-CLI zero-prompt autonomy configurations.
+
+### Fixed
+- **3270-OIA Status Bar Mouse Click Isolation (`src/input/mouse.rs`, `src/input/tests.rs`)**:
+  - Clicks and drags on the bottom OIA status bar row (`status_rect`) are strictly isolated from `OutputCanvas` copy/selection and act exclusively as interactive status bar controls (`4B:001` block jump, `HOLDING`/`MORE...` page advance, `READY` / `INPUT: CMD BOX` mode cycle, `SCRL` mode cycle, `FONT` reset, `LOCK` toggle, and `v2.0.0` version badge toggle).
+
 ## [v1.12.0] - 2026-10-26
 
 ### Added

@@ -201,12 +201,19 @@ impl WindowManager {
         }
     }
 
-    /// Detaches the current UI client while preserving the background daemon / session (`SAFE-02`, `DAEM-02`).
+    /// Detaches the current UI client while preserving the complete multi-pane window layout & session (`SAFE-02`, `DAEM-02`).
     pub fn detach_client(&mut self) -> bool {
         self.client_detached = true;
-        self.active_pane_mut().set_status_message(Some(
-            "Detached client from session (session preserved in background)".to_string(),
-        ));
+        let sess = self.config.history_session.clone();
+        let pane_count = self.panes.len();
+        let _ = self.save_session(&sess);
+        let _ = self.save_journal_checkpoint(None, &sess);
+        self.daemon_state
+            .session_panes
+            .insert(sess.clone(), pane_count);
+        self.active_pane_mut().set_status_message(Some(format!(
+            "Detached session '{sess}' ({pane_count} pane(s) window layout preserved — run 'bilterm' or ':attach {sess}' to resume)"
+        )));
         true
     }
 
