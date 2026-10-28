@@ -573,15 +573,14 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
         if app.needs_redraw {
             let dpi = query_window_dpi(hwnd);
             let (cw, ch, font_changed) = gdi_canvas.sync_font(&app.wm, dpi);
-            if font_changed {
-                gui_renderer.cell_width_px = cw;
-                gui_renderer.cell_height_px = ch;
-                let c = (client_w / u32::from(cw.max(1))).clamp(20, 500) as u16;
-                let r = (client_h / u32::from(ch.max(1))).clamp(6, 200) as u16;
-                let new_vp = Rect::new(0, 0, c, r);
-                app.wm.resize_all(new_vp)?;
-                app.last_viewport = new_vp;
-            }
+            gui_renderer.cell_width_px = cw;
+            gui_renderer.cell_height_px = ch;
+            let c = (client_w / u32::from(cw.max(1))).clamp(20, 500) as u16;
+            let r = (client_h / u32::from(ch.max(1))).clamp(6, 200) as u16;
+            let desired_vp = Rect::new(0, 0, c, r);
+            app.wm.resize_all(desired_vp)?;
+            app.last_viewport = desired_vp;
+            let _ = font_changed;
             CELL_GEOM.with(|g| *g.borrow_mut() = (cw, ch, app.last_viewport));
             gui_renderer.render_workspace_with_cell_size(
                 &app.wm,

@@ -140,6 +140,15 @@ fn replies_to_decrpm_kitty_keyboard_osc_colors_and_xtgettcap() {
         ]
     );
 
+    // Kitty keyboard pop/set on a fresh parser before any push (Claude Code startup sequence) must never panic
+    let mut fresh_vt = VtParser::new(24, 80, 200);
+    fresh_vt.process(b"\x1b[<u\x1b[<5u\x1b[=1;1u");
+    assert_eq!(fresh_vt.kitty_keyboard_flags(), 1);
+    fresh_vt.process(b"\x1b[?1049h\x1b[<u\x1b[=3;2u\x1b[<9u\x1b[?1049l");
+    assert_eq!(fresh_vt.kitty_keyboard_flags(), 1);
+    fresh_vt.process(b"\x1b[<u");
+    assert_eq!(fresh_vt.kitty_keyboard_flags(), 0);
+
     // Kitty keyboard push/query/pop
     vt.process(b"\x1b[>5u\x1b[?u");
     assert_eq!(vt.kitty_keyboard_flags(), 5);

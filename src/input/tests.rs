@@ -169,6 +169,23 @@ fn unsafe_raw_paste_triggers_confirmation_modal_and_kitty_csi_u_encodes_keys() {
         1,
     );
     assert_eq!(ctrl_a, b"\x1b[97;5u");
+
+    // Printable shifted characters (e.g. 'M', ':', '>', '\'') under Kitty disambiguate mode (flags = 1)
+    // must send normal UTF-8 bytes rather than CSI u sequences so inline TUIs (agy, claude) do not garble text.
+    let shifted_m = encode_key_to_pty_bytes_full(
+        KeyEvent::new(KeyCode::Char('M'), KeyModifiers::SHIFT),
+        false,
+        false,
+        1,
+    );
+    assert_eq!(shifted_m, b"M");
+    let shifted_colon = encode_key_to_pty_bytes_full(
+        KeyEvent::new(KeyCode::Char(':'), KeyModifiers::SHIFT),
+        false,
+        false,
+        1,
+    );
+    assert_eq!(shifted_colon, b":");
 }
 
 #[test]

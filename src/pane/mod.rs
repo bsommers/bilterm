@@ -197,19 +197,40 @@ impl CompositePane {
         self.reset_page_anchor();
         self.vt.record_command_submission(cmd_str.clone());
         let _ = self.history_store.record_command(&cmd_str);
+        let payload = self.build_submission_payload(&cmd_str);
+        self.write_to_pty(&payload)
+    }
+
+    fn build_submission_payload(&self, cmd_str: &str) -> Vec<u8> {
+        let non_canonical_tui = !self.line_discipline.canonical_mode
+            && (self.line_discipline.has_foreground_subcommand()
+                || self.vt.is_bracketed_paste()
+                || self.vt.kitty_keyboard_flags() > 0);
+        if non_canonical_tui {
+            if self.vt.is_bracketed_paste() && !cmd_str.is_empty() {
+                let clean = cmd_str.replace("\x1b[201~", "");
+                let mut bytes = Vec::with_capacity(clean.len() + 14);
+                bytes.extend_from_slice(b"\x1b[200~");
+                bytes.extend_from_slice(clean.as_bytes());
+                bytes.extend_from_slice(b"\x1b[201~\r");
+                return bytes;
+            }
+            let mut bytes = cmd_str.replace("\r\n", "\r").replace('\n', "\r").into_bytes();
+            bytes.push(b'\r');
+            return bytes;
+        }
         #[cfg(windows)]
-        let payload = {
+        {
             let mut bytes = cmd_str.replace("\r\n", "\r").replace('\n', "\r").into_bytes();
             bytes.push(b'\r');
             bytes
-        };
+        }
         #[cfg(not(windows))]
-        let payload = {
-            let mut bytes = cmd_str.into_bytes();
+        {
+            let mut bytes = cmd_str.as_bytes().to_vec();
             bytes.push(b'\n');
             bytes
-        };
-        self.write_to_pty(&payload)
+        }
     }
 
     /// Takes the current text from `prompt` and submits it via [`Self::submit_command`].

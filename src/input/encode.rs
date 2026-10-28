@@ -83,7 +83,7 @@ pub fn encode_key_to_pty_bytes_full(
             KeyCode::Backspace if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
                 return format!("\x1b[127;{mod_param}u").into_bytes();
             }
-            KeyCode::Char(c) if mod_bits > 0 || (kitty_flags & 0x08) != 0 => {
+            KeyCode::Char(c) if (mod_bits & !1) > 0 || (kitty_flags & 0x08) != 0 => {
                 let codepoint = c.to_ascii_lowercase() as u32;
                 return format!("\x1b[{codepoint};{mod_param}u").into_bytes();
             }

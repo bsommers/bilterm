@@ -166,8 +166,10 @@ impl VtParser {
                 for _ in 0..count {
                     if stack.len() > 1 {
                         stack.pop();
+                    } else if let Some(first) = stack.first_mut() {
+                        *first = 0;
                     } else {
-                        stack[0] = 0;
+                        stack.push(0);
                     }
                 }
             }
@@ -188,6 +190,9 @@ impl VtParser {
                     .and_then(|s| s.parse::<u8>().ok())
                     .unwrap_or(1);
                 let stack = self.kitty_keyboard_stack_mut();
+                if stack.is_empty() {
+                    stack.push(0);
+                }
                 if let Some(top) = stack.last_mut() {
                     match mode {
                         2 => *top |= flags,

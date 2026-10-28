@@ -117,3 +117,22 @@ fn submit_command_and_submit_prompt_enforce_identical_invariants() {
     assert!(pane.submit_prompt().is_err());
     assert_eq!(pane.vt().command_blocks().len(), 2);
 }
+
+#[test]
+fn submitting_prompt_into_inline_raw_tui_uses_bracketed_paste_and_carriage_return() {
+    let mut pane = CompositePane::new_headless(1, 25, 80);
+    // Simulate an inline TUI like `agy` or `claude` enabling bracketed paste (?2004h) and Kitty keyboard (>1u)
+    // in non-canonical mode while the user keeps the Command Prompt active.
+    pane.process_pty_output(b"\x1b[?2004h\x1b[>1u");
+    pane.line_discipline_mut().canonical_mode = false;
+    pane.line_discipline_mut().foreground_pgid = Some(200);
+    pane.line_discipline_mut().shell_pgid = Some(100);
+
+    let msg = "/swe-skills:planning-with-contracts build MPU6050 driver";
+    let payload = pane.build_submission_payload(msg);
+    assert_eq!(
+        payload,
+        format!("\x1b[200~{msg}\x1b[201~\r").into_bytes(),
+        "submitting from Command Prompt into a bracketed-paste raw TUI must wrap in 200~/201~ and end with CR (\\r)"
+    );
+}
