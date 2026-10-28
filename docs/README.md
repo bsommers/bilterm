@@ -1,8 +1,8 @@
-# Bilterm Documentation Hub (`v2.0.0`)
+# Bilterm Documentation Hub (`v2.1.0`)
 
 [← Back to Project README](../README.md) | [Visual Gallery (`docs/VISUAL_GALLERY.md`)](VISUAL_GALLERY.md) | [Starter Packs (`starter-packs/`)](../starter-packs/README.md)
 
-Welcome to the comprehensive documentation suite for **Bilterm (`v2.0.0`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
+Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
 
 ---
 

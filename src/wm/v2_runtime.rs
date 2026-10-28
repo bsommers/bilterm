@@ -10,7 +10,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::daemon::DaemonServerState;
 use crate::error::Result;
-use crate::mcp_console::McpConsoleState;
+use crate::mcp_console::{McpConsoleState, McpRowAction};
 use crate::pane::exit_guard::{
     ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, should_intercept_ctrl_d,
     should_intercept_prompt_exit,
@@ -152,14 +152,7 @@ impl WindowManager {
         let in_alt = self.active_pane().vt().is_alternate_screen();
         let in_echo_lock = self.active_pane().is_password_prompt();
 
-        if !should_intercept_ctrl_d(
-            prompt_is_empty,
-            pane_count,
-            is_root,
-            policy,
-            in_alt,
-            in_echo_lock,
-        ) {
+        if !should_intercept_ctrl_d(prompt_is_empty, pane_count, is_root, policy, in_alt, in_echo_lock) {
             return false;
         }
 
@@ -172,10 +165,7 @@ impl WindowManager {
                 let _ = self.active_pane_mut().respawn_shell_in_place();
                 true
             }
-            ExitProtectionPolicy::Detach => {
-                self.detach_client();
-                true
-            }
+            ExitProtectionPolicy::Detach => self.detach_client(),
             ExitProtectionPolicy::Off => false,
         }
     }
@@ -188,10 +178,7 @@ impl WindowManager {
                 let _ = self.active_pane_mut().respawn_shell_in_place();
                 false
             }
-            ExitGuardChoice::DetachClient => {
-                self.detach_client();
-                true
-            }
+            ExitGuardChoice::DetachClient => self.detach_client(),
             ExitGuardChoice::QuitClient | ExitGuardChoice::KillSession => true,
             ExitGuardChoice::Cancel => {
                 self.active_pane_mut()
@@ -262,11 +249,7 @@ impl WindowManager {
         };
         let z_rects = if self.layout_mode == WorkspaceLayoutMode::Stacked {
             let area = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
-            self.z_stack
-                .compute_cascade_rects(area)
-                .into_iter()
-                .map(|(id, r)| (id, r.x, r.y, r.width, r.height))
-                .collect()
+            self.z_stack.compute_cascade_rects(area).into_iter().map(|(id, r)| (id, r.x, r.y, r.width, r.height)).collect()
         } else {
             Vec::new()
         };
@@ -277,11 +260,7 @@ impl WindowManager {
             .map(|p| PaneJournalRecord {
                 pane_id: p.id(),
                 title: p.title().to_string(),
-                cwd: p
-                    .vt()
-                    .reported_cwd()
-                    .and_then(|c| c.to_str())
-                    .map(str::to_string),
+                cwd: p.vt().reported_cwd().and_then(|c| c.to_str()).map(str::to_string),
                 font_scale_pct: self.pane_effective_scale_pct(p.id()),
                 scroll_mode: p.scroll_mode().label().to_ascii_lowercase(),
                 prompt_anchor: format!("{:?}", p.prompt().anchor),
@@ -305,11 +284,7 @@ impl WindowManager {
             panes,
         };
 
-        let now_secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
+        let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         WorkspaceJournal {
             version: 1,
             timestamp_epoch_secs: now_secs,
@@ -396,7 +371,9 @@ impl WindowManager {
 
         let mut out = Vec::new();
         for line in base_lines {
-            let is_active_sess_line = line.contains(&format!("● {active_sess} "));
+            let is_active_sess_line = line.contains(&format!("● {active_sess} "))
+                || line.contains(&format!(" {active_sess}* "))
+                || line.contains(&format!(" {active_sess} ["));
             out.push(line);
             if is_active_sess_line {
                 let total = pane_ids.len();
@@ -416,7 +393,7 @@ impl WindowManager {
                             }
                         };
                         out.push(format!(
-                            "   {branch} {focus_mark} [#{pid}] {} ({cols}x{rows}, {mode_lbl}, SCRL:{}, {scale}%)",
+                            "   {branch} {focus_mark} Pane #{pid} [#{pid}] {} ({cols}x{rows}, {mode_lbl}, SCRL:{}, {scale}%)",
                             p.title(),
                             p.scroll_mode().label()
                         ));
@@ -442,7 +419,7 @@ impl WindowManager {
         let active_scroll = self.active_pane().scroll_mode().label();
         let mut lines = vec![
             format!(
-                "DAEMON     : {} | PID={pid} | UPTIME={uptime}s | CLIENTS={}",
+                "DAEMON     : {} | PID={pid} | UPTIME={uptime}s | CLIENTS={} | END OF LINE.",
                 if self.daemon_state.running { "ONLINE" } else { "OFFLINE" },
                 self.daemon_state.clients.len().max(1)
             ),
@@ -468,24 +445,93 @@ impl WindowManager {
         lines
     }
 
+    /// Refreshes the currently open `:mcp` view (`STATUS`, `TREE`, or `THEME`) while preserving cursor & scroll (`MCP-03`).
+    pub fn refresh_mcp_console_view(&mut self) {
+        let prev_selected = self.mcp_console.selected_row;
+        let prev_scroll = self.mcp_console.scroll_offset;
+        let title = self.mcp_console.title.clone();
+        if title.contains("TREE") || title.contains("HIERARCHY") {
+            let lines = self.build_full_tree_lines();
+            self.mcp_console.open_with_view(title, lines);
+        } else if title.contains("STATUS") {
+            let lines = self.build_mcp_status_lines();
+            self.mcp_console.open_with_view(title, lines);
+        }
+        self.mcp_console.selected_row = prev_selected.min(self.mcp_console.view_lines.len().saturating_sub(1));
+        self.mcp_console.scroll_offset = prev_scroll;
+    }
+
+    /// Activates the currently selected interactive row in the `:mcp` console (`MCP-03`).
+    pub fn activate_selected_mcp_row(&mut self) -> bool {
+        match self.mcp_console.selected_action() {
+            Some(McpRowAction::FocusPane(pid)) if self.panes.contains_key(&pid) => {
+                self.focus_and_raise(pid);
+                self.refresh_mcp_console_view();
+                self.active_pane_mut().set_status_message(Some(format!("MCP: Focused Pane #{pid}")));
+                true
+            }
+            Some(McpRowAction::SessionNode(node)) => {
+                let _ = self.mcp_console.execute(&format!("attach {node}"), &mut self.daemon_state);
+                self.refresh_mcp_console_view();
+                self.active_pane_mut()
+                    .set_status_message(Some(format!("MCP: Attached session node '{node}'")));
+                true
+            }
+            Some(McpRowAction::ApplyTheme(theme_name)) => {
+                self.execute_theme_command(&theme_name);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Toggles `freeze` / `thaw` on the selected session node (or active workspace session) in `:mcp` (`MCP-03`).
+    pub fn toggle_freeze_selected_mcp_node(&mut self) -> bool {
+        let node = match self.mcp_console.selected_action() {
+            Some(McpRowAction::SessionNode(n)) => n,
+            _ => self.config.history_session.clone(),
+        };
+        let is_frozen = self.daemon_state.session_tree.node(&node).is_some_and(|n| n.frozen);
+        let directive = if is_frozen { format!("thaw {node}") } else { format!("freeze {node}") };
+        let _ = self.mcp_console.execute(&directive, &mut self.daemon_state);
+        self.refresh_mcp_console_view();
+        self.active_pane_mut()
+            .set_status_message(Some(format!("MCP: Executed '{directive}'")));
+        true
+    }
+
+    /// Spawns a new child session branch under the selected session node (or active session) in `:mcp` (`MCP-03`).
+    pub fn spawn_branch_under_selected_mcp_node(&mut self) -> bool {
+        let parent = match self.mcp_console.selected_action() {
+            Some(McpRowAction::SessionNode(n)) => n,
+            _ => self.config.history_session.clone(),
+        };
+        let child = format!("{parent}/sub-{}", self.daemon_state.session_tree.nodes.len() + 1);
+        let _ = self.mcp_console.execute(&format!("spawn {child}"), &mut self.daemon_state);
+        self.refresh_mcp_console_view();
+        self.active_pane_mut()
+            .set_status_message(Some(format!("MCP: Spawned session branch '{child}'")));
+        true
+    }
+
     /// Executes `:theme import|load|export|list|<preset>` commands (`THM-01`, `THM-02`).
     pub fn execute_theme_command(&mut self, subcmd: &str) {
         let parts: Vec<&str> = subcmd.split_whitespace().collect();
         match parts.first().copied() {
             None | Some("list" | "ls") => {
                 let names: Vec<&str> = ThemePreset::all().iter().map(|p| p.label()).collect();
-                let mut lines = Vec::new();
-                for (idx, preset) in ThemePreset::all().iter().enumerate() {
-                    let marker = if *preset == self.config.theme { "►" } else { " " };
-                    lines.push(format!("{marker} {:2}. {}", idx + 1, preset.label()));
-                }
+                let mut lines: Vec<String> = ThemePreset::all()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, preset)| {
+                        let active = if *preset == self.config.theme { " [ACTIVE]" } else { "" };
+                        format!("  • {} — {:2}. {}{active}", preset.label().to_ascii_lowercase(), idx + 1, preset.label())
+                    })
+                    .collect();
                 lines.push("Import open schemes: :theme import <file.itermcolors|.toml|.yaml>".to_string());
                 self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "Themes ({}): {}",
-                    names.len(),
-                    names.join(", ")
-                )));
+                self.active_pane_mut()
+                    .set_status_message(Some(format!("Themes ({}): {}", names.len(), names.join(", "))));
             }
             Some("import" | "load") => {
                 let Some(path_str) = parts.get(1).copied() else {
@@ -506,10 +552,8 @@ impl WindowManager {
                             first.name
                         )));
                     } else {
-                        self.active_pane_mut().set_status_message(Some(format!(
-                            "No themes found in {}",
-                            path.display()
-                        )));
+                        self.active_pane_mut()
+                            .set_status_message(Some(format!("No themes found in {}", path.display())));
                     }
                 } else {
                     match load_open_theme_file(path) {
@@ -542,9 +586,9 @@ impl WindowManager {
                             "Exported open theme TOML to {}",
                             target.display()
                         ))),
-                        Err(e) => self.active_pane_mut().set_status_message(Some(format!(
-                            "Theme export error: {e}"
-                        ))),
+                        Err(e) => self
+                            .active_pane_mut()
+                            .set_status_message(Some(format!("Theme export error: {e}"))),
                     }
                 } else {
                     self.active_pane_mut().set_status_message(Some(format!(
@@ -555,7 +599,12 @@ impl WindowManager {
                 }
             }
             Some(name) => {
-                if let Some(preset) = ThemePreset::from_name(name) {
+                if let Some(preset) = ThemePreset::from_name(name).or_else(|| {
+                    ThemePreset::all()
+                        .iter()
+                        .copied()
+                        .find(|p| p.label().eq_ignore_ascii_case(name))
+                }) {
                     self.config.theme = preset;
                     self.config.custom_palette_override = None;
                     self.notify_theme_changed();
@@ -580,9 +629,8 @@ impl WindowManager {
             }
             Some("branch" | "spawn") => {
                 let Some(arg) = parts.get(1).copied() else {
-                    self.active_pane_mut().set_status_message(Some(
-                        "Usage: :session branch <parent>/<child>".to_string(),
-                    ));
+                    self.active_pane_mut()
+                        .set_status_message(Some("Usage: :session branch <parent>/<child>".to_string()));
                     return;
                 };
                 let res = if let Some((parent, child)) = arg.split_once('/') {
@@ -590,15 +638,13 @@ impl WindowManager {
                 } else if let Some(child) = parts.get(2).copied() {
                     self.daemon_state.session_tree.branch(arg, child)
                 } else {
-                    self.daemon_state
-                        .session_tree
-                        .upsert_session(arg, SessionNodeKind::Independent, None);
+                    self.daemon_state.session_tree.upsert_session(arg, SessionNodeKind::Independent, None);
                     Ok(())
                 };
                 match res {
-                    Ok(()) => self.active_pane_mut().set_status_message(Some(format!(
-                        "Session tree updated: branched '{arg}'"
-                    ))),
+                    Ok(()) => self
+                        .active_pane_mut()
+                        .set_status_message(Some(format!("Session tree updated: branched '{arg}'"))),
                     Err(e) => {
                         self.record_automation_error(e.clone());
                         self.active_pane_mut().set_status_message(Some(e));
@@ -607,15 +653,14 @@ impl WindowManager {
             }
             Some("graft") => {
                 let (Some(src), Some(dst)) = (parts.get(1).copied(), parts.get(2).copied()) else {
-                    self.active_pane_mut().set_status_message(Some(
-                        "Usage: :session graft <src> <dst_parent>".to_string(),
-                    ));
+                    self.active_pane_mut()
+                        .set_status_message(Some("Usage: :session graft <src> <dst_parent>".to_string()));
                     return;
                 };
                 match self.daemon_state.session_tree.graft(src, dst) {
-                    Ok(()) => self.active_pane_mut().set_status_message(Some(format!(
-                        "Grafted subtree '{src}' under '{dst}'"
-                    ))),
+                    Ok(()) => self
+                        .active_pane_mut()
+                        .set_status_message(Some(format!("Grafted subtree '{src}' under '{dst}'"))),
                     Err(e) => {
                         self.record_automation_error(e.clone());
                         self.active_pane_mut().set_status_message(Some(e));
@@ -624,9 +669,8 @@ impl WindowManager {
             }
             Some("detach-subtree" | "promote") => {
                 let Some(node) = parts.get(1).copied() else {
-                    self.active_pane_mut().set_status_message(Some(
-                        "Usage: :session detach-subtree <node>".to_string(),
-                    ));
+                    self.active_pane_mut()
+                        .set_status_message(Some("Usage: :session detach-subtree <node>".to_string()));
                     return;
                 };
                 match self.daemon_state.session_tree.detach_subtree(node) {
@@ -641,15 +685,11 @@ impl WindowManager {
             }
             Some("checkpoint" | "journal") => {
                 let slot = parts.get(1).copied().unwrap_or("latest");
-                match self.save_journal_checkpoint(None, slot) {
-                    Ok(path) => self.active_pane_mut().set_status_message(Some(format!(
-                        "Saved crash-safe journal checkpoint to {}",
-                        path.display()
-                    ))),
-                    Err(e) => self.active_pane_mut().set_status_message(Some(format!(
-                        "Journal checkpoint error: {e}"
-                    ))),
-                }
+                let msg = match self.save_journal_checkpoint(None, slot) {
+                    Ok(path) => format!("Saved crash-safe journal checkpoint to {}", path.display()),
+                    Err(e) => format!("Journal checkpoint error: {e}"),
+                };
+                self.active_pane_mut().set_status_message(Some(msg));
             }
             _ => {}
         }

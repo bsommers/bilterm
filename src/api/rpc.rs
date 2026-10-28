@@ -662,6 +662,8 @@ impl AutomationControlPlane {
             }
             "workspace.fontsize" => self.handle_rpc_fontsize(params),
             "canvas.command" | "canvas.status" => self.handle_rpc_canvas(params),
+            "session.save" => self.handle_rpc_session_save(params),
+            "session.restore" => self.handle_rpc_session_restore(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

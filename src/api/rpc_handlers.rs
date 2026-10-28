@@ -151,4 +151,39 @@ impl AutomationControlPlane {
             ("sprite_collisions", JsonValue::Number(collisions.len() as i64)),
         ]))
     }
+
+    /// Handles JSON-RPC `session.save` requests (`DAEM-04`, `ECO-02`).
+    pub fn handle_rpc_session_save(
+        &mut self,
+        params: &JsonValue,
+    ) -> std::result::Result<JsonValue, String> {
+        let name = params
+            .get("name")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("default");
+        let path = self.wm.save_session(name).map_err(|e| e.to_string())?;
+        Ok(JsonValue::obj([
+            ("saved", JsonValue::Bool(true)),
+            ("session", JsonValue::String(name.to_string())),
+            ("path", JsonValue::String(path.display().to_string())),
+            ("panes", JsonValue::Number(self.wm.pane_count() as i64)),
+        ]))
+    }
+
+    /// Handles JSON-RPC `session.restore` requests (`DAEM-04`, `ECO-02`).
+    pub fn handle_rpc_session_restore(
+        &mut self,
+        params: &JsonValue,
+    ) -> std::result::Result<JsonValue, String> {
+        let name = params
+            .get("name")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("default");
+        let count = self.wm.restore_session(name).map_err(|e| e.to_string())?;
+        Ok(JsonValue::obj([
+            ("restored", JsonValue::Bool(true)),
+            ("session", JsonValue::String(name.to_string())),
+            ("panes", JsonValue::Number(count as i64)),
+        ]))
+    }
 }

@@ -136,6 +136,13 @@ pub(super) fn handle_modal_mouse_event(
                         wm.mcp_console_mut().close_root_terminal();
                     }
                     let _ = wm.resize_all(workspace_area);
+                } else if mouse.row > mcp_rect.y
+                    && mouse.row + 1 < mcp_rect.y + mcp_rect.height
+                {
+                    let content_row = usize::from(mouse.row - (mcp_rect.y + 1));
+                    let line_idx = wm.mcp_console().scroll_offset + content_row;
+                    wm.mcp_console_mut().select_row_at(line_idx);
+                    wm.activate_selected_mcp_row();
                 }
             }
             MouseEventKind::ScrollUp => wm.mcp_console_mut().scroll_up(2),

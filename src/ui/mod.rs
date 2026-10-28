@@ -10,6 +10,7 @@ pub mod cursor;
 pub mod drawer;
 pub mod glyphs;
 pub mod hires_subcell;
+pub mod mcp_ui;
 pub mod modals;
 pub mod occlusion;
 pub mod oia;
@@ -709,26 +710,7 @@ impl Widget for WorkspaceWidget<'_> {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
         }
 
-        if let Some(mcp_rect) = self.wm.mcp_console().panel_rect(workspace_area) {
-            if self.wm.mcp_console().layout_mode == crate::wm::DrawerLayoutMode::Overlay
-                && cfg.drop_shadows
-            {
-                render_drop_shadow_styled(
-                    buf,
-                    mcp_rect,
-                    workspace_area,
-                    cfg.shadow_style,
-                    &palette,
-                );
-            }
-            occlude_rect(buf, mcp_rect);
-            crate::mcp_console::render_mcp_console(
-                buf,
-                mcp_rect,
-                self.wm.mcp_console(),
-                self.wm.daemon_state(),
-            );
-        }
+        mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
 
         // Capture full composited workspace frame if Whole-Workspace Asciicast v2 recording is active (REC-02)
         self.wm.record_workspace_frame(buf);

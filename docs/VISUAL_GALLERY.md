@@ -1,4 +1,4 @@
-# Bilterm Visual Gallery & Workspace Screen Renders (`v2.0.0`)
+# Bilterm Visual Gallery & Workspace Screen Renders (`v2.1.0`)
 
 [← Back to Project README](../README.md) | [Documentation Hub (`docs/README.md`)](README.md)
 

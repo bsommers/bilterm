@@ -5,6 +5,16 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.0] - 2026-10-28
+
+### Added
+- **Live Background OS Process Daemonization for `:detach` / `bilterm attach` (`DAEM-03`, `DAEM-04`, `src/daemon/process.rs`, `src/daemon/mod.rs`, `src/api/rpc_handlers.rs`, `src/main.rs`, `tests/live_daemon_detach_attach.rs`)**:
+  - Added per-session `0700`/`0600` Unix socket lifecycle (`session_daemon_socket_path_in`, `probe_or_cleanup_stale_socket` unlinking stale sockets only on `ConnectionRefused`/`NotFound`), `spawn_background_daemon_for_session` (`process_group(0)` detached `bilterm --daemon --session <name>`), `list_active_daemon_sessions`, and `bilterm ls` / `bilterm sessions` CLI discovery.
+  - Added `"session.save"` and `"session.restore"` JSON-RPC 2.0 handlers and auto-restoration of `--session <name>` on `--daemon` / `--mcp` startup.
+- **Interactive Mouse & Keyboard Navigation + Live Telemetry in `:mcp` Console Window (`MCP-03`, `MCP-04`, `src/mcp_console/mod.rs`, `src/ui/mcp_ui.rs`, `src/wm/v2_runtime.rs`, `src/input/modal.rs`, `src/input/mouse_wm.rs`, `tests/mcp_interactive_navigation.rs`)**:
+  - Added `McpRowAction` (`FocusPane(PaneId)`, `SessionNode(String)`, `ApplyTheme(String)`, `None`), `infer_row_action`, `select_next_row`, `select_prev_row`, `select_row_at`, and highlighted `► ` row selection cursor inside `:mcp status`, `:mcp tree`, `:session tree`, and `:theme list`.
+  - Pressing `Enter` or left-clicking any row in the `:mcp` floating/push-out window focuses and raises the selected pane, attaches/switches to the selected session node, or live-applies the selected theme preset; added `r` (refresh live telemetry), `f` (freeze/thaw session node), `n` (branch child session), `m` (Float↔Push), and `d` (cycle dock edge).
+
 ## [v2.0.0] - 2026-10-27
 
 ### Added

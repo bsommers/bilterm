@@ -49,6 +49,7 @@ async fn main() -> color_eyre::Result<()> {
              Usage:\n  \
                bilterm [OPTIONS]\n  \
                bilterm attach [SESSION] / bilterm -a [SESSION]\n  \
+               bilterm ls / bilterm sessions\n  \
                bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
@@ -87,6 +88,33 @@ async fn main() -> color_eyre::Result<()> {
         None
     };
 
+    if matches!(args.first().map(String::as_str), Some("ls" | "sessions")) {
+        let wm = WindowManager::new_headless(24, 80);
+        let daemons = bilterm::daemon::list_active_daemon_sessions();
+        let saved = wm.list_sessions();
+        println!("Active Background Daemons ({}):", daemons.len());
+        if daemons.is_empty() {
+            println!("  (none)");
+        } else {
+            for (name, sock) in &daemons {
+                println!("  * {name} [LIVE DAEMON] ({})", sock.display());
+            }
+        }
+        println!("Saved Workspace Sessions ({}):", saved.len());
+        if saved.is_empty() {
+            println!("  (none)");
+        } else {
+            for s in &saved {
+                let status = if wm.has_detached_session(s) {
+                    "[DETACHED]"
+                } else {
+                    "[SAVED]"
+                };
+                println!("  * {s} {status}");
+            }
+        }
+        return Ok(());
+    }
     if args.first().map(String::as_str) == Some("ctl") {
         let mut rest = args[1..].to_vec();
         let mut ctl_token_path = None;
@@ -174,6 +202,9 @@ async fn main() -> color_eyre::Result<()> {
     }
     if has_switch(&args, &["-m", "--mcp"]) {
         let mut plane = AutomationControlPlane::new_headless(24, 80);
+        if let Some(sess_name) = switch_value(&args, &["-s", "--session"]) {
+            let _ = plane.wm.restore_session(sess_name);
+        }
         if let Some(snap_dir) = switch_value(&args, &["-S", "--snapshot-dir"]) {
             plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
         }
@@ -204,6 +235,9 @@ async fn main() -> color_eyre::Result<()> {
         let default_unix = default_socket_path().ok();
         let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
         let mut plane = AutomationControlPlane::new_headless(24, 80);
+        if let Some(sess_name) = switch_value(&args, &["-s", "--session"]) {
+            let _ = plane.wm.restore_session(sess_name);
+        }
         if let Some(snap_dir) = switch_value(&args, &["-S", "--snapshot-dir"]) {
             plane = plane.with_snapshot_dir(PathBuf::from(snap_dir));
         }
@@ -356,6 +390,7 @@ async fn main() -> color_eyre::Result<()> {
     run_res?;
     if app.wm.is_client_detached() {
         let sess = &app.wm.config().history_session;
+        let _ = bilterm::daemon::spawn_background_daemon_for_session(sess);
         println!(
             "[bilterm: detached session '{}' ({} pane(s) window layout intact) — run 'bilterm' or 'bilterm attach {}' to resume]",
             sess,

@@ -447,11 +447,27 @@ pub(super) fn handle_wm_modal_key(
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                wm.mcp_console_mut().scroll_up(1);
+                wm.mcp_console_mut().select_prev_row();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                wm.mcp_console_mut().scroll_down(1);
+                wm.mcp_console_mut().select_next_row();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Enter => {
+                wm.activate_selected_mcp_row();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') if key.modifiers.is_empty() => {
+                wm.refresh_mcp_console_view();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') if key.modifiers.is_empty() => {
+                wm.toggle_freeze_selected_mcp_node();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') if key.modifiers.is_empty() => {
+                wm.spawn_branch_under_selected_mcp_node();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::PageUp => {

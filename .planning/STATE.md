@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Herdr Daemon, Session Trees, Mainframe Paging, Open Color Themes & TRON MCP Root Terminal
-current_phase: 34
-current_phase_name: tron-inspired-mcp-root-terminal
-status: milestone_v2_0_complete
-stopped_at: Completed Phases 30-34 (Exit Guard, Universal Open Theme Engine, Persistent Herdr Daemon, SessionTree + Atomic WorkspaceJournal, and TRON MCP Root Terminal) via parallel subagent waves
-last_updated: "2026-10-27"
-last_activity: 2026-10-27
-last_activity_desc: Completed Phases 30-34 (SAFE-01..02, THM-01..02, DAEM-01..02, TREE-01..02, PERS-01..02, MCP-01..02) — Milestone v2.0 100% complete
+milestone: v2.1
+milestone_name: Live Background Daemon Detach/Attach & Interactive MCP Console Navigation
+current_phase: 36
+current_phase_name: interactive-mcp-console-navigation
+status: milestone_v2_1_complete
+stopped_at: Completed Phases 35-36 (Live Background OS Process Daemonization & Interactive MCP Console Navigation) via parallel subagents and released v2.1.0
+last_updated: "2026-10-28"
+last_activity: 2026-10-28
+last_activity_desc: Completed Phases 35-36 (DAEM-03..04, MCP-03..04) — Milestone v2.1 100% complete (36/36 Phases)
 progress:
-  total_phases: 34
-  completed_phases: 34
-  total_plans: 69
-  completed_plans: 69
+  total_phases: 36
+  completed_phases: 36
+  total_plans: 75
+  completed_plans: 75
 ---
 
 # Project State

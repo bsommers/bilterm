@@ -17,6 +17,9 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
+pub mod process;
+pub use process::*;
+
 use crate::secure_fs::private_runtime_dir;
 use crate::wm::journal::{
     PaneJournalRecord, SessionJournalRecord, WorkspaceJournal,

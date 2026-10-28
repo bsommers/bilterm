@@ -475,10 +475,49 @@ Plans:
 - [x] 34-02-PLAN.md — TRON Red/Cyan/Gold cyber-grid visual theme & live daemon telemetry dashboard inside the `MCP` Root Terminal and `Herdr` Drawer root node (wave 2)
 - [x] 34-03-PLAN.md — `tests/v2_phases_30_to_34_integration.rs` end-to-end verification suite and User Manual documentation (wave 3)
 
+### Phase 35: Live Background OS Process Daemonization for `:detach` / `bilterm attach` (`v2.1`)
+
+**Goal**: As a user detaching and re-attaching (`:detach`, `Ctrl+X D`, `bilterm attach [session]`, `bilterm -a`), I want a background OS process (`bilterm --daemon`) to keep live PTY master file descriptors and running foreground processes (`vim`, `htop`, `nmon`, builds, SSH sessions) alive across client exits, while preserving the complete multi-pane `SplitTree` and `ZStack` window layout.
+**Depends on**: Phase 32, Phase 33, Phase 34
+**Requirements**: DAEM-03, DAEM-04
+**Success Criteria** (what must be TRUE):
+
+  1. **Auto-Spawn & Socket Handshake (`DAEM-03`)**: When `bilterm` or `bilterm attach [session]` starts (or when `:detach` is invoked), Bilterm can automatically spawn/connect to a detached background OS daemon process (`bilterm --daemon --session <name>`, setsid/nohup background process listening on private `0700`/`0600` `~/.local/state/bilterm/daemon-<session>.sock` with `SO_PEERCRED` UID verification and `ConnectionRefused`-only stale socket cleanup).
+  2. **Live PTY & Layout Bridge (`DAEM-04`)**: While detached, the background daemon keeps every pane's `PtySession` master FD and `VtParser` running (`DECSET 1049` alternate screen, `termios !ECHO`, scrollback, and running foreground child PIDs stay untouched). Re-attaching via `bilterm attach [session]` or `:attach [session]` hydrates the full multi-pane `SplitTree` + `ZStack` window geometries and bridges live PTY I/O (`pane.exec` / raw keystrokes / `GridSnapshot` sync) or falls back seamlessly to the TOML/Journal snapshot if the background daemon is not running.
+  3. **Daemon Lifecycle CLI**: `bilterm ls` / `bilterm sessions` lists both live running background daemon sessions (with live PID, uptime, and pane count) and saved disk sessions.
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 35-01-PLAN.md — `src/daemon/process.rs`: Background OS daemon spawner (`ensure_background_daemon`), per-session `0600` Unix socket `daemon-<session>.sock` lifecycle (`ConnectionRefused` stale cleanup), and `bilterm ls` / `bilterm sessions` CLI subcommand (wave 1)
+- [x] 35-02-PLAN.md — `src/wm/session.rs` & `src/api/rpc_handlers.rs`: RPC `session.save` / `session.restore` + live PTY bridge on `:detach` and `bilterm attach [session]` / `:attach [session]` (wave 2)
+- [x] 35-03-PLAN.md — `tests/live_daemon_detach_attach.rs`: Deterministic end-to-end test verifying live background daemon spawn, multi-pane layout + running process survival across `:detach` -> `bilterm attach`, and graceful shutdown (wave 3)
+
+### Phase 36: Interactive Mouse & Keyboard Navigation + Live Telemetry in `:mcp` Console Window (`v2.1`)
+
+**Goal**: As a systems operator using the `:mcp` floating or push-out console window (`:mcp status`, `:mcp tree`, `:session tree`, `:theme list`), I want interactive keyboard cursor selection (`Up`/`Down`/`Enter`) and direct mouse click actions on tree/status/theme rows, plus live auto-refreshing telemetry while the `:mcp` window remains open.
+**Depends on**: Phase 34, Phase 35
+**Requirements**: MCP-03, MCP-04
+**Success Criteria** (what must be TRUE):
+
+  1. **Interactive Row Selection & Actions (`MCP-03`)**: Inside the open `:mcp` floating/push-out window, `Up`/`Down` (`j`/`k`) moves a highlighted selection cursor across interactive rows (Session nodes, Pane `#id` rows, or Theme presets), and pressing `Enter` or left-clicking a row immediately executes the context action:
+     - Clicking/selecting a **Pane `#id` row** focuses and raises that pane (`focus_and_raise(id)`).
+     - Clicking/selecting a **Session node row** attaches/switches to that session (`attach <node>`) or toggles `[f]` freeze/thaw and `[b]` branch child session.
+     - Clicking/selecting a **Theme preset row** in `:theme list` immediately previews/applies that theme (`:theme <preset>`).
+  2. **Action Hotkeys & Header Controls (`MCP-04`)**: While `:mcp` is open, pressing `r` refreshes live telemetry, `f` freezes/thaws the selected session node, `n` spawns a child session branch under the selected node, `m` toggles Floating (`Overlay`) vs. Push-Out (`Push`), and `d` cycles the dock edge (`Top`/`Bottom`/`Left`/`Right`). Live telemetry (`build_mcp_status_lines` / `build_full_tree_lines`) automatically refreshes when open so pane counts, dimensions, and session states stay current in real time.
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 36-01-PLAN.md — `src/mcp_console/mod.rs`: Interactive row metadata (`McpRowAction`: `FocusPane(PaneId)`, `SessionNode(String)`, `ApplyTheme(String)`, `None`), `selected_row` cursor state, and live view auto-refresh hook (wave 1)
+- [x] 36-02-PLAN.md — `src/ui/mcp_ui.rs`, `src/ui/mod.rs`, `src/input/modal.rs`, & `src/input/mouse_wm.rs`: Highlighted selected row rendering, `Enter`/click dispatch (`Pane` focus, `Session` attach/freeze/branch, `Theme` apply), and action hotkeys (`r`, `f`, `n`, `m`, `d`) (wave 2)
+- [x] 36-03-PLAN.md — `tests/mcp_interactive_navigation.rs`: Unit and integration tests verifying keyboard/mouse row selection, pane focus jump, theme live-apply, session freeze/branch, and live telemetry refresh inside the `:mcp` window (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36
+*(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -516,3 +555,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 32. Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach) (`DAEM-01`, `DAEM-02`) | 3/3 | Complete | 2026-10-27 |
 | 33. Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence (`TREE-01..02`, `PERS-01..02`) | 3/3 | Complete | 2026-10-27 |
 | 34. TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`) | 3/3 | Complete | 2026-10-27 |
+| 35. Live Background OS Process Daemonization for `:detach` / `bilterm attach` (`DAEM-03`, `DAEM-04`) | 3/3 | Complete | 2026-10-28 |
+| 36. Interactive Mouse & Keyboard Navigation + Live Telemetry in `:mcp` Console Window (`MCP-03`, `MCP-04`) | 3/3 | Complete | 2026-10-28 |

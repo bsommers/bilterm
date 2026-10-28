@@ -8,13 +8,91 @@
 //! Closing the MCP root console (`close_root_terminal`) never terminates running child sessions;
 //! only `derez <target> --confirm` or `shutdown --confirm` tears down sessions.
 
-use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
 
 use crate::daemon::{DaemonRequest, DaemonResponse, DaemonServerState};
+pub use crate::ui::mcp_ui::render_mcp_console;
 use crate::wm::session_tree::SessionNodeKind;
 use crate::wm::{DrawerEdge, DrawerLayoutMode};
+
+/// Interactive target bound to a single line in the `:mcp` console window (`MCP-03`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum McpRowAction {
+    #[default]
+    None,
+    /// Focus and raise a workspace pane (`Pane #<id>`).
+    FocusPane(usize),
+    /// Attach/switch to a session node in the `SessionTree`.
+    SessionNode(String),
+    /// Apply a theme preset (`:theme <name>`).
+    ApplyTheme(String),
+}
+
+/// Infers an interactive [`McpRowAction`] from a formatted `:mcp` / `:session` / `:theme` console line (`MCP-03`).
+pub fn infer_row_action(line: &str) -> McpRowAction {
+    for marker in ["Pane #", "PANE #", "[#"] {
+        if let Some(pos) = line.find(marker) {
+            let after = &line[pos + marker.len()..];
+            let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+            if let Ok(id) = digits.parse::<usize>() {
+                return McpRowAction::FocusPane(id);
+            }
+        }
+    }
+
+    if let Some(rest) = line
+        .strip_prefix("  • ")
+        .or_else(|| line.strip_prefix("► • "))
+        && let Some(tok) = rest.split_whitespace().next()
+        && !tok.is_empty()
+    {
+        return McpRowAction::ApplyTheme(tok.to_string());
+    }
+
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("◈ ROOT")
+        || trimmed.starts_with("◈ MASTER CONTROL")
+        || trimmed.starts_with("DAEMON")
+        || trimmed.starts_with("WORKSPACE")
+        || trimmed.starts_with("SOCKET")
+        || trimmed.starts_with("PROTECTION")
+        || trimmed.starts_with("AESTHETICS")
+        || trimmed.contains("END OF LINE.")
+    {
+        return McpRowAction::None;
+    }
+
+    let is_session_line = line.contains("[root]")
+        || line.contains("[branch]")
+        || line.contains("[MCP]")
+        || line.contains("[SUB]")
+        || line.contains("[IND]")
+        || trimmed.starts_with("◈ ")
+        || trimmed.starts_with("├─ ")
+        || trimmed.starts_with("└─ ")
+        || trimmed.starts_with("╰─ ")
+        || trimmed.starts_with("│");
+
+    if is_session_line {
+        let stripped = line.trim_start_matches(|c: char| {
+            c.is_whitespace()
+                || matches!(
+                    c,
+                    '│' | '├' | '╰' | '└' | '─' | '•' | '▸' | '▾' | '●' | '◈' | '►'
+                )
+        });
+        let raw_token = stripped
+            .split(|c: char| c.is_whitespace() || c == '[')
+            .next()
+            .unwrap_or("")
+            .trim_end_matches('*');
+        if !raw_token.is_empty() && !raw_token.eq_ignore_ascii_case("root") {
+            return McpRowAction::SessionNode(raw_token.to_string());
+        }
+    }
+
+    McpRowAction::None
+}
 
 /// Parsed command inside the Master Control Program (`MCP`) root console (`MCP-01`, `MCP-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -151,12 +229,14 @@ pub fn parse_mcp_command(input: &str) -> Result<McpCommand, String> {
     }
 }
 
-/// Interactive state for the Master Control Program (`MCP`) root terminal & pop-up/push inspector (`MCP-01`, `MCP-02`).
+/// Interactive state for the Master Control Program (`MCP`) root terminal & pop-up/push inspector (`MCP-01..03`).
 #[derive(Clone, Debug)]
 pub struct McpConsoleState {
     pub active: bool,
     pub title: String,
     pub view_lines: Vec<String>,
+    pub selected_row: usize,
+    pub row_actions: Vec<McpRowAction>,
     pub scroll_offset: usize,
     /// `DrawerLayoutMode::Overlay` (Floating pop-up window) vs `DrawerLayoutMode::Push` (pushes workspace panes).
     pub layout_mode: DrawerLayoutMode,
@@ -179,6 +259,8 @@ impl McpConsoleState {
             active: false,
             title: "MASTER CONTROL PROGRAM [MCP ROOT CONSOLE]".to_string(),
             view_lines: Vec::new(),
+            selected_row: 0,
+            row_actions: Vec::new(),
             scroll_offset: 0,
             layout_mode: DrawerLayoutMode::Overlay,
             edge: DrawerEdge::Top,
@@ -195,12 +277,79 @@ impl McpConsoleState {
         self.scroll_offset = 0;
     }
 
-    /// Opens the MCP floating/push window with a specific title and multi-line content view.
+    /// Opens the MCP floating/push window with a specific title and multi-line content view,
+    /// automatically inferring interactive [`McpRowAction`] targets per row (`MCP-03`).
     pub fn open_with_view(&mut self, title: impl Into<String>, lines: Vec<String>) {
+        let actions: Vec<McpRowAction> = lines.iter().map(|l| infer_row_action(l)).collect();
+        self.open_with_interactive_view(title, lines, actions);
+    }
+
+    /// Opens the MCP floating/push window with explicit per-row [`McpRowAction`] metadata (`MCP-03`).
+    pub fn open_with_interactive_view(
+        &mut self,
+        title: impl Into<String>,
+        lines: Vec<String>,
+        actions: Vec<McpRowAction>,
+    ) {
         self.active = true;
         self.title = title.into();
+        self.selected_row = actions
+            .iter()
+            .position(|a| *a != McpRowAction::None)
+            .unwrap_or(0);
         self.view_lines = lines;
+        self.row_actions = actions;
         self.scroll_offset = 0;
+    }
+
+    /// Moves `selected_row` to the next interactive row (or increments by 1 if none are interactive) (`MCP-03`).
+    pub fn select_next_row(&mut self) {
+        if self.view_lines.is_empty() {
+            return;
+        }
+        if let Some(next_idx) = ((self.selected_row + 1)..self.row_actions.len())
+            .find(|&i| self.row_actions[i] != McpRowAction::None)
+        {
+            self.selected_row = next_idx;
+        } else if self.row_actions.iter().all(|a| *a == McpRowAction::None) {
+            self.selected_row = (self.selected_row + 1).min(self.view_lines.len().saturating_sub(1));
+        }
+        if self.selected_row >= self.scroll_offset + 10 {
+            self.scroll_offset = self.selected_row.saturating_sub(9);
+        }
+    }
+
+    /// Moves `selected_row` to the previous interactive row (or decrements by 1 if none are interactive) (`MCP-03`).
+    pub fn select_prev_row(&mut self) {
+        if self.view_lines.is_empty() {
+            return;
+        }
+        if let Some(prev_idx) = (0..self.selected_row)
+            .rev()
+            .find(|&i| self.row_actions.get(i).is_some_and(|a| *a != McpRowAction::None))
+        {
+            self.selected_row = prev_idx;
+        } else if self.row_actions.iter().all(|a| *a == McpRowAction::None) {
+            self.selected_row = self.selected_row.saturating_sub(1);
+        }
+        if self.selected_row < self.scroll_offset {
+            self.scroll_offset = self.selected_row;
+        }
+    }
+
+    /// Selects a specific `row_idx` (e.g. from mouse click) and returns its [`McpRowAction`] (`MCP-03`).
+    pub fn select_row_at(&mut self, row_idx: usize) -> Option<McpRowAction> {
+        if row_idx < self.view_lines.len() {
+            self.selected_row = row_idx;
+            self.row_actions.get(row_idx).cloned()
+        } else {
+            None
+        }
+    }
+
+    /// Returns the [`McpRowAction`] bound to the currently selected row (`MCP-03`).
+    pub fn selected_action(&self) -> Option<McpRowAction> {
+        self.row_actions.get(self.selected_row).cloned()
     }
 
     /// Closes the MCP root terminal without terminating the daemon or any child sessions (`MCP-01`).
@@ -443,169 +592,10 @@ impl McpConsoleState {
     }
 }
 
-/// Renders the TRON-inspired Master Control Program (`MCP`) root dashboard into `buf` (`MCP-01`, `MCP-02`).
-///
-/// Safe for any `area` dimensions (including `0×0` or tiny viewports).
-pub fn render_mcp_console(
-    buf: &mut Buffer,
-    area: Rect,
-    state: &McpConsoleState,
-    daemon: &DaemonServerState,
-) {
-    let bounds = area.intersection(*buf.area());
-    if bounds.width < 4 || bounds.height < 3 {
-        return;
-    }
-
-    let bg_style = Style::default()
-        .fg(Color::Rgb(0x00, 0xF0, 0xFF))
-        .bg(Color::Rgb(0x08, 0x04, 0x10));
-    let border_style = Style::default()
-        .fg(Color::Rgb(0xFF, 0x2A, 0x2A))
-        .bg(Color::Rgb(0x08, 0x04, 0x10))
-        .add_modifier(Modifier::BOLD);
-    let gold_style = Style::default()
-        .fg(Color::Rgb(0xFF, 0xCC, 0x00))
-        .bg(Color::Rgb(0x08, 0x04, 0x10))
-        .add_modifier(Modifier::BOLD);
-
-    for y in bounds.y..bounds.y + bounds.height {
-        for x in bounds.x..bounds.x + bounds.width {
-            if let Some(cell) = buf.cell_mut((x, y)) {
-                cell.set_symbol(" ");
-                cell.set_style(bg_style);
-            }
-        }
-    }
-
-    // Double-line TRON crimson cyber-grid border
-    let right = bounds.x + bounds.width - 1;
-    let bottom = bounds.y + bounds.height - 1;
-    for x in bounds.x..=right {
-        if let Some(top_c) = buf.cell_mut((x, bounds.y)) {
-            top_c.set_symbol("═");
-            top_c.set_style(border_style);
-        }
-        if let Some(bot_c) = buf.cell_mut((x, bottom)) {
-            bot_c.set_symbol("═");
-            bot_c.set_style(border_style);
-        }
-    }
-    for y in bounds.y..=bottom {
-        if let Some(left_c) = buf.cell_mut((bounds.x, y)) {
-            left_c.set_symbol("║");
-            left_c.set_style(border_style);
-        }
-        if let Some(right_c) = buf.cell_mut((right, y)) {
-            right_c.set_symbol("║");
-            right_c.set_style(border_style);
-        }
-    }
-    if let Some(c) = buf.cell_mut((bounds.x, bounds.y)) {
-        c.set_symbol("╔");
-    }
-    if let Some(c) = buf.cell_mut((right, bounds.y)) {
-        c.set_symbol("╗");
-    }
-    if let Some(c) = buf.cell_mut((bounds.x, bottom)) {
-        c.set_symbol("╚");
-    }
-    if let Some(c) = buf.cell_mut((right, bottom)) {
-        c.set_symbol("╝");
-    }
-
-    let mode_tag = match state.layout_mode {
-        DrawerLayoutMode::Overlay => "[m:FLOAT]",
-        DrawerLayoutMode::Push => match state.edge {
-            DrawerEdge::Top => "[m:PUSH-TOP][d:Edge]",
-            DrawerEdge::Bottom => "[m:PUSH-BOT][d:Edge]",
-            DrawerEdge::Left => "[m:PUSH-LEFT][d:Edge]",
-            DrawerEdge::Right => "[m:PUSH-RIGHT][d:Edge]",
-        },
-    };
-    let title = format!(" ◈ {} {mode_tag} [▪] ", state.title);
-    write_clipped(buf, bounds.x + 2, bounds.y, right.saturating_sub(1), &title, gold_style);
-
-    let footer = " [↑/↓:Scroll] [m:Float↔Push] [d:Edge] [Esc/q:Close] — END OF LINE. ";
-    write_clipped(buf, bounds.x + 2, bottom, right.saturating_sub(1), footer, gold_style);
-
-    let mut row = bounds.y + 1;
-    let max_row = bottom;
-    let inner_left = bounds.x + 2;
-    let inner_right = right.saturating_sub(1);
-
-    if !state.view_lines.is_empty() {
-        for line in state.view_lines.iter().skip(state.scroll_offset) {
-            if row >= max_row {
-                break;
-            }
-            let st = if line.starts_with("◈") || line.starts_with("DAEMON") || line.starts_with("WORKSPACE") {
-                gold_style
-            } else {
-                bg_style
-            };
-            write_clipped(buf, inner_left, row, inner_right, line, st);
-            row += 1;
-        }
-        return;
-    }
-
-    if row < max_row {
-        let header = format!(
-            "DAEMON: {} | SESSIONS: {} | ATTACHED CLIENTS: {} | BANNER: {}",
-            if daemon.running { "ONLINE" } else { "OFFLINE" },
-            daemon.session_tree.nodes.len(),
-            daemon.clients.len(),
-            state.last_status_banner
-        );
-        write_clipped(buf, inner_left, row, inner_right, &header, gold_style);
-        row += 1;
-    }
-
-    for tree_line in daemon.session_tree.render_herdr_tree_lines("main") {
-        if row >= max_row {
-            break;
-        }
-        write_clipped(buf, inner_left, row, inner_right, &tree_line, bg_style);
-        row += 1;
-    }
-
-    let tail_count = (max_row.saturating_sub(row)) as usize;
-    let start_idx = state.log_lines.len().saturating_sub(tail_count);
-    for log_line in &state.log_lines[start_idx..] {
-        if row >= max_row {
-            break;
-        }
-        write_clipped(buf, inner_left, row, inner_right, log_line, border_style);
-        row += 1;
-    }
-}
-
-fn write_clipped(
-    buf: &mut Buffer,
-    start_x: u16,
-    y: u16,
-    max_x: u16,
-    text: &str,
-    style: Style,
-) {
-    let mut x = start_x;
-    for ch in text.chars() {
-        if x >= max_x {
-            break;
-        }
-        if let Some(cell) = buf.cell_mut((x, y)) {
-            let mut s = [0u8; 4];
-            cell.set_symbol(ch.encode_utf8(&mut s));
-            cell.set_style(style);
-        }
-        x += 1;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::buffer::Buffer;
 
     #[test]
     fn mcp_parse_and_execute_full_directive_suite() {
