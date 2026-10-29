@@ -81,6 +81,12 @@ pub struct BiltermConfig {
     pub history_load_limit: usize,
     /// Optional custom directory path for saved workspace session layout snapshots (`ECO-02`).
     pub session_dir: Option<String>,
+    /// Automatically saves pane/window layout changes to the active layout profile (`true` by default).
+    pub layout_autosave: bool,
+    /// Default layout profile loaded on startup and targeted by default saves (`"default"` by default).
+    pub default_layout_profile: String,
+    /// Currently active layout profile name at runtime (`"default"` by default).
+    pub active_layout_profile: String,
     /// Default command prompt anchor (`"top"`, `"bottom"`, `"floating"`, `"split-top"`, or `"split-bottom"`).
     pub default_prompt_anchor: String,
     /// Default floating command prompt height in rows (`3..=12`).
@@ -161,6 +167,9 @@ impl Default for BiltermConfig {
             history_max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
             history_load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
             session_dir: None,
+            layout_autosave: true,
+            default_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),
+            active_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),
             default_prompt_anchor: "top".to_string(),
             default_prompt_height: 3,
             crt_scanlines: false,

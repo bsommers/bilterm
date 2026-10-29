@@ -56,6 +56,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 | `bilterm run <file.toml>` (`-p` / `--playbook`) | Execute declarative multi-step TOML robot playbook with assertions |
 | `bilterm -g` / `--gui-dump <path.ppm\|.svg>` | Render workspace via `GuiWorkspaceRenderer` to a `.ppm` or `.svg` framebuffer |
 | `bilterm -s` / `--session <name>` | Use named persistent command-history & workspace session |
+| `bilterm -P` / `--profile <name>` | Launch with layout profile (`default`, `single`, `dual-v`, `dual-h`, `main-side`, `quad`, `cascade`, or custom) |
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
@@ -76,6 +77,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 | **Per-Pane Font Zoom In / Out / Reset** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset \| <pt> \| <pct>%]` / `:font` |
 | **Resize Pane Frame / Equalize Splits** | Drag ANY border or corner / `Ctrl+Alt+Arrows` / `<L> =` | `:resize <left\|right\|up\|down\|reset>` / `:equalize` |
 | **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `<L> M` (`Alt+M`) / `F6` (`<L> o` / `Alt+Tab`) / `<L> 1..9` | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
+| **Layout Profiles & Automatic Layout Saving** | — | `:profile [list \| switch <name> \| save [name] \| default <name> \| autosave [on\|off] \| next \| prev \| delete <name>]` / `:autosave [on\|off]` |
 | **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Ctrl+\` / `Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
 | **Cycle Floating / Fixed / Regular Terminal** | `F4` (`<L> e` / `Alt+E`) / Click OIA `READY` or `CMD BOX` | `:mode [float \| fixed \| terminal \| cycle]` |
 | **Prompt Pin Top / Bottom / Non-Overlapping Split**| `<L> t` (`Alt+T`) / `<L> b` / `<L> s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |

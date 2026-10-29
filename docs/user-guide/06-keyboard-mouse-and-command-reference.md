@@ -35,6 +35,7 @@
 | `--theme` | `-T` | `<THEME>` | Override active color palette (`turbo-blue`, `turbo-cyan`, `ibm-3278-green`, `ibm-3279-amber`, `ibm-mono`, `cyberpunk-neon`, `solarized-dark`, `dracula`, `gruvbox-dark`, `tokyo-night`) |
 | `--config` | `-c` | `<FILE.toml>` | Load declarative configuration from custom TOML file path |
 | `--session` | `-s` | `<NAME>` | Use and restore named persistent command-history session (`[A-Za-z0-9._-]`) |
+| `--profile` | `-P` | `<NAME>` | Launch with layout profile (`default`, `single`, `dual-v`, `dual-h`, `main-side`, `quad`, `cascade`, or custom) |
 | `--headless` | `-d`, `--daemon` | *(none)* | Run headless JSON-RPC 2.0 workspace daemon (default: private `0600` Unix socket `$XDG_RUNTIME_DIR/bilterm/bilterm.sock`) |
 | `--listen` | `-l` | `<ADDR>` | Custom RPC listen address (`127.0.0.1:PORT`, `localhost:PORT`, or `unix:/path/to.sock`) |
 | `--allow-remote` | `-r` | *(none)* | Allow binding JSON-RPC daemon to non-loopback TCP interface (requires `--token-file`) |
@@ -181,7 +182,9 @@
 | `:vsplit` | `:vs` | *(none)* | Split focused pane vertically (Left / Right) |
 | `:close` | — | *(none)* | Close focused composite pane |
 | `:zoom` | — | *(none)* | Toggle zoom/maximize on focused pane |
-| `:layout` | — | `tile \| tiled \| stack \| cascade` | Switch workspace between binary `Tiled` splits and overlapping `Stacked` Z-order cascade |
+| `:layout` | — | `tile \| tiled \| stack \| cascade \| save [name] \| switch <profile> \| default [name] \| autosave [on\|off] \| list \| next \| prev` | Switch workspace between `Tiled`/`Stacked` or manage/switch multi-pane layout profiles |
+| `:profile` | `:profiles` | `[list \| switch <name> \| save [name] \| default [name] \| autosave [on\|off\|toggle] \| next \| prev \| delete <name>]` | List, dynamically switch (`single`, `dual-v`, `dual-h`, `main-side`, `quad`, `cascade`, or custom), save, set startup default, or toggle autosave for layout profiles |
+| `:autosave` | — | `[on \| off \| toggle]` | Toggle automatic saving of pane/window layout changes (`ON` by default) |
 | `:deck` | — | `[next \| prev]` | Shuffle Z-order window deck top-to-bottom (`next`) or bottom-to-top (`prev`) |
 | `:focus` | `:raise` | `<pane_id>` | Focus and selectively raise pane `#<pane_id>` to top of Z-Stack |
 | `:resize` | `:winresize` | `<left\|right\|up\|down\|+w\|-w\|+h\|-h\|reset\|<dw> [dh]> [amt]` | Resize focused pane dimensions or adjust tiled split ratios |

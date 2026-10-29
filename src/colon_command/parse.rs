@@ -115,14 +115,76 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         "zoom" => Some(Ok(ColonCommand::ZoomToggle)),
         "close" => Some(Ok(ColonCommand::ClosePane)),
         "layout" => match parts.get(1).copied() {
-            Some("stack") | Some("cascade") => {
+            Some("stack") => {
                 Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Stacked)))
             }
             Some("tile") | Some("tiled") => {
                 Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Tiled)))
             }
-            _ => Some(Err("Usage: :layout tile | stack".to_string())),
+            Some("cascade") if parts.len() == 2 => {
+                Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Stacked)))
+            }
+            Some(
+                "save"
+                | "load"
+                | "switch"
+                | "use"
+                | "select"
+                | "apply"
+                | "default"
+                | "set-default"
+                | "autosave"
+                | "auto"
+                | "list"
+                | "ls"
+                | "profiles"
+                | "status"
+                | "next"
+                | "prev"
+                | "previous"
+                | "delete"
+                | "rm"
+                | "remove",
+            ) => Some(Ok(ColonCommand::LayoutProfileCommand(parts[1..].join(" ")))),
+            Some("profile") => {
+                let sub = if parts.len() > 2 {
+                    format!("switch {}", parts[2..].join(" "))
+                } else {
+                    "list".to_string()
+                };
+                Some(Ok(ColonCommand::LayoutProfileCommand(sub)))
+            }
+            Some(
+                name @ ("single"
+                | "dual-v"
+                | "dual-h"
+                | "main-side"
+                | "quad"
+                | "side-by-side"
+                | "top-bottom"
+                | "grid-4"),
+            ) => Some(Ok(ColonCommand::LayoutProfileCommand(format!("switch {name}")))),
+            _ => Some(Err(
+                "Usage: :layout tile | stack | save [name] | switch <profile> | default [name] | autosave [on|off] | list | next | prev"
+                    .to_string(),
+            )),
         },
+        "profile" | "profiles" => {
+            let sub = if parts.len() > 1 {
+                parts[1..].join(" ")
+            } else {
+                "list".to_string()
+            };
+            Some(Ok(ColonCommand::LayoutProfileCommand(sub)))
+        }
+        "autosave" => {
+            let sub = if parts.len() > 1 {
+                format!("autosave {}", parts[1..].join(" "))
+            } else {
+                "autosave".to_string()
+            };
+            Some(Ok(ColonCommand::LayoutProfileCommand(sub)))
+        }
         "quake" | "guake" => Some(Ok(ColonCommand::QuakeToggle)),
         "search" | "find" => match parts.get(1).copied() {
             None | Some("off" | "clear") => Some(Ok(ColonCommand::SearchOff)),

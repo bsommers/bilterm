@@ -47,6 +47,7 @@ bilterm plot [kind] [csv] [-o <file>] [-b <mode>] # Render high-res chart inline
 bilterm -g / --gui-dump <path.ppm|path.svg>     # Render workspace framebuffer snapshot (.ppm or .svg)
 bilterm -C / --completions bash|zsh|fish        # Generate shell completions for bash, zsh, or fish
 bilterm -s / --session <name>                   # Use (and restore) a named persistent command-history session
+bilterm -P / --profile <name>                   # Launch with layout profile (default, single, dual-v, dual-h, main-side, quad, cascade, or custom)
 bilterm -c / --config <config.toml>             # Load configuration from custom TOML file path
 bilterm -M / --man                              # Print roff(7) manual page (docs/bilterm.1)
 bilterm -v / -V / --version                     # Print version (bilterm 2.1.0)
@@ -145,6 +146,9 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `history_max_files` | `usize` | `1..=10000` (retained session dirs) | `25` |
 | `history_dir` | `string` (optional) | Directory path | `None` |
 | `history_session` | `string` | Session name (`--session <name>` overrides) | `"default"` |
+| `layout_autosave` | `bool` | `true`, `false` (automatically saves pane/window layout changes to active profile) | `true` |
+| `default_layout_profile` | `string` | Default layout profile restored on startup (`"default"`, `"single"`, `"dual-v"`, `"dual-h"`, `"main-side"`, `"quad"`, `"cascade"`, or custom) | `"default"` |
+| `active_layout_profile` | `string` | Initial active layout profile (`--profile <name>` overrides) | `"default"` |
 | `history_max_entries` | `usize` | Entries kept per session file before compaction | `100000` |
 | `history_load_limit` | `usize` | Prior commands restored into a new pane | `10000` |
 | `default_prompt_anchor` | `string` | `"top"`, `"bottom"`, `"floating"`, `"split-top"`, `"split-bottom"` | `"top"` |

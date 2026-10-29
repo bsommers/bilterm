@@ -327,7 +327,7 @@ impl WindowManager {
         crate::secure_fs::private_dir_in(base, "sessions").map_err(Into::into)
     }
 
-    fn resolve_session_dir(&self) -> Result<PathBuf> {
+    pub(super) fn resolve_session_dir(&self) -> Result<PathBuf> {
         if let Some(custom) = &self.config.session_dir {
             return Ok(PathBuf::from(custom));
         }

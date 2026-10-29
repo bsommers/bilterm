@@ -425,8 +425,11 @@ impl WindowManager {
             ),
             format!("SOCKET     : {}", sock.display()),
             format!(
-                "WORKSPACE  : Session='{}' | Layout={layout_lbl} | Panes={} | Active=#{active_id}",
+                "WORKSPACE  : Session='{}' | Profile='{}' (Default='{}', Autosave={}) | Layout={layout_lbl} | Panes={} | Active=#{active_id}",
                 self.config.history_session,
+                self.config.active_layout_profile,
+                self.config.default_layout_profile,
+                if self.config.layout_autosave { "ON" } else { "OFF" },
                 self.panes.len()
             ),
             format!(

@@ -538,6 +538,7 @@ pub(super) fn handle_wm_window_drag_event(
         }
         MouseEventKind::Up(MouseButton::Left) => {
             wm.set_wm_mouse_drag(None);
+            wm.maybe_autosave_layout();
             Ok(Some(AppAction::Handled))
         }
         _ => Ok(None),

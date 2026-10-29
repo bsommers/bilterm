@@ -1,5 +1,6 @@
 pub mod drawer;
 pub mod journal;
+pub mod layout_profile;
 pub mod quick_terminal;
 pub mod session;
 pub mod session_tree;
@@ -12,6 +13,7 @@ pub use drawer::{
     WorkspaceDrawer,
 };
 pub use journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
+pub use layout_profile::{BUILTIN_LAYOUT_PROFILES, LayoutProfileMeta, sanitize_profile_name};
 pub use quick_terminal::{encode_sgr_mouse_local, inset_window_frame, rect_contains};
 pub use session::{SavedPaneState, SavedWorkspaceSession};
 pub use session_tree::{SessionNodeKind, SessionTree, SessionTreeNode};
@@ -123,6 +125,8 @@ pub struct WindowManager {
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
     pub(crate) client_detached: bool,
+    /// In-memory cache of saved/autosaved named layout profiles for instant dynamic switching.
+    pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
 }
 
 impl WindowManager {
@@ -176,6 +180,7 @@ impl WindowManager {
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
+            layout_profiles_mem: BTreeMap::new(),
         }
     }
 
@@ -271,7 +276,10 @@ impl WindowManager {
     pub fn panes(&self) -> &BTreeMap<PaneId, CompositePane> { &self.panes }
     pub fn panes_mut(&mut self) -> &mut BTreeMap<PaneId, CompositePane> { &mut self.panes }
     pub fn layout_mode(&self) -> WorkspaceLayoutMode { self.layout_mode }
-    pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) { self.layout_mode = mode; }
+    pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) {
+        self.layout_mode = mode;
+        self.maybe_autosave_layout();
+    }
     pub fn split_tree(&self) -> &SplitTree { &self.split_tree }
     pub fn z_stack(&self) -> &ZStack { &self.z_stack }
     pub fn zoomed_pane(&self) -> Option<PaneId> { self.zoomed_pane }
@@ -531,6 +539,7 @@ impl WindowManager {
         self.zoomed_pane = None;
         self.sync_config_scale_from_active_pane();
         self.rebalance_scrollback(Instant::now());
+        self.maybe_autosave_layout();
         Ok(new_id)
     }
 
@@ -548,6 +557,7 @@ impl WindowManager {
         }
         self.fleet.remove_pane_references(target_id);
         self.rebalance_scrollback(Instant::now());
+        self.maybe_autosave_layout();
         true
     }
 
@@ -651,6 +661,7 @@ impl WindowManager {
         } else {
             self.zoomed_pane = Some(top_id);
         }
+        self.maybe_autosave_layout();
     }
 
     /// Toggles between `WorkspaceLayoutMode::Tiled` and `WorkspaceLayoutMode::Stacked`.
@@ -659,6 +670,7 @@ impl WindowManager {
             WorkspaceLayoutMode::Tiled => WorkspaceLayoutMode::Stacked,
             WorkspaceLayoutMode::Stacked => WorkspaceLayoutMode::Tiled,
         };
+        self.maybe_autosave_layout();
     }
 
     /// Toggles the persistent Guake/Quake-style drop-down quick terminal (`Alt+\`` / `Ctrl+Space` / `:quake`, `WM-05`).

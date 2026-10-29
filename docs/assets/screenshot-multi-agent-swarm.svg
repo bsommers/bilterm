@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1184" height="642" viewBox="0 0 1184 642">
   <rect x="0" y="0" width="1184" height="642" rx="10" fill="#090c14" stroke="#2a3550" stroke-width="2"/>
   <circle cx="28" cy="24" r="6" fill="#ff5f56"/><circle cx="48" cy="24" r="6" fill="#ffbd2e"/><circle cx="68" cy="24" r="6" fill="#27c93f"/>
-  <text x="592" y="29" text-anchor="middle" font-family="'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" font-weight="bold" fill="#8be9fd">BILTERM v1.12.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)</text>
+  <text x="592" y="29" text-anchor="middle" font-family="'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" font-weight="bold" fill="#8be9fd">BILTERM v2.0.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)</text>
   <rect x="16.0" y="50.0" width="9.4" height="18.4" fill="rgb(170,170,170)" shape-rendering="crispEdges"/>
   <rect x="25.0" y="50.0" width="9.4" height="18.4" fill="rgb(170,170,170)" shape-rendering="crispEdges"/>
   <rect x="34.0" y="50.0" width="9.4" height="18.4" fill="rgb(170,170,170)" shape-rendering="crispEdges"/>

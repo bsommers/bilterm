@@ -168,6 +168,8 @@ pub enum Action {
     ThemeCommand(String),
     /// `:session branch|graft|detach-subtree|tree|checkpoint ...` (`TREE-01..02`, `PERS-01..02`).
     SessionTreeCommand(String),
+    /// `:profile [list|switch|save|default|autosave|next|prev|delete ...]` / `:layout [save|load|default|autosave|next|prev ...]`.
+    LayoutProfileCommand(String),
     /// `:mcp [status|tree|attach|spawn|graft|broadcast|freeze|thaw|derez|checkpoint|shutdown ...]` (`MCP-01..02`).
     McpCommand(String),
     Quit,
@@ -334,6 +336,7 @@ mod tests {
             Action::RespawnPaneInPlace => Some(":respawn-pane"),
             Action::ThemeCommand(_) => Some(":theme list"),
             Action::SessionTreeCommand(_) => Some(":session tree"),
+            Action::LayoutProfileCommand(_) => Some(":profile list"),
             Action::McpCommand(_) => Some(":mcp status"),
             Action::Quit => Some(":quit"),
         };
@@ -475,6 +478,7 @@ mod tests {
             Action::RespawnPaneInPlace,
             Action::ThemeCommand("list".to_string()),
             Action::SessionTreeCommand("tree".to_string()),
+            Action::LayoutProfileCommand("list".to_string()),
             Action::McpCommand("status".to_string()),
             Action::Quit,
         ];

@@ -609,17 +609,23 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::PaneResize { dw, dh } => {
             wm.resize_focused_pane_or_window(dw, dh);
+            wm.maybe_autosave_layout();
             false
         }
         ColonCommand::PaneMove { dx, dy } => {
             wm.move_focused_pane_or_window(dx, dy);
+            wm.maybe_autosave_layout();
             false
         }
         ColonCommand::WindowResetGeometry => {
             wm.reset_window_geometries();
+            wm.maybe_autosave_layout();
             false
         }
-        ColonCommand::ForceQuit => true,
+        ColonCommand::ForceQuit => {
+            wm.maybe_autosave_layout();
+            true
+        }
         ColonCommand::DetachClient => wm.detach_client(),
         ColonCommand::ExitProtectionSet(policy) => {
             wm.config_mut().exit_protection = policy;
@@ -637,14 +643,40 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_session_tree_command(subcmd);
             false
         }
+        ColonCommand::LayoutProfileCommand(ref subcmd) => {
+            wm.execute_layout_profile_command(subcmd);
+            false
+        }
         ColonCommand::McpCommand(ref subcmd) => wm.execute_mcp_command(subcmd),
         ColonCommand::Quit => {
+            wm.maybe_autosave_layout();
             if wm.intercept_prompt_exit_if_needed("exit") {
                 wm.is_client_detached()
             } else {
                 true
             }
         }
-        other => execute_colon_command(wm.active_pane_mut(), other),
+        other => {
+            let is_prompt_layout = matches!(
+                other,
+                ColonCommand::PromptTop
+                    | ColonCommand::PromptBottom
+                    | ColonCommand::PromptSplitTop
+                    | ColonCommand::PromptSplitBottom
+                    | ColonCommand::PromptSplitToggle
+                    | ColonCommand::PromptModeSet(_)
+                    | ColonCommand::PromptFloat(_)
+                    | ColonCommand::PromptHeight(_)
+                    | ColonCommand::PromptWidth(_)
+                    | ColonCommand::PromptMoveVertical(_)
+                    | ColonCommand::PromptResizeHeight(_)
+                    | ColonCommand::PromptResizeWidth(_)
+            );
+            let quit = execute_colon_command(wm.active_pane_mut(), other);
+            if is_prompt_layout {
+                wm.maybe_autosave_layout();
+            }
+            quit
+        }
     }
 }

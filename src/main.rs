@@ -69,6 +69,7 @@ async fn main() -> color_eyre::Result<()> {
                -p, --playbook <FILE.toml>       Execute a declarative TOML automation playbook and exit\n  \
                -g, --gui-dump <PATH.ppm>        Render initial workspace via GuiWorkspaceRenderer to a PPM framebuffer\n  \
                -s, --session <NAME>             Use named persistent command-history session (overrides history_session)\n  \
+               -P, --profile <NAME>             Launch with layout profile (default, single, dual-v, dual-h, main-side, quad, cascade, or custom)\n  \
                -c, --config <FILE.toml>         Load configuration from custom TOML file path\n  \
                -C, --completions <bash|zsh|fish> Print shell completion script to stdout\n  \
                -M, --man                        Print roff manpage (bilterm.1) to stdout\n  \
@@ -330,8 +331,16 @@ async fn main() -> color_eyre::Result<()> {
     } else {
         switch_value(&args, &["-a", "--attach"]).filter(|s| !s.starts_with('-'))
     };
+    let explicit_profile = switch_value(&args, &["-P", "--profile"]);
+    if let Some(prof) = explicit_profile {
+        cfg.default_layout_profile = prof.to_string();
+        cfg.active_layout_profile = prof.to_string();
+    }
     if let Some(name) = switch_value(&args, &["-s", "--session"]).or(explicit_attach_session) {
         cfg.history_session = name.to_string();
+        if explicit_profile.is_none() {
+            cfg.active_layout_profile = name.to_string();
+        }
     }
     if let Some(theme_str) = switch_value(&args, &["-T", "--theme"])
         && let Some(preset) = bilterm::ui::theme::ThemePreset::from_name(theme_str)
@@ -371,6 +380,13 @@ async fn main() -> color_eyre::Result<()> {
             }
             Err(_) => {}
         }
+    } else if (explicit_profile.is_some() || app.wm.config().layout_autosave)
+        && let Some((prof, count)) = app.wm.restore_default_layout_profile_on_startup()
+    {
+        let autosave_lbl = if app.wm.config().layout_autosave { "ON" } else { "OFF" };
+        app.wm.active_pane_mut().set_status_message(Some(format!(
+            "Loaded layout profile '{prof}' ({count} pane(s), autosave={autosave_lbl})"
+        )));
     }
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
