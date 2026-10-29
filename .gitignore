@@ -4,3 +4,4 @@ bilterm.log
 tmp/
 .flowscope/
 extra_prompt_session_panels_etc.txt
+.worktrees/
