@@ -17,9 +17,7 @@ use crate::pane::exit_guard::{
 };
 use crate::pane::{CompositePane, PaneId};
 use crate::ui::theme::ThemePreset;
-use crate::ui::theme_import::{
-    discover_themes_in_dir, export_open_theme_toml, load_open_theme_file, OpenColorScheme,
-};
+use crate::ui::theme_import::OpenColorScheme;
 use crate::wm::journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 use crate::wm::session_tree::{SessionNodeKind, SessionTree};
 use crate::wm::split_tree::SplitDirection;
@@ -453,39 +451,46 @@ impl WindowManager {
     pub fn refresh_mcp_console_view(&mut self) {
         let prev_selected = self.mcp_console.selected_row;
         let prev_scroll = self.mcp_console.scroll_offset;
-        let title = self.mcp_console.title.clone();
-        if title.contains("TREE") || title.contains("HIERARCHY") {
-            let lines = self.build_full_tree_lines();
-            self.mcp_console.open_with_view(title, lines);
-        } else if title.contains("STATUS") {
-            let lines = self.build_mcp_status_lines();
-            self.mcp_console.open_with_view(title, lines);
+        if self.mcp_console.file_browser.is_some() {
+            self.mcp_console.refresh_file_browser();
+        } else {
+            let title = self.mcp_console.title.clone();
+            if title.contains("TREE") || title.contains("HIERARCHY") {
+                let lines = self.build_full_tree_lines();
+                self.mcp_console.open_with_view(title, lines);
+            } else if title.contains("STATUS") {
+                let lines = self.build_mcp_status_lines();
+                self.mcp_console.open_with_view(title, lines);
+            }
         }
         self.mcp_console.selected_row = prev_selected.min(self.mcp_console.view_lines.len().saturating_sub(1));
         self.mcp_console.scroll_offset = prev_scroll;
     }
 
-    /// Activates the currently selected interactive row in the `:mcp` console (`MCP-03`).
+    /// Activates the currently selected interactive row in the `:mcp` or `:browse` console (`MCP-03`).
     pub fn activate_selected_mcp_row(&mut self) -> bool {
-        match self.mcp_console.selected_action() {
-            Some(McpRowAction::FocusPane(pid)) if self.panes.contains_key(&pid) => {
+        let Some(action) = self.mcp_console.selected_action() else {
+            return false;
+        };
+        match action {
+            McpRowAction::FocusPane(pid) if self.panes.contains_key(&pid) => {
                 self.focus_and_raise(pid);
                 self.refresh_mcp_console_view();
                 self.active_pane_mut().set_status_message(Some(format!("MCP: Focused Pane #{pid}")));
                 true
             }
-            Some(McpRowAction::SessionNode(node)) => {
+            McpRowAction::SessionNode(node) => {
                 let _ = self.mcp_console.execute(&format!("attach {node}"), &mut self.daemon_state);
                 self.refresh_mcp_console_view();
                 self.active_pane_mut()
                     .set_status_message(Some(format!("MCP: Attached session node '{node}'")));
                 true
             }
-            Some(McpRowAction::ApplyTheme(theme_name)) => {
+            McpRowAction::ApplyTheme(theme_name) => {
                 self.execute_theme_command(&theme_name);
                 true
             }
-            _ => false,
+            other => crate::ui::file_browser::activate_browser_row_action(self, other),
         }
     }
 
@@ -518,101 +523,29 @@ impl WindowManager {
         true
     }
 
-    /// Executes `:theme import|load|export|list|<preset>` commands (`THM-01`, `THM-02`).
+    /// Applies a built-in [`ThemePreset`] and clears any custom open-theme override.
+    pub fn apply_theme_preset(&mut self, preset: ThemePreset) {
+        self.config.theme = preset;
+        self.config.custom_palette_override = None;
+        self.notify_theme_changed();
+    }
+
+    /// Records an automation error message from external helpers.
+    pub fn record_automation_error_msg(&mut self, msg: String) {
+        self.record_automation_error(msg);
+    }
+
+    /// Returns the confined base directory for file exports.
+    pub fn export_confine_base_dir(&self) -> PathBuf {
+        self.automation_confine_dir
+            .clone()
+            .or_else(|| crate::secure_fs::private_runtime_dir().ok())
+            .unwrap_or_else(std::env::temp_dir)
+    }
+
+    /// Executes `:theme import|load|export|browse|list|<preset>` commands (`THM-01`, `THM-02`).
     pub fn execute_theme_command(&mut self, subcmd: &str) {
-        use crate::ui::theme_import::{build_theme_catalog_lines, resolve_theme_file_or_name};
-        let parts: Vec<&str> = subcmd.split_whitespace().collect();
-        match parts.first().copied() {
-            None | Some("list" | "ls" | "itermcolors" | "iterm2colors") => {
-                let names: Vec<&str> = ThemePreset::all().iter().map(|p| p.label()).collect();
-                let extra = parts.get(1).copied().filter(|&s| !matches!(s, "list" | "ls" | "itermcolors" | "iterm2colors")).map(Path::new);
-                let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), extra);
-                self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
-                self.active_pane_mut().set_status_message(Some(format!("Themes ({}): {}", names.len(), names.join(", "))));
-            }
-            Some("import" | "load") => {
-                let raw_arg = parts[1..].join(" ");
-                let path_str = raw_arg.trim().trim_matches('"').trim_matches('\'');
-                if path_str.is_empty() {
-                    let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), None);
-                    self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
-                    self.active_pane_mut().set_status_message(Some("Usage: :theme import <file.itermcolors|file.toml|file.yaml|dir>".to_string()));
-                    return;
-                }
-                let path = Path::new(path_str);
-                if path.is_dir() {
-                    let schemes = discover_themes_in_dir(path);
-                    let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), Some(path));
-                    self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
-                    if let Some(first) = schemes.first() {
-                        self.apply_open_color_scheme(first);
-                        self.active_pane_mut().set_status_message(Some(format!("Imported {} theme(s) from {}; applied '{}'", schemes.len(), path.display(), first.name)));
-                    } else {
-                        self.active_pane_mut().set_status_message(Some(format!("No themes found in {}", path.display())));
-                    }
-                } else if let Some((_, scheme)) = resolve_theme_file_or_name(path_str) {
-                    self.apply_open_color_scheme(&scheme);
-                } else {
-                    match load_open_theme_file(path) {
-                        Ok(scheme) => self.apply_open_color_scheme(&scheme),
-                        Err(err) => {
-                            self.record_automation_error(err.clone());
-                            self.active_pane_mut().set_status_message(Some(format!("Theme import error: {err}")));
-                        }
-                    }
-                }
-            }
-            Some("export" | "save") => {
-                let scheme = OpenColorScheme::from_preset(self.config.theme);
-                let toml_out = export_open_theme_toml(&scheme);
-                if let Some(dest) = parts.get(1).copied() {
-                    if let Err(e) = crate::secure_fs::validate_plain_file_name(dest) {
-                        self.record_automation_error(e.clone());
-                        self.active_pane_mut().set_status_message(Some(e));
-                        return;
-                    }
-                    let base = self
-                        .automation_confine_dir
-                        .clone()
-                        .or_else(|| crate::secure_fs::private_runtime_dir().ok())
-                        .unwrap_or_else(std::env::temp_dir);
-                    let target = base.join(dest);
-                    match crate::secure_fs::write_private_file(&target, toml_out.as_bytes()) {
-                        Ok(()) => self.active_pane_mut().set_status_message(Some(format!(
-                            "Exported open theme TOML to {}",
-                            target.display()
-                        ))),
-                        Err(e) => self
-                            .active_pane_mut()
-                            .set_status_message(Some(format!("Theme export error: {e}"))),
-                    }
-                } else {
-                    self.active_pane_mut().set_status_message(Some(format!(
-                        "Exported '{}' ({} bytes open TOML)",
-                        scheme.name,
-                        toml_out.len()
-                    )));
-                }
-            }
-            Some(name) => {
-                if let Some(preset) = ThemePreset::from_name(name).or_else(|| {
-                    ThemePreset::all()
-                        .iter()
-                        .copied()
-                        .find(|p| p.label().eq_ignore_ascii_case(name))
-                }) {
-                    self.config.theme = preset;
-                    self.config.custom_palette_override = None;
-                    self.notify_theme_changed();
-                } else if let Some((_, scheme)) = resolve_theme_file_or_name(subcmd.trim()) {
-                    self.apply_open_color_scheme(&scheme);
-                } else {
-                    self.active_pane_mut().set_status_message(Some(format!(
-                        "Unknown theme '{name}'. Try :theme list or :theme import <path>"
-                    )));
-                }
-            }
-        }
+        crate::ui::file_browser::execute_theme_or_browser_command(self, subcmd);
     }
 
     /// Executes `:session branch|graft|detach-subtree|tree|checkpoint` commands (`TREE-01..02`, `PERS-01..02`).

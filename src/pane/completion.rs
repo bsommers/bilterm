@@ -155,10 +155,15 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "solarized-dark",
             "tron-legacy",
             "list",
+            "browse ",
             "import ",
             "export ",
+            "config",
         ],
     ),
+    (":itermcolors", &["list", "import ", "browse "]),
+    (":browse", &[]),
+    (":files", &[]),
     (":glyphs", &["unicode", "cp437", "nerd-font", "ascii"]),
     (":cursor", &["block", "hollow", "underscore", "bar"]),
     (":crosshair", &["on", "off", "full", "pane"]),
@@ -351,7 +356,21 @@ pub fn compute_completions(
                     }
                 }
             }
-            return (arg_start, col, out);
+            if !out.is_empty()
+                || (!arg_trimmed.contains('/')
+                    && !arg_trimmed.starts_with('.')
+                    && !arg_trimmed.starts_with('~')
+                    && !matches!(
+                        cmd_name.as_str(),
+                        ":browse" | ":files" | ":itermcolors" | ":iterm2colors"
+                    )
+                    && !arg_trimmed.starts_with("import ")
+                    && !arg_trimmed.starts_with("browse ")
+                    && !arg_trimmed.starts_with("load ")
+                    && !arg_trimmed.starts_with("custom "))
+            {
+                return (arg_start, col, out);
+            }
         } else {
             let mut out = Vec::new();
             for &(cmd, subargs) in COLON_COMMANDS {

@@ -668,7 +668,7 @@ pub fn load_open_theme_file(path: &Path) -> Result<OpenColorScheme, String> {
     parse_open_theme_str(stem, &content)
 }
 
-/// Scans `dir` for `.itermcolors`, `.toml`, `.yaml`, and `.yml` theme files sorted by name (`THM-01`).
+/// Scans `dir` (and known theme subdirectories such as `schemes/`) for `.itermcolors`, `.toml`, `.yaml`, and `.yml` theme files (`THM-01`).
 pub fn discover_themes_in_dir(dir: &Path) -> Vec<OpenColorScheme> {
     discover_theme_files_in_dir(dir)
         .into_iter()
@@ -676,53 +676,47 @@ pub fn discover_themes_in_dir(dir: &Path) -> Vec<OpenColorScheme> {
         .collect()
 }
 
-/// Scans `dir` for `.itermcolors`, `.toml`, `.yaml`, and `.yml` theme files and returns `(PathBuf, OpenColorScheme)` pairs.
-pub fn discover_theme_files_in_dir(dir: &Path) -> Vec<( std::path::PathBuf, OpenColorScheme)> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut paths: Vec<_> = entries
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| {
-            p.extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| {
-                    matches!(
-                        ext.to_ascii_lowercase().as_str(),
-                        "itermcolors" | "toml" | "yaml" | "yml"
-                    )
-                })
-        })
-        .collect();
-    paths.sort();
+/// Scans `dir` (and known theme subdirectories like `schemes/`) and returns `(PathBuf, OpenColorScheme)` pairs.
+pub fn discover_theme_files_in_dir(dir: &Path) -> Vec<(std::path::PathBuf, OpenColorScheme)> {
+    let (_, paths) = crate::ui::file_browser::discover_theme_paths_smart(dir, None);
     paths
         .into_iter()
         .filter_map(|p| load_open_theme_file(&p).ok().map(|s| (p, s)))
         .collect()
 }
 
-/// Discovers `.itermcolors` and open theme files across standard candidate directories (`THM-01`).
-pub fn discover_candidate_theme_files(
-    extra_dir: Option<&Path>,
-) -> Vec<(std::path::PathBuf, OpenColorScheme)> {
+/// Returns candidate theme directories (`~/.config/bilterm/themes`, registered dirs, `~/styling/iterm2colors/schemes`, etc.).
+fn candidate_theme_dirs(extra_dir: Option<&Path>) -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
     if let Some(d) = extra_dir {
         dirs.push(d.to_path_buf());
     }
+    dirs.extend(crate::ui::file_browser::registered_theme_source_dirs());
     if let Ok(cwd) = std::env::current_dir() {
         dirs.push(cwd.clone());
         dirs.push(cwd.join("themes"));
     }
     if let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
         dirs.push(home.join(".config/bilterm/themes"));
+        dirs.push(home.join("styling/iterm2colors/schemes"));
         dirs.push(home.join(".iterm2"));
         dirs.push(home.join("iterm2-color-schemes/schemes"));
     }
+    dirs
+}
+
+/// Discovers `.itermcolors` and open theme files across standard candidate directories (`THM-01`).
+pub fn discover_candidate_theme_files(
+    extra_dir: Option<&Path>,
+) -> Vec<(std::path::PathBuf, OpenColorScheme)> {
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
-    for dir in dirs {
-        for (path, scheme) in discover_theme_files_in_dir(&dir) {
-            if seen.insert(path.clone()) {
+    for dir in candidate_theme_dirs(extra_dir) {
+        let (_, paths) = crate::ui::file_browser::discover_theme_paths_smart(&dir, None);
+        for path in paths {
+            if seen.insert(path.clone())
+                && let Ok(scheme) = load_open_theme_file(&path)
+            {
                 out.push((path, scheme));
             }
         }
@@ -736,20 +730,23 @@ pub fn resolve_theme_file_or_name(query: &str) -> Option<(std::path::PathBuf, Op
     if q.is_empty() {
         return None;
     }
-    let direct = Path::new(q);
-    if direct.is_file()
-        && let Ok(scheme) = load_open_theme_file(direct)
+    let expanded = crate::ui::file_browser::expand_user_path(q);
+    if expanded.is_file()
+        && let Ok(scheme) = load_open_theme_file(&expanded)
     {
-        return Some((direct.to_path_buf(), scheme));
+        return Some((expanded, scheme));
     }
-    for (path, scheme) in discover_candidate_theme_files(None) {
-        let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if fname.eq_ignore_ascii_case(q)
-            || stem.eq_ignore_ascii_case(q)
-            || scheme.name.eq_ignore_ascii_case(q)
-        {
-            return Some((path, scheme));
+    // Fast filename/stem match before parsing XML/TOML
+    for dir in candidate_theme_dirs(None) {
+        let (_, paths) = crate::ui::file_browser::discover_theme_paths_smart(&dir, None);
+        for path in paths {
+            let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if (fname.eq_ignore_ascii_case(q) || stem.eq_ignore_ascii_case(q))
+                && let Ok(scheme) = load_open_theme_file(&path)
+            {
+                return Some((path, scheme));
+            }
         }
     }
     None
@@ -778,10 +775,14 @@ pub fn build_theme_catalog_lines(
             )
         })
         .collect();
+    lines.push("  • browse — Open Interactive File & Directory Theme Browser (:browse)".to_string());
     let discovered = discover_candidate_theme_files(extra_dir);
     if !discovered.is_empty() {
         lines.push("─".repeat(66));
-        lines.push("DISCOVERED OPEN / .ITERMCOLORS SCHEMES (Enter/Click to apply):".to_string());
+        lines.push(format!(
+            "DISCOVERED OPEN / .ITERMCOLORS SCHEMES ({} found — Enter/Click to apply):",
+            discovered.len()
+        ));
         for (path, scheme) in discovered {
             lines.push(format!(
                 "  • import {} — {} (FG:{} BG:{})",
@@ -792,6 +793,6 @@ pub fn build_theme_catalog_lines(
             ));
         }
     }
-    lines.push("Import open schemes: :theme import <file.itermcolors|.toml|.yaml|dir>".to_string());
+    lines.push("Import open schemes: :theme import [file|dir|glob]  |  Browse: :browse [dir]".to_string());
     lines
 }

@@ -13,11 +13,19 @@ pub(super) fn parse_visual_colon_command(
     parts: &[&str],
 ) -> Option<Result<ColonCommand, String>> {
     match head {
+        "browse" | "files" | "filebrowser" | "explorer" => {
+            let sub = if parts.len() > 1 {
+                format!("browse {}", parts[1..].join(" "))
+            } else {
+                "browse".to_string()
+            };
+            Some(Ok(ColonCommand::ThemeCommand(sub)))
+        }
         "itermcolors" | "iterm2colors" => match parts.get(1).copied() {
             None | Some("list" | "ls") => {
                 Some(Ok(ColonCommand::ThemeCommand("itermcolors".to_string())))
             }
-            Some("import" | "load") => {
+            Some("import" | "load" | "browse" | "files") => {
                 Some(Ok(ColonCommand::ThemeCommand(parts[1..].join(" "))))
             }
             Some(_) => Some(Ok(ColonCommand::ThemeCommand(format!(
@@ -34,7 +42,7 @@ pub(super) fn parse_visual_colon_command(
                 };
                 Some(Ok(ColonCommand::ThemeCommand(sub)))
             }
-            Some("import" | "load" | "export" | "save") => {
+            Some("import" | "load" | "export" | "save" | "browse" | "files" | "open" | "config" | "where") => {
                 let sub = parts[1..].join(" ");
                 Some(Ok(ColonCommand::ThemeCommand(sub)))
             }
@@ -47,12 +55,15 @@ pub(super) fn parse_visual_colon_command(
                         || lower.ends_with(".toml")
                         || lower.ends_with(".yaml")
                         || lower.ends_with(".yml")
-                        || std::path::Path::new(&arg).exists()
+                        || arg.contains('/')
+                        || arg.contains('*')
+                        || arg.contains('~')
+                        || crate::ui::file_browser::expand_user_path(&arg).exists()
                     {
                         Some(Ok(ColonCommand::ThemeCommand(format!("import {arg}"))))
                     } else {
                         Some(Err(
-                            "Usage: :theme <preset> | list | import <path.itermcolors|dir> | export [file.toml]"
+                            "Usage: :theme <preset> | list | browse [dir] | import [path|dir|glob] | export [file.toml]"
                                 .to_string(),
                         ))
                     }
