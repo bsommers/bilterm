@@ -5,10 +5,10 @@ milestone_name: Live Background Daemon Detach/Attach & Interactive MCP Console N
 current_phase: 36
 current_phase_name: interactive-mcp-console-navigation
 status: milestone_v2_1_complete
-stopped_at: Released v2.1.1 (Multi-Profile Layout Manager & Autosave, .itermcolors browser & nucleo-matcher fix, and RAW PTY / ?2004h paste fixes)
+stopped_at: Released v2.1.2 (WCAG 2.1 highlight contrast engine, Claude/CLI agent marker rendering, UTF-8 chunk carry & SGR fix, and bounded clipboard I/O)
 last_updated: "2026-10-28"
 last_activity: 2026-10-28
-last_activity_desc: Released v2.1.1 with multi-profile layout autosave, .itermcolors browser & nucleo-matcher fix, and RAW PTY / ?2004h paste fixes
+last_activity_desc: Released v2.1.2 with WCAG 2.1 highlight contrast engine, Claude/CLI agent marker rendering, UTF-8 chunk carry & SGR fix, and bounded clipboard I/O
 progress:
   total_phases: 36
   completed_phases: 36

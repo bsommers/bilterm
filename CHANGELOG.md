@@ -5,6 +5,21 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.2] - 2026-10-28
+
+### Added
+- **WCAG 2.1 Highlighted Text & Agent Output Legibility Engine (`src/ui/contrast.rs`, `src/ui/mod.rs`, `src/ui/cursor.rs`)**:
+  - Added WCAG 2.1 relative luminance and contrast ratio enforcement (`>= 5.2:1` on highlighted/inverse cells and `>= 4.5:1` on standard text), hue-preserving foreground contrast boosting across the exact `0.185` equal-contrast luminance crossover, per-theme 16-color ANSI RGB tables, and `>= 4.8:1` cross-hair cursor contrast preservation.
+- **CLI/TUI Agent Marker Vector, Bitmap & Xft Fallback Rendering (`src/ui/gui_font/geometric.rs`, `src/ui/bitmap_font.rs`, `src/ui/gui_font/linux_x11.rs`)**:
+  - Added geometric vector rasterization, 5×7 bitmap glyph definitions, and `XftCharExists` symbol-font fallback for 56 CLI/TUI agent markers including Claude Code chevrons (`❯` `U+276F`, `❮` `U+276E`), tool/tree markers (`⏺` `U+23FA`, `⎿` `U+23BF`), thinking spinners (`✢`..`✽`), check/cross marks (`✓`, `✔`, `✗`, `✘`), bullets/diamonds (`●`, `○`, `◆`, `◇`, `•`), and arrows (`→`, `←`, `↑`, `↓`, `↳`, `↪`).
+
+### Fixed
+- **TUI Variation Selectors, Split Multi-Byte UTF-8 Chunks & TrueColor SGR Sub-Parameters (`src/ui/mod.rs`, `src/vt/mod.rs`, `src/vt/scan.rs`)**:
+  - Updated `is_safe_terminal_cluster` and `render_output_canvas` so 1-column cells containing `U+FE0E`/`U+FE0F` variation selectors are preserved without overflowing into adjacent columns.
+  - Added `utf8_carry` trailing incomplete UTF-8 reassembly (`split_incomplete_utf8_tail`) in `VtParser::process` and fixed `apply_extended_sgr` / `normalize_extended_sgr_for_vt100` to skip `38;2;R;G;B`, `48;2;R;G;B`, `38;5;N`, and `48;5;N` color parameters.
+- **Bounded Non-Blocking System Clipboard I/O (`src/clipboard.rs`)**:
+  - Isolated automated integration test binaries (`is_automated_test_process`) to the in-process clipboard and added `--type text/plain` + bounded 120ms/200ms timeouts (`wait_child_bounded` / `run_read_command_bounded`) for `wl-copy`/`wl-paste`/`xclip`/`xsel`.
+
 ## [v2.1.1] - 2026-10-28
 
 ### Added

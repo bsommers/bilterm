@@ -1,30 +1,27 @@
-# Bilterm Session Checkpoint (`v2.1.0` + Post-Merge Hardening & Docs Sync)
+# Bilterm Session Checkpoint (`v2.1.2` Release)
 
-- **Timestamp**: 2026-10-28T20:01:00-04:00
-- **Branch & Commit**: `main` at `7817cd2` (synced with `origin/main`)
-- **Installed Binary**: `~/.local/bin/bilterm` & `~/.cargo/bin/bilterm` on Linux; `/Users/bill/.local/bin/bilterm` & `/Users/bill/Applications/Bilterm.app` on macOS (`bilterm 2.1.0`)
+- **Timestamp**: 2026-10-28T22:38:00-04:00
+- **Branch & Tag**: `main` at `v2.1.2` (pushed to `origin/main` with annotated tag `v2.1.2`)
+- **Installed Binary**: `~/.local/bin/bilterm` (`bilterm 2.1.2`)
 
 ## 1. Completed in This Session
-1. **`v2.0.0` (`4c52454`) — Full Window Layout Detach/Re-Attach & Complete `<F1>` / `:help` Catalog**:
-   - Full multi-pane window layout detach/re-attach (`SplitTree` + `ZStack` `FloatingWindowGeometry` + prompt state + visible screen lines) via `Ctrl+X D`, `:detach [name]`, `:attach [name]`, and `bilterm attach [name]` (`-a`).
-   - Complete `<F1>` / `:help` reference (`52+` `:colon` commands across all subsystems, including all `:mcp` subcommands), Command Palette catalog (`src/ui/help_catalog.rs`), and `<Tab>` completions (`src/pane/completion.rs`).
-2. **Modular Documentation & `README.md` Shortening (`f24e222`, `19390c2`)**:
-   - Shortened `README.md` (`235 -> 101` lines) with `## About`, created `docs/VISUAL_GALLERY.md`, and synchronized `docs/README.md`, `docs/running.md`, `docs/user-guide/06-keyboard-mouse-and-command-reference.md`, and `docs/DEVELOPER_AND_AGENT_GUIDE.md` for `v2.1.0`.
-3. **`v2.1.0` (`f361b9b`) — Phases 35 & 36 (Executed in Parallel via Subagents)**:
-   - **Phase 35 (`DAEM-03..04`)**: Live background OS process daemonization (`src/daemon/process.rs`, `bilterm --daemon-serve --session <name>`, private `0600` Unix socket `daemon-<session>.sock`, stale socket cleanup on `ConnectionRefused`, `bilterm ls` / `bilterm sessions`, and `"session.save"` / `"session.restore"` JSON-RPC 2.0 handlers; verified in `tests/live_daemon_detach_attach.rs`).
-   - **Phase 36 (`MCP-03..04`)**: Interactive mouse & keyboard navigation in `:mcp` console (`src/mcp_console/mod.rs`, `src/ui/mcp_ui.rs`, `McpRowAction`: `FocusPane`, `SessionNode`, `ApplyTheme`, `Up`/`Down`/`j`/`k`/`Enter` + mouse click row activation, `r`=Refresh, `f`=Freeze/Thaw, `n`=Branch, `m`=Float↔Push, `d`=Edge; verified in `tests/mcp_interactive_navigation.rs`).
-4. **Pulled & Verified macOS / Claude Code / `agy` Hardening (`0feac6f..7817cd2`)**:
-   - Guarded Kitty Keyboard Protocol (`CSI < u` / `CSI = u`) stack pops (`src/vt/mod.rs`, `src/vt/scan.rs`).
-   - Fixed shifted printable characters under Kitty disambiguate mode (`src/input/encode.rs`).
-   - Fixed inline raw-mode TUI prompt submission with bracketed paste (`\x1b[200~...\x1b[201~\r` in `src/pane/mod.rs`).
-   - Added `.zshenv`/`.zprofile` sourcing in `ZDOTDIR` wrapper and `UTF-8` `LANG` fallback in GUI mode (`src/pty/shell_integration.rs`, `src/pty/mod.rs`).
+1. **Multi-Profile Layout Manager & Auto-Save (`4740534`)**:
+   - Implemented `:layout save [name]`, `:layout load [name]`, `:layout default <name>`, `:layout autosave [on|off|toggle]`, `:layout list`, `:layout delete <name>` with startup auto-restore (`default_layout_profile = "default"`) and exit/periodic auto-save (`layout_autosave = true`).
+2. **`.itermcolors` Crash Fix, Interactive Browser & RAW PTY Paste (`a32484c`, `v2.1.1` `9d64132`)**:
+   - Fixed `nucleo-matcher 0.3.1` `fuzzy_optimal.rs:37` panic (`should have been caught by prefilter`) via case-consistent `Atom` matching in `src/wm/mod.rs` and `src/pane/prompt.rs`.
+   - Added interactive `.itermcolors` picker modal (`:theme iterm2`, `:theme list`) + `Ctrl+Shift+V`, `Shift+Insert`, `Ctrl+X p`, `Ctrl+X v`, and `:paste` with bracketed-paste (`?2004h`) framing.
+3. **WCAG 2.1 Highlighted Text Contrast Engine (`a60010a`, `src/ui/contrast.rs`)**:
+   - Enforced `>= 5.2:1` contrast on highlighted/inverse cells and `>= 4.5:1` on standard text across all themes (including Borland Turbo Blue `#000084`) with per-theme ANSI 16-color RGB lookup tables and cross-hair contrast preservation (`src/ui/cursor.rs`).
+4. **General Claude Code & CLI Agent Marker Rendering Fix (`a60010a`)**:
+   - Added geometric + 5x7 bitmap + Xft fallback rendering for `❯` (`U+276F`), `❮`, `⏺` (`U+23FA`), `⎿` (`U+23BF`), `✓`, `✔`, `✗`, `✘`, `✢..✽`, `●`, `○`, `◆`, `◇`, `▸`, `▹`, `•`, `→`, `←`, `↑`, `↓`, `↳`, `↪` (`src/ui/gui_font/geometric.rs`, `src/ui/bitmap_font.rs`, `src/ui/gui_font/linux_x11.rs`).
+   - Fixed `is_safe_terminal_cluster` Variation Selector (`U+FE0E`/`U+FE0F`) handling (`src/ui/mod.rs`), TrueColor SGR parameter skipping (`src/vt/scan.rs`), and split multi-byte UTF-8 chunk reassembly (`utf8_carry` in `src/vt/mod.rs`).
+5. **Bounded Non-Blocking Clipboard I/O (`a60010a`, `src/clipboard.rs`)**:
+   - Isolated integration test processes (`is_automated_test_process`) to the in-process clipboard and bounded `wl-copy`/`wl-paste`/`xclip`/`xsel` subprocess calls to 120ms/200ms.
 
 ## 2. Verification State
 - `cargo clippy -q --all-targets -- -D warnings`: `0` warnings.
-- Unit & integration test suites passing (`184` lib unit tests + all integration suites including `live_daemon_detach_attach` and `mcp_interactive_navigation`).
-- All `src/**/*.rs` files `<= 800` lines (`ARCH-R04`) and `src/input/mod.rs::handle_wm_key_event` `<= 80` lines (`ARCH-R01`).
+- `191` lib unit tests + integration suites (`full_suite_battle_and_perf`, `itermcolors_and_paste_fixes`, `layout_profiles_and_autosave`) passing.
+- All `src/**/*.rs` files `<= 800` lines (`ARCH-R04`).
 
-## 3. Exact Next Steps (When Resuming After Restart)
-Ready to plan & execute items **3 and 4** from our roadmap backlog:
-- **Option 3 (Phase 37)**: Cross-Platform Release Packaging & Distribution (`cargo-dist` / GitHub Actions release binaries for Linux `x86_64`/`aarch64`, macOS universal `.app` bundle / Homebrew formula, and Windows `.exe` installer).
-- **Option 4 (Phase 38)**: Live PTY Stream Multiplexing Across Daemon Re-Attach (attaching multiple concurrent TUI/GUI clients to the same running `daemon-<session>.sock` PTY master streams without respawning child shells).
+## 3. Exact Next Steps (When Resuming)
+- Resume from `.planning/CHECKPOINT.md` (`git status --short` clean on `main` at `a60010a`).
