@@ -420,65 +420,140 @@ pub(super) fn handle_wm_modal_key(
         return Ok(Some(AppAction::Handled));
     }
 
-    if wm.mcp_console().active && key.modifiers.is_empty() {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                wm.mcp_console_mut().close_root_terminal();
-                wm.reflow_default_viewport();
-                return Ok(Some(AppAction::Handled));
+    if wm.mcp_console().active && !wm.is_leader_pending() {
+        if wm.mcp_console().file_browser.is_some() {
+            match key.code {
+                KeyCode::Esc => {
+                    wm.mcp_console_mut().close_root_terminal();
+                    wm.reflow_default_viewport();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Up => {
+                    wm.mcp_console_mut().select_prev_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Down => {
+                    wm.mcp_console_mut().select_next_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::PageUp => {
+                    wm.mcp_console_mut().scroll_up(8);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::PageDown => {
+                    wm.mcp_console_mut().scroll_down(8);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Home => {
+                    wm.mcp_console_mut().select_first_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::End => {
+                    wm.mcp_console_mut().select_last_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Enter => {
+                    wm.activate_selected_mcp_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Backspace => {
+                    if let Some(ref mut fb) = wm.mcp_console_mut().file_browser {
+                        if fb.preview_file.is_some() || fb.filter.is_empty() {
+                            fb.navigate_up();
+                        } else {
+                            fb.filter.pop();
+                        }
+                    }
+                    wm.mcp_console_mut().refresh_file_browser();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('u' | 'U') if key.modifiers == KeyModifiers::CONTROL => {
+                    if let Some(ref mut fb) = wm.mcp_console_mut().file_browser {
+                        fb.filter.clear();
+                    }
+                    wm.mcp_console_mut().refresh_file_browser();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char(c)
+                    if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    if let Some(ref mut fb) = wm.mcp_console_mut().file_browser {
+                        fb.filter.push(c);
+                    }
+                    wm.mcp_console_mut().refresh_file_browser();
+                    return Ok(Some(AppAction::Handled));
+                }
+                _ => {}
             }
-            KeyCode::Char('m') | KeyCode::Char('M') => {
-                let mode = wm.mcp_console_mut().toggle_layout_mode();
-                wm.reflow_default_viewport();
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "MCP Window Mode: {} (Press 'd' to cycle dock edge)",
-                    mode.label()
-                )));
-                return Ok(Some(AppAction::Handled));
+        } else if key.modifiers.is_empty() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    wm.mcp_console_mut().close_root_terminal();
+                    wm.reflow_default_viewport();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('m') | KeyCode::Char('M') => {
+                    let mode = wm.mcp_console_mut().toggle_layout_mode();
+                    wm.reflow_default_viewport();
+                    wm.active_pane_mut().set_status_message(Some(format!(
+                        "MCP Window Mode: {} (Press 'd' to cycle dock edge)",
+                        mode.label()
+                    )));
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('d') | KeyCode::Char('D') => {
+                    let edge = wm.mcp_console_mut().cycle_edge();
+                    wm.mcp_console_mut().layout_mode = crate::wm::DrawerLayoutMode::Push;
+                    wm.reflow_default_viewport();
+                    wm.active_pane_mut().set_status_message(Some(format!(
+                        "MCP Window Docked (Push): {}",
+                        edge.label()
+                    )));
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    wm.mcp_console_mut().select_prev_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    wm.mcp_console_mut().select_next_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Enter => {
+                    wm.activate_selected_mcp_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    wm.refresh_mcp_console_view();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('f') | KeyCode::Char('F') => {
+                    wm.toggle_freeze_selected_mcp_node();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') => {
+                    wm.spawn_branch_under_selected_mcp_node();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::PageUp => {
+                    wm.mcp_console_mut().scroll_up(5);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::PageDown => {
+                    wm.mcp_console_mut().scroll_down(5);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Home => {
+                    wm.mcp_console_mut().select_first_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::End => {
+                    wm.mcp_console_mut().select_last_row();
+                    return Ok(Some(AppAction::Handled));
+                }
+                _ => {}
             }
-            KeyCode::Char('d') | KeyCode::Char('D') => {
-                let edge = wm.mcp_console_mut().cycle_edge();
-                wm.mcp_console_mut().layout_mode = crate::wm::DrawerLayoutMode::Push;
-                wm.reflow_default_viewport();
-                wm.active_pane_mut().set_status_message(Some(format!(
-                    "MCP Window Docked (Push): {}",
-                    edge.label()
-                )));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                wm.mcp_console_mut().select_prev_row();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                wm.mcp_console_mut().select_next_row();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Enter => {
-                wm.activate_selected_mcp_row();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('r') | KeyCode::Char('R') if key.modifiers.is_empty() => {
-                wm.refresh_mcp_console_view();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('f') | KeyCode::Char('F') if key.modifiers.is_empty() => {
-                wm.toggle_freeze_selected_mcp_node();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('n') | KeyCode::Char('N') if key.modifiers.is_empty() => {
-                wm.spawn_branch_under_selected_mcp_node();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::PageUp => {
-                wm.mcp_console_mut().scroll_up(5);
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::PageDown => {
-                wm.mcp_console_mut().scroll_down(5);
-                return Ok(Some(AppAction::Handled));
-            }
-            _ => {}
         }
     }
 

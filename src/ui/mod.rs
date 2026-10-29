@@ -2,6 +2,7 @@ pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
 pub mod exit_guard_ui;
+pub mod file_browser;
 pub mod gui_font;
 #[cfg(target_os = "macos")]
 pub mod gui_macos;

@@ -24,8 +24,14 @@ pub enum McpRowAction {
     FocusPane(usize),
     /// Attach/switch to a session node in the `SessionTree`.
     SessionNode(String),
-    /// Apply a theme preset (`:theme <name>`).
+    /// Apply a theme preset or import file (`:theme <name>` / `import <path>`).
     ApplyTheme(String),
+    /// Navigate the interactive File/Directory Browser into a directory.
+    BrowseDir(std::path::PathBuf),
+    /// Import and register all theme files inside a directory.
+    ImportAllDir(std::path::PathBuf),
+    /// Preview a text file inside the interactive File Browser.
+    PreviewFile(std::path::PathBuf),
 }
 
 /// Infers an interactive [`McpRowAction`] from a formatted `:mcp` / `:session` / `:theme` console line (`MCP-03`).
@@ -252,6 +258,8 @@ pub struct McpConsoleState {
     pub edge: DrawerEdge,
     pub log_lines: Vec<String>,
     pub last_status_banner: String,
+    /// Active interactive file/directory browser state when `:browse` / `:theme import` browser is open.
+    pub file_browser: Option<crate::ui::file_browser::FileBrowserState>,
 }
 
 impl Default for McpConsoleState {
@@ -276,20 +284,43 @@ impl McpConsoleState {
                 "◈ MASTER CONTROL PROGRAM [MCP ROOT CONSOLE] ONLINE. END OF LINE.".to_string(),
             ],
             last_status_banner: "MCP ROOT READY — END OF LINE.".to_string(),
+            file_browser: None,
         }
     }
 
     /// Opens the MCP root terminal overlay.
     pub fn open_root_terminal(&mut self) {
         self.active = true;
+        self.file_browser = None;
         self.scroll_offset = 0;
     }
 
     /// Opens the MCP floating/push window with a specific title and multi-line content view,
     /// automatically inferring interactive [`McpRowAction`] targets per row (`MCP-03`).
     pub fn open_with_view(&mut self, title: impl Into<String>, lines: Vec<String>) {
+        self.file_browser = None;
         let actions: Vec<McpRowAction> = lines.iter().map(|l| infer_row_action(l)).collect();
         self.open_with_interactive_view(title, lines, actions);
+    }
+
+    /// Opens the interactive File & Directory Browser at `dir` with optional `filter` (`THM-01`).
+    pub fn open_file_browser(
+        &mut self,
+        dir: std::path::PathBuf,
+        filter: Option<String>,
+    ) {
+        let fb = crate::ui::file_browser::FileBrowserState::new(dir, filter);
+        let (title, lines, actions) = fb.build_view();
+        self.file_browser = Some(fb);
+        self.open_with_interactive_view(title, lines, actions);
+    }
+
+    /// Rebuilds the view lines and interactive row actions from the active [`crate::ui::file_browser::FileBrowserState`].
+    pub fn refresh_file_browser(&mut self) {
+        if let Some(ref fb) = self.file_browser {
+            let (title, lines, actions) = fb.build_view();
+            self.open_with_interactive_view(title, lines, actions);
+        }
     }
 
     /// Opens the MCP floating/push window with explicit per-row [`McpRowAction`] metadata (`MCP-03`).
@@ -363,6 +394,7 @@ impl McpConsoleState {
     /// Closes the MCP root terminal without terminating the daemon or any child sessions (`MCP-01`).
     pub fn close_root_terminal(&mut self) {
         self.active = false;
+        self.file_browser = None;
         self.last_status_banner =
             "MCP ROOT CONSOLE DETACHED (SESSIONS PRESERVED). END OF LINE.".to_string();
     }
@@ -379,15 +411,43 @@ impl McpConsoleState {
         self.edge
     }
 
-    /// Scrolls the MCP pop-up/panel content up by `rows`.
+    /// Scrolls the MCP pop-up/panel content up by `rows` and moves `selected_row` accordingly.
     pub fn scroll_up(&mut self, rows: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(rows);
+        for _ in 0..rows {
+            self.select_prev_row();
+        }
     }
 
-    /// Scrolls the MCP pop-up/panel content down by `rows`.
+    /// Scrolls the MCP pop-up/panel content down by `rows` and moves `selected_row` accordingly.
     pub fn scroll_down(&mut self, rows: usize) {
         let max_off = self.view_lines.len().saturating_sub(1);
         self.scroll_offset = (self.scroll_offset + rows).min(max_off);
+        for _ in 0..rows {
+            self.select_next_row();
+        }
+    }
+
+    /// Selects the first interactive row (`Home`).
+    pub fn select_first_row(&mut self) {
+        self.selected_row = self
+            .row_actions
+            .iter()
+            .position(|a| *a != McpRowAction::None)
+            .unwrap_or(0);
+        self.scroll_offset = 0;
+    }
+
+    /// Selects the last interactive row (`End`).
+    pub fn select_last_row(&mut self) {
+        if let Some(last) = self
+            .row_actions
+            .iter()
+            .rposition(|a| *a != McpRowAction::None)
+        {
+            self.selected_row = last;
+            self.scroll_offset = last.saturating_sub(9);
+        }
     }
 
     /// Computes the bounding [`Rect`] of the MCP window within `workspace_area` (`Overlay` floating center vs `Push` edge).

@@ -113,15 +113,23 @@ fn view_and_set_itermcolors_via_colon_commands_and_interactive_popup() {
     );
 
     // 3. Interactive row action in popup resolves `import <path with spaces>`
-    let import_line = wm
-        .mcp_console()
-        .view_lines
-        .iter()
-        .find(|l| l.contains("Solarized Dark.itermcolors"))
-        .expect("import row")
-        .clone();
+    let canon_scheme = std::fs::canonicalize(&scheme_path).unwrap_or_else(|_| scheme_path.clone());
+    assert!(
+        wm.mcp_console()
+            .row_actions
+            .contains(&McpRowAction::ApplyTheme(format!(
+                "import {}",
+                canon_scheme.display()
+            ))),
+        "expected ApplyTheme row action for {}, got {:?}",
+        canon_scheme.display(),
+        wm.mcp_console().row_actions
+    );
     assert_eq!(
-        infer_row_action(&import_line),
+        infer_row_action(&format!(
+            "  • import {} — Solarized Dark",
+            scheme_path.display()
+        )),
         McpRowAction::ApplyTheme(format!("import {}", scheme_path.display()))
     );
 
@@ -213,5 +221,121 @@ fn paste_bindings_and_bracketed_multiline_paste_in_raw_pty() {
     assert_eq!(
         wm.active_pane().last_pty_write(),
         b"\x1b[200~line1\nline2\nline3\x1b[201~"
+    );
+}
+
+#[test]
+fn theme_import_repo_root_wildcard_globs_and_interactive_file_browser_work_end_to_end() {
+    let repo_dir = tempfile::tempdir().expect("tempdir");
+    // Simulate `/home/bill/styling/iterm2colors` structure: top-level README.md + `schemes/` subdir with `.itermcolors`
+    std::fs::write(repo_dir.path().join("README.md"), "# iTerm2 Color Schemes\nLine 2\n").unwrap();
+    let schemes_dir = repo_dir.path().join("schemes");
+    std::fs::create_dir_all(&schemes_dir).unwrap();
+    let alpha_path = schemes_dir.join("Alpha Dark.itermcolors");
+    let zeta_path = schemes_dir.join("Zeta Neon.itermcolors");
+    std::fs::write(&alpha_path, SAMPLE_ITERMCOLORS_XML).unwrap();
+    std::fs::write(&zeta_path, SAMPLE_ITERMCOLORS_XML).unwrap();
+
+    let mut wm = WindowManager::new_headless(24, 80);
+
+    // 1. `:theme import <repo_root>` automatically discovers `schemes/` subdirectory!
+    let cmd = parse_colon_command(&format!(":theme import {}", repo_dir.path().display()))
+        .unwrap()
+        .unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert!(wm.config().custom_palette_override.is_some());
+    assert!(wm.mcp_console().active);
+    assert!(wm.mcp_console().file_browser.is_some());
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("Alpha Dark.itermcolors"))
+    );
+
+    // 2. `:theme import <schemes_dir>/*.itermcolors` wildcard glob works!
+    wm.config_mut().custom_palette_override = None;
+    let glob_cmd = parse_colon_command(&format!(
+        ":theme import {}/*.itermcolors",
+        schemes_dir.display()
+    ))
+    .unwrap()
+    .unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, glob_cmd));
+    assert!(wm.config().custom_palette_override.is_some());
+    assert_eq!(
+        wm.mcp_console()
+            .file_browser
+            .as_ref()
+            .unwrap()
+            .filter
+            .as_str(),
+        "*.itermcolors"
+    );
+
+    // 3. Interactive File Browser live type-to-filter, Ctrl+U clear, Backspace parent nav, and file preview
+    let browse_cmd = parse_colon_command(&format!(":browse {}", repo_dir.path().display()))
+        .unwrap()
+        .unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, browse_cmd));
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("[DIR] schemes/")),
+        "expected schemes/ directory in browser: {:?}",
+        wm.mcp_console().view_lines
+    );
+
+    // Type "zeta" while inside `schemes/` to filter live
+    wm.mcp_console_mut()
+        .open_file_browser(schemes_dir.clone(), None);
+    for ch in "zeta".chars() {
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
+    }
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("Zeta Neon.itermcolors"))
+    );
+    assert!(
+        !wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("Alpha Dark.itermcolors"))
+    );
+
+    // Clear filter with Ctrl+U
+    handle_wm_key_event(
+        &mut wm,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("Alpha Dark.itermcolors"))
+    );
+
+    // Navigate up to parent `repo_dir` via Backspace when filter is empty
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)).unwrap();
+    assert!(
+        wm.mcp_console()
+            .view_lines
+            .iter()
+            .any(|l| l.contains("README.md")),
+        "expected README.md after navigating up: {:?}",
+        wm.mcp_console().view_lines
+    );
+
+    // Tab completion on `:theme import <dir>/` returns filesystem candidates
+    let line = format!(":theme import {}/", repo_dir.path().display());
+    let (_, _, cands) =
+        bilterm::pane::completion::compute_completions(&line, line.chars().count(), repo_dir.path());
+    assert!(
+        cands.iter().any(|c| c.display.contains("schemes")),
+        "expected filesystem completion for :theme import <dir>/, got {cands:?}"
     );
 }
