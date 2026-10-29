@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-27)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.0` (`Phases 29–34`) — **COMPLETE (`34/34` Phases)**.
+**Current focus:** Milestone `v2.1` (`Phases 35–36`) — **COMPLETE (`36/36` Phases)**.
 
 ## Current Position
 
-Phase: 34 (tron-inspired-mcp-root-terminal) — COMPLETE
-Plan: All `v2.0` plans (`29-01` through `34-03`) complete
-Status: Phases 1–34 complete (`47/47` v1 requirements + `14/14` v2.0 requirements: `SCRL-01..02`, `SAFE-01..02`, `THM-01..02`, `DAEM-01..02`, `TREE-01..02`, `PERS-01..02`, `MCP-01..02`).
-Last activity: 2026-10-27 — Completed Phases 30–34 via parallel subagents (`src/pane/exit_guard.rs`, `src/ui/exit_guard_ui.rs`, `src/ui/theme_import.rs`, `src/daemon/mod.rs`, `src/wm/session_tree.rs`, `src/wm/journal.rs`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`, and `tests/v2_phases_30_to_34_integration.rs`).
+Phase: 36 (interactive-mcp-console-navigation) — COMPLETE
+Plan: All `v2.1` plans (`35-01..02`, `36-01..02`) complete
+Status: Phases 1–36 complete (`47/47` v1 + `14/14` v2.0 + `4/4` v2.1 requirements: `DAEM-03..04`, `MCP-03..04`).
+Last activity: 2026-10-28 — Completed Phases 35–36 via parallel subagents (`src/daemon/process.rs`, `src/mcp_console/mod.rs`, `src/ui/mcp_ui.rs`, `tests/live_daemon_detach_attach.rs`, `tests/mcp_interactive_navigation.rs`), synced macOS/Claude Code/`agy` fixes (`7817cd2`), and updated all docs.
 
-Progress: [██████████] 100% (34/34 Phases)
+Progress: [██████████] 100% (36/36 Phases)
 
 ## Performance Metrics
 
@@ -89,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-27 09:40
-Stopped at: Installed v1.11.1 on macOS (`~/.local/bin/bilterm` + `~/Applications/Bilterm.app`) and verified 248/248 tests passing
+Last session: 2026-10-28 20:01
+Stopped at: Released v2.1.0 (Phases 35-36), pulled macOS/Claude Code/agy hardening (7817cd2), synced docs, ready for items 3 & 4 after restart
 Resume file: .planning/CHECKPOINT.md
 
 ## Quick Tasks Completed
