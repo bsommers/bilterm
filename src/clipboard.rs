@@ -9,6 +9,20 @@ use std::sync::Mutex;
 
 static PROCESS_CLIPBOARD: Mutex<String> = Mutex::new(String::new());
 
+#[cfg(not(test))]
+fn is_automated_test_process() -> bool {
+    if std::env::var_os("RUST_TEST_THREADS").is_some()
+        || std::env::var_os("NEXTEST").is_some()
+        || std::env::var_os("CARGO_TARGET_TMPDIR").is_some()
+    {
+        return true;
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().and_then(|d| d.file_name()).map(|n| n == "deps"))
+        .unwrap_or(false)
+}
+
 /// Writes `text` to the in-process clipboard buffer and the native OS system clipboard.
 pub fn set_system_clipboard(text: &str) {
     if text.is_empty() {
@@ -18,13 +32,16 @@ pub fn set_system_clipboard(text: &str) {
         *guard = text.to_string();
     }
     #[cfg(not(test))]
-    os_set_clipboard(text);
+    if !is_automated_test_process() {
+        os_set_clipboard(text);
+    }
 }
 
 /// Reads text from the native OS system clipboard (falling back to the in-process clipboard buffer).
 pub fn get_system_clipboard() -> Option<String> {
     #[cfg(not(test))]
-    if let Some(s) = os_get_clipboard()
+    if !is_automated_test_process()
+        && let Some(s) = os_get_clipboard()
         && !s.is_empty()
     {
         if let Ok(mut guard) = PROCESS_CLIPBOARD.lock() {
@@ -294,12 +311,30 @@ fn os_get_clipboard() -> Option<String> {
 }
 
 #[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
+fn wait_child_bounded(child: &mut std::process::Child, max_ms: u64) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(max_ms);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    return true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(_) => return false,
+        }
+    }
+}
+
+#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
 fn os_set_clipboard(text: &str) {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
     if std::env::var_os("WAYLAND_DISPLAY").is_some()
         && let Ok(mut child) = Command::new("wl-copy")
+            .args(["--type", "text/plain"])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -308,7 +343,7 @@ fn os_set_clipboard(text: &str) {
         if let Some(mut stdin) = child.stdin.take() {
             let _ = stdin.write_all(text.as_bytes());
         }
-        let _ = child.wait();
+        let _ = wait_child_bounded(&mut child, 120);
         return;
     }
     if std::env::var_os("DISPLAY").is_some() {
@@ -326,7 +361,7 @@ fn os_set_clipboard(text: &str) {
                 if let Some(mut stdin) = child.stdin.take() {
                     let _ = stdin.write_all(text.as_bytes());
                 }
-                let _ = child.wait();
+                let _ = wait_child_bounded(&mut child, 120);
                 return;
             }
         }
@@ -334,38 +369,58 @@ fn os_set_clipboard(text: &str) {
 }
 
 #[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
-fn os_get_clipboard() -> Option<String> {
+fn run_read_command_bounded(prog: &str, args: &[&str], max_ms: u64) -> Option<String> {
+    use std::io::Read;
     use std::process::{Command, Stdio};
 
-    if std::env::var_os("WAYLAND_DISPLAY").is_some()
-        && let Ok(out) = Command::new("wl-paste")
-            .arg("--no-newline")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-        && out.status.success()
-    {
-        let s = String::from_utf8_lossy(&out.stdout).to_string();
-        if !s.is_empty() {
-            return Some(s);
+    let mut child = Command::new(prog)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(max_ms);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let mut buf = Vec::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = out.read_to_end(&mut buf);
+                }
+                let s = String::from_utf8_lossy(&buf).into_owned();
+                return (!s.is_empty()).then_some(s);
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(_) => return None,
         }
+    }
+}
+
+#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
+fn os_get_clipboard() -> Option<String> {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && let Some(s) = run_read_command_bounded("wl-paste", &["--no-newline"], 200)
+    {
+        return Some(s);
     }
     if std::env::var_os("DISPLAY").is_some() {
         for (prog, args) in [
             ("xclip", &["-selection", "clipboard", "-o"][..]),
             ("xsel", &["-ob"][..]),
         ] {
-            if let Ok(out) = Command::new(prog)
-                .args(args)
-                .stdin(Stdio::null())
-                .stderr(Stdio::null())
-                .output()
-                && out.status.success()
-            {
-                let s = String::from_utf8_lossy(&out.stdout).to_string();
-                if !s.is_empty() {
-                    return Some(s);
-                }
+            if let Some(s) = run_read_command_bounded(prog, args, 200) {
+                return Some(s);
             }
         }
     }

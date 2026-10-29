@@ -41,61 +41,26 @@ const CONTROL_MASK: c_uint = 1 << 2;
 const MOD1_MASK: c_uint = 1 << 3;
 
 #[repr(C)]
-struct XftFont {
-    ascent: c_int,
-    descent: c_int,
-    height: c_int,
-    max_advance_width: c_int,
-    charset: *mut c_void,
-    pattern: *mut c_void,
-}
+struct XftFont { ascent: c_int, descent: c_int, height: c_int, max_advance_width: c_int, charset: *mut c_void, pattern: *mut c_void }
 
 #[repr(C)]
 #[derive(Default)]
-struct XGlyphInfo {
-    width: c_ushort,
-    height: c_ushort,
-    x: c_short,
-    y: c_short,
-    x_off: c_short,
-    y_off: c_short,
-}
+struct XGlyphInfo { width: c_ushort, height: c_ushort, x: c_short, y: c_short, x_off: c_short, y_off: c_short }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct XRenderColor {
-    red: c_ushort,
-    green: c_ushort,
-    blue: c_ushort,
-    alpha: c_ushort,
-}
+struct XRenderColor { red: c_ushort, green: c_ushort, blue: c_ushort, alpha: c_ushort }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct XftColor {
-    pixel: c_ulong,
-    color: XRenderColor,
-}
+struct XftColor { pixel: c_ulong, color: XRenderColor }
 
 #[repr(C)]
 struct XImage {
-    width: c_int,
-    height: c_int,
-    xoffset: c_int,
-    format: c_int,
-    data: *mut c_char,
-    byte_order: c_int,
-    bitmap_unit: c_int,
-    bitmap_bit_order: c_int,
-    bitmap_pad: c_int,
-    depth: c_int,
-    bytes_per_line: c_int,
-    bits_per_pixel: c_int,
-    red_mask: c_ulong,
-    green_mask: c_ulong,
-    blue_mask: c_ulong,
-    obdata: *mut c_char,
-    f_pad: [*mut c_void; 6],
+    width: c_int, height: c_int, xoffset: c_int, format: c_int, data: *mut c_char,
+    byte_order: c_int, bitmap_unit: c_int, bitmap_bit_order: c_int, bitmap_pad: c_int,
+    depth: c_int, bytes_per_line: c_int, bits_per_pixel: c_int,
+    red_mask: c_ulong, green_mask: c_ulong, blue_mask: c_ulong, obdata: *mut c_char, f_pad: [*mut c_void; 6],
 }
 
 #[repr(C)]
@@ -193,6 +158,7 @@ pub struct X11Api {
     xft_draw_create: Option<unsafe extern "C" fn(*mut c_void, c_ulong, *mut c_void, c_ulong) -> *mut c_void>,
     xft_draw_destroy: Option<unsafe extern "C" fn(*mut c_void)>,
     xft_draw_string_utf8: Option<FnXftDrawStr>,
+    xft_char_exists: Option<unsafe extern "C" fn(*mut c_void, *mut XftFont, u32) -> c_int>,
     fc_config_app_font_add_file: Option<unsafe extern "C" fn(*mut c_void, *const c_uchar) -> c_int>,
     fc_pattern_get_string: Option<unsafe extern "C" fn(*mut c_void, *const c_char, c_int, *mut *const c_char) -> c_int>,
 }
@@ -249,6 +215,7 @@ impl X11Api {
                 xft_draw_create: load_sym(lib_xft, b"XftDrawCreate\0"),
                 xft_draw_destroy: load_sym(lib_xft, b"XftDrawDestroy\0"),
                 xft_draw_string_utf8: load_sym(lib_xft, b"XftDrawStringUtf8\0"),
+                xft_char_exists: load_sym(lib_xft, b"XftCharExists\0"),
                 fc_config_app_font_add_file: load_sym(lib_fc, b"FcConfigAppFontAddFile\0"),
                 fc_pattern_get_string: load_sym(lib_fc, b"FcPatternGetString\0"),
             })
@@ -274,6 +241,7 @@ pub struct X11GuiCanvas<'a> {
     font_bold: *mut XftFont,
     font_italic: *mut XftFont,
     font_bold_italic: *mut XftFont,
+    font_fallback: *mut XftFont,
     font_ascent: i32,
     pub cell_width_px: u16,
     pub cell_height_px: u16,
@@ -294,7 +262,7 @@ impl<'a> X11GuiCanvas<'a> {
         let mut canvas = Self {
             api, dpy, screen, visual, colormap, depth, gc, win,
             pixmap: 0, xft_draw: null_mut(), pixels: Vec::new(), width_px: 0, height_px: 0,
-            font_regular: null_mut(), font_bold: null_mut(), font_italic: null_mut(), font_bold_italic: null_mut(),
+            font_regular: null_mut(), font_bold: null_mut(), font_italic: null_mut(), font_bold_italic: null_mut(), font_fallback: null_mut(),
             font_ascent: 14,
             cell_width_px: wm.config().cell_width_px.max(8),
             cell_height_px: wm.config().cell_height_px.max(16),
@@ -328,13 +296,13 @@ impl<'a> X11GuiCanvas<'a> {
 
     fn destroy_fonts(&mut self) {
         if let Some(close_fn) = self.api.xft_font_close {
-            let base = [self.font_regular, self.font_bold, self.font_italic, self.font_bold_italic];
+            let base = [self.font_regular, self.font_bold, self.font_italic, self.font_bold_italic, self.font_fallback];
             for f in base.into_iter().chain(self.scaled_fonts.values().map(|&(f, _)| f)) {
                 if !f.is_null() { unsafe { close_fn(self.dpy, f) }; }
             }
         }
         self.scaled_fonts.clear();
-        (self.font_regular, self.font_bold, self.font_italic, self.font_bold_italic) = (null_mut(), null_mut(), null_mut(), null_mut());
+        (self.font_regular, self.font_bold, self.font_italic, self.font_bold_italic, self.font_fallback) = (null_mut(), null_mut(), null_mut(), null_mut(), null_mut());
     }
 
     fn open_xft_font(&self, family: &str, px_height: i32, bold: bool, italic: bool) -> *mut XftFont {
@@ -415,6 +383,13 @@ impl<'a> X11GuiCanvas<'a> {
         self.font_bold = self.open_xft_font(&chosen_face, px_height, true, false);
         self.font_italic = self.open_xft_font(&chosen_face, px_height, false, true);
         self.font_bold_italic = self.open_xft_font(&chosen_face, px_height, true, true);
+        for fb_sym in ["DejaVu Sans Mono", "Noto Sans Symbols 2", "DejaVu Sans", "sans-serif"] {
+            let f_fb = self.open_xft_font(fb_sym, px_height, false, false);
+            if !f_fb.is_null() {
+                self.font_fallback = f_fb;
+                break;
+            }
+        }
         self.resolved_face_name = chosen_face;
 
         if !self.font_regular.is_null() {
@@ -534,7 +509,7 @@ impl<'a> X11GuiCanvas<'a> {
                 let Some(ch) = g.text.chars().next() else { continue };
                 if ch == ' ' || is_geometric_glyph(ch) { continue; }
                 let g_px_h = ((u32::from(g.font_size_pt.max(6)) * 96 + 36) / 72).clamp(9, 96) as i32;
-                let (font, ascent) = if g_px_h == self.active_px_height {
+                let (mut font, ascent) = if g_px_h == self.active_px_height {
                     let f = match (g.bold, g.italic) {
                         (false, false) => self.font_regular,
                         (true, false) if !self.font_bold.is_null() => self.font_bold,
@@ -555,6 +530,13 @@ impl<'a> X11GuiCanvas<'a> {
                     self.scaled_fonts.insert((g_px_h, g.bold, g.italic), (f_use, asc));
                     (f_use, asc)
                 };
+                if !ch.is_ascii()
+                    && !self.font_fallback.is_null()
+                    && let Some(exists_fn) = self.api.xft_char_exists
+                    && unsafe { exists_fn(self.dpy, font, ch as u32) } == 0
+                {
+                    font = self.font_fallback;
+                }
                 let (r, gr, b) = (g.fg_rgba[0], g.fg_rgba[1], g.fg_rgba[2]);
                 let col = XftColor {
                     pixel: ((c_ulong::from(r)) << 16) | ((c_ulong::from(gr)) << 8) | c_ulong::from(b),

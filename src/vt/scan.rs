@@ -302,6 +302,12 @@ impl VtParser {
                     self.active_underline_color = Some(rgb);
                     self.last_styled_underline_color = Some(rgb);
                 }
+            } else if matches!(tok, "38" | "48") && idx + 1 < tokens.len() {
+                match tokens[idx + 1] {
+                    "5" => idx += 2,
+                    "2" => idx += 4,
+                    _ => {}
+                }
             } else if tok == "58" && idx + 4 < tokens.len() && tokens[idx + 1] == "2" {
                 if let (Ok(r), Ok(g), Ok(b)) = (
                     tokens[idx + 2].parse::<u8>(),
@@ -313,6 +319,8 @@ impl VtParser {
                     self.last_styled_underline_color = Some(rgb);
                 }
                 idx += 4;
+            } else if tok == "58" && idx + 2 < tokens.len() && tokens[idx + 1] == "5" {
+                idx += 2;
             } else {
                 match tok {
                     "0" | "" => {
@@ -340,20 +348,50 @@ impl VtParser {
     }
 }
 
+/// Splits off any trailing incomplete multi-byte UTF-8 sequence (`1..=3` bytes) at the end of a PTY read chunk
+/// so markers such as `❯` (`0xE2 0x9D 0xAF`) split across two OS `read()` calls are reassembled cleanly.
+pub(super) fn split_incomplete_utf8_tail(bytes: &[u8]) -> (&[u8], &[u8]) {
+    let len = bytes.len();
+    if len == 0 {
+        return (bytes, &[]);
+    }
+    let mut cont = 0usize;
+    while cont < 3 && cont < len && (bytes[len - 1 - cont] & 0xC0) == 0x80 {
+        cont += 1;
+    }
+    if cont < len {
+        let lead_idx = len - 1 - cont;
+        let lead = bytes[lead_idx];
+        let expected_len = match lead {
+            0xC2..=0xDF => 2,
+            0xE0..=0xEF => 3,
+            0xF0..=0xF4 => 4,
+            _ => 0,
+        };
+        if expected_len > cont + 1 {
+            return (&bytes[..lead_idx], &bytes[lead_idx..]);
+        }
+    }
+    (bytes, &[])
+}
+
 /// Rewrites extended SGR sub-parameters (`4:1..4:5` -> `4`, `4:0` -> `24`, and strips `58;2;r;g;b` / `58:2:...`)
 /// and strips APC (`\x1b_...`) / DCS (`\x1bP...`) envelopes so `vt100_ctt::Parser` applies standard attributes
 /// without dumping raw Kitty/Sixel graphics payloads onto the character grid.
 pub(super) fn normalize_extended_sgr_for_vt100(bytes: &[u8]) -> Vec<u8> {
-    let Ok(raw_text) = std::str::from_utf8(bytes) else {
-        return bytes.to_vec();
-    };
+    let raw_cow = std::str::from_utf8(bytes)
+        .map(std::borrow::Cow::Borrowed)
+        .unwrap_or_else(|_| String::from_utf8_lossy(bytes));
+    let raw_text = raw_cow.as_ref();
     let stripped_cow = if raw_text.contains("\x1b_") || raw_text.contains("\x1bP") {
         std::borrow::Cow::Owned(strip_apc_and_dcs_envelopes(raw_text))
     } else {
         std::borrow::Cow::Borrowed(raw_text)
     };
     let text = stripped_cow.as_ref();
-    if !text.contains("\x1b[") || (!text.contains("4:") && !text.contains("58")) {
+    if !text.contains("\x1b[")
+        || (!text.contains("4:") && !text.contains("58") && !text.contains("38:") && !text.contains("48:"))
+    {
         return text.as_bytes().to_vec();
     }
     let mut out = String::with_capacity(text.len());
@@ -376,16 +414,37 @@ pub(super) fn normalize_extended_sgr_for_vt100(bytes: &[u8]) -> Vec<u8> {
                 let tok = tokens[idx];
                 if let Some(sub) = tok.strip_prefix("4:") {
                     if sub == "0" {
-                        norm_tokens.push("24");
+                        norm_tokens.push("24".to_string());
                     } else {
-                        norm_tokens.push("4");
+                        norm_tokens.push("4".to_string());
                     }
                 } else if tok.starts_with("58:") {
                     // Strip colon-style underline color for vt100-ctt
+                } else if (tok.starts_with("38:2:") || tok.starts_with("48:2:")) && tok.len() > 5 {
+                    let prefix = &tok[..2];
+                    let nums: Vec<&str> = tok[5..].split(':').filter(|s| !s.is_empty()).collect();
+                    if nums.len() >= 3 {
+                        let n = nums.len();
+                        norm_tokens.push(format!("{prefix};2;{};{};{}", nums[n - 3], nums[n - 2], nums[n - 1]));
+                    }
+                } else if (tok.starts_with("38:5:") || tok.starts_with("48:5:")) && tok.len() > 5 {
+                    norm_tokens.push(tok.replacen(':', ";", 2));
+                } else if matches!(tok, "38" | "48") && idx + 4 < tokens.len() && tokens[idx + 1] == "2" {
+                    for k in 0..=4 {
+                        norm_tokens.push(tokens[idx + k].to_string());
+                    }
+                    idx += 4;
+                } else if matches!(tok, "38" | "48") && idx + 2 < tokens.len() && tokens[idx + 1] == "5" {
+                    for k in 0..=2 {
+                        norm_tokens.push(tokens[idx + k].to_string());
+                    }
+                    idx += 2;
                 } else if tok == "58" && idx + 4 < tokens.len() && tokens[idx + 1] == "2" {
                     idx += 4;
+                } else if tok == "58" && idx + 2 < tokens.len() && tokens[idx + 1] == "5" {
+                    idx += 2;
                 } else {
-                    norm_tokens.push(tok);
+                    norm_tokens.push(tok.to_string());
                 }
                 idx += 1;
             }

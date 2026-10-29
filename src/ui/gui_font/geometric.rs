@@ -1,9 +1,10 @@
 use crate::pane::typography::FontFamilyPreset;
 use crate::ui::glyphs::GlyphPack;
 
-/// Returns `true` for box-drawing, block/shade, Braille, and Powerline (`U+E0A0..=U+E0D7`)
-/// characters that should be drawn geometrically from cell edge to cell edge so window frames,
-/// statusline capsules, and plots never have gaps or missing-glyph boxes.
+/// Returns `true` for box-drawing, block/shade, Braille, Powerline (`U+E0A0..=U+E0D7`), and
+/// common CLI/TUI agent markers (`❯`, `⏺`, `⎿`, `✻`, `✢`, `✓`, `✗`, `●`, `○`, `◆`, `▸`, arrows)
+/// that should be drawn geometrically so window frames, statuslines, and AI CLI prompts (`claude`,
+/// `agy`, `gemini`) never render missing-glyph boxes (`▯`) when a monospace font lacks Dingbats.
 pub fn is_geometric_glyph(ch: char) -> bool {
     matches!(
         ch,
@@ -11,14 +12,19 @@ pub fn is_geometric_glyph(ch: char) -> bool {
             | '\u{2580}'..='\u{259F}'
             | '\u{2800}'..='\u{28FF}'
             | '\u{E0A0}'..='\u{E0D7}'
-            | '▪'
+            | '▪' | '▫' | '■' | '□'
             | '◢'
-            | '►'
-            | '▶'
-            | '◄'
-            | '◀'
-            | '▲'
-            | '▼'
+            | '►' | '▶' | '▸' | '▹' | '‣'
+            | '◄' | '◀' | '◂' | '◃'
+            | '▲' | '▴' | '▼' | '▾'
+            | '❯' | '❮' | '›' | '‹' | '»' | '«'
+            | '⏺' | '●' | '○' | '◉' | '◎' | '•' | '◦' | '·'
+            | '◆' | '◇'
+            | '⎿'
+            | '✓' | '✔' | '✗' | '✘'
+            | '✢' | '✣' | '✤' | '✥' | '✦' | '✧'
+            | '✳' | '✶' | '✷' | '✸' | '✹' | '✺' | '✻' | '✼' | '✽'
+            | '←' | '↑' | '→' | '↓' | '↔' | '↕' | '↳' | '↪' | '↵' | '➜' | '➔'
     )
 }
 
@@ -252,111 +258,42 @@ pub fn draw_geometric_cell_bgra(
     match glyph {
         '─' | '━' | '╌' | '╍' | '┄' | '┅' => h_seg(pixels, 0, cw, my),
         '│' | '┃' | '╎' | '╏' | '┆' | '┇' => v_seg(pixels, mx, 0, ch),
-        '┌' | '╭' | '┏' => {
-            h_seg(pixels, mx, cw, my);
-            v_seg(pixels, mx, my, ch);
-        }
-        '┐' | '╮' | '┓' => {
-            h_seg(pixels, 0, mx + stroke, my);
-            v_seg(pixels, mx, my, ch);
-        }
-        '└' | '╰' | '┗' => {
-            h_seg(pixels, mx, cw, my);
-            v_seg(pixels, mx, 0, my + stroke);
-        }
-        '┘' | '╯' | '┛' => {
-            h_seg(pixels, 0, mx + stroke, my);
-            v_seg(pixels, mx, 0, my + stroke);
-        }
-        '├' | '┣' => {
-            v_seg(pixels, mx, 0, ch);
-            h_seg(pixels, mx, cw, my);
-        }
-        '┤' | '┫' => {
-            v_seg(pixels, mx, 0, ch);
-            h_seg(pixels, 0, mx + stroke, my);
-        }
-        '┬' | '┳' => {
-            h_seg(pixels, 0, cw, my);
-            v_seg(pixels, mx, my, ch);
-        }
-        '┴' | '┻' => {
-            h_seg(pixels, 0, cw, my);
-            v_seg(pixels, mx, 0, my + stroke);
-        }
-        '┼' | '╋' => {
-            h_seg(pixels, 0, cw, my);
-            v_seg(pixels, mx, 0, ch);
-        }
-        '═' => {
-            h_seg(pixels, 0, cw, ty);
-            h_seg(pixels, 0, cw, by);
-        }
-        '║' => {
-            v_seg(pixels, lx, 0, ch);
-            v_seg(pixels, rx, 0, ch);
-        }
-        '╔' => {
-            h_seg(pixels, lx, cw, ty);
-            h_seg(pixels, rx, cw, by);
-            v_seg(pixels, lx, ty, ch);
-            v_seg(pixels, rx, by, ch);
-        }
-        '╗' => {
-            h_seg(pixels, 0, rx + stroke, ty);
-            h_seg(pixels, 0, lx + stroke, by);
-            v_seg(pixels, lx, by, ch);
-            v_seg(pixels, rx, ty, ch);
-        }
-        '╚' => {
-            h_seg(pixels, rx, cw, ty);
-            h_seg(pixels, lx, cw, by);
-            v_seg(pixels, lx, 0, by + stroke);
-            v_seg(pixels, rx, 0, ty + stroke);
-        }
-        '╝' => {
-            h_seg(pixels, 0, lx + stroke, ty);
-            h_seg(pixels, 0, rx + stroke, by);
-            v_seg(pixels, lx, 0, ty + stroke);
-            v_seg(pixels, rx, 0, by + stroke);
-        }
+        '┌' | '╭' | '┏' => { h_seg(pixels, mx, cw, my); v_seg(pixels, mx, my, ch); }
+        '┐' | '╮' | '┓' => { h_seg(pixels, 0, mx + stroke, my); v_seg(pixels, mx, my, ch); }
+        '└' | '╰' | '┗' => { h_seg(pixels, mx, cw, my); v_seg(pixels, mx, 0, my + stroke); }
+        '┘' | '╯' | '┛' => { h_seg(pixels, 0, mx + stroke, my); v_seg(pixels, mx, 0, my + stroke); }
+        '├' | '┣' => { v_seg(pixels, mx, 0, ch); h_seg(pixels, mx, cw, my); }
+        '┤' | '┫' => { v_seg(pixels, mx, 0, ch); h_seg(pixels, 0, mx + stroke, my); }
+        '┬' | '┳' => { h_seg(pixels, 0, cw, my); v_seg(pixels, mx, my, ch); }
+        '┴' | '┻' => { h_seg(pixels, 0, cw, my); v_seg(pixels, mx, 0, my + stroke); }
+        '┼' | '╋' => { h_seg(pixels, 0, cw, my); v_seg(pixels, mx, 0, ch); }
+        '═' => { h_seg(pixels, 0, cw, ty); h_seg(pixels, 0, cw, by); }
+        '║' => { v_seg(pixels, lx, 0, ch); v_seg(pixels, rx, 0, ch); }
+        '╔' => { h_seg(pixels, lx, cw, ty); h_seg(pixels, rx, cw, by); v_seg(pixels, lx, ty, ch); v_seg(pixels, rx, by, ch); }
+        '╗' => { h_seg(pixels, 0, rx + stroke, ty); h_seg(pixels, 0, lx + stroke, by); v_seg(pixels, lx, by, ch); v_seg(pixels, rx, ty, ch); }
+        '╚' => { h_seg(pixels, rx, cw, ty); h_seg(pixels, lx, cw, by); v_seg(pixels, lx, 0, by + stroke); v_seg(pixels, rx, 0, ty + stroke); }
+        '╝' => { h_seg(pixels, 0, lx + stroke, ty); h_seg(pixels, 0, rx + stroke, by); v_seg(pixels, lx, 0, ty + stroke); v_seg(pixels, rx, 0, by + stroke); }
         '╠' | '╟' | '╞' => {
-            v_seg(pixels, lx, 0, ch);
-            v_seg(pixels, rx, 0, ty + stroke);
-            v_seg(pixels, rx, by, ch);
-            h_seg(pixels, rx, cw, ty);
-            h_seg(pixels, rx, cw, by);
+            v_seg(pixels, lx, 0, ch); v_seg(pixels, rx, 0, ty + stroke); v_seg(pixels, rx, by, ch);
+            h_seg(pixels, rx, cw, ty); h_seg(pixels, rx, cw, by);
         }
         '╣' | '╢' | '╡' => {
-            v_seg(pixels, rx, 0, ch);
-            v_seg(pixels, lx, 0, ty + stroke);
-            v_seg(pixels, lx, by, ch);
-            h_seg(pixels, 0, lx + stroke, ty);
-            h_seg(pixels, 0, lx + stroke, by);
+            v_seg(pixels, rx, 0, ch); v_seg(pixels, lx, 0, ty + stroke); v_seg(pixels, lx, by, ch);
+            h_seg(pixels, 0, lx + stroke, ty); h_seg(pixels, 0, lx + stroke, by);
         }
         '╦' | '╤' | '╥' => {
-            h_seg(pixels, 0, cw, ty);
-            h_seg(pixels, 0, lx + stroke, by);
-            h_seg(pixels, rx, cw, by);
-            v_seg(pixels, lx, by, ch);
-            v_seg(pixels, rx, by, ch);
+            h_seg(pixels, 0, cw, ty); h_seg(pixels, 0, lx + stroke, by); h_seg(pixels, rx, cw, by);
+            v_seg(pixels, lx, by, ch); v_seg(pixels, rx, by, ch);
         }
         '╩' | '╧' | '╨' => {
-            h_seg(pixels, 0, cw, by);
-            h_seg(pixels, 0, lx + stroke, ty);
-            h_seg(pixels, rx, cw, ty);
-            v_seg(pixels, lx, 0, ty + stroke);
-            v_seg(pixels, rx, 0, ty + stroke);
+            h_seg(pixels, 0, cw, by); h_seg(pixels, 0, lx + stroke, ty); h_seg(pixels, rx, cw, ty);
+            v_seg(pixels, lx, 0, ty + stroke); v_seg(pixels, rx, 0, ty + stroke);
         }
         '╬' | '╪' | '╫' => {
-            h_seg(pixels, 0, lx + stroke, ty);
-            h_seg(pixels, rx, cw, ty);
-            h_seg(pixels, 0, lx + stroke, by);
-            h_seg(pixels, rx, cw, by);
-            v_seg(pixels, lx, 0, ty + stroke);
-            v_seg(pixels, lx, by, ch);
-            v_seg(pixels, rx, 0, ty + stroke);
-            v_seg(pixels, rx, by, ch);
+            h_seg(pixels, 0, lx + stroke, ty); h_seg(pixels, rx, cw, ty);
+            h_seg(pixels, 0, lx + stroke, by); h_seg(pixels, rx, cw, by);
+            v_seg(pixels, lx, 0, ty + stroke); v_seg(pixels, lx, by, ch);
+            v_seg(pixels, rx, 0, ty + stroke); v_seg(pixels, rx, by, ch);
         }
         '█' => fill_rect(pixels, 0, 0, cw, ch),
         '▀' => fill_rect(pixels, 0, 0, cw, my),
@@ -365,44 +302,35 @@ pub fn draw_geometric_cell_bgra(
         '▐' => fill_rect(pixels, mx, 0, cw, ch),
         '▁'..='▇' => {
             let level = (glyph as u32 - '▁' as u32 + 1).min(8);
-            let top = ch.saturating_sub((ch * level) / 8);
-            fill_rect(pixels, 0, top, cw, ch);
+            fill_rect(pixels, 0, ch.saturating_sub((ch * level) / 8), cw, ch);
         }
-        '░' => {
+        '░' | '▒' | '▓' => {
             for dy in 0..ch {
                 for dx in 0..cw {
-                    if (dx + dy) % 4 == 0 {
-                        put(pixels, x0 + dx, y0 + dy);
-                    }
-                }
-            }
-        }
-        '▒' => {
-            for dy in 0..ch {
-                for dx in 0..cw {
-                    if (dx + dy) % 2 == 0 {
-                        put(pixels, x0 + dx, y0 + dy);
-                    }
-                }
-            }
-        }
-        '▓' => {
-            for dy in 0..ch {
-                for dx in 0..cw {
-                    if (dx + dy) % 4 != 0 {
-                        put(pixels, x0 + dx, y0 + dy);
-                    }
+                    let draw = match glyph {
+                        '░' => (dx + dy) % 4 == 0,
+                        '▒' => (dx + dy) % 2 == 0,
+                        _ => (dx + dy) % 4 != 0,
+                    };
+                    if draw { put(pixels, x0 + dx, y0 + dy); }
                 }
             }
         }
         '▪' | '■' => fill_rect(pixels, cw / 4, ch / 3, (cw * 3) / 4, (ch * 2) / 3),
+        '▫' | '□' => {
+            let (x1, y1, x2, y2) = (cw / 4, ch / 3, (cw * 3) / 4, (ch * 2) / 3);
+            h_seg(pixels, x1, x2, y1);
+            h_seg(pixels, x1, x2, y2.saturating_sub(stroke));
+            v_seg(pixels, x1, y1, y2);
+            v_seg(pixels, x2.saturating_sub(stroke), y1, y2);
+        }
         '◢' => {
             for dy in 0..ch {
                 let start_x = cw.saturating_sub(((dy + 1) * cw) / ch.max(1));
                 fill_rect(pixels, start_x, dy, cw, dy + 1);
             }
         }
-        '►' | '▶' => {
+        '►' | '▶' | '▸' | '▹' | '‣' => {
             let h_span = (ch / 2).max(4);
             let y_top = (ch.saturating_sub(h_span)) / 2;
             for i in 0..h_span {
@@ -411,7 +339,7 @@ pub fn draw_geometric_cell_bgra(
                 fill_rect(pixels, cw / 4, y_top + i, (cw / 4 + w).min(cw), y_top + i + 1);
             }
         }
-        '◄' | '◀' => {
+        '◄' | '◀' | '◂' | '◃' => {
             let h_span = (ch / 2).max(4);
             let y_top = (ch.saturating_sub(h_span)) / 2;
             for i in 0..h_span {
@@ -421,7 +349,7 @@ pub fn draw_geometric_cell_bgra(
                 fill_rect(pixels, x_end.saturating_sub(w), y_top + i, x_end, y_top + i + 1);
             }
         }
-        '▲' => {
+        '▲' | '▴' => {
             let rows = (ch / 3).max(3);
             let y_top = (ch.saturating_sub(rows)) / 2;
             for r in 0..rows {
@@ -429,7 +357,7 @@ pub fn draw_geometric_cell_bgra(
                 fill_rect(pixels, mx.saturating_sub(half), y_top + r, (mx + half + 1).min(cw), y_top + r + 1);
             }
         }
-        '▼' => {
+        '▼' | '▾' => {
             let rows = (ch / 3).max(3);
             let y_top = (ch.saturating_sub(rows)) / 2;
             for r in 0..rows {
@@ -476,20 +404,42 @@ pub fn draw_geometric_cell_bgra(
                 }
             }
         }
-        // Powerline thin right chevron `` (U+E0B1)
-        '\u{E0B1}' | '\u{E0C1}' | '\u{E0C5}' | '\u{E0CD}' => {
+        // Powerline thin right chevron `` (U+E0B1) and prompt/list chevrons `❯` (U+276F), `›`, `»`
+        '\u{E0B1}' | '\u{E0C1}' | '\u{E0C5}' | '\u{E0CD}' | '❯' | '›' | '»' => {
+            let is_prompt_chev = matches!(glyph, '❯' | '›' | '»');
+            let y_pad = if is_prompt_chev { (ch as f32) * 0.22 } else { 0.0 };
             let cy = (ch as f32 - 1.0) * 0.5;
-            let half = cy.max(1.0);
-            let sw = (stroke as f32).max(1.4);
-            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            let half = (cy - y_pad).max(2.0);
+            let sw = if glyph == '❯' {
+                (stroke as f32 * 1.35).max(1.8)
+            } else {
+                (stroke as f32).max(1.4)
+            };
+            let x_min = if is_prompt_chev { (cw as f32) * 0.20 } else { 0.0 };
+            let span = if is_prompt_chev {
+                ((cw as f32) * 0.55).max(2.0)
+            } else {
+                (cw.saturating_sub(1) as f32).max(1.0)
+            };
             for dy in 0..ch {
-                let dist = ((dy as f32) - cy).abs() / half;
-                let xc = (1.0 - dist).max(0.0) * span;
+                let vy = ((dy as f32) - cy).abs();
+                if is_prompt_chev && vy > half + 1.0 {
+                    continue;
+                }
+                let dist = (vy / half).clamp(0.0, 1.0);
+                let xc = x_min + (1.0 - dist) * span;
                 for dx in 0..cw {
                     let d = ((dx as f32) - xc).abs();
                     let cov = (sw - d).clamp(0.0, 1.0);
                     if cov > 0.0 {
                         blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                    if glyph == '»' {
+                        let d2 = ((dx as f32) - (xc - span * 0.45)).abs();
+                        let cov2 = (sw - d2).clamp(0.0, 1.0);
+                        if cov2 > 0.0 {
+                            blend_px(pixels, x0 + dx, y0 + dy, cov2);
+                        }
                     }
                 }
             }
@@ -509,20 +459,42 @@ pub fn draw_geometric_cell_bgra(
                 }
             }
         }
-        // Powerline thin left chevron `` (U+E0B3)
-        '\u{E0B3}' | '\u{E0C3}' | '\u{E0CB}' => {
+        // Powerline thin left chevron `` (U+E0B3) and left chevrons `❮` (U+276E), `‹`, `«`
+        '\u{E0B3}' | '\u{E0C3}' | '\u{E0CB}' | '❮' | '‹' | '«' => {
+            let is_prompt_chev = matches!(glyph, '❮' | '‹' | '«');
+            let y_pad = if is_prompt_chev { (ch as f32) * 0.22 } else { 0.0 };
             let cy = (ch as f32 - 1.0) * 0.5;
-            let half = cy.max(1.0);
-            let sw = (stroke as f32).max(1.4);
-            let span = (cw.saturating_sub(1) as f32).max(1.0);
+            let half = (cy - y_pad).max(2.0);
+            let sw = if glyph == '❮' {
+                (stroke as f32 * 1.35).max(1.8)
+            } else {
+                (stroke as f32).max(1.4)
+            };
+            let x_min = if is_prompt_chev { (cw as f32) * 0.20 } else { 0.0 };
+            let span = if is_prompt_chev {
+                ((cw as f32) * 0.55).max(2.0)
+            } else {
+                (cw.saturating_sub(1) as f32).max(1.0)
+            };
             for dy in 0..ch {
-                let dist = ((dy as f32) - cy).abs() / half;
-                let xc = dist * span;
+                let vy = ((dy as f32) - cy).abs();
+                if is_prompt_chev && vy > half + 1.0 {
+                    continue;
+                }
+                let dist = (vy / half).clamp(0.0, 1.0);
+                let xc = x_min + dist * span;
                 for dx in 0..cw {
                     let d = ((dx as f32) - xc).abs();
                     let cov = (sw - d).clamp(0.0, 1.0);
                     if cov > 0.0 {
                         blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                    if glyph == '«' {
+                        let d2 = ((dx as f32) - (xc + span * 0.45)).abs();
+                        let cov2 = (sw - d2).clamp(0.0, 1.0);
+                        if cov2 > 0.0 {
+                            blend_px(pixels, x0 + dx, y0 + dy, cov2);
+                        }
                     }
                 }
             }
@@ -688,6 +660,102 @@ pub fn draw_geometric_cell_bgra(
         '\u{E0A1}' | '\u{E0A3}' | '\u{E0C0}'..='\u{E0D7}' => {
             v_seg(pixels, lx, ch / 4, (ch * 3) / 4);
             h_seg(pixels, lx, rx + stroke, (ch * 3) / 4);
+        }
+        // Claude Code / CLI agent markers: `⏺`, `●`, `○`, `◉`, `◎`, `•`, `◦`, `·`, `◆`, `◇`, `⎿`, `✓`, `✗`, spinners, arrows
+        '⏺' | '●' | '○' | '◉' | '◎' | '•' | '◦' | '·' | '◆' | '◇' => {
+            let (cx, cy) = (cw as f32 * 0.5, ch as f32 * 0.5);
+            let rad = match glyph {
+                '·' => (cw.min(ch) as f32 * 0.14).max(1.1),
+                '•' | '◦' => (cw.min(ch) as f32 * 0.22).max(1.6),
+                _ => (cw.min(ch) as f32 * 0.34).max(2.4),
+            };
+            let hollow = matches!(glyph, '○' | '◎' | '◦' | '◇');
+            let diamond = matches!(glyph, '◆' | '◇');
+            for dy in 0..ch {
+                for dx in 0..cw {
+                    let (vx, vy) = ((dx as f32 + 0.5 - cx).abs(), (dy as f32 + 0.5 - cy).abs());
+                    let d = if diamond { vx + vy * 0.85 } else { (vx * vx + vy * vy).sqrt() };
+                    let cov = if hollow {
+                        (1.3 - (d - rad).abs()).clamp(0.0, 1.0)
+                    } else {
+                        (rad + 0.5 - d).clamp(0.0, 1.0)
+                    };
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        '⎿' => {
+            v_seg(pixels, mx, ch / 5, my + stroke);
+            h_seg(pixels, mx, (cw * 4) / 5, my);
+        }
+        '✓' | '✔' => {
+            let sw = (stroke as f32 * 1.2).max(1.5);
+            let (x1, y1) = (cw as f32 * 0.18, ch as f32 * 0.55);
+            let (x2, y2) = (cw as f32 * 0.42, ch as f32 * 0.74);
+            let (x3, y3) = (cw as f32 * 0.84, ch as f32 * 0.26);
+            for dy in 0..ch {
+                for dx in 0..cw {
+                    let (px, py) = (dx as f32, dy as f32);
+                    let t1 = (((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / ((x2 - x1).powi(2) + (y2 - y1).powi(2)).max(1.0)).clamp(0.0, 1.0);
+                    let d1 = ((px - (x1 + t1 * (x2 - x1))).powi(2) + (py - (y1 + t1 * (y2 - y1))).powi(2)).sqrt();
+                    let t2 = (((px - x2) * (x3 - x2) + (py - y2) * (y3 - y2)) / ((x3 - x2).powi(2) + (y3 - y2).powi(2)).max(1.0)).clamp(0.0, 1.0);
+                    let d2 = ((px - (x2 + t2 * (x3 - x2))).powi(2) + (py - (y2 + t2 * (y3 - y2))).powi(2)).sqrt();
+                    let cov = (sw - d1.min(d2)).clamp(0.0, 1.0);
+                    if cov > 0.0 {
+                        blend_px(pixels, x0 + dx, y0 + dy, cov);
+                    }
+                }
+            }
+        }
+        '✗' | '✘' | '✢' | '✣' | '✤' | '✥' | '✦' | '✧' | '✳' | '✶' | '✷' | '✸' | '✹' | '✺' | '✻' | '✼' | '✽' => {
+            let (cx, cy) = (cw as f32 * 0.5, ch as f32 * 0.5);
+            let r = (cw.min(ch) as f32 * 0.34).max(2.5);
+            let is_cross = matches!(glyph, '✗' | '✘');
+            for dy in 0..ch {
+                for dx in 0..cw {
+                    let (vx, vy) = ((dx as f32 + 0.5 - cx).abs(), (dy as f32 + 0.5 - cy).abs());
+                    if vx * vx + vy * vy <= r * r {
+                        let d_diag = (vx - vy).abs() * 0.707;
+                        let d_axis = vx.min(vy);
+                        let d = if is_cross { d_diag } else { d_diag.min(d_axis) };
+                        let cov = (1.35 - d).clamp(0.0, 1.0);
+                        if cov > 0.0 {
+                            blend_px(pixels, x0 + dx, y0 + dy, cov);
+                        }
+                    }
+                }
+            }
+        }
+        '←' | '↑' | '→' | '↓' | '↔' | '↕' | '↳' | '↪' | '↵' | '➜' | '➔' => {
+            match glyph {
+                '←' => {
+                    h_seg(pixels, cw / 5, (cw * 4) / 5, my);
+                    v_seg(pixels, cw / 4, my.saturating_sub(stroke * 2), my + stroke * 3);
+                }
+                '↑' => {
+                    v_seg(pixels, mx, ch / 5, (ch * 4) / 5);
+                    h_seg(pixels, mx.saturating_sub(stroke * 2), mx + stroke * 3, ch / 4);
+                }
+                '↓' => {
+                    v_seg(pixels, mx, ch / 5, (ch * 4) / 5);
+                    h_seg(pixels, mx.saturating_sub(stroke * 2), mx + stroke * 3, (ch * 3) / 4);
+                }
+                '↕' => v_seg(pixels, mx, ch / 5, (ch * 4) / 5),
+                '↳' | '↪' => {
+                    v_seg(pixels, cw / 3, ch / 4, my + stroke);
+                    h_seg(pixels, cw / 3, (cw * 4) / 5, my);
+                }
+                '↵' => {
+                    v_seg(pixels, (cw * 2) / 3, ch / 4, my + stroke);
+                    h_seg(pixels, cw / 5, (cw * 2) / 3 + stroke, my);
+                }
+                _ => {
+                    h_seg(pixels, cw / 5, (cw * 4) / 5, my);
+                    v_seg(pixels, (cw * 3) / 5, my.saturating_sub(stroke * 2), my + stroke * 3);
+                }
+            }
         }
         _ => {}
     }

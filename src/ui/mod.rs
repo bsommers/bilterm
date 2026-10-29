@@ -1,5 +1,6 @@
 pub mod bitmap_font;
 pub mod canvas_raster;
+pub mod contrast;
 pub mod exit_guard_ui;
 pub mod gui_font;
 #[cfg(target_os = "macos")]
@@ -158,27 +159,25 @@ fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: 
     }
     let w = unicode_width::UnicodeWidthStr::width(s);
     if w != expected_width {
-        let is_single_pua = expected_width == 1
-            && s.chars().count() == 1
-            && s.chars().next().is_some_and(gui_font::geometric::is_private_use_area);
-        if !is_single_pua {
+        let first_ok = expected_width == 1
+            && s.chars().next().is_some_and(|ch| {
+                gui_font::geometric::is_private_use_area(ch)
+                    || gui_font::geometric::is_geometric_glyph(ch)
+                    || unicode_width::UnicodeWidthChar::width(ch) == Some(1)
+            });
+        if !first_ok {
             return false;
         }
     }
     for ch in s.chars() {
         let code = ch as u32;
-        if grapheme_mode_2027 && matches!(code, 0x200D | 0xFE0F) {
+        if matches!(code, 0xFE00..=0xFE0F) || (grapheme_mode_2027 && code == 0x200D) {
             continue;
         }
         if ch.is_control()
             || matches!(
                 code,
-                0x200B..=0x200F
-                    | 0x2028..=0x202F
-                    | 0x2060..=0x206F
-                    | 0xFE00..=0xFE0F
-                    | 0xFEFF
-                    | 0xFFF9..=0xFFFB
+                0x200B..=0x200F | 0x2028..=0x202F | 0x2060..=0x206F | 0xFEFF | 0xFFF9..=0xFFFB
             )
         {
             return false;
@@ -219,7 +218,7 @@ fn render_output_canvas(
             };
             let dst_x = canvas.x + c;
             let dst_y = canvas.y + r;
-            let mut style = vt_cell.to_ratatui_style();
+            let mut style = contrast::readable_canvas_cell_style(&vt_cell, cfg.theme, palette);
             if font_opts.bold {
                 style = style.add_modifier(Modifier::BOLD);
             }
@@ -260,7 +259,14 @@ fn render_output_canvas(
                 if contents.is_empty() {
                     dst_cell.set_symbol(" ");
                 } else if is_safe_terminal_cluster(contents, 1, grapheme_2027) {
-                    dst_cell.set_symbol(contents);
+                    if !grapheme_2027 && contents.contains(['\u{FE0E}', '\u{FE0F}'])
+                        && let Some(base) = contents.chars().next()
+                    {
+                        let mut sym = [0u8; 4];
+                        dst_cell.set_symbol(base.encode_utf8(&mut sym));
+                    } else {
+                        dst_cell.set_symbol(contents);
+                    }
                 } else {
                     dst_cell.set_symbol("·");
                 }

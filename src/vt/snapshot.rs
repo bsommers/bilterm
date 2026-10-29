@@ -257,6 +257,12 @@ impl Default for CellSnapshot {
 }
 
 impl CellSnapshot {
+    /// Returns the grapheme cluster string for this cell, matching the `ratatui::buffer::Cell::symbol` API.
+    #[inline]
+    pub fn symbol(&self) -> &str {
+        &self.grapheme
+    }
+
     /// Converts this cell's visual attributes into a `ratatui::style::Style`.
     pub fn to_ratatui_style(&self) -> Style {
         let mut style = Style::default()

@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::vt::codec::{is_binary_noise_chunk, sanitize_binary_noise_chunk};
-use crate::vt::scan::normalize_extended_sgr_for_vt100;
+use crate::vt::scan::{normalize_extended_sgr_for_vt100, split_incomplete_utf8_tail};
 pub use crate::vt::scrollback::PaneScrollMode;
 pub use crate::vt::snapshot::{LineSizeAttr, scan_dec_line_size_escapes};
 use crate::vt::snapshot::{
@@ -120,6 +120,7 @@ pub struct VtParser {
     last_styled_underline_color: Option<RgbTriplet>,
     line_size_attrs: std::collections::BTreeMap<u16, LineSizeAttr>,
     tektronix: TektronixState,
+    utf8_carry: Vec<u8>,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
@@ -182,6 +183,7 @@ impl VtParser {
             last_styled_underline_color: None,
             line_size_attrs: std::collections::BTreeMap::new(),
             tektronix: TektronixState::new(),
+            utf8_carry: Vec::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
         }
@@ -194,9 +196,23 @@ impl VtParser {
     /// detected while not in alternate screen mode, stray `0x1b` (`ESC`) and raw C0/C1 control
     /// bytes are sanitized into visible glyphs so random bytes cannot falsely trigger `DECSET`
     /// alternate screen mode or lock the VT100 scroll region (`DECSTBM`).
-    pub fn process(&mut self, bytes: &[u8]) {
+    pub fn process(&mut self, raw_bytes: &[u8]) {
         self.generation = self.generation.wrapping_add(1);
-        self.total_bytes_processed = self.total_bytes_processed.saturating_add(bytes.len());
+        self.total_bytes_processed = self.total_bytes_processed.saturating_add(raw_bytes.len());
+        let combined: std::borrow::Cow<'_, [u8]> = if self.utf8_carry.is_empty() {
+            std::borrow::Cow::Borrowed(raw_bytes)
+        } else {
+            let mut v = std::mem::take(&mut self.utf8_carry);
+            v.extend_from_slice(raw_bytes);
+            std::borrow::Cow::Owned(v)
+        };
+        let (bytes, tail) = split_incomplete_utf8_tail(&combined);
+        if !tail.is_empty() {
+            self.utf8_carry.extend_from_slice(tail);
+        }
+        if bytes.is_empty() {
+            return;
+        }
         if let Some(t0) = self.recording_started_at {
             let elapsed = t0.elapsed().as_secs_f64();
             self.recording_events

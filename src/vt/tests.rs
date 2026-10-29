@@ -341,3 +341,24 @@ fn explicit_recording_path_overwrites_as_before() {
     assert!(contents.contains("overwritten"));
     assert!(!contents.contains("initial"));
 }
+
+#[test]
+fn claude_marker_renders_across_split_utf8_chunks_variation_selectors_and_truecolor_sgr() {
+    let mut vt = VtParser::new(6, 40, 100);
+    // Split 3-byte UTF-8 `❯` (0xE2 0x9D 0xAF) across two PTY read chunks, with TrueColor RGB values (24, 58)
+    // that previously collided with SGR 24 / SGR 58 tokens.
+    vt.process(b"\x1b[38;2;215;24;58m\xE2\x9D");
+    vt.process(b"\xAF\x1b[0m 1. First option\r\n");
+    vt.process("⏺\u{FE0F} Bash(cargo test)\r\n  ⎿  ok\r\n".as_bytes());
+
+    let snap = vt.snapshot();
+    assert_eq!(snap.cell(0, 0).unwrap().symbol(), "❯");
+    assert_eq!(
+        snap.cell(0, 0).unwrap().fg,
+        crate::vt::snapshot::CellColor::Rgb(215, 24, 58)
+    );
+    assert_eq!(snap.cell(0, 2).unwrap().symbol(), "1");
+    assert_eq!(snap.cell(0, 3).unwrap().symbol(), ".");
+    assert!(snap.cell(1, 0).unwrap().symbol().starts_with('⏺'));
+    assert_eq!(snap.cell(2, 2).unwrap().symbol(), "⎿");
+}

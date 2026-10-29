@@ -510,11 +510,23 @@ pub fn render_crosshair_cursor(
         return;
     }
 
+    let tint_rgb = color_to_rgb(tint_bg, (0, 43, 85));
+
     // Horizontal hair across `cursor_y`
     if cursor_y >= clamped.y && cursor_y < clamped.y + clamped.height {
         for x in clamped.x..clamped.x + clamped.width {
             if let Some(cell) = buf.cell_mut((x, cursor_y)) {
-                cell.set_style(cell.style().bg(tint_bg));
+                let mut st = cell.style().bg(tint_bg);
+                if let Some(fg_col) = st.fg
+                    && fg_col != Color::Reset
+                {
+                    let fg_rgb = color_to_rgb(fg_col, (232, 238, 245));
+                    if crate::ui::contrast::rgb_contrast_ratio(fg_rgb, tint_rgb) < 4.5 {
+                        let (r, g, b) = crate::ui::contrast::boost_fg_contrast(fg_rgb, tint_rgb, 4.8);
+                        st = st.fg(Color::Rgb(r, g, b));
+                    }
+                }
+                cell.set_style(st);
             }
         }
     }
@@ -523,7 +535,17 @@ pub fn render_crosshair_cursor(
     if cursor_x >= clamped.x && cursor_x < clamped.x + clamped.width {
         for y in clamped.y..clamped.y + clamped.height {
             if let Some(cell) = buf.cell_mut((cursor_x, y)) {
-                cell.set_style(cell.style().bg(tint_bg));
+                let mut st = cell.style().bg(tint_bg);
+                if let Some(fg_col) = st.fg
+                    && fg_col != Color::Reset
+                {
+                    let fg_rgb = color_to_rgb(fg_col, (232, 238, 245));
+                    if crate::ui::contrast::rgb_contrast_ratio(fg_rgb, tint_rgb) < 4.5 {
+                        let (r, g, b) = crate::ui::contrast::boost_fg_contrast(fg_rgb, tint_rgb, 4.8);
+                        st = st.fg(Color::Rgb(r, g, b));
+                    }
+                }
+                cell.set_style(st);
             }
         }
     }

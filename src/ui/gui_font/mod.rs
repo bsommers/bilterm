@@ -117,4 +117,23 @@ mod tests {
         assert_eq!(buf.cell((13, 0)).unwrap().symbol(), "▶");
         assert_eq!(buf.cell((17, 0)).unwrap().symbol(), "▶");
     }
+
+    #[test]
+    fn claude_and_agent_markers_render_in_geometric_and_bitmap_engines() {
+        for ch in [
+            '❯', '❮', '›', '‹', '»', '«', '▸', '▹', '◂', '◃', '▴', '▾', '‣', '⏺', '⎿', '●', '○', '◉',
+            '◎', '•', '◦', '·', '◆', '◇', '▫', '□', '✓', '✔', '✗', '✘', '✢', '✣', '✤', '✥', '✦', '✧',
+            '✳', '✶', '✷', '✸', '✹', '✺', '✻', '✼', '✽', '←', '↑', '→', '↓', '↔', '↕', '↳', '↪', '↵',
+            '➜', '➔',
+        ] {
+            assert!(is_geometric_glyph(ch), "expected {ch:?} (U+{:04X}) to be geometric", ch as u32);
+            let mut pixels = vec![0xFF00_0000u32; 12 * 24];
+            draw_geometric_cell_bgra(&mut pixels, 12, 24, 0, 0, 12, 24, ch, [215, 119, 87, 255]);
+            assert!(
+                pixels.iter().any(|&p| p != 0xFF00_0000),
+                "expected drawn geometric pixels for {ch:?} (U+{:04X})",
+                ch as u32
+            );
+        }
+    }
 }
