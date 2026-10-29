@@ -47,16 +47,20 @@ pub fn ensure_user_config_initialized() -> Option<PathBuf> {
 # Custom .itermcolors / .toml / .yaml themes can be placed in ~/.config/bilterm/themes/
 # or imported from any directory via `:theme import <path|dir|glob>` or `:browse`.
 
-theme = \"borland\"
-glyph_pack = \"unicode\"
+theme = \"turbo-blue\"
+glyphs = \"unicode\"
+cursor_style = \"solid-block\"      # solid-block | blinking-hollow-block | underscore | vertical-bar | custom-char
+cursor_custom_char = \"◆\"          # Custom glyph when cursor_style = \"custom-char\"
+cursor_blink = \"auto\"             # auto | solid | blink | rapid-blink
+# cursor_color = \"#00FF66\"        # Optional hex or named color (green, amber, cyan, yellow, crimson, magenta, white)
+# cursor_text_color = \"#000000\"   # Optional text color inside block cursor
 window_outline = \"double\"
 prompt_outline = \"double\"
 drop_shadows = true
-shadow_style = \"shaded\"
-cursor_style = \"block\"
-crosshair_cursor = true
-show_menubar = true
-show_fkey_bar = true
+shadow_style = \"translucent\"
+crosshair_cursor = false
+show_top_menubar = true
+show_dos_fkey_bar = true
 ";
         let _ = std::fs::write(&cfg_file, default_toml);
     }
@@ -623,6 +627,9 @@ pub fn execute_theme_or_browser_command(wm: &mut crate::wm::WindowManager, subcm
     let _ = ensure_user_config_initialized();
     let parts: Vec<&str> = subcmd.split_whitespace().collect();
     match parts.first().copied() {
+        Some("cursor") => {
+            crate::ui::cursor_cmd::execute_cursor_command(wm, subcmd);
+        }
         None | Some("list" | "ls" | "itermcolors" | "iterm2colors") => {
             let raw_extra = parts[1..].join(" ");
             let extra_trimmed = raw_extra.trim();

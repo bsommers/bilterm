@@ -76,12 +76,28 @@ pub(super) fn parse_visual_colon_command(
                 "Usage: :glyphs unicode | cp437 | nerd-font | ascii".to_string(),
             )),
         },
-        "cursor" => match parts.get(1).and_then(|s| CaretStyle::from_name(s)) {
-            Some(style) => Some(Ok(ColonCommand::Cursor(style))),
-            None => Some(Err(
-                "Usage: :cursor block | hollow | underscore | bar".to_string(),
-            )),
-        },
+        "cursor" => {
+            if parts.len() == 2
+                && !matches!(
+                    parts[1].to_ascii_lowercase().as_str(),
+                    "solid" | "custom" | "char" | "glyph" | "custom-char"
+                )
+                && let Some(style) = CaretStyle::from_name(parts[1])
+            {
+                return Some(Ok(ColonCommand::Cursor(style)));
+            }
+            match crate::ui::cursor_cmd::validate_cursor_command_args(&parts[1..]) {
+                Ok(()) => {
+                    let sub = if parts.len() > 1 {
+                        format!("cursor {}", parts[1..].join(" "))
+                    } else {
+                        "cursor".to_string()
+                    };
+                    Some(Ok(ColonCommand::ThemeCommand(sub)))
+                }
+                Err(e) => Some(Err(e)),
+            }
+        }
         "outline" | "border" => match (parts.get(1).copied(), parts.get(2).copied()) {
             (Some("window" | "win"), Some(style_str)) => OutlineStyle::from_name(style_str)
                 .map(|s| Ok(ColonCommand::Outline { window: Some(s), prompt: None }))

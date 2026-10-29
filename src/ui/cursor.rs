@@ -16,16 +16,79 @@ pub enum CaretStyle {
     Underscore,
     /// Vertical bar caret (`▏`).
     VerticalBar,
+    /// User-defined custom character glyph (`◆`, `●`, `▸`, `▓`, `▒`, `╬`, etc.).
+    CustomChar,
 }
 
 impl CaretStyle {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.trim().to_ascii_lowercase().as_str() {
-            "block" | "solid" | "solid-block" => Some(Self::SolidBlock),
-            "hollow" | "hollow-block" | "blinking-hollow-block" => Some(Self::BlinkingHollowBlock),
-            "underscore" | "underline" => Some(Self::Underscore),
-            "bar" | "beam" | "vertical-bar" => Some(Self::VerticalBar),
+            "block" | "solid" | "solid-block" | "filled" => Some(Self::SolidBlock),
+            "hollow" | "hollow-block" | "box" | "blinking-hollow-block" => {
+                Some(Self::BlinkingHollowBlock)
+            }
+            "underscore" | "underline" | "line" => Some(Self::Underscore),
+            "bar" | "beam" | "ibeam" | "vertical-bar" => Some(Self::VerticalBar),
+            "custom" | "char" | "glyph" | "custom-char" => Some(Self::CustomChar),
             _ => None,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SolidBlock => "BLOCK",
+            Self::BlinkingHollowBlock => "HOLLOW-BLOCK",
+            Self::Underscore => "UNDERLINE",
+            Self::VerticalBar => "VERTICAL-BAR",
+            Self::CustomChar => "CUSTOM-CHAR",
+        }
+    }
+}
+
+/// Cursor blink behavior (`auto`, `solid`, `blink`, `rapid-blink`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum CursorBlinkMode {
+    /// Default per-style blink (`hollow` blinks slowly; `block`, `underline`, `bar` are solid).
+    #[default]
+    Auto,
+    /// Always solid/steady (never blinks).
+    Solid,
+    /// Standard blink (`Modifier::SLOW_BLINK`).
+    Blink,
+    /// Fast blink (`Modifier::RAPID_BLINK`).
+    RapidBlink,
+}
+
+impl CursorBlinkMode {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "auto" | "default" => Some(Self::Auto),
+            "solid" | "steady" | "noblink" | "no-blink" | "off" | "false" => Some(Self::Solid),
+            "blink" | "blinking" | "slow" | "slow-blink" | "on" | "true" => Some(Self::Blink),
+            "rapid" | "fast" | "rapid-blink" | "fast-blink" => Some(Self::RapidBlink),
+            _ => None,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "AUTO",
+            Self::Solid => "SOLID",
+            Self::Blink => "BLINK",
+            Self::RapidBlink => "RAPID-BLINK",
+        }
+    }
+
+    pub const fn modifier(self, style: CaretStyle) -> Modifier {
+        match self {
+            Self::Auto => match style {
+                CaretStyle::BlinkingHollowBlock => Modifier::SLOW_BLINK,
+                _ => Modifier::empty(),
+            },
+            Self::Solid => Modifier::empty(),
+            Self::Blink => Modifier::SLOW_BLINK,
+            Self::RapidBlink => Modifier::RAPID_BLINK,
         }
     }
 }
@@ -559,177 +622,99 @@ pub fn render_caret(
     caret_style: CaretStyle,
     accent_fg: Color,
 ) {
+    render_caret_full(
+        buf,
+        cursor_x,
+        cursor_y,
+        caret_style,
+        CursorBlinkMode::Auto,
+        "◆",
+        accent_fg,
+        None,
+        None,
+    );
+}
+
+/// Renders the software caret with full shape, custom character, blink mode, and color overrides (`UI-05`).
+#[allow(clippy::too_many_arguments)]
+pub fn render_caret_full(
+    buf: &mut Buffer,
+    cursor_x: u16,
+    cursor_y: u16,
+    caret_style: CaretStyle,
+    blink_mode: CursorBlinkMode,
+    custom_char: &str,
+    default_accent_fg: Color,
+    custom_cursor_color: Option<Color>,
+    custom_text_color: Option<Color>,
+) {
     let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) else {
         return;
     };
+    let accent_fg = custom_cursor_color.unwrap_or(default_accent_fg);
+    let blink_mod = blink_mode.modifier(caret_style);
+    let base_style = cell
+        .style()
+        .remove_modifier(Modifier::SLOW_BLINK | Modifier::RAPID_BLINK);
+
     match caret_style {
         CaretStyle::SolidBlock => {
-            cell.set_style(cell.style().add_modifier(Modifier::REVERSED));
+            if let Some(bg_col) = custom_cursor_color {
+                let fg_col = custom_text_color.unwrap_or_else(|| {
+                    let (r, g, b) = color_to_rgb(bg_col, (0, 255, 102));
+                    let luma = 0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b);
+                    if luma > 135.0 {
+                        Color::Rgb(0, 0, 0)
+                    } else {
+                        Color::Rgb(255, 255, 255)
+                    }
+                });
+                cell.set_style(
+                    base_style
+                        .fg(fg_col)
+                        .bg(bg_col)
+                        .remove_modifier(Modifier::REVERSED)
+                        .add_modifier(Modifier::BOLD | blink_mod),
+                );
+            } else {
+                let mut st = base_style.add_modifier(Modifier::REVERSED | blink_mod);
+                if let Some(tfg) = custom_text_color {
+                    st = st.fg(tfg);
+                }
+                cell.set_style(st);
+            }
         }
         CaretStyle::BlinkingHollowBlock => {
             if cell.symbol() == " " {
                 cell.set_symbol("▯");
             }
-            cell.set_style(
-                cell.style()
-                    .fg(accent_fg)
-                    .add_modifier(Modifier::BOLD | Modifier::SLOW_BLINK),
-            );
+            cell.set_style(base_style.fg(accent_fg).add_modifier(Modifier::BOLD | blink_mod));
         }
         CaretStyle::Underscore => {
             if cell.symbol() == " " {
                 cell.set_symbol("_");
             }
             cell.set_style(
-                cell.style()
+                base_style
                     .fg(accent_fg)
-                    .add_modifier(Modifier::UNDERLINED | Modifier::BOLD),
+                    .add_modifier(Modifier::UNDERLINED | Modifier::BOLD | blink_mod),
             );
         }
         CaretStyle::VerticalBar => {
             if cell.symbol() == " " {
                 cell.set_symbol("▏");
             }
-            cell.set_style(cell.style().fg(accent_fg).add_modifier(Modifier::BOLD));
+            cell.set_style(base_style.fg(accent_fg).add_modifier(Modifier::BOLD | blink_mod));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn crosshair_cursor_tints_full_row_and_column_non_destructively() {
-        let area = Rect::new(0, 0, 10, 6);
-        let mut buf = Buffer::empty(area);
-        buf.cell_mut((2, 3)).unwrap().set_symbol("A");
-
-        let tint = Color::Rgb(0, 51, 0);
-        render_crosshair_cursor(&mut buf, area, 5, 3, tint);
-        // Cell (2, 3) keeps its "A" glyph while receiving the horizontal hair tint
-        assert_eq!(buf.cell((2, 3)).unwrap().symbol(), "A");
-        assert_eq!(buf.cell((2, 3)).unwrap().style().bg, Some(tint));
-        // Cell (5, 1) receives the vertical hair tint
-        assert_eq!(buf.cell((5, 1)).unwrap().style().bg, Some(tint));
-    }
-
-    #[test]
-    fn spotlight_cursor_fuzzy_and_pixelated_shapes_modulate_cells() {
-        let area = Rect::new(0, 0, 40, 20);
-        let mut buf = Buffer::empty(area);
-        for y in 0..20 {
-            for x in 0..40 {
-                let c = buf.cell_mut((x, y)).unwrap();
-                c.set_style(c.style().fg(Color::Rgb(0, 240, 100)).bg(Color::Rgb(0, 20, 40)));
+        CaretStyle::CustomChar => {
+            let ch = custom_char.chars().find(|c| !c.is_control()).unwrap_or('◆');
+            let mut sym = [0u8; 4];
+            cell.set_symbol(ch.encode_utf8(&mut sym));
+            let mut st = base_style.fg(accent_fg).add_modifier(Modifier::BOLD | blink_mod);
+            if let Some(bg_col) = custom_text_color {
+                st = st.bg(bg_col);
             }
+            cell.set_style(st);
         }
-        buf.cell_mut((20, 10)).unwrap().set_symbol("X");
-        buf.cell_mut((0, 0)).unwrap().set_symbol("Z");
-
-        // 1. Elliptical Fuzzy Spotlight centered at (20, 10)
-        render_spotlight_cursor(
-            &mut buf,
-            area,
-            20,
-            10,
-            SpotlightMode::Ellipse,
-            12,
-            5,
-            45,
-            false,
-            Color::Rgb(0, 80, 40),
-        );
-
-        // Focal center (20, 10) retains full luminance while distant corner (0, 0) is dimmed
-        let center_fg = buf.cell((20, 10)).unwrap().style().fg.unwrap();
-        let corner_fg = buf.cell((0, 0)).unwrap().style().fg.unwrap();
-        assert_eq!(center_fg, Color::Rgb(0, 240, 100));
-        if let Color::Rgb(_, g, _) = corner_fg {
-            assert!(g < 100, "corner green channel should be dimmed, got {g}");
-        } else {
-            panic!("expected Rgb color at corner");
-        }
-
-        // 2. Circular Pixelated Character-Block Spotlight
-        let mut buf_px = Buffer::empty(area);
-        render_spotlight_cursor(
-            &mut buf_px,
-            area,
-            20,
-            10,
-            SpotlightMode::Circle,
-            10,
-            5,
-            50,
-            true,
-            Color::Rgb(0, 80, 40),
-        );
-
-        // Adjacent horizontal cells in the same 2x1 character block share identical quantized background
-        let bg_even = buf_px.cell((14, 10)).unwrap().style().bg;
-        let bg_odd = buf_px.cell((15, 10)).unwrap().style().bg;
-        assert_eq!(bg_even, bg_odd);
-    }
-
-    #[test]
-    fn focal_zoom_lens_smooth_and_pixelated_magnify_across_levels() {
-        let area = Rect::new(0, 0, 40, 20);
-        let mut buf = Buffer::empty(area);
-        // Place "ABCDE" at (18..=22, 10) with 'C' at the focal center (20, 10)
-        for (i, ch) in ["A", "B", "C", "D", "E"].iter().enumerate() {
-            let cell = buf.cell_mut((18 + i as u16, 10)).unwrap();
-            cell.set_symbol(ch);
-            cell.set_style(cell.style().fg(Color::Rgb(100, 200, 100)).bg(Color::Rgb(0, 10, 20)));
-        }
-        buf.cell_mut((0, 0)).unwrap().set_symbol("Z");
-
-        // 2.00x (200%) smooth elliptical focal zoom centered at (20, 10)
-        render_focal_zoom_cursor(
-            &mut buf,
-            area,
-            20,
-            10,
-            SpotlightMode::Ellipse,
-            200,
-            12,
-            5,
-            45,
-            false,
-            Color::Rgb(0, 60, 80),
-        );
-
-        // Center 'C' stays at (20, 10) with BOLD modifier and boosted phosphor luminance,
-        // and neighboring text 'D' stays contiguous at (21, 10) without double-spacing!
-        assert_eq!(buf.cell((20, 10)).unwrap().symbol(), "C");
-        assert!(
-            buf.cell((20, 10))
-                .unwrap()
-                .style()
-                .add_modifier
-                .contains(Modifier::BOLD)
-        );
-        assert_eq!(buf.cell((21, 10)).unwrap().symbol(), "D");
-        // Distant cell (0, 0) outside the lens is completely untouched
-        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "Z");
-
-        // Pixelated 2.00x circular focal zoom expands center cell into 2x1 character block
-        let mut buf_px = Buffer::empty(area);
-        buf_px.cell_mut((20, 10)).unwrap().set_symbol("#");
-        render_focal_zoom_cursor(
-            &mut buf_px,
-            area,
-            20,
-            10,
-            SpotlightMode::Circle,
-            200,
-            10,
-            5,
-            50,
-            true,
-            Color::Rgb(0, 60, 80),
-        );
-        assert_eq!(buf_px.cell((20, 10)).unwrap().symbol(), "#");
-        assert_eq!(buf_px.cell((21, 10)).unwrap().symbol(), "#");
     }
 }

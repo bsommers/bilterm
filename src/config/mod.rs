@@ -10,7 +10,7 @@ use crate::pane::history_store::{
 };
 use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
-use crate::ui::cursor::{CaretStyle, SpotlightMode};
+use crate::ui::cursor::{CaretStyle, CursorBlinkMode, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
 use crate::vt::scrollback::{PaneScrollMode, ScrollbackConfig};
@@ -23,6 +23,14 @@ pub struct BiltermConfig {
     pub theme: ThemePreset,
     pub glyphs: GlyphPack,
     pub cursor_style: CaretStyle,
+    /// Custom character glyph when `cursor_style = "custom-char"` (default `"◆"`).
+    pub cursor_custom_char: String,
+    /// Cursor blink behavior (`"auto"`, `"solid"`, `"blink"`, `"rapid-blink"`).
+    pub cursor_blink: CursorBlinkMode,
+    /// Optional custom cursor color (`"#RRGGBB"` or named color such as `"green"`, `"amber"`, `"cyan"`).
+    pub cursor_color: Option<String>,
+    /// Optional foreground/text color inside the cursor cell (`"#RRGGBB"` or named color).
+    pub cursor_text_color: Option<String>,
     /// Outline border style for multi-pane windows (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
     pub window_outline: OutlineStyle,
     /// Outline border style for the command prompt pane (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
@@ -138,6 +146,10 @@ impl Default for BiltermConfig {
             theme: ThemePreset::TurboBlue,
             glyphs: GlyphPack::Unicode,
             cursor_style: CaretStyle::SolidBlock,
+            cursor_custom_char: "◆".to_string(),
+            cursor_blink: CursorBlinkMode::Auto,
+            cursor_color: None,
+            cursor_text_color: None,
             window_outline: OutlineStyle::Double,
             prompt_outline: OutlineStyle::Double,
             shadow_style: ShadowStyle::Translucent,

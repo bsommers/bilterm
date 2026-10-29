@@ -339,3 +339,49 @@ fn theme_import_repo_root_wildcard_globs_and_interactive_file_browser_work_end_t
         "expected filesystem completion for :theme import <dir>/, got {cands:?}"
     );
 }
+
+#[test]
+fn cursor_shapes_custom_chars_blink_modes_and_colors_work_end_to_end() {
+    use bilterm::ui::cursor::{CaretStyle, CursorBlinkMode};
+
+    let mut wm = WindowManager::new_headless(24, 80);
+
+    // 1. Bare `:cursor` opens the interactive cursor customization popup
+    let cmd = parse_colon_command(":cursor").unwrap().unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert!(wm.mcp_console().active);
+    assert!(wm.mcp_console().title.contains("CURSOR"));
+
+    // 2. Compound `:cursor hollow rapid amber` sets shape, rapid blink, and amber color
+    let cmd = parse_colon_command(":cursor hollow rapid amber").unwrap().unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert_eq!(wm.config().cursor_style, CaretStyle::BlinkingHollowBlock);
+    assert_eq!(wm.config().cursor_blink, CursorBlinkMode::RapidBlink);
+    assert_eq!(wm.config().cursor_color.as_deref(), Some("amber"));
+
+    // 3. Custom character cursor `:cursor custom ◆ solid #00ff66`
+    let cmd = parse_colon_command(":cursor custom ◆ solid #00ff66")
+        .unwrap()
+        .unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert_eq!(wm.config().cursor_style, CaretStyle::CustomChar);
+    assert_eq!(wm.config().cursor_custom_char, "◆");
+    assert_eq!(wm.config().cursor_blink, CursorBlinkMode::Solid);
+    assert_eq!(wm.config().cursor_color.as_deref(), Some("#00ff66"));
+
+    // 4. Underline + blink + named color `:cursor underline blink cyan`
+    let cmd = parse_colon_command(":cursor underline blink cyan")
+        .unwrap()
+        .unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert_eq!(wm.config().cursor_style, CaretStyle::Underscore);
+    assert_eq!(wm.config().cursor_blink, CursorBlinkMode::Blink);
+    assert_eq!(wm.config().cursor_color.as_deref(), Some("cyan"));
+
+    // 5. `:cursor reset` restores defaults
+    let cmd = parse_colon_command(":cursor reset").unwrap().unwrap();
+    assert!(!execute_wm_colon_command(&mut wm, cmd));
+    assert_eq!(wm.config().cursor_style, CaretStyle::SolidBlock);
+    assert_eq!(wm.config().cursor_blink, CursorBlinkMode::Auto);
+    assert_eq!(wm.config().cursor_color, None);
+}

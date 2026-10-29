@@ -410,6 +410,20 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::Cursor(style) => {
             wm.config_mut().cursor_style = style;
+            if wm.mcp_console().active && wm.mcp_console().title.contains("CURSOR") {
+                let lines = crate::ui::cursor_cmd::build_cursor_catalog_lines(wm.config());
+                wm.open_mcp_popup_window(
+                    "CURSOR CUSTOMIZATION (SHAPES, BLINK, COLORS, GLYPHS)",
+                    lines,
+                );
+            }
+            let msg = format!(
+                "Cursor updated: style={}, blink={}, color={}",
+                style.label(),
+                wm.config().cursor_blink.label(),
+                wm.config().cursor_color.as_deref().unwrap_or("theme")
+            );
+            wm.active_pane_mut().set_status_message(Some(msg));
             false
         }
         ColonCommand::Outline { window, prompt } => {

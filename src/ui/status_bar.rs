@@ -12,8 +12,7 @@ use crate::pane::{CompositePane, PromptAnchor};
 pub use crate::ui::oia::{render_oia_status_bar, render_oia_status_bar_themed};
 use crate::ui::chrome::OutlineStyle;
 use crate::ui::cursor::{
-    SpotlightMode, render_caret, render_crosshair_cursor, render_focal_zoom_cursor,
-    render_spotlight_cursor,
+    SpotlightMode, render_crosshair_cursor, render_focal_zoom_cursor, render_spotlight_cursor,
 };
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
@@ -390,7 +389,7 @@ pub(super) fn render_floating_prompt(
         render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
     }
     if !pane.copy_mode().active {
-        render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
+        crate::ui::cursor_cmd::render_caret_configured(buf, cx, cy, cfg, palette);
     }
 }
 

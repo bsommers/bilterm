@@ -9,6 +9,7 @@ pub mod gui_macos;
 pub mod gui_window;
 pub mod chrome;
 pub mod cursor;
+pub mod cursor_cmd;
 pub mod drawer;
 pub mod glyphs;
 pub mod hires_subcell;
@@ -527,7 +528,7 @@ fn render_output_canvas(
                 };
                 render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
             }
-            render_caret(buf, cx, cy, cfg.cursor_style, palette.active_border_fg);
+            cursor_cmd::render_caret_configured(buf, cx, cy, cfg, palette);
         }
         if let Some(held) = pane.held_exited_shell() {
             render_held_shell_exited_banner(buf, canvas, palette, held);

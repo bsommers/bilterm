@@ -52,7 +52,7 @@ pub fn infer_row_action(line: &str) -> McpRowAction {
     {
         if let Some((cmd_part, _)) = rest.split_once(" — ") {
             let trimmed_cmd = cmd_part.trim();
-            if trimmed_cmd.starts_with("import ") {
+            if trimmed_cmd.starts_with("import ") || trimmed_cmd.starts_with("cursor ") {
                 return McpRowAction::ApplyTheme(trimmed_cmd.to_string());
             }
         }
