@@ -81,12 +81,82 @@ Each composite pane's bottom 1-row **3270-OIA** status bar displays:
 
 ---
 
-## 5. Declarative Configuration (`~/.config/bilterm/config.toml`) (`CFG-01`)
+## 5. Cursor Customization (Shapes, Custom Characters, Blink Modes & Colors) (`UI-05`)
+
+Bilterm supports full runtime and declarative customization of the command prompt & canvas cursor via **`:cursor`** or `~/.config/bilterm/config.toml`:
+
+```text
+# Open the interactive Cursor Style, Blink & Color Selector popup:
+:cursor
+
+# Shapes: block (█), hollow (▯), underline / underscore (_), bar / beam (▏), custom <char>
+:cursor block
+:cursor hollow
+:cursor underline
+:cursor bar
+:cursor custom ◆
+:cursor custom ❯
+
+# Blink modes: blink (500ms), solid / steady (always visible), rapid (250ms), auto
+:cursor blink
+:cursor solid
+:cursor rapid
+
+# Colors: named presets (theme, green, amber, cyan, yellow, white, red, magenta, blue, orange, pink) or #RRGGBB hex
+:cursor color amber
+:cursor color #00ff66
+:cursor color theme
+
+# Compound one-liner commands (combine shape + blink + color in any order):
+:cursor hollow blink amber
+:cursor underline solid cyan
+:cursor custom ◆ solid #ff55ff
+:cursor reset
+```
+
+---
+
+## 6. Interactive Text File & Theme Directory Browser (`:browse`, `:theme import`)
+
+Import single theme files, entire directories (automatically scanning `schemes/`, `themes/`, `iterm2/`, `alacritty/`, `kitty/`, and `wezterm/` subdirectories), wildcard globs, or browse the filesystem interactively:
+
+```text
+# Open the interactive Text File & Theme Browser in the current or specified directory:
+:browse
+:files ~/styling/iterm2colors
+:theme browse
+
+# Import a directory (auto-discovers subdirectories like schemes/ and previews all imported themes):
+:theme import /home/bill/styling/iterm2colors
+
+# Import a wildcard glob or single .itermcolors / .toml / .yaml file (supports <Tab> path completion):
+:theme import ~/styling/iterm2colors/schemes/*.itermcolors
+:theme import "~/styling/iterm2colors/schemes/3024 Night.itermcolors"
+
+# Initialize & inspect ~/.config/bilterm/config.toml and ~/.config/bilterm/themes/:
+:theme config
+```
+
+Inside the **`:browse`** modal:
+- **`Up` / `Down`** (or mouse wheel / click): Select directory or file
+- **`Enter`** (or **`Right`** on a folder): Enter directory, import/apply theme file (`.itermcolors`, `.toml`, `.yaml`), or preview text file
+- **`Backspace` / `Left` / `-`**: Navigate to parent directory (`..`)
+- **Type any characters**: Live case-insensitive filename filter (`Backspace` clears filter first)
+- **`Esc`**: Close browser
+
+---
+
+## 7. Declarative Configuration (`~/.config/bilterm/config.toml`) (`CFG-01`)
+
+Bilterm automatically creates `~/.config/bilterm/config.toml` and `~/.config/bilterm/themes/` on first launch (or via `:theme config`).
 
 ```toml
 theme = "ibm-3279-amber"
 glyphs = "unicode"
-cursor_style = "blinking-hollow-block"
+cursor_style = "blinking-hollow-block" # block, hollow-block, blinking-block, blinking-hollow-block, underscore, blinking-underscore, bar, blinking-bar
+cursor_blink = "blink"                 # auto, blink, solid, rapid
+# cursor_char = "◆"                    # optional custom single-character cursor glyph
+# cursor_color = "#FFB000"             # optional named color ("amber", "green", "cyan") or "#RRGGBB" hex
 window_outline = "double"
 prompt_outline = "rounded"
 shadow_style = "theme-tinted"
@@ -94,6 +164,8 @@ crosshair_cursor = true
 crosshair_fullscreen = true
 drop_shadows = true
 show_dos_fkey_bar = true
+layout_profile = "default"
+layout_autosave = true
 history_enabled = true
 history_max_files = 25          # retained session directories
 history_session = "default"     # or: bilterm --session <name>

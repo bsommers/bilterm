@@ -223,11 +223,12 @@
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:theme` | — | `turbo-blue \| turbo-cyan \| 3278 \| 3279 \| mono \| cyberpunk \| solarized \| dracula \| gruvbox \| tokyo` | Switch color theme preset (`UI-02`) |
+| `:theme` | — | `<preset\|file.itermcolors> \| list \| browse [dir] \| import [file\|dir\|glob] \| export [file.toml] \| config` | Switch color theme preset, import `.itermcolors`/TOML/YAML files/directories/globs, open interactive browser, or inspect `~/.config/bilterm/` (`UI-02`) |
+| `:browse` | `:files`, `:filebrowser` | `[dir \| file]` | Open interactive Borland Text File & Theme Directory Browser (`Up`/`Down`/`Enter`/`Backspace`/type-to-filter) |
 | `:outline` | `:border` | `[window\|prompt] <double\|solid\|rounded\|thick\|dotted\|dashed\|quadruple\|ascii>` | Set workspace window and/or prompt border outline style |
 | `:shadows` | `:shadow` | `[on \| off \| none \| translucent \| tinted \| solid]` | Set or toggle 2-col right / 1-row bottom DOS drop-shadow mode (`UI-01`) |
 | `:glyphs` | — | `unicode \| cp437 \| nerd-font \| ascii` | Switch status bar and window badge glyph pack (`UI-04`) |
-| `:cursor` | — | `block \| hollow \| underscore \| bar` | Switch software cursor caret style (`UI-05`) |
+| `:cursor` | — | `[list \| reset \| block \| hollow \| underline \| underscore \| bar \| custom <char> \| blink \| solid \| rapid \| color <#hex\|name\|theme>]` | Open interactive cursor selector or set cursor shape, custom character, blink mode (`blink`/`solid`/`rapid`), and color (`#RRGGBB` or named preset) (`UI-05`) |
 | `:crosshair` | — | `[on \| off \| full \| pane]` | Toggle or set pane-local vs. full-screen IBM 3270 cross-hair cursor ruler |
 | `:crt` | `:scanlines` | `[on \| off]` | Toggle retro CRT alternating scanline luminance shader (`CRT-01`) |
 | `:spotlight` | `:spot`, `:focus-light` | `[circle\|ellipse\|off] [fuzzy\|pixel] [full\|pane] [+|-] [size <rx> [ry]] [feather <5..100>]` | Configure radial Focal Spotlight shader around the active cursor |

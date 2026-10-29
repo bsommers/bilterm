@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.1.2-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v2.2.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-250%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
@@ -39,7 +39,7 @@
 - **Composite Terminal Panes & Mainframe Paging**: Pin the command prompt to **Top** (`Alt+T`), **Bottom** (`Alt+B`), **Free-Float** (`Alt+Up`/`Down`), or **Fixed Split** (`Alt+S`) over a 60 FPS flood-immune PTY canvas with `DECSET 1049` auto-hide (`vim`, `htop`, `nmon`), 3-signal `!ECHO LOCK` password protection, and Mainframe Block/Page-Hold (`MORE...` / `HOLDING`) or Smooth Kinetic scrolling (`:scroll`). → *[User Guide Ch. 2](docs/user-guide/02-floating-command-prompt.md)*
 - **Full-Layout Detach/Re-Attach, Exit Guard & TRON `:mcp` Console (`v2.0`)**: Detach with `Ctrl+X D` or `:detach` while leaving the entire multi-pane `SplitTree`, `ZStack` window geometries, prompt state, and screen output intact; resume via `bilterm`, `bilterm attach [session]`, or `:attach`. Manage hierarchical `SessionTree` nodes and daemon state inside the floating or push-out **`:mcp` Root Console** (`:mcp status`, `:mcp tree`, `:mcp float`, `:mcp push`). → *[User Guide Ch. 3](docs/user-guide/03-window-manager-and-z-stack.md)*
 - **Native Desktop `--gui`, Per-Pane Font Scaling & All-Border Mouse Resize**: Run standalone (`bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16`) on Linux (X11/Xft), macOS (Cocoa), or Windows (Win32 GDI). Scale each pane's font independently (`50%..300%` via `Ctrl++`/`Ctrl+-`/`Ctrl+Wheel`) and drag any border or corner to resize splits or floating windows. → *[User Guide Ch. 8](docs/user-guide/08-extended-cli-and-gui-examples.md)*
-- **22 Open Color Themes, Shaders & High-Res Canvas Graphics**: 22 built-in presets (`turbo-blue`, `ibm-3278-green`, `ibm-3279-amber`, `tron-legacy`, `dracula`, `catppuccin-mocha`, `tokyo-night`, etc.) plus `.itermcolors`/TOML import/export (`:theme`), IBM 3270 cross-hairs (`Alt+X`), Focal Spotlight (`Alt+O`), Focal Zoom Lens (`Alt+Shift+O`), Tektronix 4010/4014 vector emulation, and Kitty/Sixel/iTerm2/Braille plotting (`bilterm plot`, `:canvas`). → *[User Guide Ch. 4](docs/user-guide/04-themes-glyphs-and-config.md)*
+- **22 Open Color Themes, Interactive File Browser, Cursor Customization & High-Res Canvas Graphics**: 22 built-in presets (`turbo-blue`, `ibm-3278-green`, `ibm-3279-amber`, `tron-legacy`, `dracula`, `catppuccin-mocha`, `tokyo-night`, etc.) plus smart `.itermcolors`/TOML directory & glob import (`:theme import <file|dir|glob>`), interactive Text File & Theme Browser (`:browse`, `:files`, `:theme browse`), customizable cursors (`:cursor` popup, `block`/`hollow`/`underline`/`bar`/`custom <char>`, `blink`/`solid`/`rapid`, `#RRGGBB`/named colors), IBM 3270 cross-hairs (`Alt+X`), Focal Spotlight (`Alt+O`), Focal Zoom Lens (`Alt+Shift+O`), Tektronix 4010/4014 vector emulation, and Kitty/Sixel/iTerm2/Braille plotting (`bilterm plot`, `:canvas`). → *[User Guide Ch. 4](docs/user-guide/04-themes-glyphs-and-config.md)*
 - **SSH Fleet Management, Robot Playbooks & Zero-Trust Security**: Connect panes via `:ssh` or `:ssh-tmux`, fan out commands by `@tag` (`:remote exec`), and drive workspaces via `bilterm --mcp`, `bilterm ctl`, or `bilterm run <playbook.toml>` under private `0700`/`0600` filesystem & `SO_PEERCRED` confinement. → *[Use Cases (Ch. 9)](docs/user-guide/09-use-cases-and-workflows.md) · [Security (Ch. 10)](docs/user-guide/10-security-and-best-practices.md)*
 
 ---
@@ -81,7 +81,8 @@ bilterm --mcp
 | **Tiled Splits vs. Z-Stack / Shuffle Deck** | `Alt+M` (`<L> M`) / `F6` (`<L> o`) / `Alt+1..9` | `:layout tile\|stack` / `:deck next\|prev` / `:focus <N>` |
 | **Slide-Out Drawer / Guake Quick Terminal** | `F7` (`<L> d`) / `F10` (`Ctrl+\`) | `:drawer [toggle\|float\|push\|left\|right]` / `:quake` |
 | **Cycle Floating / Fixed / Raw Terminal** | `F4` (`<L> e`) / `F12` (`Ctrl+G`) / Click OIA | `:mode [float \| fixed \| terminal \| cycle]` / `:raw` |
-| **Per-Pane Font Zoom / Universal Theme** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset]` / `:theme <preset\|list>` |
+| **Per-Pane Font Zoom / Universal Theme** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset]` / `:theme <preset\|list\|import>` |
+| **File & Theme Browser / Cursor Customization** | — | `:browse [dir]` / `:cursor [block\|hollow\|underline\|bar\|custom <c>] [blink\|solid\|rapid] [color]` |
 | **Mainframe Page-Hold (`MORE...`) & Vi Copy** | `<L> PgDn` / `PF8` / `F8` (`Alt+C`) / `F3` (`<L> f`) | `:scroll [page\|smooth\|instant]` / `:copy` / `:hints` |
 | **Session Save / Restore / Tree / SSH Fleet** | — | `:session [save\|restore\|list\|tree]` / `:ssh` / `:remote` |
 

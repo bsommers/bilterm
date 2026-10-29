@@ -5,6 +5,20 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.0] - 2026-10-29
+
+### Added
+- **Interactive Text File & Theme Directory Browser (`src/ui/file_browser.rs`, `src/ui/theme_import.rs`, `src/wm/v2_runtime.rs`, `src/input/modal.rs`)**:
+  - Added `:browse [dir]`, `:files [dir]`, `:filebrowser [dir]`, `:theme browse [dir]`, and argumentless `:theme import` to open an interactive Borland-styled File & Directory Browser in the `:mcp` floating/push-out window.
+  - Supports parent/child directory navigation (`Enter`/`Right` into folders, `Backspace`/`Left`/`-` to `..`), live case-insensitive type-to-filter filename filtering, direct `.itermcolors`/`.toml`/`.yaml` theme import & preview on `Enter`, and scrollable text file preview.
+  - Auto-initializes `~/.config/bilterm/config.toml` and `~/.config/bilterm/themes/` on startup and exposes `:theme config` to inspect active configuration paths.
+- **Smart `:theme import <file|dir|glob>` Subdirectory & Glob Resolution + `<Tab>` Path Completion (`src/ui/file_browser.rs`, `src/pane/completion.rs`)**:
+  - Updated `:theme import <dir>` to automatically scan nested `schemes/`, `themes/`, `iterm2/`, `alacritty/`, `kitty/`, and `wezterm/` subdirectories (such as `iterm2colors/schemes/*.itermcolors`), expand `~/` and `*` wildcard globs, register all discovered schemes into the runtime catalog, apply the first imported theme immediately, and open the interactive browser when multiple themes are imported.
+  - Added filesystem directory & theme file `<Tab>` completion for `:theme import <Tab>`, `:theme browse <Tab>`, `:browse <Tab>`, and `:files <Tab>`.
+- **Full Cursor Customization Engine (`src/ui/cursor.rs`, `src/ui/cursor_cmd.rs`, `src/config/mod.rs`, `src/colon_command/parse_visual.rs`, `src/colon_command/execute_wm.rs`)**:
+  - Added `:cursor` (and `:cursor list`) interactive Cursor Style, Blink & Color Selector popup with 1-click/Enter presets.
+  - Added cursor shapes (`block` `█`, `hollow` `▯`, `underline`/`underscore` `_`, `bar`/`beam` `▏`, and `custom <char>` e.g. `:cursor custom ◆` or `:cursor custom ❯`), blink modes (`blink` 500ms, `solid`/`steady`, `rapid` 250ms, `auto`), custom colors (named `green`, `amber`, `cyan`, `yellow`, `white`, `red`, `magenta`, `blue`, `orange`, `pink`, `theme`, or `#RRGGBB` hex), compound commands (`:cursor hollow blink amber`, `:cursor custom ◆ solid #00ff66`, `:cursor reset`), and `config.toml` fields (`cursor_style`, `cursor_blink`, `cursor_char`, `cursor_color`).
+
 ## [v2.1.2] - 2026-10-28
 
 ### Added
