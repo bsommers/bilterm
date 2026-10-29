@@ -62,27 +62,45 @@ impl WindowManager {
     /// Returns `(colon_cmd, shortcut, description)` entries matching `palette_query` ranked by `nucleo-matcher` (`v0.6.0`).
     pub fn filtered_palette_items(&self) -> Vec<(&'static str, &'static str, &'static str)> {
         use crate::ui::modals::PALETTE_CATALOG;
+        use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
         use nucleo_matcher::{Config, Matcher, Utf32Str};
         let q = self.palette_state().map(|(q, _)| q).unwrap_or("").trim();
         if q.is_empty() {
             return PALETTE_CATALOG.to_vec();
         }
+        let q_lower = q.to_lowercase();
         let mut matcher = Matcher::new(Config::DEFAULT);
-        let mut needle_buf = Vec::new();
-        let needle = Utf32Str::new(q, &mut needle_buf);
-        let mut scored: Vec<(u16, (&'static str, &'static str, &'static str))> = PALETTE_CATALOG
+        let pattern = Pattern::parse(&q_lower, CaseMatching::Ignore, Normalization::Smart);
+        let mut scored: Vec<(u32, (&'static str, &'static str, &'static str))> = PALETTE_CATALOG
             .iter()
             .filter_map(|&item| {
                 let combined = format!("{} {} {}", item.0, item.1, item.2);
-                let mut hay_buf = Vec::new();
-                let hay = Utf32Str::new(&combined, &mut hay_buf);
-                matcher.fuzzy_match(hay, needle).map(|score| (score, item))
+                let score_opt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let mut hay_buf = Vec::new();
+                    let hay = Utf32Str::new(&combined, &mut hay_buf);
+                    pattern.score(hay, &mut matcher)
+                }))
+                .ok()
+                .flatten()
+                .or_else(|| fallback_subsequence_score(&combined, &q_lower));
+                score_opt.map(|score| (score, item))
             })
             .collect();
         scored.sort_by_key(|a| std::cmp::Reverse(a.0));
         scored.into_iter().map(|(_, item)| item).collect()
     }
+}
 
+fn fallback_subsequence_score(haystack: &str, needle_lower: &str) -> Option<u32> {
+    let hay_lower = haystack.to_lowercase();
+    if hay_lower.contains(needle_lower) {
+        return Some(100);
+    }
+    let mut hay_chars = hay_lower.chars();
+    needle_lower.chars().all(|nc| hay_chars.any(|hc| hc == nc)).then_some(10)
+}
+
+impl WindowManager {
     /// Propagates the active `ThemePalette` RGB values to all panes and queues unsolicited
     /// `CSI ? 997 ; 1|2 n` notifications on any pane with `DECSET ?2031` active (`BEL-03`).
     pub fn notify_theme_changed(&mut self) {
@@ -549,6 +567,7 @@ impl WindowManager {
                 if p.extension().and_then(|s| s.to_str()) == Some("toml") {
                     p.file_stem()
                         .and_then(|s| s.to_str())
+                        .filter(|&stem| stem != "layout_profile_meta")
                         .map(ToOwned::to_owned)
                 } else {
                     None

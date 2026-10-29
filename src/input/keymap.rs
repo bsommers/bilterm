@@ -21,7 +21,6 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('%'), Action::SplitVertical),
     (KeyCode::Char('|'), Action::SplitVertical),
     (KeyCode::Char('\\'), Action::SplitVertical),
-    (KeyCode::Char('v'), Action::SplitVertical),
     (KeyCode::Char('V'), Action::SplitVertical),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
@@ -31,8 +30,11 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('n'), Action::DeckNext),
     (KeyCode::Tab, Action::DeckNext),
     (KeyCode::F(6), Action::DeckNext),
-    (KeyCode::Char('p'), Action::DeckPrev),
     (KeyCode::BackTab, Action::DeckPrev),
+    // Direct OS clipboard paste into active pane / Raw PTY / herdr (`Ctrl+X p` / `Ctrl+X v`)
+    (KeyCode::Char('p'), Action::PasteClipboard),
+    (KeyCode::Char('v'), Action::PasteClipboard),
+    (KeyCode::Char(']'), Action::PasteClipboard),
     (KeyCode::Char('1'), Action::FocusPane(1)),
     (KeyCode::Char('2'), Action::FocusPane(2)),
     (KeyCode::Char('3'), Action::FocusPane(3)),
@@ -123,88 +125,39 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('+'), Action::PromptResizeHeight(1)),
     (KeyCode::Char('='), Action::WindowResetGeometry),
     (KeyCode::Char('0'), Action::FontZoomReset),
-    (KeyCode::Char(']'), Action::PromptResizeWidth(4)),
     (KeyCode::PageUp, Action::BlockPrev),
     (KeyCode::PageDown, Action::ScrollModeTogglePage),
 ];
 
 /// Declarative global workspace shortcut table (`F1`..`F10`, `Alt+<key>`, `Ctrl+P`, `Ctrl+\\`, `ARCH-R01.2`).
 pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
+    // Direct OS clipboard paste (`Ctrl+Shift+V` / `Shift+Insert`) across CommandPrompt and Raw PTY / herdr
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Char('v'), Action::PasteClipboard),
+    (KeyModifiers::CONTROL.union(KeyModifiers::SHIFT), KeyCode::Char('V'), Action::PasteClipboard),
+    (KeyModifiers::SHIFT, KeyCode::Insert, Action::PasteClipboard),
     // Global Fuzzy Command Palette & Guake/Quake quick terminal
     (KeyModifiers::ALT, KeyCode::Char(' '), Action::PaletteToggle),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('p'),
-        Action::PaletteToggle,
-    ),
+    (KeyModifiers::CONTROL, KeyCode::Char('p'), Action::PaletteToggle),
     (KeyModifiers::ALT, KeyCode::Char('`'), Action::QuakeToggle),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char(' '),
-        Action::QuakeToggle,
-    ),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('\\'),
-        Action::QuakeToggle,
-    ),
-    (
-        KeyModifiers::CONTROL,
-        KeyCode::Char('\x1c'),
-        Action::QuakeToggle,
-    ),
+    (KeyModifiers::CONTROL, KeyCode::Char(' '), Action::QuakeToggle),
+    (KeyModifiers::CONTROL, KeyCode::Char('\\'), Action::QuakeToggle),
+    (KeyModifiers::CONTROL, KeyCode::Char('\x1c'), Action::QuakeToggle),
     // Borland Turbo Vision function keys
     (KeyModifiers::NONE, KeyCode::F(1), Action::HelpToggle),
     (KeyModifiers::NONE, KeyCode::F(2), Action::SplitHorizontal),
     (KeyModifiers::NONE, KeyCode::F(5), Action::ZoomToggle),
     (KeyModifiers::NONE, KeyCode::F(6), Action::DeckNext),
-    (
-        KeyModifiers::NONE,
-        KeyCode::F(9),
-        Action::InspectorToggle(None),
-    ),
+    (KeyModifiers::NONE, KeyCode::F(9), Action::InspectorToggle(None)),
     (KeyModifiers::NONE, KeyCode::F(10), Action::QuakeToggle),
     // Multi-pane Window Manager Alt-chords
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('o'),
-        Action::spotlight_cycle(),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('O'),
-        Action::focal_zoom_cycle(),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('}'),
-        Action::FocalRadiusResize(4, 1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('{'),
-        Action::FocalRadiusResize(-4, -1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('x'),
-        Action::CrosshairCycle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('X'),
-        Action::CrosshairCycle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('h'),
-        Action::SplitHorizontal,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('H'),
-        Action::SplitHorizontal,
-    ),
+    (KeyModifiers::ALT, KeyCode::Char('o'), Action::spotlight_cycle()),
+    (KeyModifiers::ALT, KeyCode::Char('O'), Action::focal_zoom_cycle()),
+    (KeyModifiers::ALT, KeyCode::Char('}'), Action::FocalRadiusResize(4, 1)),
+    (KeyModifiers::ALT, KeyCode::Char('{'), Action::FocalRadiusResize(-4, -1)),
+    (KeyModifiers::ALT, KeyCode::Char('x'), Action::CrosshairCycle),
+    (KeyModifiers::ALT, KeyCode::Char('X'), Action::CrosshairCycle),
+    (KeyModifiers::ALT, KeyCode::Char('h'), Action::SplitHorizontal),
+    (KeyModifiers::ALT, KeyCode::Char('H'), Action::SplitHorizontal),
     (KeyModifiers::ALT, KeyCode::Char('v'), Action::SplitVertical),
     (KeyModifiers::ALT, KeyCode::Char('V'), Action::SplitVertical),
     (KeyModifiers::ALT, KeyCode::Char('w'), Action::ClosePane),
@@ -374,7 +327,11 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
     };
     DEFAULT_GLOBAL_BINDINGS
         .iter()
-        .find(|(mods, code, _)| *mods == lookup_mods && *code == key.code)
+        .find(|(mods, code, _)| {
+            *code == key.code
+                && (*mods == key.modifiers
+                    || (*mods == lookup_mods && !mods.contains(KeyModifiers::SHIFT)))
+        })
         .map(|(_, _, action)| action.clone())
 }
 
@@ -616,12 +573,13 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
         return Ok(Some(AppAction::Handled));
     }
 
-    // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`) and WM pane focus/resize chords
-    // even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`).
+    // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`), clipboard paste (`Ctrl+Shift+V`/`Shift+Insert`),
+    // and WM pane focus/resize chords even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`, `herdr`).
     if let Some(action) = default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
         && matches!(
             action,
-            Action::FontZoomIn
+            Action::PasteClipboard
+                | Action::FontZoomIn
                 | Action::FontZoomOut
                 | Action::FontZoomReset
                 | Action::PaneResize { .. }

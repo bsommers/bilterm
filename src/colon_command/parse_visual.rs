@@ -13,18 +13,50 @@ pub(super) fn parse_visual_colon_command(
     parts: &[&str],
 ) -> Option<Result<ColonCommand, String>> {
     match head {
+        "itermcolors" | "iterm2colors" => match parts.get(1).copied() {
+            None | Some("list" | "ls") => {
+                Some(Ok(ColonCommand::ThemeCommand("itermcolors".to_string())))
+            }
+            Some("import" | "load") => {
+                Some(Ok(ColonCommand::ThemeCommand(parts[1..].join(" "))))
+            }
+            Some(_) => Some(Ok(ColonCommand::ThemeCommand(format!(
+                "import {}",
+                parts[1..].join(" ")
+            )))),
+        },
         "theme" => match parts.get(1).copied() {
-            None | Some("list" | "ls") => Some(Ok(ColonCommand::ThemeCommand("list".to_string()))),
+            None | Some("list" | "ls" | "itermcolors" | "iterm2colors") => {
+                let sub = if parts.len() > 1 {
+                    parts[1..].join(" ")
+                } else {
+                    "list".to_string()
+                };
+                Some(Ok(ColonCommand::ThemeCommand(sub)))
+            }
             Some("import" | "load" | "export" | "save") => {
                 let sub = parts[1..].join(" ");
                 Some(Ok(ColonCommand::ThemeCommand(sub)))
             }
             Some(tok) => match ThemePreset::from_name(tok) {
-                Some(preset) => Some(Ok(ColonCommand::Theme(preset))),
-                None => Some(Err(
-                    "Usage: :theme <preset> | list | import <path> | export [file.toml]"
-                        .to_string(),
-                )),
+                Some(preset) if parts.len() == 2 => Some(Ok(ColonCommand::Theme(preset))),
+                _ => {
+                    let arg = parts[1..].join(" ");
+                    let lower = arg.to_ascii_lowercase();
+                    if lower.ends_with(".itermcolors")
+                        || lower.ends_with(".toml")
+                        || lower.ends_with(".yaml")
+                        || lower.ends_with(".yml")
+                        || std::path::Path::new(&arg).exists()
+                    {
+                        Some(Ok(ColonCommand::ThemeCommand(format!("import {arg}"))))
+                    } else {
+                        Some(Err(
+                            "Usage: :theme <preset> | list | import <path.itermcolors|dir> | export [file.toml]"
+                                .to_string(),
+                        ))
+                    }
+                }
             },
         },
         "glyphs" => match parts.get(1).and_then(|s| GlyphPack::from_name(s)) {

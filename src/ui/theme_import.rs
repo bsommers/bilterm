@@ -670,6 +670,14 @@ pub fn load_open_theme_file(path: &Path) -> Result<OpenColorScheme, String> {
 
 /// Scans `dir` for `.itermcolors`, `.toml`, `.yaml`, and `.yml` theme files sorted by name (`THM-01`).
 pub fn discover_themes_in_dir(dir: &Path) -> Vec<OpenColorScheme> {
+    discover_theme_files_in_dir(dir)
+        .into_iter()
+        .map(|(_, scheme)| scheme)
+        .collect()
+}
+
+/// Scans `dir` for `.itermcolors`, `.toml`, `.yaml`, and `.yml` theme files and returns `(PathBuf, OpenColorScheme)` pairs.
+pub fn discover_theme_files_in_dir(dir: &Path) -> Vec<( std::path::PathBuf, OpenColorScheme)> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -689,6 +697,101 @@ pub fn discover_themes_in_dir(dir: &Path) -> Vec<OpenColorScheme> {
     paths.sort();
     paths
         .into_iter()
-        .filter_map(|p| load_open_theme_file(&p).ok())
+        .filter_map(|p| load_open_theme_file(&p).ok().map(|s| (p, s)))
         .collect()
+}
+
+/// Discovers `.itermcolors` and open theme files across standard candidate directories (`THM-01`).
+pub fn discover_candidate_theme_files(
+    extra_dir: Option<&Path>,
+) -> Vec<(std::path::PathBuf, OpenColorScheme)> {
+    let mut dirs = Vec::new();
+    if let Some(d) = extra_dir {
+        dirs.push(d.to_path_buf());
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        dirs.push(cwd.clone());
+        dirs.push(cwd.join("themes"));
+    }
+    if let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
+        dirs.push(home.join(".config/bilterm/themes"));
+        dirs.push(home.join(".iterm2"));
+        dirs.push(home.join("iterm2-color-schemes/schemes"));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    for dir in dirs {
+        for (path, scheme) in discover_theme_files_in_dir(&dir) {
+            if seen.insert(path.clone()) {
+                out.push((path, scheme));
+            }
+        }
+    }
+    out
+}
+
+/// Resolves a theme path or `.itermcolors` filename/stem from candidate theme directories.
+pub fn resolve_theme_file_or_name(query: &str) -> Option<(std::path::PathBuf, OpenColorScheme)> {
+    let q = query.trim().trim_matches('"').trim_matches('\'');
+    if q.is_empty() {
+        return None;
+    }
+    let direct = Path::new(q);
+    if direct.is_file()
+        && let Ok(scheme) = load_open_theme_file(direct)
+    {
+        return Some((direct.to_path_buf(), scheme));
+    }
+    for (path, scheme) in discover_candidate_theme_files(None) {
+        let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if fname.eq_ignore_ascii_case(q)
+            || stem.eq_ignore_ascii_case(q)
+            || scheme.name.eq_ignore_ascii_case(q)
+        {
+            return Some((path, scheme));
+        }
+    }
+    None
+}
+
+/// Builds interactive `:theme list` / `:itermcolors` console lines for the MCP/Theme pop-up window.
+pub fn build_theme_catalog_lines(
+    active_preset: crate::ui::theme::ThemePreset,
+    custom_override_active: bool,
+    extra_dir: Option<&Path>,
+) -> Vec<String> {
+    let mut lines: Vec<String> = crate::ui::theme::ThemePreset::all()
+        .iter()
+        .enumerate()
+        .map(|(idx, preset)| {
+            let active = if !custom_override_active && *preset == active_preset {
+                " [ACTIVE]"
+            } else {
+                ""
+            };
+            format!(
+                "  • {} — {:2}. {}{active}",
+                preset.label().to_ascii_lowercase(),
+                idx + 1,
+                preset.label()
+            )
+        })
+        .collect();
+    let discovered = discover_candidate_theme_files(extra_dir);
+    if !discovered.is_empty() {
+        lines.push("─".repeat(66));
+        lines.push("DISCOVERED OPEN / .ITERMCOLORS SCHEMES (Enter/Click to apply):".to_string());
+        for (path, scheme) in discovered {
+            lines.push(format!(
+                "  • import {} — {} (FG:{} BG:{})",
+                path.display(),
+                scheme.name,
+                format_hex_color(scheme.foreground),
+                format_hex_color(scheme.background)
+            ));
+        }
+    }
+    lines.push("Import open schemes: :theme import <file.itermcolors|.toml|.yaml|dir>".to_string());
+    lines
 }

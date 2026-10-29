@@ -28,6 +28,8 @@ pub enum Action {
     BlockPrev,
     BlockNext,
     Yank,
+    /// `:paste` / `:p` / `Ctrl+Shift+V` / `Shift+Insert` / `Ctrl+X p` / `Ctrl+X v`: Paste OS clipboard into active pane/PTY.
+    PasteClipboard,
     Clear,
     /// `:scrollback` (report) / `:scrollback clear` (free history).
     Scrollback { clear: bool },
@@ -246,6 +248,7 @@ mod tests {
             Action::BlockPrev => Some(":prev"),
             Action::BlockNext => Some(":next"),
             Action::Yank => Some(":yank"),
+            Action::PasteClipboard => Some(":paste"),
             Action::Clear => Some(":clear"),
             Action::Scrollback { clear: false } => Some(":scrollback"),
             Action::Scrollback { clear: true } => Some(":scrollback clear"),
@@ -369,6 +372,7 @@ mod tests {
             Action::BlockPrev,
             Action::BlockNext,
             Action::Yank,
+            Action::PasteClipboard,
             Action::Clear,
             Action::Scrollback { clear: false },
             Action::Scrollback { clear: true },

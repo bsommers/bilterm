@@ -348,6 +348,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             )),
         },
         "yank" => Some(Ok(ColonCommand::Yank)),
+        "paste" | "p" => Some(Ok(ColonCommand::PasteClipboard)),
         "clear" => Some(Ok(ColonCommand::Clear)),
         "scrollback" | "sb" => match parts.get(1).copied() {
             None | Some("info" | "status") => Some(Ok(ColonCommand::Scrollback { clear: false })),

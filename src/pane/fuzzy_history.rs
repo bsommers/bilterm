@@ -35,14 +35,20 @@ impl FuzzyHistorySearchState {
             }
         } else {
             let mut matcher = Matcher::new(Config::DEFAULT);
-            let pattern = Pattern::parse(&self.query, CaseMatching::Smart, Normalization::Smart);
+            let q_lower = self.query.to_lowercase();
+            let pattern = Pattern::parse(&q_lower, CaseMatching::Ignore, Normalization::Smart);
             let mut char_buf = Vec::new();
 
             for (idx, cmd) in history.iter().enumerate() {
                 char_buf.clear();
                 let mut indices = Vec::new();
-                let haystack = Utf32Str::new(cmd, &mut char_buf);
-                if let Some(score) = pattern.indices(haystack, &mut matcher, &mut indices) {
+                let matched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let haystack = Utf32Str::new(cmd, &mut char_buf);
+                    pattern.indices(haystack, &mut matcher, &mut indices)
+                }))
+                .ok()
+                .flatten();
+                if let Some(score) = matched {
                     indices.sort_unstable();
                     indices.dedup();
                     self.matches.push(FuzzyHistoryMatch {
@@ -50,6 +56,13 @@ impl FuzzyHistorySearchState {
                         command: cmd.clone(),
                         score,
                         matched_indices: indices,
+                    });
+                } else if cmd.to_lowercase().contains(&q_lower) {
+                    self.matches.push(FuzzyHistoryMatch {
+                        history_index: idx,
+                        command: cmd.clone(),
+                        score: 10,
+                        matched_indices: Vec::new(),
                     });
                 }
             }

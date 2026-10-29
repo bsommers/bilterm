@@ -325,6 +325,7 @@ impl WindowManager {
             let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
             let _ = self.resize_all(vp);
         }
+        self.notify_theme_changed();
         self.active_pane_mut().set_status_message(Some(format!(
             "Applied open color scheme '{}'",
             scheme.name
@@ -519,52 +520,44 @@ impl WindowManager {
 
     /// Executes `:theme import|load|export|list|<preset>` commands (`THM-01`, `THM-02`).
     pub fn execute_theme_command(&mut self, subcmd: &str) {
+        use crate::ui::theme_import::{build_theme_catalog_lines, resolve_theme_file_or_name};
         let parts: Vec<&str> = subcmd.split_whitespace().collect();
         match parts.first().copied() {
-            None | Some("list" | "ls") => {
+            None | Some("list" | "ls" | "itermcolors" | "iterm2colors") => {
                 let names: Vec<&str> = ThemePreset::all().iter().map(|p| p.label()).collect();
-                let mut lines: Vec<String> = ThemePreset::all()
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, preset)| {
-                        let active = if *preset == self.config.theme { " [ACTIVE]" } else { "" };
-                        format!("  • {} — {:2}. {}{active}", preset.label().to_ascii_lowercase(), idx + 1, preset.label())
-                    })
-                    .collect();
-                lines.push("Import open schemes: :theme import <file.itermcolors|.toml|.yaml>".to_string());
+                let extra = parts.get(1).copied().filter(|&s| !matches!(s, "list" | "ls" | "itermcolors" | "iterm2colors")).map(Path::new);
+                let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), extra);
                 self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
-                self.active_pane_mut()
-                    .set_status_message(Some(format!("Themes ({}): {}", names.len(), names.join(", "))));
+                self.active_pane_mut().set_status_message(Some(format!("Themes ({}): {}", names.len(), names.join(", "))));
             }
             Some("import" | "load") => {
-                let Some(path_str) = parts.get(1).copied() else {
-                    self.active_pane_mut().set_status_message(Some(
-                        "Usage: :theme import <file.itermcolors|file.toml|file.yaml|dir>".to_string(),
-                    ));
+                let raw_arg = parts[1..].join(" ");
+                let path_str = raw_arg.trim().trim_matches('"').trim_matches('\'');
+                if path_str.is_empty() {
+                    let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), None);
+                    self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
+                    self.active_pane_mut().set_status_message(Some("Usage: :theme import <file.itermcolors|file.toml|file.yaml|dir>".to_string()));
                     return;
-                };
+                }
                 let path = Path::new(path_str);
                 if path.is_dir() {
                     let schemes = discover_themes_in_dir(path);
+                    let lines = build_theme_catalog_lines(self.config.theme, self.config.custom_palette_override.is_some(), Some(path));
+                    self.open_mcp_popup_window("AVAILABLE THEME PRESETS (THM-01)", lines);
                     if let Some(first) = schemes.first() {
                         self.apply_open_color_scheme(first);
-                        self.active_pane_mut().set_status_message(Some(format!(
-                            "Imported {} theme(s) from {}; applied '{}'",
-                            schemes.len(),
-                            path.display(),
-                            first.name
-                        )));
+                        self.active_pane_mut().set_status_message(Some(format!("Imported {} theme(s) from {}; applied '{}'", schemes.len(), path.display(), first.name)));
                     } else {
-                        self.active_pane_mut()
-                            .set_status_message(Some(format!("No themes found in {}", path.display())));
+                        self.active_pane_mut().set_status_message(Some(format!("No themes found in {}", path.display())));
                     }
+                } else if let Some((_, scheme)) = resolve_theme_file_or_name(path_str) {
+                    self.apply_open_color_scheme(&scheme);
                 } else {
                     match load_open_theme_file(path) {
                         Ok(scheme) => self.apply_open_color_scheme(&scheme),
                         Err(err) => {
                             self.record_automation_error(err.clone());
-                            self.active_pane_mut()
-                                .set_status_message(Some(format!("Theme import error: {err}")));
+                            self.active_pane_mut().set_status_message(Some(format!("Theme import error: {err}")));
                         }
                     }
                 }
@@ -611,6 +604,8 @@ impl WindowManager {
                     self.config.theme = preset;
                     self.config.custom_palette_override = None;
                     self.notify_theme_changed();
+                } else if let Some((_, scheme)) = resolve_theme_file_or_name(subcmd.trim()) {
+                    self.apply_open_color_scheme(&scheme);
                 } else {
                     self.active_pane_mut().set_status_message(Some(format!(
                         "Unknown theme '{name}'. Try :theme list or :theme import <path>"

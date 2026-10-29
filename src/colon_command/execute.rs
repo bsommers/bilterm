@@ -167,6 +167,10 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             pane.set_status_message(Some(format!("Yanked {} bytes via OSC 52", text_to_yank.len())));
             false
         }
+        ColonCommand::PasteClipboard => {
+            let _ = crate::input::paste_clipboard_into_pane(pane);
+            false
+        }
         ColonCommand::Clear => {
             pane.process_pty_output(b"\x1b[2J\x1b[H");
             pane.vt_mut().reset_scrollback();

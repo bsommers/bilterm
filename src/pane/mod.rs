@@ -75,6 +75,8 @@ pub struct CompositePane {
     status_message: Option<String>,
     /// Last outbound `OSC 52` clipboard escape sequence emitted by `:yank` or child PTY passthrough.
     last_osc52_sequence: Option<String>,
+    /// Last raw byte payload written to the underlying PTY (`write_to_pty`).
+    last_pty_write: Vec<u8>,
     last_canvas_size: (u16, u16),
     exited: bool,
     /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
@@ -113,6 +115,7 @@ impl CompositePane {
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
+            last_pty_write: Vec::new(),
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
             held_exited_shell: None,
@@ -714,10 +717,17 @@ impl CompositePane {
 
     /// Writes raw bytes to the underlying `PtySession` if one is attached (`v1.1.0` / `v1.4.0`).
     pub fn write_to_pty(&mut self, bytes: &[u8]) -> Result<()> {
+        self.last_pty_write.clear();
+        self.last_pty_write.extend_from_slice(bytes);
         if let Some(pty) = &self.pty {
             pty.write_all(bytes)?;
         }
         Ok(())
+    }
+
+    /// Returns the most recent byte payload passed to [`Self::write_to_pty`].
+    pub fn last_pty_write(&self) -> &[u8] {
+        &self.last_pty_write
     }
 
     pub fn has_exited(&self) -> bool {

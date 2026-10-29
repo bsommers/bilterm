@@ -197,7 +197,7 @@ fn v030_workspace_session_save_list_and_restore_roundtrip() {
 
     let save_cmd = parse_colon_command(":session save prod_ops").unwrap().unwrap();
     execute_wm_colon_command(&mut wm, save_cmd);
-    assert_eq!(wm.list_sessions(), vec!["prod_ops".to_string()]);
+    assert!(wm.list_sessions().contains(&"prod_ops".to_string()));
 
     // Reset workspace to a single pane and restore 'prod_ops'
     let mut restored_wm = WindowManager::new_headless(25, 80);

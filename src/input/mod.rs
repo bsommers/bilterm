@@ -101,7 +101,8 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     }
 
     // When in RawPtyPassthrough (including DECSET 1049 alternate screen apps like vim/htop/emacs),
-    // allow copying an active mouse canvas selection with Ctrl+C before passing keys to the child PTY.
+    // allow copying an active mouse canvas selection with Ctrl+C and pasting with Ctrl+Shift+V / Shift+Insert
+    // before passing keys to the child PTY.
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
@@ -109,6 +110,14 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
         {
             let _ = pane.yank_copy_selection();
             return Ok(AppAction::Handled);
+        }
+        let is_ctrl_shift_v = key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Char('v') | KeyCode::Char('V'));
+        let is_shift_insert =
+            key.modifiers.contains(KeyModifiers::SHIFT) && key.code == KeyCode::Insert;
+        if is_ctrl_shift_v || is_shift_insert {
+            return paste_clipboard_into_pane(pane);
         }
         if pane.is_read_only() {
             pane.set_status_message(Some(
@@ -185,6 +194,9 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 pane.prompt_mut().select_end();
                 return Ok(AppAction::Handled);
             }
+            KeyCode::Insert => {
+                return paste_clipboard_into_pane(pane);
+            }
             KeyCode::Delete => {
                 if let Some(cut) = pane.prompt_mut().cut_selection_or_line() {
                     pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&cut)));
@@ -247,12 +259,7 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
-                let clip = crate::clipboard::get_system_clipboard()
-                    .unwrap_or_else(|| pane.prompt().yank_buffer.clone());
-                if !clip.is_empty() {
-                    return handle_paste_event(pane, &clip);
-                }
-                return Ok(AppAction::Handled);
+                return paste_clipboard_into_pane(pane);
             }
             KeyCode::Char('u') => {
                 pane.prompt_mut().clear_line();
@@ -444,14 +451,28 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
     }
 }
 
+/// Reads the OS clipboard via [`crate::clipboard::get_system_clipboard`] (falling back to the
+/// pane's internal `yank_buffer`) and routes it through [`handle_paste_event`] (`PTY-04`, `DECSET 2004`).
+pub fn paste_clipboard_into_pane(pane: &mut CompositePane) -> Result<AppAction> {
+    let clip = crate::clipboard::get_system_clipboard()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| pane.prompt().yank_buffer.clone());
+    if clip.is_empty() {
+        pane.set_status_message(Some("Clipboard is empty".to_string()));
+        return Ok(AppAction::Handled);
+    }
+    handle_paste_event(pane, &clip)
+}
+
 /// Routes a `crossterm::event::Event::Paste` payload (`PTY-04`, `DECSET 2004`, `FND-01`).
 ///
 /// - Always sanitizes dangerous C0/DEL control bytes via `sanitize_paste_bytes` (`FND-01`).
 /// - In `CommandPrompt` mode: inserts sanitized text directly into `FloatingPromptState` without
 ///   auto-executing newlines so the user can inspect/edit pasted scripts before pressing `Enter`.
-/// - In `RawPtyPassthrough` mode: checks `is_unsafe_paste` (unbracketed multi-line paste or embedded
-///   `\x1b[201~` breakout) and stages `pending_unsafe_paste` for user confirmation when unsafe;
-///   otherwise wraps in `\x1b[200~...\x1b[201~` if `DECSET 2004` is active or writes raw bytes.
+/// - In `RawPtyPassthrough` mode: when the child TUI/shell has bracketed paste (`?2004h`) enabled,
+///   bypasses the multi-line confirmation modal and wraps the sanitized payload cleanly in
+///   `\x1b[200~...\x1b[201~`. When unbracketed (`!bracketed`) and multi-line, stages
+///   `pending_unsafe_paste` for user confirmation.
 pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result<AppAction> {
     pane.refresh_line_discipline();
     let sanitized = sanitize_paste_bytes(pasted_text);
@@ -461,8 +482,24 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
             Ok(AppAction::Handled)
         }
         InputRoutingMode::RawPtyPassthrough => {
+            if pane.is_read_only() {
+                pane.set_status_message(Some(
+                    "🔒 PROTECTED: Pane is locked read-only (:lock off or Ctrl+X l to unlock)"
+                        .to_string(),
+                ));
+                return Ok(AppAction::Handled);
+            }
             let bracketed = pane.vt().is_bracketed_paste();
-            if is_unsafe_paste(pasted_text, bracketed) {
+            if bracketed {
+                let clean = sanitized.replace("\x1b[201~", "");
+                let mut framed = Vec::with_capacity(clean.len() + 12);
+                framed.extend_from_slice(b"\x1b[200~");
+                framed.extend_from_slice(clean.as_bytes());
+                framed.extend_from_slice(b"\x1b[201~");
+                pane.write_to_pty(&framed)?;
+                return Ok(AppAction::Handled);
+            }
+            if is_unsafe_paste(pasted_text, false) {
                 pane.set_pending_unsafe_paste(Some(pasted_text.to_string()));
                 pane.set_status_message(Some(
                     "UNSAFE MULTI-LINE PASTE DETECTED: Press [y/Enter] to confirm or [n/Esc] to cancel"
@@ -470,15 +507,7 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
                 ));
                 return Ok(AppAction::Handled);
             }
-            if bracketed {
-                let mut framed = Vec::with_capacity(sanitized.len() + 12);
-                framed.extend_from_slice(b"\x1b[200~");
-                framed.extend_from_slice(sanitized.as_bytes());
-                framed.extend_from_slice(b"\x1b[201~");
-                pane.write_to_pty(&framed)?;
-            } else {
-                pane.write_to_pty(sanitized.as_bytes())?;
-            }
+            pane.write_to_pty(sanitized.as_bytes())?;
             Ok(AppAction::Handled)
         }
     }

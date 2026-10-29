@@ -35,81 +35,102 @@ impl VtParser {
         }
     }
 
+    /// Applies a single DECSET (`CSI ? <mode> h`) or DECRST (`CSI ? <mode> l`) private mode flag.
+    fn apply_decset_private_mode(&mut self, mode: &str, enable: bool) {
+        match mode {
+            "47" | "1047" | "1049" => {
+                self.alt_screen_47_or_1047 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1049h (AltScreen ON)"
+                } else {
+                    "CSI ?1049l (AltScreen OFF)"
+                });
+            }
+            "2004" => {
+                self.bracketed_paste_2004 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?2004h (BracketedPaste ON)"
+                } else {
+                    "CSI ?2004l (BracketedPaste OFF)"
+                });
+            }
+            "1" => {
+                self.application_cursor_decckm = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1h (DECCKM ON)"
+                } else {
+                    "CSI ?1l (DECCKM OFF)"
+                });
+            }
+            "67" => self.backarrow_key_67 = enable,
+            "1007" => self.mouse_alternate_scroll_1007 = enable,
+            "1000" | "1002" | "1003" | "1006" => {
+                self.mouse_tracking_mode = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1006h (MouseSGR ON)"
+                } else {
+                    "CSI ?1006l (MouseSGR OFF)"
+                });
+            }
+            "1004" => self.focus_reporting_1004 = enable,
+            "2026" => {
+                self.synchronized_output_2026 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?2026h (SyncOutput ON)"
+                } else {
+                    "CSI ?2026l (SyncOutput OFF)"
+                });
+            }
+            "2027" => {
+                self.grapheme_cluster_2027 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?2027h (GraphemeCluster ON)"
+                } else {
+                    "CSI ?2027l (GraphemeCluster OFF)"
+                });
+            }
+            "2031" => {
+                self.report_color_scheme_2031 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?2031h (ColorSchemeNotify ON)"
+                } else {
+                    "CSI ?2031l (ColorSchemeNotify OFF)"
+                });
+            }
+            "2048" => {
+                self.in_band_size_2048 = enable;
+                self.record_escape_sequence(if enable {
+                    "CSI ?2048h (InBandResize ON)"
+                } else {
+                    "CSI ?2048l (InBandResize OFF)"
+                });
+            }
+            _ => {}
+        }
+    }
+
     /// Dispatches a single `CSI` (`\x1b[...`) sequence starting at `csi_rest` (`&text[idx + 2..]`).
     fn scan_csi_sequence(&mut self, csi_rest: &str) {
         if let Some(rest) = csi_rest.strip_prefix('?') {
-            if rest.starts_with("1049h") || rest.starts_with("1047h") || rest.starts_with("47h") {
-                self.alt_screen_47_or_1047 = true;
-                self.record_escape_sequence("CSI ?1049h (AltScreen ON)");
-            } else if rest.starts_with("1049l")
-                || rest.starts_with("1047l")
-                || rest.starts_with("47l")
-            {
-                self.alt_screen_47_or_1047 = false;
-                self.record_escape_sequence("CSI ?1049l (AltScreen OFF)");
-            } else if rest.starts_with("2004h") {
-                self.bracketed_paste_2004 = true;
-                self.record_escape_sequence("CSI ?2004h (BracketedPaste ON)");
-            } else if rest.starts_with("2004l") {
-                self.bracketed_paste_2004 = false;
-                self.record_escape_sequence("CSI ?2004l (BracketedPaste OFF)");
-            } else if rest.starts_with("1h") {
-                self.application_cursor_decckm = true;
-                self.record_escape_sequence("CSI ?1h (DECCKM ON)");
-            } else if rest.starts_with("1l") {
-                self.application_cursor_decckm = false;
-                self.record_escape_sequence("CSI ?1l (DECCKM OFF)");
-            } else if rest.starts_with("67h") {
-                self.backarrow_key_67 = true;
-            } else if rest.starts_with("67l") {
-                self.backarrow_key_67 = false;
-            } else if rest.starts_with("1007h") {
-                self.mouse_alternate_scroll_1007 = true;
-            } else if rest.starts_with("1007l") {
-                self.mouse_alternate_scroll_1007 = false;
-            } else if rest.starts_with("1000h")
-                || rest.starts_with("1002h")
-                || rest.starts_with("1003h")
-                || rest.starts_with("1006h")
-            {
-                self.mouse_tracking_mode = true;
-                self.record_escape_sequence("CSI ?1006h (MouseSGR ON)");
-            } else if rest.starts_with("1000l")
-                || rest.starts_with("1002l")
-                || rest.starts_with("1003l")
-                || rest.starts_with("1006l")
-            {
-                self.mouse_tracking_mode = false;
-                self.record_escape_sequence("CSI ?1006l (MouseSGR OFF)");
-            } else if rest.starts_with("1004h") {
-                self.focus_reporting_1004 = true;
-            } else if rest.starts_with("1004l") {
-                self.focus_reporting_1004 = false;
-            } else if rest.starts_with("2026h") {
-                self.synchronized_output_2026 = true;
-                self.record_escape_sequence("CSI ?2026h (SyncOutput ON)");
-            } else if rest.starts_with("2026l") {
-                self.synchronized_output_2026 = false;
-                self.record_escape_sequence("CSI ?2026l (SyncOutput OFF)");
-            } else if rest.starts_with("2027h") {
-                self.grapheme_cluster_2027 = true;
-                self.record_escape_sequence("CSI ?2027h (GraphemeCluster ON)");
-            } else if rest.starts_with("2027l") {
-                self.grapheme_cluster_2027 = false;
-                self.record_escape_sequence("CSI ?2027l (GraphemeCluster OFF)");
-            } else if rest.starts_with("2031h") {
-                self.report_color_scheme_2031 = true;
-                self.record_escape_sequence("CSI ?2031h (ColorSchemeNotify ON)");
-            } else if rest.starts_with("2031l") {
-                self.report_color_scheme_2031 = false;
-                self.record_escape_sequence("CSI ?2031l (ColorSchemeNotify OFF)");
-            } else if rest.starts_with("2048h") {
-                self.in_band_size_2048 = true;
-                self.record_escape_sequence("CSI ?2048h (InBandResize ON)");
-            } else if rest.starts_with("2048l") {
-                self.in_band_size_2048 = false;
-                self.record_escape_sequence("CSI ?2048l (InBandResize OFF)");
-            } else if rest.starts_with("996n") {
+            let param_len = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == ';')
+                .count();
+            if param_len > 0 {
+                let params_str = &rest[..param_len];
+                let suffix = &rest[param_len..];
+                if let Some(enable) = suffix
+                    .strip_prefix('h')
+                    .map(|_| true)
+                    .or_else(|| suffix.strip_prefix('l').map(|_| false))
+                {
+                    for tok in params_str.split(';').filter(|s| !s.is_empty()) {
+                        self.apply_decset_private_mode(tok, enable);
+                    }
+                    return;
+                }
+            }
+            if rest.starts_with("996n") {
                 let code = self.color_scheme_code();
                 self.pending_query_responses
                     .push(format!("\x1b[?997;{code}n").into_bytes());

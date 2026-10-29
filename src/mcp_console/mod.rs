@@ -43,10 +43,18 @@ pub fn infer_row_action(line: &str) -> McpRowAction {
     if let Some(rest) = line
         .strip_prefix("  • ")
         .or_else(|| line.strip_prefix("► • "))
-        && let Some(tok) = rest.split_whitespace().next()
-        && !tok.is_empty()
     {
-        return McpRowAction::ApplyTheme(tok.to_string());
+        if let Some((cmd_part, _)) = rest.split_once(" — ") {
+            let trimmed_cmd = cmd_part.trim();
+            if trimmed_cmd.starts_with("import ") {
+                return McpRowAction::ApplyTheme(trimmed_cmd.to_string());
+            }
+        }
+        if let Some(tok) = rest.split_whitespace().next()
+            && !tok.is_empty()
+        {
+            return McpRowAction::ApplyTheme(tok.to_string());
+        }
     }
 
     let trimmed = line.trim_start();

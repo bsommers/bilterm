@@ -12,8 +12,8 @@ use bilterm::ui::{buffer_to_snapshot_string, CompositePaneWidget};
 fn tab_completes_unique_filesystem_path_and_colon_commands() {
     let mut pane = CompositePane::new_headless(1, 20, 80);
 
-    // 1. Colon command completion: ":pr" + Tab -> ":prompt "
-    for ch in ":pr".chars() {
+    // 1. Colon command completion: ":prom" + Tab -> ":prompt "
+    for ch in ":prom".chars() {
         handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
     }
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
