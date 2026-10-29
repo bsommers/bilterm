@@ -5,10 +5,10 @@ milestone_name: Live Background Daemon Detach/Attach & Interactive MCP Console N
 current_phase: 36
 current_phase_name: interactive-mcp-console-navigation
 status: milestone_v2_1_complete
-stopped_at: Completed Phases 35-36 (Live Background OS Process Daemonization & Interactive MCP Console Navigation) via parallel subagents and released v2.1.0
+stopped_at: Released v2.1.1 (Multi-Profile Layout Manager & Autosave, .itermcolors browser & nucleo-matcher fix, and RAW PTY / ?2004h paste fixes)
 last_updated: "2026-10-28"
 last_activity: 2026-10-28
-last_activity_desc: Completed Phases 35-36 (DAEM-03..04, MCP-03..04) — Milestone v2.1 100% complete (36/36 Phases)
+last_activity_desc: Released v2.1.1 with multi-profile layout autosave, .itermcolors browser & nucleo-matcher fix, and RAW PTY / ?2004h paste fixes
 progress:
   total_phases: 36
   completed_phases: 36

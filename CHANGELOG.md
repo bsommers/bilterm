@@ -5,6 +5,25 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.1] - 2026-10-28
+
+### Added
+- **Multi-Profile Layout Manager & Automatic Layout Saving (`src/wm/layout_profile.rs`, `src/config.rs`, `src/colon_command/parse_visual.rs`, `tests/layout_profiles_and_autosave.rs`)**:
+  - Added multi-profile pane/window layout management supporting built-in templates (`default`, `single`, `dual-v`, `dual-h`, `main-side`, `quad`, `cascade`) and custom user-saved `.toml` profiles (`:profile save [name]`, `:layout save [name]`).
+  - Enabled automatic layout saving by default (`layout_autosave = true`) across pane/window mutations (`split_focused`, `remove_pane`, `toggle_layout_mode`, `toggle_zoom`, `move_focused_pane_or_window`, `resize_focused_pane_or_window`, `reset_window_geometries`) with runtime toggle via `:layout autosave [on|off|toggle]` / `:autosave`.
+  - Added active default profile selection (`:profile default <name>`, `:layout default <name>`) with startup auto-restoration and dynamic profile switching (`:profile switch <name>`, `:profile next`, `:profile prev`, `:profile list`).
+- **Interactive `.itermcolors` Discovery & Browser (`src/ui/theme_import.rs`, `src/colon_command/parse_visual.rs`, `src/wm/v2_runtime.rs`, `src/mcp_console/mod.rs`)**:
+  - Added `:itermcolors` / `:iterm2colors` commands and enhanced `:theme list` / `:theme import <file.itermcolors|dir>` to discover `.itermcolors`/`.toml`/`.yaml` schemes across candidate directories (including filenames with spaces), display them in the interactive theme browser pop-up, and apply them via `Enter`/click or `:theme <name_or_path.itermcolors>`.
+- **Direct OS Clipboard Paste in `INPUT: RAW PTY` & `herdr` (`src/action.rs`, `src/input/keymap.rs`, `src/input/mod.rs`, `src/colon_command/parse.rs`, `src/colon_command/execute.rs`)**:
+  - Added `Action::PasteClipboard` bound to `Ctrl+Shift+V`, `Shift+Insert`, Leader `Ctrl+X p` / `Ctrl+X v` / `Ctrl+X ]`, and `:paste` / `:p`, reading the OS clipboard via `src/clipboard.rs` and injecting directly into the active PTY even in `INPUT: RAW PTY` (`RawPtyPassthrough`) and inside `herdr`.
+
+### Fixed
+- **`nucleo-matcher` Panic on `iterm2colors` / Mixed-Case & Unicode Queries (`src/wm/session.rs`, `src/pane/fuzzy_history.rs`, `tests/itermcolors_and_paste_fixes.rs`)**:
+  - Fixed `nucleo-matcher-0.3.1/src/fuzzy_optimal.rs:37` (`should have been caught by prefilter`) panic in `WindowManager::filtered_palette_items` and `FuzzyHistorySearchState::recompute` by normalizing queries to lowercase, using `Pattern::parse(&q_lower, CaseMatching::Ignore, Normalization::Smart)`, and guarding with `catch_unwind` + a deterministic subsequence fallback scorer.
+- **Bracketed Paste (`?2004h`) Multi-Line Modal Bypass & Compound DECSET Parsing (`src/input/mod.rs`, `src/vt/scan.rs`, `tests/itermcolors_and_paste_fixes.rs`)**:
+  - Updated `handle_paste_event` so multi-line pastes in `INPUT: RAW PTY` bypass the confirmation modal whenever bracketed paste (`?2004h`) is enabled, wrapping the sanitized payload cleanly in `\x1b[200~...\x1b[201~`.
+  - Updated `VtParser::scan_csi_sequence` to parse compound semicolon-separated DECSET/DECRST private mode sequences (e.g., `\x1b[?1049;2004h`).
+
 ## [v2.1.0] - 2026-10-28
 
 ### Added
