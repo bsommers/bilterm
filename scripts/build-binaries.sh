@@ -10,7 +10,7 @@
 #   vX.Y.Z            Tag to build (default: v<version> from Cargo.toml). Must exist.
 #   --targets         Rust target triples (default: what this host can build natively:
 #                     macOS -> aarch64 + x86_64 apple-darwin; Linux -> host gnu
-#                     (+ musl when cargo-zigbuild is installed); Windows -> msvc).
+#                     (+ musl when cargo-zigbuild is installed); Windows -> host-arch msvc).
 #   --bin             Binary name (default: [package] name in Cargo.toml).
 #   --repo            GitHub repo for upload (default: gh's current repo).
 #   --upload          `gh release upload --clobber` the archives + merged SHA256SUMS.
@@ -50,7 +50,9 @@ if [[ -z "$TARGETS" ]]; then
         Linux)
             TARGETS="$(uname -m)-unknown-linux-gnu"
             command -v cargo-zigbuild >/dev/null && TARGETS+=" $(uname -m)-unknown-linux-musl" ;;
-        MINGW*|MSYS*|CYGWIN*) TARGETS="x86_64-pc-windows-msvc" ;;
+        MINGW*|MSYS*|CYGWIN*)   # native arch from the registry (uname -m lies under x64 emulation on ARM64)
+            if MSYS_NO_PATHCONV=1 reg.exe query 'HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' /v PROCESSOR_ARCHITECTURE 2>/dev/null | grep -q ARM64
+            then TARGETS="aarch64-pc-windows-msvc"; else TARGETS="x86_64-pc-windows-msvc"; fi ;;
         *) echo "error: unknown host $OS; pass --targets" >&2; exit 2 ;;
     esac
 fi

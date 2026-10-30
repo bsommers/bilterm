@@ -16,6 +16,7 @@ param(
     [switch]$BinaryOnly,
     [switch]$FromSource,
     [string]$Tag = "latest",
+    [string]$Archive = "",
     [switch]$NoDesktop,
     [switch]$Uninstall,
     [switch]$Force,
@@ -33,7 +34,7 @@ if ($Help) {
 Bilterm Plain Binary & Desktop Launcher Installer (Windows PowerShell)
 
 Usage:
-  .\scripts\install.ps1 [-Local] [-Cargo] [-Prefix <DIR>] [-BinaryOnly] [-FromSource] [-NoDesktop] [-Uninstall] [-DryRun]
+  .\scripts\install.ps1 [-Local] [-Cargo] [-Prefix <DIR>] [-BinaryOnly] [-FromSource] [-Archive <ZIP>] [-NoDesktop] [-Uninstall] [-DryRun]
 
 Options:
   -Local          Install to $HOME\.local\bin\bilterm.exe (default)
@@ -42,6 +43,7 @@ Options:
   -BinaryOnly     Download prebuilt binary from GitHub Releases (no Rust needed)
   -FromSource     Compile from source using Cargo
   -Tag <TAG>      Release tag to download (default: latest)
+  -Archive <ZIP>  Install from a local release archive (bilterm-<tag>-<triple>.zip)
   -NoDesktop      Skip Windows Run (App Paths) and Start Menu shortcut registration
   -Uninstall      Remove installed bilterm.exe, App Paths entry, and Start Menu shortcuts
   -Force          Overwrite existing target binary
@@ -57,7 +59,10 @@ function Write-Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Write-Err($msg)  { Write-Host " [ERR] $msg" -ForegroundColor Red }
 
 if ($Prefix) {
-    $BinDir = Join-Path (Resolve-Path -LiteralPath $Prefix -ErrorAction SilentlyContinue ?? $Prefix) "bin"
+    # (no `??`: it is PowerShell 7-only and breaks parsing under Windows PowerShell 5.1)
+    $prefixPath = Resolve-Path -LiteralPath $Prefix -ErrorAction SilentlyContinue
+    if (-not $prefixPath) { $prefixPath = $Prefix }
+    $BinDir = Join-Path $prefixPath "bin"
 } elseif ($Cargo) {
     $BinDir = Join-Path $HOME ".cargo\bin"
 } else {
@@ -102,34 +107,56 @@ if ($Uninstall) {
     exit 0
 }
 
-function Try-DownloadPrebuilt($dest) {
-    $arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
-    $triple = "$arch-pc-windows-msvc"
-    $url = if ($Tag -eq "latest") {
-        "https://github.com/$GithubRepo/releases/latest/download/bilterm-$triple.zip"
-    } else {
-        "https://github.com/$GithubRepo/releases/download/$Tag/bilterm-$triple.zip"
-    }
-    Write-Info "Checking for prebuilt binary at $url..."
-    if ($DryRun) {
-        Write-Host "  [dry-run] Invoke-WebRequest -Uri $url"
-        return $true
-    }
-    $tmpZip = Join-Path $env:TEMP "bilterm-$triple.zip"
+# Native OS architecture. $env:PROCESSOR_ARCHITECTURE reports AMD64 inside an
+# x64-emulated PowerShell on Windows on ARM, so read the machine-wide value.
+function Get-NativeArch {
+    $a = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -ErrorAction SilentlyContinue).PROCESSOR_ARCHITECTURE
+    if (-not $a) { $a = $env:PROCESSOR_ARCHITECTURE }
+    switch ($a) { 'ARM64' { 'aarch64' } 'AMD64' { 'x86_64' } default { 'i686' } }
+}
+
+function Install-FromZip($zip, $dest, $label) {
     $tmpExtract = Join-Path $env:TEMP "bilterm-extract-$PID"
     try {
-        Invoke-WebRequest -Uri $url -OutFile $tmpZip -ErrorAction Stop
-        Expand-Archive -Path $tmpZip -DestinationPath $tmpExtract -Force
+        Expand-Archive -Path $zip -DestinationPath $tmpExtract -Force
         $exeItem = Get-ChildItem -Path $tmpExtract -Filter "bilterm.exe" -Recurse | Select-Object -First 1
-        if ($exeItem) {
-            Copy-Item -Path $exeItem.FullName -Destination $dest -Force
-            Write-Ok "Downloaded prebuilt bilterm.exe ($triple)"
+        if (-not $exeItem) { return $false }
+        Copy-Item -Path $exeItem.FullName -Destination $dest -Force
+        Write-Ok "Installed bilterm.exe from $label"
+        return $true
+    } finally {
+        Remove-Item -Force -Recurse $tmpExtract -ErrorAction SilentlyContinue
+    }
+}
+
+function Try-DownloadPrebuilt($dest) {
+    $arch = Get-NativeArch
+    # Windows on ARM runs x64 binaries under emulation: fall back if a release has no ARM64 build.
+    $triples = @("$arch-pc-windows-msvc")
+    if ($arch -eq "aarch64") { $triples += "x86_64-pc-windows-msvc" }
+    foreach ($triple in $triples) {
+        $url = if ($Tag -eq "latest") {
+            "https://github.com/$GithubRepo/releases/latest/download/bilterm-$triple.zip"
+        } else {
+            "https://github.com/$GithubRepo/releases/download/$Tag/bilterm-$triple.zip"
+        }
+        Write-Info "Checking for prebuilt binary at $url..."
+        if ($DryRun) {
+            Write-Host "  [dry-run] Invoke-WebRequest -Uri $url"
             return $true
         }
-    } catch {
-        return $false
-    } finally {
-        Remove-Item -Force -Recurse $tmpZip, $tmpExtract -ErrorAction SilentlyContinue
+        $tmpZip = Join-Path $env:TEMP "bilterm-$triple.zip"
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $tmpZip -UseBasicParsing -ErrorAction Stop
+            if (Install-FromZip $tmpZip $dest "prebuilt release ($triple)") {
+                if ($triple -ne "$arch-pc-windows-msvc") { Write-Warn "No $arch build in this release; installed $triple (runs under emulation)" }
+                return $true
+            }
+        } catch {
+            continue
+        } finally {
+            Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+        }
     }
     return $false
 }
@@ -143,7 +170,15 @@ if (-not $DryRun) {
 $localBuild = Join-Path $RepoRoot "target\release\bilterm.exe"
 $cargoToml = Join-Path $RepoRoot "Cargo.toml"
 
-if ($BinaryOnly) {
+if ($Archive) {
+    if (-not (Test-Path -LiteralPath $Archive)) { Write-Err "Archive not found: $Archive"; exit 1 }
+    if ($DryRun) {
+        Write-Host "  [dry-run] Expand $Archive -> $TargetBin"
+    } elseif (-not (Install-FromZip $Archive $TargetBin $Archive)) {
+        Write-Err "No bilterm.exe inside $Archive"
+        exit 1
+    }
+} elseif ($BinaryOnly) {
     if (-not (Try-DownloadPrebuilt $TargetBin)) {
         Write-Err "Could not download prebuilt Windows binary."
         Write-Err "Remedy: omit -BinaryOnly or run '.\scripts\setup.ps1 -Yes -Install' to build from source."
