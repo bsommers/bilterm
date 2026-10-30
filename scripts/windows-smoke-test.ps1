@@ -87,7 +87,8 @@ Check "headless daemon + ctl workspace.status (TCP 127.0.0.1:7370, bearer token)
         $resp = $null
         for ($i = 0; $i -lt 20 -and -not $resp; $i++) {
             Start-Sleep -Milliseconds 500
-            try { $resp = & $exe ctl --token-file $tok workspace.status } catch { }
+            # ctl's first positional argument is the endpoint, so name it explicitly.
+            try { $resp = & $exe ctl --token-file $tok 127.0.0.1:7370 workspace.status 2>$null } catch { }
         }
         Write-Host "      $resp"
         "$resp" -match "result"

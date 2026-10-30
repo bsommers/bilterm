@@ -80,10 +80,20 @@ pkg_windows() {
     cp "$TGT/$triple/release/bilterm.exe" "$DIST/$name/"
     cp "$WT"/{README.md,LICENSE,CHANGELOG.md} "$DIST/$name/"
     local d="$DIST"; command -v cygpath >/dev/null && d="$(cygpath -m "$DIST")"   # Git Bash -> native Windows path
-    local py; py="${PYTHON:-$(command -v python3 || command -v python || true)}"
-    if [[ -n "$py" ]] && "$py" -c "import shutil; shutil.make_archive('$d/$name','zip','$d','$name')" 2>/dev/null; then :
-    else   # no usable Python (e.g. the Microsoft Store alias): Windows PowerShell's built-in zip
-        powershell.exe -NoProfile -Command "Compress-Archive -Force -Path '$d/$name' -DestinationPath '$d/$name.zip'"
+    # Zip with '/' separators. First Python that really runs (python3 is often the Microsoft
+    # Store stub), else Windows' bsdtar. Never Compress-Archive: PowerShell 5.1 writes '\' names.
+    local py zipped=0
+    for py in ${PYTHON:-} python3 python py; do
+        if "$py" -c "import shutil" 2>/dev/null; then
+            "$py" -c "import shutil; shutil.make_archive('$d/$name','zip','$d','$name')"; zipped=1; break
+        fi
+    done
+    if [[ $zipped -eq 0 ]]; then
+        rm -f "$DIST/$name.zip"
+        (cd "$DIST" && "${SYSTEMROOT:-C:\\Windows}\\System32\\tar.exe" -a -c -f "$name.zip" "$name")
+    fi
+    if unzip -Z1 "$DIST/$name.zip" 2>/dev/null | grep -q '\\'; then
+        echo "error: $name.zip has '\\' in entry names" >&2; exit 1
     fi
     cp "$DIST/$name.zip" "$DIST/bilterm-$triple.zip"
     rm -rf "${DIST:?}/$name"

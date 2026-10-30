@@ -88,8 +88,10 @@ for t in "${TRIPLES[@]}"; do
     for f in "bilterm-$TAG-$t.zip" "bilterm-$t.zip"; do
         "$VM" pull "bt/src/target/release-dist/$TAG/$f" "$DIST/$f"
     done
-    command -v file >/dev/null && unzip -p "$DIST/bilterm-$TAG-$t.zip" "*/bilterm.exe" > "$TMP/b.exe" \
-        && echo "    $t: $(file -b "$TMP/b.exe")"
+    zip="$DIST/bilterm-$TAG-$t.zip"
+    if unzip -Z1 "$zip" | grep -q '\\'; then echo "error: $zip has '\\' in entry names" >&2; exit 1; fi
+    unzip -p "$zip" "bilterm-$TAG-$t/bilterm.exe" > "$TMP/b.exe"
+    echo "    $t: $(file -b "$TMP/b.exe")"
 done
 
 rc=0
