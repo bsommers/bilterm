@@ -655,6 +655,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_theme_command(subcmd);
             false
         }
+        ColonCommand::WindowStyle(ref subcmd) => {
+            wm.execute_window_style_command(subcmd);
+            false
+        }
         ColonCommand::SessionTreeCommand(ref subcmd) => {
             wm.execute_session_tree_command(subcmd);
             false

@@ -71,21 +71,21 @@ impl ThemePreset {
         match name.trim().to_ascii_lowercase().as_str() {
             "turbo-blue" | "turboblue" | "blue" | "borland" => Some(Self::TurboBlue),
             "turbo-cyan" | "turbocyan" | "cyan" => Some(Self::TurboCyan),
-            "ibm-3278-green" | "ibm3278-green" | "3278" | "green" | "ibm-green" => {
+            "ibm-3278-green" | "ibm-3278-grn" | "ibm3278-green" | "3278" | "green" | "ibm-green" => {
                 Some(Self::Ibm3278Green)
             }
-            "ibm-3279-amber" | "ibm3279-amber" | "3279" | "amber" | "ibm-amber" => {
+            "ibm-3279-amber" | "ibm-3279-amb" | "ibm3279-amber" | "3279" | "amber" | "ibm-amber" => {
                 Some(Self::Ibm3279Amber)
             }
             "ibm-mono" | "mono" | "monochrome" => Some(Self::IbmMono),
-            "cyberpunk-neon" | "cyberpunk" | "neon" => Some(Self::CyberpunkNeon),
+            "cyberpunk-neon" | "cyber-neon" | "cyberpunk" | "neon" => Some(Self::CyberpunkNeon),
             "dracula" => Some(Self::Dracula),
-            "solarized-dark" | "solarized_dark" | "solarized" => Some(Self::SolarizedDark),
-            "gruvbox-dark" | "gruvbox_dark" | "gruvbox" => Some(Self::GruvboxDark),
+            "solarized-dark" | "solarized-dk" | "solarized_dark" | "solarized" => Some(Self::SolarizedDark),
+            "gruvbox-dark" | "gruvbox-dk" | "gruvbox_dark" | "gruvbox" => Some(Self::GruvboxDark),
             "tokyo-night" | "tokyo_night" | "tokyonight" => Some(Self::TokyoNight),
             "catppuccin-mocha" | "catppuccin_mocha" | "catppuccin" => Some(Self::CatppuccinMocha),
             "nord" => Some(Self::Nord),
-            "monokai-remastered" | "monokai_remastered" | "monokai" => {
+            "monokai-remastered" | "monokai-rm" | "monokai_remastered" | "monokai" => {
                 Some(Self::MonokaiRemastered)
             }
             "tron-grid" | "tron_grid" | "tron" | "mcp" => Some(Self::TronGrid),

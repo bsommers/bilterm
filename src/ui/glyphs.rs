@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum GlyphPack {
-    /// Standard Unicode box-drawing + geometric dingbats (`╔═╗`, `[▲][▼]`, `[▪]`, `[↕]`, `◢`).
+    /// Standard Unicode box-drawing + geometric dingbats (`╔═╗`, `[▲][▼]`, `[_][□][X]`, `◢`).
     #[default]
     Unicode,
     /// Classic IBM PC Code Page 437 symbols (`♦`, `▲`, `▼`, `■`, `↕`, `╬`).
@@ -32,8 +32,8 @@ impl GlyphPack {
             Self::Unicode => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
                 minimize_badge: "[_]",
-                close_badge: "[▪]",
-                zoom_badge: "[↕]",
+                close_badge: "[X]",
+                zoom_badge: "[□]",
                 resize_corner: "◢",
                 oia_separator: "│",
                 prompt_prefix: "==> ",
@@ -48,9 +48,9 @@ impl GlyphPack {
             },
             Self::Cp437 => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
-                minimize_badge: "[─]",
-                close_badge: "[■]",
-                zoom_badge: "[↕]",
+                minimize_badge: "[_]",
+                close_badge: "[X]",
+                zoom_badge: "[↑]",
                 resize_corner: "╬",
                 oia_separator: "║",
                 prompt_prefix: "♦=> ",
@@ -66,8 +66,8 @@ impl GlyphPack {
             Self::NerdFont => GlyphSet {
                 pin_top_bottom: "[▲][▼]",
                 minimize_badge: "[_]",
-                close_badge: "[▪]",
-                zoom_badge: "[↕]",
+                close_badge: "[X]",
+                zoom_badge: "[□]",
                 resize_corner: "◢",
                 oia_separator: "",
                 prompt_prefix: "❯=> ",
@@ -83,7 +83,7 @@ impl GlyphPack {
             Self::Ascii => GlyphSet {
                 pin_top_bottom: "[^][v]",
                 minimize_badge: "[_]",
-                close_badge: "[x]",
+                close_badge: "[X]",
                 zoom_badge: "[+]",
                 resize_corner: "/",
                 oia_separator: "|",

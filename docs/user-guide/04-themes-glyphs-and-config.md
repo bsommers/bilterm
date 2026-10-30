@@ -19,9 +19,9 @@ Customize the border outline style of workspace windows and the command prompt i
 | Style Name | Top-Left / Horizontal / Top-Right | Command |
 |------------|-----------------------------------|---------|
 | `double` (Default) | `╔═══╗` | `:outline double` |
-| `solid` | `┌───┐` | `:outline solid` |
+| `single` / `thin` / `solid` | `┌───┐` | `:outline thin` |
 | `rounded` | `╭───╮` | `:outline rounded` |
-| `thick` | `┏━━━┓` | `:outline thick` |
+| `thick` / `bold` / `heavy` | `┏━━━┓` | `:outline thick` |
 | `dotted` | `┌┈┈┈┐` | `:outline dotted` |
 | `dashed` | `┌┄┄┄┐` | `:outline dashed` |
 | `quadruple` | `▛▀▀▀▜` | `:outline quadruple` |
@@ -30,6 +30,26 @@ Customize the border outline style of workspace windows and the command prompt i
 Target only windows or only the command prompt via:
 - `:outline window <style>`
 - `:outline prompt <style>`
+- `:outline bold [on|off]` — render every window frame in bold weight (`window_outline_bold = true` in `config.toml`).
+
+### Per-Window Theme, Outline & Bold Overrides
+
+Each window can use its own theme and frame style, independent of the global settings. Commands apply to the focused window:
+
+| Command | Effect |
+|---------|--------|
+| `:window theme <name>` / `:theme window <name>` | Built-in preset (`dracula`, `3278`, …) or imported `.itermcolors`/TOML/YAML name or path |
+| `:window theme next` / `prev` / `reset` | Cycle presets for this window, or revert to the global theme |
+| `:window outline <style>` / `:outline pane <style>` | Per-window frame style (any style from the table above) |
+| `:window outline next` / `reset` | Cycle styles for this window, or revert to the global outline |
+| `:window bold [on\|off\|toggle\|reset]` | Per-window bold border |
+| `:window reset` / `:window show` | Clear all overrides for this window, or show its current style |
+
+These actions are also in the top menu bar under **Window** (*Next Window Theme*, *Next Window Outline*, *Toggle Bold Border*, *Reset Window Style*). Per-window overrides last for the current run only and are not saved with sessions yet.
+
+### Window Title-Bar Controls
+
+Each window has three controls in its upper-right corner: **`[_]` minimize**, **`[□]` maximize/zoom**, and **`[X]` close**. The close `X` is shown in red. The CP437 glyph pack uses Turbo Vision's `[↑]` for zoom, and the ASCII pack uses `[+]`.
 
 ---
 

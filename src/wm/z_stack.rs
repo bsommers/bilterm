@@ -410,7 +410,7 @@ impl WindowManager {
     }
 
     /// Computes the active modal window's outer `Rect` (`Help`, `Inspector`, or `Palette`),
-    /// honoring user mouse/keyboard resize, drag-move, and `[↕]` maximize state.
+    /// honoring user mouse/keyboard resize, drag-move, and `[□]` maximize state.
     pub fn active_modal_rect(&self, workspace_area: Rect) -> Option<Rect> {
         let (def_w, def_h) = match self.modal {
             super::Modal::Help { .. } => (
@@ -504,7 +504,7 @@ impl WindowManager {
         clamped
     }
 
-    /// Toggles `[↕]` maximize on the active modal (`Help`, `Inspector`, `Palette`).
+    /// Toggles `[□]` maximize on the active modal (`Help`, `Inspector`, `Palette`).
     pub fn toggle_maximize_modal(&mut self) {
         self.z_stack.modal_maximized = !self.z_stack.modal_maximized;
     }
@@ -569,7 +569,9 @@ impl WindowManager {
                 let rect_str = self
                     .compute_workspace_rects(ws_area)
                     .into_iter()
-                    .find_map(|(id, r)| (id == active_id).then(|| format!("{}x{}", r.width, r.height)))
+                    .find_map(|(id, r)| {
+                        (id == active_id).then(|| format!("{}x{}", r.width, r.height))
+                    })
                     .unwrap_or_else(|| "updated".to_string());
                 self.active_pane_mut()
                     .set_status_message(Some(format!("Pane #{active_id} split size: {rect_str}")));

@@ -67,10 +67,28 @@ pub const ASCII_BORDER_SET: border::Set = border::Set {
 };
 
 impl OutlineStyle {
+    /// Every selectable outline style in cycle order.
+    pub const ALL: [Self; 8] = [
+        Self::Double,
+        Self::Solid,
+        Self::Rounded,
+        Self::Thick,
+        Self::Dotted,
+        Self::Dashed,
+        Self::Quadruple,
+        Self::Ascii,
+    ];
+
+    /// Returns the next outline style in [`OutlineStyle::ALL`] order.
+    pub fn next(self) -> Self {
+        let idx = Self::ALL.iter().position(|&s| s == self).unwrap_or(0);
+        Self::ALL[(idx + 1) % Self::ALL.len()]
+    }
+
     pub fn from_name(name: &str) -> Option<Self> {
         match name.trim().to_ascii_lowercase().as_str() {
             "double" | "dbl" | "borland" => Some(Self::Double),
-            "solid" | "plain" | "single" | "line" => Some(Self::Solid),
+            "solid" | "plain" | "single" | "line" | "thin" | "light" => Some(Self::Solid),
             "rounded" | "round" => Some(Self::Rounded),
             "thick" | "heavy" | "bold" => Some(Self::Thick),
             "dotted" | "dot" | "dots" => Some(Self::Dotted),
@@ -173,25 +191,28 @@ pub fn render_drop_shadow_styled(
                 && x < clamped_bounds.x + clamped_bounds.width
                 && y >= clamped_bounds.y
                 && y < clamped_bounds.y + clamped_bounds.height
-                && let Some(cell) = buf.cell_mut((x, y)) {
-                    if shadow_style == ShadowStyle::SolidHalfBlock {
-                        cell.set_symbol("█");
-                    }
-                    cell.set_style(cell_style);
+                && let Some(cell) = buf.cell_mut((x, y))
+            {
+                if shadow_style == ShadowStyle::SolidHalfBlock {
+                    cell.set_symbol("█");
                 }
+                cell.set_style(cell_style);
+            }
         }
     }
 
     // 1-row bottom shadow
     if bottom_y >= clamped_bounds.y && bottom_y < clamped_bounds.y + clamped_bounds.height {
         for x in rect.x.saturating_add(2)..right_x_end {
-            if x >= clamped_bounds.x && x < clamped_bounds.x + clamped_bounds.width
-                && let Some(cell) = buf.cell_mut((x, bottom_y)) {
-                    if shadow_style == ShadowStyle::SolidHalfBlock {
-                        cell.set_symbol("█");
-                    }
-                    cell.set_style(cell_style);
+            if x >= clamped_bounds.x
+                && x < clamped_bounds.x + clamped_bounds.width
+                && let Some(cell) = buf.cell_mut((x, bottom_y))
+            {
+                if shadow_style == ShadowStyle::SolidHalfBlock {
+                    cell.set_symbol("█");
                 }
+                cell.set_style(cell_style);
+            }
         }
     }
 }
@@ -223,6 +244,22 @@ pub fn render_borland_frame_styled(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
+    render_borland_frame_ext(outer, title, active, outline, false, palette, glyphs, buf);
+}
+
+/// Renders a Borland window frame with selectable `OutlineStyle`, optional bold border,
+/// and high-contrast `[_]` minimize / `[□]` maximize / `[X]` close title-bar controls.
+#[allow(clippy::too_many_arguments)]
+pub fn render_borland_frame_ext(
+    outer: Rect,
+    title: &str,
+    active: bool,
+    outline: OutlineStyle,
+    bold: bool,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
     if outer.width < 4 || outer.height < 3 {
         return;
     }
@@ -237,6 +274,10 @@ pub fn render_borland_frame_styled(
         palette.inactive_border_fg
     };
     let frame_bg = palette.window_frame_bg;
+    let mut border_style = Style::default().fg(border_fg).bg(frame_bg);
+    if bold {
+        border_style = border_style.add_modifier(Modifier::BOLD);
+    }
 
     let block = Block::default()
         .title(Span::styled(
@@ -248,30 +289,41 @@ pub fn render_borland_frame_styled(
         ))
         .borders(Borders::ALL)
         .border_set(effective_outline.border_set())
-        .border_style(Style::default().fg(border_fg).bg(frame_bg));
+        .border_style(border_style);
     block.render(outer, buf);
 
-    // Top-right [_] minimize badge, [↕] maximize/zoom badge, and [▪] close badge when window is wide enough
+    // Top-right [_] minimize, [□] maximize/zoom, and [X] close controls when window is wide enough.
+    // Brackets use the border color; the inner glyph is bold, with close highlighted in red.
     if outer.width >= 24 {
         let right_edge = outer.x + outer.width;
-        let badges = format!(
-            "{}{}{}",
-            glyphs.minimize_badge, glyphs.zoom_badge, glyphs.close_badge
-        );
-        let start_x = right_edge.saturating_sub(badges.chars().count() as u16 + 2);
-        for (i, ch) in badges.chars().enumerate() {
-            let x = start_x + i as u16;
-            if x < right_edge - 1
-                && let Some(cell) = buf.cell_mut((x, outer.y)) {
+        let badges: [(&str, Color); 3] = [
+            (glyphs.minimize_badge, palette.title_fg),
+            (glyphs.zoom_badge, palette.title_fg),
+            (glyphs.close_badge, Color::Rgb(255, 85, 85)),
+        ];
+        let total: u16 = badges.iter().map(|(b, _)| b.chars().count() as u16).sum();
+        let mut x = right_edge.saturating_sub(total + 2);
+        for (badge, glyph_fg) in badges {
+            for ch in badge.chars() {
+                if x < right_edge - 1
+                    && let Some(cell) = buf.cell_mut((x, outer.y))
+                {
                     let mut sym = [0u8; 4];
                     cell.set_symbol(ch.encode_utf8(&mut sym));
+                    let fg = if matches!(ch, '[' | ']') {
+                        border_fg
+                    } else {
+                        glyph_fg
+                    };
                     cell.set_style(
                         Style::default()
-                            .fg(palette.title_fg)
+                            .fg(fg)
                             .bg(frame_bg)
                             .add_modifier(Modifier::BOLD),
                     );
                 }
+                x += 1;
+            }
         }
     }
 

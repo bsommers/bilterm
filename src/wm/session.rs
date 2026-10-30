@@ -41,6 +41,15 @@ pub struct SavedPaneState {
     pub scrollback_lines: Vec<String>,
     pub read_only: bool,
     pub history: Vec<String>,
+    /// Per-window theme name (re-resolved via `resolve_named_palette`); `None` = global.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
+    /// Per-window outline style; `None` = global `window_outline`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<crate::ui::chrome::OutlineStyle>,
+    /// Per-window bold border; `None` = global `window_outline_bold`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
 }
 
 /// Declarative TOML snapshot of a multi-pane Bilterm workspace (`ECO-02`).
@@ -378,6 +387,7 @@ impl WindowManager {
                         scrollback_lines.push(trimmed.to_string());
                     }
                 }
+                let chrome = self.pane_chrome(p.id());
                 SavedPaneState {
                     id: p.id(),
                     title: p.title().to_string(),
@@ -392,6 +402,9 @@ impl WindowManager {
                     scrollback_lines,
                     read_only: p.is_read_only(),
                     history: p.prompt().history.clone(),
+                    theme: chrome.theme_name,
+                    outline: chrome.outline,
+                    bold: chrome.bold,
                 }
             })
             .collect();
@@ -524,6 +537,7 @@ impl WindowManager {
 
         let pane_count = new_panes.len();
         self.panes = new_panes;
+        self.restore_pane_chrome(&saved.panes);
         self.split_tree = saved.split_tree.clone();
         let geom_map: BTreeMap<PaneId, crate::wm::FloatingWindowGeometry> = saved
             .z_geometries

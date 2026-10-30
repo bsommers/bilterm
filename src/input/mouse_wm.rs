@@ -25,10 +25,10 @@ pub(super) fn detect_title_bar_badge_click(
     if col >= start_x && col < start_x + min_len {
         Some(0) // [_] Minimize
     } else if col >= start_x + min_len && col < start_x + min_len + zoom_len {
-        Some(1) // [↕] Maximize / Zoom
+        Some(1) // [□] Maximize / Zoom
     } else if col >= start_x + min_len + zoom_len && col < start_x + min_len + zoom_len + close_len
     {
-        Some(2) // [▪] Close
+        Some(2) // [X] Close
     } else {
         None
     }

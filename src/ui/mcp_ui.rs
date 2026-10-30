@@ -117,8 +117,15 @@ pub fn render_mcp_console(
             DrawerEdge::Right => "[m:PUSH-RIGHT][d:Edge]",
         },
     };
-    let title = format!(" ◈ {} {mode_tag} [▪] ", state.title);
-    write_clipped(buf, bounds.x + 2, bounds.y, right.saturating_sub(1), &title, gold_style);
+    let title = format!(" ◈ {} {mode_tag} [X] ", state.title);
+    write_clipped(
+        buf,
+        bounds.x + 2,
+        bounds.y,
+        right.saturating_sub(1),
+        &title,
+        gold_style,
+    );
 
     let footer = " ↑/↓:Select │ Enter/Click:Activate │ r:Refresh │ f:Freeze │ n:Branch │ m:Float/Push │ d:Edge │ Esc:Close ";
     write_clipped(buf, bounds.x + 2, bottom, right.saturating_sub(1), footer, gold_style);

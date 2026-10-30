@@ -98,27 +98,106 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":broadcast [on|off]", "Toggle Synchronized Multi-Pane Input Broadcast (📡 BCAST)"),
     (":record [start|workspace|pane] [path]", "Start Asciicast v2 (.cast) pane or whole-workspace recording"),
     (":record stop", "Stop active Asciicast v2 (.cast) recording"),
-    (":trigger add <pattern> | clear", "Register output regex/substring alert trigger or clear triggers"),
-    (":notifications", "Clear OSC 9 / OSC 777 desktop notifications"),
-    ("═══ COLON (:) THEMES, FONTS, SHADERS, GRAPHICS & CHROME ═══", ""),
-    (":theme <preset> | :theme list", "Switch theme preset or open Universal Theme browser window"),
-    (":theme import [file|dir|glob]", "Import iTerm2/TOML/YAML theme file, directory, or wildcard glob"),
-    (":browse [dir] / :files [dir]", "Open interactive Text File & Theme Directory Browser (Enter, Backspace, type filter)"),
-    (":theme config", "Initialize & inspect ~/.config/bilterm/config.toml & themes/ directory"),
-    (":fontsize [+|-|reset|<pt>|<pct>%]", "Zoom terminal/GUI font size in/out or set exact size/scale"),
-    (":font <preset|custom <ttf>|list|reset>", "Configure per-pane/global font family, .ttf file, bold/italic"),
-    (":outline [window|prompt] <style>", "double | solid | rounded | thick | dotted | dashed | quadruple | ascii"),
-    (":shadows [on|off|translucent|tinted|solid]", "Configure Borland Turbo Vision window & prompt drop shadows"),
-    (":glyphs <unicode|cp437|nerd-font|ascii>", "Switch box-drawing & status indicator glyph pack"),
-    (":cursor [shape] [blink|solid|rapid] [color]", "Customize cursor: block|hollow|underline|bar|custom <char>, blink|solid|rapid, #hex/color"),
-    (":crosshair [on|off|full|pane]", "Configure IBM 3270 full-screen or pane-local cross-hair ruler"),
-    (":spotlight <circle|ellipse|pixel|fuzzy|off>", "Configure focal spotlight shape, feathering, or radius (+/-)"),
-    (":focalzoom <1.25x|1.5x|2x|3x|pixel|fuzzy|off>", "Configure focal zoom magnification lens"),
-    (":crt [on|off]", "Toggle retro CRT phosphor scanline shader effect"),
-    (":menubar [on|off] / :fkeybar [on|off]", "Toggle top Borland Menu Bar or bottom DOS F-Key Bar"),
-    (":version [on|off] / :inspector [on|off]", "Toggle OIA version badge or F9 3270 Terminal Inspector"),
-    (":tek [on|off|demo|erase|clear]", "Tektronix 4010/4014 vector storage-tube mode & demo"),
-    (":canvas [hires|demo|mode|plot|image|clear]", "High-resolution Braille/Sextant/Kitty/Sixel/iTerm2 canvas"),
+    (
+        ":trigger add <pattern> | clear",
+        "Register output regex/substring alert trigger or clear triggers",
+    ),
+    (
+        ":notifications",
+        "Clear OSC 9 / OSC 777 desktop notifications",
+    ),
+    (
+        "═══ COLON (:) THEMES, FONTS, SHADERS, GRAPHICS & CHROME ═══",
+        "",
+    ),
+    (
+        ":theme <preset> | :theme list",
+        "Switch theme preset or open Universal Theme browser window",
+    ),
+    (
+        ":theme import [file|dir|glob]",
+        "Import iTerm2/TOML/YAML theme file, directory, or wildcard glob",
+    ),
+    (
+        ":browse [dir] / :files [dir]",
+        "Open interactive Text File & Theme Directory Browser (Enter, Backspace, type filter)",
+    ),
+    (
+        ":theme config",
+        "Initialize & inspect ~/.config/bilterm/config.toml & themes/ directory",
+    ),
+    (
+        ":fontsize [+|-|reset|<pt>|<pct>%]",
+        "Zoom terminal/GUI font size in/out or set exact size/scale",
+    ),
+    (
+        ":font <preset|custom <ttf>|list|reset>",
+        "Configure per-pane/global font family, .ttf file, bold/italic",
+    ),
+    (
+        ":outline [window|prompt] <style>",
+        "double | single/thin | rounded | thick/bold | dotted | dashed | quadruple | ascii",
+    ),
+    (
+        ":outline bold [on|off]",
+        "Render all window outline frames in bold (or normal) weight",
+    ),
+    (
+        ":window theme <name|next|reset>",
+        "Per-window theme/colors (preset or imported .itermcolors) for focused window",
+    ),
+    (
+        ":window outline <style|next|reset>",
+        "Per-window outline frame style (double, thin, dashed, thick, ...)",
+    ),
+    (
+        ":window bold [on|off] / :window reset",
+        "Per-window bold border, or reset window to global style",
+    ),
+    (
+        ":shadows [on|off|translucent|tinted|solid]",
+        "Configure Borland Turbo Vision window & prompt drop shadows",
+    ),
+    (
+        ":glyphs <unicode|cp437|nerd-font|ascii>",
+        "Switch box-drawing & status indicator glyph pack",
+    ),
+    (
+        ":cursor [shape] [blink|solid|rapid] [color]",
+        "Customize cursor: block|hollow|underline|bar|custom <char>, blink|solid|rapid, #hex/color",
+    ),
+    (
+        ":crosshair [on|off|full|pane]",
+        "Configure IBM 3270 full-screen or pane-local cross-hair ruler",
+    ),
+    (
+        ":spotlight <circle|ellipse|pixel|fuzzy|off>",
+        "Configure focal spotlight shape, feathering, or radius (+/-)",
+    ),
+    (
+        ":focalzoom <1.25x|1.5x|2x|3x|pixel|fuzzy|off>",
+        "Configure focal zoom magnification lens",
+    ),
+    (
+        ":crt [on|off]",
+        "Toggle retro CRT phosphor scanline shader effect",
+    ),
+    (
+        ":menubar [on|off] / :fkeybar [on|off]",
+        "Toggle top Borland Menu Bar or bottom DOS F-Key Bar",
+    ),
+    (
+        ":version [on|off] / :inspector [on|off]",
+        "Toggle OIA version badge or F9 3270 Terminal Inspector",
+    ),
+    (
+        ":tek [on|off|demo|erase|clear]",
+        "Tektronix 4010/4014 vector storage-tube mode & demo",
+    ),
+    (
+        ":canvas [hires|demo|mode|plot|image|clear]",
+        "High-resolution Braille/Sextant/Kitty/Sixel/iTerm2 canvas",
+    ),
 ];
 
 /// Complete Fuzzy Command Palette catalog (`Ctrl+P` / `:palette`) paired with shortcuts and descriptions.
@@ -207,21 +286,111 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":focalzoom +", "—", "Step Focal Zoom Magnification Up (+0.25x)"),
     (":focalzoom -", "—", "Step Focal Zoom Magnification Down (-0.25x)"),
     (":focalzoom off", "—", "Disable Focal Zoom Lens"),
-    (":theme list", "—", "Open Universal Theme & .itermcolors Catalog in floating/push window"),
-    (":browse", "—", "Open interactive Text File & Theme Directory Browser"),
-    (":theme import", "—", "Open interactive File & Directory Browser to import theme schemes"),
-    (":theme config", "—", "Initialize & show ~/.config/bilterm/config.toml & themes/ directory"),
-    (":itermcolors", "—", "View & apply discovered iTerm2 .itermcolors schemes (iterm2colors)"),
-    (":cursor", "—", "Open interactive Cursor Style, Blink & Color Selector"),
-    (":cursor block blink", "—", "Set cursor to Blinking Block (█)"),
-    (":cursor hollow blink amber", "—", "Set cursor to Blinking Hollow Block (▯) in Amber (#FFB000)"),
-    (":cursor underline solid cyan", "—", "Set cursor to Solid Underline (_) in Cyan (#00FFFF)"),
-    (":cursor bar blink", "—", "Set cursor to Blinking Vertical Bar (▏)"),
-    (":cursor custom ◆ solid #00ff66", "—", "Set cursor to Solid Custom Character (◆) in Phosphor Green"),
-    (":cursor reset", "—", "Reset cursor shape, blink mode, and color to theme defaults"),
-    (":paste", "Ctrl+Shift+V / Ctrl+X p", "Paste OS clipboard directly into active pane or Raw PTY"),
-    (":theme turbo-blue", "—", "Switch palette to Borland Turbo Vision Blue"),
-    (":theme 3278", "—", "Switch palette to IBM 3278 Phosphor Green"),
+    (
+        ":theme list",
+        "—",
+        "Open Universal Theme & .itermcolors Catalog in floating/push window",
+    ),
+    (
+        ":browse",
+        "—",
+        "Open interactive Text File & Theme Directory Browser",
+    ),
+    (
+        ":theme import",
+        "—",
+        "Open interactive File & Directory Browser to import theme schemes",
+    ),
+    (
+        ":theme config",
+        "—",
+        "Initialize & show ~/.config/bilterm/config.toml & themes/ directory",
+    ),
+    (
+        ":itermcolors",
+        "—",
+        "View & apply discovered iTerm2 .itermcolors schemes (iterm2colors)",
+    ),
+    (
+        ":cursor",
+        "—",
+        "Open interactive Cursor Style, Blink & Color Selector",
+    ),
+    (
+        ":cursor block blink",
+        "—",
+        "Set cursor to Blinking Block (█)",
+    ),
+    (
+        ":cursor hollow blink amber",
+        "—",
+        "Set cursor to Blinking Hollow Block (▯) in Amber (#FFB000)",
+    ),
+    (
+        ":cursor underline solid cyan",
+        "—",
+        "Set cursor to Solid Underline (_) in Cyan (#00FFFF)",
+    ),
+    (
+        ":cursor bar blink",
+        "—",
+        "Set cursor to Blinking Vertical Bar (▏)",
+    ),
+    (
+        ":cursor custom ◆ solid #00ff66",
+        "—",
+        "Set cursor to Solid Custom Character (◆) in Phosphor Green",
+    ),
+    (
+        ":cursor reset",
+        "—",
+        "Reset cursor shape, blink mode, and color to theme defaults",
+    ),
+    (
+        ":paste",
+        "Ctrl+Shift+V / Ctrl+X p",
+        "Paste OS clipboard directly into active pane or Raw PTY",
+    ),
+    (
+        ":window theme next",
+        "—",
+        "Cycle focused window's own theme (independent of other windows)",
+    ),
+    (
+        ":window theme reset",
+        "—",
+        "Reset focused window to the global theme",
+    ),
+    (
+        ":window outline next",
+        "—",
+        "Cycle focused window's outline style (double/thin/rounded/thick/dashed/...)",
+    ),
+    (
+        ":window outline dashed",
+        "—",
+        "Set focused window's outline frame to dashed",
+    ),
+    (
+        ":window bold toggle",
+        "—",
+        "Toggle bold border on focused window",
+    ),
+    (
+        ":outline bold on",
+        "—",
+        "Render all window outline frames in bold",
+    ),
+    (
+        ":theme turbo-blue",
+        "—",
+        "Switch palette to Borland Turbo Vision Blue",
+    ),
+    (
+        ":theme 3278",
+        "—",
+        "Switch palette to IBM 3278 Phosphor Green",
+    ),
     (":theme 3279", "—", "Switch palette to IBM 3279 Amber CRT"),
     (":session new", "—", "Create and switch to a new workspace session"),
     (":session blank", "bilterm -B", "Start a clean, blank single-pane workspace session"),

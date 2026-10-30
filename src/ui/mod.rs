@@ -1,17 +1,17 @@
 pub mod bitmap_font;
 pub mod canvas_raster;
+pub mod chrome;
 pub mod contrast;
+pub mod cursor;
+pub mod cursor_cmd;
+pub mod drawer;
 pub mod exit_guard_ui;
 pub mod file_browser;
+pub mod glyphs;
 pub mod gui_font;
 #[cfg(target_os = "macos")]
 pub mod gui_macos;
 pub mod gui_window;
-pub mod chrome;
-pub mod cursor;
-pub mod cursor_cmd;
-pub mod drawer;
-pub mod glyphs;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod modals;
@@ -67,6 +67,8 @@ pub struct CompositePaneWidget<'a> {
     pub pane: &'a CompositePane,
     pub active: bool,
     pub config: Option<&'a BiltermConfig>,
+    /// Optional per-window palette override (`:window theme <name>`).
+    pub palette: Option<ThemePalette>,
 }
 
 impl<'a> CompositePaneWidget<'a> {
@@ -75,7 +77,14 @@ impl<'a> CompositePaneWidget<'a> {
             pane,
             active,
             config: None,
+            palette: None,
         }
+    }
+
+    /// Applies a per-window palette override (`:window theme <name>`).
+    pub fn with_palette(mut self, palette: Option<ThemePalette>) -> Self {
+        self.palette = palette;
+        self
     }
 
     pub fn with_config(pane: &'a CompositePane, active: bool, config: &'a BiltermConfig) -> Self {
@@ -83,6 +92,7 @@ impl<'a> CompositePaneWidget<'a> {
             pane,
             active,
             config: Some(config),
+            palette: None,
         }
     }
 }
@@ -95,7 +105,7 @@ impl Widget for CompositePaneWidget<'_> {
 
         let default_cfg = BiltermConfig::default();
         let cfg = self.config.unwrap_or(&default_cfg);
-        let palette = cfg.palette();
+        let palette = self.palette.clone().unwrap_or_else(|| cfg.palette());
         let glyphs = cfg.glyph_set();
 
         let canvas = self.pane.canvas_rect(area);
@@ -575,6 +585,9 @@ impl Widget for WorkspaceWidget<'_> {
                 continue;
             };
             let is_active = !qt_visible && top_workspace_id == Some(id);
+            // Per-window theme / outline / bold overrides (`:window theme|outline|bold`)
+            let chrome_style = self.wm.pane_chrome(id);
+            let pane_palette = chrome_style.resolve_palette(cfg);
             if framed {
                 if cfg.drop_shadows && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
                     render_drop_shadow_styled(
@@ -582,7 +595,7 @@ impl Widget for WorkspaceWidget<'_> {
                         outer,
                         workspace_area,
                         cfg.shadow_style,
-                        &palette,
+                        &pane_palette,
                     );
                 }
                 occlude_rect(buf, outer);
@@ -593,19 +606,24 @@ impl Widget for WorkspaceWidget<'_> {
                     .map(|(r, total)| format!("Z:{r}/{total}"))
                     .unwrap_or_default();
                 let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
-                render_borland_frame_styled(
+                chrome::render_borland_frame_ext(
                     outer,
                     &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title()),
                     is_active,
-                    cfg.window_outline,
-                    &palette,
+                    chrome_style.resolve_outline(cfg),
+                    chrome_style.resolve_bold(cfg),
+                    &pane_palette,
                     &glyphs,
                     buf,
                 );
                 let inner = inset_window_frame(outer);
-                CompositePaneWidget::with_config(pane, is_active, cfg).render(inner, buf);
+                CompositePaneWidget::with_config(pane, is_active, cfg)
+                    .with_palette(chrome_style.palette.clone())
+                    .render(inner, buf);
             } else {
-                CompositePaneWidget::with_config(pane, is_active, cfg).render(outer, buf);
+                CompositePaneWidget::with_config(pane, is_active, cfg)
+                    .with_palette(chrome_style.palette)
+                    .render(outer, buf);
             }
         }
 

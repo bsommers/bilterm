@@ -1,3 +1,4 @@
+pub mod chrome_style;
 pub mod drawer;
 pub mod journal;
 pub mod layout_profile;
@@ -7,6 +8,7 @@ pub mod session_manager;
 pub mod session_tree;
 pub mod split_tree;
 pub mod v2_runtime;
+pub mod window_style;
 pub mod z_stack;
 
 pub use drawer::{
@@ -130,6 +132,7 @@ pub struct WindowManager {
     pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
     /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
     pub(crate) last_blink_toggle: Instant,
+    pane_chrome: BTreeMap<PaneId, chrome_style::PaneChromeStyle>,
     /// When `true` (host terminal TUI mode), disables per-pane pixel font scaling so `vt` and `Buffer` stay 1:1.
     pub(crate) tui_cell_grid_mode: bool,
     /// Sub-cell mouse pixel hint `(px, py, cell_width_px, cell_height_px)` from native GUI windows (`--gui`).
@@ -189,6 +192,7 @@ impl WindowManager {
             client_detached: false,
             layout_profiles_mem: BTreeMap::new(),
             last_blink_toggle: Instant::now(),
+            pane_chrome: BTreeMap::new(),
             tui_cell_grid_mode: false,
             mouse_pixel_hint: None,
         }
@@ -564,6 +568,7 @@ impl WindowManager {
         }
         let _ = self.split_tree.remove_leaf(target_id);
         self.panes.remove(&target_id);
+        self.pane_chrome.remove(&target_id);
         self.z_stack.remove(target_id);
         if self.zoomed_pane == Some(target_id) {
             self.zoomed_pane = None;

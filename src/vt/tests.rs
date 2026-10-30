@@ -362,3 +362,19 @@ fn claude_marker_renders_across_split_utf8_chunks_variation_selectors_and_trueco
     assert!(snap.cell(1, 0).unwrap().symbol().starts_with('⏺'));
     assert_eq!(snap.cell(2, 2).unwrap().symbol(), "⎿");
 }
+
+/// Regression: 16-way splits produced 1-row panes; vt100-ctt `col_wrap` underflowed on wrap.
+#[test]
+fn tiny_grids_clamp_to_min_dim_and_survive_soft_wrap() {
+    for (r, c) in [(0u16, 0u16), (1, 8), (1, 1), (8, 1)] {
+        let mut vt = VtParser::new(r, c, 100);
+        vt.process("SESSION #12 OUTPUT READY\r\n漢字 wide\r\n".as_bytes());
+        vt.set_size(1, 8);
+        vt.process(b"SESSION #13 OUTPUT READY AGAIN\r\n");
+        vt.set_size(0, 0);
+        vt.process("漢字🔥 overflow".as_bytes());
+        let (rows, cols) = vt.screen().size();
+        assert!(rows >= MIN_GRID_DIM && cols >= MIN_GRID_DIM);
+        assert_eq!(vt.size(), (rows, cols));
+    }
+}

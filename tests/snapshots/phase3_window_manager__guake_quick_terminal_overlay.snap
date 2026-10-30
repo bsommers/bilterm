@@ -2,7 +2,7 @@
 source: tests/phase3_window_manager.rs
 expression: rendered
 ---
-╔ [Q] QUAKE QUICK TERM [~] (Alt+` to hide) ══════════════════════════[_][↕][▪]═╗
+╔ [Q] QUAKE QUICK TERM [~] (Alt+` to hide) ══════════════════════════[_][□][X]═╗
 ║ ╔╣ BILTERM 3270 // CMD [TOP] ╠══════════════════════════════════════[▲][▼]═╗ ║
 ║ ║==> git status --short                                                    ║ ║
 ║ ╚══════════════════════════════════════════════════════════════════════════╝ ║

@@ -7,6 +7,31 @@ use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode};
 
+const WINDOW_STYLE_USAGE: &str = "Usage: :window theme <name|next|reset> | outline <style|next|reset> | bold [on|off|toggle|reset] | reset | show";
+
+/// Validates `:window ...` per-window chrome arguments and returns the normalized subcommand.
+pub(super) fn validate_window_style_args(args: &[&str]) -> Result<String, String> {
+    let ok = match (args.first().copied(), args.get(1).copied()) {
+        (None | Some("show" | "status" | "info" | "reset" | "clear"), None) => true,
+        (Some("theme" | "color" | "colors"), Some(_)) => true,
+        (Some("outline" | "border" | "frame"), Some(v)) => {
+            matches!(v, "next" | "cycle" | "reset" | "default" | "global")
+                || OutlineStyle::from_name(v).is_some()
+        }
+        (Some("bold"), None | Some("on" | "off" | "toggle" | "true" | "false" | "reset")) => true,
+        _ => false,
+    };
+    if ok {
+        Ok(if args.is_empty() {
+            "show".to_string()
+        } else {
+            args.join(" ")
+        })
+    } else {
+        Err(WINDOW_STYLE_USAGE.to_string())
+    }
+}
+
 /// Parses visual, shader, typography, drawer, and canvas `:colon` commands.
 pub(super) fn parse_visual_colon_command(
     head: &str,
@@ -41,6 +66,11 @@ pub(super) fn parse_visual_colon_command(
                     "list".to_string()
                 };
                 Some(Ok(ColonCommand::ThemeCommand(sub)))
+            }
+            Some("window" | "win" | "pane" | "this") => {
+                let mut args = vec!["theme"];
+                args.extend_from_slice(&parts[2..]);
+                Some(validate_window_style_args(&args).map(ColonCommand::WindowStyle))
             }
             Some("import" | "load" | "export" | "save" | "browse" | "files" | "open" | "config" | "where") => {
                 let sub = parts[1..].join(" ");
@@ -98,7 +128,18 @@ pub(super) fn parse_visual_colon_command(
                 Err(e) => Some(Err(e)),
             }
         }
+        "window" | "win" | "pane-style" => Some(
+            validate_window_style_args(&parts[1..])
+                .map(ColonCommand::WindowStyle),
+        ),
         "outline" | "border" => match (parts.get(1).copied(), parts.get(2).copied()) {
+            (Some("bold" | "heavy-text"), arg) => Some(Ok(ColonCommand::WindowStyle(format!(
+                "global-bold {}",
+                arg.unwrap_or("toggle")
+            )))),
+            (Some("pane" | "this" | "focused"), Some(style_str)) => Some(
+                validate_window_style_args(&["outline", style_str]).map(ColonCommand::WindowStyle),
+            ),
             (Some("window" | "win"), Some(style_str)) => OutlineStyle::from_name(style_str)
                 .map(|s| Ok(ColonCommand::Outline { window: Some(s), prompt: None }))
                 .or_else(|| Some(Err("Unknown outline style".to_string()))),
@@ -109,12 +150,12 @@ pub(super) fn parse_visual_colon_command(
                 .map(|s| Ok(ColonCommand::Outline { window: Some(s), prompt: Some(s) }))
                 .or_else(|| {
                     Some(Err(
-                        "Usage: :outline [window|prompt] <solid|double|rounded|thick|dotted|dashed|quadruple|ascii>"
+                        "Usage: :outline [window|prompt] <double|single|thin|rounded|thick|bold|dotted|dashed|quadruple|ascii>"
                             .to_string(),
                     ))
                 }),
             _ => Some(Err(
-                "Usage: :outline [window|prompt] <solid|double|rounded|thick|dotted|dashed|quadruple|ascii>"
+                "Usage: :outline [window|prompt] <double|single|thin|rounded|thick|bold|dotted|dashed|quadruple|ascii>"
                     .to_string(),
             )),
         },
@@ -246,7 +287,7 @@ fn parse_spotlight_command(parts: &[&str]) -> Option<Result<ColonCommand, String
             "feather" | "edge" => {
                 let Some(raw) = parts.get(i + 1) else {
                     return Some(Err(
-                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
+                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string()
                     ));
                 };
                 let pct = if let Ok(f) = raw.parse::<f32>() {
@@ -257,7 +298,7 @@ fn parse_spotlight_command(parts: &[&str]) -> Option<Result<ColonCommand, String
                     }
                 } else {
                     return Some(Err(
-                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
+                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string()
                     ));
                 };
                 feather_pct = Some(pct.clamp(5, 100));
@@ -339,7 +380,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
             "feather" | "edge" => {
                 let Some(raw) = parts.get(i + 1) else {
                     return Some(Err(
-                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
+                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string()
                     ));
                 };
                 let pct = if let Ok(f) = raw.parse::<f32>() {
@@ -350,7 +391,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
                     }
                 } else {
                     return Some(Err(
-                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
+                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string()
                     ));
                 };
                 feather_pct = Some(pct.clamp(5, 100));

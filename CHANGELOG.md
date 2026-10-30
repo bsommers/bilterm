@@ -5,6 +5,18 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.4.0] - 2026-10-29
+
+### Added
+- **Per-Window Themes, Outlines & Bold Borders (`src/wm/chrome_style.rs`, `src/wm/window_style.rs`, `src/ui/mod.rs`)**:
+  - `:window theme|outline|bold|reset|show|global-bold` (aliases `:win`, `:pane-style`, `:theme window <name>`, `:outline pane <style>`) give each window its own palette, outline (`double`, `single`/`thin`, `rounded`, `thick`, `dotted`, `dashed`, …) and bold border.
+  - `:outline bold [on|off]` and config `window_outline_bold`; `thin`/`light` outline aliases.
+  - Per-window styles persist in saved sessions (`theme`, `outline`, `bold` pane keys; backward compatible). Theme preset labels (e.g. `IBM-3278-GRN`) now re-resolve by name.
+- **Clearer Window Controls (`src/ui/glyphs.rs`, `src/ui/chrome.rs`)**: `[_]` minimize, `[□]` maximize (CP437 `[↑]`, ASCII `[+]`), red bold `[X]` close.
+
+### Fixed
+- **Fuzz-Torture Grid Underflow (`src/vt/mod.rs`)**: 16-way splits yielded 1-row panes; `vt100-ctt` `Grid::col_wrap` underflowed on soft-wrap. VT grids are now clamped to `>= 2x2` (`MIN_GRID_DIM`).
+
 ## [v2.3.0] - 2026-10-29
 
 ### Added

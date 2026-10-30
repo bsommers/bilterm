@@ -127,10 +127,14 @@ pub struct VtParser {
     primary_log_complete: bool,
 }
 
+/// Smallest grid dimension handed to `vt100-ctt` (1-row grids panic on soft-wrap).
+pub const MIN_GRID_DIM: u16 = 2;
+
 impl VtParser {
     pub fn new(rows: u16, cols: u16, scrollback_capacity: usize) -> Self {
-        let clamped_rows = rows.max(1);
-        let clamped_cols = cols.max(1);
+        // vt100-ctt underflows (`grid.rs` col_wrap) on 1-row/1-col grids; enforce >= 2x2.
+        let clamped_rows = rows.max(MIN_GRID_DIM);
+        let clamped_cols = cols.max(MIN_GRID_DIM);
         Self {
             parser: vt100_ctt::Parser::new(clamped_rows, clamped_cols, scrollback_capacity),
             rows: clamped_rows,
@@ -287,8 +291,9 @@ impl VtParser {
     /// screen when horizontal columns change (`FND-08`) and emitting in-band size reports when
     /// `DECSET ?2048` is active (`VAL-05`).
     pub fn set_size(&mut self, rows: u16, cols: u16) {
-        let clamped_rows = rows.max(1);
-        let clamped_cols = cols.max(1);
+        // vt100-ctt underflows (`grid.rs` col_wrap) on 1-row/1-col grids; enforce >= 2x2.
+        let clamped_rows = rows.max(MIN_GRID_DIM);
+        let clamped_cols = cols.max(MIN_GRID_DIM);
         if (self.rows, self.cols) != (clamped_rows, clamped_cols) {
             let cols_changed = self.cols != clamped_cols;
             self.rows = clamped_rows;
@@ -308,7 +313,7 @@ impl VtParser {
             } else {
                 self.parser
                     .screen_mut()
-                    .set_size(clamped_rows.max(2), clamped_cols.max(2));
+                    .set_size(clamped_rows, clamped_cols);
             }
             if self.in_band_size_2048 {
                 self.pending_query_responses.push(

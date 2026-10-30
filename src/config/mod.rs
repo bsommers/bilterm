@@ -3,16 +3,16 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::pane::{ExitProtectionPolicy, PromptAnchor};
 use crate::pane::history_store::{
     DEFAULT_HISTORY_LOAD_LIMIT, DEFAULT_HISTORY_MAX_ENTRIES, DEFAULT_HISTORY_SESSION,
     HistorySettings,
 };
+use crate::pane::{ExitProtectionPolicy, PromptAnchor};
 use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, CursorBlinkMode, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
-use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
+use crate::ui::theme::{ThemePalette, ThemePreset, parse_hex_color};
 use crate::vt::scrollback::{PaneScrollMode, ScrollbackConfig};
 use crate::wm::DrawerConfig;
 
@@ -33,6 +33,8 @@ pub struct BiltermConfig {
     pub cursor_text_color: Option<String>,
     /// Outline border style for multi-pane windows (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
     pub window_outline: OutlineStyle,
+    /// Renders window outline frames in bold (`:outline bold [on|off]`).
+    pub window_outline_bold: bool,
     /// Outline border style for the command prompt pane (`double`, `solid`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`).
     pub prompt_outline: OutlineStyle,
     /// DOS-style drop-shadow mode (`none`, `translucent`, `theme-tinted`, `solid-half-block`).
@@ -156,6 +158,7 @@ impl Default for BiltermConfig {
             cursor_color: None,
             cursor_text_color: None,
             window_outline: OutlineStyle::Double,
+            window_outline_bold: false,
             prompt_outline: OutlineStyle::Double,
             shadow_style: ShadowStyle::Translucent,
             crosshair_cursor: false,
