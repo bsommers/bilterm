@@ -20,9 +20,11 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
+      # Run the script from the default branch (so script fixes apply to old
+      # tags); it builds the tag itself in a clean worktree.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          fetch-depth: 0
       - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --upload
 
   windows:
@@ -33,7 +35,9 @@ jobs:
       run:
         shell: bash
     steps:
+      # Run the script from the default branch (so script fixes apply to old
+      # tags); it builds the tag itself in a clean worktree.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          fetch-depth: 0
       - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows --upload
