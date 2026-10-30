@@ -1,27 +1,33 @@
-# Session Checkpoint (2026-10-29 22:32)
+# Session Checkpoint (2026-10-30)
 
-**Status:** COMPLETE. Last tag: `v2.4.0` (pushed, released).
+**Status:** PAUSED — release asset backfill partly done; Windows + some Linux archives still missing. Last tag: `v2.4.0` (Latest).
 
 ## User decisions (verbatim)
-- Request: "make the window controls in the upper right more clear for minimize "_", close "X", maximize (unsure what to show)." / "allow each window to be a different theme or color" / "allow the window outlines to switch from double, single, thin, dased, bold or not, for the border/ outline frames"
-- Follow-up: agent asked "Want me to fix that pre-existing fuzz-test regression and add session persistence for per-window styles before cutting `v2.4.0`?" → user: **"yes"**
+- "make MacOS releases for this. also make a skill / command / scripts to do binary release per platform."
+- "v2.1.2 - do release. make release page; add MacOS binaries. note that I have to build for Linux and Windows, too." / "v2.1.1 - build and attach v2.1.1. binaries for MacOS to it"
+- Merge local vs remote without clobbering either → user: **"yes"** (to the stash / ff-pull / pop plan).
+- Workflow should run the script from `main` + attach macOS to v2.2.0–v2.4.0 → user: **"yes"**.
 
-## Done (uncommitted, verified: clippy clean, 196 lib tests pass)
-- Badges `[_][□][X]` (CP437 `[↑]`, ASCII `[+]`), red bold X: `src/ui/glyphs.rs`, `src/ui/chrome.rs` (`render_borland_frame_ext` w/ bold, `OutlineStyle::ALL`/`next()`, `thin`/`light` aliases).
-- Per-window overrides stored in WM (pane layer may NOT import `crate::ui`/`crate::config` — DAG test `tests/vt_worker_and_snapshot_seam.rs`):
-  - `src/wm/chrome_style.rs` (`PaneChromeStyle {theme_name, palette, outline, bold}`, `resolve_named_palette`, `WindowManager::pane_chrome(id)`, `active_pane_chrome_mut()`), field `pane_chrome: BTreeMap<PaneId, PaneChromeStyle>` in `src/wm/mod.rs` (removed in `remove_pane`).
-  - `src/wm/window_style.rs` (`execute_window_style_command`: `theme|outline|bold|reset|show|global-bold`) + tests.
-  - `Action::WindowStyle(String)` (`src/action.rs`), parse `:window`/`:win`/`:pane-style`, `:theme window <n>`, `:outline pane <s>`, `:outline bold [on|off]` (`src/colon_command/parse_visual.rs::validate_window_style_args`), exec in `src/colon_command/execute_wm.rs`.
-  - Config `window_outline_bold: bool` (`src/config/mod.rs`).
-  - Render: `src/ui/mod.rs` `CompositePaneWidget.palette` + `with_palette()`; WorkspaceWidget uses per-pane palette/outline/bold.
-  - Help/palette/menubar (Window menu) entries; docs `docs/user-guide/04-themes-glyphs-and-config.md`; snapshots updated (`tests/snapshots/phase3_*`, `phase4_*`), `tests/phase4_retro_aesthetics.rs` asserts `[□][X]`.
-- Release binary built & installed (`~/.local/bin/bilterm`, still reports 2.3.0).
+## Done (committed + pushed)
+- `066f4e5` fix `scripts/build-release-mac-win.sh --upload` on macOS: `ls bilterm-*.zip` failed under `pipefail` (no zips on mac) → nullglob + printf.
+- `d0552c2` `.github/workflows/release-binaries.yml` checks out the default branch (`fetch-depth: 0`) instead of the tag; the script builds the tag in its own worktree, so script fixes now apply to old tags. **Not yet run on GitHub.**
+- macOS archives (aarch64 + x86_64, verified arch / `--version` / system-only dylibs, re-downloaded and `SHA256SUMS`-checked) attached to v2.1.1, v2.1.2, v2.2.0, v2.3.0, v2.4.0. Existing Linux/Windows sums were merged, not overwritten.
+- v2.1.2 release page created from CHANGELOG (`--latest=false`); v2.1.1 notes footer updated to list macOS.
+- Skill `building-release-binaries` committed in swe-skills-2 (`28b79df`); its `build-binaries.sh` (bash 3.2-safe `REPO_ARGS`) is also in this repo as `scripts/build-binaries.sh`.
 
-## Completed (v2.4.0 released)
-1. Regression fixed: 16-way split → 1-row pane; vt100-ctt `Grid::col_wrap` `prev_pos.row -= scrolled` underflow. `VtParser::new/set_size` clamp to `MIN_GRID_DIM=2` (`src/vt/mod.rs`); test `vt::tests::tiny_grids_clamp_to_min_dim_and_survive_soft_wrap`.
-2. Session persistence: `SavedPaneState.{theme,outline,bold}` (`#[serde(default)]`, skip-if-none); `WindowManager::restore_pane_chrome`; preset labels re-resolve via new `ThemePreset::from_name` aliases. Tests: `per_window_styles_round_trip_through_session_toml`, `every_preset_label_re_resolves`.
-3. Verified: clippy clean; lib 199 pass; `--tests` 31 suites / 318 pass / 0 fail; all `src/**/*.rs` <= 800.
-4. Tag `v2.4.0` pushed (85845a0); release https://github.com/bsommers/bilterm/releases/tag/v2.4.0 (linux gnu+musl + SHA256SUMS); `~/.local/bin/bilterm` = 2.4.0.
+## Release asset matrix (remaining gaps)
+| Release | macOS | Windows | Linux |
+|---|---|---|---|
+| v2.4.0 (Latest) | ✅ | **missing** | gnu, musl x86_64; **aarch64 musl missing** |
+| v2.3.0 | ✅ | **missing** | gnu, musl x86_64; **aarch64 musl missing** |
+| v2.2.0 | ✅ | msvc | complete |
+| v2.1.2 | ✅ | **missing** | **missing** (notes say "not attached yet") |
+| v2.1.1 | ✅ | gnu (+ `windows-msvc.zip` alias is a copy of the gnu build — same sha) | complete |
+
+## Known issues (not fixed)
+- `cargo test` (`tests/full_suite_battle_and_perf.rs`) rewrites 5 `docs/assets/*.svg` → dirty tree after every test run. Proposed: write under `target/` or behind an env var.
+- `scripts/build-release-assets.sh` hardcodes a stale `/tmp/claude-1000/...` zig path; needs `zig` on PATH.
+- Local backup of pre-merge working tree: `~/bilterm-local-backup.patch` (safe to delete).
 
 ## Exact next command
-None — awaiting new user request.
+`gh workflow run release-binaries.yml -f tag=v2.4.0` (first real run — watch it; expect fixes). Then repeat for v2.3.0, v2.1.2; Linux gaps via `scripts/build-release-assets.sh <tag>` on the Linux box; after v2.1.2 is complete, drop its "not attached yet" note.
