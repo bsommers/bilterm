@@ -1,0 +1,39 @@
+name: release-binaries
+
+# Manual: build macOS + native MSVC Windows archives for an existing tag and
+# attach them to its GitHub release (merging SHA256SUMS). Linux archives are
+# built locally with scripts/build-release-assets.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v2.2.0); the GitHub release must already exist"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --upload
+
+  windows:
+    # Sequential: both jobs merge and re-upload SHA256SUMS.
+    needs: macos
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows --upload
