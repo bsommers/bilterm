@@ -152,6 +152,46 @@ pub(super) fn handle_modal_mouse_event(
         return Some(AppAction::Handled);
     }
 
+    if let Some((cat, _)) = wm.menubar_state() {
+        let dropdown = crate::ui::modals::menubar_dropdown_rect(cat, workspace_area);
+        let inner = crate::wm::inset_window_frame(dropdown);
+        let item_count = crate::ui::modals::menubar_category_item_count(cat);
+        if rect_contains(dropdown, mouse.column, mouse.row) {
+            let hovered_item = if rect_contains(inner, mouse.column, mouse.row) && item_count > 0 {
+                Some(usize::from(mouse.row - inner.y).min(item_count - 1))
+            } else {
+                None
+            };
+            match mouse.kind {
+                MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Left) => {
+                    if let Some(item) = hovered_item {
+                        *wm.modal_mut() = crate::wm::Modal::Menubar {
+                            category: cat,
+                            item,
+                        };
+                    }
+                }
+                MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                    if let Some(item) = hovered_item {
+                        *wm.modal_mut() = crate::wm::Modal::Menubar {
+                            category: cat,
+                            item,
+                        };
+                        let action = crate::input::modal::execute_menubar_selection(wm, cat, item)
+                            .unwrap_or(AppAction::Handled);
+                        let _ = wm.resize_all(workspace_area);
+                        return Some(action);
+                    }
+                }
+                _ => {}
+            }
+            return Some(AppAction::Handled);
+        } else if matches!(mouse.kind, MouseEventKind::Down(_)) {
+            wm.set_menubar_open_category(None);
+            return Some(AppAction::Handled);
+        }
+    }
+
     let modal_outer = wm.active_modal_rect(workspace_area)?;
     if !rect_contains(modal_outer, mouse.column, mouse.row) {
         return None;
@@ -174,6 +214,35 @@ pub(super) fn handle_modal_mouse_event(
                     edge,
                     initial_rect: modal_outer,
                 }));
+            } else {
+                let inner = crate::wm::inset_window_frame(modal_outer);
+                if rect_contains(inner, mouse.column, mouse.row)
+                    && let Some(action) =
+                        handle_modal_inner_left_click(wm, inner, mouse.row, workspace_area)
+                {
+                    return Some(action);
+                }
+            }
+            Some(AppAction::Handled)
+        }
+        MouseEventKind::Moved => {
+            let inner = crate::wm::inset_window_frame(modal_outer);
+            if rect_contains(inner, mouse.column, mouse.row)
+                && mouse.row > inner.y
+                && let crate::wm::Modal::Palette { selected, .. } = wm.modal()
+            {
+                let items_len = wm.filtered_palette_items().len();
+                let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
+                let sel = (*selected).min(items_len.saturating_sub(1));
+                let start = sel.saturating_sub(list_rows.saturating_sub(1));
+                if start == 0 {
+                    let hovered = usize::from(mouse.row - inner.y - 1);
+                    if hovered < items_len
+                        && let crate::wm::Modal::Palette { selected, .. } = wm.modal_mut()
+                    {
+                        *selected = hovered;
+                    }
+                }
             }
             Some(AppAction::Handled)
         }
@@ -200,6 +269,56 @@ pub(super) fn handle_modal_mouse_event(
         }
         _ => Some(AppAction::Handled),
     }
+}
+
+fn handle_modal_inner_left_click(
+    wm: &mut WindowManager,
+    inner: Rect,
+    row: u16,
+    workspace_area: Rect,
+) -> Option<AppAction> {
+    let cmd_str = match wm.modal().clone() {
+        crate::wm::Modal::Palette { selected, .. } if row > inner.y => {
+            let items = wm.filtered_palette_items();
+            let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
+            let sel = selected.min(items.len().saturating_sub(1));
+            let start = sel.saturating_sub(list_rows.saturating_sub(1));
+            let &(c, _, _) = items.get(start + usize::from(row - inner.y - 1))?;
+            c
+        }
+        crate::wm::Modal::Help { scroll } => {
+            let max_s = crate::ui::modals::HELP_LINES
+                .len()
+                .saturating_sub(usize::from(inner.height));
+            let &(lhs, rhs) = crate::ui::modals::HELP_LINES
+                .get(scroll.min(max_s) + usize::from(row - inner.y))?;
+            if rhs.is_empty() {
+                return None;
+            }
+            lhs.split(['/', '|'])
+                .map(|s| s.trim().trim_matches(['(', ')']).trim())
+                .find(|s| s.starts_with(':'))?
+                .split(['[', '<'])
+                .next()?
+                .trim()
+        }
+        _ => return None,
+    };
+    if cmd_str == ":help" {
+        wm.toggle_help();
+        return Some(AppAction::Handled);
+    }
+    let Ok(cmd) = crate::colon_command::parse_colon_command(cmd_str)? else {
+        return None;
+    };
+    wm.close_modal();
+    let quit = crate::colon_command::execute_wm_colon_command(wm, cmd);
+    let _ = wm.resize_all(workspace_area);
+    Some(if quit {
+        AppAction::Quit
+    } else {
+        AppAction::Handled
+    })
 }
 
 pub(super) fn handle_quick_terminal_border_mouse_down(

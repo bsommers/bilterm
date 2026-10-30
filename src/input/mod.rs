@@ -515,6 +515,7 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
 
 /// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`, `ARCH-R01.2`).
 pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<AppAction> {
+    wm.reset_cursor_blink();
     let key = normalize_macos_option_key(raw_key, wm.config().macos_option_as_alt);
 
     // Global emergency quit: Ctrl+Q

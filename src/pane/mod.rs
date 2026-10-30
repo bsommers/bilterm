@@ -355,9 +355,20 @@ impl CompositePane {
             .x_offset
             .map(|x| x.min(max_x_off))
             .unwrap_or_else(|| default_margin_x.min(max_x_off));
+        let mut y = canvas.y + y_offset;
+        if self.copy_mode.active {
+            let cr = canvas.y + self.copy_mode.cursor_row;
+            if cr >= y && cr < y + height {
+                y = if y <= canvas.y + canvas.height / 2 {
+                    canvas.y + max_y_offset
+                } else {
+                    canvas.y
+                };
+            }
+        }
         Rect {
             x: canvas.x + x_off,
-            y: canvas.y + y_offset,
+            y,
             width,
             height,
         }

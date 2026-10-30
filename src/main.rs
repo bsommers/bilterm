@@ -17,7 +17,12 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 fn has_switch(args: &[String], switches: &[&str]) -> bool {
-    args.iter().any(|a| switches.contains(&a.as_str()))
+    args.iter().any(|a| {
+        switches.contains(&a.as_str())
+            || switches
+                .iter()
+                .any(|sw| a.strip_prefix(sw).is_some_and(|r| r.starts_with('=')))
+    })
 }
 
 fn switch_value<'a>(args: &'a [String], switches: &[&str]) -> Option<&'a str> {
@@ -48,12 +53,16 @@ async fn main() -> color_eyre::Result<()> {
             "Bilterm v{} — IBM 3270 x Borland Turbo Vision Composite Terminal Multiplexer\n\
              Usage:\n  \
                bilterm [OPTIONS]\n  \
+               bilterm new [SESSION] / bilterm -n [SESSION]\n  \
+               bilterm blank [SESSION] / bilterm -B\n  \
                bilterm attach [SESSION] / bilterm -a [SESSION]\n  \
                bilterm ls / bilterm sessions\n  \
                bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
+               -n, --new-session [SESSION]      Start a fresh named (or auto-named) 1-pane session\n  \
+               -B, --blank, --blank-session     Start a clean blank 1-pane session (no layout/history restore)\n  \
                -a, --attach [SESSION]           Re-attach & restore saved/detached multi-pane window layout\n  \
                -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
                -F, --font, --gui-font <FAMILY>  Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
@@ -322,6 +331,39 @@ async fn main() -> color_eyre::Result<()> {
             }
         }
     }
+    let new_subcmd = matches!(args.first().map(String::as_str), Some("new" | "new-session"));
+    let blank_subcmd = matches!(
+        args.first().map(String::as_str),
+        Some("blank" | "blank-session" | "clean")
+    );
+    let new_session_flag = new_subcmd || has_switch(&args, &["-n", "--new", "--new-session"]);
+    let blank_session_flag =
+        blank_subcmd || has_switch(&args, &["-B", "--blank", "--blank-session", "--clean"]);
+    let cli_new_session_name: Option<String> = if new_subcmd || blank_subcmd {
+        args.get(1)
+            .filter(|s| !s.starts_with('-'))
+            .cloned()
+    } else {
+        switch_value(
+            &args,
+            &[
+                "-n",
+                "--new",
+                "--new-session",
+                "-B",
+                "--blank",
+                "--blank-session",
+                "--clean",
+            ],
+        )
+        .filter(|s| !s.starts_with('-'))
+        .map(str::to_string)
+    }
+    .or_else(|| {
+        switch_value(&args, &["-s", "--session"])
+            .filter(|_| new_session_flag || blank_session_flag)
+            .map(str::to_string)
+    });
     let attach_subcmd = matches!(args.first().map(String::as_str), Some("attach" | "a" | "resume"));
     let attach_flag = has_switch(&args, &["-a", "--attach"]);
     let explicit_attach_session = if attach_subcmd {
@@ -366,7 +408,17 @@ async fn main() -> color_eyre::Result<()> {
     }
     let session_to_restore = cfg.history_session.clone();
     app.wm.apply_config(cfg);
-    if attach_subcmd || attach_flag || app.wm.has_detached_session(&session_to_restore) {
+    if blank_session_flag || new_session_flag {
+        if let Ok(sess) = app
+            .wm
+            .create_new_session(cli_new_session_name.as_deref(), blank_session_flag)
+        {
+            let kind_lbl = if blank_session_flag { "blank" } else { "new" };
+            app.wm.active_pane_mut().set_status_message(Some(format!(
+                "Started {kind_lbl} session '{sess}' (clean 1-pane workspace)"
+            )));
+        }
+    } else if attach_subcmd || attach_flag || app.wm.has_detached_session(&session_to_restore) {
         match app.wm.restore_session(&session_to_restore) {
             Ok(count) => {
                 app.wm.active_pane_mut().set_status_message(Some(format!(

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.2.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v2.3.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-250%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
@@ -55,6 +55,8 @@ cargo build --release && install -m 0755 target/release/bilterm ~/.local/bin/bil
 # Launch TUI multiplexer, detach (Ctrl+X D or :detach), and re-attach with full window layout intact
 bilterm
 bilterm attach                  # or: bilterm -a [session]
+bilterm new [session]           # or: bilterm -n [session] (start a new named/auto-named session)
+bilterm blank [session]         # or: bilterm -B [session] (start a clean 1-pane blank session)
 
 # Launch standalone native desktop GUI window with custom font & theme
 bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16 --theme ibm-3278-green
@@ -84,7 +86,7 @@ bilterm --mcp
 | **Per-Pane Font Zoom / Universal Theme** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset]` / `:theme <preset\|list\|import>` |
 | **File & Theme Browser / Cursor Customization** | — | `:browse [dir]` / `:cursor [block\|hollow\|underline\|bar\|custom <c>] [blink\|solid\|rapid] [color]` |
 | **Mainframe Page-Hold (`MORE...`) & Vi Copy** | `<L> PgDn` / `PF8` / `F8` (`Alt+C`) / `F3` (`<L> f`) | `:scroll [page\|smooth\|instant]` / `:copy` / `:hints` |
-| **Session Save / Restore / Tree / SSH Fleet** | — | `:session [save\|restore\|list\|tree]` / `:ssh` / `:remote` |
+| **Session New / Blank / Rename / Reorder / Save** | `N` / `Shift+Up`/`Down` (in `F7` Drawer) | `:session [new\|blank\|rename\|move\|reorder\|save\|restore\|list\|tree]` |
 
 *(Exhaustive CLI, keyboard, mouse, and `:colon` tables: **[`docs/README.md`](docs/README.md)** and **[Chapter 6: Complete Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)**).*
 

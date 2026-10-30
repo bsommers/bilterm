@@ -341,6 +341,7 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         "≡ System",
         &[
             ("3270 Inspector (F9)", ":inspector"),
+            ("New Session", ":session new"),
             ("Save Session", ":session save default"),
             ("Restore Session", ":session restore default"),
             ("Quit (Ctrl+Q)", ":quit"),
@@ -402,6 +403,54 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
+/// Returns the menu bar category index (`0..MENUBAR_CATEGORIES.len()`) at `rel_col`
+/// relative to the left edge of the top menu bar (`ECO-03`).
+pub fn menubar_category_at_col(rel_col: u16) -> Option<usize> {
+    let mut x = 0u16;
+    for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
+        let w = title.chars().count() as u16 + 2;
+        if rel_col >= x && rel_col < x + w {
+            return Some(idx);
+        }
+        x = x.saturating_add(w);
+    }
+    None
+}
+
+/// Returns the starting column offset of `category` along the top menu bar (`ECO-03`).
+pub fn menubar_category_x_offset(category: usize) -> u16 {
+    MENUBAR_CATEGORIES
+        .iter()
+        .take(category.min(MENUBAR_CATEGORIES.len()))
+        .map(|&(title, _)| title.chars().count() as u16 + 2)
+        .sum()
+}
+
+/// Returns the number of items in `category` of the top menu bar (`ECO-03`).
+pub fn menubar_category_item_count(category: usize) -> usize {
+    let cat_idx = category.min(MENUBAR_CATEGORIES.len().saturating_sub(1));
+    MENUBAR_CATEGORIES[cat_idx].1.len()
+}
+
+/// Returns the `:colon` command string for `(category, item)` in the top menu bar (`ECO-03`).
+pub fn menubar_item_command(category: usize, item: usize) -> Option<&'static str> {
+    let (_, items) = MENUBAR_CATEGORIES.get(category)?;
+    items.get(item).map(|&(_, cmd)| cmd)
+}
+
+/// Computes the outer `Rect` of the open pull-down menu for `category` inside `workspace_area` (`ECO-03`).
+pub fn menubar_dropdown_rect(category: usize, workspace_area: Rect) -> Rect {
+    let cat_idx = category.min(MENUBAR_CATEGORIES.len().saturating_sub(1));
+    let (_, items) = MENUBAR_CATEGORIES[cat_idx];
+    let x_off = menubar_category_x_offset(cat_idx);
+    let w = 30u16.min(workspace_area.width);
+    let h = (items.len() as u16 + 2).min(workspace_area.height);
+    let x = (workspace_area.x + x_off)
+        .min(workspace_area.x + workspace_area.width.saturating_sub(w));
+    let y = workspace_area.y;
+    Rect::new(x, y, w, h)
+}
+
 pub(super) fn render_top_menubar(
     rect: Rect,
     wm: &WindowManager,
@@ -453,13 +502,7 @@ pub(super) fn render_menubar_dropdown(
 ) {
     let cat_idx = category.min(MENUBAR_CATEGORIES.len() - 1);
     let (cat_title, items) = MENUBAR_CATEGORIES[cat_idx];
-    let x_off = (cat_idx as u16) * 8;
-    let w = 30u16.min(workspace_area.width);
-    let h = (items.len() as u16 + 2).min(workspace_area.height);
-    let x = (workspace_area.x + x_off)
-        .min(workspace_area.x + workspace_area.width.saturating_sub(w));
-    let y = workspace_area.y;
-    let dropdown = Rect::new(x, y, w, h);
+    let dropdown = menubar_dropdown_rect(cat_idx, workspace_area);
 
     if cfg.drop_shadows {
         render_drop_shadow_styled(buf, dropdown, workspace_area, cfg.shadow_style, palette);

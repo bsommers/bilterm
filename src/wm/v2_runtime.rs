@@ -548,8 +548,11 @@ impl WindowManager {
         crate::ui::file_browser::execute_theme_or_browser_command(self, subcmd);
     }
 
-    /// Executes `:session branch|graft|detach-subtree|tree|checkpoint` commands (`TREE-01..02`, `PERS-01..02`).
+    /// Executes `:session branch|graft|detach-subtree|tree|checkpoint|new|rename|switch|move|reorder|delete` commands (`TREE-01..02`, `PERS-01..02`).
     pub fn execute_session_tree_command(&mut self, subcmd: &str) {
+        if self.execute_session_management_command(subcmd) {
+            return;
+        }
         let parts: Vec<&str> = subcmd.split_whitespace().collect();
         match parts.first().copied() {
             None | Some("tree") => {

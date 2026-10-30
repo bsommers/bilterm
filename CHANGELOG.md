@@ -5,6 +5,27 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.3.0] - 2026-10-29
+
+### Added
+- **Session Creation, Naming/Renaming, Persistent Ordering & CLI Switches (`src/wm/session_manager.rs`, `src/wm/drawer.rs`, `src/colon_command/parse.rs`, `src/main.rs`)**:
+  - Added `:session new [name]` / `:new-session [name]` to save the outgoing session and start a new 1-pane workspace session (auto-naming `session-2`, `session-3`, ... when `[name]` is omitted).
+  - Added `:session blank [name]` / `:session clean [name]` to start a clean 1-pane blank session without restoring prior multi-pane layout state.
+  - Added `:session rename [old_name] <new_name>` / `:rename-session <new_name>`, `:session switch <name>` / `:session open <name>`, and `:session delete <name>`.
+  - Added persistent session ordering (`session-order.json`) with `:session move [name] <up|down|top|bottom|1..N>` (`:session up|down|top|bottom`), `:session reorder <s1> <s2> ...`, `:session swap <a> <b>`, and `<F7>` Slide-Out Drawer hotkeys (`N` for new session; `Shift+Up` / `Alt+Up` / `K` and `Shift+Down` / `Alt+Down` / `J` to move selected sessions up/down).
+  - Added CLI subcommands and switches `bilterm new [SESSION]`, `bilterm -n, --new-session [SESSION]`, `bilterm blank [SESSION]`, and `bilterm -B, --blank, --blank-session, --clean`.
+
+### Fixed
+- **Software Cursor Blinking (`src/ui/cursor.rs`, `src/ui/cursor_cmd.rs`, `src/wm/mod.rs`, `src/input/mod.rs`, `src/ui/mod.rs`)**:
+  - Implemented software cursor blink phase tracking (`cursor_blink_hidden`, `tick_cursor_blink`, `reset_cursor_blink`) at 500ms (`blink`) and 250ms (`rapid`) intervals across `FloatingCommandPrompt`, `RawPtyPassthrough`, and `CopyMode`, resetting the cursor to solid-visible on any keypress.
+- **Mouse Text Selection Alignment in Normal & Scaled Windows (`src/pane/mod.rs`, `src/wm/mod.rs`, `src/wm/z_stack.rs`, `src/ui/typography.rs`, `src/ui/renderer.rs`, `src/ui/gui_font/linux_x11.rs`)**:
+  - Unified Copy-Mode floating-prompt dodge inside `CompositePane::prompt_rect` so rendering and mouse hit-testing always match.
+  - Accounted for `show_top_menubar` (`top_off`) and `show_dos_fkey_bar` (`bot_off`) in `WindowManager::resize_all` and `current_workspace_area`.
+  - Added `tui_cell_grid_mode`, `mouse_pixel_hint`, and `WindowManager::translate_pane_mouse_event` for accurate scaled-pane mouse selection in both TUI and X11 GUI modes.
+- **Borland Top Menu Bar Alignment, Pull-Down Menus & Clickable Help (`src/ui/modals.rs`, `src/input/mouse.rs`, `src/input/mouse_wm.rs`, `src/input/modal.rs`)**:
+  - Replaced hardcoded top menu bar column ranges with exact title-width helpers (`menubar_category_at_col`, `menubar_category_x_offset`, `menubar_dropdown_rect`, `menubar_item_command`).
+  - Wired mouse hover and left-click across all top menu bar categories (including `" Help "` at category 6), pull-down menu items, `<F1>` Help modal rows, and `<Ctrl+P>` Command Palette rows.
+
 ## [v2.2.0] - 2026-10-29
 
 ### Added

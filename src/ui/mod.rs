@@ -46,7 +46,7 @@ use crate::pane::CompositePane;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
 use crate::ui::cursor::{
-    SpotlightMode, render_caret, render_crosshair_cursor, render_focal_zoom_cursor,
+    SpotlightMode, render_crosshair_cursor, render_focal_zoom_cursor,
     render_spotlight_cursor,
 };
 use crate::ui::modals::{
@@ -106,18 +106,7 @@ impl Widget for CompositePaneWidget<'_> {
 
         // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 2 {
-            let mut prompt_rect = self.pane.prompt_rect(area);
-            if self.pane.copy_mode().active && !self.pane.prompt().anchor.is_split() {
-                let cr = canvas.y + self.pane.copy_mode().cursor_row;
-                if cr >= prompt_rect.y && cr < prompt_rect.y + prompt_rect.height {
-                    if prompt_rect.y <= canvas.y + canvas.height / 2 {
-                        prompt_rect.y =
-                            canvas.y + canvas.height.saturating_sub(prompt_rect.height);
-                    } else {
-                        prompt_rect.y = canvas.y;
-                    }
-                }
-            }
+            let prompt_rect = self.pane.prompt_rect(area);
             if cfg.drop_shadows && !self.pane.prompt().anchor.is_split() {
                 render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
@@ -420,7 +409,7 @@ fn render_output_canvas(
                 };
                 render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
             }
-            render_caret(buf, cx, cy, cfg.cursor_style, Color::Rgb(255, 255, 85));
+            cursor_cmd::render_caret_configured(buf, cx, cy, cfg, palette);
         }
     }
 

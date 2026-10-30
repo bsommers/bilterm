@@ -548,36 +548,6 @@ impl WindowManager {
         Ok(pane_count)
     }
 
-    /// Lists all saved workspace session names found in `<session_dir>` (`:session list`, `ECO-02`).
-    pub fn list_sessions(&self) -> Vec<String> {
-        let dir = match self.resolve_session_dir() {
-            Ok(d) => d,
-            Err(e) => {
-                tracing::warn!(error = %e, "session dir unavailable");
-                return Vec::new();
-            }
-        };
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return Vec::new();
-        };
-        let mut names: Vec<String> = entries
-            .flatten()
-            .filter_map(|e| {
-                let p = e.path();
-                if p.extension().and_then(|s| s.to_str()) == Some("toml") {
-                    p.file_stem()
-                        .and_then(|s| s.to_str())
-                        .filter(|&stem| stem != "layout_profile_meta")
-                        .map(ToOwned::to_owned)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        names.sort();
-        names
-    }
-
     /// Runs [`Self::rebalance_scrollback`] when the periodic interval has elapsed (app tick).
     pub fn maybe_rebalance_scrollback(&mut self, now: Instant) {
         if self.scrollback.due(now) {

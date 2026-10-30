@@ -652,10 +652,9 @@ impl WindowManager {
                 DrawerRowKind::SessionHeader(name) => {
                     if name != &self.config.history_session {
                         let name_clone = name.clone();
-                        if self.restore_session(&name_clone).is_ok() {
-                            self.config.history_session = name_clone.clone();
+                        if let Ok((sess, count, _)) = self.switch_or_create_session(&name_clone) {
                             self.active_pane_mut().set_status_message(Some(format!(
-                                "Restored session '{name_clone}'"
+                                "Switched to session '{sess}' ({count} pane(s))"
                             )));
                         }
                     } else if let Some(top_id) = self.z_stack.top() {
@@ -686,6 +685,27 @@ impl WindowManager {
         if let Some(id) = self.selected_drawer_pane_id() {
             self.focus_and_raise(id);
             self.toggle_zoom();
+        }
+    }
+
+    pub fn drawer_move_selected_session(&mut self, up: bool) {
+        let rows = self.drawer_rows();
+        let target_sess = rows.get(self.drawer.selected_index).and_then(|r| match &r.kind {
+            DrawerRowKind::SessionHeader(s) => Some(s.clone()),
+            _ => None,
+        });
+        let dir = if up { "up" } else { "down" };
+        if let Ok(order) = self.move_session_in_order(target_sess.as_deref(), dir) {
+            if let Some(ref s) = target_sess
+                && let Some(pos) = self
+                    .drawer_rows()
+                    .iter()
+                    .position(|r| r.kind == DrawerRowKind::SessionHeader(s.clone()))
+            {
+                self.drawer.selected_index = pos;
+            }
+            self.active_pane_mut()
+                .set_status_message(Some(format!("Session order: {}", order.join(", "))));
         }
     }
 

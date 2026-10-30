@@ -533,17 +533,39 @@ impl GuiWorkspaceRenderer {
         );
         let pane_rects = wm.compute_workspace_rects(ws_area);
         let vp_scale = wm.viewport_scale_pct();
-        let can_scale_panes =
-            *wm.modal() == crate::wm::Modal::None && !wm.is_quick_terminal_visible();
+        let framed = wm.is_framed();
         let drawer_rect = wm.drawer_rect(ws_area);
+        let mcp_rect = wm.mcp_console().panel_rect(ws_area);
+        let modal_rect = wm.active_modal_rect(ws_area);
+        let dropdown_rect = wm
+            .menubar_state()
+            .map(|(cat, _)| crate::ui::modals::menubar_dropdown_rect(cat, ws_area));
+        let qt_rect = wm
+            .is_quick_terminal_visible()
+            .then(|| wm.quick_terminal().overlay_rect(ws_area));
+
+        let is_overlay_cell = |abs_c: u16, abs_r: u16| -> bool {
+            !crate::wm::rect_contains(ws_area, abs_c, abs_r)
+                || drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+        };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
-            if !can_scale_panes || drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r)) {
+            if is_overlay_cell(abs_c, abs_r) {
                 return false;
             }
             for &(id, outer) in pane_rects.iter().rev() {
                 if crate::wm::rect_contains(outer, abs_c, abs_r) {
-                    return wm.pane_effective_scale_pct(id) != vp_scale;
+                    let inner = if framed {
+                        crate::wm::inset_window_frame(outer)
+                    } else {
+                        outer
+                    };
+                    return crate::wm::rect_contains(inner, abs_c, abs_r)
+                        && wm.pane_effective_scale_pct(id) != vp_scale;
                 }
             }
             false
@@ -571,13 +593,13 @@ impl GuiWorkspaceRenderer {
         };
 
         let subcell_y_offset = |abs_c: u16, abs_r: u16| -> f32 {
-            if !can_scale_panes || drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r)) {
+            if is_overlay_cell(abs_c, abs_r) {
                 return 0.0;
             }
             for &(id, outer) in pane_rects.iter().rev() {
                 if crate::wm::rect_contains(outer, abs_c, abs_r) {
                     let Some(pane) = wm.pane(id) else { return 0.0 };
-                    let inner = if wm.is_framed() { crate::wm::inset_window_frame(outer) } else { outer };
+                    let inner = if framed { crate::wm::inset_window_frame(outer) } else { outer };
                     let canvas = pane.canvas_rect(inner);
                     if !crate::wm::rect_contains(canvas, abs_c, abs_r) {
                         return 0.0;
@@ -604,49 +626,65 @@ impl GuiWorkspaceRenderer {
             }
         }
 
-        if can_scale_panes {
-            let (framed, top_id, glyphs_set) = (wm.is_framed(), wm.z_stack().top(), wm.config().glyph_set());
-            for (idx, &(id, outer)) in pane_rects.iter().enumerate() {
-                let pane_scale = wm.pane_effective_scale_pct(id);
-                if pane_scale == vp_scale {
-                    continue;
-                }
-                let Some(pane) = wm.pane(id) else { continue };
-                let scaled_outer = wm.pane_scaled_outer_rect(id, outer);
-                let local_outer = Rect::new(0, 0, scaled_outer.width.max(1), scaled_outer.height.max(1));
-                let mut pane_buf = Buffer::empty(local_outer);
-                let is_active = top_id == Some(id);
-                if framed {
-                    let z_badge = wm.z_stack().rank_of(id).map(|(rk, tot)| format!("Z:{rk}/{tot}")).unwrap_or_default();
-                    let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
-                    crate::ui::chrome::render_borland_frame_styled(
-                        local_outer, &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title()),
-                        is_active, wm.config().window_outline, &palette, &glyphs_set, &mut pane_buf,
+        let top_id = wm.z_stack().top();
+        for (idx, &(id, outer)) in pane_rects.iter().enumerate() {
+            let pane_scale = wm.pane_effective_scale_pct(id);
+            if pane_scale == vp_scale {
+                continue;
+            }
+            let Some(pane) = wm.pane(id) else { continue };
+            let inner = if framed {
+                crate::wm::inset_window_frame(outer)
+            } else {
+                outer
+            };
+            if inner.width == 0 || inner.height == 0 {
+                continue;
+            }
+            let scaled_inner = wm.pane_scaled_inner_rect(id, inner);
+            let local_inner = Rect::new(0, 0, scaled_inner.width.max(1), scaled_inner.height.max(1));
+            let mut pane_buf = Buffer::empty(local_inner);
+            let is_active = top_id == Some(id);
+            crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config())
+                .render(local_inner, &mut pane_buf);
+            let pane_x0 = f32::from(inner.x.saturating_sub(viewport.x)) * cw;
+            let pane_y0 = f32::from(inner.y.saturating_sub(viewport.y)) * ch;
+            let pane_cw_f = (f32::from(inner.width) * cw) / f32::from(local_inner.width.max(1));
+            let pane_ch_f = (f32::from(inner.height) * ch) / f32::from(local_inner.height.max(1));
+            let (pane_cw_u16, pane_ch_u16) = (
+                pane_cw_f.round().clamp(4.0, 64.0) as u16,
+                pane_ch_f.round().clamp(8.0, 128.0) as u16,
+            );
+            let pane_pt = ((u32::from(wm.config().font_size_pt.clamp(6, 72)) * u32::from(pane_scale) + 50) / 100)
+                .clamp(6, 72) as u16;
+            for sr in 0..local_inner.height {
+                for sc in 0..local_inner.width {
+                    let (x_px, y_px) = (
+                        pane_x0 + f32::from(sc) * pane_cw_f,
+                        pane_y0 + f32::from(sr) * pane_ch_f,
                     );
-                    let local_inner = crate::wm::inset_window_frame(local_outer);
-                    crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config()).render(local_inner, &mut pane_buf);
-                } else {
-                    crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config()).render(local_outer, &mut pane_buf);
-                }
-                let pane_x0 = f32::from(outer.x.saturating_sub(viewport.x)) * cw;
-                let pane_y0 = f32::from(outer.y.saturating_sub(viewport.y)) * ch;
-                let pane_cw_f = (f32::from(outer.width) * cw) / f32::from(local_outer.width.max(1));
-                let pane_ch_f = (f32::from(outer.height) * ch) / f32::from(local_outer.height.max(1));
-                let (pane_cw_u16, pane_ch_u16) = (pane_cw_f.round().clamp(4.0, 64.0) as u16, pane_ch_f.round().clamp(8.0, 128.0) as u16);
-                let pane_pt = ((u32::from(wm.config().font_size_pt.clamp(6, 72)) * u32::from(pane_scale) + 50) / 100).clamp(6, 72) as u16;
-                for sr in 0..local_outer.height {
-                    for sc in 0..local_outer.width {
-                        let (x_px, y_px) = (pane_x0 + f32::from(sc) * pane_cw_f, pane_y0 + f32::from(sr) * pane_ch_f);
-                        let abs_c = viewport.x + ((x_px + pane_cw_f * 0.5) / cw) as u16;
-                        let abs_r = viewport.y + ((y_px + pane_ch_f * 0.5) / ch) as u16;
-                        if drawer_rect.is_some_and(|dr| crate::wm::rect_contains(dr, abs_c, abs_r))
-                            || pane_rects[idx + 1..].iter().any(|&(_, higher)| crate::wm::rect_contains(higher, abs_c, abs_r))
-                        {
-                            continue;
-                        }
-                        if let Some(cell) = pane_buf.cell((sc, sr)) {
-                            push_cell(cell, sr, sc, x_px, y_px, pane_cw_f, pane_ch_f, pane_cw_u16, pane_ch_u16, pane_pt);
-                        }
+                    let abs_c = viewport.x + ((x_px + pane_cw_f * 0.5) / cw) as u16;
+                    let abs_r = viewport.y + ((y_px + pane_ch_f * 0.5) / ch) as u16;
+                    if is_overlay_cell(abs_c, abs_r)
+                        || pane_rects[idx + 1..]
+                            .iter()
+                            .any(|&(_, higher)| crate::wm::rect_contains(higher, abs_c, abs_r))
+                    {
+                        continue;
+                    }
+                    if let Some(cell) = pane_buf.cell((sc, sr)) {
+                        push_cell(
+                            cell,
+                            sr,
+                            sc,
+                            x_px,
+                            y_px,
+                            pane_cw_f,
+                            pane_ch_f,
+                            pane_cw_u16,
+                            pane_ch_u16,
+                            pane_pt,
+                        );
                     }
                 }
             }

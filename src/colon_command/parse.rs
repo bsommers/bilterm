@@ -222,7 +222,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::BroadcastToggle(arg)))
         }
-        "session" | "workspace" => match parts.get(1).copied() {
+        "session" | "workspace" | "sessions" => match parts.get(1).copied() {
             Some("save") => {
                 let name = parts.get(2).copied().unwrap_or("default").to_string();
                 Some(Ok(ColonCommand::SessionSave(name)))
@@ -231,16 +231,60 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 let name = parts.get(2).copied().unwrap_or("default").to_string();
                 Some(Ok(ColonCommand::SessionRestore(name)))
             }
-            Some("branch" | "spawn" | "graft" | "detach-subtree" | "promote" | "tree" | "checkpoint" | "journal") => {
+            Some(
+                "new"
+                | "create"
+                | "blank"
+                | "clean"
+                | "rename"
+                | "name"
+                | "switch"
+                | "open"
+                | "move"
+                | "reorder"
+                | "order"
+                | "swap"
+                | "up"
+                | "down"
+                | "top"
+                | "bottom"
+                | "delete"
+                | "rm"
+                | "remove"
+                | "branch"
+                | "spawn"
+                | "graft"
+                | "detach-subtree"
+                | "promote"
+                | "tree"
+                | "checkpoint"
+                | "journal",
+            ) => {
                 let sub = parts[1..].join(" ");
                 Some(Ok(ColonCommand::SessionTreeCommand(sub)))
             }
             None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
             _ => Some(Err(
-                "Usage: :session save [name] | restore [name] | list | tree | branch <p>/<c> | graft <s> <d> | detach-subtree <n> | checkpoint [slot]"
+                "Usage: :session new [name] | blank [name] | rename [old] <new> | switch <name> | move [name] <up|down|top|bottom|idx> | reorder <s1> <s2>... | save [name] | restore [name] | delete <name> | list | tree"
                     .to_string(),
             )),
         },
+        "new-session" | "newsession" => {
+            let sub = if parts.len() > 1 {
+                format!("new {}", parts[1..].join(" "))
+            } else {
+                "new".to_string()
+            };
+            Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+        }
+        "rename-session" | "renamesession" => {
+            let sub = if parts.len() > 1 {
+                format!("rename {}", parts[1..].join(" "))
+            } else {
+                "rename".to_string()
+            };
+            Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+        }
         "palette" | "commands" | "cmd" => Some(Ok(ColonCommand::PaletteToggle)),
         "notifications" | "notify" | "bell" => Some(Ok(ColonCommand::NotificationsClear)),
         "trigger" | "triggers" => match parts.get(1).copied() {

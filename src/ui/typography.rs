@@ -75,6 +75,108 @@ pub fn render_double_width_row(
 }
 
 impl WindowManager {
+    /// Enables or disables 1:1 host-terminal character cell grid mode (disabling per-pane pixel scaling in TUI mode).
+    pub fn set_tui_cell_grid_mode(&mut self, enabled: bool) {
+        self.tui_cell_grid_mode = enabled;
+    }
+
+    /// Sets the sub-cell mouse pixel coordinate hint `(px, py, cw, ch)` for native GUI windows (`--gui`).
+    pub fn set_mouse_pixel_hint(&mut self, hint: Option<(u32, u32, u16, u16)>) {
+        self.mouse_pixel_hint = hint;
+    }
+
+    /// Returns the most recent mouse pixel coordinate hint `(px, py, cw, ch)`, if any.
+    pub fn mouse_pixel_hint(&self) -> Option<(u32, u32, u16, u16)> {
+        self.mouse_pixel_hint
+    }
+
+    /// Translates `mouse` into the target pane's scaled `inner` coordinate space (`FONT-01`).
+    pub fn translate_pane_mouse_event(
+        &self,
+        hit_focus: crate::wm::Focus,
+        inner: Rect,
+        screen_area: Rect,
+        mouse: crossterm::event::MouseEvent,
+    ) -> (Rect, crossterm::event::MouseEvent) {
+        if let crate::wm::Focus::Pane(hit_id) = hit_focus {
+            let scaled = self.pane_scaled_inner_rect(hit_id, inner);
+            if scaled != inner && inner.width > 0 && inner.height > 0 {
+                let on_status_bar = inner.height > 0
+                    && mouse.row >= inner.y + inner.height.saturating_sub(1);
+                let (sc, sr) = if let Some((px, py, cw, ch)) = self.mouse_pixel_hint
+                    && cw > 0
+                    && ch > 0
+                {
+                    let inner_x_px =
+                        u32::from(inner.x.saturating_sub(screen_area.x)) * u32::from(cw);
+                    let inner_y_px =
+                        u32::from(inner.y.saturating_sub(screen_area.y)) * u32::from(ch);
+                    let inner_w_px = (u32::from(inner.width) * u32::from(cw)).max(1);
+                    let inner_h_px = (u32::from(inner.height) * u32::from(ch)).max(1);
+                    let rel_x_px = px
+                        .saturating_sub(inner_x_px)
+                        .min(inner_w_px.saturating_sub(1));
+                    let rel_y_px = py
+                        .saturating_sub(inner_y_px)
+                        .min(inner_h_px.saturating_sub(1));
+                    let sc = scaled.x
+                        + ((rel_x_px * u32::from(scaled.width)) / inner_w_px)
+                            .min(u32::from(scaled.width.saturating_sub(1)))
+                            as u16;
+                    let sr = if on_status_bar {
+                        scaled.y + scaled.height.saturating_sub(1)
+                    } else {
+                        scaled.y
+                            + ((rel_y_px * u32::from(scaled.height)) / inner_h_px)
+                                .min(u32::from(scaled.height.saturating_sub(1)))
+                                as u16
+                    };
+                    (sc, sr)
+                } else {
+                    let rel_c = mouse
+                        .column
+                        .saturating_sub(inner.x)
+                        .min(inner.width.saturating_sub(1));
+                    let rel_r = mouse
+                        .row
+                        .saturating_sub(inner.y)
+                        .min(inner.height.saturating_sub(1));
+                    let sc = scaled.x
+                        + ((u32::from(rel_c) * u32::from(scaled.width)) / u32::from(inner.width))
+                            as u16;
+                    let sr = if on_status_bar {
+                        scaled.y + scaled.height.saturating_sub(1)
+                    } else {
+                        scaled.y
+                            + ((u32::from(rel_r) * u32::from(scaled.height)) / u32::from(inner.height))
+                                as u16
+                    };
+                    (sc, sr)
+                };
+                return (
+                    scaled,
+                    crossterm::event::MouseEvent {
+                        column: sc,
+                        row: sr,
+                        ..mouse
+                    },
+                );
+            }
+            let clamped = crossterm::event::MouseEvent {
+                column: mouse
+                    .column
+                    .clamp(inner.x, inner.x + inner.width.saturating_sub(1)),
+                row: mouse
+                    .row
+                    .clamp(inner.y, inner.y + inner.height.saturating_sub(1)),
+                ..mouse
+            };
+            (inner, clamped)
+        } else {
+            (inner, mouse)
+        }
+    }
+
     /// Returns the scale percentage at which the workspace's outer viewport was computed (`100` by default).
     pub fn viewport_scale_pct(&self) -> u16 {
         self.viewport_scale_pct.clamp(50, 400)
@@ -107,6 +209,9 @@ impl WindowManager {
     /// Scales a pane's `inner` character rect inversely by `pane_effective_scale_pct(id)` relative
     /// to `viewport_scale_pct()` so zooming a pane's font changes that pane's terminal screen `(rows, cols)`.
     pub fn pane_scaled_inner_rect(&self, id: usize, inner: Rect) -> Rect {
+        if self.tui_cell_grid_mode {
+            return inner;
+        }
         let vp_scale = u32::from(self.viewport_scale_pct());
         let pane_scale = u32::from(self.pane_effective_scale_pct(id));
         if pane_scale == vp_scale {

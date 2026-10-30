@@ -563,22 +563,34 @@ pub fn handle_wm_mouse_event(
     };
 
     if top_off > 0 && mouse.row == screen_area.y {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let rel_col = mouse.column.saturating_sub(screen_area.x);
-            let cat = match rel_col {
-                0..=10 => 0,
-                11..=19 => 1,
-                20..=28 => 2,
-                29..=35 => 3,
-                36..=43 => 4,
-                44..=50 => 5,
-                _ => 6,
-            };
-            if wm.menubar_open_category() == Some(cat) {
-                wm.set_menubar_open_category(None);
-            } else {
-                wm.set_menubar_open_category(Some(cat));
+        let rel_col = mouse.column.saturating_sub(screen_area.x);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(cat) = crate::ui::modals::menubar_category_at_col(rel_col) {
+                    if cat == 6 && wm. is_help_visible() {
+                        wm.toggle_help();
+                    } else if wm.menubar_open_category() == Some(cat) {
+                        if cat == 6 {
+                            wm.toggle_help();
+                        } else {
+                            wm.set_menubar_open_category(None);
+                        }
+                    } else {
+                        wm.set_menubar_open_category(Some(cat));
+                    }
+                } else {
+                    wm.set_menubar_open_category(None);
+                }
             }
+            MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Left) => {
+                if wm.menubar_open_category().is_some()
+                    && let Some(cat) = crate::ui::modals::menubar_category_at_col(rel_col)
+                    && wm.menubar_open_category() != Some(cat)
+                {
+                    wm.set_menubar_open_category(Some(cat));
+                }
+            }
+            _ => {}
         }
         return Ok(AppAction::Handled);
     }
@@ -621,9 +633,41 @@ pub fn handle_wm_mouse_event(
         return Ok(action);
     }
 
-    let Some((hit_focus, outer, inner)) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area)
-    else {
-        return Ok(AppAction::Continue);
+    let (hit_focus, outer, inner) = if wm.active_pane().mouse_drag().is_some()
+        && matches!(
+            mouse.kind,
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
+        )
+    {
+        let focus = wm.focus();
+        match focus {
+            Focus::Quick => {
+                let qt_outer = wm.quick_terminal().overlay_rect(workspace_area);
+                (Focus::Quick, qt_outer, crate::wm::inset_window_frame(qt_outer))
+            }
+            Focus::Pane(id) => {
+                let rects = wm.compute_workspace_rects(workspace_area);
+                if let Some(&(_, r_outer)) = rects.iter().find(|&&(pid, _)| pid == id) {
+                    let r_inner = if wm.is_framed() {
+                        crate::wm::inset_window_frame(r_outer)
+                    } else {
+                        r_outer
+                    };
+                    (Focus::Pane(id), r_outer, r_inner)
+                } else {
+                    let Some(hit) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area)
+                    else {
+                        return Ok(AppAction::Continue);
+                    };
+                    hit
+                }
+            }
+        }
+    } else {
+        let Some(hit) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area) else {
+            return Ok(AppAction::Continue);
+        };
+        hit
     };
 
     if matches!(mouse.kind, MouseEventKind::Down(_))
@@ -669,45 +713,13 @@ pub fn handle_wm_mouse_event(
         }
     }
 
-    let on_pane_status_bar = inner.height > 0
-        && mouse.row == inner.y + inner.height.saturating_sub(1)
-        && mouse.column >= inner.x
-        && mouse.column < inner.x + inner.width;
+    let (pane_inner, pane_mouse) =
+        wm.translate_pane_mouse_event(hit_focus, inner, screen_area, mouse);
 
-    let (pane_inner, pane_mouse) = if let Focus::Pane(hit_id) = hit_focus {
-        let scaled = wm.pane_scaled_inner_rect(hit_id, inner);
-        if scaled != inner && inner.width > 0 && inner.height > 0 {
-            let rel_c = mouse
-                .column
-                .saturating_sub(inner.x)
-                .min(inner.width.saturating_sub(1));
-            let rel_r = mouse
-                .row
-                .saturating_sub(inner.y)
-                .min(inner.height.saturating_sub(1));
-            let sc = scaled.x
-                + ((u32::from(rel_c) * u32::from(scaled.width)) / u32::from(inner.width)) as u16;
-            let sr = if on_pane_status_bar {
-                scaled.y + scaled.height.saturating_sub(1)
-            } else {
-                scaled.y
-                    + ((u32::from(rel_r) * u32::from(scaled.height)) / u32::from(inner.height))
-                        as u16
-            };
-            (
-                scaled,
-                MouseEvent {
-                    column: sc,
-                    row: sr,
-                    ..mouse
-                },
-            )
-        } else {
-            (inner, mouse)
-        }
-    } else {
-        (inner, mouse)
-    };
+    let on_pane_status_bar = pane_inner.height > 0
+        && pane_mouse.row == pane_inner.y + pane_inner.height.saturating_sub(1)
+        && pane_mouse.column >= pane_inner.x
+        && pane_mouse.column < pane_inner.x + pane_inner.width;
 
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
         return Ok(AppAction::Continue);
@@ -726,5 +738,7 @@ pub fn handle_wm_mouse_event(
         }
     }
 
-    handle_mouse_event(pane, pane_mouse, pane_inner)
+    let res = handle_mouse_event(pane, pane_mouse, pane_inner);
+    wm.set_mouse_pixel_hint(None);
+    res
 }

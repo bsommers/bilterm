@@ -246,6 +246,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             if !next {
                 wm.set_menubar_open_category(None);
             }
+            wm.reflow_default_viewport();
             false
         }
         ColonCommand::VersionToggle(val) => {
@@ -595,6 +596,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::FKeyBarToggle(val) => {
             wm.config_mut().show_dos_fkey_bar = val.unwrap_or(!wm.config().show_dos_fkey_bar);
+            wm.reflow_default_viewport();
             false
         }
         ref drawer_act @ (ColonCommand::DrawerToggle

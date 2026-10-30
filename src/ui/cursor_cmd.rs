@@ -59,6 +59,9 @@ pub fn render_caret_configured(
     cfg: &BiltermConfig,
     palette: &ThemePalette,
 ) {
+    if cfg.cursor_blink_hidden && cfg.cursor_blink.blink_interval(cfg.cursor_style).is_some() {
+        return;
+    }
     let custom_color = cfg.cursor_color.as_deref().and_then(parse_cursor_color);
     let custom_text = cfg
         .cursor_text_color
@@ -75,6 +78,38 @@ pub fn render_caret_configured(
         custom_color,
         custom_text,
     );
+}
+
+impl crate::wm::WindowManager {
+    /// Advances the software cursor blink phase (`Blink` = 500ms, `RapidBlink` = 240ms) (`UI-05`).
+    /// Returns `true` if the visible/hidden phase toggled and the screen should be redrawn.
+    pub fn tick_cursor_blink(&mut self, now: std::time::Instant) -> bool {
+        let Some(interval) = self
+            .config()
+            .cursor_blink
+            .blink_interval(self.config().cursor_style)
+        else {
+            if self.config().cursor_blink_hidden {
+                self.config_mut().cursor_blink_hidden = false;
+                return true;
+            }
+            return false;
+        };
+        if now.duration_since(self.last_blink_toggle) >= interval {
+            self.last_blink_toggle = now;
+            let next = !self.config().cursor_blink_hidden;
+            self.config_mut().cursor_blink_hidden = next;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Resets the cursor blink phase to visible (`ON`) when the user interacts or updates `:cursor`.
+    pub fn reset_cursor_blink(&mut self) {
+        self.last_blink_toggle = std::time::Instant::now();
+        self.config_mut().cursor_blink_hidden = false;
+    }
 }
 
 /// Builds interactive console lines for `:cursor` / `:cursor list`.
@@ -391,6 +426,7 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
     }
 
     if changed {
+        wm.reset_cursor_blink();
         if wm.mcp_console().active && wm.mcp_console().title.contains("CURSOR") {
             let lines = build_cursor_catalog_lines(wm.config());
             wm.open_mcp_popup_window(
@@ -519,5 +555,86 @@ mod tests {
         assert_eq!(cell_b.style().bg, Some(Color::Rgb(0, 255, 102)));
         assert_eq!(cell_b.style().fg, Some(Color::Rgb(0, 0, 0)));
         assert!(cell_b.style().add_modifier.contains(Modifier::SLOW_BLINK));
+
+        // 4. Software blink hidden phase leaves underlying cell untouched
+        cfg.cursor_blink_hidden = true;
+        buf.cell_mut((6, 1)).unwrap().set_symbol("A");
+        render_caret_configured(&mut buf, 6, 1, &cfg, &pal);
+        assert_eq!(buf.cell((6, 1)).unwrap().symbol(), "A");
+        assert_ne!(buf.cell((6, 1)).unwrap().style().bg, Some(Color::Rgb(0, 255, 102)));
+    }
+
+    #[test]
+    fn software_cursor_blink_timer_toggles_and_menubar_dropdown_mouse_works() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+        use std::time::{Duration, Instant};
+
+        let mut wm = crate::wm::WindowManager::new_headless(24, 80);
+        wm.config_mut().cursor_blink = CursorBlinkMode::Blink;
+        let t0 = Instant::now();
+        wm.last_blink_toggle = t0;
+        assert!(!wm.config().cursor_blink_hidden);
+        assert!(!wm.tick_cursor_blink(t0 + Duration::from_millis(200)));
+        assert!(wm.tick_cursor_blink(t0 + Duration::from_millis(550)));
+        assert!(wm.config().cursor_blink_hidden);
+        assert!(wm.tick_cursor_blink(t0 + Duration::from_millis(1100)));
+        assert!(!wm.config().cursor_blink_hidden);
+
+        // Enable top Borland menu bar and click "Window" category (cols 10..18)
+        wm.config_mut().show_top_menubar = true;
+        let vp = Rect::new(0, 0, 80, 24);
+        wm.resize_all(vp).unwrap();
+        assert_eq!(crate::ui::modals::menubar_category_at_col(5), Some(0)); // ≡ System
+        assert_eq!(crate::ui::modals::menubar_category_at_col(12), Some(1)); // Window
+        assert_eq!(crate::ui::modals::menubar_category_at_col(20), Some(2)); // Prompt
+        assert_eq!(crate::ui::modals::menubar_category_at_col(28), Some(3)); // View
+        assert_eq!(crate::ui::modals::menubar_category_at_col(35), Some(4)); // Theme
+        assert_eq!(crate::ui::modals::menubar_category_at_col(41), Some(5)); // Tmux
+        assert_eq!(crate::ui::modals::menubar_category_at_col(47), Some(6)); // Help
+
+        crate::input::handle_wm_mouse_event(
+            &mut wm,
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 12,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            },
+            vp,
+        )
+        .unwrap();
+        assert_eq!(wm.menubar_state(), Some((1, 0)));
+
+        // Hover over item 1 ("Split Vertical (Alt+V)") inside the Window dropdown
+        let ws_area = Rect::new(0, 1, 80, 23);
+        let dd = crate::ui::modals::menubar_dropdown_rect(1, ws_area);
+        crate::input::handle_wm_mouse_event(
+            &mut wm,
+            MouseEvent {
+                kind: MouseEventKind::Moved,
+                column: dd.x + 3,
+                row: dd.y + 2,
+                modifiers: KeyModifiers::NONE,
+            },
+            vp,
+        )
+        .unwrap();
+        assert_eq!(wm.menubar_state(), Some((1, 1)));
+
+        // Click item 1 ("Split Vertical") inside the Window dropdown -> splits pane and closes dropdown!
+        assert_eq!(wm.pane_count(), 1);
+        crate::input::handle_wm_mouse_event(
+            &mut wm,
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: dd.x + 3,
+                row: dd.y + 2,
+                modifiers: KeyModifiers::NONE,
+            },
+            vp,
+        )
+        .unwrap();
+        assert_eq!(wm.menubar_state(), None);
+        assert_eq!(wm.pane_count(), 2);
     }
 }

@@ -91,6 +91,19 @@ impl CursorBlinkMode {
             Self::RapidBlink => Modifier::RAPID_BLINK,
         }
     }
+
+    /// Returns the software blink toggle interval if blinking is active for `(self, style)`.
+    pub const fn blink_interval(self, style: CaretStyle) -> Option<std::time::Duration> {
+        match self {
+            Self::Auto => match style {
+                CaretStyle::BlinkingHollowBlock => Some(std::time::Duration::from_millis(500)),
+                _ => None,
+            },
+            Self::Solid => None,
+            Self::Blink => Some(std::time::Duration::from_millis(500)),
+            Self::RapidBlink => Some(std::time::Duration::from_millis(240)),
+        }
+    }
 }
 
 /// Toggleable focal spotlight shape (`:spotlight`, `Alt+O` / `Ctrl+X O`).

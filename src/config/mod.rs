@@ -89,6 +89,8 @@ pub struct BiltermConfig {
     pub history_load_limit: usize,
     /// Optional custom directory path for saved workspace session layout snapshots (`ECO-02`).
     pub session_dir: Option<String>,
+    /// User-defined display and cycling order for workspace sessions (`:session move`, `:session reorder`).
+    pub session_order: Vec<String>,
     /// Automatically saves pane/window layout changes to the active layout profile (`true` by default).
     pub layout_autosave: bool,
     /// Default layout profile loaded on startup and targeted by default saves (`"default"` by default).
@@ -138,6 +140,9 @@ pub struct BiltermConfig {
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
+    /// Runtime software blink phase (`true` when the cursor is in the hidden `OFF` blink phase).
+    #[serde(skip)]
+    pub cursor_blink_hidden: bool,
 }
 
 impl Default for BiltermConfig {
@@ -179,6 +184,7 @@ impl Default for BiltermConfig {
             history_max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
             history_load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
             session_dir: None,
+            session_order: Vec::new(),
             layout_autosave: true,
             default_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),
             active_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),
@@ -203,6 +209,7 @@ impl Default for BiltermConfig {
             cell_height_px: 16,
             host_font_passthrough: true,
             custom_palette_override: None,
+            cursor_blink_hidden: false,
         }
     }
 }

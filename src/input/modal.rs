@@ -331,33 +331,7 @@ pub(super) fn execute_menubar_selection(
     item: usize,
 ) -> Result<AppAction> {
     wm.close_modal();
-    let cmd_str = match (category, item) {
-        (0, 0) => ":inspector",
-        (0, 1) => ":session save default",
-        (0, 2) => ":session restore default",
-        (0, 3) => ":quit",
-        (1, 0) => ":split h",
-        (1, 1) => ":split v",
-        (1, 2) => ":zoom",
-        (1, 3) => ":layout stack",
-        (2, 0) => ":prompt top",
-        (2, 1) => ":prompt bottom",
-        (2, 2) => ":prompt split",
-        (2, 3) => ":mode cycle",
-        (3, 0) => ":hints",
-        (3, 1) => ":copy",
-        (3, 2) => ":crosshair",
-        (3, 3) => ":fkeybar",
-        (4, 0) => ":theme turbo-blue",
-        (4, 1) => ":theme turbo-cyan",
-        (4, 2) => ":theme 3278",
-        (4, 3) => ":theme 3279",
-        (5, 0) => ":broadcast",
-        (5, 1) => ":lock",
-        (5, 2) => ":quake",
-        (5, 3) => ":raw",
-        _ => ":help",
-    };
+    let cmd_str = crate::ui::modals::menubar_item_command(category, item).unwrap_or(":help");
     if let Some(Ok(cmd)) = parse_colon_command(cmd_str)
         && execute_wm_colon_command(wm, cmd)
     {
@@ -376,6 +350,26 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),
             KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
                 wm.drawer_mut().focused = false;
+            }
+            KeyCode::Down
+                if key.modifiers.contains(KeyModifiers::SHIFT)
+                    || key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                wm.drawer_move_selected_session(false);
+            }
+            KeyCode::Up
+                if key.modifiers.contains(KeyModifiers::SHIFT)
+                    || key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                wm.drawer_move_selected_session(true);
+            }
+            KeyCode::Char('J') => wm.drawer_move_selected_session(false),
+            KeyCode::Char('K') => wm.drawer_move_selected_session(true),
+            KeyCode::Char('N') => {
+                if let Ok(name) = wm.create_new_session(None, false) {
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("Created new session '{name}'")));
+                }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 wm.drawer_select_next();
@@ -766,7 +760,8 @@ pub(super) fn handle_wm_modal_key(
                     *item = sel.saturating_sub(1);
                 }
                 KeyCode::Down => {
-                    *item = (sel + 1).min(3);
+                    let max_idx = crate::ui::modals::menubar_category_item_count(cat).saturating_sub(1);
+                    *item = (sel + 1).min(max_idx);
                 }
                 KeyCode::Enter => {
                     return execute_menubar_selection(wm, cat, sel).map(Some);

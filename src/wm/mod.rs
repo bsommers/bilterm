@@ -3,6 +3,7 @@ pub mod journal;
 pub mod layout_profile;
 pub mod quick_terminal;
 pub mod session;
+pub mod session_manager;
 pub mod session_tree;
 pub mod split_tree;
 pub mod v2_runtime;
@@ -127,6 +128,12 @@ pub struct WindowManager {
     pub(crate) client_detached: bool,
     /// In-memory cache of saved/autosaved named layout profiles for instant dynamic switching.
     pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
+    /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
+    pub(crate) last_blink_toggle: Instant,
+    /// When `true` (host terminal TUI mode), disables per-pane pixel font scaling so `vt` and `Buffer` stay 1:1.
+    pub(crate) tui_cell_grid_mode: bool,
+    /// Sub-cell mouse pixel hint `(px, py, cell_width_px, cell_height_px)` from native GUI windows (`--gui`).
+    pub(crate) mouse_pixel_hint: Option<(u32, u32, u16, u16)>,
 }
 
 impl WindowManager {
@@ -181,6 +188,9 @@ impl WindowManager {
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
             layout_profiles_mem: BTreeMap::new(),
+            last_blink_toggle: Instant::now(),
+            tui_cell_grid_mode: false,
+            mouse_pixel_hint: None,
         }
     }
 
@@ -278,6 +288,7 @@ impl WindowManager {
     pub fn layout_mode(&self) -> WorkspaceLayoutMode { self.layout_mode }
     pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) {
         self.layout_mode = mode;
+        self.reflow_default_viewport();
         self.maybe_autosave_layout();
     }
     pub fn split_tree(&self) -> &SplitTree { &self.split_tree }
@@ -412,6 +423,7 @@ impl WindowManager {
         if !self.config.show_top_menubar && matches!(self.modal, Modal::Menubar { .. }) {
             self.modal = Modal::None;
         }
+        self.reflow_default_viewport();
     }
 
     /// Sets or toggles Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
@@ -538,6 +550,7 @@ impl WindowManager {
         self.z_stack.push(new_id);
         self.zoomed_pane = None;
         self.sync_config_scale_from_active_pane();
+        self.reflow_default_viewport();
         self.rebalance_scrollback(Instant::now());
         self.maybe_autosave_layout();
         Ok(new_id)
@@ -556,6 +569,7 @@ impl WindowManager {
             self.zoomed_pane = None;
         }
         self.fleet.remove_pane_references(target_id);
+        self.reflow_default_viewport();
         self.rebalance_scrollback(Instant::now());
         self.maybe_autosave_layout();
         true
@@ -613,6 +627,9 @@ impl WindowManager {
         if self.poll_tmux_control() > 0 {
             changed = true;
         }
+        if !self.headless_mode && self.tick_cursor_blink(Instant::now()) {
+            changed = true;
+        }
         self.update_drawer_telemetry();
         self.maybe_rebalance_scrollback(Instant::now());
         changed
@@ -661,6 +678,7 @@ impl WindowManager {
         } else {
             self.zoomed_pane = Some(top_id);
         }
+        self.reflow_default_viewport();
         self.maybe_autosave_layout();
     }
 
@@ -670,6 +688,7 @@ impl WindowManager {
             WorkspaceLayoutMode::Tiled => WorkspaceLayoutMode::Stacked,
             WorkspaceLayoutMode::Stacked => WorkspaceLayoutMode::Tiled,
         };
+        self.reflow_default_viewport();
         self.maybe_autosave_layout();
     }
 
@@ -711,8 +730,16 @@ impl WindowManager {
     /// inversely by its per-pane font scale so larger fonts have fewer cols/rows and smaller fonts have more.
     pub fn resize_all(&mut self, area: Rect) -> Result<()> {
         self.default_size = (area.height.max(1), area.width.max(1));
+        let top_off = u16::from(self.config.show_top_menubar && area.y == 0 && area.height >= 4);
+        let bot_off = u16::from(self.config.show_dos_fkey_bar && area.height >= 4 + top_off);
+        let ws_area = Rect::new(
+            area.x,
+            area.y + top_off,
+            area.width,
+            area.height.saturating_sub(top_off + bot_off),
+        );
         let framed = self.is_framed();
-        let rects = self.compute_workspace_rects(area);
+        let rects = self.compute_workspace_rects(ws_area);
         for (id, rect) in rects {
             let inner = if framed {
                 inset_window_frame(rect)
@@ -725,7 +752,7 @@ impl WindowManager {
             }
         }
         if self.quick_terminal.visible {
-            let qt_rect = inset_window_frame(self.quick_terminal.overlay_rect(area));
+            let qt_rect = inset_window_frame(self.quick_terminal.overlay_rect(ws_area));
             self.quick_terminal.pane.resize_viewport(qt_rect)?;
         }
         Ok(())

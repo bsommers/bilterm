@@ -60,14 +60,21 @@ Need to run a quick "by-the-way" command without disrupting your tiled or stacke
 
 - Press **`F7`**, **`Alt+Shift+D`**, **`<Leader> d`**, or run **`:drawer`** to toggle the **`herdr`-style Slide-Out Drawer** displaying all active sessions, windows, composite panes (with live process status and geometry), and registered remote SSH fleet nodes.
 - Dock the drawer to any screen edge (`:drawer left | right | top | bottom`), switch between `Overlay` (floating with DOS drop shadow) and `Push` (shrinking tiled workspace so zero cells are occluded via `:drawer push | float`), or set visibility (`:drawer fixed | autohide | ondemand`).
+- **Interactive Session Creation & Reordering in the Drawer**:
+  - Press **`N`** inside the focused `<F7>` Drawer to create and switch to a new session immediately.
+  - Press **`Shift+Up`** / **`Alt+Up`** / **`K`** or **`Shift+Down`** / **`Alt+Down`** / **`J`** inside the focused `<F7>` Drawer to move the selected session up or down in the session list order (persisted to `session-order.json`).
 
 ---
 
 ## 6. Workspace Session Serialization, Multi-Pane Broadcast & 3270 Field Lock (`ECO-02`..`ECO-04`)
 
-- **Save & Restore Multi-Pane Workspaces (`:session`)**:
+- **Create, Name/Rename, Reorder, Save & Restore Multi-Pane Workspaces (`:session`)**:
+  - `:session new [name]` (or `:new-session [name]`, `bilterm new [name]`, `bilterm -n [name]`) saves the outgoing session and starts a fresh 1-pane session (auto-named `session-2`, `session-3`, ... when `[name]` is omitted).
+  - `:session blank [name]` (or `:session clean [name]`, `bilterm blank [name]`, `bilterm -B`) starts a clean 1-pane blank session without restoring prior multi-pane state.
+  - `:session rename [old_name] <new_name>` (or `:rename-session <new_name>`) renames the active or specified session in place while preserving its position in the session list.
+  - `:session move [name] <up|down|top|bottom|1..N>` and `:session reorder <s1> <s2> ...` (or `:session swap <a> <b>`) reorder sessions in `:session list` and the `<F7>` Drawer.
   - `:session save <name>` serializes the active layout (`Tile` vs `Stack`), `SplitTree` ratios, `ZStack` order, pane titles, working directories, `PromptAnchor`, prompt dimensions, read-only locks, and command histories to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml`.
-  - `:session restore <name>` reconstructs the saved workspace layout and panes; `:session list` displays all saved session profiles.
+  - `:session restore <name>` reconstructs the saved workspace layout and panes; `:session list` displays all saved session profiles in your custom order; `:session delete <name>` deletes a saved session.
 - **Synchronized Multi-Pane Input Broadcast (`:broadcast [on|off]`)**:
   - Displays a `📡 BCAST` badge in the OIA status bar and fans out every command submitted in the focused prompt to **all unlocked panes** simultaneously.
 - **Read-Only Protected 3270 Field Lock (`Alt+L` / `:lock [on|off]`)**:

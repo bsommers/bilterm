@@ -397,7 +397,15 @@ impl WindowManager {
     fn current_workspace_area(&self) -> (Rect, Rect) {
         let (rows, cols) = self.default_size;
         let full = Rect::new(0, 0, cols.max(1), rows.max(1));
-        let eff = self.effective_workspace_area(full);
+        let top_off = u16::from(self.config.show_top_menubar && full.height >= 4);
+        let bot_off = u16::from(self.config.show_dos_fkey_bar && full.height >= 4 + top_off);
+        let ws = Rect::new(
+            full.x,
+            full.y + top_off,
+            full.width,
+            full.height.saturating_sub(top_off + bot_off),
+        );
+        let eff = self.effective_workspace_area(ws);
         (full, eff)
     }
 
