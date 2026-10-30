@@ -17,13 +17,33 @@
 
 ### System Requirements
 - **Rust**: `1.88+` (Edition 2024)
-- **OS**: Linux (primary POSIX PTY + native X11 `--gui`), macOS (POSIX PTY + Cocoa `--gui`), or Windows (`ConPTY` + Win32 GDI `--gui`)
+- **OS**: Linux (primary POSIX PTY + native X11 `--gui`), macOS (POSIX PTY + Cocoa `--gui`), or Windows 10/11 x64 and Windows 11 ARM64 (`ConPTY` + Win32 GDI `--gui`)
 
 ### Build & Run
 ```bash
 cargo build --release
 ./target/release/bilterm
 ```
+
+### Windows (x64 & ARM64)
+```powershell
+# Prebuilt release: picks the native architecture (aarch64 on Windows on ARM, falling back to the
+# x64 build under emulation when a release has no ARM64 archive)
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -BinaryOnly
+# Local release archive (e.g. one built in a VM)
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Archive .\bilterm-v2.4.0-aarch64-pc-windows-msvc.zip
+```
+Release archives: `bilterm-<tag>-x86_64-pc-windows-msvc.zip` and `bilterm-<tag>-aarch64-pc-windows-msvc.zip`
+(plus unversioned `bilterm-<triple>.zip` aliases). Build them with `scripts/build-release-mac-win.sh --windows
+--windows-arm64` on Windows (Git Bash), in CI (`release-binaries` workflow: `windows-latest` + `windows-11-arm`),
+or from a Mac with a [win-devvm](https://github.com/bsommers/win-devvm) Parallels VM:
+```bash
+scripts/build-windows-vm.sh v2.4.0 --arch all --test     # build in the VM, pull back, smoke-test there
+scripts/build-windows-vm.sh v2.4.0 --arch all --upload   # ...and attach to the GitHub release
+```
+`scripts/windows-smoke-test.ps1 -Archive <zip> -ExpectArch aarch64` installs an archive with `install.ps1` under
+Windows PowerShell 5.1 and checks PE architecture, CLI, `--gui-dump`, canvas export, a headless playbook and the
+TCP JSON-RPC daemon.
 
 ### Complete CLI Options (`v2.1.0`)
 ```bash

@@ -5,6 +5,20 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Windows 11 ARM64 builds (`scripts/build-release-mac-win.sh`, `.github/workflows/release-binaries.yml`)**: `--windows-arm64` builds `aarch64-pc-windows-msvc` archives (combinable with `--windows`); new `windows-arm64` CI job on the native `windows-11-arm` runner. `--no-build` uploads archives built elsewhere; `CARGO_TARGET_DIR` is honoured.
+- **`scripts/build-windows-vm.sh`**: build, pull back, smoke-test and optionally upload Windows archives from a Mac via a [win-devvm](https://github.com/bsommers/win-devvm) Parallels Windows 11 ARM VM.
+- **`scripts/windows-smoke-test.ps1`**: installs a release archive and checks PE arch, CLI, GUI frame dump, canvas export, headless playbook and the TCP JSON-RPC daemon (also run by CI after each Windows build).
+- **`install.ps1 -Archive <zip>`**: install from a local release archive.
+
+### Fixed
+- **`install.ps1` on Windows on ARM / Windows PowerShell 5.1**: detects the native architecture (registry, not the emulated `PROCESSOR_ARCHITECTURE`), downloads the `aarch64` archive with an `x86_64` fallback; `-Prefix` always failed (`A positional parameter cannot be found that accepts argument '??'`) because `??` was passed to `Resolve-Path` as an argument.
+- **`setup.ps1` / `build-binaries.sh`**: rustup download and default target follow the native Windows architecture.
+- **Windows test portability (`tests/smooth_and_mainframe_page_scrolling.rs`)**: the VT-worker page-hold test spawned `/bin/sh` unconditionally; it now uses `cmd.exe` on Windows. Full suite on Windows 11 ARM64: 288/288.
+- **Windows build warning (`src/daemon/process.rs`)**: `ErrorKind` import is now `#[cfg(unix)]`, like its only use.
+
 ## [v2.4.0] - 2026-10-29
 
 ### Added

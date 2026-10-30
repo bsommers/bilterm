@@ -1,33 +1,33 @@
-# Session Checkpoint (2026-10-30)
+# Session Checkpoint (2026-10-30, Windows 11 ARM64 / win-devvm)
 
-**Status:** PAUSED — release asset backfill partly done; Windows + some Linux archives still missing. Last tag: `v2.4.0` (Latest).
+**Status:** PAUSED. Windows ARM64 build + VM pipeline verified. Branches pushed, PRs open (bilterm #4, win-devvm #1). v2.4.0 Windows assets uploaded (aarch64 + x86_64, SHA256SUMS merged + verified).
 
-## User decisions (verbatim)
-- "make MacOS releases for this. also make a skill / command / scripts to do binary release per platform."
-- "v2.1.2 - do release. make release page; add MacOS binaries. note that I have to build for Linux and Windows, too." / "v2.1.1 - build and attach v2.1.1. binaries for MacOS to it"
-- Merge local vs remote without clobbering either → user: **"yes"** (to the stash / ff-pull / pop plan).
-- Workflow should run the script from `main` + attach macOS to v2.2.0–v2.4.0 → user: **"yes"**.
+## User request (verbatim)
+"extend https://github.com/bsommers/win-devvm to use local Paralells on Mac, provision Windows 11 dev VM, build bilterm for Windows 11 ARM. update build and release scripts. update win-devvm repo. install bilterm in windows 11 vm, test. report back to me"
 
-## Done (committed + pushed)
-- `066f4e5` fix `scripts/build-release-mac-win.sh --upload` on macOS: `ls bilterm-*.zip` failed under `pipefail` (no zips on mac) → nullglob + printf.
-- `d0552c2` `.github/workflows/release-binaries.yml` checks out the default branch (`fetch-depth: 0`) instead of the tag; the script builds the tag in its own worktree, so script fixes now apply to old tags. **Not yet run on GitHub.**
-- macOS archives (aarch64 + x86_64, verified arch / `--version` / system-only dylibs, re-downloaded and `SHA256SUMS`-checked) attached to v2.1.1, v2.1.2, v2.2.0, v2.3.0, v2.4.0. Existing Linux/Windows sums were merged, not overwritten.
-- v2.1.2 release page created from CHANGELOG (`--latest=false`); v2.1.1 notes footer updated to list macOS.
-- Skill `building-release-binaries` committed in swe-skills-2 (`28b79df`); its `build-binaries.sh` (bash 3.2-safe `REPO_ARGS`) is also in this repo as `scripts/build-binaries.sh`.
+## Commits (pushed; PRs https://github.com/bsommers/bilterm/pull/4 and https://github.com/bsommers/win-devvm/pull/1)
+- bilterm branch `feat/windows-arm64`: `8a5f08e` ARM64 build flags, `build-windows-vm.sh`, `windows-smoke-test.ps1`, CI `windows-arm64` job, install.ps1 native arch + `-Archive`; `84b732d` accurate `-Prefix '??'` bug note; `439a5c3` spec-compliant zips (no `\` entries), ctl endpoint in smoke test; `a9bc7fe` Windows-portable page-hold test, unix-gated import.
+- win-devvm (`~/src/tools/win-devvm`) branch `feat/parallels-arm64`: `7a1e361` Parallels backend + all fixes + docs.
 
-## Release asset matrix (remaining gaps)
-| Release | macOS | Windows | Linux |
-|---|---|---|---|
-| v2.4.0 (Latest) | ✅ | **missing** | gnu, musl x86_64; **aarch64 musl missing** |
-| v2.3.0 | ✅ | **missing** | gnu, musl x86_64; **aarch64 musl missing** |
-| v2.2.0 | ✅ | msvc | complete |
-| v2.1.2 | ✅ | **missing** | **missing** (notes say "not attached yet") |
-| v2.1.1 | ✅ | gnu (+ `windows-msvc.zip` alias is a copy of the gnu build — same sha) | complete |
+## Verified (Windows 11 ARM64 26100.4349, Parallels Standard, VM `win-devvm`, 4 vCPU / 8 GB)
+- `scripts/build-windows-vm.sh v2.4.0 --arch all --test`: builds aarch64 + x86_64 MSVC in the VM (warm ~35 s), archives in `target/release-dist/v2.4.0/`; smoke test 9/9 PASS for both under Windows PowerShell 5.1.
+- `cargo test --release --no-fail-fast` natively on ARM64: 288 passed, 0 failed (after the test fix in `a9bc7fe`; before: 287/1, `/bin/sh` test).
+- Interactive TUI in ConPTY over `ssh -tt`: command round-trip in a pane, Ctrl+Q exit. `bilterm --gui`: Win32 window opens in the desktop session.
+- `install.ps1` from main: `-Prefix` fails under PS 5.1 (`??` passed to Resolve-Path); fixed version works.
 
-## Known issues (not fixed)
-- `cargo test` (`tests/full_suite_battle_and_perf.rs`) rewrites 5 `docs/assets/*.svg` → dirty tree after every test run. Proposed: write under `target/` or behind an env var.
-- `scripts/build-release-assets.sh` hardcodes a stale `/tmp/claude-1000/...` zig path; needs `zig` on PATH.
-- Local backup of pre-merge working tree: `~/bilterm-local-backup.patch` (safe to delete).
+## Not done / open
+1. **Clean reprovision proof** of the last win-devvm fixes (EULA screen: removed SkipMachineOOBE/SkipUserOOBE + oobeSystem locale; `winget --source winget`; installed-check). Run: `cd ../win-devvm && WIN_ISO=/Volumes/mini-m4-2tb/ISOs/26100.4349.250607-1500.ge_release_svc_refresh_CLIENTCONSUMER_RET_A64FRE_en-us.iso ./provision.sh --force && ./vm.sh wait` — expect no clicks and `tools: DONE`. (Destroys the current VM.)
+2. libvirt (Linux) path of win-devvm refactored but **untested** — run `./provision.sh` once on the Linux host.
+3. Review/merge PRs bilterm #4 and win-devvm #1.
+4. ~~Attach v2.4.0 Windows archives~~ done 2026-10-30. v2.3.0 / v2.1.2 Windows: `scripts/build-windows-vm.sh <tag> --arch all --test --upload`.
+5. CI `windows-arm64` job (windows-11-arm runner) not yet run on GitHub.
+6. Minor: unused imports in `tests/live_daemon_detach_attach.rs` on Windows (warning only).
 
-## Exact next command
-`gh workflow run release-binaries.yml -f tag=v2.4.0` (first real run — watch it; expect fixes). Then repeat for v2.3.0, v2.1.2; Linux gaps via `scripts/build-release-assets.sh <tag>` on the Linux box; after v2.1.2 is complete, drop its "not attached yet" note.
+## Parallels Standard facts (hard-won)
+- prlctl only `list`/`register`/`unregister` work. Start = `open` an *unregistered* bundle (pre-registered → opens stopped + "already registered" dialog). Stop = `shutdown` over SSH; kill = SIGKILL `prl_vm_app --uuid {…}`.
+- "Press any key" avoided by remastering with `efisys_noprompt.bin` (`hdiutil makehybrid -udf … -eltorito-platform 0xEF`).
+- Parallels disconnects the install ISO after its Tools install → payload staged to `C:\win-devvm` in specialize.
+- Guest IP from `/Library/Preferences/Parallels/parallels_dhcp_leases` by MAC.
+
+## Previous checkpoint (release asset backfill) — still open
+v2.4.0: Windows done, aarch64 musl missing. v2.3.0: Windows missing (buildable, see item 4), aarch64 musl missing; v2.1.2: Windows + Linux missing. `gh workflow run release-binaries.yml -f tag=v2.4.0` never run.

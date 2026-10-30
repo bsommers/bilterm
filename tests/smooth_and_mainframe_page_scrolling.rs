@@ -324,13 +324,23 @@ fn vt_worker_handle_tracks_block_page_hold_and_advances_across_thread_seam() {
     use bilterm::vt::worker::VtWorkerHandle;
     use std::time::{Duration, Instant};
 
+    // 30 output lines, then stay alive briefly so the worker sees them all.
+    let (program, script) = if cfg!(windows) {
+        (
+            "cmd.exe",
+            "(for /L %i in (1,1,30) do @echo WORKER-LINE-%i) & ping -n 2 127.0.0.1 >nul",
+        )
+    } else {
+        (
+            "/bin/sh",
+            "i=1; while [ $i -le 30 ]; do printf 'WORKER-LINE-%02d\\r\\n' $i; i=$((i+1)); done; sleep 0.2",
+        )
+    };
+    let flag = if cfg!(windows) { "/c" } else { "-c" };
     let handle = VtWorkerHandle::spawn_pty(
         PtyConfig {
-            program: "/bin/sh".to_string(),
-            args: vec![
-                "-c".to_string(),
-                "i=1; while [ $i -le 30 ]; do printf 'WORKER-LINE-%02d\\r\\n' $i; i=$((i+1)); done; sleep 0.2".to_string(),
-            ],
+            program: program.to_string(),
+            args: vec![flag.to_string(), script.to_string()],
             rows: 10,
             cols: 80,
             ..Default::default()
@@ -338,7 +348,7 @@ fn vt_worker_handle_tracks_block_page_hold_and_advances_across_thread_seam() {
         500,
         || {},
     )
-    .expect("spawn /bin/sh worker");
+    .expect("spawn shell worker");
 
     handle.set_scroll_mode(PaneScrollMode::BlockPage);
 

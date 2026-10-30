@@ -22,7 +22,7 @@
 | **Core Innovation** | Composite Terminal Panes (`FloatingCommandPrompt` + `OutputCanvas` + `3270-OIA Bar`) with zero `SIGWINCH` geometry thrashing |
 | **Windowing & Persistence** | Binary H/V splits, Borland Z-order cascade deck, 4-edge Slide-Out Drawer, full-layout `:detach` / `:attach`, and hierarchical `SessionTree` |
 | **Automation & AI** | Native MCP (`bilterm --mcp`), JSON-RPC 2.0 (`bilterm ctl`), TRON `:mcp` Root Console, and declarative TOML playbooks (`bilterm run`) |
-| **Platforms & Stack** | Linux, macOS, Windows · Rust `1.88+` (Edition 2024), `ratatui 0.30`, `crossterm`, `portable-pty`, `tokio` · License: `Apache-2.0` |
+| **Platforms & Stack** | Linux, macOS, Windows (x64 & ARM64) · Rust `1.88+` (Edition 2024), `ratatui 0.30`, `crossterm`, `portable-pty`, `tokio` · License: `Apache-2.0` |
 
 <p align="center">
   <img src="docs/assets/screenshot-workspace.svg" alt="Bilterm Multi-Pane Composite Workspace & SSH Fleet (Borland Turbo Blue)" width="920" />
