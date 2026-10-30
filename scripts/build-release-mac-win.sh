@@ -77,7 +77,9 @@ if [[ $WINDOWS -eq 1 ]]; then pkg_windows; else pkg_unix aarch64-apple-darwin; p
 if [[ $UPLOAD -eq 1 ]]; then
     # Merge with the checksums already on the release, then upload new assets.
     gh release download "$TAG" -R "$REPO" -p SHA256SUMS -D "$DIST/prev" 2>/dev/null || true
-    new=$(cd "$DIST" && ls bilterm-*.tar.gz bilterm-*.zip | { [[ $WINDOWS -eq 1 ]] && grep windows || grep apple; })
+    # Only this run's platform; nullglob so a missing .zip/.tar.gz isn't fatal.
+    new=$(cd "$DIST" && shopt -s nullglob && printf '%s\n' bilterm-*.tar.gz bilterm-*.zip \
+        | grep "$([[ $WINDOWS -eq 1 ]] && echo windows || echo apple)")
     (cd "$DIST" && shasum -a 256 $new > SHA256SUMS.new)
     { grep -v -F -f <(awk '{print $2}' "$DIST/SHA256SUMS.new") "$DIST/prev/SHA256SUMS" 2>/dev/null || true
       cat "$DIST/SHA256SUMS.new"; } > "$DIST/SHA256SUMS"
