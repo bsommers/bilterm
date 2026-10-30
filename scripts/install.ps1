@@ -59,7 +59,7 @@ function Write-Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Write-Err($msg)  { Write-Host " [ERR] $msg" -ForegroundColor Red }
 
 if ($Prefix) {
-    # (no `??`: it is PowerShell 7-only and breaks parsing under Windows PowerShell 5.1)
+    # (no `??` here: in command mode it is passed to Resolve-Path as a stray argument, so -Prefix always failed)
     $prefixPath = Resolve-Path -LiteralPath $Prefix -ErrorAction SilentlyContinue
     if (-not $prefixPath) { $prefixPath = $Prefix }
     $BinDir = Join-Path $prefixPath "bin"

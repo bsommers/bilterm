@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`install.ps1 -Archive <zip>`**: install from a local release archive.
 
 ### Fixed
-- **`install.ps1` on Windows on ARM / Windows PowerShell 5.1**: detects the native architecture (registry, not the emulated `PROCESSOR_ARCHITECTURE`), downloads the `aarch64` archive with an `x86_64` fallback; removed the PowerShell 7-only `??` operator that broke parsing under the stock Windows PowerShell 5.1.
+- **`install.ps1` on Windows on ARM / Windows PowerShell 5.1**: detects the native architecture (registry, not the emulated `PROCESSOR_ARCHITECTURE`), downloads the `aarch64` archive with an `x86_64` fallback; `-Prefix` always failed (`A positional parameter cannot be found that accepts argument '??'`) because `??` was passed to `Resolve-Path` as an argument.
 - **`setup.ps1` / `build-binaries.sh`**: rustup download and default target follow the native Windows architecture.
 
 ## [v2.4.0] - 2026-10-29
