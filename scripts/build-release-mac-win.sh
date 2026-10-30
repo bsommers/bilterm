@@ -66,7 +66,8 @@ pkg_windows() {
     mkdir -p "$DIST/$name"
     cp "$WT/target/$triple/release/bilterm.exe" "$DIST/$name/"
     cp "$WT"/{README.md,LICENSE,CHANGELOG.md} "$DIST/$name/"
-    python3 -c "import shutil; shutil.make_archive('$DIST/$name','zip','$DIST','$name')"
+    local d="$DIST"; command -v cygpath >/dev/null && d="$(cygpath -m "$DIST")"   # Git Bash -> native Windows path
+    "${PYTHON:-$(command -v python3 || command -v python)}" -c "import shutil; shutil.make_archive('$d/$name','zip','$d','$name')"
     cp "$DIST/$name.zip" "$DIST/bilterm-$triple.zip"
     rm -rf "$DIST/$name"
 }
