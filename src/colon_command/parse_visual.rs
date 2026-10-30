@@ -287,7 +287,7 @@ fn parse_spotlight_command(parts: &[&str]) -> Option<Result<ColonCommand, String
             "feather" | "edge" => {
                 let Some(raw) = parts.get(i + 1) else {
                     return Some(Err(
-                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string()
+                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
                     ));
                 };
                 let pct = if let Ok(f) = raw.parse::<f32>() {
@@ -298,7 +298,7 @@ fn parse_spotlight_command(parts: &[&str]) -> Option<Result<ColonCommand, String
                     }
                 } else {
                     return Some(Err(
-                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string()
+                        "Usage: :spotlight feather <5..100 | 0.05..1.0>".to_string(),
                     ));
                 };
                 feather_pct = Some(pct.clamp(5, 100));
@@ -380,7 +380,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
             "feather" | "edge" => {
                 let Some(raw) = parts.get(i + 1) else {
                     return Some(Err(
-                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string()
+                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
                     ));
                 };
                 let pct = if let Ok(f) = raw.parse::<f32>() {
@@ -391,7 +391,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
                     }
                 } else {
                     return Some(Err(
-                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string()
+                        "Usage: :focalzoom feather <5..100 | 0.05..1.0>".to_string(),
                     ));
                 };
                 feather_pct = Some(pct.clamp(5, 100));

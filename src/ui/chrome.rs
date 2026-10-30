@@ -191,28 +191,25 @@ pub fn render_drop_shadow_styled(
                 && x < clamped_bounds.x + clamped_bounds.width
                 && y >= clamped_bounds.y
                 && y < clamped_bounds.y + clamped_bounds.height
-                && let Some(cell) = buf.cell_mut((x, y))
-            {
-                if shadow_style == ShadowStyle::SolidHalfBlock {
-                    cell.set_symbol("█");
+                && let Some(cell) = buf.cell_mut((x, y)) {
+                    if shadow_style == ShadowStyle::SolidHalfBlock {
+                        cell.set_symbol("█");
+                    }
+                    cell.set_style(cell_style);
                 }
-                cell.set_style(cell_style);
-            }
         }
     }
 
     // 1-row bottom shadow
     if bottom_y >= clamped_bounds.y && bottom_y < clamped_bounds.y + clamped_bounds.height {
         for x in rect.x.saturating_add(2)..right_x_end {
-            if x >= clamped_bounds.x
-                && x < clamped_bounds.x + clamped_bounds.width
-                && let Some(cell) = buf.cell_mut((x, bottom_y))
-            {
-                if shadow_style == ShadowStyle::SolidHalfBlock {
-                    cell.set_symbol("█");
+            if x >= clamped_bounds.x && x < clamped_bounds.x + clamped_bounds.width
+                && let Some(cell) = buf.cell_mut((x, bottom_y)) {
+                    if shadow_style == ShadowStyle::SolidHalfBlock {
+                        cell.set_symbol("█");
+                    }
+                    cell.set_style(cell_style);
                 }
-                cell.set_style(cell_style);
-            }
         }
     }
 }

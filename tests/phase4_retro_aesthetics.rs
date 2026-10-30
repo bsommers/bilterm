@@ -1,13 +1,13 @@
 use bilterm::ui::cursor::CaretStyle;
 use bilterm::ui::glyphs::GlyphPack;
 use bilterm::ui::theme::ThemePreset;
-use bilterm::ui::{WorkspaceWidget, buffer_to_snapshot_string};
+use bilterm::ui::{buffer_to_snapshot_string, WorkspaceWidget};
 use bilterm::wm::split_tree::SplitDirection;
 use bilterm::wm::{WindowManager, WorkspaceLayoutMode};
-use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
+use ratatui::Terminal;
 
 #[test]
 fn snapshot_borland_turbo_vision_shadows_and_fkey_bar() {

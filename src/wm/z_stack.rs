@@ -569,9 +569,7 @@ impl WindowManager {
                 let rect_str = self
                     .compute_workspace_rects(ws_area)
                     .into_iter()
-                    .find_map(|(id, r)| {
-                        (id == active_id).then(|| format!("{}x{}", r.width, r.height))
-                    })
+                    .find_map(|(id, r)| (id == active_id).then(|| format!("{}x{}", r.width, r.height)))
                     .unwrap_or_else(|| "updated".to_string());
                 self.active_pane_mut()
                     .set_status_message(Some(format!("Pane #{active_id} split size: {rect_str}")));

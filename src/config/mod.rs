@@ -12,7 +12,7 @@ use crate::remote::RemoteHostProfile;
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, CursorBlinkMode, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
-use crate::ui::theme::{ThemePalette, ThemePreset, parse_hex_color};
+use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
 use crate::vt::scrollback::{PaneScrollMode, ScrollbackConfig};
 use crate::wm::DrawerConfig;
 
