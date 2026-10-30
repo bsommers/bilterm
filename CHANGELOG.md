@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`install.ps1` on Windows on ARM / Windows PowerShell 5.1**: detects the native architecture (registry, not the emulated `PROCESSOR_ARCHITECTURE`), downloads the `aarch64` archive with an `x86_64` fallback; `-Prefix` always failed (`A positional parameter cannot be found that accepts argument '??'`) because `??` was passed to `Resolve-Path` as an argument.
 - **`setup.ps1` / `build-binaries.sh`**: rustup download and default target follow the native Windows architecture.
+- **Windows test portability (`tests/smooth_and_mainframe_page_scrolling.rs`)**: the VT-worker page-hold test spawned `/bin/sh` unconditionally; it now uses `cmd.exe` on Windows. Full suite on Windows 11 ARM64: 288/288.
+- **Windows build warning (`src/daemon/process.rs`)**: `ErrorKind` import is now `#[cfg(unix)]`, like its only use.
 
 ## [v2.4.0] - 2026-10-29
 

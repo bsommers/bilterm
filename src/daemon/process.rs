@@ -4,7 +4,9 @@
 //! listening on private `0700`/`0600` Unix domain sockets (`<runtime_dir>/daemons/daemon-<session>.sock`).
 
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io;
+#[cfg(unix)]
+use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
 #[cfg(unix)]
