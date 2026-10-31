@@ -37,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+TARGETS="${TARGETS//,/ }"
 
 cargo_field() { awk -F'"' -v k="$1" '/^\[package\]/{p=1;next} /^\[/{p=0} p && $0 ~ "^"k" *=" {print $2; exit}' "$ROOT/Cargo.toml"; }
 TAG="${TAG:-v$(cargo_field version)}"
