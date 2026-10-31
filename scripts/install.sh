@@ -178,6 +178,7 @@ case "$SCOPE" in
         ;;
 esac
 
+SHARE_DIR="${SHARE_ROOT}"
 DATA_DIR="${SHARE_ROOT}/bilterm"
 MAN_DIR="${SHARE_ROOT}/man/man1"
 DESKTOP_DIR="${SHARE_ROOT}/applications"
@@ -309,9 +310,15 @@ acquire_binary() {
     fi
 
     if [[ "$FROM_SOURCE" -eq 0 && -f "${REPO_ROOT}/target/release/bilterm" ]]; then
-        log_info "Using existing release binary at ${REPO_ROOT}/target/release/bilterm"
-        install_bin_file "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
-        return 0
+        local stale=0
+        if [[ -f "${REPO_ROOT}/Cargo.toml" ]] && [[ -n "$(find "${REPO_ROOT}/Cargo.toml" "${REPO_ROOT}/src" -newer "${REPO_ROOT}/target/release/bilterm" -print -quit 2>/dev/null || true)" ]]; then
+            stale=1
+        fi
+        if [[ "$stale" -eq 0 ]]; then
+            log_info "Using existing release binary at ${REPO_ROOT}/target/release/bilterm"
+            install_bin_file "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
+            return 0
+        fi
     fi
 
     if [[ "$FROM_SOURCE" -eq 0 ]] && [[ ! -f "${REPO_ROOT}/Cargo.toml" ]]; then
@@ -391,13 +398,13 @@ if [[ "$NO_DESKTOP" -eq 0 ]]; then
                 cp -f "${REPO_ROOT}/docs/assets/icons/bilterm-256.png" "$TARGET_ICON"
                 for sz in 16 32 48 64 128 256 512; do
                     if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm-${sz}.png" ]]; then
-                        mkdir -p "${SHARE_DIR}/icons/hicolor/${sz}x${sz}/apps"
-                        cp -f "${REPO_ROOT}/docs/assets/icons/bilterm-${sz}.png" "${SHARE_DIR}/icons/hicolor/${sz}x${sz}/apps/bilterm.png"
+                        mkdir -p "${SHARE_ROOT}/icons/hicolor/${sz}x${sz}/apps"
+                        cp -f "${REPO_ROOT}/docs/assets/icons/bilterm-${sz}.png" "${SHARE_ROOT}/icons/hicolor/${sz}x${sz}/apps/bilterm.png"
                     fi
                 done
                 if [[ -f "${REPO_ROOT}/docs/assets/icons/bilterm.svg" ]]; then
-                    mkdir -p "${SHARE_DIR}/icons/hicolor/scalable/apps"
-                    cp -f "${REPO_ROOT}/docs/assets/icons/bilterm.svg" "${SHARE_DIR}/icons/hicolor/scalable/apps/bilterm.svg"
+                    mkdir -p "${SHARE_ROOT}/icons/hicolor/scalable/apps"
+                    cp -f "${REPO_ROOT}/docs/assets/icons/bilterm.svg" "${SHARE_ROOT}/icons/hicolor/scalable/apps/bilterm.svg"
                 fi
             elif [[ -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" ]]; then
                 cp -f "${REPO_ROOT}/docs/assets/bilterm-logo.png" "$TARGET_ICON"
@@ -428,7 +435,7 @@ DESK_EOF
             fi
             chmod 0644 "$TARGET_DESKTOP"
             command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-            command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t "${SHARE_DIR}/icons/hicolor" 2>/dev/null || true
+            command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t "${SHARE_ROOT}/icons/hicolor" 2>/dev/null || true
         fi
         log_ok "Installed Linux desktop launcher: ${TARGET_DESKTOP}"
     elif [[ "$OS_NAME" == "Darwin"* ]]; then
