@@ -104,7 +104,10 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     } else {
         Write-Info "Downloading and running rustup-init.exe (toolchain $RequiredChannel)..."
         $rustupInit = Join-Path $env:TEMP "rustup-init.exe"
-        Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
+        # Native arch (registry): PROCESSOR_ARCHITECTURE says AMD64 in x64-emulated shells on ARM64.
+        $nativeArch = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
+        $rustupArch = if ($nativeArch -eq 'ARM64') { 'aarch64' } else { 'x86_64' }
+        Invoke-WebRequest -Uri "https://win.rustup.rs/$rustupArch" -OutFile $rustupInit -UseBasicParsing
         & $rustupInit -y --default-toolchain $RequiredChannel -c rustfmt -c clippy
         $env:PATH = "$cargoBin;$env:PATH"
     }

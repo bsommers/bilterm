@@ -51,7 +51,9 @@ if [[ -z "$TARGETS" ]]; then
         Linux)
             TARGETS="$(uname -m)-unknown-linux-gnu"
             command -v cargo-zigbuild >/dev/null && TARGETS+=" $(uname -m)-unknown-linux-musl" ;;
-        MINGW*|MSYS*|CYGWIN*) TARGETS="x86_64-pc-windows-msvc" ;;
+        MINGW*|MSYS*|CYGWIN*)   # native arch from the registry (uname -m lies under x64 emulation on ARM64)
+            if MSYS_NO_PATHCONV=1 reg.exe query 'HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' /v PROCESSOR_ARCHITECTURE 2>/dev/null | grep -q ARM64
+            then TARGETS="aarch64-pc-windows-msvc"; else TARGETS="x86_64-pc-windows-msvc"; fi ;;
         *) echo "error: unknown host $OS; pass --targets" >&2; exit 2 ;;
     esac
 fi

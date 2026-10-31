@@ -1,6 +1,6 @@
 name: release-binaries
 
-# Manual: build macOS + native MSVC Windows archives for an existing tag and
+# Manual: build macOS + native MSVC Windows (x64 + ARM64) archives for an existing tag and
 # attach them to its GitHub release (merging SHA256SUMS). Linux archives are
 # built locally with scripts/build-release-assets.sh.
 on:
@@ -40,4 +40,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows --upload
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows
+      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/${{ inputs.tag }}/bilterm-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip" -ExpectArch x86_64
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows --no-build --upload
+
+  windows-arm64:
+    # Native Windows 11 ARM64 runner (free for public repos). Sequential for SHA256SUMS.
+    needs: windows
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure native ARM64 Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl -sSfLo /tmp/rustup-init.exe https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+            /tmp/rustup-init.exe -y --profile minimal --default-host aarch64-pc-windows-msvc
+            echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows-arm64
+      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/${{ inputs.tag }}/bilterm-${{ inputs.tag }}-aarch64-pc-windows-msvc.zip" -ExpectArch aarch64
+      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows-arm64 --no-build --upload
