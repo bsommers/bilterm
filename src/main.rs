@@ -411,7 +411,7 @@ async fn main() -> color_eyre::Result<()> {
     if blank_session_flag || new_session_flag {
         if let Ok(sess) = app
             .wm
-            .create_new_session(cli_new_session_name.as_deref(), blank_session_flag)
+            .init_cli_new_session(cli_new_session_name.as_deref(), blank_session_flag)
         {
             let kind_lbl = if blank_session_flag { "blank" } else { "new" };
             app.wm.active_pane_mut().set_status_message(Some(format!(

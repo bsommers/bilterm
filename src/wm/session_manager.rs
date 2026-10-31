@@ -157,6 +157,39 @@ impl WindowManager {
         }
     }
 
+    /// Initializes a CLI `-n`/`--new-session` or `-B`/`--blank` workspace on startup by reusing
+    /// the freshly spawned initial pane without killing its shell or overwriting prior `"default"` session state.
+    pub fn init_cli_new_session(&mut self, name_opt: Option<&str>, blank: bool) -> Result<String> {
+        let new_name = match name_opt.filter(|s| !s.trim().is_empty()) {
+            Some(raw) => sanitize_profile_name(raw),
+            None if blank => "blank".to_string(),
+            None => self.generate_next_session_name(),
+        };
+        self.config.history_session = new_name.clone();
+        self.config.active_layout_profile = new_name.clone();
+        if blank {
+            self.active_pane_mut().prompt_mut().history.clear();
+            let _ = self.active_pane_mut().vt_mut().clear_scrollback();
+        } else {
+            self.sync_history_config();
+            let snap = self.snapshot_session(&new_name);
+            self.layout_profiles_mem.insert(new_name.clone(), snap);
+            if self.should_persist_sessions_to_disk() {
+                let _ = self.save_session(&new_name);
+            }
+            let mut order = self.ordered_sessions_with_active();
+            if !order.contains(&new_name) {
+                order.push(new_name.clone());
+            }
+            self.save_session_order(order);
+        }
+        self.daemon_state
+            .session_tree
+            .upsert_session(&new_name, SessionNodeKind::Rooted, None);
+        self.daemon_state.session_panes.insert(new_name.clone(), 1);
+        Ok(new_name)
+    }
+
     /// Resets the workspace to a clean 1-pane session named `name` (or auto-generated if `None`).
     /// When `blank` is `true`, clears initial command history and scrollback without saving the outgoing session.
     pub fn create_new_session(&mut self, name_opt: Option<&str>, blank: bool) -> Result<String> {

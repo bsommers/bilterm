@@ -30,6 +30,10 @@ impl ShellKind {
 
 /// Bash integration script sourced via `--rcfile` for interactive Bash sessions (`VAL-01`).
 pub const BASH_INTEGRATION_SCRIPT: &str = r#"# Bilterm zero-config Bash integration (OSC 133 + OSC 7)
+export DISABLE_AUTO_UPDATE="${DISABLE_AUTO_UPDATE:-true}"
+if [ -d "$HOME/.oh-my-bash/log/update.lock" ]; then
+    rmdir "$HOME/.oh-my-bash/log/update.lock" 2>/dev/null || rm -rf "$HOME/.oh-my-bash/log/update.lock" 2>/dev/null
+fi
 if [ -f /etc/bash.bashrc ]; then
     source /etc/bash.bashrc
 fi
@@ -59,6 +63,10 @@ PS0='\e]133;C\a'
 
 /// Zsh `.zshrc` wrapper script injected via `ZDOTDIR` (`VAL-01`).
 pub const ZSH_INTEGRATION_SCRIPT: &str = r#"# Bilterm zero-config Zsh integration (OSC 133 + OSC 7)
+export DISABLE_AUTO_UPDATE="${DISABLE_AUTO_UPDATE:-true}"
+if [ -d "$HOME/.oh-my-zsh/log/update.lock" ]; then
+    rmdir "$HOME/.oh-my-zsh/log/update.lock" 2>/dev/null || rm -rf "$HOME/.oh-my-zsh/log/update.lock" 2>/dev/null
+fi
 if [ -n "$BILTERM_ORIG_ZDOTDIR" ]; then
     export ZDOTDIR="$BILTERM_ORIG_ZDOTDIR"
     unset BILTERM_ORIG_ZDOTDIR
