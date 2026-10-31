@@ -79,11 +79,29 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
         return handle_history_popup_key(pane, key);
     }
 
-    // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12
+    // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12 (without Shift)
     if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
-        || key.code == KeyCode::F(12)
+        || (key.code == KeyCode::F(12) && !key.modifiers.contains(KeyModifiers::SHIFT))
     {
         pane.toggle_manual_raw_override();
+        return Ok(AppAction::Handled);
+    }
+
+    // Shift+F1..F12 always sends the raw F1..F12 escape sequence directly to the child PTY
+    if let KeyCode::F(n @ 1..=12) = key.code
+        && key.modifiers == KeyModifiers::SHIFT
+    {
+        if !pane.is_read_only() {
+            let bytes = encode_key_to_pty_bytes_full(
+                KeyEvent::new(KeyCode::F(n), KeyModifiers::NONE),
+                pane.vt().is_application_cursor(),
+                pane.vt().is_backarrow_key_67(),
+                pane.vt().kitty_keyboard_flags(),
+            );
+            if !bytes.is_empty() {
+                pane.write_to_pty(&bytes)?;
+            }
+        }
         return Ok(AppAction::Handled);
     }
 
@@ -92,7 +110,7 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     // when not inside a DECSET 1049 ALT_SCREEN app like htop/vim or an active canvas password prompt.
     if !pane.vt().is_alternate_screen()
         && !pane.is_active_canvas_password_prompt()
-        && (key.code == KeyCode::F(4)
+        && ((key.code == KeyCode::F(4) && key.modifiers.is_empty())
             || (key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))))
     {

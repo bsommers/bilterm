@@ -84,6 +84,9 @@ impl PaneChromeStyle {
 
     pub fn resolve_palette(&self, cfg: &BiltermConfig) -> ThemePalette {
         let mut pal = self.palette.clone().unwrap_or_else(|| cfg.palette());
+        if let Some(col) = cfg.cursor_color.as_deref().and_then(parse_cursor_color) {
+            pal.cursor_fg = Some(col);
+        }
         self.apply_color_overrides(&mut pal, cfg.theme);
         pal
     }
@@ -188,6 +191,17 @@ impl WindowManager {
     pub fn active_pane_chrome_mut(&mut self) -> &mut PaneChromeStyle {
         let id = self.active_pane_id();
         self.pane_chrome.entry(id).or_default()
+    }
+
+    /// Removes a single per-window color override key on the focused pane and prunes empty entries.
+    pub fn clear_active_pane_color_override(&mut self, key: &str) {
+        let id = self.active_pane_id();
+        if let Some(chrome) = self.pane_chrome.get_mut(&id) {
+            chrome.colors.remove(key);
+            if chrome.is_default() {
+                self.pane_chrome.remove(&id);
+            }
+        }
     }
 
     /// Rebuilds per-window overrides from saved session panes (unknown themes are dropped).

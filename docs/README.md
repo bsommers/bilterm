@@ -1,8 +1,8 @@
-# Bilterm Documentation Hub (`v2.5.0`)
+# Bilterm Documentation Hub (`v2.5.1`)
 
 [← Back to Project README](../README.md) | [Visual Gallery (`docs/VISUAL_GALLERY.md`)](VISUAL_GALLERY.md) | [Starter Packs (`starter-packs/`)](../starter-packs/README.md)
 
-Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.0`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
+Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.1`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
 
 ---
 
@@ -60,7 +60,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.0`)** — 
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.5.0`) |
+| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.5.1`) |
 | `bilterm -h` / `--help` | Print CLI help summary |
 
 ---

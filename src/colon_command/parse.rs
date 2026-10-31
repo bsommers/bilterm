@@ -244,13 +244,25 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::BroadcastToggle(arg)))
         }
+        "save" | "session-save" => {
+            let name = parts.get(1).copied().unwrap_or("").to_string();
+            Some(Ok(ColonCommand::SessionSave(name)))
+        }
+        "rename" | "session-rename" => {
+            if parts.len() < 2 {
+                Some(Err("Usage: :rename [old_name] <new_name>".to_string()))
+            } else {
+                let sub = format!("rename {}", parts[1..].join(" "));
+                Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+            }
+        }
         "session" | "workspace" | "sessions" => match parts.get(1).copied() {
-            Some("save") => {
-                let name = parts.get(2).copied().unwrap_or("default").to_string();
+            Some("save" | "save-as") => {
+                let name = parts.get(2).copied().unwrap_or("").to_string();
                 Some(Ok(ColonCommand::SessionSave(name)))
             }
             Some("restore" | "load") => {
-                let name = parts.get(2).copied().unwrap_or("default").to_string();
+                let name = parts.get(2).copied().unwrap_or("").to_string();
                 Some(Ok(ColonCommand::SessionRestore(name)))
             }
             Some(

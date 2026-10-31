@@ -237,37 +237,24 @@ impl OpenColorScheme {
             ensure_min_contrast(self.ansi[10], prompt_surface_bg, active_border_fg, 3.0);
 
         let oia_badge_bg = self.badge.unwrap_or(self.ansi[14]);
-        let contrast_black = contrast_ratio(Color::Black, oia_badge_bg);
-        let contrast_white = contrast_ratio(Color::White, oia_badge_bg);
-        let oia_badge_fg = if contrast_black >= contrast_white {
+        let oia_badge_fg = if contrast_ratio(Color::Black, oia_badge_bg) >= contrast_ratio(Color::White, oia_badge_bg) {
             Color::Black
         } else {
             Color::White
         };
-
         let fkey_bar_fg = ensure_min_contrast(self.foreground, fkey_bar_bg, Color::White, 3.0);
         let fkey_num_fg = ensure_min_contrast(self.ansi[9], fkey_bar_bg, active_border_fg, 3.0);
         let shadow_fg = self.ansi[8];
         let shadow_bg = blend_rgb(self.background, Color::Black, 0.55);
 
-        ThemePalette::new(
-            self.name.clone(),
-            prompt_surface_bg,
-            window_frame_bg,
-            active_border_fg,
-            inactive_border_fg,
-            title_fg,
-            prompt_prefix_fg,
-            oia_bg,
-            oia_badge_bg,
-            oia_badge_fg,
-            crosshair_bg,
-            fkey_bar_bg,
-            fkey_bar_fg,
-            fkey_num_fg,
-            shadow_fg,
-            shadow_bg,
-        )
+        let mut pal = ThemePalette::new(
+            self.name.clone(), prompt_surface_bg, window_frame_bg, active_border_fg, inactive_border_fg,
+            title_fg, prompt_prefix_fg, oia_bg, oia_badge_bg, oia_badge_fg, crosshair_bg, fkey_bar_bg,
+            fkey_bar_fg, fkey_num_fg, shadow_fg, shadow_bg,
+        );
+        pal.text_fg = Some(ensure_min_contrast(self.foreground, window_frame_bg, Color::White, 4.5));
+        pal.cursor_fg = Some(self.cursor);
+        pal
     }
 }
 

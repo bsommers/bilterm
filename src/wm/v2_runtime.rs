@@ -313,6 +313,14 @@ impl WindowManager {
     /// Applies an [`OpenColorScheme`] to the workspace and active pane, including any per-theme typography profile (`THM-01`, `THM-02`).
     pub fn apply_open_color_scheme(&mut self, scheme: &OpenColorScheme) {
         self.config.custom_palette_override = Some(scheme.to_theme_palette());
+        let active_id = self.active_pane_id();
+        if let Some(chrome) = self.pane_chrome.get_mut(&active_id) {
+            chrome.theme_name = None;
+            chrome.palette = None;
+            if chrome.is_default() {
+                self.pane_chrome.remove(&active_id);
+            }
+        }
         if let Some(ref fam) = scheme.typography.font_family {
             self.config.font_family = fam.clone();
         }
@@ -541,6 +549,14 @@ impl WindowManager {
     pub fn apply_theme_preset(&mut self, preset: ThemePreset) {
         self.config.theme = preset;
         self.config.custom_palette_override = None;
+        let active_id = self.active_pane_id();
+        if let Some(chrome) = self.pane_chrome.get_mut(&active_id) {
+            chrome.theme_name = None;
+            chrome.palette = None;
+            if chrome.is_default() {
+                self.pane_chrome.remove(&active_id);
+            }
+        }
         self.notify_theme_changed();
     }
 

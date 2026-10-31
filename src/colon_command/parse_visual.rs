@@ -281,6 +281,63 @@ pub(super) fn parse_visual_colon_command(
             Some(Ok(ColonCommand::CrtToggle(arg)))
         }
         "drawer" | "sidebar" | "panels" => parse_drawer_command(parts),
+        "fkeys" | "fkey" | "function-keys" => parse_fkeys_command(parts),
+        "snazzy" | "herdr-style" => match parts.get(1).copied() {
+            None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
+                "snazzy-toggle".to_string(),
+            )))),
+            Some("on" | "true" | "1" | "enable") => Some(Ok(ColonCommand::VisualStyleCommand(
+                Some("snazzy".to_string()),
+            ))),
+            Some("off" | "false" | "0" | "disable") => Some(Ok(
+                ColonCommand::VisualStyleCommand(Some("snazzy-off".to_string())),
+            )),
+            _ => Some(Err("Usage: :snazzy [on | off | toggle]".to_string())),
+        },
+        "glass" | "frosted" | "aero" => match parts.get(1).copied() {
+            None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
+                "glass-toggle".to_string(),
+            )))),
+            Some("on" | "true" | "1" | "enable") => Some(Ok(ColonCommand::VisualStyleCommand(
+                Some("glass".to_string()),
+            ))),
+            Some("off" | "false" | "0" | "disable") => Some(Ok(
+                ColonCommand::VisualStyleCommand(Some("glass-off".to_string())),
+            )),
+            _ => Some(Err("Usage: :glass [on | off | toggle]".to_string())),
+        },
+        "style" | "visual" | "visual-style" => match parts.get(1).copied() {
+            None | Some("cycle" | "next" | "toggle") => {
+                Some(Ok(ColonCommand::VisualStyleCommand(None)))
+            }
+            Some(
+                tok @ ("classic"
+                | "off"
+                | "reset"
+                | "default"
+                | "retro"
+                | "snazzy"
+                | "snazzy-only"
+                | "snazzy-off"
+                | "herdr"
+                | "rich"
+                | "glass"
+                | "glass-only"
+                | "glass-off"
+                | "frosted"
+                | "aero"
+                | "translucent"
+                | "both"
+                | "all"
+                | "snazzy-glass"
+                | "snazzy+glass"
+                | "max"
+                | "ultra"),
+            ) => Some(Ok(ColonCommand::VisualStyleCommand(Some(tok.to_string())))),
+            _ => Some(Err(
+                "Usage: :style [classic | snazzy | glass | snazzy-glass | cycle]".to_string(),
+            )),
+        },
         "fontsize" | "textsize" => match parts.get(1).copied() {
             None | Some("reset" | "0" | "default") => Some(Ok(ColonCommand::FontZoomReset)),
             Some("+" | "in" | "up" | "grow" | "larger") => Some(Ok(ColonCommand::FontZoomIn)),
@@ -531,20 +588,24 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
         Some("ondemand" | "on-demand") => Some(Ok(ColonCommand::DrawerVisibility(Some(
             DrawerVisibilityMode::OnDemand,
         )))),
-        Some("float" | "overlay") => Some(Ok(ColonCommand::DrawerLayout(Some(
-            DrawerLayoutMode::Overlay,
-        )))),
-        Some("push" | "bump") => Some(Ok(ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Push)))),
+        Some("float" | "overlay" | "fly" | "fly-out" | "flyout") => Some(Ok(
+            ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Overlay)),
+        )),
+        Some("push" | "bump" | "push-out" | "pushout" | "dock-push") => {
+            Some(Ok(ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Push))))
+        }
         Some("mode" | "layout") => match parts.get(2).copied() {
-            Some("float" | "overlay") => Some(Ok(ColonCommand::DrawerLayout(Some(
-                DrawerLayoutMode::Overlay,
-            )))),
-            Some("push" | "bump") => {
+            Some("float" | "overlay" | "fly" | "fly-out" | "flyout") => Some(Ok(
+                ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Overlay)),
+            )),
+            Some("push" | "bump" | "push-out" | "pushout") => {
                 Some(Ok(ColonCommand::DrawerLayout(Some(DrawerLayoutMode::Push))))
             }
             None => Some(Ok(ColonCommand::DrawerLayout(None))),
             _ => Some(Err("Usage: :drawer mode [float|push]".to_string())),
         },
+        Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
+        Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
             if let Some(n) = parts.get(2).and_then(|s| s.parse::<u16>().ok()) {
                 Some(Ok(ColonCommand::DrawerSize(n)))
@@ -553,8 +614,44 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|minimize|maximize|size <n>]"
                 .to_string(),
         )),
+    }
+}
+
+fn parse_fkeys_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
+    use crate::ui::visual_style::{RawFkeyMode, parse_fkey_number};
+    match parts.get(1).copied() {
+        None | Some("toggle" | "cycle" | "next") => Some(Ok(ColonCommand::FkeyModeCommand(None))),
+        Some("status" | "show" | "info") => {
+            Some(Ok(ColonCommand::FkeyModeCommand(Some("status".to_string()))))
+        }
+        Some("send" | "pass" | "pty") => {
+            if let Some(tok) = parts.get(2).copied()
+                && let Some(n) = parse_fkey_number(tok)
+            {
+                Some(Ok(ColonCommand::FkeyModeCommand(Some(format!("send F{n}")))))
+            } else {
+                Some(Err("Usage: :fkeys send <F1..F12>".to_string()))
+            }
+        }
+        Some(tok) => {
+            if let Some(mode) = RawFkeyMode::from_name(tok) {
+                let canon = match mode {
+                    RawFkeyMode::Bilterm => "bilterm",
+                    RawFkeyMode::App => "app",
+                    RawFkeyMode::Auto => "auto",
+                };
+                Some(Ok(ColonCommand::FkeyModeCommand(Some(canon.to_string()))))
+            } else if let Some(n) = parse_fkey_number(tok) {
+                Some(Ok(ColonCommand::FkeyModeCommand(Some(format!("send F{n}")))))
+            } else {
+                Some(Err(
+                    "Usage: :fkeys [bilterm | app | auto | toggle | status | send <F1..F12>]"
+                        .to_string(),
+                ))
+            }
+        }
     }
 }

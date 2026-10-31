@@ -468,10 +468,51 @@ impl WindowManager {
             .unwrap_or(false)
     }
 
+    /// Saves the current workspace under `name_opt` (or the active `history_session` when `None`),
+    /// activates that session name, and registers it in memory, disk, `session_order`, and `session_tree`.
+    pub fn save_and_activate_session(
+        &mut self,
+        name_opt: Option<&str>,
+    ) -> Result<(String, PathBuf)> {
+        let raw = name_opt
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.config.history_session);
+        let target = crate::wm::layout_profile::sanitize_profile_name(raw);
+        let snap = self.snapshot_session(&target);
+        self.layout_profiles_mem.insert(target.clone(), snap);
+        let path = self.save_session(&target)?;
+        self.config.history_session = target.clone();
+        self.config.active_layout_profile = target.clone();
+        let settings = self.config.history_settings();
+        for pane in self.panes.values_mut() {
+            let _ = pane.history_store_mut().apply_settings(&settings);
+        }
+        let mut order = self.ordered_sessions_with_active();
+        if !order.contains(&target) {
+            order.push(target.clone());
+        }
+        self.save_session_order(order);
+        self.daemon_state.session_tree.upsert_session(
+            &target,
+            crate::wm::session_tree::SessionNodeKind::Rooted,
+            None,
+        );
+        self.daemon_state
+            .session_panes
+            .insert(target.clone(), self.panes.len());
+        Ok((target, path))
+    }
+
     /// Saves the current workspace layout and pane states to `<session_dir>/<name>.toml` (`:session save <name>`, `ECO-02`).
     pub fn save_session(&self, name: &str) -> Result<PathBuf> {
-        let safe_name: String = name
-            .trim()
+        let fallback = if self.config.history_session.trim().is_empty() {
+            "default"
+        } else {
+            self.config.history_session.trim()
+        };
+        let raw = if name.trim().is_empty() { fallback } else { name.trim() };
+        let safe_name: String = raw
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
             .collect();
@@ -492,27 +533,39 @@ impl WindowManager {
 
     /// Restores a previously saved workspace session from `<session_dir>/<name>.toml` (`:session restore <name>`, `ECO-02`).
     pub fn restore_session(&mut self, name: &str) -> Result<usize> {
-        let safe_name: String = name
-            .trim()
+        let fallback = if self.config.history_session.trim().is_empty() {
+            "default"
+        } else {
+            self.config.history_session.trim()
+        };
+        let raw_name = if name.trim().is_empty() { fallback } else { name.trim() };
+        let safe_name: String = raw_name
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
             .collect();
         let file_stem = if safe_name.is_empty() {
-            "default"
+            "default".to_string()
         } else {
-            &safe_name
+            safe_name
         };
         let path = self.resolve_session_dir()?.join(format!("{file_stem}.toml"));
         let raw = std::fs::read_to_string(&path)?;
         let mut saved: SavedWorkspaceSession = toml::from_str(&raw)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
         let was_detached = saved.detached;
+        self.config.history_session = file_stem.clone();
+        self.config.active_layout_profile = file_stem.clone();
         let pane_count = self.apply_saved_session_snapshot(&saved);
         self.client_detached = false;
+        self.layout_profiles_mem.insert(file_stem.clone(), saved.clone());
         self.daemon_state
             .session_panes
-            .insert(file_stem.to_string(), pane_count);
-        self.sync_history_config();
+            .insert(file_stem.clone(), pane_count);
+        let mut order = self.ordered_sessions_with_active();
+        if !order.contains(&file_stem) {
+            order.push(file_stem);
+            self.save_session_order(order);
+        }
         if was_detached {
             saved.detached = false;
             if let Ok(toml_str) = toml::to_string_pretty(&saved) {

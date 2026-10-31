@@ -35,25 +35,11 @@ pub enum DrawerEdge {
 
 impl DrawerEdge {
     pub const fn cycle(self) -> Self {
-        match self {
-            Self::Left => Self::Right,
-            Self::Right => Self::Top,
-            Self::Top => Self::Bottom,
-            Self::Bottom => Self::Left,
-        }
+        match self { Self::Left => Self::Right, Self::Right => Self::Top, Self::Top => Self::Bottom, Self::Bottom => Self::Left }
     }
-
-    pub const fn is_vertical(self) -> bool {
-        matches!(self, Self::Left | Self::Right)
-    }
-
+    pub const fn is_vertical(self) -> bool { matches!(self, Self::Left | Self::Right) }
     pub const fn label(self) -> &'static str {
-        match self {
-            Self::Left => "Left",
-            Self::Right => "Right",
-            Self::Top => "Top",
-            Self::Bottom => "Bottom",
-        }
+        match self { Self::Left => "Left", Self::Right => "Right", Self::Top => "Top", Self::Bottom => "Bottom" }
     }
 }
 
@@ -69,26 +55,13 @@ pub enum DrawerVisibilityMode {
 
 impl DrawerVisibilityMode {
     pub const fn toggle_pin(self) -> Self {
-        match self {
-            Self::Fixed => Self::AutoHide,
-            Self::OnDemand | Self::AutoHide => Self::Fixed,
-        }
+        match self { Self::Fixed => Self::AutoHide, Self::OnDemand | Self::AutoHide => Self::Fixed }
     }
-
     pub const fn cycle(self) -> Self {
-        match self {
-            Self::OnDemand => Self::Fixed,
-            Self::Fixed => Self::AutoHide,
-            Self::AutoHide => Self::OnDemand,
-        }
+        match self { Self::OnDemand => Self::Fixed, Self::Fixed => Self::AutoHide, Self::AutoHide => Self::OnDemand }
     }
-
     pub const fn label(self) -> &'static str {
-        match self {
-            Self::OnDemand => "OnDemand",
-            Self::Fixed => "Fixed",
-            Self::AutoHide => "AutoHide",
-        }
+        match self { Self::OnDemand => "OnDemand", Self::Fixed => "Fixed", Self::AutoHide => "AutoHide" }
     }
 }
 
@@ -105,17 +78,10 @@ pub enum DrawerLayoutMode {
 
 impl DrawerLayoutMode {
     pub const fn toggle(self) -> Self {
-        match self {
-            Self::Overlay => Self::Push,
-            Self::Push => Self::Overlay,
-        }
+        match self { Self::Overlay => Self::Push, Self::Push => Self::Overlay }
     }
-
     pub const fn label(self) -> &'static str {
-        match self {
-            Self::Overlay => "Float",
-            Self::Push => "Push",
-        }
+        match self { Self::Overlay => "Float", Self::Push => "Push" }
     }
 }
 
@@ -222,12 +188,13 @@ impl DrawerRow {
 pub struct WorkspaceDrawer {
     pub open: bool,
     pub focused: bool,
+    pub maximized: bool,
     pub hover_active: bool,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub resizing_drag: bool,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
-    pane_sparklines: BTreeMap<PaneId, [u8; 6]> ,
+    pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
 }
 
@@ -321,32 +288,27 @@ impl WindowManager {
 
     /// Computes the bounding [`Rect`] of the slide-out drawer within `workspace_area` when visible (`DRW-01`).
     pub fn drawer_rect(&self, workspace_area: Rect) -> Option<Rect> {
-        if !self.is_drawer_effectively_visible()
-            || workspace_area.width < 12
-            || workspace_area.height < 4
-        {
+        if !self.is_drawer_effectively_visible() || workspace_area.width < 12 || workspace_area.height < 4 {
             return None;
         }
         let cfg = &self.config.drawer;
-        let max_w = (workspace_area.width / 2).max(12);
-        let w = cfg.width_cols.clamp(12, max_w).min(workspace_area.width);
-        let max_h = (workspace_area.height / 2).max(3);
-        let h = cfg.height_rows.clamp(3, max_h).min(workspace_area.height);
+        let (w, h) = if self.drawer.maximized {
+            let mw = ((workspace_area.width * 2) / 3).clamp(44.min(workspace_area.width), workspace_area.width);
+            let mh = ((workspace_area.height * 2) / 3).clamp(10.min(workspace_area.height), workspace_area.height);
+            (mw, mh)
+        } else {
+            let max_w = (workspace_area.width / 2).max(12);
+            let max_h = (workspace_area.height / 2).max(3);
+            (
+                cfg.width_cols.clamp(12, max_w).min(workspace_area.width),
+                cfg.height_rows.clamp(3, max_h).min(workspace_area.height),
+            )
+        };
         Some(match cfg.edge {
             DrawerEdge::Left => Rect::new(workspace_area.x, workspace_area.y, w, workspace_area.height),
-            DrawerEdge::Right => Rect::new(
-                workspace_area.x + workspace_area.width.saturating_sub(w),
-                workspace_area.y,
-                w,
-                workspace_area.height,
-            ),
+            DrawerEdge::Right => Rect::new(workspace_area.x + workspace_area.width.saturating_sub(w), workspace_area.y, w, workspace_area.height),
             DrawerEdge::Top => Rect::new(workspace_area.x, workspace_area.y, workspace_area.width, h),
-            DrawerEdge::Bottom => Rect::new(
-                workspace_area.x,
-                workspace_area.y + workspace_area.height.saturating_sub(h),
-                workspace_area.width,
-                h,
-            ),
+            DrawerEdge::Bottom => Rect::new(workspace_area.x, workspace_area.y + workspace_area.height.saturating_sub(h), workspace_area.width, h),
         })
     }
 
@@ -559,6 +521,10 @@ impl WindowManager {
             self.drawer.open = false;
             self.drawer.focused = false;
             self.drawer.hover_active = false;
+            self.drawer.maximized = false;
+            if self.config.drawer.visibility == DrawerVisibilityMode::Fixed {
+                self.config.drawer.visibility = DrawerVisibilityMode::OnDemand;
+            }
         } else {
             self.drawer.open = true;
             self.drawer.focused = true;
@@ -576,11 +542,19 @@ impl WindowManager {
 
     pub fn close_drawer(&mut self) {
         self.drawer.focused = false;
+        self.drawer.maximized = false;
         if self.config.drawer.visibility != DrawerVisibilityMode::Fixed {
             self.drawer.open = false;
             self.drawer.hover_active = false;
         }
         self.reflow_default_viewport();
+    }
+
+    pub fn toggle_maximize_drawer(&mut self) -> bool {
+        self.drawer.open = true;
+        self.drawer.maximized = !self.drawer.maximized;
+        self.reflow_default_viewport();
+        self.drawer.maximized
     }
 
     pub fn sync_drawer_selection_to_active_pane(&mut self) {
@@ -688,6 +662,18 @@ impl WindowManager {
         }
     }
 
+    pub fn selected_drawer_session_name(&self) -> String {
+        let rows = self.drawer_rows();
+        if let Some(DrawerRow {
+            kind: DrawerRowKind::SessionHeader(s),
+            ..
+        }) = rows.get(self.drawer.selected_index)
+        {
+            return s.clone();
+        }
+        self.config.history_session.clone()
+    }
+
     pub fn drawer_move_selected_session(&mut self, up: bool) {
         let rows = self.drawer_rows();
         let target_sess = rows.get(self.drawer.selected_index).and_then(|r| match &r.kind {
@@ -721,20 +707,20 @@ impl WindowManager {
         self.config.drawer.layout
     }
 
-    pub fn set_drawer_visibility(
-        &mut self,
-        mode: Option<DrawerVisibilityMode>,
-    ) -> DrawerVisibilityMode {
+    pub fn set_drawer_visibility(&mut self, mode: Option<DrawerVisibilityMode>) -> DrawerVisibilityMode {
         let next = mode.unwrap_or_else(|| self.config.drawer.visibility.toggle_pin());
         self.config.drawer.visibility = next;
         if next == DrawerVisibilityMode::Fixed {
             self.drawer.open = true;
+        } else if next == DrawerVisibilityMode::OnDemand && !self.drawer.focused {
+            self.drawer.open = false;
         }
         self.reflow_default_viewport();
         next
     }
 
     pub fn resize_drawer(&mut self, size: u16) {
+        self.drawer.maximized = false;
         if self.config.drawer.edge.is_vertical() {
             self.config.drawer.width_cols = size.clamp(16, 60);
         } else {
@@ -751,9 +737,7 @@ impl WindowManager {
             DrawerEdge::Top => row <= workspace_area.y + 1,
             DrawerEdge::Bottom => row >= workspace_area.y.saturating_add(workspace_area.height.saturating_sub(2)),
         };
-        let inside_open = self
-            .drawer_rect(workspace_area)
-            .is_some_and(|r| crate::wm::rect_contains(r, col, row));
+        let inside_open = self.drawer_rect(workspace_area).is_some_and(|r| crate::wm::rect_contains(r, col, row));
         self.drawer.hover_active = at_edge || (prev && inside_open);
         if prev != self.drawer.hover_active
             && self.config.drawer.visibility == DrawerVisibilityMode::AutoHide
@@ -776,14 +760,23 @@ impl WindowManager {
                 self.focus_drawer();
                 "Slide-Out Drawer: FOCUSED".to_string()
             }
-            Action::DrawerDock(edge_opt) => {
-                format!("Slide-Out Drawer Dock Edge: {}", self.set_drawer_edge(*edge_opt).label())
+            Action::DrawerDock(edge_opt) => format!("Slide-Out Drawer Dock Edge: {}", self.set_drawer_edge(*edge_opt).label()),
+            Action::DrawerVisibility(vis_opt) => format!("Slide-Out Drawer Visibility: {}", self.set_drawer_visibility(*vis_opt).label()),
+            Action::DrawerLayout(layout_opt) => format!("Slide-Out Drawer Layout Mode: {}", self.set_drawer_layout(*layout_opt).label()),
+            Action::DrawerSize(0) => {
+                if self.drawer.maximized {
+                    self.drawer.maximized = false;
+                    self.reflow_default_viewport();
+                    "Slide-Out Drawer: RESTORED [_]".to_string()
+                } else {
+                    self.config.drawer.visibility = DrawerVisibilityMode::OnDemand;
+                    self.close_drawer();
+                    "Slide-Out Drawer: MINIMIZED [_]".to_string()
+                }
             }
-            Action::DrawerVisibility(vis_opt) => {
-                format!("Slide-Out Drawer Visibility: {}", self.set_drawer_visibility(*vis_opt).label())
-            }
-            Action::DrawerLayout(layout_opt) => {
-                format!("Slide-Out Drawer Layout Mode: {}", self.set_drawer_layout(*layout_opt).label())
+            Action::DrawerSize(u16::MAX) => {
+                let max_now = self.toggle_maximize_drawer();
+                format!("Slide-Out Drawer: {}", if max_now { "MAXIMIZED [□]" } else { "RESTORED" })
             }
             Action::DrawerSize(size) => {
                 self.resize_drawer(*size);

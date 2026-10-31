@@ -342,8 +342,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         &[
             ("3270 Inspector (F9)", ":inspector"),
             ("New Session", ":session new"),
-            ("Save Session", ":session save default"),
-            ("Restore Session", ":session restore default"),
+            ("Save Session", ":session save"),
+            ("Restore Session", ":session restore"),
             ("Session Processes & CWD...", ":session info"),
             ("Toggle Auto-Relaunch Apps", ":session processes"),
             ("Quit (Ctrl+Q)", ":quit"),

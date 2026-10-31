@@ -107,7 +107,15 @@ pub(super) fn render_floating_prompt(
     let base_text_fg = palette.text_fg.unwrap_or(Color::White);
     let pin_fg = palette.controls_fg.unwrap_or(Color::Rgb(85, 255, 255));
     let corner_fg = palette.controls_fg.unwrap_or(palette.title_fg);
-    let title = format!("╣ BILTERM 3270 // CMD [{anchor_badge}] ╠");
+    let title = if cfg.snazzy_mode {
+        let cmd_lbl = pane
+            .resolve_running_command()
+            .unwrap_or_else(|| pane.shell_program().to_string());
+        let icon = crate::ui::visual_style::herdr_process_icon(&cmd_lbl);
+        format!("╣ {icon} BILTERM 3270 // CMD [{anchor_badge}] ╠")
+    } else {
+        format!("╣ BILTERM 3270 // CMD [{anchor_badge}] ╠")
+    };
     let block = Block::default()
         .title(Span::styled(
             title,
@@ -123,6 +131,9 @@ pub(super) fn render_floating_prompt(
 
     let inner = block.inner(prompt_rect);
     block.render(prompt_rect, buf);
+    if cfg.glass_mode {
+        crate::ui::visual_style::polish_glass_panel_rect(buf, prompt_rect, surface_bg, palette, active);
+    }
 
     // Render clickable [▲][▼] pin badges on the top-right border when width >= 44
     if prompt_rect.width >= 44 {

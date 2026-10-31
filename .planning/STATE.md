@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.5.0
-milestone_name: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence
+milestone: v2.5.1
+milestone_name: Per-Window Theme & Element Color Fixes, Drawer Controls, Session Save/Rename, RAW F-Keys & Snazzy/Glass Visual Styles
 current_phase: 41
 current_phase_name: rectangular-select-and-per-pane-session-process-cwd-persistence
-status: milestone_v2_5_0_complete
-stopped_at: Released v2.5.0 (2D Rectangular Select/Highlight/Copy + Full Per-Pane Session Shell, Running Software/Command & CWD Persistence across every session)
+status: milestone_v2_5_1_complete
+stopped_at: Built and installed v2.5.1 (Per-window themes/colors & canvas bg fix, DRAWER title & Ctrl+X/F7/minimize/maximize/push-out controls, :save/:rename session commands, :fkeys RAW mode routing, and :snazzy/:glass visual styles)
 last_updated: "2026-10-31"
 last_activity: 2026-10-31
-last_activity_desc: Released v2.5.0 with 2D rectangular block selection (:rect, :select, :copy rect, Alt+R, Alt+LeftDrag) and full per-pane session shell, running command, and CWD persistence
+last_activity_desc: Built and installed v2.5.1 release binary at target/release/bilterm and ~/.local/bin/bilterm
 progress:
   total_phases: 41
   completed_phases: 41

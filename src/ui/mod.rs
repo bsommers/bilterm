@@ -23,6 +23,7 @@ pub mod status_bar;
 pub mod theme;
 pub mod theme_import;
 pub mod typography;
+pub mod visual_style;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
@@ -35,6 +36,7 @@ pub use typography::{
     FontFamilyPreset, LineSizeAttr, PaneFontOptions, encode_host_font_passthrough,
     scan_dec_line_size_escapes,
 };
+pub use visual_style::RawFkeyMode;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -120,17 +122,18 @@ impl Widget for CompositePaneWidget<'_> {
             if cfg.drop_shadows && !self.pane.prompt().anchor.is_split() {
                 render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
-            occlude_rect(buf, prompt_rect);
+            if cfg.glass_mode {
+                visual_style::apply_frosted_glass_surface(buf, prompt_rect, palette.prompt_surface_bg, &palette);
+            } else {
+                occlude_rect(buf, prompt_rect);
+            }
             render_floating_prompt(
-                self.pane,
-                self.active && !self.pane.copy_mode().active,
-                prompt_rect,
-                canvas,
-                cfg,
-                &palette,
-                &glyphs,
-                buf,
+                self.pane, self.active && !self.pane.copy_mode().active, prompt_rect, canvas,
+                cfg, &palette, &glyphs, buf,
             );
+            if cfg.glass_mode {
+                visual_style::polish_glass_panel_rect(buf, prompt_rect, palette.prompt_surface_bg, &palette, self.active);
+            }
         }
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
@@ -200,6 +203,17 @@ fn render_output_canvas(
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
     let grapheme_2027 = vt.is_grapheme_cluster_2027();
+    let fill_style = Style::default()
+        .fg(palette.text_fg.unwrap_or(palette.title_fg))
+        .bg(palette.window_frame_bg);
+    for y in canvas.y..canvas.y + canvas.height {
+        for x in canvas.x..canvas.x + canvas.width {
+            if let Some(c) = buf.cell_mut((x, y)) {
+                c.set_symbol(" ");
+                c.set_style(fill_style);
+            }
+        }
+    }
 
     let font_opts = pane.font_options();
     for r in 0..render_rows {
@@ -590,39 +604,31 @@ impl Widget for WorkspaceWidget<'_> {
             let pane_palette = chrome_style.resolve_palette(cfg);
             if framed {
                 if cfg.drop_shadows && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
-                    render_drop_shadow_styled(
-                        buf,
-                        outer,
-                        workspace_area,
-                        cfg.shadow_style,
-                        &pane_palette,
-                    );
+                    render_drop_shadow_styled(buf, outer, workspace_area, cfg.shadow_style, &pane_palette);
                 }
-                occlude_rect(buf, outer);
-                let z_badge = self
-                    .wm
-                    .z_stack()
-                    .rank_of(id)
-                    .map(|(r, total)| format!("Z:{r}/{total}"))
-                    .unwrap_or_default();
+                if cfg.glass_mode && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
+                    visual_style::apply_frosted_glass_surface(buf, outer, pane_palette.window_frame_bg, &pane_palette);
+                } else {
+                    occlude_rect(buf, outer);
+                }
+                let z_badge = self.wm.z_stack().rank_of(id).map(|(r, total)| format!("Z:{r}/{total}")).unwrap_or_default();
                 let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
+                let frame_title = if cfg.snazzy_mode {
+                    visual_style::format_snazzy_window_title(self.wm, pane, id, &z_badge, lock_tag)
+                } else {
+                    format!("[{id}] {}{lock_tag} ({z_badge})", pane.title())
+                };
                 chrome::render_borland_frame_ext(
-                    outer,
-                    &format!("[{id}] {}{lock_tag} ({z_badge})", pane.title()),
-                    is_active,
-                    chrome_style.resolve_outline(cfg),
-                    chrome_style.resolve_bold(cfg),
-                    &pane_palette,
-                    &glyphs,
-                    buf,
+                    outer, &frame_title, is_active, chrome_style.resolve_outline(cfg),
+                    chrome_style.resolve_bold(cfg), &pane_palette, &glyphs, buf,
                 );
                 let inner = inset_window_frame(outer);
                 CompositePaneWidget::with_config(pane, is_active, cfg)
-                    .with_palette(chrome_style.palette.clone())
+                    .with_palette(Some(pane_palette))
                     .render(inner, buf);
             } else {
                 CompositePaneWidget::with_config(pane, is_active, cfg)
-                    .with_palette(chrome_style.palette)
+                    .with_palette(Some(pane_palette))
                     .render(outer, buf);
             }
         }
@@ -630,90 +636,43 @@ impl Widget for WorkspaceWidget<'_> {
         // Render `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
         render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
-        // Render persistent Guake/Quake-style drop-down quick terminal overlay on top (WM-05)
         if qt_visible {
             let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);
             if cfg.drop_shadows {
-                render_drop_shadow_styled(
-                    buf,
-                    qt_outer,
-                    workspace_area,
-                    cfg.shadow_style,
-                    &palette,
-                );
+                render_drop_shadow_styled(buf, qt_outer, workspace_area, cfg.shadow_style, &palette);
             }
             occlude_rect(buf, qt_outer);
             render_borland_frame_styled(
-                qt_outer,
-                "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)",
-                true,
-                cfg.window_outline,
-                &palette,
-                &glyphs,
-                buf,
+                qt_outer, "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)", true,
+                cfg.window_outline, &palette, &glyphs, buf,
             );
             let qt_inner = inset_window_frame(qt_outer);
             CompositePaneWidget::with_config(&self.wm.quick_terminal().pane, true, cfg)
                 .render(qt_inner, buf);
         }
 
-        // Render optional top 1-row Borland Turbo Vision Menu Bar & active pull-down menu (ECO-03)
         if top_offset > 0 {
-            let menubar_rect = Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            };
+            let menubar_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
             if let Some((cat, sel_item)) = self.wm.menubar_state()
                 && workspace_area.height >= 6
                 && workspace_area.width >= 24
             {
-                render_menubar_dropdown(
-                    cat,
-                    sel_item,
-                    workspace_area,
-                    cfg,
-                    &palette,
-                    &glyphs,
-                    buf,
-                );
+                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
             }
         }
 
         if bottom_offset > 0 {
-            let fkey_rect = Rect {
-                x: area.x,
-                y: area.y + area.height - 1,
-                width: area.width,
-                height: 1,
-            };
+            let fkey_rect = Rect { x: area.x, y: area.y + area.height - 1, width: area.width, height: 1 };
             render_dos_fkey_bar(fkey_rect, &palette, buf);
         }
 
-        // Render interactive <F9> Live 3270 Terminal Inspector modal on top of workspace (BEL-01)
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
-            render_inspector_modal(
-                self.wm,
-                workspace_area,
-                cfg,
-                &palette,
-                &glyphs,
-                buf,
-            );
+            render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
 
-        // Render interactive <F1> Borland Turbo Vision Help Modal on top of the workspace
         if self.wm.is_help_visible() && workspace_area.width >= 20 && workspace_area.height >= 6 {
-            render_help_modal(
-                self.wm,
-                workspace_area,
-                cfg,
-                &palette,
-                &glyphs,
-                buf,
-            );
+            render_help_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
 
         // Render interactive Fuzzy Command Palette modal on top of the workspace (v0.6.0)

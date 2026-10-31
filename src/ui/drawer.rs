@@ -76,8 +76,9 @@ pub fn render_workspace_drawer(
     }
     occlude_rect(buf, drawer_rect);
 
+    let drawer_prefix = if cfg.snazzy_mode { "✨ DRAWER" } else { "DRAWER" };
     let title = format!(
-        "HERDR [D:{}] [M:{}] [P:{}]",
+        "{drawer_prefix} [D:{}] [M:{}] [P:{}]",
         dcfg.edge.label(),
         dcfg.layout.label(),
         dcfg.visibility.label()
@@ -212,12 +213,17 @@ pub fn render_workspace_drawer(
                 Rect::new(inner.x, footer_y, inner.width, 1),
                 footer_style,
             );
+            let footer_text = if wm.is_leader_pending() {
+                "⌨ LEADER [Ctrl+X] — d:Close c:New w:ClosePane ?:Help :"
+            } else {
+                "↑↓:Nav Ent:Sel s:Save r:Rename N:New m:Push F7:Hide"
+            };
             write_clipped_line(
                 buf,
                 inner.x,
                 footer_y,
                 inner.width,
-                "↑↓/jk:Scroll Ent:Select Tab:Pane n:New m:Push F7:Hide",
+                footer_text,
                 footer_style,
             );
         }

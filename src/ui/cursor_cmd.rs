@@ -435,6 +435,9 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
     }
 
     if changed {
+        if wm.config().cursor_color.is_some() {
+            wm.clear_active_pane_color_override("cursor-color");
+        }
         wm.reset_cursor_blink();
         if wm.mcp_console().active && wm.mcp_console().title.contains("CURSOR") {
             let lines = build_cursor_catalog_lines(wm.config());

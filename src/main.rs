@@ -65,6 +65,10 @@ async fn main() -> color_eyre::Result<()> {
                -B, --blank, --blank-session     Start a clean blank 1-pane session (no layout/history restore)\n  \
                -a, --attach [SESSION]           Re-attach & restore saved/detached multi-pane window layout\n  \
                -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
+                   --snazzy                     Enable Snazzy rich process-icon glyphs mode\n  \
+                   --glass, --gui-glass         Enable translucent frosted Glass + Snazzy visual style\n  \
+                   --drawer-push                Set Slide-Out Drawer layout mode to Push-Out (reflows workspace)\n  \
+                   --raw-fkeys <bilterm|app|auto> Configure F1..F12 behavior in RAW PTY mode\n  \
                -F, --font, --gui-font <FAMILY>  Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
                    --font-size, --gui-font-size <PT> Set base font size in points (6..72, default 14)\n  \
                    --font-file, --gui-font-file <PATH.ttf> Load and activate a custom .ttf/.otf/.ttc font file\n  \
@@ -405,6 +409,21 @@ async fn main() -> color_eyre::Result<()> {
         && let Ok(pt) = pt_str.trim_end_matches("pt").parse::<u16>()
     {
         cfg.font_size_pt = pt.clamp(6, 72);
+    }
+    if has_switch(&args, &["--snazzy"]) {
+        cfg.snazzy_mode = true;
+    }
+    if has_switch(&args, &["--glass", "--gui-glass"]) {
+        cfg.glass_mode = true;
+        cfg.snazzy_mode = true;
+    }
+    if has_switch(&args, &["--drawer-push"]) {
+        cfg.drawer.layout = bilterm::wm::DrawerLayoutMode::Push;
+    }
+    if let Some(fk_str) = switch_value(&args, &["--raw-fkeys"])
+        && let Some(fk_mode) = bilterm::ui::RawFkeyMode::from_name(fk_str)
+    {
+        cfg.raw_fkeys = fk_mode;
     }
     let session_to_restore = cfg.history_session.clone();
     app.wm.apply_config(cfg);

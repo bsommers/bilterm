@@ -519,7 +519,7 @@ impl GuiWorkspaceRenderer {
 
         let cw = f32::from(eff_cw);
         let ch = f32::from(eff_ch);
-        let palette = wm.config().theme.palette();
+        let palette = wm.config().palette();
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
 
@@ -645,7 +645,9 @@ impl GuiWorkspaceRenderer {
             let local_inner = Rect::new(0, 0, scaled_inner.width.max(1), scaled_inner.height.max(1));
             let mut pane_buf = Buffer::empty(local_inner);
             let is_active = top_id == Some(id);
+            let pane_pal = wm.pane_chrome(id).resolve_palette(wm.config());
             crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config())
+                .with_palette(Some(pane_pal))
                 .render(local_inner, &mut pane_buf);
             let pane_x0 = f32::from(inner.x.saturating_sub(viewport.x)) * cw;
             let pane_y0 = f32::from(inner.y.saturating_sub(viewport.y)) * ch;

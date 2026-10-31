@@ -225,9 +225,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::Theme(preset) => {
-            wm.config_mut().theme = preset;
-            wm.config_mut().custom_palette_override = None;
-            wm.notify_theme_changed();
+            wm.apply_theme_preset(preset);
             false
         }
         ColonCommand::InspectorToggle(val) => {
@@ -264,10 +262,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::SessionSave(name) => {
-            match wm.save_session(&name) {
-                Ok(path) => {
+            match wm.save_and_activate_session((!name.trim().is_empty()).then_some(name.as_str())) {
+                Ok((saved_name, path)) => {
                     wm.active_pane_mut().set_status_message(
-                        Some(format!("Saved session '{}' to {}", name, path.display())),
+                        Some(format!("Saved session '{saved_name}' to {}", path.display())),
                     );
                 }
                 Err(err) => {
@@ -278,10 +276,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::SessionRestore(name) => {
-            match wm.restore_session(&name) {
+            let target = if name.trim().is_empty() {
+                wm.config().history_session.clone()
+            } else {
+                name
+            };
+            match wm.restore_session(&target) {
                 Ok(count) => {
                     wm.active_pane_mut().set_status_message(
-                        Some(format!("Restored session '{name}' ({count} pane(s))")),
+                        Some(format!("Restored session '{target}' ({count} pane(s))")),
                     );
                 }
                 Err(err) => {
@@ -668,6 +671,68 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::McpCommand(ref subcmd) => wm.execute_mcp_command(subcmd),
+        ColonCommand::FkeyModeCommand(ref arg_opt) => {
+            use crate::ui::visual_style::{RawFkeyMode, parse_fkey_number};
+            use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+            match arg_opt.as_deref() {
+                None => {
+                    let next = wm.config().raw_fkeys.cycle();
+                    wm.config_mut().raw_fkeys = next;
+                    wm.active_pane_mut().set_status_message(Some(format!(
+                        "RAW Mode F-Keys: [{}] — {}",
+                        next.label(),
+                        next.description()
+                    )));
+                }
+                Some("status") => {
+                    let cur = wm.config().raw_fkeys;
+                    wm.active_pane_mut().set_status_message(Some(format!(
+                        "RAW Mode F-Keys: [{}] — {}",
+                        cur.label(),
+                        cur.description()
+                    )));
+                }
+                Some(s) if s.starts_with("send ") => {
+                    if let Some(n) = s.strip_prefix("send ").and_then(parse_fkey_number) {
+                        let pane = wm.active_pane_mut();
+                        let bytes = crate::input::encode_key_to_pty_bytes_full(
+                            KeyEvent::new(KeyCode::F(n), KeyModifiers::NONE),
+                            pane.vt().is_application_cursor(),
+                            pane.vt().is_backarrow_key_67(),
+                            pane.vt().kitty_keyboard_flags(),
+                        );
+                        if !bytes.is_empty() {
+                            let _ = pane.write_to_pty(&bytes);
+                            pane.set_status_message(Some(format!(
+                                "Sent raw F{n} escape sequence ({} bytes) to PTY",
+                                bytes.len()
+                            )));
+                        }
+                    }
+                }
+                Some(tok) => {
+                    if let Some(mode) = RawFkeyMode::from_name(tok) {
+                        wm.config_mut().raw_fkeys = mode;
+                        wm.active_pane_mut().set_status_message(Some(format!(
+                            "RAW Mode F-Keys: [{}] — {}",
+                            mode.label(),
+                            mode.description()
+                        )));
+                    }
+                }
+            }
+            false
+        }
+        ColonCommand::VisualStyleCommand(ref mode_opt) => {
+            let label = crate::ui::visual_style::apply_visual_style_mode(
+                wm.config_mut(),
+                mode_opt.as_deref(),
+            );
+            wm.active_pane_mut().set_status_message(Some(format!(
+                "Visual Style: {label} (toggle via F11, :snazzy, :glass, or :style)"
+            )));
+            false
+        }
         ColonCommand::Quit => {
             wm.maybe_autosave_layout();
             if wm.intercept_prompt_exit_if_needed("exit") {

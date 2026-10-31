@@ -5,6 +5,27 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.5.1] - 2026-10-31
+
+### Added
+- **Snazzy Rich Glyphs & Frosted Glass Visual Style (`src/ui/visual_style.rs`, `src/ui/mod.rs`, `src/ui/status_bar.rs`, `src/main.rs`)**:
+  - Added `:snazzy`, `:glass`, `:style [classic|snazzy|glass|both]` (`F11` cycle) and CLI flags `--snazzy`, `--glass` (`--gui-glass`), and `--drawer-push`.
+- **Configurable Function Keys (`F1..F12`) in RAW Mode (`src/ui/visual_style.rs`, `src/input/keymap.rs`, `src/input/mod.rs`)**:
+  - Added `RawFkeyMode` (`:fkeys [auto|bilterm|app|send F1..F12]`, `--raw-fkeys <auto|bilterm|app>`): `auto` (default) triggers Bilterm actions for `F1..F12` in RAW shell mode while auto-forwarding to `ALT_SCREEN` TUI apps; `Shift+F1..F12` always sends the raw VT escape sequence to the app; `Alt+F1..F12` or `Ctrl+X F1..F12` always runs the Bilterm action.
+- **Top-Level Session Save & Rename + Drawer Session Hotkeys (`src/colon_command/parse.rs`, `src/wm/session.rs`, `src/input/modal.rs`)**:
+  - Added top-level `:save [name]`, `:rename [old_name] <new_name>`, `:session save [name]`, `:session save-as <name>`, and drawer `s` (save session) / `r` (rename session) / `:` (command prompt) hotkeys.
+
+### Fixed
+- **Per-Window Theme & Element Color Overrides + Canvas Background (`src/ui/mod.rs`, `src/ui/renderer.rs`, `src/ui/contrast.rs`, `src/ui/theme_import.rs`, `src/wm/chrome_style.rs`, `src/wm/v2_runtime.rs`)**:
+  - Fixed `WorkspaceWidget::render` and `GuiWorkspaceRenderer::render_workspace` to pass the fully resolved per-window `pane_palette` (including `:window cursor-color`, `bg`, `font-color`, `prompt-bg`, `prompt-color`, `status-color`, `badge-color`, `crosshair-color`, `shadow-color`) to `CompositePaneWidget`.
+  - Fixed `readable_canvas_cell_style` and `render_output_canvas` so unhighlighted `Color::Reset` canvas cells paint with the window's resolved `palette.window_frame_bg` and `palette.text_fg` instead of staying Borland Blue.
+  - Fixed `OpenColorScheme::to_theme_palette` so `:iterm` schemes populate `text_fg` and `cursor_fg`, and cleared stale active-window theme overrides when running `:theme <preset>` or `:iterm`.
+- **Slide-Out / Push-Out Drawer Title, `Ctrl+X`, `F7`, and Minimize/Maximize Controls (`src/ui/drawer.rs`, `src/wm/drawer.rs`, `src/input/keymap.rs`, `src/input/mouse_wm.rs`)**:
+  - Renamed drawer header from `"HERDR"` to `"DRAWER"`, fixed `Ctrl+X` leader chords while the drawer is focused, fixed `F7` when `BlockPage` scroll mode is not holding a page, and wired clickable `[_]`, `[□]`, `[X]`, and `[M:Float]`/`[M:Push]` drawer controls.
+- **Session Startup & Installer Hardening (`src/main.rs`, `src/wm/mod.rs`, `src/vt/worker.rs`, `scripts/install.sh`, `scripts/build-binaries.sh`)**:
+  - Prevented CLI `-n`/`-B` double-shell spawning and `DISABLE_AUTO_UPDATE=true` propagation to avoid `oh-my-bash` `update.lock` collisions.
+  - Fixed unbound `SHARE_DIR` (`SHARE_ROOT`) in `scripts/install.sh`, auto-rebuilt stale release binaries during install, and added comma-separated `--targets` support in `scripts/build-binaries.sh`.
+
 ## [v2.5.0] - 2026-10-31
 
 ### Added

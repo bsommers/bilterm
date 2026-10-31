@@ -1,8 +1,13 @@
 # Session Checkpoint (2026-10-31)
 
-**Status:** COMPLETE — `v2.5.0` implemented, verified (`202` unit + `309` integration tests), documented, and tagged. Last tag: `v2.5.0` (Latest).
+**Status:** COMPLETE — `v2.5.1` implemented, verified (`202` unit + `310` integration tests), documented, and installed (`target/release/bilterm` & `~/.local/bin/bilterm`).
 
-## Latest Milestone (`v2.4.0`–`v2.5.0`)
+## Latest Milestone (`v2.4.0`–`v2.5.1`)
+- **`v2.5.1` (Patch Release)**:
+  - Fixed per-window theme & individual element color overrides (`:window cursor-color`, `bg`, `font-color`, `prompt-bg`, `prompt-color`, `status-color`, `badge-color`, `crosshair-color`, `shadow-color`), `:theme`, and `:iterm` so canvas backgrounds and interior widgets honor each window's resolved palette.
+  - Renamed drawer header from `"HERDR"` to `"DRAWER"`, fixed `Ctrl+X` leader chords while drawer is focused, fixed `F7` when `BlockPage` is not holding a page, and wired `[_]`, `[□]`, `[X]`, and `[M:Push]` drawer controls.
+  - Added top-level `:save [name]`, `:rename [old] <new>`, `:session save [name]`, and drawer `s`/`r`/`:` hotkeys.
+  - Added `RawFkeyMode` (`:fkeys [auto|bilterm|app|send F1..F12]`, `--raw-fkeys`) and `:snazzy` / `:glass` / `:style` (`F11`) visual styles.
 - **`v2.4.0` (Phase 39)**: Per-window themes (`:window theme`), outlines (`:window outline`), bold borders (`:window bold`), clearer `[_][□][X]` window controls, and `MIN_GRID_DIM = 2×2` VT grid clamp preventing 1-row soft-wrap underflow.
 - **`v2.4.1` (Phase 40)**:
   - Interactive **Per-Window Theme Browser** (`:window theme`, `:window theme list`, `:window theme browse [dir]`, `:window theme import [path|dir|glob]`) scoped to the active window via `McpConsoleState::window_theme_target`.

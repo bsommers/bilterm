@@ -13,6 +13,7 @@ use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, CursorBlinkMode, SpotlightMode};
 use crate::ui::glyphs::{GlyphPack, GlyphSet};
 use crate::ui::theme::{parse_hex_color, ThemePalette, ThemePreset};
+use crate::ui::visual_style::RawFkeyMode;
 use crate::vt::scrollback::{PaneScrollMode, ScrollbackConfig};
 use crate::wm::DrawerConfig;
 
@@ -141,6 +142,13 @@ pub struct BiltermConfig {
     pub cell_height_px: u16,
     /// Emits `OSC 50` font-scaling passthrough sequences to the host terminal when `true` (`FONT-01`).
     pub host_font_passthrough: bool,
+    /// Controls whether `F1..F12` in `RawPtyPassthrough` trigger Bilterm actions (`bilterm`, default),
+    /// forward to the child application (`app`), or auto-switch on `DECSET ?1049` (`auto`).
+    pub raw_fkeys: RawFkeyMode,
+    /// Enables `herdr`-style rich glyphs, icons, Braille spinners, and sparkline telemetry (`:snazzy`).
+    pub snazzy_mode: bool,
+    /// Enables frosted translucent glass visual style for overlaid panels and `--gui` mode (`:glass`).
+    pub glass_mode: bool,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -214,6 +222,9 @@ impl Default for BiltermConfig {
             cell_width_px: 8,
             cell_height_px: 16,
             host_font_passthrough: true,
+            raw_fkeys: RawFkeyMode::Auto,
+            snazzy_mode: false,
+            glass_mode: false,
             custom_palette_override: None,
             cursor_blink_hidden: false,
         }

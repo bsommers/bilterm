@@ -126,7 +126,7 @@ pub(super) fn handle_modal_mouse_event(
                     } else if rel_col >= mcp_rect.width / 2 {
                         wm.mcp_console_mut().toggle_layout_mode();
                     }
-                    let _ = wm.resize_all(workspace_area);
+                    wm.reflow_default_viewport();
                 } else if mouse.row == mcp_rect.y + mcp_rect.height.saturating_sub(1) {
                     if (16..31).contains(&rel_col) {
                         wm.mcp_console_mut().toggle_layout_mode();
@@ -135,12 +135,9 @@ pub(super) fn handle_modal_mouse_event(
                     } else if (40..55).contains(&rel_col) {
                         wm.mcp_console_mut().close_root_terminal();
                     }
-                    let _ = wm.resize_all(workspace_area);
-                } else if mouse.row > mcp_rect.y
-                    && mouse.row + 1 < mcp_rect.y + mcp_rect.height
-                {
-                    let content_row = usize::from(mouse.row - (mcp_rect.y + 1));
-                    let line_idx = wm.mcp_console().scroll_offset + content_row;
+                    wm.reflow_default_viewport();
+                } else if mouse.row > mcp_rect.y && mouse.row + 1 < mcp_rect.y + mcp_rect.height {
+                    let line_idx = wm.mcp_console().scroll_offset + usize::from(mouse.row - (mcp_rect.y + 1));
                     wm.mcp_console_mut().select_row_at(line_idx);
                     wm.activate_selected_mcp_row();
                 }
@@ -157,29 +154,19 @@ pub(super) fn handle_modal_mouse_event(
         let inner = crate::wm::inset_window_frame(dropdown);
         let item_count = crate::ui::modals::menubar_category_item_count(cat);
         if rect_contains(dropdown, mouse.column, mouse.row) {
-            let hovered_item = if rect_contains(inner, mouse.column, mouse.row) && item_count > 0 {
-                Some(usize::from(mouse.row - inner.y).min(item_count - 1))
-            } else {
-                None
-            };
+            let hovered = (rect_contains(inner, mouse.column, mouse.row) && item_count > 0)
+                .then(|| usize::from(mouse.row - inner.y).min(item_count - 1));
             match mouse.kind {
                 MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Left) => {
-                    if let Some(item) = hovered_item {
-                        *wm.modal_mut() = crate::wm::Modal::Menubar {
-                            category: cat,
-                            item,
-                        };
+                    if let Some(item) = hovered {
+                        *wm.modal_mut() = crate::wm::Modal::Menubar { category: cat, item };
                     }
                 }
                 MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
-                    if let Some(item) = hovered_item {
-                        *wm.modal_mut() = crate::wm::Modal::Menubar {
-                            category: cat,
-                            item,
-                        };
-                        let action = crate::input::modal::execute_menubar_selection(wm, cat, item)
-                            .unwrap_or(AppAction::Handled);
-                        let _ = wm.resize_all(workspace_area);
+                    if let Some(item) = hovered {
+                        *wm.modal_mut() = crate::wm::Modal::Menubar { category: cat, item };
+                        let action = crate::input::modal::execute_menubar_selection(wm, cat, item).unwrap_or(AppAction::Handled);
+                        wm.reflow_default_viewport();
                         return Some(action);
                     }
                 }
@@ -351,7 +338,7 @@ pub(super) fn handle_wm_frame_border_mouse_down(
     hit_id: crate::pane::PaneId,
     outer: Rect,
     mouse: MouseEvent,
-    workspace_area: Rect,
+    _workspace_area: Rect,
 ) -> Result<Option<AppAction>> {
     let (col, row) = (mouse.column, mouse.row);
     if row == outer.y {
@@ -364,15 +351,13 @@ pub(super) fn handle_wm_frame_border_mouse_down(
                 if wm.z_stack().is_minimized(hit_id) {
                     wm.toggle_minimize_pane(hit_id);
                 } else {
+                    wm.focus_and_raise(hit_id);
                     wm.toggle_zoom();
-                    wm.resize_all(workspace_area)?;
                 }
                 return Ok(Some(AppAction::Handled));
             }
             Some(2) => {
-                if wm.remove_pane(hit_id) {
-                    wm.resize_all(workspace_area)?;
-                }
+                let _ = wm.remove_pane(hit_id);
                 return Ok(Some(AppAction::Handled));
             }
             _ => {
@@ -710,6 +695,19 @@ pub(super) fn handle_drawer_mouse_event(
 
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
+            if mouse.row == dr.y
+                && let Some(badge) = detect_title_bar_badge_click(wm, dr, mouse.column)
+            {
+                match badge {
+                    0 => { let _ = wm.apply(crate::action::Action::DrawerSize(0)); }
+                    1 => { let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX)); }
+                    _ => {
+                        wm.drawer_config_mut().visibility = crate::wm::DrawerVisibilityMode::OnDemand;
+                        wm.close_drawer();
+                    }
+                }
+                return Some(AppAction::Handled);
+            }
             let edge = wm.drawer_config().edge;
             let on_resize_border = match edge {
                 DrawerEdge::Left => mouse.column == dr.x + dr.width.saturating_sub(1),
@@ -724,21 +722,15 @@ pub(super) fn handle_drawer_mouse_event(
 
             if mouse.row == dr.y || (edge.is_vertical() && mouse.row == dr.y + 1) {
                 let rel_x = mouse.column.saturating_sub(dr.x);
-                if mouse.row == dr.y && rel_x >= dr.width.saturating_sub(5) {
-                    wm.toggle_drawer();
-                } else if edge.is_vertical()
-                    && mouse.row == dr.y + 1
-                    && rel_x >= dr.width.saturating_sub(8)
-                {
+                let title_shift = if mouse.row == dr.y { 6 } else { 0 };
+                if edge.is_vertical() && mouse.row == dr.y + 1 && rel_x >= dr.width.saturating_sub(8) {
                     let _ = wm.split_focused(SplitDirection::Horizontal);
-                } else if rel_x < 12 {
+                } else if rel_x < 10 + title_shift {
                     wm.set_drawer_edge(None);
-                } else if rel_x < 22 {
+                } else if rel_x < 20 + title_shift {
                     wm.set_drawer_layout(None);
                 } else {
-                    let next_vis = if wm.drawer_config().visibility
-                        == crate::wm::DrawerVisibilityMode::Fixed
-                    {
+                    let next_vis = if wm.drawer_config().visibility == crate::wm::DrawerVisibilityMode::Fixed {
                         crate::wm::DrawerVisibilityMode::OnDemand
                     } else {
                         crate::wm::DrawerVisibilityMode::Fixed
@@ -746,7 +738,18 @@ pub(super) fn handle_drawer_mouse_event(
                     wm.set_drawer_visibility(Some(next_vis));
                     wm.drawer_mut().open = true;
                 }
-                let _ = wm.resize_all(workspace_area);
+                wm.reflow_default_viewport();
+                return Some(AppAction::Handled);
+            }
+            if edge.is_vertical() && dr.height >= 5 && mouse.row == dr.y + dr.height.saturating_sub(2) {
+                let rel_x = mouse.column.saturating_sub(dr.x + 1);
+                if (33..40).contains(&rel_x) {
+                    let _ = wm.split_focused(SplitDirection::Horizontal);
+                } else if (40..47).contains(&rel_x) {
+                    wm.set_drawer_layout(None);
+                } else if rel_x >= 47 {
+                    wm.close_drawer();
+                }
                 return Some(AppAction::Handled);
             }
 
@@ -763,8 +766,7 @@ pub(super) fn handle_drawer_mouse_event(
                         scroll = selected + 1 - list_h;
                     }
                     scroll = scroll.min(rows_len.saturating_sub(list_h));
-                    let vis_row = usize::from(mouse.row.saturating_sub(dr.y + 2));
-                    let row_idx = scroll + vis_row;
+                    let row_idx = scroll + usize::from(mouse.row.saturating_sub(dr.y + 2));
                     if row_idx < rows_len {
                         wm.drawer_mut().selected_index = row_idx;
                         wm.drawer_mut().scroll_offset = scroll;
@@ -777,14 +779,8 @@ pub(super) fn handle_drawer_mouse_event(
             }
             Some(AppAction::Handled)
         }
-        MouseEventKind::ScrollUp => {
-            wm.drawer_select_prev();
-            Some(AppAction::Handled)
-        }
-        MouseEventKind::ScrollDown => {
-            wm.drawer_select_next();
-            Some(AppAction::Handled)
-        }
+        MouseEventKind::ScrollUp => { wm.drawer_select_prev(); Some(AppAction::Handled) }
+        MouseEventKind::ScrollDown => { wm.drawer_select_next(); Some(AppAction::Handled) }
         _ => Some(AppAction::Handled),
     }
 }

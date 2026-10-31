@@ -369,8 +369,24 @@ pub(super) fn handle_wm_modal_key(
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
     if wm.drawer().focused {
+        if wm.is_leader_pending() {
+            return Ok(None);
+        }
+        let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
+        if super::keymap::is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
+            return Ok(None);
+        }
         match key.code {
             KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),
+            KeyCode::F(11) => {
+                let _ = wm.apply(crate::action::Action::VisualStyleCommand(None));
+            }
+            KeyCode::Char('_') | KeyCode::Char('-') => {
+                let _ = wm.apply(crate::action::Action::DrawerSize(0));
+            }
+            KeyCode::Char('M') | KeyCode::F(5) => {
+                let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX));
+            }
             KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
                 wm.drawer_mut().focused = false;
             }
@@ -394,24 +410,36 @@ pub(super) fn handle_wm_modal_key(
                         .set_status_message(Some(format!("Created new session '{name}'")));
                 }
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                wm.drawer_select_next();
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                let target = wm.selected_drawer_session_name();
+                if let Ok((saved, path)) = wm.save_and_activate_session(Some(&target)) {
+                    wm.active_pane_mut().set_status_message(Some(format!(
+                        "Saved session '{saved}' to {}",
+                        path.display()
+                    )));
+                }
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                wm.drawer_select_prev();
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                let target = wm.selected_drawer_session_name();
+                wm.drawer_mut().focused = false;
+                wm.active_pane_mut().prompt_mut().manual_raw_override = false;
+                wm.active_pane_mut().prompt_mut().force_command_prompt = true;
+                wm.active_pane_mut()
+                    .prompt_mut()
+                    .set_text(&format!(":session rename {target} "));
             }
-            KeyCode::PageDown => {
-                wm.drawer_scroll_by(5);
+            KeyCode::Char(':') => {
+                wm.drawer_mut().focused = false;
+                wm.active_pane_mut().prompt_mut().manual_raw_override = false;
+                wm.active_pane_mut().prompt_mut().force_command_prompt = true;
+                wm.active_pane_mut().prompt_mut().set_text(":");
             }
-            KeyCode::PageUp => {
-                wm.drawer_scroll_by(-5);
-            }
-            KeyCode::Home | KeyCode::Char('g') => {
-                wm.drawer_mut().selected_index = 0;
-            }
-            KeyCode::End | KeyCode::Char('G') => {
-                wm.drawer_scroll_by(10_000);
-            }
+            KeyCode::Down | KeyCode::Char('j') => wm.drawer_select_next(),
+            KeyCode::Up | KeyCode::Char('k') => wm.drawer_select_prev(),
+            KeyCode::PageDown => wm.drawer_scroll_by(5),
+            KeyCode::PageUp => wm.drawer_scroll_by(-5),
+            KeyCode::Home | KeyCode::Char('g') => wm.drawer_mut().selected_index = 0,
+            KeyCode::End | KeyCode::Char('G') => wm.drawer_scroll_by(10_000),
             KeyCode::Enter | KeyCode::Char(' ') => wm.drawer_activate_selected(false),
             KeyCode::Char('n') | KeyCode::Char('+') => {
                 let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
@@ -423,15 +451,16 @@ pub(super) fn handle_wm_modal_key(
                 wm.drawer_close_selected_pane();
             }
             KeyCode::Char('z') => wm.drawer_zoom_selected_pane(),
-            KeyCode::Char('d') => {
-                wm.set_drawer_edge(None);
+            KeyCode::Char('d') => { wm.set_drawer_edge(None); }
+            KeyCode::Char('m') | KeyCode::Char('p' | 'P') if key.code == KeyCode::Char('m') => {
+                let mode = wm.set_drawer_layout(None);
+                wm.active_pane_mut().set_status_message(Some(format!(
+                    "Slide-Out Drawer Layout Mode: {} ({})",
+                    mode.label(),
+                    if mode == crate::wm::DrawerLayoutMode::Push { "Push-Out reflow" } else { "Fly-Out overlay" }
+                )));
             }
-            KeyCode::Char('m') => {
-                wm.set_drawer_layout(None);
-            }
-            KeyCode::Char('p') => {
-                wm.set_drawer_visibility(None);
-            }
+            KeyCode::Char('p') => { wm.set_drawer_visibility(None); }
             _ => {}
         }
         return Ok(Some(AppAction::Handled));
@@ -665,48 +694,24 @@ pub(super) fn handle_wm_modal_key(
         }
         Modal::Help { scroll } => {
             match key.code {
-                KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => {
-                    wm.close_modal();
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    *scroll = scroll.saturating_sub(1);
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    *scroll = scroll.saturating_add(1);
-                }
-                KeyCode::PageUp => {
-                    *scroll = scroll.saturating_sub(8);
-                }
-                KeyCode::PageDown => {
-                    *scroll = scroll.saturating_add(8);
-                }
-                KeyCode::Home => {
-                    *scroll = 0;
-                }
-                KeyCode::End => {
-                    *scroll = 500;
-                }
+                KeyCode::F(1) | KeyCode::Esc | KeyCode::Char('q') => wm.close_modal(),
+                KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => *scroll = scroll.saturating_add(1),
+                KeyCode::PageUp => *scroll = scroll.saturating_sub(8),
+                KeyCode::PageDown => *scroll = scroll.saturating_add(8),
+                KeyCode::Home => *scroll = 0,
+                KeyCode::End => *scroll = 500,
                 _ => {}
             }
             Ok(Some(AppAction::Handled))
         }
         Modal::Inspector { scroll } => {
             match key.code {
-                KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => {
-                    wm.close_modal();
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    *scroll = scroll.saturating_sub(1);
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    *scroll = scroll.saturating_add(1);
-                }
-                KeyCode::PageUp => {
-                    *scroll = scroll.saturating_sub(6);
-                }
-                KeyCode::PageDown => {
-                    *scroll = scroll.saturating_add(6);
-                }
+                KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => wm.close_modal(),
+                KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => *scroll = scroll.saturating_add(1),
+                KeyCode::PageUp => *scroll = scroll.saturating_sub(6),
+                KeyCode::PageDown => *scroll = scroll.saturating_add(6),
                 _ => {}
             }
             Ok(Some(AppAction::Handled))

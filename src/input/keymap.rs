@@ -47,7 +47,9 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('w'), Action::ClosePane),
     (KeyCode::Char('W'), Action::ClosePane),
     (KeyCode::Char('d'), Action::DrawerToggle),
-    (KeyCode::Char('D'), Action::DrawerToggle),
+    (KeyCode::Char('D'), Action::DrawerLayout(None)),
+    (KeyCode::F(7), Action::DrawerToggle),
+    (KeyCode::F(11), Action::VisualStyleCommand(None)),
     (KeyCode::Char('M'), Action::LayoutCycle),
     (KeyCode::Char('q'), Action::QuakeToggle),
     (KeyCode::Char('`'), Action::QuakeToggle),
@@ -168,6 +170,8 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('M'), Action::LayoutCycle),
     (KeyModifiers::ALT, KeyCode::Char('D'), Action::DrawerToggle),
     (KeyModifiers::NONE, KeyCode::F(7), Action::DrawerToggle),
+    (KeyModifiers::NONE, KeyCode::F(11), Action::VisualStyleCommand(None)),
+    (KeyModifiers::ALT, KeyCode::F(12), Action::FkeyModeCommand(None)),
     (KeyModifiers::ALT, KeyCode::Tab, Action::DeckNext),
     (KeyModifiers::ALT, KeyCode::BackTab, Action::DeckPrev),
     (KeyModifiers::ALT, KeyCode::Char('1'), Action::FocusPane(1)),
@@ -218,99 +222,27 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('t'), Action::PromptTop),
     (KeyModifiers::ALT, KeyCode::Char('T'), Action::PromptTop),
     (KeyModifiers::ALT, KeyCode::Char('B'), Action::PromptBottom),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('s'),
-        Action::PromptSplitToggle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('S'),
-        Action::PromptSplitToggle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('c'),
-        Action::CopyModeToggle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('C'),
-        Action::CopyModeToggle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('r'),
-        Action::SelectCommand(None),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('R'),
-        Action::SelectCommand(None),
-    ),
+    (KeyModifiers::ALT, KeyCode::Char('s'), Action::PromptSplitToggle),
+    (KeyModifiers::ALT, KeyCode::Char('S'), Action::PromptSplitToggle),
+    (KeyModifiers::ALT, KeyCode::Char('c'), Action::CopyModeToggle),
+    (KeyModifiers::ALT, KeyCode::Char('C'), Action::CopyModeToggle),
+    (KeyModifiers::ALT, KeyCode::Char('r'), Action::SelectCommand(None)),
+    (KeyModifiers::ALT, KeyCode::Char('R'), Action::SelectCommand(None)),
     (KeyModifiers::ALT, KeyCode::Char('F'), Action::HintsToggle),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('l'),
-        Action::LockToggle(None),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('L'),
-        Action::LockToggle(None),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('/'),
-        Action::SearchPromptPrefill,
-    ),
+    (KeyModifiers::ALT, KeyCode::Char('l'), Action::LockToggle(None)),
+    (KeyModifiers::ALT, KeyCode::Char('L'), Action::LockToggle(None)),
+    (KeyModifiers::ALT, KeyCode::Char('/'), Action::SearchPromptPrefill),
     (KeyModifiers::ALT, KeyCode::Char('n'), Action::SearchNext),
     (KeyModifiers::ALT, KeyCode::Char('N'), Action::SearchPrev),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Up,
-        Action::PromptMoveVertical(-1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Down,
-        Action::PromptMoveVertical(1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('+'),
-        Action::PromptResizeHeight(1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('='),
-        Action::PromptResizeHeight(1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('-'),
-        Action::PromptResizeHeight(-1),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char(']'),
-        Action::PromptResizeWidth(4),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('['),
-        Action::PromptResizeWidth(-4),
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('p'),
-        Action::HistoryPopupToggle,
-    ),
-    (
-        KeyModifiers::ALT,
-        KeyCode::Char('P'),
-        Action::HistoryPopupToggle,
-    ),
+    (KeyModifiers::ALT, KeyCode::Up, Action::PromptMoveVertical(-1)),
+    (KeyModifiers::ALT, KeyCode::Down, Action::PromptMoveVertical(1)),
+    (KeyModifiers::ALT, KeyCode::Char('+'), Action::PromptResizeHeight(1)),
+    (KeyModifiers::ALT, KeyCode::Char('='), Action::PromptResizeHeight(1)),
+    (KeyModifiers::ALT, KeyCode::Char('-'), Action::PromptResizeHeight(-1)),
+    (KeyModifiers::ALT, KeyCode::Char(']'), Action::PromptResizeWidth(4)),
+    (KeyModifiers::ALT, KeyCode::Char('['), Action::PromptResizeWidth(-4)),
+    (KeyModifiers::ALT, KeyCode::Char('p'), Action::HistoryPopupToggle),
+    (KeyModifiers::ALT, KeyCode::Char('P'), Action::HistoryPopupToggle),
     (KeyModifiers::ALT, KeyCode::PageUp, Action::BlockPrev),
     (KeyModifiers::ALT, KeyCode::PageDown, Action::BlockNext),
 ];
@@ -505,6 +437,7 @@ pub(crate) fn format_key_chord(key: KeyEvent) -> Option<String> {
 }
 
 pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+    let drawer_was_focused = wm.drawer().focused;
     let lookup_key = if key.modifiers.contains(KeyModifiers::CONTROL)
         && let KeyCode::Char(c) = key.code
     {
@@ -517,6 +450,10 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
             '0' => return wm.apply(Action::FontZoomReset),
             _ => {}
         }
+        if drawer_was_focused && matches!(c.to_ascii_lowercase(), 'x' | 'b') {
+            wm.drawer_mut().focused = false;
+            return Ok(AppAction::Handled);
+        }
         if wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
             && matches!(c.to_ascii_lowercase(), 'x' | 'b' | 'a')
         {
@@ -527,6 +464,7 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
             return Ok(AppAction::Handled);
         }
         if c.eq_ignore_ascii_case(&'a') {
+            wm.drawer_mut().focused = false;
             wm.active_pane_mut().prompt_mut().move_cursor_home();
             return Ok(AppAction::Handled);
         }
@@ -540,10 +478,41 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
     }
 
     if let Some(action) = default_leader_action(lookup_key) {
+        if drawer_was_focused && !matches!(action, Action::DrawerToggle | Action::DrawerFocus) {
+            wm.drawer_mut().focused = false;
+        }
         return wm.apply(action);
     }
 
     Ok(AppAction::Handled)
+}
+
+fn bilterm_action_for_fkey(wm: &WindowManager, n: u8) -> Option<Action> {
+    let block_holding = wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected());
+    match n {
+        1 => Some(Action::HelpToggle),
+        2 => Some(Action::SplitHorizontal),
+        3 => Some(Action::HintsToggle),
+        4 => Some(Action::PromptModeSet(None)),
+        5 => Some(Action::ZoomToggle),
+        6 => Some(Action::DeckNext),
+        7 => Some(if block_holding {
+            Action::ScrollPageBack
+        } else {
+            Action::DrawerToggle
+        }),
+        8 => Some(if block_holding {
+            Action::ScrollPageAdvance
+        } else {
+            Action::CopyModeToggle
+        }),
+        9 => Some(Action::InspectorToggle(None)),
+        10 => Some(Action::QuakeToggle),
+        11 => Some(Action::VisualStyleCommand(None)),
+        12 => Some(Action::RawToggle),
+        _ => None,
+    }
 }
 
 /// Handles user-configured `[keybindings]` and Workspace Leader mode entry.
@@ -578,9 +547,59 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
             format!("{} / Ctrl+B", wm.config().leader_key)
         };
         wm.active_pane_mut().set_status_message(Some(format!(
-            "⌨ LEADER [{leader_label}]: \"/-=SplitH %/|=SplitV z=Zoom n/p/o=Deck 1-9=Pane q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
+            "⌨ LEADER [{leader_label}]: \"/-=SplitH %/|=SplitV z=Zoom n/p/o=Deck 1-9=Pane d=Drawer q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
         )));
         return Ok(Some(AppAction::Handled));
+    }
+
+    // Function key routing across CommandPrompt and RawPtyPassthrough modes (F1..F12, Shift+F1..F12, Alt+F1..F12)
+    if let KeyCode::F(n @ 1..=12) = key.code {
+        if key.modifiers == KeyModifiers::ALT {
+            if n == 12 {
+                return Ok(Some(wm.apply(Action::FkeyModeCommand(None))?));
+            }
+            if let Some(act) = bilterm_action_for_fkey(wm, n) {
+                return Ok(Some(wm.apply(act)?));
+            }
+        }
+        wm.active_pane_mut().refresh_line_discipline();
+        let in_raw_passthrough = wm.active_pane().effective_routing_mode()
+            == InputRoutingMode::RawPtyPassthrough
+            && wm.active_pane().pending_unsafe_paste().is_none()
+            && !wm.active_pane().copy_mode().active
+            && !wm.active_pane().hints_mode().active;
+        if key.modifiers == KeyModifiers::SHIFT {
+            let pane = wm.active_pane_mut();
+            if !pane.is_read_only() {
+                let bytes = crate::input::encode_key_to_pty_bytes_full(
+                    KeyEvent::new(KeyCode::F(n), KeyModifiers::NONE),
+                    pane.vt().is_application_cursor(),
+                    pane.vt().is_backarrow_key_67(),
+                    pane.vt().kitty_keyboard_flags(),
+                );
+                if !bytes.is_empty() {
+                    pane.write_to_pty(&bytes)?;
+                }
+            }
+            return Ok(Some(AppAction::Handled));
+        }
+        if in_raw_passthrough && key.modifiers.is_empty() {
+            if n == 12 {
+                return Ok(Some(wm.apply(Action::RawToggle)?));
+            }
+            if n == 7 && wm.drawer_is_open() {
+                return Ok(Some(wm.apply(Action::DrawerToggle)?));
+            }
+            if wm
+                .config()
+                .raw_fkeys
+                .intercept_plain_fkeys_in_raw(wm.active_pane().vt().is_alternate_screen())
+                && !wm.active_pane().is_active_canvas_password_prompt()
+                && let Some(act) = bilterm_action_for_fkey(wm, n)
+            {
+                return Ok(Some(wm.apply(act)?));
+            }
+        }
     }
 
     // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`), clipboard paste (`Ctrl+Shift+V`/`Shift+Insert`),
@@ -611,6 +630,7 @@ pub(super) fn handle_wm_shortcut_key(
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
     if wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected())
         && key.modifiers.is_empty()
     {
         match key.code {
@@ -733,7 +753,9 @@ pub(super) fn handle_pane_alt_or_fkey_shortcut(
         }
     }
 
-    if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage {
+    if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && (pane.is_page_holding() || pane.is_holding_inspected())
+    {
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::F(7)) | (KeyModifiers::ALT, KeyCode::PageUp) => {
                 let _ = pane.scroll_page_back();

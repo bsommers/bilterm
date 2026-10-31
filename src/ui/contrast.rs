@@ -194,16 +194,29 @@ pub fn readable_canvas_cell_style(
     palette: &ThemePalette,
 ) -> Style {
     let default_bg = resolve_ratatui_color_rgb(palette.window_frame_bg, theme, (14, 18, 28));
+    let fallback_fg = match theme {
+        ThemePreset::Ibm3278Green => (0, 255, 102),
+        ThemePreset::Ibm3279Amber => (255, 176, 0),
+        ThemePreset::CyberpunkNeon => (0, 245, 212),
+        ThemePreset::TronGrid => (110, 240, 255),
+        ThemePreset::Dracula | ThemePreset::MonokaiRemastered => (248, 248, 242),
+        ThemePreset::SolarizedDark => (147, 161, 161),
+        ThemePreset::GruvboxDark => (235, 219, 178),
+        ThemePreset::TokyoNight => (192, 202, 245),
+        ThemePreset::CatppuccinMocha => (205, 214, 244),
+        ThemePreset::Nord => (236, 239, 244),
+        _ => (232, 238, 245),
+    };
     let default_fg = palette
         .text_fg
-        .map(|c| resolve_ratatui_color_rgb(c, theme, (232, 238, 245)))
-        .unwrap_or((232, 238, 245));
+        .map(|c| resolve_ratatui_color_rgb(c, theme, fallback_fg))
+        .unwrap_or(fallback_fg);
 
     let has_explicit_bg = !matches!(cell.bg, CellColor::Default);
     let has_explicit_fg = !matches!(cell.fg, CellColor::Default);
     let is_highlighted = has_explicit_bg || cell.inverse;
 
-    let mut style = Style::default();
+    let mut style = Style::default().bg(Color::Rgb(default_bg.0, default_bg.1, default_bg.2));
     let mut mods = Modifier::empty();
     if cell.bold {
         mods |= Modifier::BOLD;
@@ -262,7 +275,7 @@ pub fn readable_canvas_cell_style(
         // Lift dark/muted foreground colors so they have at least 4.5:1 WCAG AA contrast against the canvas
         let adj_fg = boost_fg_contrast(raw_fg, default_bg, 4.5);
         style = style.fg(Color::Rgb(adj_fg.0, adj_fg.1, adj_fg.2));
-    } else if palette.text_fg.is_some() {
+    } else {
         let adj_fg = boost_fg_contrast(default_fg, default_bg, 4.5);
         style = style.fg(Color::Rgb(adj_fg.0, adj_fg.1, adj_fg.2));
     }

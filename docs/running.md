@@ -1,4 +1,4 @@
-# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v2.5.0`)
+# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v2.5.1`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 
@@ -25,7 +25,7 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### Complete CLI Options (`v2.5.0`)
+### Complete CLI Options (`v2.5.1`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer (auto-resumes detached session)
 bilterm attach [session] / -a / --attach        # Re-attach to live background daemon or restore saved multi-pane layout
@@ -50,7 +50,7 @@ bilterm -s / --session <name>                   # Use (and restore) a named pers
 bilterm -P / --profile <name>                   # Launch with layout profile (default, single, dual-v, dual-h, main-side, quad, cascade, or custom)
 bilterm -c / --config <config.toml>             # Load configuration from custom TOML file path
 bilterm -M / --man                              # Print roff(7) manual page (docs/bilterm.1)
-bilterm -v / -V / --version                     # Print version (bilterm 2.5.0)
+bilterm -v / -V / --version                     # Print version (bilterm 2.5.1)
 bilterm -h / --help                             # Print CLI usage summary
 ```
 

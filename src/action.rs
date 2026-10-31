@@ -178,6 +178,10 @@ pub enum Action {
     LayoutProfileCommand(String),
     /// `:mcp [status|tree|attach|spawn|graft|broadcast|freeze|thaw|derez|checkpoint|shutdown ...]` (`MCP-01..02`).
     McpCommand(String),
+    /// `:fkeys [bilterm|app|auto|toggle|send <F1..F12>]`: Function-key routing in RAW mode (`FKEY-01`).
+    FkeyModeCommand(Option<String>),
+    /// `:style [classic|snazzy|glass|both|cycle]` / `:snazzy [on|off]` / `:glass [on|off]` / `F11`: Visual style (`STYLE-01`).
+    VisualStyleCommand(Option<String>),
     Quit,
 }
 
@@ -347,6 +351,8 @@ mod tests {
             Action::SessionTreeCommand(_) => Some(":session tree"),
             Action::LayoutProfileCommand(_) => Some(":profile list"),
             Action::McpCommand(_) => Some(":mcp status"),
+            Action::FkeyModeCommand(_) => Some(":fkeys bilterm"),
+            Action::VisualStyleCommand(_) => Some(":style snazzy"),
             Action::Quit => Some(":quit"),
         };
 
@@ -492,6 +498,8 @@ mod tests {
             Action::SessionTreeCommand("tree".to_string()),
             Action::LayoutProfileCommand("list".to_string()),
             Action::McpCommand("status".to_string()),
+            Action::FkeyModeCommand(None),
+            Action::VisualStyleCommand(None),
             Action::Quit,
         ];
 

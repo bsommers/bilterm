@@ -265,8 +265,8 @@ fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
     let mut gui_surface = GuiFrameSurface::new(8, 16);
     gui_renderer.render_workspace(&wm, area, &mut gui_surface);
     let glyph_stream: String = gui_surface.glyphs.iter().map(|g| g.text.as_str()).collect();
-    assert!(glyph_stream.contains("HERDR"));
-    let svg = gui_surface.export_svg("Bilterm Herdr Drawer");
+    assert!(glyph_stream.contains("DRAWER"));
+    let svg = gui_surface.export_svg("Bilterm Drawer");
     assert!(svg.contains("<svg"));
 
     // Press 'x' inside drawer to close selected pane (#1), leaving pane #2
@@ -320,4 +320,85 @@ fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_ter
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
     assert!(!wm.drawer().focused);
     assert!(wm.is_drawer_effectively_visible(), "drawer must remain visible in place when typing in pane");
+}
+
+#[test]
+fn per_window_colors_drawer_ctrl_x_raw_fkeys_and_session_save_rename_work() {
+    use bilterm::ui::WorkspaceWidget;
+    use ratatui::buffer::Buffer;
+    use ratatui::style::Color;
+    use ratatui::widgets::Widget;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut wm = WindowManager::new_headless(24, 100);
+    wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+    let area = Rect::new(0, 0, 100, 24);
+
+    // 1. Per-window theme & element color overrides (:window cursor-color, :window bg, :theme)
+    let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
+    assert_eq!(wm.active_pane_id(), p2);
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":window cursor-color #ff00ff").unwrap().unwrap(),
+    );
+    execute_wm_colon_command(
+        &mut wm,
+        parse_colon_command(":window bg #112233").unwrap().unwrap(),
+    );
+    let p2_pal = wm.pane_chrome(p2).resolve_palette(wm.config());
+    assert_eq!(p2_pal.cursor_fg, Some(Color::Rgb(0xFF, 0x00, 0xFF)));
+    assert_eq!(p2_pal.window_frame_bg, Color::Rgb(0x11, 0x22, 0x33));
+    // Pane #1 remains on its own independent palette
+    let p1_pal = wm.pane_chrome(1).resolve_palette(wm.config());
+    assert_ne!(p1_pal.window_frame_bg, Color::Rgb(0x11, 0x22, 0x33));
+
+    // Render WorkspaceWidget and verify Pane #2 canvas cells receive #112233 background (not Borland Blue)
+    let mut buf = Buffer::empty(area);
+    WorkspaceWidget::new(&wm).render(area, &mut buf);
+    let p2_sample = buf.cell((75, 10)).unwrap();
+    assert_eq!(p2_sample.bg, Color::Rgb(0x11, 0x22, 0x33));
+
+    // 2. Drawer Ctrl+X leader chords while drawer is focused + maximize/minimize
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
+    assert!(wm.drawer().open && wm.drawer().focused);
+    // Press Ctrl+X d while drawer is focused -> closes drawer
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
+    assert!(wm.is_leader_pending());
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
+    assert!(!wm.drawer().open);
+
+    // Re-open drawer, test maximize [□] (M) and minimize [_] (-)
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
+    let normal_w = wm.drawer_rect(area).unwrap().width;
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('M'), KeyModifiers::SHIFT)).unwrap();
+    assert!(wm.drawer().maximized);
+    assert!(wm.drawer_rect(area).unwrap().width > normal_w);
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE)).unwrap();
+    assert!(!wm.drawer().maximized);
+
+    // 3. Session save & rename (:save, :rename, and drawer 's'/'r' hotkeys)
+    execute_wm_colon_command(&mut wm, parse_colon_command(":save work-alpha").unwrap().unwrap());
+    assert_eq!(wm.config().history_session, "work-alpha");
+    assert!(tmp.path().join("work-alpha.toml").is_file());
+
+    execute_wm_colon_command(&mut wm, parse_colon_command(":rename work-beta").unwrap().unwrap());
+    assert_eq!(wm.config().history_session, "work-beta");
+    assert!(tmp.path().join("work-beta.toml").is_file());
+
+    // 4. RAW mode F-keys (F7 toggles drawer in RAW shell mode; Shift+F2 sends raw VT escape sequence)
+    wm.close_drawer();
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE)).unwrap();
+    assert_eq!(
+        wm.active_pane().effective_routing_mode(),
+        bilterm::pty::line_discipline::InputRoutingMode::RawPtyPassthrough
+    );
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
+    assert!(wm.drawer().open);
+    wm.close_drawer();
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(2), KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(wm.active_pane().last_pty_write(), b"\x1bOQ");
+
+    // 5. Snazzy + Glass visual style modes
+    execute_wm_colon_command(&mut wm, parse_colon_command(":style both").unwrap().unwrap());
+    assert!(wm.config().snazzy_mode && wm.config().glass_mode);
 }
