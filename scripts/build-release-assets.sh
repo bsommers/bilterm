@@ -23,15 +23,19 @@ cd "$REPO_ROOT"
 VERSION="${1:-v$(awk -F'"' '/^version = / {print $2; exit}' Cargo.toml)}"
 DIST_DIR="${REPO_ROOT}/target/release-dist/${VERSION}"
 
-# Include scratchpad zig on PATH if present
-for candidate_zig in \
-    /tmp/claude-1000/-home-bill-src-ai-bilterm/*/scratchpad/zig \
-    "$HOME/.local/bin"; do
-    if [[ -x "${candidate_zig}/zig" ]]; then
-        export PATH="${candidate_zig}:$PATH"
-        break
-    fi
-done
+# zig is the cross-linker for cargo-zigbuild. Resolution: PATH, then $ZIG_DIR, then ~/.local/bin.
+if ! command -v zig >/dev/null 2>&1; then
+    for candidate_zig in "${ZIG_DIR:-}" "$HOME/.local/bin"; do
+        if [[ -n "$candidate_zig" && -x "${candidate_zig}/zig" ]]; then
+            export PATH="${candidate_zig}:$PATH"
+            break
+        fi
+    done
+fi
+command -v zig >/dev/null 2>&1 || {
+    echo "error: zig not found; install it on PATH or set ZIG_DIR=<dir containing zig>" >&2
+    exit 1
+}
 
 if ! command -v cargo-zigbuild >/dev/null 2>&1; then
     cargo install --locked cargo-zigbuild

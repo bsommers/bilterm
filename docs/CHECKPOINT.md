@@ -28,8 +28,10 @@
 
 ## Known issues (not fixed)
 - ~~`cargo test` rewrites 5 `docs/assets/*.svg`~~ — fixed: screenshots now go to `target/tmp/screenshots/`; refresh committed SVGs with `BILTERM_UPDATE_SCREENSHOTS=1 cargo test -q --test full_suite_battle_and_perf`.
-- `scripts/build-release-assets.sh` hardcodes a stale `/tmp/claude-1000/...` zig path; needs `zig` on PATH.
-- Local backup of pre-merge working tree: `~/bilterm-local-backup.patch` (safe to delete).
+- ~~`scripts/build-release-assets.sh` hardcodes a stale `/tmp/claude-1000/...` zig path~~ — fixed: resolves `zig` from PATH, `$ZIG_DIR`, or `~/.local/bin`, else fails fast.
+- ~~`~/bilterm-local-backup.patch`~~ — already deleted.
+- `.planning/CHECKPOINT.md` is now a pointer to this file (was stale v2.4.0-in-progress state).
+- v2.1.1–v2.2.0 also lack Windows aarch64 (never built for those; not tracked as a gap).
 
 ## Lessons
 - `scripts/build-binaries.sh` now uses `cargo zigbuild` for `*-windows-gnu` on Linux (plain cargo has no MinGW linker).
