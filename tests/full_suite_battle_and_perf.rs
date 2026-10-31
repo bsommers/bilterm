@@ -876,7 +876,15 @@ unknown_key = #FFFFFF
 #[test]
 fn generates_real_workspace_screenshots_for_documentation() {
     use bilterm::ui::theme::ThemePreset;
-    use std::path::Path;
+
+    // Write to `target/tmp/screenshots/` by default so `cargo test` leaves the tree clean;
+    // set `BILTERM_UPDATE_SCREENSHOTS=1` to refresh the committed `docs/assets/*.svg`.
+    let screenshot_dir = if std::env::var_os("BILTERM_UPDATE_SCREENSHOTS").is_some() {
+        std::path::PathBuf::from("docs/assets")
+    } else {
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("screenshots")
+    };
+    std::fs::create_dir_all(&screenshot_dir).expect("create screenshot dir");
 
     let viewport = Rect::new(0, 0, 128, 32);
     let mut renderer = GuiWorkspaceRenderer::new(9, 18);
@@ -917,7 +925,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let svg1 = surface.export_svg(
         "BILTERM v2.0.0 — Multi-Pane Composite Workspace + SSH Fleet (Borland Turbo Blue)",
     );
-    let svg1_path = Path::new("docs/assets/screenshot-workspace.svg");
+    let svg1_path = &screenshot_dir.join("screenshot-workspace.svg");
     std::fs::write(svg1_path, &svg1).expect("write screenshot-workspace.svg");
     assert!(svg1_path.exists());
 
@@ -931,7 +939,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let svg2 = surface.export_svg(
         "BILTERM v2.0.0 — IBM 3278 Phosphor Green CRT + Live 3270 Terminal Inspector (F9)",
     );
-    let svg2_path = Path::new("docs/assets/screenshot-3278-inspector.svg");
+    let svg2_path = &screenshot_dir.join("screenshot-3278-inspector.svg");
     std::fs::write(svg2_path, &svg2).expect("write screenshot-3278-inspector.svg");
     assert!(svg2_path.exists());
 
@@ -944,7 +952,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let svg3 = surface.export_svg(
         "BILTERM v2.0.0 — IBM 3279 Amber CRT + Z-Order Cascade Deck + Fuzzy Command Palette (Ctrl+P)",
     );
-    let svg3_path = Path::new("docs/assets/screenshot-3279-palette.svg");
+    let svg3_path = &screenshot_dir.join("screenshot-3279-palette.svg");
     std::fs::write(svg3_path, &svg3).expect("write screenshot-3279-palette.svg");
     assert!(svg3_path.exists());
 
@@ -988,7 +996,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let svg4 = surface.export_svg(
         "BILTERM v2.0.0 — 3-Way Split with Independent Per-Pane Font Scaling (120% / 80% nmon / 100%)",
     );
-    let svg4_path = Path::new("docs/assets/screenshot-per-pane-scaling.svg");
+    let svg4_path = &screenshot_dir.join("screenshot-per-pane-scaling.svg");
     std::fs::write(svg4_path, &svg4).expect("write screenshot-per-pane-scaling.svg");
     assert!(svg4_path.exists());
 
@@ -1030,7 +1038,7 @@ fn generates_real_workspace_screenshots_for_documentation() {
     let svg5 = surface.export_svg(
         "BILTERM v2.0.0 — 4-Pane Multi-Agent Coding Swarm + Fleet Drawer (Cyberpunk Neon)",
     );
-    let svg5_path = Path::new("docs/assets/screenshot-multi-agent-swarm.svg");
+    let svg5_path = &screenshot_dir.join("screenshot-multi-agent-swarm.svg");
     std::fs::write(svg5_path, &svg5).expect("write screenshot-multi-agent-swarm.svg");
     assert!(svg5_path.exists());
 }
