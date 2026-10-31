@@ -34,6 +34,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 32: Persistent Background Multiplexer Daemon (`herdr`-Style Multi-Client Attach/Detach)** - Auto-spawned background daemon (`bilterm daemon`) hosting all PTYs, `VtWorkerHandle` state machines, and session trees over a `0600` Unix socket for seamless multi-client connect/disconnect/reconnect (`DAEM-01`, `DAEM-02`) (completed 2026-10-27)
 - [x] **Phase 33: Independent, Rooted & Hierarchical Tree/Subtree Sessions + Crash-Safe Layout Persistence** - Forest of independent workspaces, rooted daemon sessions, and parent/child session trees & subtrees with continuous atomic crash/restart layout journaling (`TREE-01`, `TREE-02`, `PERS-01`, `PERS-02`) (completed 2026-10-27)
 - [x] **Phase 34: TRON-Inspired Master Control Program (`MCP`) Root Terminal** - Non-destructive `MCP` root terminal interfacing to the background daemon with TRON grid aesthetics, global session tree routing, broadcast, freeze/thaw, and `derez` controls (`MCP-01`, `MCP-02`) (completed 2026-10-27)
+- [x] **Phase 35: Live Background OS Process Daemonization for `:detach` / `bilterm attach`** - Detached `bilterm --daemon --session <name>` background process keeping live PTY master FDs and multi-pane layouts alive across client exits (`DAEM-03`, `DAEM-04`) (completed 2026-10-28)
+- [x] **Phase 36: Interactive Mouse & Keyboard Navigation + Live Telemetry in `:mcp` Console Window** - Highlighted row selection cursor, 1-click/Enter actions, and live auto-refreshing telemetry in `:mcp` (`MCP-03`, `MCP-04`) (completed 2026-10-28)
+- [x] **Phase 37: Interactive File & `.itermcolors` Browser, Cursor Customizer & Multi-Profile Layout Manager (`v2.1.1`–`v2.2.0`)** - Multi-profile layout templates & autosave, WCAG 2.1 contrast engine, interactive `:browse` / `:theme import` file browser, and `:cursor` customizer (`PROF-01`, `THM-03`, `CUR-01`) (completed 2026-10-29)
+- [x] **Phase 38: Session Lifecycle Commands, Persistent Ordering, Blinking Software Cursor & Scaled Mouse Selection (`v2.3.0`)** - `:session new|blank|rename|switch|delete|move|reorder|swap`, `bilterm new|blank`, software cursor blink timer, and scaled-window mouse selection/menubar alignment (`SESS-01..02`, `CUR-02`) (completed 2026-10-29)
+- [x] **Phase 39: Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`v2.4.0`)** - Per-pane `PaneChromeStyle` (`:window theme|outline|bold|reset|show`), `[_][□][X]` window control badges, and `>= 2×2` VT grid clamp preventing 1-row soft-wrap underflow (`WIN-01`, `WIN-02`, `VT-CLAMP-01`) (completed 2026-10-29)
+- [x] **Phase 40: Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`v2.4.1`)** - Interactive `:window` / `:window theme` browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`WIN-03`, `WIN-04`) (completed 2026-10-31)
 
 ## Phase Details
 
@@ -513,10 +519,59 @@ Plans:
 - [x] 36-02-PLAN.md — `src/ui/mcp_ui.rs`, `src/ui/mod.rs`, `src/input/modal.rs`, & `src/input/mouse_wm.rs`: Highlighted selected row rendering, `Enter`/click dispatch (`Pane` focus, `Session` attach/freeze/branch, `Theme` apply), and action hotkeys (`r`, `f`, `n`, `m`, `d`) (wave 2)
 - [x] 36-03-PLAN.md — `tests/mcp_interactive_navigation.rs`: Unit and integration tests verifying keyboard/mouse row selection, pane focus jump, theme live-apply, session freeze/branch, and live telemetry refresh inside the `:mcp` window (wave 3)
 
+### Phase 37: Interactive File & `.itermcolors` Browser, Cursor Customizer & Multi-Profile Layout Manager (`v2.1.1`–`v2.2.0`)
+
+**Goal**: As a user customizing workspaces and color schemes, I want multi-profile layout templates with automatic layout saving, WCAG 2.1 contrast enforcement, an interactive directory & `.itermcolors` theme browser (`:browse`, `:theme browse`, `:theme import`), and a full cursor customizer (`:cursor`), so that layouts, themes, and cursors can be discovered and configured interactively.
+**Depends on**: Phase 36
+**Requirements**: PROF-01, THM-03, CUR-01
+**Plans**: 3/3 plans complete
+
+### Phase 38: Session Lifecycle Commands, Persistent Ordering, Blinking Software Cursor & Scaled Mouse Selection (`v2.3.0`)
+
+**Goal**: As a multi-session user, I want first-class session creation/renaming/reordering (`:session new|blank|rename|switch|delete|move|reorder|swap`, `bilterm new|blank`), software cursor blinking (`500ms`/`250ms`), and accurate mouse text selection & top menu bar hit-testing across scaled and normal panes.
+**Depends on**: Phase 37
+**Requirements**: SESS-01, SESS-02, CUR-02
+**Plans**: 3/3 plans complete
+
+### Phase 39: Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`v2.4.0`)
+
+**Goal**: As a user managing multiple composite windows, I want each window to have its own independent theme preset, border outline (`double`, `single`/`thin`, `rounded`, `thick`, `dotted`, `dashed`, `heavy-quad`, `ascii`), and bold border setting (`:window theme|outline|bold|reset|show`), clearer `[_][□][X]` window controls, and `MIN_GRID_DIM = 2×2` VT grid clamping to prevent 1-row soft-wrap underflow during 16-way splits.
+**Depends on**: Phase 38
+**Requirements**: WIN-01, WIN-02, VT-CLAMP-01
+**Success Criteria** (what must be TRUE):
+
+  1. `:window theme|outline|bold|reset|show|global-bold` (aliases `:win`, `:pane-style`, `:theme window <name>`, `:outline pane <style>`) customize each window's theme palette, outline style, and bold border independently, and persist `theme`, `outline`, and `bold` in saved session TOML files.
+  2. Window title bars render `[_]` minimize, `[□]` maximize, and bold red `[X]` close controls.
+  3. VT grids clamp dimensions to `>= 2×2` (`MIN_GRID_DIM` in `src/vt/mod.rs`), preventing `vt100-ctt` `Grid::col_wrap` underflow on 1-row panes.
+
+**Plans**: 2/2 plans complete
+
+Plans:
+- [x] 39-01-PLAN.md — `src/wm/chrome_style.rs`, `src/wm/window_style.rs`, `src/ui/chrome.rs`, & `src/ui/glyphs.rs`: Per-window `PaneChromeStyle` (`theme`, `outline`, `bold`), `[_][□][X]` window controls, and session TOML persistence (wave 1)
+- [x] 39-02-PLAN.md — `src/vt/mod.rs`: `MIN_GRID_DIM` `2×2` clamp and multi-split regression verification (wave 2)
+
+### Phase 40: Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`v2.4.1`)
+
+**Goal**: As a user styling individual terminal windows, I want an interactive Per-Window Theme Browser (`:window theme`, `:window theme list`, `:window theme browse [dir]`, `:window theme import [path|dir|glob]`), an interactive Window Style & Element Color Customizer (`:window` / `:window menu`), and granular per-window color overrides for 13 individual UI elements (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence.
+**Depends on**: Phase 39
+**Requirements**: WIN-03, WIN-04
+**Success Criteria** (what must be TRUE):
+
+  1. Running `:window theme` or `:window theme list` opens an interactive Per-Window Theme Browser in the `:mcp` console window (`window_theme_target`) where selecting any built-in preset or discovered `.itermcolors`/TOML/YAML scheme applies it exclusively to that window without altering the global workspace theme or sibling windows.
+  2. Running `:window theme browse [dir]` / `:window browse [dir]` or `:window theme import [file|dir|glob]` routes interactive `.itermcolors` file selection exclusively to the target window.
+  3. Running `:window <element> <color|reset>` (or `:window <elem> color <color>`, or `:window <element>` to open that element's interactive swatch picker) overrides any of the 13 theme elements (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) on the focused window and persists `colors` in saved session TOML files (`SavedPaneState.colors`).
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 40-01-PLAN.md — `src/ui/theme.rs`, `src/ui/contrast.rs`, `src/ui/chrome.rs`, `src/ui/status_bar.rs`, `src/ui/cursor_cmd.rs`, & `src/wm/chrome_style.rs`: Per-window `text_fg`, `controls_fg`, `cursor_fg`, and 13-element `PaneChromeStyle.colors` override synthesis + session TOML persistence (wave 1)
+- [x] 40-02-PLAN.md — `src/wm/window_style.rs`, `src/colon_command/parse_visual.rs`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`, & `src/pane/completion.rs`: Interactive `:window` customizer, `:window theme` browser (`window_theme_target`), per-window `.itermcolors` file browser routing, and `<Tab>` completions (wave 2)
+- [x] 40-03-PLAN.md — Unit & integration test suite verification (`309` integration + `200` lib tests) and documentation/manual sync for `v2.4.1` (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -557,3 +612,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 34. TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`) | 3/3 | Complete | 2026-10-27 |
 | 35. Live Background OS Process Daemonization for `:detach` / `bilterm attach` (`DAEM-03`, `DAEM-04`) | 3/3 | Complete | 2026-10-28 |
 | 36. Interactive Mouse & Keyboard Navigation + Live Telemetry in `:mcp` Console Window (`MCP-03`, `MCP-04`) | 3/3 | Complete | 2026-10-28 |
+| 37. `v2.1.1`–`v2.2.0` Interactive File & `.itermcolors` Browser, Cursor Customizer & Multi-Profile Layout Manager (`PROF-01`, `THM-03`, `CUR-01`) | 3/3 | Complete | 2026-10-29 |
+| 38. `v2.3.0` Session Lifecycle Commands, Persistent Ordering, Blinking Software Cursor & Scaled Mouse Selection (`SESS-01..02`, `CUR-02`) | 3/3 | Complete | 2026-10-29 |
+| 39. `v2.4.0` Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`WIN-01..02`, `VT-CLAMP-01`) | 2/2 | Complete | 2026-10-29 |
+| 40. `v2.4.1` Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`WIN-03`, `WIN-04`) | 3/3 | Complete | 2026-10-31 |

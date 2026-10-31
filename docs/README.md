@@ -1,8 +1,8 @@
-# Bilterm Documentation Hub (`v2.1.0`)
+# Bilterm Documentation Hub (`v2.4.1`)
 
 [← Back to Project README](../README.md) | [Visual Gallery (`docs/VISUAL_GALLERY.md`)](VISUAL_GALLERY.md) | [Starter Packs (`starter-packs/`)](../starter-packs/README.md)
 
-Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
+Welcome to the comprehensive documentation suite for **Bilterm (`v2.4.1`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
 
 ---
 
@@ -83,7 +83,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.1.0`)** — 
 | **Prompt Pin Top / Bottom / Non-Overlapping Split**| `<L> t` (`Alt+T`) / `<L> b` / `<L> s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |
 | **Mainframe Page-Hold (`MORE...`) & Smooth Scroller** | `<L> PgDn` / `PF8` / `PA2` / `Space` / Click OIA `SCRL` | `:scroll [smooth \| page \| instant \| toggle \| next \| prev]` / `:more` |
 | **3270 Field Hints / Vi Copy / Canvas Search** | `F3` (`<L> f`) / `F8` (`Alt+C`) / `<L> /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
-| **Universal Themes (22 Presets + Import/Export)** | — | `:theme <preset \| list \| import <path> \| export [file.toml]>` |
+| **Universal & Per-Window Themes / Element Colors** | — | `:theme <preset\|list\|import <path>\|export>` / `:window [menu\|theme [list\|browse\|<name>]\|<elem> <color\|reset>]` |
 | **Focal Spotlight / Focal Zoom Lens** | `Alt+O` (`<L> L`) / `Alt+Shift+O` / `Alt+}` & `Alt+{` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
 | **Slide-Out Drawer & Session Tree** | `F7` (`<L> d`) | `:drawer [toggle\|left\|right\|top\|bottom\|float\|push]` / `:session [save\|restore\|list\|tree\|branch\|graft\|checkpoint]` |
 | **Tektronix 4010/4014 & Graphical Canvas** | `\x1b[?38h` / `OSC 1337;Canvas=...` | `:canvas [hires\|tek\|mode\|res\|plot\|image\|export\|clear]` |

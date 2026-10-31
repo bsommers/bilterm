@@ -354,6 +354,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
             ("Split Vertical (Alt+V)", ":split v"),
             ("Zoom Toggle (F5)", ":zoom"),
             ("Stack Windows (Alt+M)", ":layout stack"),
+            ("Window Theme Browser...", ":window theme list"),
+            ("Customize Window Colors...", ":window menu"),
             ("Next Window Theme", ":window theme next"),
             ("Next Window Outline", ":window outline next"),
             ("Toggle Bold Border", ":window bold toggle"),

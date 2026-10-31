@@ -487,7 +487,18 @@ impl WindowManager {
                 true
             }
             McpRowAction::ApplyTheme(theme_name) => {
-                self.execute_theme_command(&theme_name);
+                if let Some(win_sub) = theme_name.strip_prefix("window ") {
+                    self.execute_window_style_command(win_sub);
+                } else if let Some(target_id) = self.mcp_console.window_theme_target {
+                    let _ = self.focus_and_raise(target_id);
+                    let sub = theme_name
+                        .strip_prefix("import ")
+                        .unwrap_or(&theme_name)
+                        .trim();
+                    self.execute_window_style_command(&format!("theme {sub}"));
+                } else {
+                    self.execute_theme_command(&theme_name);
+                }
                 true
             }
             other => crate::ui::file_browser::activate_browser_row_action(self, other),
@@ -545,6 +556,7 @@ impl WindowManager {
 
     /// Executes `:theme import|load|export|browse|list|<preset>` commands (`THM-01`, `THM-02`).
     pub fn execute_theme_command(&mut self, subcmd: &str) {
+        self.mcp_console.window_theme_target = None;
         crate::ui::file_browser::execute_theme_or_browser_command(self, subcmd);
     }
 

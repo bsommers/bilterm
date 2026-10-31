@@ -7,29 +7,99 @@ use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode};
 
-const WINDOW_STYLE_USAGE: &str = "Usage: :window theme <name|next|reset> | outline <style|next|reset> | bold [on|off|toggle|reset] | reset | show";
+const WINDOW_STYLE_USAGE: &str = "Usage: :window [menu | show | reset | theme [name|list|browse|import|next|prev|reset] | outline <style|next|reset> | bold [on|off|reset] | <font-color|bg|prompt-bg|prompt-color|cursor-color|frame-color|inactive-border|title-color|controls-color|status-color|badge-color> <color|reset>]";
 
 /// Validates `:window ...` per-window chrome arguments and returns the normalized subcommand.
 pub(super) fn validate_window_style_args(args: &[&str]) -> Result<String, String> {
-    let ok = match (args.first().copied(), args.get(1).copied()) {
-        (None | Some("show" | "status" | "info" | "reset" | "clear"), None) => true,
-        (Some("theme" | "color" | "colors"), Some(_)) => true,
-        (Some("outline" | "border" | "frame"), Some(v)) => {
-            matches!(v, "next" | "cycle" | "reset" | "default" | "global")
-                || OutlineStyle::from_name(v).is_some()
-        }
-        (Some("bold"), None | Some("on" | "off" | "toggle" | "true" | "false" | "reset")) => true,
-        _ => false,
+    use crate::ui::cursor_cmd::parse_cursor_color;
+    use crate::wm::chrome_style::canonical_window_color_element;
+
+    let is_reset_kw = |s: &str| {
+        matches!(
+            s.to_ascii_lowercase().as_str(),
+            "reset" | "default" | "global" | "theme" | "clear" | "none" | "auto"
+        )
     };
-    if ok {
-        Ok(if args.is_empty() {
-            "show".to_string()
-        } else {
-            args.join(" ")
-        })
-    } else {
-        Err(WINDOW_STYLE_USAGE.to_string())
+
+    match args.first().copied() {
+        None => return Ok("menu".to_string()),
+        Some("menu" | "list" | "ls" | "customize") if args.len() == 1 => {
+            return Ok("menu".to_string());
+        }
+        Some("show" | "status" | "info") if args.len() == 1 => return Ok("show".to_string()),
+        Some("reset" | "clear") if args.len() == 1 => return Ok("reset".to_string()),
+        Some("browse" | "files" | "explorer") => {
+            let rest = args[1..].join(" ");
+            return Ok(if rest.is_empty() {
+                "theme browse".to_string()
+            } else {
+                format!("theme browse {rest}")
+            });
+        }
+        Some("theme" | "themes" | "color" | "colors") => {
+            let rest = args[1..].join(" ");
+            return Ok(if rest.trim().is_empty() {
+                "theme list".to_string()
+            } else {
+                format!("theme {}", rest.trim())
+            });
+        }
+        Some("outline" | "border" | "frame") if args.len() == 2 => {
+            let v = args[1];
+            if matches!(v, "next" | "cycle" | "reset" | "default" | "global")
+                || OutlineStyle::from_name(v).is_some()
+            {
+                return Ok(format!("outline {v}"));
+            }
+            if is_reset_kw(v) || parse_cursor_color(v).is_some() {
+                return Ok(format!("color frame-color {v}"));
+            }
+        }
+        Some("bold")
+            if args.len() == 1
+                || (args.len() == 2
+                    && matches!(
+                        args[1],
+                        "on" | "off" | "toggle" | "true" | "false" | "reset"
+                    )) =>
+        {
+            return Ok(args.join(" "));
+        }
+        Some(first) => {
+            // Support both `:window font-color amber` and two-word `:window font color amber` / `:window frame color cyan`
+            let (elem_candidate, val_slice) = if args.get(1).is_some_and(|s| {
+                matches!(
+                    s.to_ascii_lowercase().as_str(),
+                    "color" | "fg" | "bg" | "border" | "frame" | "badge"
+                )
+            }) && canonical_window_color_element(&format!(
+                "{first}-{}",
+                args[1].to_ascii_lowercase()
+            ))
+            .is_some()
+            {
+                (
+                    format!("{first}-{}", args[1].to_ascii_lowercase()),
+                    &args[2..],
+                )
+            } else {
+                (first.to_string(), &args[1..])
+            };
+
+            if let Some(canon) = canonical_window_color_element(&elem_candidate) {
+                match val_slice.first().copied() {
+                    None | Some("list" | "ls" | "menu") if val_slice.len() <= 1 => {
+                        return Ok(format!("menu {canon}"));
+                    }
+                    Some(v) if val_slice.len() == 1 && (is_reset_kw(v) || parse_cursor_color(v).is_some()) => {
+                        return Ok(format!("color {canon} {v}"));
+                    }
+                    _ => return Err(WINDOW_STYLE_USAGE.to_string()),
+                }
+            }
+        }
     }
+    Err(WINDOW_STYLE_USAGE.to_string())
 }
 
 /// Parses visual, shader, typography, drawer, and canvas `:colon` commands.

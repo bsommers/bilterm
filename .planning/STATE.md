@@ -1,38 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Live Background Daemon Detach/Attach & Interactive MCP Console Navigation
-current_phase: 36
-current_phase_name: interactive-mcp-console-navigation
-status: milestone_v2_1_complete
-stopped_at: Released v2.1.2 (WCAG 2.1 highlight contrast engine, Claude/CLI agent marker rendering, UTF-8 chunk carry & SGR fix, and bounded clipboard I/O)
-last_updated: "2026-10-28"
-last_activity: 2026-10-28
-last_activity_desc: Released v2.1.2 with WCAG 2.1 highlight contrast engine, Claude/CLI agent marker rendering, UTF-8 chunk carry & SGR fix, and bounded clipboard I/O
+milestone: v2.4.1
+milestone_name: Per-Window Theme Browser & Individual Element Color Overrides
+current_phase: 40
+current_phase_name: per-window-theme-browser-and-element-color-overrides
+status: milestone_v2_4_1_complete
+stopped_at: Released v2.4.1 (Interactive per-window theme browser, per-window .itermcolors file browser routing, and 13 individual per-window theme element color overrides with session TOML persistence)
+last_updated: "2026-10-31"
+last_activity: 2026-10-31
+last_activity_desc: Released v2.4.1 with interactive :window / :window theme browser and per-window individual theme element color overrides
 progress:
-  total_phases: 36
-  completed_phases: 36
-  total_plans: 75
-  completed_plans: 75
+  total_phases: 40
+  completed_phases: 40
+  total_plans: 86
+  completed_plans: 86
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-27)
+See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.1` (`Phases 35–36`) — **COMPLETE (`36/36` Phases)**.
+**Current focus:** Milestone `v2.4.1` (`Phases 39–40`) — **COMPLETE (`40/40` Phases)**.
 
 ## Current Position
 
-Phase: 36 (interactive-mcp-console-navigation) — COMPLETE
-Plan: All `v2.1` plans (`35-01..02`, `36-01..02`) complete
-Status: Phases 1–36 complete (`47/47` v1 + `14/14` v2.0 + `4/4` v2.1 requirements: `DAEM-03..04`, `MCP-03..04`).
-Last activity: 2026-10-28 — Completed Phases 35–36 via parallel subagents (`src/daemon/process.rs`, `src/mcp_console/mod.rs`, `src/ui/mcp_ui.rs`, `tests/live_daemon_detach_attach.rs`, `tests/mcp_interactive_navigation.rs`), synced macOS/Claude Code/`agy` fixes (`7817cd2`), and updated all docs.
+Phase: 40 (per-window-theme-browser-and-element-color-overrides) — COMPLETE
+Plan: All `v2.4.x` plans (`39-01..02`, `40-01..03`) complete
+Status: Phases 1–40 complete (`40/40` Phases across `v1.0`–`v2.4.1`).
+Last activity: 2026-10-31 — Completed Phase 40 (`v2.4.1`): interactive `:window` / `:window theme` per-window theme browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`SavedPaneState.colors`).
 
-Progress: [██████████] 100% (36/36 Phases)
+Progress: [██████████] 100% (40/40 Phases)
 
 ## Performance Metrics
 

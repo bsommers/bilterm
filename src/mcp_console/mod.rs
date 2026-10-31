@@ -52,7 +52,10 @@ pub fn infer_row_action(line: &str) -> McpRowAction {
     {
         if let Some((cmd_part, _)) = rest.split_once(" — ") {
             let trimmed_cmd = cmd_part.trim();
-            if trimmed_cmd.starts_with("import ") || trimmed_cmd.starts_with("cursor ") {
+            if trimmed_cmd.starts_with("import ")
+                || trimmed_cmd.starts_with("cursor ")
+                || trimmed_cmd.starts_with("window ")
+            {
                 return McpRowAction::ApplyTheme(trimmed_cmd.to_string());
             }
         }
@@ -260,6 +263,8 @@ pub struct McpConsoleState {
     pub last_status_banner: String,
     /// Active interactive file/directory browser state when `:browse` / `:theme import` browser is open.
     pub file_browser: Option<crate::ui::file_browser::FileBrowserState>,
+    /// When `Some(pane_id)`, theme selection in the file/theme browser applies to that window (`PaneChromeStyle`) rather than globally.
+    pub window_theme_target: Option<usize>,
 }
 
 impl Default for McpConsoleState {
@@ -285,6 +290,7 @@ impl McpConsoleState {
             ],
             last_status_banner: "MCP ROOT READY — END OF LINE.".to_string(),
             file_browser: None,
+            window_theme_target: None,
         }
     }
 
@@ -292,6 +298,7 @@ impl McpConsoleState {
     pub fn open_root_terminal(&mut self) {
         self.active = true;
         self.file_browser = None;
+        self.window_theme_target = None;
         self.scroll_offset = 0;
     }
 
@@ -395,6 +402,7 @@ impl McpConsoleState {
     pub fn close_root_terminal(&mut self) {
         self.active = false;
         self.file_browser = None;
+        self.window_theme_target = None;
         self.last_status_banner =
             "MCP ROOT CONSOLE DETACHED (SESSIONS PRESERVED). END OF LINE.".to_string();
     }

@@ -250,8 +250,8 @@ impl OpenColorScheme {
         let shadow_fg = self.ansi[8];
         let shadow_bg = blend_rgb(self.background, Color::Black, 0.55);
 
-        ThemePalette {
-            name: self.name.clone(),
+        ThemePalette::new(
+            self.name.clone(),
             prompt_surface_bg,
             window_frame_bg,
             active_border_fg,
@@ -267,7 +267,7 @@ impl OpenColorScheme {
             fkey_num_fg,
             shadow_fg,
             shadow_bg,
-        }
+        )
     }
 }
 

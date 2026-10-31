@@ -32,20 +32,32 @@ Target only windows or only the command prompt via:
 - `:outline prompt <style>`
 - `:outline bold [on|off]` — render every window frame in bold weight (`window_outline_bold = true` in `config.toml`).
 
-### Per-Window Theme, Outline & Bold Overrides
+### Per-Window Theme Browser, Individual Element Colors, Outline & Bold Overrides
 
-Each window can use its own theme and frame style, independent of the global settings. Commands apply to the focused window:
+Each window panel can use its own theme, outline frame, bold border, and individual element colors (`font-color`, `cursor-color`, `frame-color`, `controls-color`, `status-color`, `bg`, `title-color`, etc.), independent of global settings. All per-window overrides persist in saved workspace sessions (`SavedPaneState`):
 
 | Command | Effect |
 |---------|--------|
-| `:window theme <name>` / `:theme window <name>` | Built-in preset (`dracula`, `3278`, …) or imported `.itermcolors`/TOML/YAML name or path |
+| `:window` / `:window menu` | Open the interactive **Per-Window Style, Theme & Element Color Customizer** popup |
+| `:window theme` / `:window theme list` | Open the interactive **Per-Window Theme Browser** (all 14 presets + discovered `.itermcolors`/TOML/YAML schemes) |
+| `:window theme browse [dir]` / `:window browse [dir]` | Open the interactive File & `.itermcolors` Directory Browser scoped to the focused window |
+| `:window theme import <file\|dir\|glob>` | Import `.itermcolors`/TOML/YAML theme file or directory and apply it to the focused window |
+| `:window theme <name>` / `:theme window <name>` | Apply built-in preset (`dracula`, `3278`, …) or imported `.itermcolors`/TOML/YAML scheme to the focused window |
 | `:window theme next` / `prev` / `reset` | Cycle presets for this window, or revert to the global theme |
-| `:window outline <style>` / `:outline pane <style>` | Per-window frame style (any style from the table above) |
+| `:window font-color <color\|reset>` (aliases: `fg`, `font`, `text`) | Override terminal canvas & prompt text color for this window (or omit `<color>` to open swatch picker) |
+| `:window cursor-color <color\|reset>` (alias: `cursor`) | Override software cursor color for this window (`#RRGGBB`, `green`, `amber`, `cyan`, `crimson`, `yellow`, …) |
+| `:window frame-color <color\|reset>` (alias: `border-color`) | Override active window border frame color (`:window inactive-border <color>` for unfocused border) |
+| `:window controls-color <color\|reset>` (alias: `controls`) | Override top-right `[_][□][X]`, bottom-right `◢`, and prompt `[▲][▼]` control badge colors |
+| `:window status-color <color\|reset>` (aliases: `status`, `oia-bg`) | Override bottom 3270-OIA status bar background (`:window badge-color <color>` for leading `3270-OIA` badge) |
+| `:window title-color <color\|reset>` (alias: `title`) | Override window & prompt title bar text color |
+| `:window bg <color\|reset>` / `:window prompt-bg <color\|reset>` | Override window canvas background or floating prompt surface background |
+| `:window prompt-color <color\|reset>` | Override floating prompt `===>` prefix color |
+| `:window outline <style>` / `:outline pane <style>` | Per-window frame style (`double`, `single`/`thin`, `rounded`, `thick`, `dotted`, `dashed`, `quadruple`, `ascii`) |
 | `:window outline next` / `reset` | Cycle styles for this window, or revert to the global outline |
 | `:window bold [on\|off\|toggle\|reset]` | Per-window bold border |
-| `:window reset` / `:window show` | Clear all overrides for this window, or show its current style |
+| `:window reset` / `:window show` | Clear all overrides for this window, or display its current style summary |
 
-These actions are also in the top menu bar under **Window** (*Next Window Theme*, *Next Window Outline*, *Toggle Bold Border*, *Reset Window Style*). Per-window overrides last for the current run only and are not saved with sessions yet.
+These actions are also available in the top menu bar under **Window** (*Window Theme Browser...*, *Customize Window Colors...*, *Next Window Theme*, *Next Window Outline*, *Toggle Bold Border*, *Reset Window Style*).
 
 ### Window Title-Bar Controls
 

@@ -50,6 +50,9 @@ pub struct SavedPaneState {
     /// Per-window bold border; `None` = global `window_outline_bold`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bold: Option<bool>,
+    /// Per-window individual element color overrides (`font-color`, `cursor-color`, `frame-color`, `controls-color`, `status-color`, etc.).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub colors: BTreeMap<String, String>,
 }
 
 /// Declarative TOML snapshot of a multi-pane Bilterm workspace (`ECO-02`).
@@ -405,6 +408,7 @@ impl WindowManager {
                     theme: chrome.theme_name,
                     outline: chrome.outline,
                     bold: chrome.bold,
+                    colors: chrome.colors,
                 }
             })
             .collect();

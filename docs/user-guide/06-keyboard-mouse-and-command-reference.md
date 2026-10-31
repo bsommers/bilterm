@@ -223,7 +223,8 @@
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:theme` | — | `<preset\|file.itermcolors> \| list \| browse [dir] \| import [file\|dir\|glob] \| export [file.toml] \| config` | Switch color theme preset, import `.itermcolors`/TOML/YAML files/directories/globs, open interactive browser, or inspect `~/.config/bilterm/` (`UI-02`) |
+| `:theme` | — | `<preset\|file.itermcolors> \| window <spec> \| list \| browse [dir] \| import [file\|dir\|glob] \| export [file.toml] \| config` | Switch color theme preset, apply per-window theme, import `.itermcolors`/TOML/YAML files/directories/globs, open interactive browser, or inspect `~/.config/bilterm/` (`UI-02`) |
+| `:window` | `:win`, `:pane-style` | `[menu \| show \| reset \| theme [name\|list\|browse\|import\|next\|prev\|reset] \| outline <style\|next\|reset> \| bold [on\|off\|reset] \| <font-color\|bg\|prompt-bg\|prompt-color\|cursor-color\|frame-color\|inactive-border\|title-color\|controls-color\|status-color\|badge-color> [color\|reset]]` | Per-window theme browser, individual theme element color overrides (`#RRGGBB` or named colors), per-window outline style, and bold border |
 | `:browse` | `:files`, `:filebrowser` | `[dir \| file]` | Open interactive Borland Text File & Theme Directory Browser (`Up`/`Down`/`Enter`/`Backspace`/type-to-filter) |
 | `:outline` | `:border` | `[window\|prompt] <double\|solid\|rounded\|thick\|dotted\|dashed\|quadruple\|ascii>` | Set workspace window and/or prompt border outline style |
 | `:shadows` | `:shadow` | `[on \| off \| none \| translucent \| tinted \| solid]` | Set or toggle 2-col right / 1-row bottom DOS drop-shadow mode (`UI-01`) |

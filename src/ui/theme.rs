@@ -209,6 +209,12 @@ pub struct ThemePalette {
     pub fkey_num_fg: Color,
     pub shadow_fg: Color,
     pub shadow_bg: Color,
+    /// Optional per-window font/foreground text color override (`:window font-color <color>`).
+    pub text_fg: Option<Color>,
+    /// Optional per-window window-controls (`[_][□][X]`, `◢`, `[▲][▼]`) color override (`:window controls-color <color>`).
+    pub controls_fg: Option<Color>,
+    /// Optional per-window cursor color override (`:window cursor-color <color>`).
+    pub cursor_fg: Option<Color>,
 }
 
 impl ThemePalette {
@@ -248,6 +254,9 @@ impl ThemePalette {
             fkey_num_fg,
             shadow_fg,
             shadow_bg,
+            text_fg: None,
+            controls_fg: None,
+            cursor_fg: None,
         }
     }
 }

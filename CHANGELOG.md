@@ -5,6 +5,25 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.4.1] - 2026-10-31
+
+### Added
+- **Per-Window Theme Browser & Interactive Window Style Customizer (`src/wm/window_style.rs`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`)**:
+  - `:window` (or `:window menu` / `:window list` / `:window customize`) opens an interactive Borland/MCP customizer popup for the focused window with 1-click/Enter selection for per-window themes, outlines, bold borders, and individual element color pickers.
+  - `:window theme` (or `:window theme list`) opens a dedicated **Per-Window Theme Browser** listing all 14 built-in presets plus discovered `.itermcolors`/TOML/YAML schemes scoped exclusively to the focused window (`window_theme_target`).
+  - `:window theme browse [dir]` / `:window browse [dir]` and `:window theme import [file|dir|glob]` open the interactive File & `.itermcolors` Browser scoped to the active window.
+- **Per-Window Individual Theme Element Color Overrides (`src/wm/chrome_style.rs`, `src/ui/theme.rs`, `src/ui/contrast.rs`, `src/ui/chrome.rs`, `src/ui/status_bar.rs`, `src/ui/cursor_cmd.rs`, `src/wm/session.rs`)**:
+  - Added per-window element color overrides (`:window <element> <color|reset>` and two-word `:window <elem> color <color>`, or `:window <element>` to open that element's interactive swatch picker) for:
+    - `font-color` (`fg`, `font`, `text`) — terminal canvas & floating prompt default text color
+    - `cursor-color` (`cursor`, `caret`) — per-window software cursor color
+    - `frame-color` (`border-color`, `frame`) & `inactive-border` (`inactive-frame`) — active/inactive window border colors
+    - `controls-color` (`controls`, `badges-color`) — window control badges (`[_][□][X]`, `◢`, `[▲][▼]`)
+    - `title-color` (`title`) — window & prompt title bar text color
+    - `status-color` (`status`, `oia-bg`) & `badge-color` (`status-badge`, `oia-badge`) — 3270-OIA status bar and badge colors
+    - `bg` (`background`), `prompt-bg` (`cmd-bg`), `prompt-color` (`prefix-color`), `crosshair-color`, and `shadow-color`
+  - Persists per-window `colors` overrides in saved session TOML files (`SavedPaneState.colors`) alongside `theme`, `outline`, and `bold`.
+  - Added full `<Tab>` completion for `:window`, `:win`, `:pane-style`, and `:theme window ` in `src/pane/completion.rs`, plus top `"Window"` menu bar items (`Window Theme Browser...`, `Customize Window Colors...`).
+
 ## [v2.4.0] - 2026-10-29
 
 ### Added

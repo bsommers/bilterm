@@ -290,13 +290,15 @@ pub fn render_borland_frame_ext(
     block.render(outer, buf);
 
     // Top-right [_] minimize, [□] maximize/zoom, and [X] close controls when window is wide enough.
-    // Brackets use the border color; the inner glyph is bold, with close highlighted in red.
+    // Brackets use the border color; the inner glyph is bold, with close highlighted in red (or `controls_fg`).
+    let ctrl_fg = palette.controls_fg.unwrap_or(palette.title_fg);
+    let close_fg = palette.controls_fg.unwrap_or(Color::Rgb(255, 85, 85));
     if outer.width >= 24 {
         let right_edge = outer.x + outer.width;
         let badges: [(&str, Color); 3] = [
-            (glyphs.minimize_badge, palette.title_fg),
-            (glyphs.zoom_badge, palette.title_fg),
-            (glyphs.close_badge, Color::Rgb(255, 85, 85)),
+            (glyphs.minimize_badge, ctrl_fg),
+            (glyphs.zoom_badge, ctrl_fg),
+            (glyphs.close_badge, close_fg),
         ];
         let total: u16 = badges.iter().map(|(b, _)| b.chars().count() as u16).sum();
         let mut x = right_edge.saturating_sub(total + 2);
@@ -331,7 +333,7 @@ pub fn render_borland_frame_ext(
         cell.set_symbol(glyphs.resize_corner);
         cell.set_style(
             Style::default()
-                .fg(palette.title_fg)
+                .fg(ctrl_fg)
                 .bg(frame_bg)
                 .add_modifier(Modifier::BOLD),
         );

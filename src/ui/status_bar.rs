@@ -104,6 +104,9 @@ pub(super) fn render_floating_prompt(
         }
     };
 
+    let base_text_fg = palette.text_fg.unwrap_or(Color::White);
+    let pin_fg = palette.controls_fg.unwrap_or(Color::Rgb(85, 255, 255));
+    let corner_fg = palette.controls_fg.unwrap_or(palette.title_fg);
     let title = format!("╣ BILTERM 3270 // CMD [{anchor_badge}] ╠");
     let block = Block::default()
         .title(Span::styled(
@@ -116,7 +119,7 @@ pub(super) fn render_floating_prompt(
         .borders(Borders::ALL)
         .border_set(effective_outline.border_set())
         .border_style(Style::default().fg(border_fg).bg(surface_bg))
-        .style(Style::default().fg(Color::White).bg(surface_bg));
+        .style(Style::default().fg(base_text_fg).bg(surface_bg));
 
     let inner = block.inner(prompt_rect);
     block.render(prompt_rect, buf);
@@ -135,7 +138,7 @@ pub(super) fn render_floating_prompt(
                 cell.set_symbol(ch.encode_utf8(&mut sym_buf));
                 cell.set_style(
                     Style::default()
-                        .fg(Color::Rgb(85, 255, 255))
+                        .fg(pin_fg)
                         .bg(surface_bg)
                         .add_modifier(Modifier::BOLD),
                 );
@@ -151,7 +154,7 @@ pub(super) fn render_floating_prompt(
             cell.set_symbol(glyphs.resize_corner);
             cell.set_style(
                 Style::default()
-                    .fg(palette.title_fg)
+                    .fg(corner_fg)
                     .bg(surface_bg)
                     .add_modifier(Modifier::BOLD),
             );
@@ -267,7 +270,13 @@ pub(super) fn render_floating_prompt(
                 .add_modifier(Modifier::BOLD),
         ));
         for tok in tokenize_shell_line(&visible_sub) {
-            spans.push(Span::styled(tok.text, tok.kind.style().bg(surface_bg)));
+            let mut tstyle = tok.kind.style().bg(surface_bg);
+            if let Some(tfg) = palette.text_fg
+                && tstyle.fg == Some(Color::White)
+            {
+                tstyle = tstyle.fg(tfg);
+            }
+            spans.push(Span::styled(tok.text, tstyle));
         }
         rendered_lines.push(Line::from(spans));
     }

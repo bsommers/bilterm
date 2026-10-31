@@ -194,7 +194,10 @@ pub fn readable_canvas_cell_style(
     palette: &ThemePalette,
 ) -> Style {
     let default_bg = resolve_ratatui_color_rgb(palette.window_frame_bg, theme, (14, 18, 28));
-    let default_fg = (232, 238, 245);
+    let default_fg = palette
+        .text_fg
+        .map(|c| resolve_ratatui_color_rgb(c, theme, (232, 238, 245)))
+        .unwrap_or((232, 238, 245));
 
     let has_explicit_bg = !matches!(cell.bg, CellColor::Default);
     let has_explicit_fg = !matches!(cell.fg, CellColor::Default);
@@ -258,6 +261,9 @@ pub fn readable_canvas_cell_style(
         };
         // Lift dark/muted foreground colors so they have at least 4.5:1 WCAG AA contrast against the canvas
         let adj_fg = boost_fg_contrast(raw_fg, default_bg, 4.5);
+        style = style.fg(Color::Rgb(adj_fg.0, adj_fg.1, adj_fg.2));
+    } else if palette.text_fg.is_some() {
+        let adj_fg = boost_fg_contrast(default_fg, default_bg, 4.5);
         style = style.fg(Color::Rgb(adj_fg.0, adj_fg.1, adj_fg.2));
     }
 

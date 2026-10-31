@@ -22,10 +22,16 @@ pub fn parse_cursor_color(spec: &str) -> Option<Color> {
     if let Some(c) = parse_hex_color(s) {
         return Some(c);
     }
-    // 3-digit hex shorthand `#RGB`
-    let hex3 = s.strip_prefix('#').unwrap_or(s);
-    if hex3.len() == 3 && hex3.chars().all(|c| c.is_ascii_hexdigit()) {
-        let mut chars = hex3.chars();
+    let raw_hex = s
+        .strip_prefix('#')
+        .or_else(|| s.strip_prefix("0x"))
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
+    if raw_hex.len() == 6 && raw_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return parse_hex_color(&format!("#{raw_hex}"));
+    }
+    if raw_hex.len() == 3 && raw_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        let mut chars = raw_hex.chars();
         let r = u8::from_str_radix(&chars.next()?.to_string().repeat(2), 16).ok()?;
         let g = u8::from_str_radix(&chars.next()?.to_string().repeat(2), 16).ok()?;
         let b = u8::from_str_radix(&chars.next()?.to_string().repeat(2), 16).ok()?;
@@ -37,16 +43,17 @@ pub fn parse_cursor_color(spec: &str) -> Option<Color> {
         "amber" | "phosphor-amber" | "3279" => Some(Color::Rgb(255, 176, 0)),
         "cyan" | "turbo-cyan" | "aqua" => Some(Color::Rgb(0, 240, 255)),
         "yellow" | "turbo-yellow" | "gold" => Some(Color::Rgb(255, 230, 0)),
-        "red" | "crimson" | "tron-red" => Some(Color::Rgb(255, 42, 42)),
+        "red" | "crimson" | "tron-red" | "coral" => Some(Color::Rgb(255, 42, 42)),
         "magenta" | "pink" | "hot-pink" | "neon" => Some(Color::Rgb(255, 64, 192)),
-        "purple" | "violet" => Some(Color::Rgb(189, 147, 249)),
-        "blue" | "electric-blue" => Some(Color::Rgb(85, 170, 255)),
-        "orange" => Some(Color::Rgb(255, 140, 0)),
-        "lime" => Some(Color::Rgb(166, 227, 161)),
-        "teal" => Some(Color::Rgb(20, 200, 180)),
+        "purple" | "violet" | "lavender" => Some(Color::Rgb(189, 147, 249)),
+        "blue" | "electric-blue" | "sky" => Some(Color::Rgb(85, 170, 255)),
+        "navy" | "royal-blue" | "turbo-blue" | "indigo" => Some(Color::Rgb(0, 28, 88)),
+        "orange" | "peach" => Some(Color::Rgb(255, 140, 0)),
+        "lime" | "mint" => Some(Color::Rgb(166, 227, 161)),
+        "teal" | "turquoise" => Some(Color::Rgb(20, 200, 180)),
         "white" | "mono" => Some(Color::Rgb(255, 255, 255)),
-        "black" => Some(Color::Rgb(0, 0, 0)),
-        "gray" | "grey" | "silver" => Some(Color::Rgb(170, 178, 190)),
+        "black" | "obsidian" => Some(Color::Rgb(0, 0, 0)),
+        "gray" | "grey" | "silver" | "slate" => Some(Color::Rgb(170, 178, 190)),
         _ => None,
     }
 }
@@ -62,7 +69,9 @@ pub fn render_caret_configured(
     if cfg.cursor_blink_hidden && cfg.cursor_blink.blink_interval(cfg.cursor_style).is_some() {
         return;
     }
-    let custom_color = cfg.cursor_color.as_deref().and_then(parse_cursor_color);
+    let custom_color = palette
+        .cursor_fg
+        .or_else(|| cfg.cursor_color.as_deref().and_then(parse_cursor_color));
     let custom_text = cfg
         .cursor_text_color
         .as_deref()
