@@ -1,6 +1,6 @@
 # Session Checkpoint (2026-10-30)
 
-**Status:** PAUSED — only remaining asset gap is **v2.3.0 Windows**. Last tag: `v2.4.0` (Latest).
+**Status:** PAUSED — only remaining asset gap is **v2.3.0 Windows ARM64 (aarch64-pc-windows-msvc)**, user will build on the Mac. Last tag: `v2.4.0` (Latest).
 
 ## User decisions (verbatim)
 - "make MacOS releases for this. also make a skill / command / scripts to do binary release per platform."
@@ -19,7 +19,7 @@
 | Release | macOS | Windows | Linux |
 |---|---|---|---|
 | v2.4.0 (Latest) | ✅ | x86_64 + aarch64 msvc | gnu, musl x86_64 + aarch64 musl ✅ |
-| v2.3.0 | ✅ | **missing** | gnu, musl x86_64 + aarch64 musl ✅ |
+| v2.3.0 | ✅ | x86_64 **gnu** (cross-built on Linux via zigbuild; system DLLs only; not executed — no Wine); **aarch64 msvc missing** | gnu, musl x86_64 + aarch64 musl ✅ |
 | v2.2.0 | ✅ | msvc | complete |
 | v2.1.2 | ✅ | msvc | complete (release notes updated to list all platforms) |
 | v2.1.1 | ✅ | gnu (+ `windows-msvc.zip` alias is a copy of the gnu build — same sha) | complete |
@@ -32,8 +32,9 @@
 - Local backup of pre-merge working tree: `~/bilterm-local-backup.patch` (safe to delete).
 
 ## Lessons
+- `scripts/build-binaries.sh` now uses `cargo zigbuild` for `*-windows-gnu` on Linux (plain cargo has no MinGW linker).
 - Never run `cargo fmt` repo-wide (repo is not rustfmt-clean → 100+ file churn; v2.4.0 needed a revert commit `0df2ed5`).
 - Run the FULL integration suite (`timeout 900 cargo test -q --tests --no-fail-fast`) before releases, not just lib tests (v2.3.0 shipped a 1-row-grid crash).
 
 ## Exact next command
-v2.3.0 Windows: build on the Windows VM (`scripts/build-binaries.sh v2.3.0 --upload`) or try the never-run workflow `gh workflow run release-binaries.yml -f tag=v2.3.0` (expect fixes).
+v2.3.0 Windows ARM64: user builds on the Mac (`scripts/build-binaries.sh v2.3.0 --targets aarch64-pc-windows-msvc --upload` or the mac-win script). **Do NOT use the GitHub CI workflow** (user decision). Optional later: native x86_64 msvc for v2.3.0 from a Windows host.

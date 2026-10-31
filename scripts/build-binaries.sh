@@ -78,6 +78,8 @@ for triple in $TARGETS; do
     rustup target add "$triple" >/dev/null
     builder=(cargo build)
     [[ "$triple" == *-linux-musl && "$OS" == Linux ]] && builder=(cargo zigbuild)
+    # windows-gnu cross-builds from Linux need zig as the MinGW linker (plain cargo lacks one).
+    [[ "$triple" == *-windows-gnu && "$OS" == Linux ]] && builder=(cargo zigbuild)
     (cd "$WT" && "${builder[@]}" --locked --release --target "$triple" --bin "$BIN")
 
     exe="$BIN"; [[ "$triple" == *windows* ]] && exe="$BIN.exe"
