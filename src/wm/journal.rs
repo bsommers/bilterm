@@ -40,6 +40,12 @@ pub struct PaneJournalRecord {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shell_args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_command: Option<String>,
     pub font_scale_pct: u16,
     pub scroll_mode: String,
     pub prompt_anchor: String,
@@ -187,6 +193,181 @@ impl WorkspaceJournal {
     }
 }
 
+impl super::WindowManager {
+    /// Handles `:session processes|cmd|shell|cwd|relaunch|info` per-pane process/shell/CWD persistence commands.
+    pub(super) fn execute_session_pane_state_command(
+        &mut self,
+        verb: &str,
+        parts: &[&str],
+        subcmd: &str,
+    ) -> bool {
+        match verb {
+            "processes" | "apps" | "restore-processes" | "save-apps" => {
+                let next = match parts.get(1).copied().map(|s| s.to_ascii_lowercase()) {
+                    Some(v) if matches!(v.as_str(), "on" | "true" | "1" | "yes") => true,
+                    Some(v) if matches!(v.as_str(), "off" | "false" | "0" | "no") => false,
+                    _ => !self.config.session_restore_processes,
+                };
+                self.config.session_restore_processes = next;
+                self.maybe_autosave_layout();
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Session process & command auto-relaunch: {} (shell + running command + CWD saved per pane)",
+                    if next { "ON" } else { "OFF" }
+                )));
+                true
+            }
+            "cmd" | "command" | "app" | "program" => {
+                if parts.len() < 2 {
+                    let cur = self
+                        .active_pane()
+                        .resolve_running_command()
+                        .unwrap_or_else(|| "(none)".to_string());
+                    let pid = self.active_pane_id();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Pane #{pid} saved/running command: {cur}"
+                    )));
+                    return true;
+                }
+                let raw_cmd = subcmd
+                    .trim_start()
+                    .strip_prefix(verb)
+                    .unwrap_or("")
+                    .trim();
+                let pid = self.active_pane_id();
+                if matches!(
+                    raw_cmd.to_ascii_lowercase().as_str(),
+                    "clear" | "none" | "off" | "reset"
+                ) {
+                    self.active_pane_mut().prompt_mut().running_command = None;
+                    self.maybe_autosave_layout();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Cleared saved running command for Pane #{pid}"
+                    )));
+                } else {
+                    self.active_pane_mut().prompt_mut().running_command =
+                        Some(raw_cmd.to_string());
+                    self.maybe_autosave_layout();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Set saved running command for Pane #{pid}: {raw_cmd}"
+                    )));
+                }
+                true
+            }
+            "shell" => {
+                if parts.len() < 2 {
+                    let pid = self.active_pane_id();
+                    let sh = self.active_pane().shell_program().to_string();
+                    let args = self.active_pane().shell_args().join(" ");
+                    let suffix = if args.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {args}")
+                    };
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Pane #{pid} shell: {sh}{suffix}"
+                    )));
+                    return true;
+                }
+                let prog = parts[1].to_string();
+                let args: Vec<String> = parts[2..].iter().map(|s| (*s).to_string()).collect();
+                let pid = self.active_pane_id();
+                self.active_pane_mut()
+                    .set_shell_program(prog.clone(), args.clone());
+                self.maybe_autosave_layout();
+                let args_str = if args.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", args.join(" "))
+                };
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Set Pane #{pid} session shell: {prog}{args_str}"
+                )));
+                true
+            }
+            "cwd" | "dir" | "workdir" => {
+                if parts.len() < 2 {
+                    let pid = self.active_pane_id();
+                    let cwd = self.active_pane().resolve_cwd();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Pane #{pid} working directory: {}",
+                        cwd.display()
+                    )));
+                    return true;
+                }
+                let raw_path = parts[1..].join(" ");
+                let path = std::path::PathBuf::from(raw_path.trim());
+                let pid = self.active_pane_id();
+                self.active_pane_mut().set_tracked_cwd(Some(path.clone()));
+                self.maybe_autosave_layout();
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Set Pane #{pid} session working directory: {}",
+                    path.display()
+                )));
+                true
+            }
+            "relaunch" | "restart-apps" => {
+                let mut count = 0usize;
+                for pane in self.panes.values_mut() {
+                    if !pane.is_read_only()
+                        && let Some(cmd) = pane.resolve_running_command()
+                        && !Self::is_unsafe_auto_relaunch_command(&cmd)
+                    {
+                        let payload = format!("{cmd}\n");
+                        let _ = pane.write_to_pty(payload.as_bytes());
+                        count += 1;
+                    }
+                }
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Relaunched running command(s) in {count} pane(s)"
+                )));
+                true
+            }
+            "info" | "inspect" | "status" | "panes" => {
+                let sess = self.config.history_session.clone();
+                let auto_proc = if self.config.session_restore_processes {
+                    "ON"
+                } else {
+                    "OFF"
+                };
+                let mut summary_parts = Vec::new();
+                let mut popup_lines = vec![
+                    format!(
+                        "SESSION: '{sess}' | Layout={:?} | Panes={} | RestoreProcesses={auto_proc}",
+                        self.layout_mode,
+                        self.panes.len()
+                    ),
+                    "─".repeat(66),
+                ];
+                for (&pid, p) in &self.panes {
+                    let sh = p.shell_program();
+                    let args = p.shell_args().join(" ");
+                    let sh_full = if args.is_empty() {
+                        sh.to_string()
+                    } else {
+                        format!("{sh} {args}")
+                    };
+                    let cwd = p.resolve_cwd().to_string_lossy().into_owned();
+                    let cmd = p
+                        .resolve_running_command()
+                        .unwrap_or_else(|| "(idle)".to_string());
+                    summary_parts.push(format!("#{pid}[sh={sh_full}, cwd={cwd}, cmd={cmd}]"));
+                    popup_lines.push(format!(
+                        "  Pane #{pid} ({}) | Shell: {sh_full} | CWD: {cwd} | Cmd: {cmd}",
+                        p.title()
+                    ));
+                }
+                self.open_mcp_popup_window("SESSION PANE STATE (SHELL / CWD / COMMAND)", popup_lines);
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Session '{sess}' (processes={auto_proc}): {}",
+                    summary_parts.join(" ; ")
+                )));
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,6 +382,9 @@ mod tests {
             pane_id: 1,
             title: "Bash #1".to_string(),
             cwd: Some("/tmp".to_string()),
+            shell: Some("/bin/bash".to_string()),
+            shell_args: Vec::new(),
+            running_command: Some("htop".to_string()),
             font_scale_pct: 110,
             scroll_mode: "smooth".to_string(),
             prompt_anchor: "floating".to_string(),

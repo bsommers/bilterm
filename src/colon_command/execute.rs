@@ -230,6 +230,10 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             }
             false
         }
+        ColonCommand::SelectCommand(ref subcmd) => {
+            pane.execute_select_command(subcmd.as_deref().unwrap_or(""));
+            false
+        }
         ColonCommand::LinksYank => {
             let link = pane
                 .vt()

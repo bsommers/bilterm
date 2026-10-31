@@ -1,8 +1,8 @@
-# Bilterm Documentation Hub (`v2.4.1`)
+# Bilterm Documentation Hub (`v2.5.0`)
 
 [← Back to Project README](../README.md) | [Visual Gallery (`docs/VISUAL_GALLERY.md`)](VISUAL_GALLERY.md) | [Starter Packs (`starter-packs/`)](../starter-packs/README.md)
 
-Welcome to the comprehensive documentation suite for **Bilterm (`v2.4.1`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
+Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.0`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
 
 ---
 
@@ -60,7 +60,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.4.1`)** — 
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.1.0`) |
+| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 2.5.0`) |
 | `bilterm -h` / `--help` | Print CLI help summary |
 
 ---
@@ -82,9 +82,9 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.4.1`)** — 
 | **Cycle Floating / Fixed / Regular Terminal** | `F4` (`<L> e` / `Alt+E`) / Click OIA `READY` or `CMD BOX` | `:mode [float \| fixed \| terminal \| cycle]` |
 | **Prompt Pin Top / Bottom / Non-Overlapping Split**| `<L> t` (`Alt+T`) / `<L> b` / `<L> s` (`Alt+S`) | `:prompt top \| bottom \| split-top \| split-bottom` |
 | **Mainframe Page-Hold (`MORE...`) & Smooth Scroller** | `<L> PgDn` / `PF8` / `PA2` / `Space` / Click OIA `SCRL` | `:scroll [smooth \| page \| instant \| toggle \| next \| prev]` / `:more` |
-| **3270 Field Hints / Vi Copy / Canvas Search** | `F3` (`<L> f`) / `F8` (`Alt+C`) / `<L> /` (`Alt+/`) | `:hints` / `:copy` / `:search <query>` |
+| **3270 Field Hints / Vi Copy / 2D Rectangular Select / Canvas Search** | `F3` (`<L> f`) / `F8` (`Alt+C`) / `Alt+R` (`Alt+LeftDrag`) / `<L> /` (`Alt+/`) | `:hints` / `:copy` / `:rect [mode\|<r1> <c1> <r2> <c2>\|copy\|cut\|clear]` / `:select` / `:search <query>` |
 | **Universal & Per-Window Themes / Element Colors** | — | `:theme <preset\|list\|import <path>\|export>` / `:window [menu\|theme [list\|browse\|<name>]\|<elem> <color\|reset>]` |
 | **Focal Spotlight / Focal Zoom Lens** | `Alt+O` (`<L> L`) / `Alt+Shift+O` / `Alt+}` & `Alt+{` | `:spotlight [circle\|ellipse] [fuzzy\|pixel]` / `:focalzoom [1.25x..3x]` |
-| **Slide-Out Drawer & Session Tree** | `F7` (`<L> d`) | `:drawer [toggle\|left\|right\|top\|bottom\|float\|push]` / `:session [save\|restore\|list\|tree\|branch\|graft\|checkpoint]` |
+| **Slide-Out Drawer & Session Tree (with Per-Pane Shell, Cmd & CWD)** | `F7` (`<L> d`) | `:drawer [toggle\|left\|right\|top\|bottom\|float\|push]` / `:session [save\|restore\|processes\|cmd\|shell\|cwd\|relaunch\|info\|list\|tree\|branch\|graft\|checkpoint]` |
 | **Tektronix 4010/4014 & Graphical Canvas** | `\x1b[?38h` / `OSC 1337;Canvas=...` | `:canvas [hires\|tek\|mode\|res\|plot\|image\|export\|clear]` |
 | **SSH Pane / Remote `tmux -CC` / Fleet Exec** | — | `:ssh <user@host> [port]` / `:ssh-tmux <user@host> [sess]` / `:remote [list\|add\|exec\|disconnect]` |

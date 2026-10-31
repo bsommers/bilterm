@@ -110,27 +110,28 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
 
     let is_nav_key = matches!(
         key.code,
-        KeyCode::Left
-            | KeyCode::Right
-            | KeyCode::Up
-            | KeyCode::Down
-            | KeyCode::Home
-            | KeyCode::End
-            | KeyCode::PageUp
-            | KeyCode::PageDown
+        KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End | KeyCode::PageUp | KeyCode::PageDown
     );
 
     if is_nav_key {
         if key.modifiers.contains(KeyModifiers::SHIFT) {
+            let want_block = key.modifiers.contains(KeyModifiers::ALT)
+                || pane.copy_mode().rect_mode
+                || pane.copy_mode().selection_kind == CopySelectionKind::Block;
             if pane.copy_mode().anchor.is_none() {
                 let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
                 pane.copy_mode_mut().anchor = Some(cur);
-                pane.copy_mode_mut().selection_kind = CopySelectionKind::Char;
-                pane.copy_mode_mut().visual_lock = false;
-                pane.set_status_message(Some(
+                pane.copy_mode_mut().selection_kind = if want_block { CopySelectionKind::Block } else { CopySelectionKind::Char };
+                pane.copy_mode_mut().visual_lock = want_block;
+                let msg = if want_block {
+                    "RECT SELECT: Shift+Arrows/hjkl selecting block (Enter/y=Copy, x=To Prompt)"
+                } else {
                     "CANVAS SELECT: Shift+Arrows selecting (Enter/y/Ctrl+C=Copy, x=To Prompt)"
-                        .to_string(),
-                ));
+                };
+                pane.set_status_message(Some(msg.to_string()));
+            } else if want_block && pane.copy_mode().selection_kind != CopySelectionKind::Block {
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+                pane.copy_mode_mut().visual_lock = true;
             }
         } else if !pane.copy_mode().visual_lock && pane.copy_mode().anchor.is_some() {
             pane.copy_mode_mut().anchor = None;
@@ -138,7 +139,8 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
         }
     }
 
-    let word_mod = key.modifiers.contains(KeyModifiers::ALT)
+    let word_mod = (key.modifiers.contains(KeyModifiers::ALT)
+        && !key.modifiers.contains(KeyModifiers::SHIFT))
         || key.modifiers.contains(KeyModifiers::CONTROL);
 
     match key.code {
@@ -194,6 +196,27 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
         }
         KeyCode::Char('B') => {
             pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(5);
+        }
+        KeyCode::Char('r') | KeyCode::Char('R') => {
+            if pane.copy_mode().visual_lock
+                && pane.copy_mode().selection_kind == CopySelectionKind::Block
+            {
+                pane.copy_mode_mut().anchor = None;
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::None;
+                pane.copy_mode_mut().visual_lock = false;
+                pane.set_status_message(Some("COPY MODE: rectangular selection cleared".to_string()));
+            } else {
+                let cur = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
+                if pane.copy_mode().anchor.is_none() {
+                    pane.copy_mode_mut().anchor = Some(cur);
+                }
+                pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+                pane.copy_mode_mut().visual_lock = true;
+                pane.set_status_message(Some(
+                    "COPY MODE: VISUAL BLOCK (rectangular) — Arrows/hjkl resize, Enter/y=Copy, x=To Prompt"
+                        .to_string(),
+                ));
+            }
         }
         KeyCode::Char('b') => {
             if pane.copy_mode().selection_kind != CopySelectionKind::Block {
@@ -742,30 +765,17 @@ pub(super) fn handle_wm_modal_key(
             Ok(Some(AppAction::Handled))
         }
         Modal::Menubar { category, item } => {
-            let cat = *category;
-            let sel = *item;
+            let (cat, sel) = (*category, *item);
             match key.code {
-                KeyCode::Esc => {
-                    wm.close_modal();
-                }
-                KeyCode::Left => {
-                    *category = (cat + 6) % 7;
-                    *item = 0;
-                }
-                KeyCode::Right => {
-                    *category = (cat + 1) % 7;
-                    *item = 0;
-                }
-                KeyCode::Up => {
-                    *item = sel.saturating_sub(1);
-                }
+                KeyCode::Esc => wm.close_modal(),
+                KeyCode::Left => { *category = (cat + 6) % 7; *item = 0; }
+                KeyCode::Right => { *category = (cat + 1) % 7; *item = 0; }
+                KeyCode::Up => *item = sel.saturating_sub(1),
                 KeyCode::Down => {
                     let max_idx = crate::ui::modals::menubar_category_item_count(cat).saturating_sub(1);
                     *item = (sel + 1).min(max_idx);
                 }
-                KeyCode::Enter => {
-                    return execute_menubar_selection(wm, cat, sel).map(Some);
-                }
+                KeyCode::Enter => return execute_menubar_selection(wm, cat, sel).map(Some),
                 _ => {}
             }
             Ok(Some(AppAction::Handled))

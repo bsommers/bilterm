@@ -9,7 +9,14 @@
 //!   block (`b`, `PageUp`, `PF7`).
 //! - **`PaneScrollMode::Instant`**: Classic discrete row scrolling without kinetic inertia.
 
-use crate::pane::CompositePane;
+use std::path::{Path, PathBuf};
+
+use crate::pane::history_store::HistoryStore;
+use crate::pane::modes::{CanvasSearchState, CopyModeState, HintsModeState};
+use crate::pane::{CompositePane, FloatingPromptState, PaneId, PromptMouseDrag};
+use crate::pty::PtySession;
+use crate::pty::line_discipline::LineDisciplineState;
+use crate::vt::VtParser;
 pub use crate::vt::scrollback::PaneScrollMode;
 
 /// Runtime per-pane scroll state tracking kinetic velocity, sub-cell pixel interpolation,
@@ -447,5 +454,318 @@ impl CompositePane {
                 break;
             }
         }
+    }
+
+    pub fn id(&self) -> PaneId {
+        self.id
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        self.title = title.into();
+    }
+
+    pub fn vt(&self) -> &VtParser {
+        &self.vt
+    }
+
+    pub fn vt_mut(&mut self) -> &mut VtParser {
+        &mut self.vt
+    }
+
+    pub fn has_pty(&self) -> bool {
+        self.pty.is_some()
+    }
+
+    pub fn pty(&self) -> Option<&PtySession> {
+        self.pty.as_ref()
+    }
+
+    pub fn prompt(&self) -> &FloatingPromptState {
+        &self.prompt
+    }
+
+    pub fn prompt_mut(&mut self) -> &mut FloatingPromptState {
+        &mut self.prompt
+    }
+
+    pub fn history_store(&self) -> &HistoryStore {
+        &self.history_store
+    }
+
+    pub fn history_store_mut(&mut self) -> &mut HistoryStore {
+        &mut self.history_store
+    }
+
+    pub fn export_history_to_temp_file(
+        &mut self,
+        custom_path: Option<&Path>,
+    ) -> std::io::Result<PathBuf> {
+        self.history_store
+            .export_to_temp_file(&self.prompt.history, custom_path)
+    }
+
+    pub fn line_discipline(&self) -> &LineDisciplineState {
+        &self.line_discipline
+    }
+
+    pub fn line_discipline_mut(&mut self) -> &mut LineDisciplineState {
+        &mut self.line_discipline
+    }
+
+    pub fn is_password_prompt(&self) -> bool {
+        self.line_discipline.is_password_prompt() || self.is_active_canvas_password_prompt()
+    }
+
+    pub fn has_foreground_subcommand(&self) -> bool {
+        self.line_discipline.has_foreground_subcommand()
+    }
+
+    pub fn mouse_drag(&self) -> Option<PromptMouseDrag> {
+        self.mouse_drag
+    }
+
+    pub fn set_mouse_drag(&mut self, drag: Option<PromptMouseDrag>) {
+        self.mouse_drag = drag;
+    }
+
+    pub fn take_mouse_drag(&mut self) -> Option<PromptMouseDrag> {
+        self.mouse_drag.take()
+    }
+
+    pub fn canvas_search(&self) -> &CanvasSearchState {
+        &self.canvas_search
+    }
+
+    pub fn copy_mode(&self) -> &CopyModeState {
+        &self.copy_mode
+    }
+
+    pub fn copy_mode_mut(&mut self) -> &mut CopyModeState {
+        &mut self.copy_mode
+    }
+
+    pub fn hints_mode(&self) -> &HintsModeState {
+        &self.hints_mode
+    }
+
+    pub fn hints_mode_mut(&mut self) -> &mut HintsModeState {
+        &mut self.hints_mode
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    pub fn show_version_badge(&self) -> bool {
+        self.show_version_badge
+    }
+
+    pub fn set_show_version_badge(&mut self, enabled: bool) {
+        self.show_version_badge = enabled;
+    }
+
+    pub fn remote_target(&self) -> Option<&str> {
+        self.remote_target.as_deref()
+    }
+
+    pub fn set_remote_target(&mut self, target: Option<String>) {
+        self.remote_target = target;
+    }
+
+    /// Returns the shell executable configured/running in this pane (`$SHELL`, `/bin/zsh`, `fish`, `pwsh`, etc.).
+    pub fn shell_program(&self) -> &str {
+        &self.shell_program
+    }
+
+    /// Returns the command-line arguments passed to this pane's shell executable.
+    pub fn shell_args(&self) -> &[String] {
+        &self.shell_args
+    }
+
+    /// Sets the shell executable and arguments for this pane.
+    pub fn set_shell_program(&mut self, program: impl Into<String>, args: Vec<String>) {
+        let prog = program.into();
+        if !prog.trim().is_empty() {
+            self.shell_program = prog.trim().to_string();
+        }
+        self.shell_args = args;
+    }
+
+    /// Returns the explicitly tracked working directory for this pane, if set.
+    pub fn tracked_cwd(&self) -> Option<&Path> {
+        self.tracked_cwd.as_deref()
+    }
+
+    /// Sets the explicitly tracked working directory for this pane.
+    pub fn set_tracked_cwd(&mut self, cwd: Option<PathBuf>) {
+        self.tracked_cwd = cwd;
+    }
+
+    /// Resolves the live working directory (`OSC 7` -> `/proc/<fg_or_shell_pid>/cwd` -> `tracked_cwd` -> `current_dir()`).
+    pub(crate) fn resolve_pane_cwd(&self) -> PathBuf {
+        if let Some(osc7_cwd) = self.vt.reported_cwd() {
+            return osc7_cwd.to_path_buf();
+        }
+        #[cfg(target_os = "linux")]
+        if let Some(pty) = &self.pty {
+            if let Some(fg_pid) = self.line_discipline.foreground_pgid.filter(|&p| p > 0)
+                && let Ok(path) = std::fs::read_link(format!("/proc/{fg_pid}/cwd"))
+            {
+                return path;
+            }
+            if let Some(pid) = pty.child_pid()
+                && let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd"))
+            {
+                return path;
+            }
+        }
+        if let Some(tracked) = &self.tracked_cwd {
+            return tracked.clone();
+        }
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    /// Resolves the active software/command running in this pane (`prompt.running_command` or `/proc/<fg_pgid>/cmdline`).
+    pub fn resolve_running_command(&self) -> Option<String> {
+        if let Some(cmd) = self
+            .prompt
+            .running_command
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let first = cmd.split_whitespace().next().unwrap_or("");
+            if !matches!(first, "cd" | "clear" | "cls" | "exit" | "logout") {
+                return Some(cmd.to_string());
+            }
+        }
+        #[cfg(target_os = "linux")]
+        if self.pty.is_some()
+            && self.line_discipline.has_foreground_subcommand()
+            && let Some(fg_pid) = self.line_discipline.foreground_pgid.filter(|&p| p > 0)
+            && let Ok(raw) = std::fs::read(format!("/proc/{fg_pid}/cmdline"))
+        {
+            let parts: Vec<String> = raw
+                .split(|&b| b == 0)
+                .filter(|s| !s.is_empty())
+                .map(|s| {
+                    let arg = String::from_utf8_lossy(s).into_owned();
+                    if arg.contains(char::is_whitespace) {
+                        format!("'{arg}'")
+                    } else {
+                        arg
+                    }
+                })
+                .collect();
+            if !parts.is_empty() {
+                return Some(parts.join(" "));
+            }
+        }
+        None
+    }
+
+    /// Updates `tracked_cwd` and `prompt.running_command` when a shell command is submitted.
+    pub(crate) fn track_submitted_command_state(&mut self, cmd_str: &str) {
+        let normalized = cmd_str.replace('\n', " ; ");
+        let trimmed = normalized.trim();
+        for segment in trimmed.split(&[';', '&'][..]) {
+            let seg = segment.trim();
+            if seg == "cd" || seg == "cd ~" {
+                if let Ok(home) = std::env::var("HOME") {
+                    self.tracked_cwd = Some(PathBuf::from(home));
+                }
+            } else if let Some(rest) = seg.strip_prefix("cd ") {
+                let target_raw = rest.trim().trim_matches(&['"', '\''][..]);
+                if !target_raw.is_empty() && target_raw != "-" {
+                    let expanded = if let Some(after_tilde) = target_raw.strip_prefix("~/")
+                        && let Ok(home) = std::env::var("HOME")
+                    {
+                        PathBuf::from(home).join(after_tilde)
+                    } else {
+                        PathBuf::from(target_raw)
+                    };
+                    let base = self.resolve_pane_cwd();
+                    let joined = if expanded.is_absolute() {
+                        expanded
+                    } else {
+                        base.join(expanded)
+                    };
+                    self.tracked_cwd = Some(clean_relative_path(joined));
+                }
+            }
+        }
+        self.prompt.running_command = Some(normalized);
+    }
+
+    pub fn pending_unsafe_paste(&self) -> Option<&str> {
+        self.pending_unsafe_paste.as_deref()
+    }
+
+    pub fn set_pending_unsafe_paste(&mut self, paste: Option<String>) {
+        self.pending_unsafe_paste = paste;
+    }
+
+    pub fn take_pending_unsafe_paste(&mut self) -> Option<String> {
+        self.pending_unsafe_paste.take()
+    }
+
+    pub fn status_message(&self) -> Option<&str> {
+        self.status_message.as_deref()
+    }
+
+    pub fn set_status_message(&mut self, msg: Option<String>) {
+        self.status_message = msg;
+    }
+
+    pub fn last_osc52_sequence(&self) -> Option<&str> {
+        self.last_osc52_sequence.as_deref()
+    }
+
+    pub fn set_last_osc52_sequence(&mut self, seq: Option<String>) {
+        self.last_osc52_sequence = seq;
+    }
+
+    pub fn take_last_osc52_sequence(&mut self) -> Option<String> {
+        self.last_osc52_sequence.take()
+    }
+
+    pub fn take_all_outbound_osc52(&mut self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Some(seq) = self.last_osc52_sequence.take() {
+            out.push(seq);
+        }
+        out.extend(self.vt.take_outbound_osc52());
+        out
+    }
+
+    pub fn flush_query_responses(&mut self) {
+        if let Some(pty) = &self.pty {
+            for resp in self.vt.take_query_responses() {
+                let _ = pty.write_all(&resp);
+            }
+        }
+    }
+}
+
+fn clean_relative_path(path: PathBuf) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    if out.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        out
     }
 }

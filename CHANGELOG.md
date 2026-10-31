@@ -5,6 +5,21 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.5.0] - 2026-10-31
+
+### Added
+- **2D Rectangular Block Selection, Highlight & Copy (`src/pane/modes.rs`, `src/pane/scroll.rs`, `src/input/mouse.rs`, `src/input/modal.rs`, `src/input/keymap.rs`, `src/ui/oia.rs`, `src/colon_command/parse.rs`)**:
+  - Added first-class `:rect` / `:select` / `:copy rect` commands and `Alt+R` (`Action::SelectCommand("rect")`) to enter 2D rectangular block selection mode with an OIA `" INPUT: RECT [F8/Enter/Esc] "` / `" INPUT: RECT BOX "` status indicator.
+  - Added `Alt+LeftClick` / `Alt+LeftDrag` on any pane's `OutputCanvas` to drag-select a 2D rectangular region (even inside `RawPtyPassthrough` / mouse-reporting TUI apps), keeping the rectangular highlight visible on mouse release while yanking the block to the system/OSC 52 clipboard and paste buffer.
+  - Added `:rect mode [on|off|toggle]` so plain `LeftClick` / `LeftDrag` on the output canvas performs 2D rectangular selection without holding `Alt`.
+  - Added coordinate-based `:rect <r1> <c1> <r2> <c2> [copy|highlight]` for exact 1-based (`row`, `col`) rectangular block highlighting or copying, plus `:rect all [copy]`, `:rect copy` (`:rect yank`), `:rect cut`, and `:rect clear`.
+  - Added `r` / `R` toggle in Vi Copy Mode (`F8`) and preserved `CopySelectionKind::Block` during `Shift+Arrow` / `Alt+Shift+Arrow` selection extension.
+- **Full Per-Pane Session Persistence — Layout + Shell + Running Software/Commands + CWD (`src/wm/session.rs`, `src/wm/layout_profile.rs`, `src/wm/journal.rs`, `src/wm/session_manager.rs`, `src/pane/mod.rs`, `src/pane/scroll.rs`, `src/config/mod.rs`)**:
+  - Extended `SavedPaneState` and `PaneJournalRecord` with `shell: Option<String>`, `shell_args: Vec<String>`, `running_command: Option<String>`, and `remote_target: Option<String>` alongside `cwd: Option<String>`, `title`, `prompt_pos`, `prompt_height`, and `PaneChromeStyle`.
+  - Live pane state introspection via `CompositePane::resolve_pane_cwd()` (`OSC 7` -> `/proc/<fg_or_shell_pid>/cwd` -> `tracked_cwd` -> `current_dir()`) and `CompositePane::resolve_running_command()` (`prompt.running_command` excluding trivial `cd`/`clear`/`cls`/`exit`/`logout`, plus `/proc/<fg_pgid>/cmdline` foreground process inspection on Linux).
+  - Added `session_restore_processes: bool` (default `true` in `config.toml`) and unified `WindowManager::restore_session` with `apply_saved_session_snapshot` so every session restore/switch spawns each pane with its saved `shell`, `shell_args`, and `cwd` and automatically relaunches each pane's saved `running_command` (`htop`, `vim`, `cargo watch`, `ssh`, `tail -f`, etc.).
+  - Added `:session processes [on|off|toggle]`, `:session cmd [<command>|clear]`, `:session shell [<program> [args...]]`, `:session cwd [<path>]`, `:session relaunch` (re-executes saved `running_command` across panes), and `:session info` (`:session inspect` / `:session details`) for per-pane `shell`, `cwd`, and `cmd` inspection.
+
 ## [v2.4.1] - 2026-10-31
 
 ### Added

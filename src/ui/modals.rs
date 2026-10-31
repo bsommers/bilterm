@@ -344,6 +344,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
             ("New Session", ":session new"),
             ("Save Session", ":session save default"),
             ("Restore Session", ":session restore default"),
+            ("Session Processes & CWD...", ":session info"),
+            ("Toggle Auto-Relaunch Apps", ":session processes"),
             ("Quit (Ctrl+Q)", ":quit"),
         ],
     ),
@@ -376,6 +378,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         &[
             ("3270 Field Hints (Alt+F)", ":hints"),
             ("Vi Copy Mode (Alt+C)", ":copy"),
+            ("Rectangular Select (Alt+R)", ":rect"),
+            ("Toggle Rect Mouse Mode", ":rect mode"),
             ("Cross-Hair Ruler (Alt+X)", ":crosshair"),
             ("DOS F-Key Bar", ":fkeybar"),
         ],

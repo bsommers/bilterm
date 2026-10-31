@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.4.1
-milestone_name: Per-Window Theme Browser & Individual Element Color Overrides
-current_phase: 40
-current_phase_name: per-window-theme-browser-and-element-color-overrides
-status: milestone_v2_4_1_complete
-stopped_at: Released v2.4.1 (Interactive per-window theme browser, per-window .itermcolors file browser routing, and 13 individual per-window theme element color overrides with session TOML persistence)
+milestone: v2.5.0
+milestone_name: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence
+current_phase: 41
+current_phase_name: rectangular-select-and-per-pane-session-process-cwd-persistence
+status: milestone_v2_5_0_complete
+stopped_at: Released v2.5.0 (2D Rectangular Select/Highlight/Copy + Full Per-Pane Session Shell, Running Software/Command & CWD Persistence across every session)
 last_updated: "2026-10-31"
 last_activity: 2026-10-31
-last_activity_desc: Released v2.4.1 with interactive :window / :window theme browser and per-window individual theme element color overrides
+last_activity_desc: Released v2.5.0 with 2D rectangular block selection (:rect, :select, :copy rect, Alt+R, Alt+LeftDrag) and full per-pane session shell, running command, and CWD persistence
 progress:
-  total_phases: 40
-  completed_phases: 40
-  total_plans: 86
-  completed_plans: 86
+  total_phases: 41
+  completed_phases: 41
+  total_plans: 89
+  completed_plans: 89
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.4.1` (`Phases 39–40`) — **COMPLETE (`40/40` Phases)**.
+**Current focus:** Milestone `v2.5.0` (`Phases 39–41`) — **COMPLETE (`41/41` Phases)**.
 
 ## Current Position
 
-Phase: 40 (per-window-theme-browser-and-element-color-overrides) — COMPLETE
-Plan: All `v2.4.x` plans (`39-01..02`, `40-01..03`) complete
-Status: Phases 1–40 complete (`40/40` Phases across `v1.0`–`v2.4.1`).
-Last activity: 2026-10-31 — Completed Phase 40 (`v2.4.1`): interactive `:window` / `:window theme` per-window theme browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`SavedPaneState.colors`).
+Phase: 41 (rectangular-select-and-per-pane-session-process-cwd-persistence) — COMPLETE
+Plan: All `v2.4.x`–`v2.5.0` plans (`39-01..02`, `40-01..03`, `41-01..03`) complete
+Status: Phases 1–41 complete (`41/41` Phases across `v1.0`–`v2.5.0`).
+Last activity: 2026-10-31 — Completed Phase 41 (`v2.5.0`): 2D rectangular block select, highlight & copy (`:rect`, `:select`, `:copy rect`, `Alt+R`, `Alt+LeftDrag`, `:rect mode`, `:rect <r1> <c1> <r2> <c2>`) and full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`session_restore_processes`).
 
-Progress: [██████████] 100% (40/40 Phases)
+Progress: [██████████] 100% (41/41 Phases)
 
 ## Performance Metrics
 

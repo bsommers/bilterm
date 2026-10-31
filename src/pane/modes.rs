@@ -1,11 +1,6 @@
-use std::path::{Path, PathBuf};
-
-use crate::pane::history_store::HistoryStore;
-use crate::pane::{CompositePane, FloatingPromptState, PaneId, PromptMouseDrag};
-use crate::pty::PtySession;
-use crate::pty::line_discipline::LineDisciplineState;
+use crate::pane:: CompositePane;
 use crate::vt::snapshot::GridSnapshot;
-use crate::vt::{CanvasHint, CanvasSearchMatch, VtParser, encode_osc52_clipboard};
+use crate::vt::{CanvasHint, CanvasSearchMatch, encode_osc52_clipboard};
 
 /// Interactive scrollback search & match highlighting state for the `OutputCanvas` (`VAL-02`).
 #[derive(Clone, Debug, Default)]
@@ -58,8 +53,10 @@ pub struct CopyModeState {
     pub cursor_col: u16,
     pub anchor: Option<(u16, u16)>,
     pub selection_kind: CopySelectionKind,
-    /// When `true`, selection was anchored via `v`/`V`/`b`/`Space` so plain arrow/`hjkl` keys extend it.
+    /// When `true`, selection was anchored via `v`/`V`/`b`/`r`/`Space` so plain arrow/`hjkl` keys extend it.
     pub visual_lock: bool,
+    /// When `true`, plain mouse drag (`LeftDrag`) and `Shift+Arrows` default to rectangular (`Block`) selection.
+    pub rect_mode: bool,
 }
 
 impl CopyModeState {
@@ -68,7 +65,18 @@ impl CopyModeState {
         self.anchor.is_some() && self.selection_kind != CopySelectionKind::None
     }
 
-    /// Clears any active selection and exits Copy Mode.
+    /// Returns `(rows, cols)` of the active selection bounding box when `has_selection()` is true.
+    pub fn selection_dimensions(&self) -> Option<(u16, u16)> {
+        if !self.has_selection() {
+            return None;
+        }
+        let (ar, ac) = self.anchor?;
+        let h = ar.abs_diff(self.cursor_row) + 1;
+        let w = ac.abs_diff(self.cursor_col) + 1;
+        Some((h, w))
+    }
+
+    /// Clears any active selection and exits Copy Mode (while preserving persistent `rect_mode`).
     pub fn clear_selection(&mut self) {
         self.active = false;
         self.anchor = None;
@@ -231,9 +239,240 @@ impl CompositePane {
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
         self.status_message = Some(
-            "CANVAS SELECT: Arrows/hjkl move | Shift+Arrows or v/Space select | Enter/y copy | x to prompt | Tab/F8/Esc exit"
+            "CANVAS SELECT: Arrows/hjkl move | r/b/Ctrl+V=Rect | v/Space=Char | V=Line | Enter/y copy | x to prompt | Esc exit"
                 .to_string(),
         );
+    }
+
+    /// Enters Rectangular Block Selection & Copy Mode on the `OutputCanvas` (`Alt+R` / `:rect` / `:copy rect`).
+    pub fn enter_rect_copy_mode(&mut self) {
+        let (r, c) = if self.copy_mode.active {
+            (self.copy_mode.cursor_row, self.copy_mode.cursor_col)
+        } else {
+            self.vt.cursor_position()
+        };
+        self.copy_mode.active = true;
+        self.copy_mode.cursor_row = r;
+        self.copy_mode.cursor_col = c;
+        self.copy_mode.anchor = Some((r, c));
+        self.copy_mode.selection_kind = CopySelectionKind::Block;
+        self.copy_mode.visual_lock = true;
+        self.copy_mode.rect_mode = true;
+        self.status_message = Some(
+            "RECTANGULAR SELECT [1×1]: Arrows/hjkl/Mouse resize box | Enter/y/Ctrl+C copy | x to prompt | v=Char V=Line | Esc exit"
+                .to_string(),
+        );
+    }
+
+    /// Enables or disables persistent rectangular selection mode (`rect_mode`) for mouse drag and `Shift+Arrows`.
+    pub fn set_rect_select_mode(&mut self, enabled: bool) {
+        self.copy_mode.rect_mode = enabled;
+        if self.copy_mode.has_selection() {
+            self.copy_mode.selection_kind = if enabled {
+                CopySelectionKind::Block
+            } else {
+                CopySelectionKind::Char
+            };
+        }
+        self.status_message = Some(format!(
+            "Rectangular selection mode: {} (Mouse drag & Shift+Arrows select {})",
+            if enabled { "ON [RECT]" } else { "OFF [CHAR]" },
+            if enabled {
+                "2D rectangular blocks"
+            } else {
+                "character streams"
+            }
+        ));
+    }
+
+    /// Toggles persistent rectangular selection mode (`rect_mode`).
+    pub fn toggle_rect_select_mode(&mut self) -> bool {
+        let next = !self.copy_mode.rect_mode;
+        self.set_rect_select_mode(next);
+        next
+    }
+
+    /// Programmatically highlights a 2D rectangular region `(r1, c1)..=(r2, c2)` on the `OutputCanvas`
+    /// with `CopySelectionKind::Block` and optionally copies it to the clipboard & `OSC 52`.
+    pub fn select_canvas_rect(
+        &mut self,
+        r1: u16,
+        c1: u16,
+        r2: u16,
+        c2: u16,
+        auto_copy: bool,
+    ) -> Option<String> {
+        let (rows, cols) = self.vt.size();
+        let max_r = rows.saturating_sub(1);
+        let max_c = cols.saturating_sub(1);
+        let sr = r1.min(max_r);
+        let sc = c1.min(max_c);
+        let er = r2.min(max_r);
+        let ec = c2.min(max_c);
+        self.prompt.clear_selection();
+        self.copy_mode.active = true;
+        self.copy_mode.anchor = Some((sr, sc));
+        self.copy_mode.cursor_row = er;
+        self.copy_mode.cursor_col = ec;
+        self.copy_mode.selection_kind = CopySelectionKind::Block;
+        self.copy_mode.visual_lock = true;
+        if auto_copy {
+            self.yank_mouse_canvas_selection()
+        } else {
+            let (h, w) = self.copy_mode.selection_dimensions().unwrap_or((1, 1));
+            let text = self.copy_mode.extract_selected_text(&self.vt.snapshot());
+            self.status_message = Some(format!(
+                "RECT HIGHLIGHT [{h}×{w}]: ({sr},{sc})..=({er},{ec}) — Enter/y copy | x to prompt | Esc clear"
+            ));
+            Some(text)
+        }
+    }
+
+    /// Executes `:rect ...`, `:select ...`, or `:copy <subcmd>` canvas selection commands.
+    pub fn execute_select_command(&mut self, raw_subcmd: &str) {
+        let trimmed = raw_subcmd.trim();
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        let first_lower = parts
+            .first()
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_default();
+
+        // Check for coordinate tuple: `:rect <r1> <c1> <r2> <c2> [copy|highlight]`
+        // or `:select rect|highlight|copy <r1> <c1> <r2> <c2> [copy|highlight]`
+        let coord_start = if matches!(
+            first_lower.as_str(),
+            "rect" | "block" | "box" | "highlight" | "copy" | "yank"
+        ) && parts.len() >= 5
+        {
+            Some((1usize, first_lower != "highlight"))
+        } else if parts.len() >= 4 && parts[0].parse::<u16>().is_ok() {
+            let auto_copy = !parts
+                .get(4)
+                .is_some_and(|m| m.eq_ignore_ascii_case("highlight"));
+            Some((0usize, auto_copy))
+        } else {
+            None
+        };
+
+        if let Some((idx, default_copy)) = coord_start
+            && let (Ok(r1), Ok(c1), Ok(r2), Ok(c2)) = (
+                parts[idx].parse::<u16>(),
+                parts[idx + 1].parse::<u16>(),
+                parts[idx + 2].parse::<u16>(),
+                parts[idx + 3].parse::<u16>(),
+            )
+        {
+            let auto_copy = match parts.get(idx + 4).map(|s| s.to_ascii_lowercase()).as_deref() {
+                Some("highlight" | "hl" | "nocopy") => false,
+                Some("copy" | "yank") => true,
+                _ => default_copy,
+            };
+            let (zr1, zc1, zr2, zc2) = if r1 >= 1 && c1 >= 1 && r2 >= 1 && c2 >= 1 {
+                (r1 - 1, c1 - 1, r2 - 1, c2 - 1)
+            } else {
+                (r1, c1, r2, c2)
+            };
+            let _ = self.select_canvas_rect(zr1, zc1, zr2, zc2, auto_copy);
+            return;
+        }
+
+        match first_lower.as_str() {
+            "" | "rect" | "block" | "box" | "rectangular" => {
+                if parts.len() == 1
+                    && matches!(
+                        parts.first().copied(),
+                        Some("toggle")
+                    )
+                {
+                    self.toggle_rect_select_mode();
+                } else if let Some(arg) = parts.get(1) {
+                    match arg.to_ascii_lowercase().as_str() {
+                        "on" | "true" | "enable" => self.set_rect_select_mode(true),
+                        "off" | "false" | "disable" => self.set_rect_select_mode(false),
+                        "toggle" | "mode" => {
+                            self.toggle_rect_select_mode();
+                        }
+                        "copy" | "yank" => {
+                            let _ = self.yank_copy_selection();
+                        }
+                        "prompt" | "cut" | "insert" => {
+                            let _ = self.cut_copy_selection_to_prompt();
+                        }
+                        "clear" | "exit" => {
+                            self.exit_copy_mode();
+                        }
+                        _ => self.enter_rect_copy_mode(),
+                    }
+                } else if self.copy_mode.active
+                    && self.copy_mode.selection_kind == CopySelectionKind::Block
+                    && trimmed.is_empty()
+                {
+                    self.exit_copy_mode();
+                } else {
+                    self.enter_rect_copy_mode();
+                }
+            }
+            "mode" | "rect-mode" => match parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                Some("on" | "true" | "rect" | "block" | "box") => self.set_rect_select_mode(true),
+                Some("off" | "false" | "char" | "stream") => self.set_rect_select_mode(false),
+                Some("line" | "lines") => {
+                    self.enter_copy_mode();
+                    let cur = (self.copy_mode.cursor_row, self.copy_mode.cursor_col);
+                    self.copy_mode.anchor = Some(cur);
+                    self.copy_mode.selection_kind = CopySelectionKind::Line;
+                    self.copy_mode.visual_lock = true;
+                    self.status_message = Some("COPY MODE: VISUAL LINE".to_string());
+                }
+                _ => {
+                    self.toggle_rect_select_mode();
+                }
+            },
+            "toggle" => {
+                self.toggle_rect_select_mode();
+            }
+            "on" | "enable" => self.set_rect_select_mode(true),
+            "off" | "disable" | "clear" | "none" | "exit" => {
+                self.copy_mode.rect_mode = false;
+                self.copy_mode.clear_selection();
+                self.status_message = Some("Cleared canvas selection".to_string());
+            }
+            "char" | "stream" => {
+                self.copy_mode.rect_mode = false;
+                self.enter_copy_mode();
+                let cur = (self.copy_mode.cursor_row, self.copy_mode.cursor_col);
+                self.copy_mode.anchor = Some(cur);
+                self.copy_mode.selection_kind = CopySelectionKind::Char;
+                self.copy_mode.visual_lock = true;
+                self.status_message = Some(
+                    "COPY MODE: VISUAL CHAR (Arrows/hjkl select, Enter/y=Copy, x=To Prompt)"
+                        .to_string(),
+                );
+            }
+            "line" | "lines" => {
+                self.enter_copy_mode();
+                let cur = (self.copy_mode.cursor_row, self.copy_mode.cursor_col);
+                self.copy_mode.anchor = Some(cur);
+                self.copy_mode.selection_kind = CopySelectionKind::Line;
+                self.copy_mode.visual_lock = true;
+                self.status_message = Some("COPY MODE: VISUAL LINE".to_string());
+            }
+            "copy" | "yank" => {
+                if self.copy_mode.active || self.copy_mode.has_selection() {
+                    let _ = self.yank_copy_selection();
+                } else {
+                    self.enter_rect_copy_mode();
+                }
+            }
+            "prompt" | "cut" | "insert" | "transfer" => {
+                let _ = self.cut_copy_selection_to_prompt();
+            }
+            _ => {
+                self.status_message = Some(
+                    "Usage: :rect [on|off|toggle|copy|prompt|clear|<r1> <c1> <r2> <c2> [highlight]] | :select [rect|char|line|mode|copy|clear]"
+                        .to_string(),
+                );
+            }
+        }
     }
 
     /// Exits Vi Copy Mode (`VAL-04`).
@@ -249,6 +488,8 @@ impl CompositePane {
     /// OS system clipboard, and `OSC 52` (`VAL-04`).
     pub fn yank_copy_selection(&mut self) -> Option<String> {
         let snap = self.vt.snapshot();
+        let was_block = self.copy_mode.selection_kind == CopySelectionKind::Block;
+        let dims = self.copy_mode.selection_dimensions();
         let text = self.copy_mode.extract_selected_text(&snap);
         self.copy_mode.active = false;
         self.copy_mode.anchor = None;
@@ -262,7 +503,14 @@ impl CompositePane {
         crate::clipboard::set_system_clipboard(&text);
         let seq = encode_osc52_clipboard(&text);
         self.last_osc52_sequence = Some(seq);
-        self.status_message = Some(format!("Yanked {} chars to clipboard", text.len()));
+        if was_block && let Some((h, w)) = dims {
+            self.status_message = Some(format!(
+                "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
+                text.len()
+            ));
+        } else {
+            self.status_message = Some(format!("Yanked {} chars to clipboard", text.len()));
+        }
         Some(text)
     }
 
@@ -270,6 +518,8 @@ impl CompositePane {
     /// and `OSC 52` while keeping the visual highlight and canvas cursor active.
     pub fn yank_mouse_canvas_selection(&mut self) -> Option<String> {
         let snap = self.vt.snapshot();
+        let is_block = self.copy_mode.selection_kind == CopySelectionKind::Block;
+        let dims = self.copy_mode.selection_dimensions();
         let text = self.copy_mode.extract_selected_text(&snap);
         if text.is_empty() {
             self.copy_mode.anchor = None;
@@ -281,10 +531,17 @@ impl CompositePane {
         crate::clipboard::set_system_clipboard(&text);
         let seq = encode_osc52_clipboard(&text);
         self.last_osc52_sequence = Some(seq);
-        self.status_message = Some(format!(
-            "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
-            text.len()
-        ));
+        if is_block && let Some((h, w)) = dims {
+            self.status_message = Some(format!(
+                "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
+                text.len()
+            ));
+        } else {
+            self.status_message = Some(format!(
+                "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
+                text.len()
+            ));
+        }
         Some(text)
     }
 
@@ -387,174 +644,5 @@ impl CompositePane {
         let next = !self.read_only;
         self.set_read_only(next);
         next
-    }
-
-    pub fn id(&self) -> PaneId {
-        self.id
-    }
-
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    pub fn set_title(&mut self, title: impl Into<String>) {
-        self.title = title.into();
-    }
-
-    pub fn vt(&self) -> &VtParser {
-        &self.vt
-    }
-
-    pub fn vt_mut(&mut self) -> &mut VtParser {
-        &mut self.vt
-    }
-
-    pub fn has_pty(&self) -> bool {
-        self.pty.is_some()
-    }
-
-    pub fn pty(&self) -> Option<&PtySession> {
-        self.pty.as_ref()
-    }
-
-    pub fn prompt(&self) -> &FloatingPromptState {
-        &self.prompt
-    }
-
-    pub fn prompt_mut(&mut self) -> &mut FloatingPromptState {
-        &mut self.prompt
-    }
-
-    pub fn history_store(&self) -> &HistoryStore {
-        &self.history_store
-    }
-
-    pub fn history_store_mut(&mut self) -> &mut HistoryStore {
-        &mut self.history_store
-    }
-
-    pub fn export_history_to_temp_file(
-        &mut self,
-        custom_path: Option<&Path>,
-    ) -> std::io::Result<PathBuf> {
-        self.history_store
-            .export_to_temp_file(&self.prompt.history, custom_path)
-    }
-
-    pub fn line_discipline(&self) -> &LineDisciplineState {
-        &self.line_discipline
-    }
-
-    pub fn line_discipline_mut(&mut self) -> &mut LineDisciplineState {
-        &mut self.line_discipline
-    }
-
-    pub fn is_password_prompt(&self) -> bool {
-        self.line_discipline.is_password_prompt() || self.is_active_canvas_password_prompt()
-    }
-
-    pub fn has_foreground_subcommand(&self) -> bool {
-        self.line_discipline.has_foreground_subcommand()
-    }
-
-    pub fn mouse_drag(&self) -> Option<PromptMouseDrag> {
-        self.mouse_drag
-    }
-
-    pub fn set_mouse_drag(&mut self, drag: Option<PromptMouseDrag>) {
-        self.mouse_drag = drag;
-    }
-
-    pub fn take_mouse_drag(&mut self) -> Option<PromptMouseDrag> {
-        self.mouse_drag.take()
-    }
-
-    pub fn canvas_search(&self) -> &CanvasSearchState {
-        &self.canvas_search
-    }
-
-    pub fn copy_mode(&self) -> &CopyModeState {
-        &self.copy_mode
-    }
-
-    pub fn copy_mode_mut(&mut self) -> &mut CopyModeState {
-        &mut self.copy_mode
-    }
-
-    pub fn hints_mode(&self) -> &HintsModeState {
-        &self.hints_mode
-    }
-
-    pub fn hints_mode_mut(&mut self) -> &mut HintsModeState {
-        &mut self.hints_mode
-    }
-
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    pub fn show_version_badge(&self) -> bool {
-        self.show_version_badge
-    }
-
-    pub fn set_show_version_badge(&mut self, enabled: bool) {
-        self.show_version_badge = enabled;
-    }
-
-    pub fn remote_target(&self) -> Option<&str> {
-        self.remote_target.as_deref()
-    }
-
-    pub fn set_remote_target(&mut self, target: Option<String>) {
-        self.remote_target = target;
-    }
-
-    pub fn pending_unsafe_paste(&self) -> Option<&str> {
-        self.pending_unsafe_paste.as_deref()
-    }
-
-    pub fn set_pending_unsafe_paste(&mut self, paste: Option<String>) {
-        self.pending_unsafe_paste = paste;
-    }
-
-    pub fn take_pending_unsafe_paste(&mut self) -> Option<String> {
-        self.pending_unsafe_paste.take()
-    }
-
-    pub fn status_message(&self) -> Option<&str> {
-        self.status_message.as_deref()
-    }
-
-    pub fn set_status_message(&mut self, msg: Option<String>) {
-        self.status_message = msg;
-    }
-
-    pub fn last_osc52_sequence(&self) -> Option<&str> {
-        self.last_osc52_sequence.as_deref()
-    }
-
-    pub fn set_last_osc52_sequence(&mut self, seq: Option<String>) {
-        self.last_osc52_sequence = seq;
-    }
-
-    pub fn take_last_osc52_sequence(&mut self) -> Option<String> {
-        self.last_osc52_sequence.take()
-    }
-
-    pub fn take_all_outbound_osc52(&mut self) -> Vec<String> {
-        let mut out = Vec::new();
-        if let Some(seq) = self.last_osc52_sequence.take() {
-            out.push(seq);
-        }
-        out.extend(self.vt.take_outbound_osc52());
-        out
-    }
-
-    pub fn flush_query_responses(&mut self) {
-        if let Some(pty) = &self.pty {
-            for resp in self.vt.take_query_responses() {
-                let _ = pty.write_all(&resp);
-            }
-        }
     }
 }

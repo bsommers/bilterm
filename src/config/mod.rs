@@ -93,6 +93,8 @@ pub struct BiltermConfig {
     pub session_dir: Option<String>,
     /// User-defined display and cycling order for workspace sessions (`:session move`, `:session reorder`).
     pub session_order: Vec<String>,
+    /// Automatically relaunches each pane's saved running software/command when restoring or switching sessions (`true` by default).
+    pub session_restore_processes: bool,
     /// Automatically saves pane/window layout changes to the active layout profile (`true` by default).
     pub layout_autosave: bool,
     /// Default layout profile loaded on startup and targeted by default saves (`"default"` by default).
@@ -188,6 +190,7 @@ impl Default for BiltermConfig {
             history_load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
             session_dir: None,
             session_order: Vec::new(),
+            session_restore_processes: true,
             layout_autosave: true,
             default_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),
             active_layout_profile: DEFAULT_HISTORY_SESSION.to_string(),

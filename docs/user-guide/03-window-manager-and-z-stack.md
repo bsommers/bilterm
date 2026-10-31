@@ -73,8 +73,15 @@ Need to run a quick "by-the-way" command without disrupting your tiled or stacke
   - `:session blank [name]` (or `:session clean [name]`, `bilterm blank [name]`, `bilterm -B`) starts a clean 1-pane blank session without restoring prior multi-pane state.
   - `:session rename [old_name] <new_name>` (or `:rename-session <new_name>`) renames the active or specified session in place while preserving its position in the session list.
   - `:session move [name] <up|down|top|bottom|1..N>` and `:session reorder <s1> <s2> ...` (or `:session swap <a> <b>`) reorder sessions in `:session list` and the `<F7>` Drawer.
-  - `:session save <name>` serializes the active layout (`Tile` vs `Stack`), `SplitTree` ratios, `ZStack` order, pane titles, working directories, `PromptAnchor`, prompt dimensions, read-only locks, and command histories to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml`.
-  - `:session restore <name>` reconstructs the saved workspace layout and panes; `:session list` displays all saved session profiles in your custom order; `:session delete <name>` deletes a saved session.
+  - `:session save <name>` serializes the active layout (`Tile` vs `Stack`), `SplitTree` ratios, `ZStack` order, pane titles, per-pane **shell program & arguments (`shell`, `shell_args`)**, **running software/commands (`running_command`)**, **current working directories (`cwd`)**, remote SSH targets (`remote_target`), per-window chrome/color overrides, `PromptAnchor`, prompt dimensions, read-only locks, and command histories to `$XDG_STATE_HOME/bilterm/sessions/<name>.toml`.
+  - `:session restore <name>` (and `:session switch <name>`) reconstructs the saved workspace layout, spawns each pane with its saved `shell`, `shell_args`, and `cwd`, and (when `session_restore_processes = true`, the default) **automatically relaunches each pane's saved `running_command`** (`htop`, `vim`, `cargo watch`, `tail -f`, `ssh`, etc.); `:session list` displays all saved session profiles in your custom order; `:session delete <name>` deletes a saved session.
+  - **Per-Pane Session Process, Shell & CWD Controls (`v2.5.0`)**:
+    - `:session info` (aliases `:session inspect`, `:session details`) — Display each pane's tracked `shell`, `cwd`, and `running_command` alongside the `session_restore_processes` setting.
+    - `:session processes [on|off|toggle]` — Enable or disable automatic relaunch of per-pane running commands when restoring or switching sessions (`session_restore_processes = true` in `config.toml`).
+    - `:session cmd [<command>|clear]` — Set, override, or clear the focused pane's startup/running command saved with the session.
+    - `:session shell [<program> [args...]]` — Set or inspect the shell binary and arguments saved for the focused pane.
+    - `:session cwd [<path>]` — Set or inspect the working directory saved for the focused pane (and `cd` into it).
+    - `:session relaunch` — Re-execute the saved/tracked `running_command` across all panes in the active session on demand.
 - **Synchronized Multi-Pane Input Broadcast (`:broadcast [on|off]`)**:
   - Displays a `📡 BCAST` badge in the OIA status bar and fans out every command submitted in the focused prompt to **all unlocked panes** simultaneously.
 - **Read-Only Protected 3270 Field Lock (`Alt+L` / `:lock [on|off]`)**:

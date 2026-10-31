@@ -195,7 +195,29 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::SearchQuery(query)))
             }
         },
-        "copy" | "vi" => Some(Ok(ColonCommand::CopyModeToggle)),
+        "copy" | "vi" => {
+            if parts.len() <= 1 {
+                Some(Ok(ColonCommand::CopyModeToggle))
+            } else {
+                Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
+            }
+        }
+        "rect" | "rect-select" | "rectselect" | "block-select" | "blockselect" | "box-select" => {
+            let sub = if parts.len() > 1 {
+                Some(parts[1..].join(" "))
+            } else {
+                None
+            };
+            Some(Ok(ColonCommand::SelectCommand(sub)))
+        }
+        "select" | "sel" => {
+            let sub = if parts.len() > 1 {
+                Some(parts[1..].join(" "))
+            } else {
+                None
+            };
+            Some(Ok(ColonCommand::SelectCommand(sub)))
+        }
         "links" | "url" | "urls" => Some(Ok(ColonCommand::LinksYank)),
         "inspector" | "inspect" => {
             let arg = match parts.get(1).copied() {
@@ -251,6 +273,24 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 | "delete"
                 | "rm"
                 | "remove"
+                | "processes"
+                | "apps"
+                | "restore-processes"
+                | "save-apps"
+                | "cmd"
+                | "command"
+                | "app"
+                | "program"
+                | "shell"
+                | "cwd"
+                | "dir"
+                | "workdir"
+                | "relaunch"
+                | "restart-apps"
+                | "info"
+                | "inspect"
+                | "status"
+                | "panes"
                 | "branch"
                 | "spawn"
                 | "graft"
@@ -265,7 +305,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
             None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
             _ => Some(Err(
-                "Usage: :session new [name] | blank [name] | rename [old] <new> | switch <name> | move [name] <up|down|top|bottom|idx> | reorder <s1> <s2>... | save [name] | restore [name] | delete <name> | list | tree"
+                "Usage: :session new [name] | blank [name] | rename [old] <new> | switch <name> | move [name] <up|down|top|bottom|idx> | reorder <s1> <s2>... | save [name] | restore [name] | processes [on|off] | cmd <command|clear> | shell <prog> [args...] | cwd <path> | relaunch | info | delete <name> | list | tree"
                     .to_string(),
             )),
         },

@@ -143,7 +143,8 @@
 | `Alt+PageUp` / `Alt+PageDown` / `<L> PageUp`/`PageDown` | `:block prev\|next` | Jump between `OSC 133` semantic command blocks in scrollback |
 | `Alt+/` / `<L> /` | `:search <query>` | Search `OutputCanvas` grid and highlight matches |
 | `Alt+n` / `Alt+N` / `<L> N` | `:search next\|prev\|clear` | Jump to next/previous canvas search match |
-| `Alt+C` / `<L> [` / `<L> c` | `:copy` / `:vi` | Enter keyboard-driven Vi Copy Mode (`h/j/k/l/w/b/0/$`, `g`/`G`, `v` char, `V` line, `Ctrl+V` rectangular block, `y`/`Enter` yank via `OSC 52`, `q`/`Esc` exit) |
+| `Alt+C` / `<L> [` / `<L> c` | `:copy` / `:vi` | Enter keyboard-driven Vi Copy Mode (`h/j/k/l/w/b/0/$`, `g`/`G`, `v` char, `V` line, `r`/`R`/`Ctrl+V` rectangular block, `y`/`Enter` yank via `OSC 52`, `q`/`Esc` exit) |
+| `Alt+R` | `:rect` / `:select` / `:copy rect` | Enter 2D Rectangular Block Selection Mode (`INPUT: RECT [F8/Enter/Esc]`) at the current cursor |
 
 ---
 
@@ -167,6 +168,7 @@
 | **`Ctrl + Mouse Scroll Wheel` over any pane** | **Per-Pane Font Zoom In / Out** (`+10%` / `-10%`) for the pane under the cursor |
 | **Mouse Scroll Wheel inside multi-line prompt** | Scroll multi-line command prompt lines up or down |
 | **Mouse Scroll Wheel over `OutputCanvas`** | Scroll VT100 scrollback history up or down (`3` lines per tick) |
+| **`Alt + LeftClick + Drag` over `OutputCanvas`** | **2D Rectangular Block Selection**: Drag-select a rectangular region on the canvas (even inside `RawPtyPassthrough` apps); keeps highlight visible on release and yanks the block to the system/OSC 52 clipboard (or plain `LeftDrag` when `:rect mode on` is active) |
 | **`Ctrl + LeftClick` on `OutputCanvas` URL / `OSC 8` link** | Copy URL to clipboard via `OSC 52` (`:links`) |
 | **Click Bottom DOS Function-Key Bar (`F1 Help` .. `F12 Raw`)** | Execute the clicked function-key action immediately |
 
@@ -203,7 +205,8 @@
 | `:history` | `:hist` | `[popup \| save [path] \| on \| off \| toggle \| runs \| max-files <N>]` | Open History Pop-up, export commands to `.sh`, toggle persistence, view run segments, or set max retained session dirs |
 | `:block` | — | `prev \| next` | Jump to previous or next `OSC 133` semantic command block in scrollback |
 | `:search` | `:find` | `<query> \| next \| prev \| clear \| off` | Search `OutputCanvas` text, jump between matches, or clear search highlights |
-| `:copy` | `:vi` | *(none)* | Toggle keyboard-driven Vi Copy Mode |
+| `:copy` | `:vi` | `[rect \| block \| line \| char \| all \| yank \| cut \| clear \| mode [on\|off\|toggle]]` | Toggle keyboard-driven Vi Copy Mode or execute rectangular/character/line copy actions |
+| `:rect` | `:select`, `:rect-select`, `:box-select` | `[mode [on\|off\|toggle] \| <r1> <c1> <r2> <c2> [copy\|highlight] \| all [copy] \| copy \| yank \| cut \| clear \| off \| status]` | Enter 2D rectangular block selection mode, toggle persistent mouse rectangular drag mode, highlight/copy an exact 1-based `(r1, c1)..(r2, c2)` rectangle, or yank/cut/clear the rectangular selection |
 | `:yank` | — | *(none)* | Copy active selection, command block, or screen via `OSC 52` clipboard |
 | `:links` | `:url`, `:urls` | *(none)* | Yank explicit `OSC 8` hyperlink or detected URL on the canvas via `OSC 52` |
 | `:hints` | `:hint`, `:fields` | *(none)* | Toggle QuickSelect 3270 Field Hints (`[a]..[z]`) |
@@ -279,7 +282,7 @@
 | `:exit-guard` | `:exitguard` | `[guard \| respawn \| detach \| off]` | Configure final/root shell exit protection (`[r]` Respawn, `[d]` Detach, `[q]` Quit) |
 | `:respawn-pane` | `:respawn` | *(none)* | Respawn an exited shell in-place inside a held pane |
 | `:scroll` | `:more`, `:pagehold` | `[smooth \| page \| instant \| toggle \| next \| prev \| release \| clear]` | Configure Mainframe Page-Hold (`MORE...`) & Smooth Scroller (`PF8`/`PA2`/`Space`/Click OIA `SCRL`) |
-| `:session` | `:workspace` | `save [name] \| restore [name] \| list \| tree \| branch <parent/child> \| graft <src> <dst> \| detach-subtree <node> \| checkpoint [slot]` | Save/restore multi-pane workspace topology and manage hierarchical `SessionTree` (`$XDG_STATE_HOME/bilterm/sessions/<name>.toml`) |
+| `:session` | `:workspace` | `new [name] \| blank [name] \| rename [old] <new> \| switch <name> \| delete <name> \| move [name] <dir> \| reorder <s1..> \| swap <a> <b> \| save [name] \| restore [name] \| processes [on\|off\|toggle] \| cmd [<command>\|clear] \| shell [<prog> [args..]] \| cwd [<path>] \| relaunch \| info \| list \| tree \| branch <parent/child> \| graft <src> <dst> \| detach-subtree <node> \| checkpoint [slot]` | Create, rename, reorder, save, and restore multi-pane workspace sessions (including per-pane `shell`, `shell_args`, `running_command`, and `cwd`), configure auto-relaunch (`session_restore_processes`), and manage hierarchical `SessionTree` (`$XDG_STATE_HOME/bilterm/sessions/<name>.toml`) |
 | `:record` | `:rec`, `:asciinema` | `[start [path.cast] \| workspace [path.cast] \| pane [path.cast] \| stop]` | Start/stop whole-workspace (`WorkspaceRecorder`) or single-pane (`SessionRecorder`) Asciicast v2 `.cast` recording |
 | `:trigger` | `:triggers` | `add <pattern> \| clear` | Highlight matching case-insensitive tokens on the `OutputCanvas` and increment OIA trigger counter |
 | `:notifications` | `:notify`, `:bell` | `clear` | Clear `OSC 9` / `OSC 777` desktop notification and bell counter (`🔔`) |

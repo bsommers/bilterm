@@ -238,6 +238,16 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
         KeyCode::Char('C'),
         Action::CopyModeToggle,
     ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('r'),
+        Action::SelectCommand(None),
+    ),
+    (
+        KeyModifiers::ALT,
+        KeyCode::Char('R'),
+        Action::SelectCommand(None),
+    ),
     (KeyModifiers::ALT, KeyCode::Char('F'), Action::HintsToggle),
     (
         KeyModifiers::ALT,

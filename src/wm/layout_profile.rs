@@ -258,13 +258,25 @@ impl WindowManager {
         }
     }
 
-    /// Restores a `SavedWorkspaceSession` directly in-place inside `self`.
-    fn apply_saved_session_snapshot(&mut self, saved: &SavedWorkspaceSession) {
+    /// Restores a `SavedWorkspaceSession` directly in-place inside `self`, including per-pane
+    /// shell, working directory (`cwd`), running software/commands, scrollback, history, and chrome.
+    pub(super) fn apply_saved_session_snapshot(&mut self, saved: &SavedWorkspaceSession) -> usize {
         let (rows, cols) = self.default_size;
+        let default_pty = PtyConfig::default();
         let mut new_panes = BTreeMap::new();
         let mut max_id = 1usize;
         for sp in &saved.panes {
             max_id = max_id.max(sp.id);
+            let program = sp
+                .shell
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&default_pty.program)
+                .to_string();
+            let args = sp.shell_args.clone();
+            let cwd_path = PathBuf::from(if sp.cwd.trim().is_empty() { "." } else { &sp.cwd });
+            let spawn_cwd = cwd_path.is_dir().then(|| cwd_path.clone());
             let mut pane = if self.headless_mode {
                 CompositePane::new_headless(sp.id, rows, cols)
             } else {
@@ -273,12 +285,28 @@ impl WindowManager {
                     PtyConfig {
                         rows,
                         cols,
-                        cwd: Some(PathBuf::from(&sp.cwd)),
-                        ..Default::default()
+                        program: program.clone(),
+                        args: args.clone(),
+                        cwd: spawn_cwd.clone(),
+                        ..default_pty.clone()
                     },
                 )
+                .or_else(|_| {
+                    CompositePane::spawn(
+                        sp.id,
+                        PtyConfig {
+                            rows,
+                            cols,
+                            cwd: spawn_cwd,
+                            ..default_pty.clone()
+                        },
+                    )
+                })
                 .unwrap_or_else(|_| CompositePane::new_headless(sp.id, rows, cols))
             };
+            pane.set_shell_program(program, args);
+            pane.set_tracked_cwd(Some(cwd_path));
+            pane.set_remote_target(sp.remote_target.clone());
             pane.set_title(sp.title.clone());
             pane.prompt_mut().anchor = sp.prompt_anchor;
             pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
@@ -298,6 +326,21 @@ impl WindowManager {
             pane.set_read_only(sp.read_only);
             Self::attach_history(&mut pane, &self.config.history_settings());
             pane.prompt_mut().history = sp.history.clone();
+            if let Some(cmd) = sp
+                .running_command
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                pane.prompt_mut().running_command = Some(cmd.to_string());
+                if self.config.session_restore_processes
+                    && !sp.read_only
+                    && !Self::is_unsafe_auto_relaunch_command(cmd)
+                {
+                    let payload = format!("{cmd}\n");
+                    let _ = pane.write_to_pty(payload.as_bytes());
+                }
+            }
             new_panes.insert(sp.id, pane);
         }
 
@@ -305,7 +348,9 @@ impl WindowManager {
             new_panes.insert(1, CompositePane::new_headless(1, rows, cols));
         }
 
+        let pane_count = new_panes.len();
         self.panes = new_panes;
+        self.restore_pane_chrome(&saved.panes);
         self.split_tree = saved.split_tree.clone();
         let geom_map: BTreeMap<PaneId, crate::wm::FloatingWindowGeometry> = saved
             .z_geometries
@@ -318,6 +363,12 @@ impl WindowManager {
         self.next_pane_id = max_id + 1;
         let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
         let _ = self.resize_all(vp);
+        pane_count
+    }
+
+    pub(super) fn is_unsafe_auto_relaunch_command(cmd: &str) -> bool {
+        let first = cmd.split_whitespace().next().unwrap_or("");
+        matches!(first, "exit" | "logout" | ":q" | ":quit" | ":quit!")
     }
 
     /// Applies one of the built-in layout templates (`single`, `dual-v`, `dual-h`, `main-side`, `quad`, `cascade`) dynamically.

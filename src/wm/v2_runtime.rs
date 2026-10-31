@@ -258,7 +258,10 @@ impl WindowManager {
             .map(|p| PaneJournalRecord {
                 pane_id: p.id(),
                 title: p.title().to_string(),
-                cwd: p.vt().reported_cwd().and_then(|c| c.to_str()).map(str::to_string),
+                cwd: Some(p.resolve_cwd().to_string_lossy().into_owned()),
+                shell: Some(p.shell_program().to_string()),
+                shell_args: p.shell_args().to_vec(),
+                running_command: p.resolve_running_command(),
                 font_scale_pct: self.pane_effective_scale_pct(p.id()),
                 scroll_mode: p.scroll_mode().label().to_ascii_lowercase(),
                 prompt_anchor: format!("{:?}", p.prompt().anchor),

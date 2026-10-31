@@ -198,6 +198,7 @@ drop_shadows = true
 show_dos_fkey_bar = true
 layout_profile = "default"
 layout_autosave = true
+session_restore_processes = true # auto-relaunch per-pane running commands on session restore
 history_enabled = true
 history_max_files = 25          # retained session directories
 history_session = "default"     # or: bilterm --session <name>

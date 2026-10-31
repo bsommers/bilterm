@@ -210,18 +210,30 @@ pub fn handle_mouse_event(
                 }
             }
 
-            // Alt+LeftClick on OutputCanvas: start rectangular block selection (VAL-04)
-            if mouse.modifiers.contains(KeyModifiers::ALT) && in_canvas && !in_prompt {
+            // Alt+LeftClick or Rectangular Mode LeftClick on OutputCanvas: start rectangular block selection (VAL-04)
+            if (mouse.modifiers.contains(KeyModifiers::ALT) || pane.copy_mode().rect_mode)
+                && in_canvas
+                && !in_prompt
+            {
                 pane.prompt_mut().clear_selection();
-                let rel_r = row.saturating_sub(canvas_rect.y);
-                let rel_c = col.saturating_sub(canvas_rect.x);
+                let rel_r = row
+                    .saturating_sub(canvas_rect.y)
+                    .min(canvas_rect.height.saturating_sub(1));
+                let rel_c = col
+                    .saturating_sub(canvas_rect.x)
+                    .min(canvas_rect.width.saturating_sub(1));
                 let copy = pane.copy_mode_mut();
                 copy.active = true;
                 copy.anchor = Some((rel_r, rel_c));
                 copy.cursor_row = rel_r;
                 copy.cursor_col = rel_c;
                 copy.selection_kind = CopySelectionKind::Block;
+                copy.visual_lock = true;
                 pane.set_mouse_drag(Some(PromptMouseDrag::CanvasRectSelect));
+                pane.set_status_message(Some(
+                    "RECT SELECT [1×1]: Drag or Shift+Arrows | Enter/y copy | x to prompt | Esc clear"
+                        .to_string(),
+                ));
                 return Ok(AppAction::Handled);
             }
 
@@ -415,7 +427,7 @@ pub fn handle_mouse_event(
             if let Some(drag) = pane.take_mouse_drag() {
                 match drag {
                     PromptMouseDrag::CanvasRectSelect => {
-                        let _ = pane.yank_copy_selection();
+                        let _ = pane.yank_mouse_canvas_selection();
                     }
                     PromptMouseDrag::CanvasCharSelect => {
                         if pane.copy_mode().has_selection() {
@@ -476,13 +488,14 @@ fn handle_canvas_only_mouse_event(
         .min(canvas_rect.width.saturating_sub(1));
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) if in_canvas => {
-            if mouse.modifiers.contains(KeyModifiers::ALT) {
+            if mouse.modifiers.contains(KeyModifiers::ALT) || pane.copy_mode().rect_mode {
                 let copy = pane.copy_mode_mut();
                 copy.active = true;
                 copy.anchor = Some((rel_r, rel_c));
                 copy.cursor_row = rel_r;
                 copy.cursor_col = rel_c;
                 copy.selection_kind = CopySelectionKind::Block;
+                copy.visual_lock = true;
                 pane.set_mouse_drag(Some(PromptMouseDrag::CanvasRectSelect));
             } else {
                 let copy = pane.copy_mode_mut();
@@ -522,7 +535,7 @@ fn handle_canvas_only_mouse_event(
             if let Some(drag) = pane.take_mouse_drag() {
                 match drag {
                     PromptMouseDrag::CanvasRectSelect => {
-                        let _ = pane.yank_copy_selection();
+                        let _ = pane.yank_mouse_canvas_selection();
                     }
                     PromptMouseDrag::CanvasCharSelect if pane.copy_mode().has_selection() => {
                         let _ = pane.yank_mouse_canvas_selection();
@@ -725,7 +738,15 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Continue);
     };
 
-    if !on_pane_status_bar && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+    let force_local_select = pane_mouse.modifiers.contains(KeyModifiers::ALT)
+        || pane.copy_mode().active
+        || pane.copy_mode().rect_mode
+        || pane.mouse_drag().is_some();
+
+    if !on_pane_status_bar
+        && !force_local_select
+        && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+    {
         // If the child app has not enabled mouse tracking (?1000..1006), check DECSET ?1007 Alternate Scroll first
         if !pane.vt().is_mouse_sgr_or_tracking() {
             if let Some(scroll_bytes) = encode_alternate_scroll_wheel(pane, pane_mouse.kind) {

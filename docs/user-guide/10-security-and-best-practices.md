@@ -48,7 +48,7 @@ Bilterm enforces two layers of paste defense (`src/vt/mod.rs`, `src/input/mod.rs
 
 ## 3. Filesystem & Credential Confinement (`SEC-R01..04`)
 
-All persistent files written by Bilterm are confined via [`src/util/secure_fs.rs`](../../src/util/secure_fs.rs):
+All persistent files written by Bilterm are confined via [`src/secure_fs.rs`](../../src/secure_fs.rs):
 
 | Rule ID | Security Control | Enforcement Mechanism |
 | :--- | :--- | :--- |

@@ -40,6 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 38: Session Lifecycle Commands, Persistent Ordering, Blinking Software Cursor & Scaled Mouse Selection (`v2.3.0`)** - `:session new|blank|rename|switch|delete|move|reorder|swap`, `bilterm new|blank`, software cursor blink timer, and scaled-window mouse selection/menubar alignment (`SESS-01..02`, `CUR-02`) (completed 2026-10-29)
 - [x] **Phase 39: Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`v2.4.0`)** - Per-pane `PaneChromeStyle` (`:window theme|outline|bold|reset|show`), `[_][□][X]` window control badges, and `>= 2×2` VT grid clamp preventing 1-row soft-wrap underflow (`WIN-01`, `WIN-02`, `VT-CLAMP-01`) (completed 2026-10-29)
 - [x] **Phase 40: Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`v2.4.1`)** - Interactive `:window` / `:window theme` browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`WIN-03`, `WIN-04`) (completed 2026-10-31)
+- [x] **Phase 41: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`v2.5.0`)** - First-class `:rect` / `:select` / `:copy rect` / `Alt+R` / `Alt+LeftDrag` 2D rectangular block selection, highlight, and copy plus full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`RECT-01`, `SESS-03`) (completed 2026-10-31)
 
 ## Phase Details
 
@@ -568,10 +569,28 @@ Plans:
 - [x] 40-02-PLAN.md — `src/wm/window_style.rs`, `src/colon_command/parse_visual.rs`, `src/mcp_console/mod.rs`, `src/wm/v2_runtime.rs`, & `src/pane/completion.rs`: Interactive `:window` customizer, `:window theme` browser (`window_theme_target`), per-window `.itermcolors` file browser routing, and `<Tab>` completions (wave 2)
 - [x] 40-03-PLAN.md — Unit & integration test suite verification (`309` integration + `200` lib tests) and documentation/manual sync for `v2.4.1` (wave 3)
 
+### Phase 41: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`v2.5.0`)
+
+**Goal**: As a power user managing multi-window sessions, I want first-class 2D rectangular block selection, highlighting, and copying via mouse (`Alt+LeftDrag` or persistent `:rect mode`), keyboard (`Alt+R`, `v`/`r` in Copy Mode), and `:rect`/`:select`/`:copy` commands, and I want every saved session and crash journal to persist and restore not only the window layout and chrome, but also the shell running (`shell`, `shell_args`), the software/commands running (`running_command`), and the current working directory (`cwd`) in every window pane.
+**Depends on**: Phase 40
+**Requirements**: RECT-01, SESS-03
+**Success Criteria** (what must be TRUE):
+
+  1. User can select, highlight, and copy 2D rectangular blocks via `Alt+R`, `Alt+LeftDrag` on the output canvas, persistent `:rect mode [on|off|toggle]`, coordinate-based `:rect <r1> <c1> <r2> <c2> [copy|highlight]`, `:rect all [copy]`, `:rect copy`, `:rect cut`, and `:rect clear` (aliases `:select`, `:copy rect`).
+  2. Every saved session TOML (`SavedPaneState`) and crash-recovery journal (`PaneJournalRecord`) captures each pane's `shell`, `shell_args`, `running_command` (via prompt submission tracking and `/proc/<fg_pgid>/cmdline`), `cwd` (via `OSC 7`, `/proc/<pid>/cwd`, and `cd` tracking), and `remote_target`.
+  3. Restoring or switching sessions spawns each pane with its saved `shell`, `shell_args`, and `cwd` and automatically relaunches its saved `running_command` when `session_restore_processes` is enabled (`true` by default), with runtime controls `:session processes [on|off|toggle]`, `:session cmd`, `:session shell`, `:session cwd`, `:session relaunch`, and `:session info`.
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 41-01-PLAN.md — `src/pane/modes.rs`, `src/pane/scroll.rs`, `src/input/mouse.rs`, `src/input/modal.rs`, `src/input/keymap.rs`, `src/ui/oia.rs`, `src/action.rs`, & `src/colon_command/`: 2D rectangular block select, persistent highlight, and copy (`:rect`, `:select`, `:copy rect`, `Alt+R`, `Alt+LeftDrag`) (wave 1)
+- [x] 41-02-PLAN.md — `src/wm/session.rs`, `src/wm/layout_profile.rs`, `src/wm/journal.rs`, `src/wm/session_manager.rs`, `src/pane/mod.rs`, `src/pane/scroll.rs`, & `src/config/mod.rs`: Per-pane `shell`, `shell_args`, `running_command`, and `cwd` persistence, auto-relaunch (`session_restore_processes`), and `:session processes|cmd|shell|cwd|relaunch|info` commands (wave 2)
+- [x] 41-03-PLAN.md — Unit & integration test suite verification, full documentation & cross-link synchronization, and `v2.5.0` multi-platform release binaries (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -616,3 +635,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 38. `v2.3.0` Session Lifecycle Commands, Persistent Ordering, Blinking Software Cursor & Scaled Mouse Selection (`SESS-01..02`, `CUR-02`) | 3/3 | Complete | 2026-10-29 |
 | 39. `v2.4.0` Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`WIN-01..02`, `VT-CLAMP-01`) | 2/2 | Complete | 2026-10-29 |
 | 40. `v2.4.1` Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`WIN-03`, `WIN-04`) | 3/3 | Complete | 2026-10-31 |
+| 41. `v2.5.0` 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`RECT-01`, `SESS-03`) | 3/3 | Complete | 2026-10-31 |

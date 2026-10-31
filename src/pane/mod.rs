@@ -69,6 +69,12 @@ pub struct CompositePane {
     show_version_badge: bool,
     /// Optional remote SSH / `tmux -CC` destination badge (`🌐 SSH:<host>`, `v1.4.0`).
     remote_target: Option<String>,
+    /// Shell executable running in this pane (`$SHELL`, `/bin/zsh`, `fish`, `pwsh`, `ssh`, etc.).
+    pub(crate) shell_program: String,
+    /// Arguments passed to the pane's shell executable.
+    pub(crate) shell_args: Vec<String>,
+    /// Tracked working directory (`cwd`) updated on spawn, session restore, `:session cwd`, and `cd` commands.
+    pub(crate) tracked_cwd: Option<PathBuf>,
     /// Pending multi-line or escape-containing raw PTY paste awaiting user confirmation (`FND-01`).
     pending_unsafe_paste: Option<String>,
     /// Optional status feedback message displayed in the OIA bar (e.g. `:command` result or yank feedback).
@@ -112,6 +118,9 @@ impl CompositePane {
             read_only: false,
             show_version_badge: is_live,
             remote_target: None,
+            shell_program: PtyConfig::default().program,
+            shell_args: Vec::new(),
+            tracked_cwd: None,
             pending_unsafe_paste: None,
             status_message: None,
             last_osc52_sequence: None,
@@ -143,7 +152,9 @@ impl CompositePane {
         let canvas_cols = pty_config.cols.max(1);
         pty_config.rows = canvas_rows;
         pty_config.cols = canvas_cols;
-
+        let shell_program = pty_config.program.clone();
+        let shell_args = pty_config.args.clone();
+        let tracked_cwd = pty_config.cwd.clone();
         let title = format!("{} [#{id}]", pty_config.program);
         let session = PtySession::spawn(pty_config)?;
         let mut pane = Self::new_base(
@@ -155,6 +166,9 @@ impl CompositePane {
             Some(session),
             HistoryStore::new_live(id),
         );
+        pane.shell_program = shell_program;
+        pane.shell_args = shell_args;
+        pane.tracked_cwd = tracked_cwd;
         pane.restore_persisted_history();
         Ok(pane)
     }
@@ -179,9 +193,8 @@ impl CompositePane {
                 self.prompt.history.push(cmd_str.clone());
             }
             if !cmd_str.trim().starts_with(':') {
-                self.prompt.running_command = Some(cmd_str.replace('\n', " ; "));
+                self.track_submitted_command_state(&cmd_str);
                 self.prompt.force_command_prompt = false;
-                // Auto-dismiss interactive `:tek demo` / `:canvas demo` overlay when a shell command is executed
                 if cmd_str.trim() == "clear"
                     || self
                         .vt
@@ -639,20 +652,9 @@ impl CompositePane {
         self.effective_routing_mode() == InputRoutingMode::CommandPrompt
     }
 
-    /// Resolves the live working directory of the child shell process (`OSC 7` reported path first,
-    /// then `/proc/<pid>/cwd` on Linux, falling back to `std::env::current_dir()`).
+    /// Resolves the live working directory (`OSC 7`, `/proc/<pid>/cwd`, `tracked_cwd`, then `current_dir()`).
     pub fn resolve_cwd(&self) -> PathBuf {
-        if let Some(osc7_cwd) = self.vt.reported_cwd() {
-            return osc7_cwd.to_path_buf();
-        }
-        #[cfg(target_os = "linux")]
-        if let Some(pty) = &self.pty
-            && let Some(pid) = pty.child_pid()
-            && let Ok(path) = std::fs::read_link(format!("/proc/{pid}/cwd"))
-        {
-            return path;
-        }
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        self.resolve_pane_cwd()
     }
 
     /// Triggers or cycles `Tab` / `Shift+Tab` completion inside the floating prompt using the pane's live `cwd`.
@@ -775,6 +777,9 @@ impl CompositePane {
             let pty_cfg = PtyConfig {
                 rows: rows.max(1),
                 cols: cols.max(1),
+                program: self.shell_program.clone(),
+                args: self.shell_args.clone(),
+                cwd: Some(self.resolve_cwd()),
                 ..PtyConfig::default()
             };
             self.pty = Some(PtySession::spawn(pty_cfg)?);

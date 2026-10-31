@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.4.1-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v2.5.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
   <img src="https://img.shields.io/badge/tests-250%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
@@ -86,7 +86,8 @@ bilterm --mcp
 | **Per-Pane Font Zoom / Universal & Per-Window Theme** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset]` / `:theme <preset\|list\|import>` / `:window [theme\|<elem> <color>]` |
 | **File & Theme Browser / Cursor Customization** | — | `:browse [dir]` / `:cursor [block\|hollow\|underline\|bar\|custom <c>] [blink\|solid\|rapid] [color]` |
 | **Mainframe Page-Hold (`MORE...`) & Vi Copy** | `<L> PgDn` / `PF8` / `F8` (`Alt+C`) / `F3` (`<L> f`) | `:scroll [page\|smooth\|instant]` / `:copy` / `:hints` |
-| **Session New / Blank / Rename / Reorder / Save** | `N` / `Shift+Up`/`Down` (in `F7` Drawer) | `:session [new\|blank\|rename\|move\|reorder\|save\|restore\|list\|tree]` |
+| **2D Rectangular Select, Highlight & Copy** | `Alt+R` / `Alt+LeftDrag` / `r` (in Copy Mode) | `:rect [mode [on\|off] \| <r1> <c1> <r2> <c2> [copy] \| copy \| cut \| clear]` / `:select` |
+| **Session New / Blank / Rename / Reorder / Save (with Shell, Cmd & CWD)** | `N` / `Shift+Up`/`Down` (in `F7` Drawer) | `:session [new\|blank\|rename\|move\|reorder\|save\|restore\|processes\|cmd\|shell\|cwd\|relaunch\|info\|list\|tree]` |
 
 *(Exhaustive CLI, keyboard, mouse, and `:colon` tables: **[`docs/README.md`](docs/README.md)** and **[Chapter 6: Complete Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)**).*
 

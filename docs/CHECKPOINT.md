@@ -1,13 +1,16 @@
 # Session Checkpoint (2026-10-31)
 
-**Status:** COMPLETE — `v2.4.1` implemented, verified (`200` unit + `309` integration tests), documented, and tagged. All release asset gaps (`v2.1.1`–`v2.4.0`) are also closed. Last tag: `v2.4.1` (Latest).
+**Status:** COMPLETE — `v2.5.0` implemented, verified (`202` unit + `309` integration tests), documented, and tagged. Last tag: `v2.5.0` (Latest).
 
-## Latest Milestone (`v2.4.0`–`v2.4.1`)
+## Latest Milestone (`v2.4.0`–`v2.5.0`)
 - **`v2.4.0` (Phase 39)**: Per-window themes (`:window theme`), outlines (`:window outline`), bold borders (`:window bold`), clearer `[_][□][X]` window controls, and `MIN_GRID_DIM = 2×2` VT grid clamp preventing 1-row soft-wrap underflow.
 - **`v2.4.1` (Phase 40)**:
   - Interactive **Per-Window Theme Browser** (`:window theme`, `:window theme list`, `:window theme browse [dir]`, `:window theme import [path|dir|glob]`) scoped to the active window via `McpConsoleState::window_theme_target`.
   - Interactive **Window Style & Element Color Customizer** (`:window` / `:window menu`).
   - Per-window **Individual Theme Element Color Overrides** (`:window <element> <color|reset>` and `:window <elem> color <color>`) for `font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, and `shadow-color`, persisted in saved session TOML files (`SavedPaneState.colors`).
+- **`v2.5.0` (Phase 41)**:
+  - **2D Rectangular Block Select, Highlight & Copy** (`:rect`, `:select`, `:copy rect`, `Alt+R`, `Alt+LeftDrag`, `:rect mode [on|off|toggle]`, `:rect <r1> <c1> <r2> <c2> [copy|highlight]`, `:rect all [copy]`, `:rect copy`, `:rect cut`, `:rect clear`).
+  - **Full Per-Pane Session Persistence (Layout + Shell + Running Software/Commands + CWD)**: `SavedPaneState` and `PaneJournalRecord` now persist and restore `shell`, `shell_args`, `running_command`, `cwd`, and `remote_target` for every window pane across every session, automatically relaunching running commands when `session_restore_processes = true` (`:session processes|cmd|shell|cwd|relaunch|info`).
 
 ## User decisions (verbatim)
 - "make MacOS releases for this. also make a skill / command / scripts to do binary release per platform."

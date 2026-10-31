@@ -18,7 +18,6 @@ use crate::remote::{
 };
 use crate::vt::scrollback::{PaneUsage, format_mib, plan_capacities};
 use crate::wm::split_tree::{SplitDirection, SplitTree};
-use crate::wm::z_stack::ZStack;
 
 /// Serialized per-pane metadata inside a `SavedWorkspaceSession` (`ECO-02`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +25,18 @@ pub struct SavedPaneState {
     pub id: PaneId,
     pub title: String,
     pub cwd: String,
+    /// Shell executable running in this pane (`$SHELL`, `/bin/zsh`, `fish`, `pwsh`, `ssh`, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
+    /// Arguments passed to the pane's shell executable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shell_args: Vec<String>,
+    /// Active software / foreground command running in this pane (`htop`, `vim`, `cargo watch`, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_command: Option<String>,
+    /// Optional remote SSH / `tmux -CC` target associated with this pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_target: Option<String>,
     pub prompt_anchor: PromptAnchor,
     pub prompt_height: u16,
     pub prompt_width_cols: Option<u16>,
@@ -395,6 +406,10 @@ impl WindowManager {
                     id: p.id(),
                     title: p.title().to_string(),
                     cwd: p.resolve_cwd().to_string_lossy().into_owned(),
+                    shell: Some(p.shell_program().to_string()),
+                    shell_args: p.shell_args().to_vec(),
+                    running_command: p.resolve_running_command(),
+                    remote_target: p.remote_target().map(ToOwned::to_owned),
                     prompt_anchor: p.prompt().anchor,
                     prompt_height: p.prompt().height,
                     prompt_width_cols: p.prompt().width_cols,
@@ -492,66 +507,7 @@ impl WindowManager {
         let mut saved: SavedWorkspaceSession = toml::from_str(&raw)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
         let was_detached = saved.detached;
-
-        let (rows, cols) = self.default_size;
-        let mut new_panes = BTreeMap::new();
-        let mut max_id = 1usize;
-        for sp in &saved.panes {
-            max_id = max_id.max(sp.id);
-            let mut pane = if self.headless_mode {
-                CompositePane::new_headless(sp.id, rows, cols)
-            } else {
-                CompositePane::spawn(
-                    sp.id,
-                    PtyConfig {
-                        rows,
-                        cols,
-                        cwd: Some(PathBuf::from(&sp.cwd)),
-                        ..Default::default()
-                    },
-                )
-                .unwrap_or_else(|_| CompositePane::new_headless(sp.id, rows, cols))
-            };
-            pane.set_title(sp.title.clone());
-            pane.prompt_mut().anchor = sp.prompt_anchor;
-            pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
-            pane.prompt_mut().width_cols = sp.prompt_width_cols;
-            pane.prompt_mut().x_offset = sp.prompt_x_offset;
-            if !sp.prompt_input.is_empty() {
-                pane.prompt_mut().set_text(&sp.prompt_input);
-            }
-            pane.font_options_mut().scale_pct = sp.font_scale_pct;
-            if let Some(sm) = sp.scroll_mode {
-                pane.set_scroll_mode(sm);
-            }
-            if !sp.scrollback_lines.is_empty() {
-                let replayed = format!("{}\r\n", sp.scrollback_lines.join("\r\n"));
-                pane.process_pty_output(replayed.as_bytes());
-            }
-            pane.set_read_only(sp.read_only);
-            // Configure the store first so the later sync does not overwrite the saved history.
-            Self::attach_history(&mut pane, &self.config.history_settings());
-            pane.prompt_mut().history = sp.history.clone();
-            new_panes.insert(sp.id, pane);
-        }
-
-        if new_panes.is_empty() {
-            new_panes.insert(1, CompositePane::new_headless(1, rows, cols));
-        }
-
-        let pane_count = new_panes.len();
-        self.panes = new_panes;
-        self.restore_pane_chrome(&saved.panes);
-        self.split_tree = saved.split_tree.clone();
-        let geom_map: BTreeMap<PaneId, crate::wm::FloatingWindowGeometry> = saved
-            .z_geometries
-            .iter()
-            .filter_map(|(k, v)| k.parse::<PaneId>().ok().map(|id| (id, *v)))
-            .collect();
-        self.z_stack = ZStack::from_order_and_geometries(saved.z_order.clone(), geom_map);
-        self.layout_mode = saved.layout_mode;
-        self.zoomed_pane = saved.zoomed_pane;
-        self.next_pane_id = max_id + 1;
+        let pane_count = self.apply_saved_session_snapshot(&saved);
         self.client_detached = false;
         self.daemon_state
             .session_panes

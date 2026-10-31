@@ -64,7 +64,15 @@ pub fn render_oia_status_bar_themed(
     };
 
     let routing_badge = if pane.copy_mode().active {
-        (" INPUT: CANVAS [F8/Tab/Esc] ", Color::Rgb(85, 255, 255))
+        if pane.copy_mode().selection_kind == crate::pane::CopySelectionKind::Block
+            || pane.copy_mode().rect_mode
+        {
+            (" INPUT: RECT [F8/Enter/Esc] ", Color::Rgb(255, 215, 0))
+        } else {
+            (" INPUT: CANVAS [F8/Tab/Esc] ", Color::Rgb(85, 255, 255))
+        }
+    } else if pane.copy_mode().rect_mode {
+        (" INPUT: RECT BOX ", Color::Rgb(255, 215, 0))
     } else {
         match pane.effective_routing_mode() {
             InputRoutingMode::CommandPrompt => (" INPUT: CMD BOX ", Color::Rgb(0, 255, 102)),

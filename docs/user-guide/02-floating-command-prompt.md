@@ -76,10 +76,18 @@ By default (`history_enabled = true`), Bilterm persists every submitted command 
 
 ---
 
-## 5. `OSC 133` Command Block Jumping & `OSC 52` Clipboard
+## 5. `OSC 133` Command Block Jumping, `OSC 52` Clipboard & 2D Rectangular Block Selection (`:rect`)
 
 - **Jump to Previous / Next Command Block**: Press `Alt+PageUp` / `Alt+PageDown` (or `:block prev` / `:block next`) to jump directly between prior commands in scrollback.
 - **Yank to System Clipboard (`OSC 52`)**: Run `:yank` to copy the selected command block (or screen contents) via `OSC 52` (`DCS tmux;` wrapped when inside `tmux`).
+- **2D Rectangular Block Select, Highlight & Copy (`:rect`, `:select`, `:copy rect`, `Alt+R`, `Alt+LeftDrag`)**:
+  - **Mouse Rectangular Drag**: Hold **`Alt` and Left-Click + Drag** (`Alt+LeftDrag`) anywhere on a pane's `OutputCanvas` (even inside `RawPtyPassthrough` / mouse-reporting TUI applications) to highlight a 2D rectangular block. Releasing the mouse keeps the rectangular highlight visible on the canvas and automatically copies the rectangular block to the system/OSC 52 clipboard and paste buffer.
+  - **Persistent Mouse Rectangular Mode (`:rect mode [on|off|toggle]`)**: Run `:rect mode on` (or `:rect mode`) so plain `LeftClick` + `LeftDrag` on the output canvas performs 2D rectangular selection without holding `Alt` (`INPUT: RECT BOX` badge in the OIA bar).
+  - **Keyboard Rectangular Copy Mode (`Alt+R` or `:rect` / `:select` / `:copy rect`)**: Enters Copy Mode anchored in 2D rectangular block selection (`INPUT: RECT [F8/Enter/Esc]` badge in the OIA bar). Move the cursor with `Arrows` or `h/j/k/l` to resize the highlighted rectangle, press `Enter` or `y` to yank, `x`/`d` to cut, `r`/`v`/`V` to switch selection modes, or `Esc`/`F8` to exit.
+  - **Coordinate-Based Rectangular Highlight & Copy**:
+    - `:rect <r1> <c1> <r2> <c2>` — Highlight the 1-based (`row`, `col`) rectangular region on the canvas.
+    - `:rect <r1> <c1> <r2> <c2> copy` — Highlight and immediately copy that rectangular region to the clipboard.
+    - `:rect all [copy]`, `:rect copy` (`:rect yank`), `:rect cut`, and `:rect clear` — Select the full visible grid as a rectangle, copy/cut the active rectangular highlight, or clear the selection.
 
 ---
 

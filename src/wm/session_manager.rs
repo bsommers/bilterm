@@ -578,7 +578,7 @@ impl WindowManager {
                 self.active_pane_mut().set_status_message(Some(msg));
                 true
             }
-            _ => false,
+            _ => self.execute_session_pane_state_command(verb, &parts, subcmd),
         }
     }
 }
@@ -669,5 +669,99 @@ mod tests {
         };
         handle_wm_mouse_event(&mut wm, click_help_row, screen).unwrap();
         assert!(!wm.is_help_visible());
+    }
+
+    #[test]
+    fn rectangular_select_highlight_and_copy_via_colon_and_mouse() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        wm.active_pane_mut().set_prompt_anchor(crate::pane::PromptAnchor::Bottom);
+        wm.active_pane_mut().process_pty_output(b"ALPHA_111_END\r\nBETA__222_END\r\nGAMMA_333_END\r\n");
+
+        // 1. Coordinate-based :rect <r1> <c1> <r2> <c2> highlights a 3x3 block (rows 1..=3, cols 7..=9)
+        let cmd = parse_colon_command(":rect 1 7 3 9").unwrap().unwrap();
+        wm.apply(cmd).unwrap();
+        assert!(wm.active_pane().copy_mode().active);
+        assert_eq!(wm.active_pane().copy_mode().selection_kind, crate::pane::CopySelectionKind::Block);
+        assert_eq!(wm.active_pane().copy_mode().selection_dimensions(), Some((3, 3)));
+        assert!(wm.active_pane().copy_mode().is_cell_selected(0, 6));
+        assert!(!wm.active_pane().copy_mode().is_cell_selected(0, 5));
+
+        // 2. :rect copy yanks the 3x3 block ("111\n222\n333") and emits OSC 52
+        let copy_cmd = parse_colon_command(":rect copy").unwrap().unwrap();
+        wm.apply(copy_cmd).unwrap();
+        assert_eq!(wm.active_pane().prompt().yank_buffer, "111\n222\n333");
+        assert!(wm.active_pane().last_osc52_sequence().is_some());
+
+        // 3. :rect mode on enables plain LeftDrag rectangular block selection that keeps highlight on mouse-up
+        let mode_cmd = parse_colon_command(":rect mode on").unwrap().unwrap();
+        wm.apply(mode_cmd).unwrap();
+        assert!(wm.active_pane().copy_mode().rect_mode);
+
+        let screen = Rect::new(0, 0, 80, 24);
+        for (kind, col, row) in [
+            (MouseEventKind::Down(MouseButton::Left), 0, 0),
+            (MouseEventKind::Drag(MouseButton::Left), 4, 1),
+            (MouseEventKind::Up(MouseButton::Left), 4, 1),
+        ] {
+            handle_wm_mouse_event(&mut wm, MouseEvent { kind, column: col, row, modifiers: KeyModifiers::NONE }, screen).unwrap();
+        }
+        assert!(wm.active_pane().copy_mode().active);
+        assert_eq!(wm.active_pane().copy_mode().selection_kind, crate::pane::CopySelectionKind::Block);
+        assert_eq!(wm.active_pane().prompt().yank_buffer, "ALPHA\nBETA_");
+    }
+
+    #[test]
+    fn session_persists_and_restores_shell_running_commands_and_cwd_per_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut wm = WindowManager::new_headless(24, 80);
+        wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+        wm.config_mut().history_session = "dev-stack".to_string();
+
+        // Pane #1: configure shell, cd into /tmp/frontend, and start a long-running dev server
+        execute_wm_colon_command(&mut wm, parse_colon_command(":session shell /bin/zsh -l").unwrap().unwrap());
+        wm.active_pane_mut().submit_command("cd /tmp/frontend").unwrap();
+        wm.active_pane_mut().submit_command("npm run dev -- --port 3000").unwrap();
+        assert_eq!(wm.active_pane().resolve_cwd(), std::path::PathBuf::from("/tmp/frontend"));
+        assert_eq!(wm.active_pane().resolve_running_command().as_deref(), Some("npm run dev -- --port 3000"));
+
+        // Split Pane #2: configure shell, cwd via :session cwd, and command via :session cmd
+        let p2 = wm.split_focused(crate::wm::SplitDirection::Vertical).unwrap();
+        assert_eq!(wm.active_pane_id(), p2);
+        execute_wm_colon_command(&mut wm, parse_colon_command(":session shell /usr/bin/fish -i").unwrap().unwrap());
+        execute_wm_colon_command(&mut wm, parse_colon_command(":session cwd /var/log/nginx").unwrap().unwrap());
+        execute_wm_colon_command(&mut wm, parse_colon_command(":session cmd tail -f access.log").unwrap().unwrap());
+
+        // Save session "dev-stack"
+        execute_wm_colon_command(&mut wm, parse_colon_command(":session save dev-stack").unwrap().unwrap());
+
+        // Restore into a fresh WindowManager with session_restore_processes = true (default)
+        let mut wm2 = WindowManager::new_headless(24, 80);
+        wm2.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+        execute_wm_colon_command(&mut wm2, parse_colon_command(":session restore dev-stack").unwrap().unwrap());
+
+        assert_eq!(wm2.pane_count(), 2);
+        let pane1 = wm2.panes().get(&1).unwrap();
+        assert_eq!(pane1.shell_program(), "/bin/zsh");
+        assert_eq!(pane1.shell_args(), &["-l".to_string()]);
+        assert_eq!(pane1.resolve_cwd(), std::path::PathBuf::from("/tmp/frontend"));
+        assert_eq!(pane1.resolve_running_command().as_deref(), Some("npm run dev -- --port 3000"));
+        assert_eq!(pane1.last_pty_write(), b"npm run dev -- --port 3000\n");
+
+        let pane2 = wm2.panes().get(&p2).unwrap();
+        assert_eq!(pane2.shell_program(), "/usr/bin/fish");
+        assert_eq!(pane2.shell_args(), &["-i".to_string()]);
+        assert_eq!(pane2.resolve_cwd(), std::path::PathBuf::from("/var/log/nginx"));
+        assert_eq!(pane2.resolve_running_command().as_deref(), Some("tail -f access.log"));
+        assert_eq!(pane2.last_pty_write(), b"tail -f access.log\n");
+
+        // Verify :session processes off disables auto-relaunch until :session relaunch is called
+        let mut wm3 = WindowManager::new_headless(24, 80);
+        wm3.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+        execute_wm_colon_command(&mut wm3, parse_colon_command(":session processes off").unwrap().unwrap());
+        assert!(!wm3.config().session_restore_processes);
+        execute_wm_colon_command(&mut wm3, parse_colon_command(":session restore dev-stack").unwrap().unwrap());
+        assert!(wm3.panes().get(&1).unwrap().last_pty_write().is_empty());
+        execute_wm_colon_command(&mut wm3, parse_colon_command(":session relaunch").unwrap().unwrap());
+        assert_eq!(wm3.panes().get(&1).unwrap().last_pty_write(), b"npm run dev -- --port 3000\n");
     }
 }
