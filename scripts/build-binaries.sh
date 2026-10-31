@@ -90,7 +90,9 @@ for triple in $TARGETS; do
         [[ -f "$WT/$doc" ]] && cp "$WT/$doc" "$DIST/$name/"
     done
     if [[ "$triple" == *windows* ]]; then
-        (cd "$DIST" && rm -f "$name.zip" && python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1],'zip','.',sys.argv[1])" "$name")
+        py="${PYTHON:-$(command -v python3 || command -v python || true)}"
+        [[ -n "$py" ]] || { echo "error: python3/python required to package zip for $triple" >&2; exit 1; }
+        (cd "$DIST" && rm -f "$name.zip" && "$py" -c "import shutil,sys; shutil.make_archive(sys.argv[1],'zip','.',sys.argv[1])" "$name")
         cp "$DIST/$name.zip" "$DIST/$BIN-$triple.zip"
         BUILT+=("$name.zip" "$BIN-$triple.zip")
     else
