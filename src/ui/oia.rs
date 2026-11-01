@@ -45,10 +45,14 @@ pub fn render_oia_status_bar_themed(
 
     let oia_bg = palette.oia_bg;
     let sep = glyphs.oia_separator;
+    // Tokens apply only to palettes that name a non-Legacy appearance profile.
+    // Existing looks (incl. MODERN-SLATE / LIQUID-GLASS) keep their literals byte-identical.
+    let uses_tokens = AppearanceProfile::from_name(&palette.name)
+        .is_some_and(|p| p != AppearanceProfile::Legacy);
     let is_modern = sep == "·"
         || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
-        || AppearanceProfile::from_name(&palette.name).is_some_and(|p| p != AppearanceProfile::Legacy);
-    let is_legacy = !is_modern;
+        || uses_tokens;
+    let is_legacy = !uses_tokens;
     let tokens = DesignTokens::from_palette(palette);
     let system_state = if pane.is_password_prompt() {
         (
@@ -120,8 +124,14 @@ pub fn render_oia_status_bar_themed(
         )
     } else if is_modern {
         match pane.effective_routing_mode() {
-            InputRoutingMode::CommandPrompt => (" ❯ Command ", tokens.get(ColorRole::Accent)),
-            InputRoutingMode::RawPtyPassthrough => (" ⇄ Raw PTY ", tokens.get(ColorRole::Warning)),
+            InputRoutingMode::CommandPrompt => (
+                " ❯ Command ",
+                role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(110, 231, 255)),
+            ),
+            InputRoutingMode::RawPtyPassthrough => (
+                " ⇄ Raw PTY ",
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 200, 0)),
+            ),
         }
     } else {
         match pane.effective_routing_mode() {
