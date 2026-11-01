@@ -15,6 +15,6 @@
 - User runs 5 agy tasks: `.planning/dispatch/RUN.sh 45-03a oia | 45-03b status | 45-03c modals-tok | 45-03d cursor | 45-03e theme-import` (branches ui/<slug> in ../bilterm-<slug>). agy never commits.
 
 ## Next (Claude)
-1. When user reports branches done: review each diff (spec then quality), run `cargo clippy -q --all-targets -- -D warnings && cargo test -q`, commit per branch, merge to main.
+1. When user reports branches done: review each diff (spec then quality), run `scripts/verify.sh` (prints one line: `PASS n/n Ns` or `FAIL ...`; on FAIL read only `target/verify/<stage>/fail.txt`, then `log` if needed; never paste full logs), commit per branch, merge to main.
 2. 45-04 bundled font; Phase 46 shell/Zen/`:appearance` command + Obsidian default for fresh installs (Claude, serial, sonnet; opus only for shell design).
 3. Then agy: 47-01/02/03, Phase 48 tests (see .planning/DISPATCH_PLAN.md).

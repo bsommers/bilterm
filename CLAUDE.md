@@ -14,3 +14,6 @@ Please read **[`AGENTS.md`](AGENTS.md)** and **[`docs/DEVELOPER_AND_AGENT_GUIDE.
    - Trace logs: `RUST_LOG=bilterm=debug cargo run` writes to `bilterm.log`.
    - Live RPC / MCP: `bilterm ctl workspace.status` or `bilterm --mcp`.
    - Deterministic headless unit tests: `WindowManager::new_headless(cols, rows)` + `CompositePane::new_headless(id, title, cols, rows)`.
+
+## Verification (token-cheap)
+Run `scripts/verify.sh`; read its single output line. PASS = done. FAIL = read only `target/verify/<stage>/fail.txt`, then `log`. Details in `AGENTS.md` (PERF-CTX).

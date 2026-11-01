@@ -2,7 +2,7 @@
 
 Ownership is strict. Claude does not run agy-owned work; agy tasks are not run as Claude subagents unless the user overrides.
 Rules: full task text per dispatch, one writer per file, one git worktree per agy task, agy NEVER commits, Claude reviews (spec then quality), verifies, merges, commits.
-Verify (every task): `cargo clippy -q --all-targets -- -D warnings && cargo test -q`
+Verify (every task): `scripts/verify.sh` (prints one line: `PASS n/n Ns` or `FAIL ...`; on FAIL read only `target/verify/<stage>/fail.txt`, then `log` if needed; never paste full logs)
 
 ## Claude (this session), serial
 | Step | Work | Files |

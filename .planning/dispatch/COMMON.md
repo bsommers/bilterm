@@ -8,5 +8,5 @@ Hard rules:
 3. Do NOT touch retro/data colours: phosphor/3270 colour tables, named-colour parsers, theme definitions. Migrate only literals that style app chrome (backgrounds, borders, text, accents, status colours) and have a matching ColorRole.
 4. Keep function signatures unchanged unless the file is private to it. Prefer a small private helper like `fn role(cfg,&pal,ColorRole,legacy:Color)->Color` in your file over repeated branching.
 5. Do NOT run `git commit`/`git add`/`git push`. Leave changes uncommitted. Do not create files.
-6. Verify before reporting: `cargo clippy -q --all-targets -- -D warnings && cargo test -q` must pass; snapshot tests must be unchanged (no `.snap` edits).
+6. Verify before reporting: `scripts/verify.sh` (prints one line: `PASS n/n Ns` or `FAIL ...`; on FAIL read only `target/verify/<stage>/fail.txt`, then `log` if needed; never paste full logs) must pass; snapshot tests must be unchanged (no `.snap` edits).
 Report (max 10 lines): status, number of literals migrated vs intentionally left (and why), verify result, any blocker.
