@@ -1,0 +1,164 @@
+<title>Bilterm Visual Proposal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: proposal page. Intro, 4 profile previews (each a miniature workspace), mapping table, open decisions. */
+:root{
+  --bg:#f3f4f6; --fg:#14181f; --muted:#5a6370; --line:#d6dae1; --card:#ffffff; --accent:#2a6df4;
+  --ui:'IBM Plex Sans',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1217;--fg:#e6e9ee;--muted:#9099a6;--line:#262c36;--card:#161b22;--accent:#6ea0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1217;--fg:#e6e9ee;--muted:#9099a6;--line:#262c36;--card:#161b22;--accent:#6ea0ff;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);line-height:1.55;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+main{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1{font-size:clamp(26px,4vw,38px);font-weight:600;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h2{font-size:20px;font-weight:600;margin:0 0 6px;text-wrap:balance}
+p{margin:0;max-width:68ch;color:var(--muted)}
+.lead{font-size:17px;color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:24px}
+.prof{display:flex;flex-direction:column;gap:10px;min-width:0}
+.prof header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.prof header span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+/* miniature workspace */
+.ws{--r:12px;position:relative;aspect-ratio:16/10;border-radius:16px;overflow:hidden;background:var(--wall);padding:10px;display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--t-fg);border:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;background:var(--glass);border:1px solid var(--edge);backdrop-filter:blur(var(--blur));width:fit-content;max-width:100%}
+.bar i{width:7px;height:7px;border-radius:50%;background:var(--dot)}
+.pill{padding:1px 8px;border-radius:999px;color:var(--t-dim);white-space:nowrap}
+.pill.on{background:var(--accentbg);color:var(--accent2)}
+.panes{flex:1;display:grid;grid-template-columns:1.4fr 1fr;gap:var(--gap);min-height:0}
+.pane{border-radius:var(--r);background:var(--term);border:1px solid var(--edge);padding:8px 10px;overflow:hidden;white-space:pre;line-height:1.5;position:relative}
+.pane.focus{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accentbg),0 6px 22px var(--shadow)}
+.pane .ttl{position:absolute;top:5px;right:9px;color:var(--t-dim);font-size:9px}
+.g{color:var(--ok)} .b{color:var(--accent2)} .y{color:var(--warn)} .d{color:var(--t-dim)}
+.cur{display:inline-block;width:6px;height:11px;background:var(--accent2);vertical-align:-2px}
+.drawer{position:absolute;left:10px;right:10px;bottom:10px;height:30%;border-radius:var(--r);background:var(--glass2);border:1px solid var(--edge);backdrop-filter:blur(var(--blur));padding:6px 10px;box-shadow:0 -8px 28px var(--shadow)}
+.drawer b{font-weight:500;color:var(--t-dim);letter-spacing:.08em;font-size:9px}
+.pal{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:56%;border-radius:14px;background:var(--glass3);border:1px solid var(--edge);backdrop-filter:blur(calc(var(--blur)*1.4));padding:8px;box-shadow:0 18px 48px var(--shadow)}
+.pal div{padding:2px 6px;border-radius:6px}
+.pal .sel{background:var(--accentbg);color:var(--accent2)}
+.pal em{float:right;font-style:normal;color:var(--t-dim)}
+.obsidian{--wall:linear-gradient(160deg,#15171b,#0c0d10);--term:#101216;--glass:rgba(40,44,52,.55);--glass2:rgba(34,37,44,.78);--glass3:rgba(44,48,57,.88);--edge:rgba(255,255,255,.09);--accent:#c3cad6;--accent2:#c3cad6;--accentbg:rgba(195,202,214,.12);--t-fg:#d5d9e0;--t-dim:#7d8592;--ok:#8fd0a0;--warn:#e0c27a;--shadow:rgba(0,0,0,.5);--dot:#7d8592;--blur:10px;--gap:8px}
+.midnight{--wall:linear-gradient(160deg,#0c1426,#070b16);--term:#0a1020;--glass:rgba(24,36,66,.55);--glass2:rgba(20,32,60,.78);--glass3:rgba(26,40,74,.9);--edge:rgba(140,170,255,.16);--accent:#6ea0ff;--accent2:#7fb0ff;--accentbg:rgba(110,160,255,.16);--t-fg:#d4def5;--t-dim:#6b7ba3;--ok:#7ed3b2;--warn:#e6c77f;--shadow:rgba(0,0,10,.55);--dot:#6b7ba3;--blur:12px;--gap:8px}
+.arctic{--wall:linear-gradient(160deg,#e9eff7,#dbe5f1);--term:#f7f9fc;--glass:rgba(255,255,255,.6);--glass2:rgba(255,255,255,.78);--glass3:rgba(255,255,255,.92);--edge:rgba(40,70,110,.16);--accent:#3b82c4;--accent2:#2f77bd;--accentbg:rgba(59,130,196,.14);--t-fg:#1d2733;--t-dim:#78879a;--ok:#2f8f5b;--warn:#a97a14;--shadow:rgba(40,70,110,.22);--dot:#9aa8ba;--blur:10px;--gap:8px}
+.liquid{--wall:radial-gradient(120% 90% at 20% 0%,#25324a,#0d1119 70%);--term:rgba(14,18,26,.82);--glass:rgba(70,90,130,.34);--glass2:rgba(60,80,120,.42);--glass3:rgba(70,92,136,.55);--edge:rgba(190,215,255,.26);--accent:#8ab8ff;--accent2:#9cc4ff;--accentbg:rgba(138,184,255,.18);--t-fg:#e4ecfb;--t-dim:#8497ba;--ok:#86dcb6;--warn:#efd08a;--shadow:rgba(0,0,0,.45);--dot:#8497ba;--blur:18px;--gap:10px;--r:14px}
+.liquid .pane,.liquid .bar,.liquid .drawer,.liquid .pal{box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.08)}
+.zen .bar,.zen .panes>.pane:nth-child(2){display:none}.zen .panes{grid-template-columns:1fr}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.scroll{overflow-x:auto}
+code{font-family:var(--mono);font-size:.9em}
+ul{margin:0;padding-left:1.1em;color:var(--muted);display:flex;flex-direction:column;gap:4px;max-width:68ch}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}
+.note{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+</style>
+
+<main>
+  <section style="display:flex;flex-direction:column;gap:12px">
+    <h1>Bilterm visual proposal</h1>
+    <p class="lead">The terminal stays the subject. Everything around it becomes one layered system: a quiet top bar, panes that share a material and a focus rule, drawers that grow out of the workspace, and floating tools in the same glass.</p>
+    <p>These are design mockups for sign-off, not renders of the app. The current app's renders are in <code>.planning/phases/44-*/before/</code>. Every profile below is the same layout driven by tokens only, which is the point of Phase 45.</p>
+  </section>
+
+  <section class="grid" aria-label="Profile previews">
+    <div class="prof"><header><h2>Obsidian</h2><span>graphite · 8px gap · blur 10</span></header>
+      <div class="ws obsidian" role="img" aria-label="Obsidian profile preview with two panes and a command palette">
+        <div class="bar"><i></i><span class="pill on">main</span><span class="pill">build</span><span class="pill">logs</span><span class="pill">+</span></div>
+        <div class="panes">
+<div class="pane focus"><span class="ttl">zsh · ~/src/bilterm</span><span class="g">bill@host</span> <span class="b">~/src/bilterm</span> $ cargo build
+   <span class="g">Compiling</span> bilterm v2.5.4
+    <span class="g">Finished</span> dev in 4.2s
+<span class="g">bill@host</span> <span class="b">~/src/bilterm</span> $ <span class="cur"></span></div>
+<div class="pane"><span class="ttl">htop</span><span class="d">CPU  [||||||     38%]
+MEM  [|||||||    52%]
+SWP  [|           3%]</span></div>
+        </div>
+        <div class="pal"><div class="d">⌕ split</div><div class="sel">Split Pane Right <em>⌃X %</em></div><div>Split Pane Down <em>⌃X "</em></div><div>Toggle Zen Mode <em>⌃X Z</em></div></div>
+      </div></div>
+
+    <div class="prof"><header><h2>Midnight</h2><span>navy · blue accent · blur 12</span></header>
+      <div class="ws midnight" role="img" aria-label="Midnight profile preview with bottom drawer">
+        <div class="bar"><i></i><span class="pill on">main</span><span class="pill">build</span><span class="pill">logs</span><span class="pill">+</span></div>
+        <div class="panes">
+<div class="pane focus"><span class="ttl">zsh</span><span class="g">bill@host</span> <span class="b">~/src</span> $ git status
+<span class="d">On branch main
+nothing to commit</span>
+<span class="g">bill@host</span> <span class="b">~/src</span> $ <span class="cur"></span></div>
+<div class="pane"><span class="ttl">tail -f</span><span class="d">GET /api 200 12ms
+GET /api 200  9ms</span> <span class="y">WARN slow</span></div>
+        </div>
+        <div class="drawer"><b>SESSIONS</b><div style="margin-top:4px"><span class="b">●</span> main <span class="d">· 2 panes · ready</span></div><div><span class="d">○ build · 1 pane · idle</span></div></div>
+      </div></div>
+
+    <div class="prof"><header><h2>Arctic</h2><span>light · cool borders · blur 10</span></header>
+      <div class="ws arctic" role="img" aria-label="Arctic light profile preview">
+        <div class="bar"><i></i><span class="pill on">main</span><span class="pill">build</span><span class="pill">logs</span><span class="pill">+</span></div>
+        <div class="panes">
+<div class="pane focus"><span class="ttl">zsh · ~/docs</span><span class="g">bill@host</span> <span class="b">~/docs</span> $ ls
+<span class="b">design</span>  <span class="b">notes</span>  README.md
+<span class="g">bill@host</span> <span class="b">~/docs</span> $ <span class="cur"></span></div>
+<div class="pane"><span class="ttl">vim</span><span class="d"># Notes
+- ship Phase 44
+- review tokens</span></div>
+        </div>
+      </div></div>
+
+    <div class="prof"><header><h2>Liquid</h2><span>translucent graphite · specular edge · blur 18</span></header>
+      <div class="ws liquid" role="img" aria-label="Liquid Glass profile preview with drawer and palette">
+        <div class="bar"><i></i><span class="pill on">main</span><span class="pill">build</span><span class="pill">logs</span><span class="pill">+</span></div>
+        <div class="panes">
+<div class="pane focus"><span class="ttl">zsh · ~/src/bilterm</span><span class="g">bill@host</span> <span class="b">~/src/bilterm</span> $ cargo test
+   <span class="g">Running</span> 202 tests
+<span class="g">test result: ok.</span> 202 passed
+<span class="g">bill@host</span> <span class="b">~/src/bilterm</span> $ <span class="cur"></span></div>
+<div class="pane"><span class="ttl">logs</span><span class="d">12:01 daemon up
+12:02 attach #2</span></div>
+        </div>
+        <div class="drawer"><b>SESSIONS</b><div style="margin-top:4px"><span class="b">●</span> main <span class="d">· ready</span></div></div>
+      </div></div>
+  </section>
+
+  <section class="two">
+    <div class="note"><h2>Zen mode</h2><p>One pane, no top bar, no status line. Controls come back on hover at the top edge, on <code>Ctrl+X Z</code>, or from the palette.</p>
+      <div class="ws liquid zen" role="img" aria-label="Zen mode preview" style="aspect-ratio:16/8"><div class="bar"></div><div class="panes"><div class="pane focus"><span class="g">bill@host</span> <span class="b">~/src</span> $ <span class="cur"></span></div><div class="pane"></div></div></div></div>
+    <div class="note"><h2>Design rules</h2>
+      <ul>
+        <li>Five materials: Background, Primary Glass (top bar), Secondary Glass (drawers), Floating Glass (palette, menus), Terminal Surface (always readable).</li>
+        <li>Focus is a brighter 1px edge plus a faint accent halo. No strong glow.</li>
+        <li>Pane titles show on the focused pane only. Actions appear on hover or from the palette.</li>
+        <li>In the text UI, glass is approximated with tint, bevel and rounded <code>╭╮╰╯</code> corners. In <code>--gui</code>, corners are vector arcs and the edge highlight is drawn in pixels. No true backdrop blur is claimed.</li>
+        <li>Master glass toggle falls back to opaque surfaces with the same layout.</li>
+      </ul></div>
+  </section>
+
+  <section>
+    <h2>What changes, mapped to existing code</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Today</th><th>Redesigned as</th><th>Files touched later</th></tr></thead>
+      <tbody>
+        <tr><td>Per-pane header with <code>[_][□][X]</code> or three dots</td><td>Slim title on the focused pane only; controls on hover; one top bar with workspace pills</td><td><code>ui/chrome.rs</code>, <code>wm/chrome_style.rs</code></td></tr>
+        <tr><td>OIA status line / pills</td><td>Compact status in the top bar or hidden in Minimal and Zen</td><td><code>ui/oia.rs</code>, <code>ui/status_bar.rs</code></td></tr>
+        <tr><td>SESSIONS slide-out drawer</td><td>Secondary Glass drawer, bottom and right variants</td><td><code>ui/drawer.rs</code>, <code>wm/drawer.rs</code></td></tr>
+        <tr><td>Command palette, help, inspector</td><td>Floating Glass, grouped fuzzy list with shortcuts</td><td><code>ui/modals.rs</code></td></tr>
+        <tr><td>Style flags <code>modern</code>, <code>liquid</code>, <code>glass</code>, <code>snazzy</code></td><td>Kept as entry points; resolve to token sets</td><td><code>ui/visual_style.rs</code>, <code>config/mod.rs</code></td></tr>
+        <tr><td>No settings UI</td><td>Appearance modal with live preview, profile import and export</td><td>new <code>ui/appearance/</code></td></tr>
+      </tbody></table></div>
+  </section>
+
+  <section class="two">
+    <div class="note"><h2>Problems seen in the current renders</h2>
+      <ul>
+        <li>The built-in bitmap font draws all text in capitals, which reads as retro, not modern.</li>
+        <li>The open drawer shows a stair-step artifact at its lower left and its blurred rows stay noisy.</li>
+        <li>Headers repeat information: pane number, title, mode and hints all at once.</li>
+        <li>The prompt box takes three rows even when empty.</li>
+      </ul></div>
+    <div class="note"><h2>Decisions needed from you</h2>
+      <ul>
+        <li>Approve the direction (top bar with workspace pills, focused-pane title only).</li>
+        <li>Pick the default profile: Obsidian or Liquid.</li>
+        <li>Mixed-case GUI font: add a bundled proportional-free monospace, or keep the bitmap font as the Classic option only?</li>
+        <li>Should Zen mode hide the prompt box too, or keep it as a one-line input?</li>
+      </ul></div>
+  </section>
+</main>
