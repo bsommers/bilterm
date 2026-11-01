@@ -153,6 +153,8 @@ pub struct BiltermConfig {
     pub modern_mode: bool,
     /// Enables Liquid Glass optical refraction mode (modern UI + specular edge refraction, chromatic dispersion & ambient glow, `:liquid`).
     pub liquid_glass: bool,
+    /// Design-system appearance (`[appearance]`, Phase 45); defaults preserve legacy style behaviour.
+    pub appearance: crate::ui::design::AppearanceConfig,
     /// When `false` (default), mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`).
     pub copy_on_select: bool,
     /// Persists the cut-and-paste yank buffer history uniquely per Bilterm session (`true` by default, `:clipboard persist [on|off]`).
@@ -235,6 +237,7 @@ impl Default for BiltermConfig {
             glass_mode: false,
             modern_mode: false,
             liquid_glass: false,
+            appearance: crate::ui::design::AppearanceConfig::default(),
             copy_on_select: false,
             clipboard_history_persist: true,
             custom_palette_override: None,

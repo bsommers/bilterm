@@ -10,6 +10,7 @@ pub mod gui_window;
 pub mod chrome;
 pub mod cursor;
 pub mod cursor_cmd;
+pub mod design;
 pub mod drawer;
 pub mod glyphs;
 pub mod hires_subcell;
