@@ -739,6 +739,21 @@ Plans:
 - [ ] 48-01-PLAN.md — Regression + perf + accessibility (wave 1)
 - [ ] 48-02-PLAN.md — Polish, docs, release (wave 2)
 
+## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
+
+Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
+
+| Phase | Parallelism | Who | Model tier | File ownership | Verify |
+|---|---|---|---|---|---|
+| 43 audit | none (done inline) | orchestrator | — | `.planning/phases/43-*` | `cargo clippy -q`, `cargo test -q` |
+| 44 previews | per style×theme×scene renders independent | haiku (renders, PNG conversion); orchestrator writes proposal | haiku / orchestrator | `examples/design_preview.rs`, `.planning/phases/44-*` | `cargo run -q --example design_preview -- <dir>` |
+| 45 design system | **serial for 45-01/02** (one design); 45-03 fans out by file **only after the "API FROZEN" gate** | opus for token API design; sonnet for config migration; haiku for per-file colour migration | opus / sonnet / haiku | 45-01/02: `src/ui/design/**`, `src/config/mod.rs` · 45-03: one file per agent (`oia.rs`, `status_bar.rs`, `modals.rs`, `cursor_cmd.rs`, ...) | `cargo clippy -q --all-targets -- -D warnings`, `cargo test -q`, existing insta snapshots unchanged |
+| 46 shell/modes | **serial** (touches `wm/mod.rs`, `ui/mod.rs`, `chrome.rs` together) | sonnet | sonnet | `wm/mod.rs`, `ui/mod.rs`, `ui/chrome.rs`, `wm/chrome_style.rs` | clippy + test |
+| 47 aux UI | **best fan-out**: drawers / palette+menus / settings modal are mostly disjoint | sonnet per area; orchestrator wires `Action` | sonnet | 47-01 `ui/drawer.rs`,`ui/mcp_ui.rs`,`ui/exit_guard_ui.rs` · 47-02 `ui/modals.rs`,palette · 47-03 new `ui/appearance/**` | clippy + test + snapshot review |
+| 48 regression | tests, perf runs, a11y checks in parallel | haiku (test writing to spec), sonnet (perf analysis) | haiku / sonnet | `tests/**` only | `cargo test -q`, perf budget vs. baseline |
+
+**Gates**: (G1) Phase 44 user sign-off before Phase 45. (G2) **API FROZEN** after 45-01/02 — no token API changes while 45-03 / Phase 47 agents run. (G3) `Action`/`apply` wiring, config migration, and anything at the `vt`/`TerminalBackend` seam is orchestrator-only (Claude Code). (G4) Independent fresh-context review (spec compliance, then quality) before each phase commit.
+
 ## Progress
 
 **Execution Order:**
