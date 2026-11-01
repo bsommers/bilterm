@@ -1,16 +1,20 @@
-# Bilterm Session Checkpoint (2026-11-01)
+# Bilterm Session Checkpoint (2026-11-01, post-freeze)
 
 ## User decisions (verbatim)
-- "commit the baseline and update the roadmap with phases 43-48; relax ARCH-R04 ... fuzzy target of ~800-1000 lines ... full use of libghostty if it makes sense. add a path, but do not remove or rewire existing paths ... paths living in harmony"
-- "yes, start Phase 44 design previews"
-- "show me the dispatch plan so I can run the correct stuff here in claude and give the other to agy in another window"
+- Phase 44 sign-off: direction approved; default Obsidian; bundle mixed-case mono font; Zen keeps one-line input (see .planning/phases/44-*/DECISIONS.md)
+- "I want to be able to select between the Legacy/retro looks and Obsidian, even if Obsidian is the default. we are taking NOTHING away from the old looks. just adding new looks and capabilities. EXTENDING what we have."
+- "go straight through to the freeze, stop there for review" (done); design/*.rs approved by user.
+- Ownership: Claude does NOT run agy-owned work; agy work is not run as Claude subagents unless user overrides.
 
 ## State
-- Branch main. Commits: c1da655 (v2.5.4 baseline), 67b9c64 (phases 43-48, ARCH-R04 soft, 1200 backstop), ec30c3d (design_preview example + 30 baseline PNGs + roadmap subagent model).
-- Uncommitted: PROPOSAL.html, this checkpoint.
-- Phase 44: baseline renders done (`cargo run -q --example design_preview -- <dir>`); proposal artifact https://claude.ai/artifact/DHtLf6cfQAUwST9vKqRL8v. AWAITING user sign-off (gate G1) and 4 open decisions in the proposal.
-- swe-skills-2 skills identical to ~/.claude/skills (no sync needed). agy at ~/.local/bin/agy supports `-p/--print`, `--model`, `--mode`, `--dangerously-skip-permissions`.
-- No background jobs. Dead end: codegraph not indexed for this repo.
+- Branch main, clean. Commits: c1da655, 67b9c64, ec30c3d, 9f7f9c3, e101949 (decisions+DISPATCH_PLAN), 7a1dfa9 (design API, tag ui-api-frozen), 286c709 (agy task texts).
+- Artifact (proposal): https://claude.ai/artifact/DHtLf6cfQAUwST9vKqRL8v
+- Unset profile resolves to Legacy for now; Phase 46 makes Obsidian default for fresh installs only.
 
-## Next
-After sign-off: Phase 45-01 (token API, orchestrator/opus, serial), then API FROZEN gate, then 45-03 fan-out.
+## Waiting on user
+- User runs 5 agy tasks: `.planning/dispatch/RUN.sh 45-03a oia | 45-03b status | 45-03c modals-tok | 45-03d cursor | 45-03e theme-import` (branches ui/<slug> in ../bilterm-<slug>). agy never commits.
+
+## Next (Claude)
+1. When user reports branches done: review each diff (spec then quality), run `cargo clippy -q --all-targets -- -D warnings && cargo test -q`, commit per branch, merge to main.
+2. 45-04 bundled font; Phase 46 shell/Zen/`:appearance` command + Obsidian default for fresh installs (Claude, serial, sonnet; opus only for shell design).
+3. Then agy: 47-01/02/03, Phase 48 tests (see .planning/DISPATCH_PLAN.md).
