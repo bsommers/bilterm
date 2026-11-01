@@ -8,6 +8,7 @@
 //! 3. **Pixel-Perfect Edge-to-Edge Geometric Box-Drawing, Block & Braille Rendering** so Borland Turbo Vision
 //!    double-line borders (`╔═╗║╚═╝`), split dividers, and shadows connect with zero 1px gaps at any font size.
 
+pub mod bundled;
 pub mod geometric;
 pub use geometric::*;
 

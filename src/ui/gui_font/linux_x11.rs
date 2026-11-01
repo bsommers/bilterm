@@ -260,6 +260,7 @@ impl<'a> X11GuiCanvas<'a> {
             loaded_font_paths: Vec::new(),
             scaled_fonts: std::collections::BTreeMap::new(),
         };
+        super::bundled::install_if_wanted(wm.config());
         if let Some(dir) = default_custom_fonts_dir() {
             let _ = scan_and_register_fonts_dir(&dir);
         }

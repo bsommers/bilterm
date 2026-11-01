@@ -17,9 +17,7 @@
 2. Then agy: 47-01/02/03, Phase 48 tests (.planning/DISPATCH_PLAN.md). Before dispatching, find the missing allow-rule (try adding cd/echo/awk/python3/true) or run agy interactively.
 3. Always review agy diffs for Legacy byte-identical parity before merge.
 
-## 45-04 bundled font: findings so far (nothing implemented yet, tree clean)
-- No network in this env (curl to github hangs), so JetBrains Mono cannot be downloaded. JetBrains Mono is NOT installed locally.
-- Locally installed mono options: Hack (/usr/share/fonts/truetype/hack/, free license), IBM Plex Mono (OFL), DejaVu Sans Mono. Plan: bundle Hack (Regular/Bold/Oblique/BoldOblique) + its LICENSE under docs/assets/fonts/ (or assets/fonts/), embed with include_bytes!. Tell the user it can be swapped for JetBrains Mono later.
-- Font code is src/ui/gui_font/ (linux_x11.rs, win32_gdi.rs, macos_ct.rs, geometric.rs). Linux path: `register_custom_font_file`/`registered_custom_fonts()` + `sync_private_font_files()` -> FcConfigAppFontAddFile; family choice in `sync_font()` via `resolve_candidate_font_faces()` (geometric.rs:154), fallback list JetBrains Mono, Fira Code, DejaVu Sans Mono...
-- Approach: write embedded bytes to a private dir via src/util/secure_fs.rs (0700 dir / 0600 atomic files, validate_safe_name), register through the existing custom-font registry on all three platforms, add the bundled family as the last fallback candidate AND as default for Obsidian/non-Legacy profiles only. Legacy/3270 bitmap path unchanged (taking NOTHING away). AppearanceConfig.ui_font (src/ui/design/config.rs:74) is the hook for chrome font.
-- Keep files <= ~800-1000 lines (ARCH-R04); put new code in a new small module (e.g. src/ui/gui_font/bundled.rs). Verify with scripts/verify.sh.
+## 45-04 bundled font: DONE (committed)
+- JetBrains Mono v2.304 (OFL) bundled in assets/fonts/ (download worked on retry). Loader: src/ui/gui_font/bundled.rs; called from all three platform canvases (linux_x11/win32_gdi/macos_ct `new()`) via `install_if_wanted(wm.config())`; installs to private runtime dir only when AppearanceProfile::resolve(cfg) != Legacy. Legacy font resolution unchanged.
+- Verified: 3 new unit tests, verify.sh PASS 31/31. NOT verified: Windows/macOS compile of the one-line call sites, and live GUI rendering (needs `bilterm --gui` with [appearance] profile=obsidian).
+- Next: Phase 46 (shell/Zen/`:appearance`, Obsidian default for fresh installs only). Make non-Legacy profiles select the "JetBrains Mono" family explicitly in sync_font (currently only resolves via existing candidate list / Ibm3270 default).

@@ -197,6 +197,7 @@ pub struct Win32GuiCanvas {
 
 impl Win32GuiCanvas {
     pub fn new(hwnd: Hwnd, wm: &WindowManager) -> Self {
+        super::bundled::install_if_wanted(wm.config());
         if let Some(dir) = default_custom_fonts_dir() {
             let _ = scan_and_register_fonts_dir(&dir);
         }

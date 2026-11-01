@@ -300,6 +300,7 @@ pub struct MacosGuiCanvas {
 
 impl MacosGuiCanvas {
     pub fn new(wm: &WindowManager, scale_factor: f64) -> Self {
+        super::bundled::install_if_wanted(wm.config());
         if let Some(dir) = default_custom_fonts_dir() {
             let _ = scan_and_register_fonts_dir(&dir);
         }
