@@ -14,8 +14,17 @@ use crate::ui::chrome::OutlineStyle;
 use crate::ui::cursor::{
     SpotlightMode, render_crosshair_cursor, render_focal_zoom_cursor, render_spotlight_cursor,
 };
+use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
+
+fn role(cfg: &BiltermConfig, palette: &ThemePalette, role: ColorRole, legacy: Color) -> Color {
+    if AppearanceProfile::resolve(cfg) == AppearanceProfile::Legacy {
+        legacy
+    } else {
+        DesignTokens::from_palette(palette).get(role)
+    }
+}
 
 /// Renders the classic Borland Turbo Vision / DOS IDE bottom Function-Key status bar (`UI-03`),
 /// or a clean modern shortcut strip when Modern / Liquid Glass palette is active.
@@ -125,7 +134,9 @@ pub(super) fn render_floating_prompt(
     };
 
     let base_text_fg = palette.text_fg.unwrap_or(Color::White);
-    let pin_fg = palette.controls_fg.unwrap_or(Color::Rgb(85, 255, 255));
+    let pin_fg = palette
+        .controls_fg
+        .unwrap_or_else(|| role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)));
     let corner_fg = palette.controls_fg.unwrap_or(palette.title_fg);
     let title = if cfg.is_modern() {
         let liq = if cfg.liquid_glass { "💧 " } else { "" };
@@ -208,7 +219,7 @@ pub(super) fn render_floating_prompt(
     }
 
     if pane.prompt().fuzzy_search.active {
-        render_fuzzy_search_contents(pane, inner, surface_bg, buf);
+        render_fuzzy_search_contents(pane, inner, surface_bg, cfg, palette, buf);
         return;
     }
 
@@ -257,15 +268,15 @@ pub(super) fn render_floating_prompt(
         };
         let (tag_fg, tag_bg, cmd_fg) = if cfg.is_modern() {
             (
-                Color::Rgb(125, 211, 252),
-                Color::Rgb(24, 46, 78),
-                Color::Rgb(226, 232, 240),
+                role(cfg, palette, ColorRole::Accent, Color::Rgb(125, 211, 252)),
+                role(cfg, palette, ColorRole::SurfaceRaised, Color::Rgb(24, 46, 78)),
+                role(cfg, palette, ColorRole::TextPrimary, Color::Rgb(226, 232, 240)),
             )
         } else {
             (
                 Color::Black,
-                Color::Rgb(255, 255, 85),
-                Color::Rgb(85, 255, 255),
+                role(cfg, palette, ColorRole::Warning, Color::Rgb(255, 255, 85)),
+                role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)),
             )
         };
         let mut banner_spans = vec![
@@ -291,9 +302,15 @@ pub(super) fn render_floating_prompt(
                 .map(|ms| format!(" [{ms}ms]"))
                 .unwrap_or_default();
             let (badge_txt, badge_fg) = if exit_code == 0 {
-                (format!(" ✓ 0{dur_str} "), Color::Rgb(0, 255, 102))
+                (
+                    format!(" ✓ 0{dur_str} "),
+                    role(cfg, palette, ColorRole::Success, Color::Rgb(0, 255, 102)),
+                )
             } else {
-                (format!(" ✗ {exit_code}{dur_str} "), Color::Rgb(255, 85, 85))
+                (
+                    format!(" ✗ {exit_code}{dur_str} "),
+                    role(cfg, palette, ColorRole::Danger, Color::Rgb(255, 85, 85)),
+                )
             };
             banner_spans.push(Span::styled(
                 badge_txt,
@@ -343,7 +360,13 @@ pub(super) fn render_floating_prompt(
     }
 
     if has_completion_bar {
-        rendered_lines.push(build_completion_bar_line(pane, inner.width, surface_bg));
+        rendered_lines.push(build_completion_bar_line(
+            pane,
+            inner.width,
+            surface_bg,
+            cfg,
+            palette,
+        ));
     }
 
     Paragraph::new(rendered_lines).render(inner, buf);
@@ -353,7 +376,7 @@ pub(super) fn render_floating_prompt(
         let banner_off = u16::from(has_running_banner);
         let sel_style = Style::default()
             .fg(Color::Black)
-            .bg(Color::Rgb(85, 255, 255))
+            .bg(role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)))
             .add_modifier(Modifier::BOLD);
         for (vis_r, (rel_idx, line_str)) in lines_slice
             .iter()
@@ -477,11 +500,13 @@ fn build_completion_bar_line<'a>(
     pane: &'a CompositePane,
     max_width: u16,
     surface_bg: Color,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
 ) -> Line<'a> {
     let mut spans = vec![Span::styled(
         "TAB: ",
         Style::default()
-            .fg(Color::Rgb(85, 255, 255))
+            .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)))
             .bg(surface_bg)
             .add_modifier(Modifier::BOLD),
     )];
@@ -507,11 +532,11 @@ fn build_completion_bar_line<'a>(
         let style = if selected == Some(idx) {
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(255, 255, 85))
+                .bg(role(cfg, palette, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                 .add_modifier(Modifier::BOLD)
         } else if cand.is_dir {
             Style::default()
-                .fg(Color::Rgb(85, 255, 255))
+                .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)))
                 .bg(surface_bg)
                 .add_modifier(Modifier::BOLD)
         } else {
@@ -532,6 +557,8 @@ fn render_fuzzy_search_contents(
     pane: &CompositePane,
     inner: Rect,
     surface_bg: Color,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
     buf: &mut Buffer,
 ) {
     let mut lines = Vec::new();
@@ -539,7 +566,7 @@ fn render_fuzzy_search_contents(
     lines.push(Line::from(vec![Span::styled(
         header,
         Style::default()
-            .fg(Color::Rgb(255, 255, 85))
+            .fg(role(cfg, palette, ColorRole::Warning, Color::Rgb(255, 255, 85)))
             .bg(surface_bg)
             .add_modifier(Modifier::BOLD),
     )]));
@@ -555,7 +582,7 @@ fn render_fuzzy_search_contents(
     {
         let is_selected = idx == pane.prompt().fuzzy_search.selected;
         let row_bg = if is_selected {
-            Color::Rgb(0, 80, 120)
+            role(cfg, palette, ColorRole::SurfaceRaised, Color::Rgb(0, 80, 120))
         } else {
             surface_bg
         };
@@ -563,7 +590,7 @@ fn render_fuzzy_search_contents(
         let mut spans = vec![Span::styled(
             marker,
             Style::default()
-                .fg(Color::Rgb(0, 255, 102))
+                .fg(role(cfg, palette, ColorRole::Success, Color::Rgb(0, 255, 102)))
                 .bg(row_bg)
                 .add_modifier(Modifier::BOLD),
         )];
@@ -572,7 +599,7 @@ fn render_fuzzy_search_contents(
             let matched = item.matched_indices.contains(&(char_idx as u32));
             let style = if matched {
                 Style::default()
-                    .fg(Color::Rgb(255, 255, 85))
+                    .fg(role(cfg, palette, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                     .bg(row_bg)
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
             } else {
@@ -585,4 +612,41 @@ fn render_fuzzy_search_contents(
 
     Paragraph::new(lines).render(inner, buf);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_profile_keeps_legacy_literal_byte_identical() {
+        let cfg = BiltermConfig::default();
+        assert_eq!(AppearanceProfile::resolve(&cfg), AppearanceProfile::Legacy);
+
+        let pal = ThemePalette::default();
+        let lit = Color::Rgb(12, 34, 56);
+        assert_eq!(role(&cfg, &pal, ColorRole::Accent, lit), lit);
+        assert_eq!(role(&cfg, &pal, ColorRole::SurfaceRaised, lit), lit);
+        assert_eq!(role(&cfg, &pal, ColorRole::TextPrimary, lit), lit);
+        assert_eq!(role(&cfg, &pal, ColorRole::Warning, lit), lit);
+        assert_eq!(role(&cfg, &pal, ColorRole::Success, lit), lit);
+        assert_eq!(role(&cfg, &pal, ColorRole::Danger, lit), lit);
+    }
+
+    #[test]
+    fn non_legacy_profile_routes_to_design_tokens() {
+        let mut cfg = BiltermConfig::default();
+        cfg.appearance.profile = Some(AppearanceProfile::Obsidian);
+
+        let pal = ThemePalette::default();
+        let tokens = DesignTokens::from_palette(&pal);
+        let lit = Color::Rgb(12, 34, 56);
+        assert_eq!(role(&cfg, &pal, ColorRole::Accent, lit), tokens.accent);
+        assert_eq!(role(&cfg, &pal, ColorRole::SurfaceRaised, lit), tokens.surface_raised);
+        assert_eq!(role(&cfg, &pal, ColorRole::TextPrimary, lit), tokens.text_primary);
+        assert_eq!(role(&cfg, &pal, ColorRole::Warning, lit), tokens.warning);
+        assert_eq!(role(&cfg, &pal, ColorRole::Success, lit), tokens.success);
+        assert_eq!(role(&cfg, &pal, ColorRole::Danger, lit), tokens.danger);
+    }
+}
+
 
