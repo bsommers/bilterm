@@ -1,26 +1,18 @@
-# Bilterm Session Checkpoint (2026-11-01, post-freeze + verify.sh)
+# Bilterm Session Checkpoint (2026-11-01 evening)
 
-## User decisions (verbatim)
-- Phase 44 sign-off: direction approved; default Obsidian; bundle mixed-case mono font; Zen keeps one-line input (see .planning/phases/44-*/DECISIONS.md)
+## User decisions (verbatim, still in force)
+- Default Obsidian; bundled mixed-case mono font; Zen keeps one-line input (see .planning/phases/44-*/DECISIONS.md)
 - "I want to be able to select between the Legacy/retro looks and Obsidian, even if Obsidian is the default. we are taking NOTHING away from the old looks. just adding new looks and capabilities. EXTENDING what we have."
-- "go straight through to the freeze, stop there for review" (done); design/*.rs approved by user.
-- Ownership: Claude does NOT run agy-owned work; agy work is not run as Claude subagents unless user overrides.
+- agy work is user-run unless user overrides (user overrode once, for the 45-03d/e rerun).
 
 ## State
-- Branch main, clean. Commits: c1da655, 67b9c64, ec30c3d, 9f7f9c3, e101949 (decisions+DISPATCH_PLAN), 7a1dfa9 (design API, tag ui-api-frozen), 286c709 (agy task texts).
-- Artifact (proposal): https://claude.ai/artifact/DHtLf6cfQAUwST9vKqRL8v
-- Unset profile resolves to Legacy for now; Phase 46 makes Obsidian default for fresh installs only.
-
-## Waiting on user
-- User runs 5 agy tasks: `.planning/dispatch/RUN.sh 45-03a oia | 45-03b status | 45-03c modals-tok | 45-03d cursor | 45-03e theme-import` (branches ui/<slug> in ../bilterm-<slug>). agy never commits.
+- main @ 34ae639 (+ this commit). Tag ui-api-frozen. Version 2.6.0.
+- 45-03a/b/c merged by agy; reviewed by Claude: oia.rs had a Legacy-parity regression, fixed in b64bbe3 (tokens only for palettes naming a non-Legacy profile).
+- 34ae639: scripts/verify.sh sets XDG_STATE_HOME to a temp dir (tests used to read the real ~/.local/state/bilterm/sessions). verify = PASS 31/31.
+- 45-03d/e: audited by Claude, zero migrations (see .planning/dispatch/45-03de-RESULT.md). 45-03 is DONE.
+- RUN.sh now passes a session-only allow-list via --settings (literal prefixes `command(cat)` etc., NOT regex) and exits 1 on "no output produced". agy headless still denies some unknown command on larger tasks (theme-import hit it); the denied command is not logged. Probe tasks with `cat/grep/git/scripts/verify.sh` work.
 
 ## Next (Claude)
-1. When user reports branches done: review each diff (spec then quality), run `scripts/verify.sh` (prints one line: `PASS n/n Ns` or `FAIL ...`; on FAIL read only `target/verify/<stage>/fail.txt`, then `log` if needed; never paste full logs), commit per branch, merge to main.
-2. 45-04 bundled font; Phase 46 shell/Zen/`:appearance` command + Obsidian default for fresh installs (Claude, serial, sonnet; opus only for shell design).
-3. Then agy: 47-01/02/03, Phase 48 tests (see .planning/DISPATCH_PLAN.md).
-
-## Added after freeze
-- `scripts/verify.sh` (7201ad1): one-line PASS/FAIL gate; on FAIL read only `target/verify/<stage>/fail.txt`. Flags --quick/--failed/--only/--list/--status. fmt opt-in (legacy drift). Documented in AGENTS.md + CLAUDE.md; used in all agy tasks.
-- swe-skills-2 (1665094): layered-verification-gates, orchestrating-subagents, writing-agent-context-files updated for scripted gates.
-- `.planning/dispatch/RUN.sh` has user's uncommitted edit (--model gemini-3.8-flash-medium); leave it.
-- Still waiting: user reports which agy branches (ui/oia, ui/status, ui/modals-tok, ui/cursor, ui/theme-import) are done.
+1. 45-04 bundled font; Phase 46 shell/Zen/`:appearance` + Obsidian default for fresh installs only (serial, sonnet; opus only for shell design).
+2. Then agy: 47-01/02/03, Phase 48 tests (.planning/DISPATCH_PLAN.md). Before dispatching, find the missing allow-rule (try adding cd/echo/awk/python3/true) or run agy interactively.
+3. Always review agy diffs for Legacy byte-identical parity before merge.
