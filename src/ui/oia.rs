@@ -8,9 +8,19 @@ use ratatui::widgets::{Block, Paragraph, Widget};
 
 use crate::pane::{CompositePane, PaneScrollMode, PromptAnchor};
 use crate::pty::line_discipline::InputRoutingMode;
+use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
 use crate::vt::Osc9Progress;
+
+#[inline]
+fn role_color(tokens: &DesignTokens, is_legacy: bool, role: ColorRole, legacy: Color) -> Color {
+    if is_legacy {
+        legacy
+    } else {
+        tokens.get(role)
+    }
+}
 
 pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut Buffer) {
     render_oia_status_bar_themed(
@@ -35,10 +45,16 @@ pub fn render_oia_status_bar_themed(
 
     let oia_bg = palette.oia_bg;
     let sep = glyphs.oia_separator;
-    let is_modern =
-        sep == "·" || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
+    let is_modern = sep == "·"
+        || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
+        || AppearanceProfile::from_name(&palette.name).is_some_and(|p| p != AppearanceProfile::Legacy);
+    let is_legacy = !is_modern;
+    let tokens = DesignTokens::from_palette(palette);
     let system_state = if pane.is_password_prompt() {
-        (format!(" {} !ECHO LOCK ", glyphs.status_lock_icon), Color::Red)
+        (
+            format!(" {} !ECHO LOCK ", glyphs.status_lock_icon),
+            role_color(&tokens, is_legacy, ColorRole::Danger, Color::Red),
+        )
     } else if pane.vt().is_alternate_screen() {
         (
             format!(
@@ -46,20 +62,23 @@ pub fn render_oia_status_bar_themed(
                 glyphs.status_alt_icon,
                 if is_modern { "Alt" } else { "ALT SCR" }
             ),
-            Color::Yellow,
+            role_color(&tokens, is_legacy, ColorRole::Warning, Color::Yellow),
         )
     } else if pane.is_holding_inspected() {
         (
             format!(" {} HOLDING ", glyphs.status_scroll_icon),
-            Color::Rgb(255, 200, 0),
+            role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 200, 0)),
         )
     } else if pane.is_page_holding() {
         (
             format!(" {} MORE... ", glyphs.status_scroll_icon),
-            Color::Rgb(255, 255, 85),
+            role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)),
         )
     } else if pane.vt().scrollback_offset() > 0 {
-        (format!(" {} SCROLL ", glyphs.status_scroll_icon), Color::Cyan)
+        (
+            format!(" {} SCROLL ", glyphs.status_scroll_icon),
+            role_color(&tokens, is_legacy, ColorRole::Accent, Color::Cyan),
+        )
     } else if pane.has_foreground_subcommand() {
         (
             format!(
@@ -67,7 +86,7 @@ pub fn render_oia_status_bar_themed(
                 glyphs.status_run_icon,
                 if is_modern { "Running" } else { "RUNNING" }
             ),
-            Color::Rgb(85, 255, 255),
+            role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)),
         )
     } else {
         (
@@ -76,7 +95,7 @@ pub fn render_oia_status_bar_themed(
                 glyphs.status_ready_icon,
                 if is_modern { "Ready" } else { "READY" }
             ),
-            Color::Rgb(0, 255, 102),
+            role_color(&tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)),
         )
     };
 
@@ -84,16 +103,25 @@ pub fn render_oia_status_bar_themed(
         if pane.copy_mode().selection_kind == crate::pane::CopySelectionKind::Block
             || pane.copy_mode().rect_mode
         {
-            (" INPUT: RECT [F8/Enter/Esc] ", Color::Rgb(255, 215, 0))
+            (
+                " INPUT: RECT [F8/Enter/Esc] ",
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 215, 0)),
+            )
         } else {
-            (" INPUT: CANVAS [F8/Tab/Esc] ", Color::Rgb(85, 255, 255))
+            (
+                " INPUT: CANVAS [F8/Tab/Esc] ",
+                role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)),
+            )
         }
     } else if pane.copy_mode().rect_mode {
-        (" INPUT: RECT BOX ", Color::Rgb(255, 215, 0))
+        (
+            " INPUT: RECT BOX ",
+            role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 215, 0)),
+        )
     } else if is_modern {
         match pane.effective_routing_mode() {
-            InputRoutingMode::CommandPrompt => (" ❯ Command ", Color::Rgb(110, 231, 255)),
-            InputRoutingMode::RawPtyPassthrough => (" ⇄ Raw PTY ", Color::Rgb(255, 200, 0)),
+            InputRoutingMode::CommandPrompt => (" ❯ Command ", tokens.get(ColorRole::Accent)),
+            InputRoutingMode::RawPtyPassthrough => (" ⇄ Raw PTY ", tokens.get(ColorRole::Warning)),
         }
     } else {
         match pane.effective_routing_mode() {
@@ -203,7 +231,7 @@ pub fn render_oia_status_bar_themed(
             " 🔒 PROT ",
             Style::default()
                 .fg(Color::White)
-                .bg(Color::Red)
+                .bg(role_color(&tokens, is_legacy, ColorRole::Danger, Color::Red))
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -217,7 +245,7 @@ pub fn render_oia_status_bar_themed(
             format!(" 🌐 SSH:{remote} "),
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(85, 255, 255))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)))
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -231,7 +259,7 @@ pub fn render_oia_status_bar_themed(
             " ⏺ REC ",
             Style::default()
                 .fg(Color::White)
-                .bg(Color::Rgb(200, 0, 0))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Danger, Color::Rgb(200, 0, 0)))
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -245,7 +273,7 @@ pub fn render_oia_status_bar_themed(
             " 📈 TEK-4014 ",
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(0, 255, 102))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)))
                 .add_modifier(Modifier::BOLD),
         ));
     } else if pane.canvas_scene().has_visible_content() {
@@ -257,7 +285,7 @@ pub fn render_oia_status_bar_themed(
             " 🎨 CANVAS ",
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(85, 255, 255))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)))
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -271,13 +299,13 @@ pub fn render_oia_status_bar_themed(
             format!(" 🔔 {}: {} ", notif.title, notif.body),
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(255, 255, 85))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                 .add_modifier(Modifier::BOLD),
         ));
     }
 
     if let Some(progress) = pane.vt().osc9_progress() {
-        let (gauge_str, gauge_fg) = format_osc9_gauge(progress);
+        let (gauge_str, gauge_fg) = format_osc9_gauge(progress, &tokens, is_legacy);
         spans.push(Span::styled(
             format!(" {sep}"),
             Style::default().fg(Color::White).bg(oia_bg),
@@ -301,7 +329,7 @@ pub fn render_oia_status_bar_themed(
             format!("BLK {}/{total}", block.index + 1),
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(255, 255, 85))
+                .bg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -313,11 +341,20 @@ pub fn render_oia_status_bar_themed(
     {
         let scrl_badge = pane.oia_scroll_badge();
         let (scrl_fg, scrl_bg) = if pane.is_page_holding() {
-            (Color::Black, Color::Rgb(255, 255, 85))
+            (
+                Color::Black,
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)),
+            )
         } else if pane.scroll_mode() == PaneScrollMode::BlockPage {
-            (Color::Rgb(255, 255, 85), oia_bg)
+            (
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)),
+                oia_bg,
+            )
         } else {
-            (Color::Rgb(0, 255, 102), oia_bg)
+            (
+                role_color(&tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)),
+                oia_bg,
+            )
         };
         spans.push(Span::styled(
             format!(" {sep} "),
@@ -338,12 +375,16 @@ pub fn render_oia_status_bar_themed(
     ));
     spans.push(Span::styled(
         coord_str,
-        Style::default().fg(Color::Rgb(255, 255, 85)).bg(oia_bg),
+        Style::default()
+            .fg(role_color(&tokens, is_legacy, ColorRole::TextMuted, Color::Rgb(255, 255, 85)))
+            .bg(oia_bg),
     ));
     spans.push(Span::styled(sep, Style::default().fg(Color::White).bg(oia_bg)));
     spans.push(Span::styled(
         out_str,
-        Style::default().fg(Color::Rgb(85, 255, 255)).bg(oia_bg),
+        Style::default()
+            .fg(role_color(&tokens, is_legacy, ColorRole::TextMuted, Color::Rgb(85, 255, 255)))
+            .bg(oia_bg),
     ));
 
     if let Some(msg) = pane.status_message() {
@@ -354,7 +395,7 @@ pub fn render_oia_status_bar_themed(
         spans.push(Span::styled(
             msg.to_string(),
             Style::default()
-                .fg(Color::Rgb(255, 255, 85))
+                .fg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                 .bg(oia_bg)
                 .add_modifier(Modifier::BOLD),
         ));
@@ -368,7 +409,11 @@ pub fn render_oia_status_bar_themed(
     Paragraph::new(line).render(status_rect, buf);
 }
 
-fn format_osc9_gauge(progress: Osc9Progress) -> (String, Color) {
+fn format_osc9_gauge(
+    progress: Osc9Progress,
+    tokens: &DesignTokens,
+    is_legacy: bool,
+) -> (String, Color) {
     let build_bar = |pct: u8| -> String {
         let filled = ((u16::from(pct.min(100)) * 8) / 100) as usize;
         let empty = 8usize.saturating_sub(filled);
@@ -380,9 +425,21 @@ fn format_osc9_gauge(progress: Osc9Progress) -> (String, Color) {
         )
     };
     match progress {
-        Osc9Progress::Normal(pct) => (build_bar(pct), Color::Rgb(0, 255, 102)),
-        Osc9Progress::Error(pct) => (format!("!{}", build_bar(pct)), Color::Rgb(255, 85, 85)),
-        Osc9Progress::Paused(pct) => (format!("⏸{}", build_bar(pct)), Color::Rgb(255, 255, 85)),
-        Osc9Progress::Indeterminate => ("[▓▓░░░░▓▓] BUSY".to_string(), Color::Rgb(85, 255, 255)),
+        Osc9Progress::Normal(pct) => (
+            build_bar(pct),
+            role_color(tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)),
+        ),
+        Osc9Progress::Error(pct) => (
+            format!("!{}", build_bar(pct)),
+            role_color(tokens, is_legacy, ColorRole::Danger, Color::Rgb(255, 85, 85)),
+        ),
+        Osc9Progress::Paused(pct) => (
+            format!("⏸{}", build_bar(pct)),
+            role_color(tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)),
+        ),
+        Osc9Progress::Indeterminate => (
+            "[▓▓░░░░▓▓] BUSY".to_string(),
+            role_color(tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)),
+        ),
     }
 }
