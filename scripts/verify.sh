@@ -17,6 +17,10 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT=target/verify
 mkdir -p "$OUT"
+# Isolate tests from the user's real saved sessions/state (drawer tests read them).
+VERIFY_STATE="$(mktemp -d "${TMPDIR:-/tmp}/bilterm-verify-state.XXXXXX")"
+trap 'rm -rf "$VERIFY_STATE"' EXIT
+export XDG_STATE_HOME="$VERIFY_STATE"
 
 all_stages() {
   echo clippy; echo unit
