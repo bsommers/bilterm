@@ -310,17 +310,16 @@ impl WindowManager {
         journal.save_atomic(&dir, slot_name)
     }
 
-    /// Applies an [`OpenColorScheme`] to the workspace and active pane, including any per-theme typography profile (`THM-01`, `THM-02`).
+    /// Applies an [`OpenColorScheme`] to the focused window (pinning other windows), including any per-theme typography profile (`THM-01`, `THM-02`).
     pub fn apply_open_color_scheme(&mut self, scheme: &OpenColorScheme) {
-        self.config.custom_palette_override = Some(scheme.to_theme_palette());
         let active_id = self.active_pane_id();
-        if let Some(chrome) = self.pane_chrome.get_mut(&active_id) {
-            chrome.theme_name = None;
-            chrome.palette = None;
-            if chrome.is_default() {
-                self.pane_chrome.remove(&active_id);
-            }
-        }
+        self.pin_other_panes_theme(active_id);
+        let pal = scheme.to_theme_palette();
+        self.config.custom_palette_override = Some(pal.clone());
+        let chrome = self.active_pane_chrome_mut();
+        chrome.preset = None;
+        chrome.theme_name = Some(scheme.name.clone());
+        chrome.palette = Some(pal);
         if let Some(ref fam) = scheme.typography.font_family {
             self.config.font_family = fam.clone();
         }
@@ -498,7 +497,10 @@ impl WindowManager {
                 true
             }
             McpRowAction::ApplyTheme(theme_name) => {
-                if let Some(win_sub) = theme_name.strip_prefix("window ") {
+                if theme_name.starts_with("clipboard ") {
+                    self.execute_select_or_clipboard_command(Some(&theme_name));
+                    self.mcp_console.active = false;
+                } else if let Some(win_sub) = theme_name.strip_prefix("window ") {
                     self.execute_window_style_command(win_sub);
                 } else if let Some(target_id) = self.mcp_console.window_theme_target {
                     let _ = self.focus_and_raise(target_id);
@@ -545,18 +547,24 @@ impl WindowManager {
         true
     }
 
-    /// Applies a built-in [`ThemePreset`] and clears any custom open-theme override.
+    /// Applies a built-in [`ThemePreset`] to the focused window (preserving other windows' themes).
     pub fn apply_theme_preset(&mut self, preset: ThemePreset) {
+        let active_id = self.active_pane_id();
+        self.pin_other_panes_theme(active_id);
         self.config.theme = preset;
         self.config.custom_palette_override = None;
-        let active_id = self.active_pane_id();
-        if let Some(chrome) = self.pane_chrome.get_mut(&active_id) {
-            chrome.theme_name = None;
-            chrome.palette = None;
-            if chrome.is_default() {
-                self.pane_chrome.remove(&active_id);
-            }
-        }
+        let chrome = self.active_pane_chrome_mut();
+        chrome.preset = Some(preset);
+        chrome.theme_name = Some(preset.label().to_string());
+        chrome.palette = Some(preset.palette());
+        self.notify_theme_changed();
+    }
+
+    /// Applies a built-in [`ThemePreset`] globally across all windows (`:theme global <name>`).
+    pub fn apply_global_theme_preset(&mut self, preset: ThemePreset) {
+        self.config.theme = preset;
+        self.config.custom_palette_override = None;
+        self.clear_all_pane_theme_overrides();
         self.notify_theme_changed();
     }
 

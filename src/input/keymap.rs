@@ -1,10 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::action::Action;
-use crate::colon_command::{execute_colon_command, parse_colon_command};
+use crate::colon_command::parse_colon_command;
 use crate::error::Result;
 use crate::input::AppAction;
-use crate::pane::CompositePane;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
 
@@ -107,6 +106,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('C'), Action::CopyModeToggle),
     (KeyCode::Char('['), Action::CopyModeToggle),
     (KeyCode::F(8), Action::CopyModeToggle),
+    (KeyCode::Char('r'), Action::SelectCommand(None)),
     (KeyCode::Char('f'), Action::HintsToggle),
     (KeyCode::Char('F'), Action::HintsToggle),
     (KeyCode::F(3), Action::HintsToggle),
@@ -116,10 +116,12 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('P'), Action::HistoryPopupToggle),
     (KeyCode::Char('H'), Action::HistoryPopupToggle),
     (KeyCode::Char('R'), Action::RecordWorkspaceStart(None)),
-    (KeyCode::Up, Action::PromptMoveVertical(-1)),
-    (KeyCode::Down, Action::PromptMoveVertical(1)),
-    (KeyCode::Left, Action::PaneResize { dw: -4, dh: 0 }),
-    (KeyCode::Right, Action::PaneResize { dw: 4, dh: 0 }),
+    (KeyCode::Left, Action::PaneFocusDirection { dx: -1, dy: 0 }),
+    (KeyCode::Right, Action::PaneFocusDirection { dx: 1, dy: 0 }),
+    (KeyCode::Up, Action::PaneFocusDirection { dx: 0, dy: -1 }),
+    (KeyCode::Down, Action::PaneFocusDirection { dx: 0, dy: 1 }),
+    (KeyCode::Char('j'), Action::PaneFocusDirection { dx: 0, dy: 1 }),
+    (KeyCode::Char('k'), Action::PaneFocusDirection { dx: 0, dy: -1 }),
     (KeyCode::Char('<'), Action::PaneResize { dw: -4, dh: 0 }),
     (KeyCode::Char('>'), Action::PaneResize { dw: 4, dh: 0 }),
     (KeyCode::Char('J'), Action::PaneMove { dx: 0, dy: 2 }),
@@ -183,6 +185,16 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('7'), Action::FocusPane(7)),
     (KeyModifiers::ALT, KeyCode::Char('8'), Action::FocusPane(8)),
     (KeyModifiers::ALT, KeyCode::Char('9'), Action::FocusPane(9)),
+    (KeyModifiers::ALT, KeyCode::Char('j'), Action::PaneFocusDirection { dx: 0, dy: 1 }),
+    (KeyModifiers::ALT, KeyCode::Char('k'), Action::PaneFocusDirection { dx: 0, dy: -1 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('H'), Action::PaneFocusDirection { dx: -1, dy: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('L'), Action::PaneFocusDirection { dx: 1, dy: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('K'), Action::PaneFocusDirection { dx: 0, dy: -1 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('J'), Action::PaneFocusDirection { dx: 0, dy: 1 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('A'), Action::PaneFocusDirection { dx: -1, dy: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('D'), Action::PaneFocusDirection { dx: 1, dy: 0 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('W'), Action::PaneFocusDirection { dx: 0, dy: -1 }),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('S'), Action::PaneFocusDirection { dx: 0, dy: 1 }),
     // Dynamic terminal font & text scaling (FONT-01)
     (KeyModifiers::CONTROL, KeyCode::Char('+'), Action::FontZoomIn),
     (KeyModifiers::CONTROL, KeyCode::Char('='), Action::FontZoomIn),
@@ -267,12 +279,16 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
         KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
         _ => key.modifiers,
     };
+    if let Some((_, _, action)) = DEFAULT_GLOBAL_BINDINGS
+        .iter()
+        .find(|(mods, code, _)| *code == key.code && *mods == key.modifiers)
+    {
+        return Some(action.clone());
+    }
     DEFAULT_GLOBAL_BINDINGS
         .iter()
         .find(|(mods, code, _)| {
-            *code == key.code
-                && (*mods == key.modifiers
-                    || (*mods == lookup_mods && !mods.contains(KeyModifiers::SHIFT)))
+            *code == key.code && *mods == lookup_mods && !mods.contains(KeyModifiers::SHIFT)
         })
         .map(|(_, _, action)| action.clone())
 }
@@ -603,19 +619,52 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
     }
 
     // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`), clipboard paste (`Ctrl+Shift+V`/`Shift+Insert`),
-    // and WM pane focus/resize chords even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`, `herdr`).
+    // Command Palette (`Ctrl+P`/`Alt+Space`), and WM pane focus/resize chords even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`, `herdr`).
     if let Some(action) = default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
         && matches!(
             action,
             Action::PasteClipboard
+                | Action::PaletteToggle
                 | Action::FontZoomIn
                 | Action::FontZoomOut
                 | Action::FontZoomReset
                 | Action::PaneResize { .. }
                 | Action::PaneMove { .. }
                 | Action::FocusPane(_)
+                | Action::PaneFocusDirection { .. }
                 | Action::DeckNext
                 | Action::DeckPrev
+        )
+    {
+        return Ok(Some(wm.apply(action)?));
+    }
+
+    if wm.pane_count() > 1
+        && key.modifiers == KeyModifiers::ALT
+        && !wm.active_pane().vt().is_alternate_screen()
+        && (wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+            || wm.active_pane().prompt().input.is_empty())
+    {
+        let dir = match key.code {
+            KeyCode::Left => Some((-1, 0)),
+            KeyCode::Right => Some((1, 0)),
+            KeyCode::Up => Some((0, -1)),
+            KeyCode::Down => Some((0, 1)),
+            _ => None,
+        };
+        if let Some((dx, dy)) = dir {
+            return Ok(Some(wm.apply(Action::PaneFocusDirection { dx, dy })?));
+        }
+    }
+
+    if !wm.active_pane().vt().is_alternate_screen()
+        && !wm.active_pane().is_active_canvas_password_prompt()
+        && !(wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+            && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected()))
+        && let Some(action) = default_pane_action(key)
+        && matches!(
+            action,
+            Action::SelectCommand(_) | Action::CopyModeToggle | Action::HintsToggle
         )
     {
         return Ok(Some(wm.apply(action)?));
@@ -640,139 +689,27 @@ pub(super) fn handle_wm_shortcut_key(
         }
     }
     let fuzzy_active = wm.active_pane().prompt().fuzzy_search.active;
+    if wm.pane_count() > 1
+        && key.modifiers == KeyModifiers::ALT
+        && (wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+            || wm.active_pane().prompt().input.is_empty())
+    {
+        let dir = match key.code {
+            KeyCode::Left => Some((-1, 0)),
+            KeyCode::Right => Some((1, 0)),
+            KeyCode::Up => Some((0, -1)),
+            KeyCode::Down => Some((0, 1)),
+            _ => None,
+        };
+        if let Some((dx, dy)) = dir {
+            return Ok(Some(wm.apply(Action::PaneFocusDirection { dx, dy })?));
+        }
+    }
+    if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
+        return Ok(Some(wm.apply(Action::SelectCommand(Some("clipboard pop".to_string())))?));
+    }
     if let Some(action) = default_global_action(key, fuzzy_active) {
         return Ok(Some(wm.apply(action)?));
     }
-    Ok(None)
-}
-
-/// Handles `Enter` submissions on the active `WindowManager` pane (in-prompt `:colon` commands and broadcast mode).
-pub(super) fn handle_wm_enter_submission(
-    wm: &mut WindowManager,
-    key: KeyEvent,
-) -> Result<Option<AppAction>> {
-    if key.code == KeyCode::Enter
-        && !key.modifiers.contains(KeyModifiers::SHIFT)
-        && !key.modifiers.contains(KeyModifiers::ALT)
-        && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
-        && !wm.active_pane().prompt().fuzzy_search.active
-        && !wm.active_pane().copy_mode().active
-        && !wm.active_pane().hints_mode().active
-        && wm.active_pane().pending_unsafe_paste().is_none()
-    {
-        if wm.active_pane().is_page_holding() && wm.active_pane().prompt().input.is_empty() {
-            return Ok(Some(wm.apply(Action::ScrollPageAdvance)?));
-        }
-        let text = wm.active_pane().prompt().text();
-        if let Some(cmd_res) = parse_colon_command(&text) {
-            let _ = wm.active_pane_mut().prompt_mut().take_submission();
-            return match cmd_res {
-                Ok(action) => Ok(Some(wm.apply(action)?)),
-                Err(err) => {
-                    wm.active_pane_mut().set_status_message(Some(err));
-                    Ok(Some(AppAction::Handled))
-                }
-            };
-        }
-
-        if wm.is_broadcast_input() && !wm.active_pane().is_read_only() {
-            let submitted = wm.active_pane_mut().prompt_mut().take_submission();
-            wm.broadcast_command(&submitted)?;
-            return Ok(Some(AppAction::Handled));
-        }
-    }
-    Ok(None)
-}
-
-/// Handles single-pane function keys (`F3` Hints) and Alt-chord shortcuts in `CommandPrompt` mode.
-pub(super) fn handle_pane_alt_or_fkey_shortcut(
-    pane: &mut CompositePane,
-    key: KeyEvent,
-) -> Result<Option<AppAction>> {
-    if key.modifiers.contains(KeyModifiers::ALT) {
-        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-        match key.code {
-            KeyCode::Char('a') | KeyCode::Char('A') => {
-                pane.prompt_mut().select_all();
-                pane.set_status_message(Some("Selected all prompt text".to_string()));
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('b') | KeyCode::Char('B') => {
-                if !pane.prompt().input.is_empty() {
-                    if shift || key.code == KeyCode::Char('B') {
-                        pane.prompt_mut().select_word_left();
-                    } else {
-                        pane.prompt_mut().move_word_left();
-                    }
-                } else {
-                    let _ = execute_colon_command(pane, Action::PromptBottom);
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('f') | KeyCode::Char('F') => {
-                if !pane.prompt().input.is_empty() {
-                    if shift || key.code == KeyCode::Char('F') {
-                        pane.prompt_mut().select_word_right();
-                    } else {
-                        pane.prompt_mut().move_word_right();
-                    }
-                } else {
-                    let _ = execute_colon_command(pane, Action::HintsToggle);
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
-                pane.prompt_mut().kill_next_word();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Backspace => {
-                pane.prompt_mut().kill_prev_word();
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Left => {
-                if shift {
-                    pane.prompt_mut().select_word_left();
-                } else {
-                    pane.prompt_mut().move_word_left();
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Right => {
-                if shift {
-                    pane.prompt_mut().select_word_right();
-                } else {
-                    pane.prompt_mut().move_word_right();
-                }
-                return Ok(Some(AppAction::Handled));
-            }
-            KeyCode::Enter => {
-                pane.prompt_mut().insert_newline();
-                return Ok(Some(AppAction::Handled));
-            }
-            _ => {}
-        }
-    }
-
-    if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage
-        && (pane.is_page_holding() || pane.is_holding_inspected())
-    {
-        match (key.modifiers, key.code) {
-            (KeyModifiers::NONE, KeyCode::F(7)) | (KeyModifiers::ALT, KeyCode::PageUp) => {
-                let _ = pane.scroll_page_back();
-                return Ok(Some(AppAction::Handled));
-            }
-            (KeyModifiers::NONE, KeyCode::F(8)) | (KeyModifiers::ALT, KeyCode::PageDown) => {
-                let _ = pane.scroll_page_advance();
-                return Ok(Some(AppAction::Handled));
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(action) = default_pane_action(key) {
-        let _ = execute_colon_command(pane, action);
-        return Ok(Some(AppAction::Handled));
-    }
-
     Ok(None)
 }

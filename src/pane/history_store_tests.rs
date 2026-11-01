@@ -3,6 +3,7 @@ use super::*;
 fn settings(dir: &Path, session: &str) -> HistorySettings {
     HistorySettings {
         enabled: true,
+        clipboard_persist: true,
         max_files: 25,
         max_entries: 100,
         load_limit: 1000,

@@ -630,6 +630,78 @@ impl WindowManager {
             "Reset window cascade & equalized split ratios".to_string(),
         ));
     }
+
+    /// Clears transient (unselected, non-rect-locked) canvas cursors on non-focused panes.
+    pub(crate) fn clear_inactive_transient_copy_cursors(&mut self) {
+        let active_id = self.active_pane_id();
+        for (&id, pane) in self.panes.iter_mut() {
+            if id != active_id
+                && pane.copy_mode().active
+                && !pane.copy_mode().has_selection()
+                && !pane.copy_mode().rect_mode
+            {
+                pane.copy_mode_mut().active = false;
+            }
+        }
+    }
+
+    /// Switches focus to the adjacent window/pane in direction `(dx, dy)` (Arrow / VIM `hjkl` / WASD `wasd`),
+    /// wrapping around the deck when at the edge of the layout or in overlapping Z-Stack mode.
+    pub fn focus_direction(&mut self, dx: i16, dy: i16) -> Option<PaneId> {
+        if self.panes.len() <= 1 {
+            return Some(self.active_pane_id());
+        }
+        let active_id = self.active_pane_id();
+        let (_, ws_area) = self.current_workspace_area();
+        let rects = self.compute_workspace_rects(ws_area);
+        if let Some(&(_, cur_r)) = rects.iter().find(|&&(id, _)| id == active_id) {
+            let cx0 = i32::from(cur_r.x) * 2 + i32::from(cur_r.width);
+            let cy0 = i32::from(cur_r.y) * 2 + i32::from(cur_r.height);
+            let mut best: Option<(PaneId, i32)> = None;
+            for &(id, r) in &rects {
+                if id == active_id {
+                    continue;
+                }
+                let cx = i32::from(r.x) * 2 + i32::from(r.width);
+                let cy = i32::from(r.y) * 2 + i32::from(r.height);
+                let dcx = cx - cx0;
+                let dcy = cy - cy0;
+                let in_dir = (dx < 0 && dcx < 0)
+                    || (dx > 0 && dcx > 0)
+                    || (dy < 0 && dcy < 0)
+                    || (dy > 0 && dcy > 0);
+                if !in_dir {
+                    continue;
+                }
+                let score = if dx != 0 {
+                    dcx.abs() + dcy.abs() * 2
+                } else {
+                    dcy.abs() + dcx.abs() * 2
+                };
+                if best.is_none_or(|(_, b_score)| score < b_score) {
+                    best = Some((id, score));
+                }
+            }
+            if let Some((target_id, _)) = best {
+                self.focus_and_raise(target_id);
+                return Some(target_id);
+            }
+        }
+        if dx > 0 || dy > 0 {
+            self.shuffle_deck_next()
+        } else {
+            self.shuffle_deck_prev()
+        }
+    }
+
+    /// Clears all in-memory and persisted session clipboard history entries across all panes.
+    pub fn clear_session_clipboard_history(&mut self) {
+        for p in self.panes.values_mut() {
+            p.prompt_mut().yank_history.clear();
+            p.prompt_mut().yank_buffer.clear();
+            let _ = p.history_store().clear_clipboard_history();
+        }
+    }
 }
 
 #[cfg(test)]

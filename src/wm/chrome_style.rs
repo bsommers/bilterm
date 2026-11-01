@@ -8,6 +8,7 @@ use crate::config::BiltermConfig;
 use crate::pane::PaneId;
 use crate::ui::chrome::OutlineStyle;
 use crate::ui::contrast::{resolve_ratatui_color_rgb, rgb_luminance};
+use crate::ui::cursor::{CaretStyle, CursorBlinkMode};
 use crate::ui::cursor_cmd::parse_cursor_color;
 use crate::ui::theme::{ThemePalette, ThemePreset};
 use crate::wm::WindowManager;
@@ -62,6 +63,8 @@ pub fn canonical_window_color_element(raw: &str) -> Option<&'static str> {
 /// Optional per-window overrides layered on top of the global `BiltermConfig`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PaneChromeStyle {
+    /// Built-in preset pinned for this window (`None` = custom or follow global theme).
+    pub preset: Option<ThemePreset>,
     /// Display name of the per-window theme (`None` = follow global theme).
     pub theme_name: Option<String>,
     /// Resolved per-window palette (`None` = follow global palette).
@@ -72,22 +75,91 @@ pub struct PaneChromeStyle {
     pub bold: Option<bool>,
     /// Per-window individual element color overrides (`canonical_key -> color_spec`).
     pub colors: BTreeMap<String, String>,
+    /// Per-window cursor shape override (`None` = follow global `cursor_style`).
+    pub cursor_style: Option<CaretStyle>,
+    /// Per-window cursor blink override (`None` = follow global `cursor_blink`).
+    pub cursor_blink: Option<CursorBlinkMode>,
+    /// Per-window custom cursor character (`None` = follow global `cursor_custom_char`).
+    pub cursor_custom_char: Option<String>,
+    /// Per-window cursor text color override (`None` = follow global, `Some(opt)` = pinned).
+    pub cursor_text_color: Option<Option<String>>,
+    /// Per-window cursor color override (`None` = follow global, `Some(opt)` = pinned).
+    pub cursor_color_override: Option<Option<String>>,
 }
 
 impl PaneChromeStyle {
     pub fn is_default(&self) -> bool {
-        self.palette.is_none()
+        self.preset.is_none()
+            && self.palette.is_none()
             && self.outline.is_none()
             && self.bold.is_none()
             && self.colors.is_empty()
+            && self.cursor_style.is_none()
+            && self.cursor_blink.is_none()
+            && self.cursor_custom_char.is_none()
+            && self.cursor_text_color.is_none()
+            && self.cursor_color_override.is_none()
+    }
+
+    /// Resolves a per-pane `BiltermConfig` applying any per-window cursor overrides.
+    pub fn resolve_pane_config(&self, base: &BiltermConfig) -> BiltermConfig {
+        let mut cfg = base.clone();
+        if let Some(p) = self.preset {
+            cfg.theme = p;
+        }
+        if let Some(st) = self.cursor_style {
+            cfg.cursor_style = st;
+        }
+        if let Some(bl) = self.cursor_blink {
+            cfg.cursor_blink = bl;
+        }
+        if let Some(ref ch) = self.cursor_custom_char {
+            cfg.cursor_custom_char = ch.clone();
+        }
+        if let Some(ref tc) = self.cursor_text_color {
+            cfg.cursor_text_color = tc.clone();
+        }
+        if let Some(ref cc) = self.cursor_color_override {
+            cfg.cursor_color = cc.clone();
+        }
+        if let Some(c) = self.colors.get("cursor-color") {
+            cfg.cursor_color = Some(c.clone());
+        }
+        cfg
+    }
+
+    /// Resolves both the per-window `BiltermConfig` and `ThemePalette` for rendering.
+    pub fn resolve_config_and_palette(&self, base: &BiltermConfig) -> (BiltermConfig, ThemePalette) {
+        let pane_cfg = self.resolve_pane_config(base);
+        let pal = self.resolve_palette(&pane_cfg);
+        (pane_cfg, pal)
     }
 
     pub fn resolve_palette(&self, cfg: &BiltermConfig) -> ThemePalette {
-        let mut pal = self.palette.clone().unwrap_or_else(|| cfg.palette());
-        if let Some(col) = cfg.cursor_color.as_deref().and_then(parse_cursor_color) {
+        let mut pal = if self.preset == Some(ThemePreset::TurboBlue)
+            && cfg.is_modern()
+            && cfg.custom_palette_override.is_none()
+        {
+            crate::ui::visual_style::modern_obsidian_palette(cfg.liquid_glass)
+        } else if let Some(ref p) = self.palette {
+            p.clone()
+        } else if let Some(preset) = self.preset {
+            preset.palette()
+        } else {
+            cfg.palette()
+        };
+        let eff_cursor_col = self
+            .colors
+            .get("cursor-color")
+            .cloned()
+            .or_else(|| match &self.cursor_color_override {
+                Some(opt) => opt.clone(),
+                None => cfg.cursor_color.clone(),
+            });
+        if let Some(col) = eff_cursor_col.as_deref().and_then(parse_cursor_color) {
             pal.cursor_fg = Some(col);
         }
-        self.apply_color_overrides(&mut pal, cfg.theme);
+        self.apply_color_overrides(&mut pal, self.preset.unwrap_or(cfg.theme));
         pal
     }
 
@@ -133,7 +205,14 @@ impl PaneChromeStyle {
     }
 
     pub fn resolve_outline(&self, cfg: &BiltermConfig) -> OutlineStyle {
-        self.outline.unwrap_or(cfg.window_outline)
+        if let Some(outline) = self.outline {
+            return outline;
+        }
+        if cfg.is_modern() && cfg.window_outline == OutlineStyle::Double {
+            OutlineStyle::Rounded
+        } else {
+            cfg.window_outline
+        }
     }
 
     pub fn resolve_bold(&self, cfg: &BiltermConfig) -> bool {
@@ -204,10 +283,114 @@ impl WindowManager {
         }
     }
 
+    /// Pins the current theme palette on all panes other than `active_id` so changing the active
+    /// pane's theme does not alter other open windows (`THM-01`).
+    pub fn pin_other_panes_theme(&mut self, active_id: PaneId) {
+        let cur_preset = self
+            .config
+            .custom_palette_override
+            .is_none()
+            .then_some(self.config.theme);
+        let cur_pal = self.config.palette();
+        let cur_name = self.config.theme.label().to_string();
+        let pids: Vec<PaneId> = self.panes.keys().copied().collect();
+        for pid in pids {
+            if pid == active_id {
+                continue;
+            }
+            let chrome = self.pane_chrome.entry(pid).or_default();
+            if chrome.palette.is_none() && chrome.preset.is_none() {
+                chrome.preset = cur_preset;
+                chrome.palette = Some(cur_pal.clone());
+                chrome.theme_name = Some(cur_name.clone());
+            }
+        }
+    }
+
+    /// Clears per-window theme overrides across all panes (used by `:theme global <name>`).
+    pub fn clear_all_pane_theme_overrides(&mut self) {
+        let pids: Vec<PaneId> = self.pane_chrome.keys().copied().collect();
+        for pid in pids {
+            if let Some(chrome) = self.pane_chrome.get_mut(&pid) {
+                chrome.preset = None;
+                chrome.palette = None;
+                chrome.theme_name = None;
+                if chrome.is_default() {
+                    self.pane_chrome.remove(&pid);
+                }
+            }
+        }
+    }
+
+    /// Pins the current cursor settings on all panes other than `active_id` so changing the active
+    /// pane's cursor does not alter other open windows (`UI-05`).
+    pub fn pin_other_panes_cursor(&mut self, active_id: PaneId) {
+        let st = self.config.cursor_style;
+        let bl = self.config.cursor_blink;
+        let ch = self.config.cursor_custom_char.clone();
+        let tc = self.config.cursor_text_color.clone();
+        let cc = self.config.cursor_color.clone();
+        let pids: Vec<PaneId> = self.panes.keys().copied().collect();
+        for pid in pids {
+            if pid == active_id {
+                continue;
+            }
+            let chrome = self.pane_chrome.entry(pid).or_default();
+            chrome.cursor_style.get_or_insert(st);
+            chrome.cursor_blink.get_or_insert(bl);
+            chrome.cursor_custom_char.get_or_insert_with(|| ch.clone());
+            chrome.cursor_text_color.get_or_insert_with(|| tc.clone());
+            if !chrome.colors.contains_key("cursor-color") {
+                chrome
+                    .cursor_color_override
+                    .get_or_insert_with(|| cc.clone());
+            }
+        }
+    }
+
+    /// Copies the current `self.config` cursor settings into the focused pane's `PaneChromeStyle`.
+    pub fn sync_active_pane_cursor_from_config(&mut self) {
+        let st = self.config.cursor_style;
+        let bl = self.config.cursor_blink;
+        let ch = self.config.cursor_custom_char.clone();
+        let tc = self.config.cursor_text_color.clone();
+        let cc = self.config.cursor_color.clone();
+        let chrome = self.active_pane_chrome_mut();
+        chrome.cursor_style = Some(st);
+        chrome.cursor_blink = Some(bl);
+        chrome.cursor_custom_char = Some(ch);
+        chrome.cursor_text_color = Some(tc);
+        chrome.cursor_color_override = Some(cc.clone());
+        if let Some(c) = cc {
+            chrome.colors.insert("cursor-color".to_string(), c);
+        } else {
+            chrome.colors.remove("cursor-color");
+        }
+    }
+
+    /// Clears per-window cursor overrides across all panes (used by `:cursor global ...`).
+    pub fn clear_all_pane_cursor_overrides(&mut self) {
+        let pids: Vec<PaneId> = self.pane_chrome.keys().copied().collect();
+        for pid in pids {
+            if let Some(chrome) = self.pane_chrome.get_mut(&pid) {
+                chrome.cursor_style = None;
+                chrome.cursor_blink = None;
+                chrome.cursor_custom_char = None;
+                chrome.cursor_text_color = None;
+                chrome.cursor_color_override = None;
+                chrome.colors.remove("cursor-color");
+                if chrome.is_default() {
+                    self.pane_chrome.remove(&pid);
+                }
+            }
+        }
+    }
+
     /// Rebuilds per-window overrides from saved session panes (unknown themes are dropped).
     pub(crate) fn restore_pane_chrome(&mut self, saved: &[crate::wm::session::SavedPaneState]) {
         self.pane_chrome.clear();
         for sp in saved {
+            let preset = sp.theme.as_deref().and_then(ThemePreset::from_name);
             let (theme_name, palette) = sp
                 .theme
                 .as_deref()
@@ -222,11 +405,13 @@ impl WindowManager {
                 }
             }
             let style = PaneChromeStyle {
+                preset,
                 theme_name,
                 palette,
                 outline: sp.outline,
                 bold: sp.bold,
                 colors,
+                ..Default::default()
             };
             if !style.is_default() {
                 self.pane_chrome.insert(sp.id, style);
@@ -262,11 +447,13 @@ mod tests {
         let id = wm.active_pane_id();
         let (label, pal) = resolve_named_palette("solarized").unwrap();
         *wm.active_pane_chrome_mut() = PaneChromeStyle {
+            preset: Some(ThemePreset::SolarizedDark),
             theme_name: Some(label.clone()),
             palette: Some(pal.clone()),
             outline: Some(OutlineStyle::Dashed),
             bold: Some(true),
             colors: BTreeMap::from([("font-color".to_string(), "amber".to_string())]),
+            ..Default::default()
         };
         let toml_str = toml::to_string_pretty(&wm.snapshot_session("rt")).unwrap();
         assert!(toml_str.contains("outline = \"dashed\""), "{toml_str}");

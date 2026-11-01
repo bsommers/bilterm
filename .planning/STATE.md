@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.5.1
-milestone_name: Per-Window Theme & Element Color Fixes, Drawer Controls, Session Save/Rename, RAW F-Keys & Snazzy/Glass Visual Styles
-current_phase: 41
-current_phase_name: rectangular-select-and-per-pane-session-process-cwd-persistence
-status: milestone_v2_5_1_complete
-stopped_at: Built and installed v2.5.1 (Per-window themes/colors & canvas bg fix, DRAWER title & Ctrl+X/F7/minimize/maximize/push-out controls, :save/:rename session commands, :fkeys RAW mode routing, and :snazzy/:glass visual styles)
+milestone: v2.5.3
+milestone_name: Explicit Copy Protection, Session-Persisted Clipboard History, Directional Window Switching, Single-Cursor Invariant & SESSIONS Drawer
+current_phase: 42
+current_phase_name: modern-liquid-glass-per-window-theme-cursor-and-ssh-hardening
+status: milestone_v2_5_3_complete
+stopped_at: Completed v2.5.3 (Explicit Copy by default, Per-Session Cut & Paste Buffer History, Directional Arrow/VIM/WASD Window Switching, Multi-Window Single-Cursor Fix, and SESSIONS Drawer Header)
 last_updated: "2026-10-31"
 last_activity: 2026-10-31
-last_activity_desc: Built and installed v2.5.1 release binary at target/release/bilterm and ~/.local/bin/bilterm
+last_activity_desc: Bumped version to v2.5.3, updated STATE.md & CHECKPOINT.md, verified test suite and installed release binary
 progress:
-  total_phases: 41
-  completed_phases: 41
-  total_plans: 89
-  completed_plans: 89
+  total_phases: 42
+  completed_phases: 42
+  total_plans: 92
+  completed_plans: 92
 ---
 
 # Project State
@@ -22,17 +22,17 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-10-31)
 
-**Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.5.0` (`Phases 39–41`) — **COMPLETE (`41/41` Phases)**.
+**Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
+**Current focus:** Milestone `v2.5.2` (`Phase 42`) — **COMPLETE (`42/42` Phases)**.
 
 ## Current Position
 
-Phase: 41 (rectangular-select-and-per-pane-session-process-cwd-persistence) — COMPLETE
-Plan: All `v2.4.x`–`v2.5.0` plans (`39-01..02`, `40-01..03`, `41-01..03`) complete
-Status: Phases 1–41 complete (`41/41` Phases across `v1.0`–`v2.5.0`).
-Last activity: 2026-10-31 — Completed Phase 41 (`v2.5.0`): 2D rectangular block select, highlight & copy (`:rect`, `:select`, `:copy rect`, `Alt+R`, `Alt+LeftDrag`, `:rect mode`, `:rect <r1> <c1> <r2> <c2>`) and full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`session_restore_processes`).
+Phase: 42 (modern-liquid-glass-per-window-theme-cursor-and-ssh-hardening) — COMPLETE
+Plan: All `v2.4.x`–`v2.5.2` plans (`39-01..02`, `40-01..03`, `41-01..03`, `42-01..03`) complete
+Status: Phases 1–42 complete (`42/42` Phases across `v1.0`–`v2.5.2`).
+Last activity: 2026-10-31 — Completed Phase 42 (`v2.5.2`): Non-Retro Modern Minimal (`--modern`, `:modern`) and Liquid Glass (`--liquid-glass`, `:liquid`) UI modes, per-window vs. global `:theme` and `:cursor` (`:cursor cursor-color`), and `:ssh` parsing, `<Tab>` completion (`~/.ssh/config` hosts), `<F1>` help, and SSH login `PROMPT_COMMAND` echo fix.
 
-Progress: [██████████] 100% (41/41 Phases)
+Progress: [██████████] 100% (42/42 Phases)
 
 ## Performance Metrics
 

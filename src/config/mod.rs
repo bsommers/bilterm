@@ -149,6 +149,14 @@ pub struct BiltermConfig {
     pub snazzy_mode: bool,
     /// Enables frosted translucent glass visual style for overlaid panels and `--gui` mode (`:glass`).
     pub glass_mode: bool,
+    /// Enables non-retro, clean modern minimal UI (rounded borders, obsidian slate palette, minimal headers/bars, `:modern`).
+    pub modern_mode: bool,
+    /// Enables Liquid Glass optical refraction mode (modern UI + specular edge refraction, chromatic dispersion & ambient glow, `:liquid`).
+    pub liquid_glass: bool,
+    /// When `false` (default), mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`).
+    pub copy_on_select: bool,
+    /// Persists the cut-and-paste yank buffer history uniquely per Bilterm session (`true` by default, `:clipboard persist [on|off]`).
+    pub clipboard_history_persist: bool,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -225,6 +233,10 @@ impl Default for BiltermConfig {
             raw_fkeys: RawFkeyMode::Auto,
             snazzy_mode: false,
             glass_mode: false,
+            modern_mode: false,
+            liquid_glass: false,
+            copy_on_select: false,
+            clipboard_history_persist: true,
             custom_palette_override: None,
             cursor_blink_hidden: false,
         }
@@ -232,6 +244,16 @@ impl Default for BiltermConfig {
 }
 
 impl BiltermConfig {
+    /// Returns `true` when non-retro Modern Minimal or Liquid Glass UI mode is active.
+    pub const fn is_modern(&self) -> bool {
+        self.modern_mode || self.liquid_glass
+    }
+
+    /// Returns `true` when Frosted Glass or Liquid Glass optical mode is active.
+    pub const fn is_glass(&self) -> bool {
+        self.glass_mode || self.liquid_glass
+    }
+
     /// Parses a TOML configuration string into `BiltermConfig`.
     pub fn from_toml_str(toml_text: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(toml_text)
@@ -270,6 +292,7 @@ impl BiltermConfig {
     pub fn history_settings(&self) -> HistorySettings {
         HistorySettings {
             enabled: self.history_enabled,
+            clipboard_persist: self.clipboard_history_persist,
             max_files: self.history_max_files,
             max_entries: self.history_max_entries,
             load_limit: self.history_load_limit,
@@ -278,15 +301,24 @@ impl BiltermConfig {
         }
     }
 
-    /// Resolves the active `ThemePalette` (applying any INI/custom override if present).
+    /// Resolves the active `ThemePalette` (applying any INI/custom override if present, or
+    /// the clean Modern Obsidian / Liquid Glass slate palette when `is_modern()` is active
+    /// and the user has not chosen a non-default theme).
     pub fn palette(&self) -> ThemePalette {
-        self.custom_palette_override
-            .clone()
-            .unwrap_or_else(|| self.theme.palette())
+        if let Some(custom) = &self.custom_palette_override {
+            return custom.clone();
+        }
+        if self.is_modern() && self.theme == ThemePreset::TurboBlue {
+            return crate::ui::visual_style::modern_obsidian_palette(self.liquid_glass);
+        }
+        self.theme.palette()
     }
 
     /// Resolves the active `GlyphSet`.
     pub fn glyph_set(&self) -> GlyphSet {
+        if self.is_modern() && self.glyphs == GlyphPack::Unicode {
+            return crate::ui::visual_style::modern_glyph_set();
+        }
         self.glyphs.glyphs()
     }
 

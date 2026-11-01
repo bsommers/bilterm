@@ -21,8 +21,7 @@ use crate::action::Action;
 use crate::colon_command::{execute_colon_command, parse_colon_command};
 use crate::error::Result;
 use crate::input::keymap::{
-    handle_pane_alt_or_fkey_shortcut, handle_wm_enter_submission, handle_wm_leader_key,
-    handle_wm_shortcut_key, handle_wm_user_binding_or_leader_entry,
+    handle_wm_leader_key, handle_wm_shortcut_key, handle_wm_user_binding_or_leader_entry,
 };
 use crate::input::modal::{
     handle_copy_mode_key, handle_fuzzy_search_key, handle_hints_mode_key,
@@ -30,7 +29,7 @@ use crate::input::modal::{
 };
 use crate::pane::CompositePane;
 use crate::pty::line_discipline::InputRoutingMode;
-use crate::vt::{encode_osc52_clipboard, is_unsafe_paste, sanitize_paste_bytes};
+use crate::vt::{is_unsafe_paste, sanitize_paste_bytes};
 use crate::wm::WindowManager;
 
 /// High-level application actions returned by the input router.
@@ -119,9 +118,35 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     }
 
     // When in RawPtyPassthrough (including DECSET 1049 alternate screen apps like vim/htop/emacs),
-    // allow copying an active mouse canvas selection with Ctrl+C and pasting with Ctrl+Shift+V / Shift+Insert
-    // before passing keys to the child PTY.
+    // allow copying an active mouse canvas selection with Ctrl+C, pasting with Ctrl+Shift+V / Shift+Insert,
+    // and starting/toggling Rectangular Copy Mode (:rect mode / Alt+R / Shift+Arrows) before passing keys to the child PTY.
     if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough {
+        if key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(
+                key.code,
+                KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+            )
+            && (pane.copy_mode().rect_mode || key.modifiers.contains(KeyModifiers::ALT))
+        {
+            pane.enter_rect_copy_mode();
+            return handle_copy_mode_key(pane, key);
+        }
+        if !pane.vt().is_alternate_screen() && !pane.is_active_canvas_password_prompt() {
+            if key.modifiers.contains(KeyModifiers::ALT)
+                && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
+            {
+                pane.enter_rect_copy_mode();
+                return Ok(AppAction::Handled);
+            }
+            if (key.modifiers.contains(KeyModifiers::ALT)
+                && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')))
+                || (key.code == KeyCode::F(8) && key.modifiers.is_empty())
+                || (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Up)
+            {
+                pane.enter_copy_mode();
+                return Ok(AppAction::Handled);
+            }
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
             && pane.copy_mode().has_selection()
@@ -165,6 +190,15 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
 
 fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
     if key.modifiers.contains(KeyModifiers::SHIFT) {
+        if matches!(
+            key.code,
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+        ) && (key.modifiers.contains(KeyModifiers::ALT)
+            || (pane.copy_mode().rect_mode && pane.prompt().input.is_empty()))
+        {
+            pane.enter_rect_copy_mode();
+            return handle_copy_mode_key(pane, key);
+        }
         let word_mod = key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT);
         match key.code {
@@ -217,7 +251,7 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             }
             KeyCode::Delete => {
                 if let Some(cut) = pane.prompt_mut().cut_selection_or_line() {
-                    pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&cut)));
+                    pane.record_yank(&cut);
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
                         cut.chars().count()
@@ -250,7 +284,7 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 if pane.prompt().has_selection() {
                     if let Some(copied) = pane.prompt_mut().copy_selection() {
-                        pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&copied)));
+                        pane.record_yank(&copied);
                         pane.prompt_mut().clear_selection();
                         pane.set_status_message(Some(format!(
                             "Copied {} chars to clipboard",
@@ -270,6 +304,8 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 pane.prompt_mut().running_command = None;
                 if !prompt_was_empty {
                     pane.prompt_mut().clear_line();
+                    let y = pane.prompt().yank_buffer.clone();
+                    pane.record_yank(&y);
                 }
                 if prompt_was_empty || has_fg_sub {
                     pane.write_to_pty(&[0x03])?;
@@ -281,14 +317,16 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             }
             KeyCode::Char('u') => {
                 pane.prompt_mut().clear_line();
+                let y = pane.prompt().yank_buffer.clone();
+                pane.record_yank(&y);
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('k') => {
                 let had_sel = pane.prompt().has_selection();
                 pane.prompt_mut().kill_to_end_of_line();
+                let y = pane.prompt().yank_buffer.clone();
+                pane.record_yank(&y);
                 if had_sel {
-                    let y = pane.prompt().yank_buffer.clone();
-                    pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&y)));
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
                         y.chars().count()
@@ -299,9 +337,9 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             KeyCode::Char('w') => {
                 let had_sel = pane.prompt().has_selection();
                 pane.prompt_mut().kill_prev_word();
+                let y = pane.prompt().yank_buffer.clone();
+                pane.record_yank(&y);
                 if had_sel {
-                    let y = pane.prompt().yank_buffer.clone();
-                    pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&y)));
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
                         y.chars().count()
@@ -579,6 +617,137 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     }
 
     handle_key_event(wm.active_pane_mut(), key)
+}
+
+/// Handles `Enter` submissions on the active `WindowManager` pane (in-prompt `:colon` commands and broadcast mode).
+fn handle_wm_enter_submission(
+    wm: &mut WindowManager,
+    key: KeyEvent,
+) -> Result<Option<AppAction>> {
+    if key.code == KeyCode::Enter
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+        && wm.active_pane().effective_routing_mode() == InputRoutingMode::CommandPrompt
+        && !wm.active_pane().prompt().fuzzy_search.active
+        && !wm.active_pane().copy_mode().active
+        && !wm.active_pane().hints_mode().active
+        && wm.active_pane().pending_unsafe_paste().is_none()
+    {
+        if wm.active_pane().is_page_holding() && wm.active_pane().prompt().input.is_empty() {
+            return Ok(Some(wm.apply(Action::ScrollPageAdvance)?));
+        }
+        let text = wm.active_pane().prompt().text();
+        if let Some(cmd_res) = parse_colon_command(&text) {
+            let _ = wm.active_pane_mut().prompt_mut().take_submission();
+            return match cmd_res {
+                Ok(action) => Ok(Some(wm.apply(action)?)),
+                Err(err) => {
+                    wm.active_pane_mut().set_status_message(Some(err));
+                    Ok(Some(AppAction::Handled))
+                }
+            };
+        }
+
+        if wm.is_broadcast_input() && !wm.active_pane().is_read_only() {
+            let submitted = wm.active_pane_mut().prompt_mut().take_submission();
+            wm.broadcast_command(&submitted)?;
+            return Ok(Some(AppAction::Handled));
+        }
+    }
+    Ok(None)
+}
+
+/// Handles single-pane function keys (`F3` Hints) and Alt-chord shortcuts in `CommandPrompt` mode.
+fn handle_pane_alt_or_fkey_shortcut(
+    pane: &mut CompositePane,
+    key: KeyEvent,
+) -> Result<Option<AppAction>> {
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        match key.code {
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                pane.prompt_mut().select_all();
+                pane.set_status_message(Some("Selected all prompt text".to_string()));
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('b') | KeyCode::Char('B') => {
+                if !pane.prompt().input.is_empty() {
+                    if shift || key.code == KeyCode::Char('B') {
+                        pane.prompt_mut().select_word_left();
+                    } else {
+                        pane.prompt_mut().move_word_left();
+                    }
+                } else {
+                    let _ = execute_colon_command(pane, Action::PromptBottom);
+                }
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                if !pane.prompt().input.is_empty() {
+                    if shift || key.code == KeyCode::Char('F') {
+                        pane.prompt_mut().select_word_right();
+                    } else {
+                        pane.prompt_mut().move_word_right();
+                    }
+                } else {
+                    let _ = execute_colon_command(pane, Action::HintsToggle);
+                }
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
+                pane.prompt_mut().kill_next_word();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Backspace => {
+                pane.prompt_mut().kill_prev_word();
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Left => {
+                if shift {
+                    pane.prompt_mut().select_word_left();
+                } else {
+                    pane.prompt_mut().move_word_left();
+                }
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Right => {
+                if shift {
+                    pane.prompt_mut().select_word_right();
+                } else {
+                    pane.prompt_mut().move_word_right();
+                }
+                return Ok(Some(AppAction::Handled));
+            }
+            KeyCode::Enter => {
+                pane.prompt_mut().insert_newline();
+                return Ok(Some(AppAction::Handled));
+            }
+            _ => {}
+        }
+    }
+
+    if pane.scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && (pane.is_page_holding() || pane.is_holding_inspected())
+    {
+        match (key.modifiers, key.code) {
+            (KeyModifiers::NONE, KeyCode::F(7)) | (KeyModifiers::ALT, KeyCode::PageUp) => {
+                let _ = pane.scroll_page_back();
+                return Ok(Some(AppAction::Handled));
+            }
+            (KeyModifiers::NONE, KeyCode::F(8)) | (KeyModifiers::ALT, KeyCode::PageDown) => {
+                let _ = pane.scroll_page_advance();
+                return Ok(Some(AppAction::Handled));
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(action) = default_pane_action(key) {
+        let _ = execute_colon_command(pane, action);
+        return Ok(Some(AppAction::Handled));
+    }
+
+    Ok(None)
 }
 
 #[cfg(test)]

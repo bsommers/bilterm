@@ -55,7 +55,7 @@ Relying solely on `KeyModifiers::ALT` or `F1`–`F12` breaks keyboard navigation
 ## 2. Font Rendering, Powerline / Nerd-Font PUA Glyphs & macOS `LastResort` `[?]` Boxes
 
 ### What Happened
-Prompts containing Powerline or Nerd Font Private Use Area (PUA) glyphs — such as `" bill@bigmac  ~ "` (`U+E0B0` ``, `U+E0A0` ``) — rendered as **boxed question marks (`[?]`)** on macOS native GUI mode and degraded into `°` (`0xB0`) or `?` in the software bitmap fallback.
+Prompts containing Powerline or Nerd Font Private Use Area (PUA) glyphs — such as `" user@devbox  ~ "` (`U+E0B0` ``, `U+E0A0` ``) — rendered as **boxed question marks (`[?]`)** on macOS native GUI mode and degraded into `°` (`0xB0`) or `?` in the software bitmap fallback.
 
 ### Root Cause
 1. **CoreText `.LastResort` Fallback**: When the primary monospace font (e.g., `Menlo` or `Monaco`) does not contain a glyph for `U+E0B0`, calling `CTFontCreateForString` on macOS returns Apple's internal `.LastResort` font, whose glyphs are literal boxed `[?]` symbols.

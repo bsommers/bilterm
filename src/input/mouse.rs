@@ -10,7 +10,6 @@ use crate::input::mouse_wm::{
 };
 use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
-use crate::vt::encode_osc52_clipboard;
 use crate::wm::{Focus, WindowManager, encode_sgr_mouse_local, rect_contains};
 
 fn prompt_editor_coords_from_mouse(
@@ -201,10 +200,7 @@ pub fn handle_mouse_event(
                 let rel_r = row.saturating_sub(canvas_rect.y);
                 let rel_c = col.saturating_sub(canvas_rect.x);
                 if let Some(url) = pane.vt().url_at(rel_r, rel_c) {
-                    let seq = encode_osc52_clipboard(&url);
-                    pane.set_last_osc52_sequence(Some(seq));
-                    pane.prompt_mut().yank_buffer = url.clone();
-                    crate::clipboard::set_system_clipboard(&url);
+                    pane.record_yank(&url);
                     pane.set_status_message(Some(format!("Yanked URL: {url}")));
                     return Ok(AppAction::Handled);
                 }
@@ -295,7 +291,7 @@ pub fn handle_mouse_event(
                 return Ok(AppAction::Handled);
             }
 
-            // Plain LeftClick on OutputCanvas: focus OutputCanvas cursor & start character stream selection
+            // Plain LeftClick on OutputCanvas: position canvas cursor without activating copy mode until drag/Shift
             if in_canvas && !in_prompt {
                 pane.prompt_mut().clear_selection();
                 let rel_r = row
@@ -311,19 +307,15 @@ pub fn handle_mouse_event(
                     copy.active = true;
                     copy.cursor_row = rel_r;
                     copy.cursor_col = rel_c;
-                    let _ = pane.yank_mouse_canvas_selection();
+                    let _ = pane.stage_mouse_canvas_selection();
                 } else {
                     let copy = pane.copy_mode_mut();
-                    copy.active = true;
+                    copy.active = false;
                     copy.anchor = None;
                     copy.cursor_row = rel_r;
                     copy.cursor_col = rel_c;
                     copy.selection_kind = CopySelectionKind::Char;
                     copy.visual_lock = false;
-                    pane.set_status_message(Some(
-                        "CANVAS SELECT: Arrows move | Shift+Arrows/Drag select | Enter/y copy | x to prompt | Tab/F8/Esc -> Prompt"
-                            .to_string(),
-                    ));
                 }
                 pane.set_mouse_drag(Some(PromptMouseDrag::CanvasCharSelect));
                 return Ok(AppAction::Handled);
@@ -407,6 +399,7 @@ pub fn handle_mouse_event(
                             .saturating_sub(canvas_rect.x)
                             .min(canvas_rect.width.saturating_sub(1));
                         let copy = pane.copy_mode_mut();
+                        copy.active = true;
                         if copy.anchor.is_none() {
                             copy.anchor = Some((copy.cursor_row, copy.cursor_col));
                         }
@@ -427,21 +420,18 @@ pub fn handle_mouse_event(
             if let Some(drag) = pane.take_mouse_drag() {
                 match drag {
                     PromptMouseDrag::CanvasRectSelect => {
-                        let _ = pane.yank_mouse_canvas_selection();
+                        let _ = pane.stage_mouse_canvas_selection();
                     }
                     PromptMouseDrag::CanvasCharSelect => {
                         if pane.copy_mode().has_selection() {
-                            let _ = pane.yank_mouse_canvas_selection();
+                            let _ = pane.stage_mouse_canvas_selection();
                         }
                     }
                     PromptMouseDrag::PromptTextSelect => {
-                        if pane.prompt().has_selection()
-                            && let Some(copied) = pane.prompt_mut().copy_selection()
-                        {
-                            pane.set_last_osc52_sequence(Some(encode_osc52_clipboard(&copied)));
+                        if let Some(sel) = pane.prompt().selected_text() {
                             pane.set_status_message(Some(format!(
-                                "Selected & copied {} chars",
-                                copied.chars().count()
+                                "Selected {} chars (Ctrl+C copy | Ctrl+X cut | Esc clear)",
+                                sel.chars().count()
                             )));
                         }
                     }
@@ -478,25 +468,46 @@ fn handle_canvas_only_mouse_event(
     canvas_rect: Rect,
     in_canvas: bool,
 ) -> Result<AppAction> {
-    let rel_r = mouse
-        .row
-        .saturating_sub(canvas_rect.y)
-        .min(canvas_rect.height.saturating_sub(1));
-    let rel_c = mouse
-        .column
-        .saturating_sub(canvas_rect.x)
-        .min(canvas_rect.width.saturating_sub(1));
+    let rel_r = mouse.row.saturating_sub(canvas_rect.y).min(canvas_rect.height.saturating_sub(1));
+    let rel_c = mouse.column.saturating_sub(canvas_rect.x).min(canvas_rect.width.saturating_sub(1));
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) if in_canvas => {
-            if mouse.modifiers.contains(KeyModifiers::ALT) || pane.copy_mode().rect_mode {
+            if mouse.modifiers.contains(KeyModifiers::CONTROL)
+                && let Some(url) = pane.vt().url_at(rel_r, rel_c)
+            {
+                pane.record_yank(&url);
+                pane.set_status_message(Some(format!("Yanked URL: {url}")));
+                return Ok(AppAction::Handled);
+            }
+            let want_rect = mouse.modifiers.contains(KeyModifiers::ALT)
+                || pane.copy_mode().rect_mode
+                || (pane.copy_mode().active && pane.copy_mode().selection_kind == CopySelectionKind::Block);
+            let extend = mouse.modifiers.contains(KeyModifiers::SHIFT) && pane.copy_mode().anchor.is_some();
+            if want_rect {
                 let copy = pane.copy_mode_mut();
                 copy.active = true;
-                copy.anchor = Some((rel_r, rel_c));
+                if !extend {
+                    copy.anchor = Some((rel_r, rel_c));
+                }
                 copy.cursor_row = rel_r;
                 copy.cursor_col = rel_c;
                 copy.selection_kind = CopySelectionKind::Block;
                 copy.visual_lock = true;
+                if extend {
+                    let _ = pane.stage_mouse_canvas_selection();
+                } else {
+                    pane.set_status_message(Some(
+                        "RECT SELECT [1×1]: Drag or Shift+Arrows | Enter/y copy | x to paste | Esc clear".to_string(),
+                    ));
+                }
                 pane.set_mouse_drag(Some(PromptMouseDrag::CanvasRectSelect));
+            } else if extend {
+                let copy = pane.copy_mode_mut();
+                copy.active = true;
+                copy.cursor_row = rel_r;
+                copy.cursor_col = rel_c;
+                let _ = pane.stage_mouse_canvas_selection();
+                pane.set_mouse_drag(Some(PromptMouseDrag::CanvasCharSelect));
             } else {
                 let copy = pane.copy_mode_mut();
                 copy.active = false;
@@ -504,6 +515,7 @@ fn handle_canvas_only_mouse_event(
                 copy.cursor_row = rel_r;
                 copy.cursor_col = rel_c;
                 copy.selection_kind = CopySelectionKind::Char;
+                copy.visual_lock = false;
                 pane.set_mouse_drag(Some(PromptMouseDrag::CanvasCharSelect));
             }
             Ok(AppAction::Handled)
@@ -513,14 +525,22 @@ fn handle_canvas_only_mouse_event(
                 match drag {
                     PromptMouseDrag::CanvasRectSelect => {
                         let copy = pane.copy_mode_mut();
+                        copy.active = true;
+                        copy.selection_kind = CopySelectionKind::Block;
+                        copy.visual_lock = true;
                         copy.cursor_row = rel_r;
                         copy.cursor_col = rel_c;
                         return Ok(AppAction::Handled);
                     }
                     PromptMouseDrag::CanvasCharSelect => {
                         let copy = pane.copy_mode_mut();
+                        copy.active = true;
                         if copy.anchor.is_none() {
                             copy.anchor = Some((copy.cursor_row, copy.cursor_col));
+                        }
+                        if mouse.modifiers.contains(KeyModifiers::ALT) || copy.rect_mode {
+                            copy.selection_kind = CopySelectionKind::Block;
+                            copy.visual_lock = true;
                         }
                         copy.cursor_row = rel_r;
                         copy.cursor_col = rel_c;
@@ -535,10 +555,10 @@ fn handle_canvas_only_mouse_event(
             if let Some(drag) = pane.take_mouse_drag() {
                 match drag {
                     PromptMouseDrag::CanvasRectSelect => {
-                        let _ = pane.yank_mouse_canvas_selection();
+                        let _ = pane.stage_mouse_canvas_selection();
                     }
                     PromptMouseDrag::CanvasCharSelect if pane.copy_mode().has_selection() => {
-                        let _ = pane.yank_mouse_canvas_selection();
+                        let _ = pane.stage_mouse_canvas_selection();
                     }
                     _ => {}
                 }
@@ -734,6 +754,7 @@ pub fn handle_wm_mouse_event(
         && pane_mouse.column >= pane_inner.x
         && pane_mouse.column < pane_inner.x + pane_inner.width;
 
+    let auto_copy = wm.config().copy_on_select;
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
         return Ok(AppAction::Continue);
     };
@@ -760,6 +781,16 @@ pub fn handle_wm_mouse_event(
     }
 
     let res = handle_mouse_event(pane, pane_mouse, pane_inner);
+    if auto_copy
+        && matches!(pane_mouse.kind, MouseEventKind::Up(MouseButton::Left))
+        && let Some(p) = wm.pane_by_focus_mut(hit_focus)
+    {
+        if p.copy_mode().has_selection() {
+            let _ = p.yank_mouse_canvas_selection();
+        } else if let Some(copied) = p.prompt_mut().copy_selection() {
+            p.record_yank(&copied);
+        }
+    }
     wm.set_mouse_pixel_hint(None);
     res
 }

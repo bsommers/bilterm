@@ -174,6 +174,25 @@ pub struct HintsModeState {
 }
 
 impl CompositePane {
+    /// Replaces the prompt's in-memory history with the newest persisted commands of the
+    /// pane's history session and restores persisted cut-and-paste yank history when enabled.
+    pub fn restore_persisted_history(&mut self) {
+        self.prompt.history = self.history_store.load_recent_commands();
+        self.prompt.history_index = None;
+        self.prompt.history_popup_selected = 0;
+        let clips = self
+            .history_store
+            .load_recent_clipboard(crate::pane::prompt_selection::MAX_YANK_HISTORY);
+        if !clips.is_empty() {
+            if self.prompt.yank_buffer.is_empty() {
+                self.prompt.yank_buffer = clips[0].clone();
+            }
+            for item in clips.into_iter().rev() {
+                self.prompt.push_yank_entry(&item);
+            }
+        }
+    }
+
     /// Executes a case-insensitive search on the visible `OutputCanvas` grid (`VAL-02`).
     pub fn set_canvas_search(&mut self, query: &str) {
         let trimmed = query.trim();
@@ -231,6 +250,10 @@ impl CompositePane {
 
     /// Enters keyboard-driven Vi Copy Mode on the `OutputCanvas` (`F8` / `Alt+C` / `:copy`, `VAL-04`).
     pub fn enter_copy_mode(&mut self) {
+        if self.copy_mode.rect_mode {
+            self.enter_rect_copy_mode();
+            return;
+        }
         let (r, c) = self.vt.cursor_position();
         self.copy_mode.active = true;
         self.copy_mode.cursor_row = r;
@@ -267,15 +290,28 @@ impl CompositePane {
     /// Enables or disables persistent rectangular selection mode (`rect_mode`) for mouse drag and `Shift+Arrows`.
     pub fn set_rect_select_mode(&mut self, enabled: bool) {
         self.copy_mode.rect_mode = enabled;
-        if self.copy_mode.has_selection() {
-            self.copy_mode.selection_kind = if enabled {
-                CopySelectionKind::Block
+        if enabled {
+            let (r, c) = if self.copy_mode.active {
+                (self.copy_mode.cursor_row, self.copy_mode.cursor_col)
             } else {
-                CopySelectionKind::Char
+                self.vt.cursor_position()
             };
+            self.copy_mode.active = true;
+            self.copy_mode.cursor_row = r;
+            self.copy_mode.cursor_col = c;
+            if self.copy_mode.anchor.is_none() {
+                self.copy_mode.anchor = Some((r, c));
+            }
+            self.copy_mode.selection_kind = CopySelectionKind::Block;
+            self.copy_mode.visual_lock = true;
+        } else {
+            self.copy_mode.active = false;
+            self.copy_mode.anchor = None;
+            self.copy_mode.selection_kind = CopySelectionKind::None;
+            self.copy_mode.visual_lock = false;
         }
         self.status_message = Some(format!(
-            "Rectangular selection mode: {} (Mouse drag & Shift+Arrows select {})",
+            "Rectangular selection mode: {} (Mouse drag & Arrows/Shift+Arrows select {})",
             if enabled { "ON [RECT]" } else { "OFF [CHAR]" },
             if enabled {
                 "2D rectangular blocks"
@@ -287,7 +323,8 @@ impl CompositePane {
 
     /// Toggles persistent rectangular selection mode (`rect_mode`).
     pub fn toggle_rect_select_mode(&mut self) -> bool {
-        let next = !self.copy_mode.rect_mode;
+        let currently_active_rect = self.copy_mode.rect_mode && self.copy_mode.active;
+        let next = !currently_active_rect;
         self.set_rect_select_mode(next);
         next
     }
@@ -481,11 +518,27 @@ impl CompositePane {
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
-        self.status_message = Some("Returned focus to Command Prompt".to_string());
+        self.status_message = Some(if self.is_prompt_visible() {
+            "Returned focus to Command Prompt".to_string()
+        } else {
+            "Returned focus to Terminal".to_string()
+        });
+    }
+
+    /// Records `text` into the pane's yank buffer, yank history ring, session `clipboard.log`
+    /// (when enabled), OS system clipboard, and `OSC 52` sequence.
+    pub fn record_yank(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        self.prompt.push_yank_entry(text);
+        let _ = self.history_store.record_clipboard_entry(text);
+        crate::clipboard::set_system_clipboard(text);
+        self.last_osc52_sequence = Some(encode_osc52_clipboard(text));
     }
 
     /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer,
-    /// OS system clipboard, and `OSC 52` (`VAL-04`).
+    /// yank history ring, OS system clipboard, and `OSC 52` (`VAL-04`).
     pub fn yank_copy_selection(&mut self) -> Option<String> {
         let snap = self.vt.snapshot();
         let was_block = self.copy_mode.selection_kind == CopySelectionKind::Block;
@@ -499,10 +552,7 @@ impl CompositePane {
             self.status_message = Some("Copy Mode: empty selection".to_string());
             return None;
         }
-        self.prompt.yank_buffer = text.clone();
-        crate::clipboard::set_system_clipboard(&text);
-        let seq = encode_osc52_clipboard(&text);
-        self.last_osc52_sequence = Some(seq);
+        self.record_yank(&text);
         if was_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
@@ -510,6 +560,33 @@ impl CompositePane {
             ));
         } else {
             self.status_message = Some(format!("Yanked {} chars to clipboard", text.len()));
+        }
+        Some(text)
+    }
+
+    /// Stages a mouse-dragged canvas selection visually without overwriting `yank_buffer`,
+    /// the OS clipboard, or `OSC 52` until the user explicitly copies (`Enter`/`y`/`Ctrl+C`).
+    pub fn stage_mouse_canvas_selection(&mut self) -> Option<String> {
+        let snap = self.vt.snapshot();
+        let is_block = self.copy_mode.selection_kind == CopySelectionKind::Block;
+        let dims = self.copy_mode.selection_dimensions();
+        let text = self.copy_mode.extract_selected_text(&snap);
+        if text.is_empty() {
+            self.copy_mode.anchor = None;
+            self.copy_mode.selection_kind = CopySelectionKind::None;
+            self.copy_mode.visual_lock = false;
+            return None;
+        }
+        if is_block && let Some((h, w)) = dims {
+            self.status_message = Some(format!(
+                "RECT SELECT [{h}×{w}]: Selected {} chars (Enter/y/Ctrl+C copy | x to prompt | Esc clear)",
+                text.len()
+            ));
+        } else {
+            self.status_message = Some(format!(
+                "Selected {} chars (Enter/y/Ctrl+C copy | x to prompt | Esc clear)",
+                text.len()
+            ));
         }
         Some(text)
     }
@@ -527,10 +604,7 @@ impl CompositePane {
             self.copy_mode.visual_lock = false;
             return None;
         }
-        self.prompt.yank_buffer = text.clone();
-        crate::clipboard::set_system_clipboard(&text);
-        let seq = encode_osc52_clipboard(&text);
-        self.last_osc52_sequence = Some(seq);
+        self.record_yank(&text);
         if is_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
@@ -546,15 +620,23 @@ impl CompositePane {
     }
 
     /// Yanks the active `CopyModeState` selection to the clipboard AND inserts it into the
-    /// `FloatingCommandPrompt` at the cursor (`x` / `Ctrl+X` in Copy Mode).
+    /// `FloatingCommandPrompt` at the cursor (or pastes into the raw PTY when in Raw mode) (`x` / `Ctrl+X` in Copy Mode).
     pub fn cut_copy_selection_to_prompt(&mut self) -> Option<String> {
         let text = self.yank_copy_selection()?;
         if !self.read_only {
             self.prompt.insert_str(&text);
-            self.status_message = Some(format!(
-                "Transferred {} chars from canvas to command prompt",
-                text.len()
-            ));
+            if !self.is_prompt_visible() {
+                let _ = crate::input::handle_paste_event(self, &text);
+                self.status_message = Some(format!(
+                    "Transferred {} chars from canvas to terminal",
+                    text.len()
+                ));
+            } else {
+                self.status_message = Some(format!(
+                    "Transferred {} chars from canvas to command prompt",
+                    text.len()
+                ));
+            }
         }
         Some(text)
     }
@@ -591,8 +673,7 @@ impl CompositePane {
         let hint = self.hints_mode.hints.get(idx)?.clone();
         self.hints_mode.active = false;
         self.hints_mode.typed_prefix.clear();
-        self.prompt.yank_buffer = hint.text.clone();
-        self.last_osc52_sequence = Some(encode_osc52_clipboard(&hint.text));
+        self.record_yank(&hint.text);
         if !self.read_only {
             self.prompt.insert_str(&hint.text);
         }

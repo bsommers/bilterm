@@ -1,7 +1,6 @@
 use crate::colon_command::ColonCommand;
 use crate::pane::history_store::HistorySegment;
 use crate::pane::{CompositePane, PromptAnchor};
-use crate::vt::encode_osc52_clipboard;
 
 /// Formats the `:history runs` status line: segment count plus the 3 most recent runs.
 fn format_history_runs(session: &str, segments: &[HistorySegment]) -> String {
@@ -155,6 +154,21 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             false
         }
         ColonCommand::Yank => {
+            if pane.copy_mode().has_selection() {
+                let _ = pane.yank_copy_selection();
+                return false;
+            }
+            if pane.prompt().has_selection()
+                && let Some(copied) = pane.prompt_mut().copy_selection()
+            {
+                pane.record_yank(&copied);
+                pane.prompt_mut().clear_selection();
+                pane.set_status_message(Some(format!(
+                    "Yanked {} chars from prompt to clipboard",
+                    copied.chars().count()
+                )));
+                return false;
+            }
             let text_to_yank = if let Some(block) = pane.vt().selected_command_block() {
                 block.command.clone()
             } else if let Some(last) = pane.vt().command_blocks().last() {
@@ -162,8 +176,7 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             } else {
                 pane.vt().contents()
             };
-            let seq = encode_osc52_clipboard(&text_to_yank);
-            pane.set_last_osc52_sequence(Some(seq));
+            pane.record_yank(&text_to_yank);
             pane.set_status_message(Some(format!("Yanked {} bytes via OSC 52", text_to_yank.len())));
             false
         }
@@ -242,9 +255,7 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
                 .map(|u| u.url.clone())
                 .or_else(|| pane.vt().osc8_links().last().map(|l| l.uri.clone()));
             if let Some(url) = link {
-                let seq = encode_osc52_clipboard(&url);
-                pane.set_last_osc52_sequence(Some(seq));
-                pane.prompt_mut().yank_buffer = url.clone();
+                pane.record_yank(&url);
                 pane.set_status_message(Some(format!("Yanked URL: {url}")));
             } else {
                 pane.set_status_message(Some("No URLs detected on canvas".to_string()));
@@ -339,6 +350,166 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
         }
         ColonCommand::Quit => true,
         _ => false,
+    }
+}
+
+impl crate::wm::WindowManager {
+    /// Executes `:rect`, `:select`, `:copy [auto on|off]`, `:clipboard [...]`, or `:paste [...]` commands.
+    pub fn execute_select_or_clipboard_command(&mut self, subcmd_opt: Option<&str>) {
+        let raw = subcmd_opt.unwrap_or("").trim();
+        let parts: Vec<&str> = raw.split_whitespace().collect();
+        let first = parts.first().map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+
+        if matches!(first.as_str(), "auto" | "copy-on-select" | "explicit") {
+            let next = match parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                Some("on" | "true" | "enable" | "auto") => first != "explicit",
+                Some("off" | "false" | "disable" | "explicit") => first == "explicit",
+                _ => !self.config().copy_on_select,
+            };
+            self.config_mut().copy_on_select = next;
+            self.active_pane_mut().set_status_message(Some(format!(
+                "Copy Mode: {} (copy_on_select={})",
+                if next {
+                    "AUTO-COPY ON MOUSE SELECT"
+                } else {
+                    "EXPLICIT COPY (Enter/y/Ctrl+C required to copy selection)"
+                },
+                next
+            )));
+            return;
+        }
+
+        if first == "clipboard" {
+            let sub = parts.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+            match sub.as_str() {
+                "persist" | "save" => {
+                    let next = match parts.get(2).map(|s| s.to_ascii_lowercase()).as_deref() {
+                        Some("on" | "true" | "enable") => true,
+                        Some("off" | "false" | "disable") => false,
+                        _ => !self.config().clipboard_history_persist,
+                    };
+                    self.config_mut().clipboard_history_persist = next;
+                    self.sync_history_config();
+                    if next {
+                        let ring = self.active_pane().prompt().yank_history.clone();
+                        for entry in ring.iter().rev() {
+                            let _ = self
+                                .active_pane_mut()
+                                .history_store_mut()
+                                .record_clipboard_entry(entry);
+                        }
+                    }
+                    let sess = self.config().history_session.clone();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Clipboard history persistence for session '{sess}': {}",
+                        if next { "ON" } else { "OFF" }
+                    )));
+                }
+                "clear" | "reset" => {
+                    self.clear_session_clipboard_history();
+                    self.active_pane_mut().set_status_message(Some(
+                        "Cleared cut-and-paste buffer history for active session".to_string(),
+                    ));
+                }
+                "copy" | "add" | "push" => {
+                    let text = parts.get(2..).map(|s| s.join(" ")).unwrap_or_default();
+                    if !text.is_empty() {
+                        self.active_pane_mut().record_yank(&text);
+                        self.active_pane_mut().set_status_message(Some(format!(
+                            "Added {} chars to session clipboard history (#1)",
+                            text.chars().count()
+                        )));
+                    }
+                }
+                "pop" | "cycle" | "next" => {
+                    if let Some(entry) = self.active_pane_mut().prompt_mut().yank_pop() {
+                        let idx = self.active_pane().prompt().yank_ring_index + 1;
+                        let total = self.active_pane().prompt().yank_history.len();
+                        self.active_pane_mut().set_status_message(Some(format!(
+                            "Clipboard Ring [{idx}/{total}]: {}",
+                            entry.replace('\n', " ↵ ")
+                        )));
+                    } else {
+                        self.active_pane_mut()
+                            .set_status_message(Some("Clipboard history is empty".to_string()));
+                    }
+                }
+                "paste" => {
+                    let idx_1 = parts
+                        .get(2)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .unwrap_or(1)
+                        .max(1);
+                    self.paste_clipboard_history_index(idx_1 - 1);
+                }
+                other if other.parse::<usize>().is_ok() => {
+                    let idx_1 = other.parse::<usize>().unwrap_or(1).max(1);
+                    self.paste_clipboard_history_index(idx_1 - 1);
+                }
+                _ => {
+                    let sess = self.config().history_session.clone();
+                    let persist = if self.config().clipboard_history_persist {
+                        "ON"
+                    } else {
+                        "OFF"
+                    };
+                    let ring = self.active_pane().prompt().yank_history.clone();
+                    let mut lines = vec![
+                        format!(
+                            "◈ SESSION '{sess}' CUT & PASTE BUFFER HISTORY ({} item(s), PERSIST: {persist})",
+                            ring.len()
+                        ),
+                        "  Up/Down + Enter (or click) to paste entry | :clipboard persist [on|off] | :clipboard clear"
+                            .to_string(),
+                    ];
+                    if ring.is_empty() {
+                        lines.push("  (No cut/copy entries recorded yet in this session)".to_string());
+                    } else {
+                        for (i, item) in ring.iter().enumerate() {
+                            let preview: String = item.replace('\n', " ↵ ").chars().take(64).collect();
+                            lines.push(format!(
+                                "  • clipboard paste {} — [{} chars] {}",
+                                i + 1,
+                                item.chars().count(),
+                                preview
+                            ));
+                        }
+                    }
+                    self.open_mcp_popup_window("CUT & PASTE BUFFER HISTORY", lines);
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Session '{sess}' clipboard history: {} entry(s) [persist={persist}]",
+                        ring.len()
+                    )));
+                }
+            }
+            return;
+        }
+
+        self.active_pane_mut().execute_select_command(raw);
+    }
+
+    fn paste_clipboard_history_index(&mut self, idx: usize) {
+        let mut ring = self.active_pane().prompt().yank_history.clone();
+        if ring.is_empty() {
+            ring = self.active_pane().history_store().load_recent_clipboard(50);
+        }
+        let Some(entry) = ring.get(idx).cloned() else {
+            self.active_pane_mut().set_status_message(Some(format!(
+                "Clipboard history entry #{} not found ({} available)",
+                idx + 1,
+                ring.len()
+            )));
+            return;
+        };
+        let pane = self.active_pane_mut();
+        pane.prompt_mut().yank_buffer = entry.clone();
+        crate::clipboard::set_system_clipboard(&entry);
+        let _ = crate::input::handle_paste_event(pane, &entry);
+        pane.set_status_message(Some(format!(
+            "Pasted clipboard history #{} ({} chars)",
+            idx + 1,
+            entry.chars().count()
+        )));
     }
 }
 

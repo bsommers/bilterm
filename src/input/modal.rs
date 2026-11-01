@@ -1,8 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::colon_command::{
-    execute_colon_command, execute_wm_colon_command, parse_colon_command,
-};
+use crate::colon_command::{execute_wm_colon_command, parse_colon_command};
 use crate::error::Result;
 use crate::input::AppAction;
 use crate::pane::{CompositePane, CopySelectionKind};
@@ -16,25 +14,12 @@ pub(super) fn handle_hints_mode_key(pane: &mut CompositePane, key: KeyEvent) -> 
         return Ok(AppAction::Handled);
     }
     match key.code {
-        KeyCode::Esc => {
-            pane.exit_hints_mode();
-        }
-        KeyCode::Enter => {
-            let sel = pane.hints_mode().selected.min(len - 1);
-            let _ = pane.accept_hint_index(sel);
-        }
-        KeyCode::Down | KeyCode::Tab => {
-            pane.hints_mode_mut().selected = (pane.hints_mode().selected + 1) % len;
-        }
-        KeyCode::Up | KeyCode::BackTab => {
-            pane.hints_mode_mut().selected = (pane.hints_mode().selected + len - 1) % len;
-        }
-        KeyCode::Backspace => {
-            pane.hints_mode_mut().typed_prefix.pop();
-        }
-        KeyCode::Char(ch) => {
-            let _ = pane.push_hint_char(ch);
-        }
+        KeyCode::Esc => pane.exit_hints_mode(),
+        KeyCode::Enter => { let _ = pane.accept_hint_index(pane.hints_mode().selected.min(len - 1)); }
+        KeyCode::Down | KeyCode::Tab => pane.hints_mode_mut().selected = (pane.hints_mode().selected + 1) % len,
+        KeyCode::Up | KeyCode::BackTab => pane.hints_mode_mut().selected = (pane.hints_mode().selected + len - 1) % len,
+        KeyCode::Backspace => { pane.hints_mode_mut().typed_prefix.pop(); }
+        KeyCode::Char(ch) => { let _ = pane.push_hint_char(ch); }
         _ => {}
     }
     Ok(AppAction::Handled)
@@ -59,15 +44,14 @@ pub(super) fn handle_unsafe_paste_modal_key(
                 }
                 pane.set_status_message(Some(format!("Confirmed paste ({} chars)", clean.len())));
             }
-            Ok(AppAction::Handled)
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             pane.set_pending_unsafe_paste(None);
             pane.set_status_message(Some("Cancelled unsafe multi-line paste".to_string()));
-            Ok(AppAction::Handled)
         }
-        _ => Ok(AppAction::Handled),
+        _ => {}
     }
+    Ok(AppAction::Handled)
 }
 
 pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
@@ -75,11 +59,28 @@ pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> R
     let max_r = rows.saturating_sub(1);
     let max_c = cols.saturating_sub(1);
 
-    if key.modifiers.contains(KeyModifiers::ALT)
-        && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
+    if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
+        || (key.code == KeyCode::F(12) && !key.modifiers.contains(KeyModifiers::SHIFT))
     {
-        pane.exit_copy_mode();
+        pane.toggle_manual_raw_override();
         return Ok(AppAction::Handled);
+    }
+    if (key.code == KeyCode::F(4) && key.modifiers.is_empty())
+        || (key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E')))
+    {
+        pane.cycle_prompt_mode();
+        return Ok(AppAction::Handled);
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        if matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
+            pane.exit_copy_mode();
+            return Ok(AppAction::Handled);
+        }
+        if matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
+            pane.toggle_rect_select_mode();
+            return Ok(AppAction::Handled);
+        }
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -272,49 +273,23 @@ pub(super) fn handle_fuzzy_search_key(
 ) -> Result<AppAction> {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
-            KeyCode::Char('g') | KeyCode::Char('c') => {
-                pane.prompt_mut().cancel_fuzzy_search();
-                return Ok(AppAction::Handled);
-            }
-            KeyCode::Char('r') | KeyCode::Char('n') => {
-                pane.prompt_mut().fuzzy_search.select_next();
-                return Ok(AppAction::Handled);
-            }
-            KeyCode::Char('p') => {
-                pane.prompt_mut().fuzzy_search.select_prev();
-                return Ok(AppAction::Handled);
-            }
+            KeyCode::Char('g') | KeyCode::Char('c') => pane.prompt_mut().cancel_fuzzy_search(),
+            KeyCode::Char('r') | KeyCode::Char('n') => pane.prompt_mut().fuzzy_search.select_next(),
+            KeyCode::Char('p') => pane.prompt_mut().fuzzy_search.select_prev(),
             _ => {}
         }
+        return Ok(AppAction::Handled);
     }
-
     match key.code {
-        KeyCode::Esc => {
-            pane.prompt_mut().cancel_fuzzy_search();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Enter => {
-            pane.prompt_mut().accept_fuzzy_match();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Up => {
-            pane.prompt_mut().fuzzy_search.select_prev();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Down => {
-            pane.prompt_mut().fuzzy_search.select_next();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Backspace => {
-            pane.prompt_mut().pop_fuzzy_query_char();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Char(ch) => {
-            pane.prompt_mut().push_fuzzy_query_char(ch);
-            Ok(AppAction::Handled)
-        }
-        _ => Ok(AppAction::Handled),
+        KeyCode::Esc => pane.prompt_mut().cancel_fuzzy_search(),
+        KeyCode::Enter => { let _ = pane.prompt_mut().accept_fuzzy_match(); }
+        KeyCode::Up => pane.prompt_mut().fuzzy_search.select_prev(),
+        KeyCode::Down => pane.prompt_mut().fuzzy_search.select_next(),
+        KeyCode::Backspace => pane.prompt_mut().pop_fuzzy_query_char(),
+        KeyCode::Char(ch) => pane.prompt_mut().push_fuzzy_query_char(ch),
+        _ => {}
     }
+    Ok(AppAction::Handled)
 }
 
 pub(super) fn handle_history_popup_key(
@@ -322,30 +297,18 @@ pub(super) fn handle_history_popup_key(
     key: KeyEvent,
 ) -> Result<AppAction> {
     match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => {
-            pane.prompt_mut().history_popup_open = false;
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Enter => {
-            pane.prompt_mut().accept_history_popup_selection();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            pane.prompt_mut().history_popup_prev();
-            Ok(AppAction::Handled)
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            pane.prompt_mut().history_popup_next();
-            Ok(AppAction::Handled)
-        }
+        KeyCode::Esc | KeyCode::Char('q') => pane.prompt_mut().history_popup_open = false,
+        KeyCode::Enter => { let _ = pane.prompt_mut().accept_history_popup_selection(); }
+        KeyCode::Up | KeyCode::Char('k') => pane.prompt_mut().history_popup_prev(),
+        KeyCode::Down | KeyCode::Char('j') => pane.prompt_mut().history_popup_next(),
         KeyCode::Char('s') => {
             if let Ok(saved) = pane.export_history_to_temp_file(None) {
                 pane.set_status_message(Some(format!("Saved history to {}", saved.display())));
             }
-            Ok(AppAction::Handled)
         }
-        _ => Ok(AppAction::Handled),
+        _ => {}
     }
+    Ok(AppAction::Handled)
 }
 
 pub(super) fn execute_menubar_selection(
@@ -741,22 +704,31 @@ pub(super) fn handle_wm_modal_key(
                     }
                 }
                 KeyCode::Enter => {
-                    let selected_idx = wm.palette_state().map(|(_, s)| s).unwrap_or(0);
+                    let (raw_query, selected_idx) = wm
+                        .palette_state()
+                        .map(|(q, s)| (q.trim().to_string(), s))
+                        .unwrap_or_default();
                     let items = wm.filtered_palette_items();
                     let sel = items
                         .get(selected_idx)
                         .or_else(|| items.first())
-                        .map(|&(cmd, _, _)| cmd);
-                    wm.close_modal();
-                    if let Some(cmd_str) = sel
-                        && let Some(Ok(cmd)) = parse_colon_command(cmd_str)
+                        .map(|&(cmd, _, _)| cmd.to_string());
+                    let candidate = if raw_query.starts_with(':')
+                        && (sel.is_none() || selected_idx == 0)
+                        && parse_colon_command(&raw_query).is_some_and(|r| r.is_ok())
                     {
-                        if execute_wm_colon_command(wm, cmd.clone()) {
-                            return Ok(Some(AppAction::Quit));
-                        }
-                        if execute_colon_command(wm.active_pane_mut(), cmd) {
-                            return Ok(Some(AppAction::Quit));
-                        }
+                        Some(raw_query)
+                    } else if sel.is_none() && !raw_query.is_empty() {
+                        Some(format!(":{raw_query}"))
+                    } else {
+                        sel
+                    };
+                    wm.close_modal();
+                    if let Some(cmd_str) = candidate
+                        && let Some(Ok(cmd)) = parse_colon_command(&cmd_str)
+                        && execute_wm_colon_command(wm, cmd)
+                    {
+                        return Ok(Some(AppAction::Quit));
                     }
                 }
                 KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {

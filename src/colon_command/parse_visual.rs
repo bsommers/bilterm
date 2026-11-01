@@ -142,6 +142,14 @@ pub(super) fn parse_visual_colon_command(
                 args.extend_from_slice(&parts[2..]);
                 Some(validate_window_style_args(&args).map(ColonCommand::WindowStyle))
             }
+            Some("global" | "all") => {
+                let rest = parts[2..].join(" ");
+                if rest.trim().is_empty() {
+                    Some(Err("Usage: :theme global <preset|name>".to_string()))
+                } else {
+                    Some(Ok(ColonCommand::ThemeCommand(format!("global {}", rest.trim()))))
+                }
+            }
             Some("import" | "load" | "export" | "save" | "browse" | "files" | "open" | "config" | "where") => {
                 let sub = parts[1..].join(" ");
                 Some(Ok(ColonCommand::ThemeCommand(sub)))
@@ -198,10 +206,26 @@ pub(super) fn parse_visual_colon_command(
                 Err(e) => Some(Err(e)),
             }
         }
-        "window" | "win" | "pane-style" => Some(
-            validate_window_style_args(&parts[1..])
-                .map(ColonCommand::WindowStyle),
-        ),
+        "window" | "win" | "pane-style" => match parts.get(1).copied() {
+            Some("left" | "h" | "a" | "west") if parts.len() == 2 => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: -1, dy: 0 }))
+            }
+            Some("right" | "l" | "d" | "east") if parts.len() == 2 => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 1, dy: 0 }))
+            }
+            Some("up" | "k" | "w" | "north") if parts.len() == 2 => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 0, dy: -1 }))
+            }
+            Some("down" | "j" | "s" | "south") if parts.len() == 2 => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 0, dy: 1 }))
+            }
+            Some("next" | "n") if parts.len() == 2 => Some(Ok(ColonCommand::DeckNext)),
+            Some("prev" | "p") if parts.len() == 2 => Some(Ok(ColonCommand::DeckPrev)),
+            Some(s) if parts.len() == 2 && s.parse::<usize>().is_ok() => {
+                Some(Ok(ColonCommand::FocusPane(s.parse::<usize>().unwrap_or(1))))
+            }
+            _ => Some(validate_window_style_args(&parts[1..]).map(ColonCommand::WindowStyle)),
+        },
         "outline" | "border" => match (parts.get(1).copied(), parts.get(2).copied()) {
             (Some("bold" | "heavy-text"), arg) => Some(Ok(ColonCommand::WindowStyle(format!(
                 "global-bold {}",
@@ -306,6 +330,30 @@ pub(super) fn parse_visual_colon_command(
             )),
             _ => Some(Err("Usage: :glass [on | off | toggle]".to_string())),
         },
+        "modern" | "minimal" | "non-retro" | "nonretro" => match parts.get(1).copied() {
+            None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
+                "modern-toggle".to_string(),
+            )))),
+            Some("on" | "true" | "1" | "enable") => Some(Ok(ColonCommand::VisualStyleCommand(
+                Some("modern".to_string()),
+            ))),
+            Some("off" | "false" | "0" | "disable") => Some(Ok(
+                ColonCommand::VisualStyleCommand(Some("modern-off".to_string())),
+            )),
+            _ => Some(Err("Usage: :modern [on | off | toggle]".to_string())),
+        },
+        "liquid" | "liquid-glass" | "liquidglass" => match parts.get(1).copied() {
+            None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
+                "liquid-toggle".to_string(),
+            )))),
+            Some("on" | "true" | "1" | "enable") => Some(Ok(ColonCommand::VisualStyleCommand(
+                Some("liquid".to_string()),
+            ))),
+            Some("off" | "false" | "0" | "disable") => Some(Ok(
+                ColonCommand::VisualStyleCommand(Some("liquid-off".to_string())),
+            )),
+            _ => Some(Err("Usage: :liquid [on | off | toggle]".to_string())),
+        },
         "style" | "visual" | "visual-style" => match parts.get(1).copied() {
             None | Some("cycle" | "next" | "toggle") => {
                 Some(Ok(ColonCommand::VisualStyleCommand(None)))
@@ -332,10 +380,20 @@ pub(super) fn parse_visual_colon_command(
                 | "snazzy-glass"
                 | "snazzy+glass"
                 | "max"
-                | "ultra"),
+                | "ultra"
+                | "modern"
+                | "minimal"
+                | "non-retro"
+                | "nonretro"
+                | "clean"
+                | "modern-off"
+                | "liquid"
+                | "liquid-glass"
+                | "liquidglass"
+                | "liquid-off"),
             ) => Some(Ok(ColonCommand::VisualStyleCommand(Some(tok.to_string())))),
             _ => Some(Err(
-                "Usage: :style [classic | snazzy | glass | snazzy-glass | cycle]".to_string(),
+                "Usage: :style [classic | snazzy | glass | snazzy-glass | modern | liquid | cycle]".to_string(),
             )),
         },
         "fontsize" | "textsize" => match parts.get(1).copied() {

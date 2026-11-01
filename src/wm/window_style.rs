@@ -129,6 +129,9 @@ impl WindowManager {
         if is_reset {
             let chrome = self.active_pane_chrome_mut();
             chrome.colors.remove(canon);
+            if canon == "cursor-color" {
+                chrome.cursor_color_override = None;
+            }
             if chrome.is_default() {
                 self.pane_chrome.remove(&id);
             }
@@ -140,9 +143,14 @@ impl WindowManager {
             self.record_automation_error_msg(msg.clone());
             return msg;
         }
-        self.active_pane_chrome_mut()
-            .colors
-            .insert(canon.to_string(), val.to_string());
+        if canon == "cursor-color" {
+            self.pin_other_panes_cursor(id);
+        }
+        let chrome = self.active_pane_chrome_mut();
+        chrome.colors.insert(canon.to_string(), val.to_string());
+        if canon == "cursor-color" {
+            chrome.cursor_color_override = Some(Some(val.to_string()));
+        }
         self.refresh_window_customizer_if_open();
         format!("Window #{id} {canon}: {val}")
     }

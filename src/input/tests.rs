@@ -456,6 +456,9 @@ fn keyboard_and_mouse_cut_copy_paste_with_visual_selection_highlights_work() {
     )
     .unwrap();
     assert!(pane.copy_mode().has_selection());
+    // Explicit copy by default: mouse drag stages selection without overwriting previous yank_buffer ("world") until Enter/y/Ctrl+C
+    assert_eq!(pane.prompt().yank_buffer, "world");
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
     assert_eq!(pane.prompt().yank_buffer, "MAINFRAME");
 
     // 3. Mouse left-click and drag inside FloatingCommandPrompt selects prompt text
@@ -495,7 +498,22 @@ fn keyboard_and_mouse_cut_copy_paste_with_visual_selection_highlights_work() {
     .unwrap();
     assert!(pane.prompt().has_selection());
     assert_eq!(pane.prompt().selected_text().as_deref(), Some("hello"));
+    // Explicit copy: yank_buffer remains "MAINFRAME" until Ctrl+C is pressed
+    assert_eq!(pane.prompt().yank_buffer, "MAINFRAME");
+    handle_key_event(
+        &mut pane,
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
     assert_eq!(pane.prompt().yank_buffer, "hello");
+    assert_eq!(
+        pane.prompt().yank_history,
+        vec![
+            "hello".to_string(),
+            "MAINFRAME".to_string(),
+            "world".to_string()
+        ]
+    );
 }
 
 #[test]

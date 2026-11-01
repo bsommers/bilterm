@@ -650,6 +650,7 @@ impl WindowManager {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
             let changed = self.z_stack.raise(pane_id);
+            self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
             changed
         } else {
@@ -661,6 +662,7 @@ impl WindowManager {
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
         let top = self.z_stack.shuffle_top_to_bottom();
+        self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
         top
     }
@@ -669,6 +671,7 @@ impl WindowManager {
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
         let top = self.z_stack.shuffle_bottom_to_top();
+        self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
         top
     }

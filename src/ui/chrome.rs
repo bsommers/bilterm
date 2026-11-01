@@ -260,7 +260,10 @@ pub fn render_borland_frame_ext(
     if outer.width < 4 || outer.height < 3 {
         return;
     }
-    let effective_outline = if !active && outline == OutlineStyle::Double {
+    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
+    let effective_outline = if is_modern && outline == OutlineStyle::Double {
+        OutlineStyle::Rounded
+    } else if !active && outline == OutlineStyle::Double {
         OutlineStyle::Solid
     } else {
         outline
@@ -289,10 +292,34 @@ pub fn render_borland_frame_ext(
         .border_style(border_style);
     block.render(outer, buf);
 
+    // Color macOS / ZenTerm traffic-light dots (`● ● ●`) at the start of modern window titles
+    if is_modern && title.starts_with("● ● ●") && outer.width >= 12 {
+        let lights: [(u16, Color); 3] = if active {
+            [
+                (outer.x + 2, Color::Rgb(255, 95, 87)),
+                (outer.x + 4, Color::Rgb(254, 188, 46)),
+                (outer.x + 6, Color::Rgb(40, 200, 64)),
+            ]
+        } else {
+            let muted = Color::Rgb(71, 85, 105);
+            [(outer.x + 2, muted), (outer.x + 4, muted), (outer.x + 6, muted)]
+        };
+        for (lx, lcol) in lights {
+            if lx < outer.x + outer.width - 1
+                && let Some(cell) = buf.cell_mut((lx, outer.y))
+            {
+                cell.set_fg(lcol);
+            }
+        }
+    }
+
     // Top-right [_] minimize, [□] maximize/zoom, and [X] close controls when window is wide enough.
-    // Brackets use the border color; the inner glyph is bold, with close highlighted in red (or `controls_fg`).
     let ctrl_fg = palette.controls_fg.unwrap_or(palette.title_fg);
-    let close_fg = palette.controls_fg.unwrap_or(Color::Rgb(255, 85, 85));
+    let close_fg = if is_modern {
+        Color::Rgb(255, 95, 87)
+    } else {
+        palette.controls_fg.unwrap_or(Color::Rgb(255, 85, 85))
+    };
     if outer.width >= 24 {
         let right_edge = outer.x + outer.width;
         let badges: [(&str, Color); 3] = [

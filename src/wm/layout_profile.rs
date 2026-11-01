@@ -326,6 +326,11 @@ impl WindowManager {
             pane.set_read_only(sp.read_only);
             Self::attach_history(&mut pane, &self.config.history_settings());
             pane.prompt_mut().history = sp.history.clone();
+            if self.config.clipboard_history_persist && !sp.yank_history.is_empty() {
+                for item in sp.yank_history.iter().rev() {
+                    pane.prompt_mut().push_yank_entry(item);
+                }
+            }
             if let Some(cmd) = sp
                 .running_command
                 .as_deref()

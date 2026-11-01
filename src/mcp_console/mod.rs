@@ -55,6 +55,7 @@ pub fn infer_row_action(line: &str) -> McpRowAction {
             if trimmed_cmd.starts_with("import ")
                 || trimmed_cmd.starts_with("cursor ")
                 || trimmed_cmd.starts_with("window ")
+                || trimmed_cmd.starts_with("clipboard ")
             {
                 return McpRowAction::ApplyTheme(trimmed_cmd.to_string());
             }

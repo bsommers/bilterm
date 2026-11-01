@@ -33,8 +33,8 @@ pub struct RemoteHostProfile {
     /// Enables OpenSSH `ControlMaster=auto` and `ControlPersist=60s` for instant multi-pane SSH multiplexing.
     #[serde(default = "default_true")]
     pub control_master: bool,
-    /// Injects a non-invasive POSIX `OSC 133` prompt-marker bootstrap over SSH so command blocks and exit codes work remotely.
-    #[serde(default = "default_true")]
+    /// Optional POSIX `OSC 133` prompt-marker bootstrap over SSH (disabled by default to avoid pre-login echo).
+    #[serde(default)]
     pub remote_osc133_bootstrap: bool,
     /// Optional fleet tags (e.g. `["prod", "db"]`) for `@tag` selector targeting.
     #[serde(default)]
@@ -79,7 +79,7 @@ impl RemoteHostProfile {
             port: None,
             identity_file: None,
             control_master: true,
-            remote_osc133_bootstrap: true,
+            remote_osc133_bootstrap: false,
             tags: Vec::new(),
             rpc_endpoint: None,
         }
@@ -163,6 +163,40 @@ impl RemoteHostProfile {
 /// and `OSC 7` working directory reporting on a remote SSH host without modifying remote dotfiles.
 pub fn remote_osc133_bootstrap_command() -> &'static str {
     " PROMPT_COMMAND='__bt_ec=$?; printf \"\\033]133;D;%d\\007\\033]7;file://%s%s\\007\\033]133;A\\007\" \"$__bt_ec\" \"$(hostname)\" \"$PWD\"'; printf '\\033]133;A\\007'\n"
+}
+
+/// Discovers non-wildcard `Host` aliases from `~/.ssh/config` for `:ssh` `<Tab>` completion.
+pub fn discover_ssh_config_hosts() -> Vec<String> {
+    let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) else {
+        return Vec::new();
+    };
+    let path = std::path::PathBuf::from(home).join(".ssh").join("config");
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut hosts = Vec::new();
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut toks = trimmed.split_whitespace();
+        if let Some(kw) = toks.next()
+            && kw.eq_ignore_ascii_case("host")
+        {
+            for alias in toks {
+                if !alias.contains('*')
+                    && !alias.contains('?')
+                    && !alias.starts_with('!')
+                    && validate_destination(alias).is_ok()
+                    && !hosts.iter().any(|h| h == alias)
+                {
+                    hosts.push(alias.to_string());
+                }
+            }
+        }
+    }
+    hosts
 }
 
 /// Connection transport type for a node managed by Bilterm's `FleetRegistry`.

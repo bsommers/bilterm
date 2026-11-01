@@ -16,7 +16,36 @@ use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::theme::ThemePalette;
+use crate::ui::visual_style::{
+    apply_frosted_glass_surface, polish_glass_panel_rect, render_liquid_ambient_halo,
+};
 use crate::wm::{WindowManager, inset_window_frame};
+
+/// Returns the number of header rows inside `render_palette_modal` (`2` in modern mode with `inner.height >= 6`, else `1`).
+pub fn palette_header_rows(cfg: &BiltermConfig, inner_height: u16) -> u16 {
+    if cfg.is_modern() && inner_height >= 6 { 2 } else { 1 }
+}
+
+fn render_modal_surface_and_frame(
+    rect: Rect,
+    bounds: Rect,
+    title: &str,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    if cfg.liquid_glass {
+        render_liquid_ambient_halo(buf, rect, bounds, palette);
+    } else if cfg.drop_shadows {
+        render_drop_shadow_styled(buf, rect, bounds, cfg.shadow_style, palette);
+    }
+    occlude_rect(buf, rect);
+    if cfg.is_glass() {
+        apply_frosted_glass_surface(buf, rect, palette.window_frame_bg, palette);
+    }
+    render_borland_frame_styled(rect, title, true, cfg.window_outline, palette, glyphs, buf);
+}
 
 pub(super) fn render_palette_modal(
     wm: &WindowManager,
@@ -27,26 +56,21 @@ pub(super) fn render_palette_modal(
     buf: &mut Buffer,
 ) {
     let pop_rect = wm.active_modal_rect(canvas).unwrap_or_else(|| {
-        let pop_w = canvas.width.saturating_sub(4).clamp(24, 76).min(canvas.width);
-        let pop_h = canvas.height.saturating_sub(2).clamp(6, 14).min(canvas.height);
+        let pop_w = canvas.width.saturating_sub(4).clamp(24, 78).min(canvas.width);
+        let pop_h = canvas.height.saturating_sub(2).clamp(6, 16).min(canvas.height);
         let pop_x = canvas.x + (canvas.width.saturating_sub(pop_w)) / 2;
         let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
         Rect::new(pop_x, pop_y, pop_w, pop_h)
     });
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, pop_rect);
-    render_borland_frame_styled(
-        pop_rect,
-        "[P] COMMAND PALETTE [Enter=Run  Up/Down=Select  Esc=Close]",
-        true,
-        cfg.window_outline,
-        palette,
-        glyphs,
-        buf,
-    );
+    let title = if cfg.liquid_glass {
+        "● ● ●  💧 Command Palette · Enter Run · ↑↓ Select · Esc Close"
+    } else if cfg.is_modern() {
+        "● ● ●  ◢ Command Palette · Enter Run · ↑↓ Select · Esc Close"
+    } else {
+        "[P] COMMAND PALETTE [Enter=Run  Up/Down=Select  Esc=Close]"
+    };
+    render_modal_surface_and_frame(pop_rect, canvas, title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(pop_rect);
     if inner.width == 0 || inner.height == 0 {
         return;
@@ -54,32 +78,68 @@ pub(super) fn render_palette_modal(
 
     let (palette_query, palette_selected) = wm.palette_state().unwrap_or(("", 0));
     let items = wm.filtered_palette_items();
+    let hdr_rows = palette_header_rows(cfg, inner.height);
     let mut lines = Vec::new();
-    lines.push(Line::from(Span::styled(
-        format!("Search > {palette_query}_"),
-        Style::default()
-            .fg(Color::Rgb(255, 255, 85))
-            .bg(palette.window_frame_bg)
-            .add_modifier(Modifier::BOLD),
-    )));
+    if cfg.is_modern() {
+        lines.push(Line::from(Span::styled(
+            format!("  ❯  {palette_query}▍   ({} commands)", items.len()),
+            Style::default()
+                .fg(palette.prompt_prefix_fg)
+                .bg(palette.oia_bg)
+                .add_modifier(Modifier::BOLD),
+        )));
+        if hdr_rows >= 2 {
+            lines.push(Line::from(Span::styled(
+                "─".repeat(usize::from(inner.width)),
+                Style::default()
+                    .fg(palette.inactive_border_fg)
+                    .bg(palette.window_frame_bg),
+            )));
+        }
+    } else {
+        lines.push(Line::from(Span::styled(
+            format!("Search > {palette_query}_"),
+            Style::default()
+                .fg(Color::Rgb(255, 255, 85))
+                .bg(palette.window_frame_bg)
+                .add_modifier(Modifier::BOLD),
+        )));
+    }
 
-    let list_rows = usize::from(inner.height.saturating_sub(1)).max(1);
+    let list_rows = usize::from(inner.height.saturating_sub(hdr_rows)).max(1);
     let sel = palette_selected.min(items.len().saturating_sub(1));
     let start = sel.saturating_sub(list_rows.saturating_sub(1));
     for (idx, (cmd, key, desc)) in items.iter().enumerate().skip(start).take(list_rows) {
         let is_sel = idx == sel;
-        let bg = if is_sel {
-            palette.active_border_fg
+        if cfg.is_modern() {
+            let bg = if is_sel {
+                if cfg.liquid_glass { Color::Rgb(24, 46, 78) } else { Color::Rgb(30, 41, 59) }
+            } else {
+                palette.window_frame_bg
+            };
+            let fg = if is_sel { palette.title_fg } else { palette.text_fg.unwrap_or(Color::White) };
+            let bar = if is_sel { "▎" } else { " " };
+            lines.push(Line::from(Span::styled(
+                format!("{bar} {:<20} [{:<10}] {}", cmd, key, desc),
+                Style::default().fg(fg).bg(bg).add_modifier(if is_sel {
+                    Modifier::BOLD
+                } else {
+                    Modifier::empty()
+                }),
+            )));
         } else {
-            palette.window_frame_bg
-        };
-        let fg = if is_sel { Color::Black } else { Color::White };
-        lines.push(Line::from(Span::styled(
-            format!(" {:<20} [{:<10}] {}", cmd, key, desc),
-            Style::default().fg(fg).bg(bg),
-        )));
+            let bg = if is_sel { palette.active_border_fg } else { palette.window_frame_bg };
+            let fg = if is_sel { Color::Black } else { Color::White };
+            lines.push(Line::from(Span::styled(
+                format!(" {:<20} [{:<10}] {}", cmd, key, desc),
+                Style::default().fg(fg).bg(bg),
+            )));
+        }
     }
     Paragraph::new(lines).render(inner, buf);
+    if cfg.is_glass() {
+        polish_glass_panel_rect(buf, pop_rect, palette.window_frame_bg, palette, true);
+    }
 }
 
 pub(super) fn render_history_popup(
@@ -96,27 +156,13 @@ pub(super) fn render_history_popup(
     let pop_y = canvas.y + (canvas.height.saturating_sub(pop_h)) / 2;
     let pop_rect = Rect::new(pop_x, pop_y, pop_w, pop_h);
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, pop_rect, canvas, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, pop_rect);
-    let persist_tag = if pane.history_store().enabled {
-        "PERSIST:ON"
+    let persist_tag = if pane.history_store().enabled { "Persist:On" } else { "Persist:Off" };
+    let hist_title = if cfg.is_modern() {
+        format!("● ● ●  Command History · {persist_tag} · Enter Select · s Save · Esc Close")
     } else {
-        "PERSIST:OFF"
+        format!("[H] COMMAND HISTORY ({persist_tag}) [Enter=Select  s=Save  Esc=Close]")
     };
-    render_borland_frame_styled(
-        pop_rect,
-        &format!(
-            "[H] COMMAND HISTORY ({}) [Enter=Select  s=Save  Esc=Close]",
-            persist_tag
-        ),
-        true,
-        cfg.window_outline,
-        palette,
-        glyphs,
-        buf,
-    );
+    render_modal_surface_and_frame(pop_rect, canvas, &hist_title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(pop_rect);
     if inner.width == 0 || inner.height == 0 {
         return;
@@ -201,15 +247,11 @@ pub(super) fn render_unsafe_paste_modal(
     let y = canvas.y + (canvas.height.saturating_sub(h)) / 2;
     let modal = Rect::new(x, y, w, h);
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, modal, canvas, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, modal);
-    render_borland_frame_styled(
+    render_modal_surface_and_frame(
         modal,
+        canvas,
         "[!] UNSAFE PASTE GUARD [y/Enter=Confirm  n/Esc=Cancel]",
-        true,
-        cfg.window_outline,
+        cfg,
         palette,
         &glyphs,
         buf,
@@ -277,23 +319,12 @@ pub(super) fn render_help_modal(
         Rect::new(x, y, w, h)
     });
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, modal);
-    render_borland_frame_styled(
-        modal,
-        concat!(
-            "[F1] BILTERM v",
-            env!("CARGO_PKG_VERSION"),
-            " — 3270 // TURBO VISION HELP (Up/Down/PgUp/PgDn, Esc/F1=Close)"
-        ),
-        true,
-        cfg.window_outline,
-        palette,
-        glyphs,
-        buf,
-    );
+    let help_title = if cfg.is_modern() {
+        concat!("● ● ●  Bilterm v", env!("CARGO_PKG_VERSION"), " · Help · ↑↓ Scroll · Esc Close")
+    } else {
+        concat!("[F1] BILTERM v", env!("CARGO_PKG_VERSION"), " — 3270 // TURBO VISION HELP (Up/Down/PgUp/PgDn, Esc/F1=Close)")
+    };
+    render_modal_surface_and_frame(modal, workspace_area, help_title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(modal);
     if inner.width == 0 || inner.height == 0 {
         return;
@@ -337,80 +368,40 @@ pub(super) fn render_help_modal(
 }
 
 const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
-    (
-        "≡ System",
-        &[
-            ("3270 Inspector (F9)", ":inspector"),
-            ("New Session", ":session new"),
-            ("Save Session", ":session save"),
-            ("Restore Session", ":session restore"),
-            ("Session Processes & CWD...", ":session info"),
-            ("Toggle Auto-Relaunch Apps", ":session processes"),
-            ("Quit (Ctrl+Q)", ":quit"),
-        ],
-    ),
-    (
-        "Window",
-        &[
-            ("Split Horizontal (F2)", ":split h"),
-            ("Split Vertical (Alt+V)", ":split v"),
-            ("Zoom Toggle (F5)", ":zoom"),
-            ("Stack Windows (Alt+M)", ":layout stack"),
-            ("Window Theme Browser...", ":window theme list"),
-            ("Customize Window Colors...", ":window menu"),
-            ("Next Window Theme", ":window theme next"),
-            ("Next Window Outline", ":window outline next"),
-            ("Toggle Bold Border", ":window bold toggle"),
-            ("Reset Window Style", ":window reset"),
-        ],
-    ),
-    (
-        "Prompt",
-        &[
-            ("Pin Top (Alt+T)", ":prompt top"),
-            ("Pin Bottom (Alt+B)", ":prompt bottom"),
-            ("Fixed / Float (Alt+S)", ":prompt split"),
-            ("Cycle Float/Fix/Term (F4)", ":mode cycle"),
-        ],
-    ),
-    (
-        "View",
-        &[
-            ("3270 Field Hints (Alt+F)", ":hints"),
-            ("Vi Copy Mode (Alt+C)", ":copy"),
-            ("Rectangular Select (Alt+R)", ":rect"),
-            ("Toggle Rect Mouse Mode", ":rect mode"),
-            ("Cross-Hair Ruler (Alt+X)", ":crosshair"),
-            ("DOS F-Key Bar", ":fkeybar"),
-        ],
-    ),
-    (
-        "Theme",
-        &[
-            ("Borland Turbo Blue", ":theme turbo-blue"),
-            ("Borland Turbo Cyan", ":theme turbo-cyan"),
-            ("IBM 3278 Phosphor Green", ":theme 3278"),
-            ("IBM 3279 Amber CRT", ":theme 3279"),
-        ],
-    ),
-    (
-        "Tmux",
-        &[
-            ("Broadcast Input", ":broadcast"),
-            ("Read-Only Lock (Alt+L)", ":lock"),
-            ("Quake Terminal (F10)", ":quake"),
-            ("Raw Passthrough (F12)", ":raw"),
-        ],
-    ),
-    (
-        "Help",
-        &[
-            ("Help Reference (F1)", ":help"),
-            ("3270 Inspector (F9)", ":inspector"),
-            ("List Sessions", ":session list"),
-            ("Close Help", ":help"),
-        ],
-    ),
+    ("≡ System", &[
+        ("3270 Inspector (F9)", ":inspector"), ("New Session", ":session new"),
+        ("Save Session", ":session save"), ("Restore Session", ":session restore"),
+        ("Session Processes & CWD...", ":session info"), ("Toggle Auto-Relaunch Apps", ":session processes"),
+        ("Quit (Ctrl+Q)", ":quit"),
+    ]),
+    ("Window", &[
+        ("Split Horizontal (F2)", ":split h"), ("Split Vertical (Alt+V)", ":split v"),
+        ("Zoom Toggle (F5)", ":zoom"), ("Stack Windows (Alt+M)", ":layout stack"),
+        ("Window Theme Browser...", ":window theme list"), ("Customize Window Colors...", ":window menu"),
+        ("Next Window Theme", ":window theme next"), ("Next Window Outline", ":window outline next"),
+        ("Toggle Bold Border", ":window bold toggle"), ("Reset Window Style", ":window reset"),
+    ]),
+    ("Prompt", &[
+        ("Pin Top (Alt+T)", ":prompt top"), ("Pin Bottom (Alt+B)", ":prompt bottom"),
+        ("Fixed / Float (Alt+S)", ":prompt split"), ("Cycle Float/Fix/Term (F4)", ":mode cycle"),
+    ]),
+    ("View", &[
+        ("3270 Field Hints (Alt+F)", ":hints"), ("Vi Copy Mode (Alt+C)", ":copy"),
+        ("Rectangular Select (Alt+R)", ":rect"), ("Toggle Rect Mouse Mode", ":rect mode"),
+        ("Cross-Hair Ruler (Alt+X)", ":crosshair"), ("DOS F-Key Bar", ":fkeybar"),
+    ]),
+    ("Theme", &[
+        ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),
+        ("IBM 3278 Phosphor Green", ":theme 3278"), ("IBM 3279 Amber CRT", ":theme 3279"),
+    ]),
+    ("Tmux", &[
+        ("Broadcast Input", ":broadcast"), ("Read-Only Lock (Alt+L)", ":lock"),
+        ("Quake Terminal (F10)", ":quake"), ("Raw Passthrough (F12)", ":raw"),
+    ]),
+    ("Help", &[
+        ("Help Reference (F1)", ":help"), ("3270 Inspector (F9)", ":inspector"),
+        ("List Sessions", ":session list"), ("Close Help", ":help"),
+    ]),
 ];
 
 /// Returns the menu bar category index (`0..MENUBAR_CATEGORIES.len()`) at `rel_col`
@@ -470,14 +461,28 @@ pub(super) fn render_top_menubar(
     if rect.width == 0 || rect.height == 0 {
         return;
     }
-    let bar_bg = Color::Rgb(170, 170, 170);
+    let is_modern = wm.config().is_modern();
+    let bar_bg = if is_modern {
+        palette.oia_bg
+    } else {
+        Color::Rgb(170, 170, 170)
+    };
+    let bar_fg = if is_modern {
+        palette.title_fg
+    } else {
+        Color::Black
+    };
     let mut spans = Vec::new();
     for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
         let is_open = wm.menubar_open_category() == Some(idx);
         let (fg, bg) = if is_open {
-            (Color::White, Color::Rgb(0, 128, 0))
+            if is_modern {
+                (Color::Rgb(11, 15, 25), palette.active_border_fg)
+            } else {
+                (Color::White, Color::Rgb(0, 128, 0))
+            }
         } else {
-            (Color::Black, bar_bg)
+            (bar_fg, bar_bg)
         };
         spans.push(Span::styled(
             format!(" {title} "),
@@ -492,11 +497,26 @@ pub(super) fn render_top_menubar(
                 .bg(Color::Rgb(255, 176, 0))
                 .add_modifier(Modifier::BOLD),
         ));
+    } else if wm.config().liquid_glass {
+        spans.push(Span::styled(
+            "  💧 LIQUID GLASS ",
+            Style::default()
+                .fg(palette.prompt_prefix_fg)
+                .bg(bar_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    } else if is_modern {
+        spans.push(Span::styled(
+            "  ◢ MODERN ",
+            Style::default()
+                .fg(palette.prompt_prefix_fg)
+                .bg(bar_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
     }
     Block::default()
-        .style(Style::default().fg(Color::Black).bg(bar_bg))
+        .style(Style::default().fg(bar_fg).bg(bar_bg))
         .render(rect, buf);
-    let _ = palette;
     Paragraph::new(Line::from(spans)).render(rect, buf);
 }
 
@@ -514,19 +534,7 @@ pub(super) fn render_menubar_dropdown(
     let (cat_title, items) = MENUBAR_CATEGORIES[cat_idx];
     let dropdown = menubar_dropdown_rect(cat_idx, workspace_area);
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, dropdown, workspace_area, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, dropdown);
-    render_borland_frame_styled(
-        dropdown,
-        cat_title,
-        true,
-        cfg.window_outline,
-        palette,
-        glyphs,
-        buf,
-    );
+    render_modal_surface_and_frame(dropdown, workspace_area, cat_title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(dropdown);
     if inner.width == 0 || inner.height == 0 {
         return;
@@ -535,12 +543,25 @@ pub(super) fn render_menubar_dropdown(
     let mut lines = Vec::with_capacity(items.len());
     for (idx, &(label, _)) in items.iter().enumerate() {
         let is_sel = idx == selected_item.min(items.len().saturating_sub(1));
-        let (fg, bg) = if is_sel {
+        let (fg, bg) = if cfg.is_modern() {
+            if is_sel {
+                (
+                    palette.title_fg,
+                    if cfg.liquid_glass { Color::Rgb(24, 46, 78) } else { Color::Rgb(30, 41, 59) },
+                )
+            } else {
+                (palette.text_fg.unwrap_or(Color::White), palette.window_frame_bg)
+            }
+        } else if is_sel {
             (Color::Black, Color::Rgb(0, 255, 102))
         } else {
             (Color::White, palette.window_frame_bg)
         };
-        let prefix = if is_sel { "► " } else { "  " };
+        let prefix = if is_sel {
+            if cfg.is_modern() { "▎ " } else { "► " }
+        } else {
+            "  "
+        };
         lines.push(Line::from(Span::styled(
             format!(
                 "{prefix}{label:<width$}",
@@ -557,6 +578,9 @@ pub(super) fn render_menubar_dropdown(
         .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
         .render(inner, buf);
     Paragraph::new(lines).render(inner, buf);
+    if cfg.is_glass() {
+        polish_glass_panel_rect(buf, dropdown, palette.window_frame_bg, palette, true);
+    }
 }
 
 pub(super) fn render_inspector_modal(
@@ -583,19 +607,12 @@ pub(super) fn render_inspector_modal(
         Rect::new(x, y, w, h)
     });
 
-    if cfg.drop_shadows {
-        render_drop_shadow_styled(buf, modal, workspace_area, cfg.shadow_style, palette);
-    }
-    occlude_rect(buf, modal);
-    render_borland_frame_styled(
-        modal,
-        "[F9] 3270 TERMINAL INSPECTOR (Up/Down Scroll, F9/Esc=Close)",
-        true,
-        cfg.window_outline,
-        palette,
-        glyphs,
-        buf,
-    );
+    let insp_title = if cfg.is_modern() {
+        "● ● ●  Terminal Inspector · ↑↓ Scroll · F9/Esc Close"
+    } else {
+        "[F9] 3270 TERMINAL INSPECTOR (Up/Down Scroll, F9/Esc=Close)"
+    };
+    render_modal_surface_and_frame(modal, workspace_area, insp_title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(modal);
     if inner.width == 0 || inner.height == 0 {
         return;

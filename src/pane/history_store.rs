@@ -138,6 +138,7 @@ pub struct HistorySegment {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistorySettings {
     pub enabled: bool,
+    pub clipboard_persist: bool,
     pub max_files: usize,
     pub max_entries: usize,
     pub load_limit: usize,
@@ -166,6 +167,14 @@ pub fn session_history_path(base_dir: &Path, session_name: &str) -> PathBuf {
         .join("sessions")
         .join(session_name)
         .join("history.log")
+}
+
+/// Returns `<base_dir>/sessions/<name>/clipboard.log`.
+pub fn session_clipboard_path(base_dir: &Path, session_name: &str) -> PathBuf {
+    base_dir
+        .join("sessions")
+        .join(session_name)
+        .join("clipboard.log")
 }
 
 /// Returns the current UTC/epoch timestamp formatted as `YYYY-MM-DDTHH:MM:SSZ` (computed deterministically without extra crate deps).
@@ -241,11 +250,13 @@ pub fn default_history_dir(custom_dir: Option<&str>) -> PathBuf {
 #[derive(Clone, Debug)]
 pub struct HistoryStore {
     pub enabled: bool,
+    pub clipboard_persist: bool,
     pub session_name: String,
     pub run_id: String,
     pub pane_id: usize,
     pub base_dir: PathBuf,
     pub session_file_path: PathBuf,
+    pub clipboard_file_path: PathBuf,
     /// Maximum number of retained session directories.
     pub max_files: usize,
     /// Maximum entries kept in the session file (compacted once 5% past this).
@@ -276,18 +287,23 @@ impl HistoryStore {
         max_files: usize,
     ) -> Self {
         let session_name = sanitize_session_name(session_name);
-        let session_file_path = if base_dir.as_os_str().is_empty() {
-            PathBuf::new()
+        let (session_file_path, clipboard_file_path) = if base_dir.as_os_str().is_empty() {
+            (PathBuf::new(), PathBuf::new())
         } else {
-            session_history_path(&base_dir, &session_name)
+            (
+                session_history_path(&base_dir, &session_name),
+                session_clipboard_path(&base_dir, &session_name),
+            )
         };
         Self {
             enabled,
+            clipboard_persist: enabled,
             session_name,
             run_id: run_id.into(),
             pane_id,
             base_dir,
             session_file_path,
+            clipboard_file_path,
             max_files: max_files.max(1),
             max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
             load_limit: DEFAULT_HISTORY_LOAD_LIMIT,
@@ -334,21 +350,28 @@ impl HistoryStore {
         if let Some(dir) = custom_dir {
             self.base_dir = PathBuf::from(dir);
             self.enabled = settings.enabled;
+            self.clipboard_persist = settings.clipboard_persist;
         } else if !self.headless {
             self.base_dir = default_history_dir(None);
             self.enabled = settings.enabled;
+            self.clipboard_persist = settings.clipboard_persist;
         } else {
             self.enabled = false;
+            self.clipboard_persist = settings.clipboard_persist && settings.enabled;
         }
         self.session_name = sanitize_session_name(&settings.session);
-        let new_path = if self.base_dir.as_os_str().is_empty() {
-            PathBuf::new()
+        let (new_path, new_clip_path) = if self.base_dir.as_os_str().is_empty() {
+            (PathBuf::new(), PathBuf::new())
         } else {
-            session_history_path(&self.base_dir, &self.session_name)
+            (
+                session_history_path(&self.base_dir, &self.session_name),
+                session_clipboard_path(&self.base_dir, &self.session_name),
+            )
         };
-        let changed = new_path != self.session_file_path;
+        let changed = new_path != self.session_file_path || new_clip_path != self.clipboard_file_path;
         if changed {
             self.session_file_path = new_path;
+            self.clipboard_file_path = new_clip_path;
             self.cached_entry_count = None;
         }
         changed
@@ -480,6 +503,70 @@ impl HistoryStore {
         }
         let skip = cmds.len().saturating_sub(self.load_limit);
         cmds.split_off(skip)
+    }
+
+    /// Appends a cut/copy/yank entry to the session's `clipboard.log` (keeping up to 50 recent entries).
+    pub fn record_clipboard_entry(&mut self, text: &str) -> std::io::Result<Option<PathBuf>> {
+        if !self.clipboard_persist
+            || self.base_dir.as_os_str().is_empty()
+            || self.clipboard_file_path.as_os_str().is_empty()
+            || text.is_empty()
+        {
+            return Ok(None);
+        }
+        if let Some(parent) = self.clipboard_file_path.parent() {
+            create_private_dir_all(parent)?;
+        }
+        let record_line = format!(
+            "[{} | session={} | run={} | pane={}] {}\n",
+            format_iso_utc_now(),
+            self.session_name,
+            self.run_id,
+            self.pane_id,
+            escape_history_command(text)
+        );
+        let mut file = crate::secure_fs::private_open_options()
+            .create(true)
+            .append(true)
+            .open(&self.clipboard_file_path)?;
+        file.write_all(record_line.as_bytes())?;
+        file.flush()?;
+        Ok(Some(self.clipboard_file_path.clone()))
+    }
+
+    /// Loads the newest `max_items` unique clipboard/yank entries for this session (newest first).
+    pub fn load_recent_clipboard(&self, max_items: usize) -> Vec<String> {
+        if !self.clipboard_persist
+            || self.base_dir.as_os_str().is_empty()
+            || self.clipboard_file_path.as_os_str().is_empty()
+        {
+            return Vec::new();
+        }
+        let Ok(raw) = fs::read_to_string(&self.clipboard_file_path) else {
+            return Vec::new();
+        };
+        let mut ring: Vec<String> = Vec::new();
+        for entry in raw.lines().filter_map(parse_history_line) {
+            if entry.command.is_empty() {
+                continue;
+            }
+            ring.retain(|existing| existing != &entry.command);
+            ring.insert(0, entry.command);
+            if ring.len() > max_items.max(1) {
+                ring.truncate(max_items.max(1));
+            }
+        }
+        ring
+    }
+
+    /// Removes the persisted `clipboard.log` for this session if present.
+    pub fn clear_clipboard_history(&self) -> std::io::Result<()> {
+        if !self.clipboard_file_path.as_os_str().is_empty()
+            && self.clipboard_file_path.exists()
+        {
+            fs::remove_file(&self.clipboard_file_path)?;
+        }
+        Ok(())
     }
 
     /// Exports the given command history slice to a temporary file (or `custom_path`), returning the written `PathBuf`.

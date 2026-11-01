@@ -266,14 +266,6 @@ impl CompositePane {
         Ok(submitted)
     }
 
-    /// Replaces the prompt's in-memory history with the newest persisted commands of the
-    /// pane's history session (so Up/Down, `Ctrl+R`, and the history popup see prior runs).
-    pub fn restore_persisted_history(&mut self) {
-        self.prompt.history = self.history_store.load_recent_commands();
-        self.prompt.history_index = None;
-        self.prompt.history_popup_selected = 0;
-    }
-
     /// Computes the `OutputCanvas` rectangle.
     ///
     /// - In floating modes (`Top`, `Bottom`, `Floating`) or when the prompt is hidden (`ALT_SCREEN` / `!ECHO`),

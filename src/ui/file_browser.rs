@@ -475,27 +475,19 @@ impl FileBrowserState {
             actions.push(McpRowAction::BrowseDir(parent.to_path_buf()));
         }
 
-        let (mut subdirs, mut theme_files, mut text_files) = (Vec::new(), Vec::new(), Vec::new());
-        if let Ok(entries) = std::fs::read_dir(&self.current_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                if (fname.starts_with('.') && fname != ".config")
-                    || (!self.filter.is_empty() && !wildcard_match(&self.filter, fname))
-                {
-                    continue;
-                }
-                if p.is_dir() {
-                    subdirs.push(p);
-                } else if p.is_file() {
-                    if is_theme_file_path(&p) {
-                        theme_files.push(p);
-                    } else {
-                        text_files.push(p);
-                    }
-                }
+    let (mut subdirs, mut theme_files, mut text_files) = (Vec::new(), Vec::new(), Vec::new());
+    if let Ok(entries) = std::fs::read_dir(&self.current_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let fname = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if (fname.starts_with('.') && fname != ".config") || (!self.filter.is_empty() && !wildcard_match(&self.filter, fname)) {
+                continue;
+            }
+            if p.is_dir() { subdirs.push(p); } else if p.is_file() {
+                if is_theme_file_path(&p) { theme_files.push(p); } else { text_files.push(p); }
             }
         }
+    }
 
         subdirs.sort_by(|a, b| {
             let a_n = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
@@ -627,8 +619,20 @@ pub fn execute_theme_or_browser_command(wm: &mut crate::wm::WindowManager, subcm
     let _ = ensure_user_config_initialized();
     let parts: Vec<&str> = subcmd.split_whitespace().collect();
     match parts.first().copied() {
-        Some("cursor") => {
-            crate::ui::cursor_cmd::execute_cursor_command(wm, subcmd);
+        Some("cursor") => crate::ui::cursor_cmd::execute_cursor_command(wm, subcmd),
+        Some("global" | "all") => {
+            let target = parts[1..].join(" ");
+            let t = target.trim();
+            if let Some(p) = ThemePreset::from_name(t).or_else(|| ThemePreset::all().iter().copied().find(|p| p.label().eq_ignore_ascii_case(t))) {
+                wm.apply_global_theme_preset(p);
+                wm.active_pane_mut().set_status_message(Some(format!("Applied global theme '{}' to all windows", p.label())));
+            } else if let Some((_, scheme)) = resolve_theme_file_or_name(t) {
+                wm.apply_open_color_scheme(&scheme);
+                wm.clear_all_pane_theme_overrides();
+                wm.active_pane_mut().set_status_message(Some(format!("Applied global scheme '{}' to all windows", scheme.name)));
+            } else {
+                wm.active_pane_mut().set_status_message(Some(format!("Unknown global theme '{t}'")));
+            }
         }
         None | Some("list" | "ls" | "itermcolors" | "iterm2colors") => {
             let raw_extra = parts[1..].join(" ");

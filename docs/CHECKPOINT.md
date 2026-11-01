@@ -22,7 +22,7 @@
 - "v2.1.2 - do release. make release page; add MacOS binaries. note that I have to build for Linux and Windows, too." / "v2.1.1 - build and attach v2.1.1. binaries for MacOS to it"
 - Merge local vs remote without clobbering either → user: **"yes"** (to the stash / ff-pull / pop plan).
 - Workflow should run the script from `main` + attach macOS to v2.2.0–v2.4.0 → user: **"yes"**.
-- SSH into `bigmac.local` and use `/Users/bill/src/tools/win-devvm` (Parallels Windows 11 ARM VM) to complete the `v2.3.0` Windows builds.
+- SSH into the macOS build host and use `win-devvm` (Parallels Windows 11 ARM VM) to complete the `v2.3.0` Windows builds.
 
 ## Done (committed + pushed)
 - `066f4e5` fix `scripts/build-release-mac-win.sh --upload` on macOS: `ls bilterm-*.zip` failed under `pipefail` (no zips on mac) → nullglob + printf.
@@ -30,7 +30,7 @@
 - macOS archives (aarch64 + x86_64, verified arch / `--version` / system-only dylibs, re-downloaded and `SHA256SUMS`-checked) attached to v2.1.1, v2.1.2, v2.2.0, v2.3.0, v2.4.0. Existing Linux/Windows sums were merged, not overwritten.
 - v2.1.2 release page created from CHANGELOG (`--latest=false`); v2.1.1 notes footer updated to list macOS.
 - Skill `building-release-binaries` committed in `~/src/swe-skills-2` (`28b79df`) and pushed; its `build-binaries.sh` (bash 3.2-safe `REPO_ARGS`, plus `python3`/`python` fallback on Windows) is also in this repo as `scripts/build-binaries.sh`.
-- v2.3.0 Windows `aarch64-pc-windows-msvc` and `x86_64-pc-windows-msvc` built natively inside the Parallels Windows 11 ARM VM on `bigmac.local` (`/Users/bill/src/tools/win-devvm/vm.sh`), verified (`bilterm.exe --version` → `bilterm 2.3.0`), uploaded to the `v2.3.0` GitHub release, and `SHA256SUMS` merged & re-verified after download.
+- v2.3.0 Windows `aarch64-pc-windows-msvc` and `x86_64-pc-windows-msvc` built natively inside the Parallels Windows 11 ARM VM on the macOS build host (`win-devvm/vm.sh`), verified (`bilterm.exe --version` → `bilterm 2.3.0`), uploaded to the `v2.3.0` GitHub release, and `SHA256SUMS` merged & re-verified after download.
 
 ## Release asset matrix (2026-10-31 11:48, verified via `gh release view`)
 | Release | macOS | Windows | Linux |
@@ -52,7 +52,7 @@
 
 ## Lessons
 - `scripts/build-binaries.sh` now uses `cargo zigbuild` for `*-windows-gnu` on Linux (plain cargo has no MinGW linker) and falls back to `python` when `python3` is a Microsoft Store alias stub on Windows.
-- On `bigmac.local` (`win-devvm`), invoke `./vm.sh` via `zsh -l -c` so `/usr/local/bin/prlctl` is on `PATH`, and inside the Windows guest invoke `"C:\Program Files\Git\bin\bash.exe" -l -c` with `PATH=/clangarm64/bin:/c/Users/dev/AppData/Local/Programs/Python/Python312-arm64:/usr/bin:/c/Users/dev/.cargo/bin:$PATH`.
+- On the macOS build host (`win-devvm`), invoke `./vm.sh` via `zsh -l -c` so `/usr/local/bin/prlctl` is on `PATH`, and inside the Windows guest invoke `"C:\Program Files\Git\bin\bash.exe" -l -c` with `PATH=/clangarm64/bin:/c/Users/dev/AppData/Local/Programs/Python/Python312-arm64:/usr/bin:/c/Users/dev/.cargo/bin:$PATH`.
 - Never run `cargo fmt` repo-wide (repo is not rustfmt-clean → 100+ file churn; v2.4.0 needed a revert commit `0df2ed5`).
 - Run the FULL integration suite (`timeout 900 cargo test -q --tests --no-fail-fast`) before releases, not just lib tests (v2.3.0 shipped a 1-row-grid crash).
 

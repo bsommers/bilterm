@@ -83,6 +83,9 @@ fn v020_end_to_end_canvas_search_vi_copy_url_yank_and_exit_telemetry() {
         area,
     )
     .unwrap();
+    // Explicit copy by default: mouse drag highlights selection without overwriting URL in yank_buffer until Enter/y
+    assert_eq!(pane.prompt().yank_buffer, "https://docs.rs/ratatui/latest");
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
     assert_eq!(pane.prompt().yank_buffer, "1234\n5678");
 
     // 5. Trigger unsafe paste modal in RawPtyPassthrough and render it (FND-01)

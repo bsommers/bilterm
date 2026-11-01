@@ -119,10 +119,12 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 2 {
             let prompt_rect = self.pane.prompt_rect(area);
-            if cfg.drop_shadows && !self.pane.prompt().anchor.is_split() {
+            if cfg.liquid_glass && !self.pane.prompt().anchor.is_split() {
+                visual_style::render_liquid_ambient_halo(buf, prompt_rect, canvas, &palette);
+            } else if cfg.drop_shadows && !cfg.is_modern() && !self.pane.prompt().anchor.is_split() {
                 render_drop_shadow_styled(buf, prompt_rect, canvas, cfg.shadow_style, &palette);
             }
-            if cfg.glass_mode {
+            if cfg.is_glass() {
                 visual_style::apply_frosted_glass_surface(buf, prompt_rect, palette.prompt_surface_bg, &palette);
             } else {
                 occlude_rect(buf, prompt_rect);
@@ -131,9 +133,6 @@ impl Widget for CompositePaneWidget<'_> {
                 self.pane, self.active && !self.pane.copy_mode().active, prompt_rect, canvas,
                 cfg, &palette, &glyphs, buf,
             );
-            if cfg.glass_mode {
-                visual_style::polish_glass_panel_rect(buf, prompt_rect, palette.prompt_surface_bg, &palette, self.active);
-            }
         }
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
@@ -420,12 +419,12 @@ fn render_output_canvas(
                 }
             }
         }
-        if pane.copy_mode().active {
+        if active && pane.copy_mode().active {
             let cr = pane.copy_mode().cursor_row.min(render_rows.saturating_sub(1));
             let cc = pane.copy_mode().cursor_col.min(render_cols.saturating_sub(1));
             let cx = canvas.x + cc;
             let cy = canvas.y + cr;
-            if active && cfg.crosshair_cursor {
+            if cfg.crosshair_cursor {
                 let target_rect = if cfg.crosshair_fullscreen {
                     buf.area
                 } else {
@@ -482,8 +481,10 @@ fn render_output_canvas(
         }
     }
 
-    // When in RawPtyPassthrough and not scrolled back, highlight the live PTY cursor cell
-    if pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+    // When in RawPtyPassthrough and not scrolled back (nor in active Copy Mode), highlight the live PTY cursor cell
+    if active
+        && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+        && !pane.copy_mode().active
         && vt.scrollback_offset() == 0
         && vt.is_cursor_visible()
     {
@@ -599,21 +600,29 @@ impl Widget for WorkspaceWidget<'_> {
                 continue;
             };
             let is_active = !qt_visible && top_workspace_id == Some(id);
-            // Per-window theme / outline / bold overrides (`:window theme|outline|bold`)
+            // Per-window theme / outline / bold / cursor overrides (`:window`, `:theme`, `:cursor`)
             let chrome_style = self.wm.pane_chrome(id);
-            let pane_palette = chrome_style.resolve_palette(cfg);
+            let (pane_cfg, pane_palette) = chrome_style.resolve_config_and_palette(cfg);
             if framed {
-                if cfg.drop_shadows && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
+                if cfg.liquid_glass && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
+                    visual_style::render_liquid_ambient_halo(buf, outer, workspace_area, &pane_palette);
+                } else if cfg.drop_shadows && !cfg.is_modern() && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
                     render_drop_shadow_styled(buf, outer, workspace_area, cfg.shadow_style, &pane_palette);
                 }
-                if cfg.glass_mode && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
+                if cfg.is_glass() && self.wm.layout_mode() == WorkspaceLayoutMode::Stacked {
                     visual_style::apply_frosted_glass_surface(buf, outer, pane_palette.window_frame_bg, &pane_palette);
                 } else {
                     occlude_rect(buf, outer);
                 }
                 let z_badge = self.wm.z_stack().rank_of(id).map(|(r, total)| format!("Z:{r}/{total}")).unwrap_or_default();
-                let lock_tag = if pane.is_read_only() { " 🔒" } else { "" };
-                let frame_title = if cfg.snazzy_mode {
+                let lock_tag = if pane.is_read_only() {
+                    if cfg.is_modern() { " · ◈" } else { " 🔒" }
+                } else {
+                    ""
+                };
+                let frame_title = if cfg.is_modern() {
+                    visual_style::format_modern_window_title(self.wm, pane, id, &z_badge, lock_tag)
+                } else if cfg.snazzy_mode {
                     visual_style::format_snazzy_window_title(self.wm, pane, id, &z_badge, lock_tag)
                 } else {
                     format!("[{id}] {}{lock_tag} ({z_badge})", pane.title())
@@ -622,12 +631,15 @@ impl Widget for WorkspaceWidget<'_> {
                     outer, &frame_title, is_active, chrome_style.resolve_outline(cfg),
                     chrome_style.resolve_bold(cfg), &pane_palette, &glyphs, buf,
                 );
+                if cfg.liquid_glass {
+                    visual_style::polish_glass_panel_rect(buf, outer, pane_palette.window_frame_bg, &pane_palette, is_active);
+                }
                 let inner = inset_window_frame(outer);
-                CompositePaneWidget::with_config(pane, is_active, cfg)
+                CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .render(inner, buf);
             } else {
-                CompositePaneWidget::with_config(pane, is_active, cfg)
+                CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .render(outer, buf);
             }
@@ -638,14 +650,27 @@ impl Widget for WorkspaceWidget<'_> {
 
         if qt_visible {
             let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);
-            if cfg.drop_shadows {
+            if cfg.liquid_glass {
+                visual_style::render_liquid_ambient_halo(buf, qt_outer, workspace_area, &palette);
+            } else if cfg.drop_shadows && !cfg.is_modern() {
                 render_drop_shadow_styled(buf, qt_outer, workspace_area, cfg.shadow_style, &palette);
             }
             occlude_rect(buf, qt_outer);
+            if cfg.is_glass() {
+                visual_style::apply_frosted_glass_surface(buf, qt_outer, palette.window_frame_bg, &palette);
+            }
+            let qt_title = if cfg.is_modern() {
+                "● ● ●  Quick Terminal · ~ · Alt+`"
+            } else {
+                "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)"
+            };
             render_borland_frame_styled(
-                qt_outer, "[Q] QUAKE QUICK TERM [~] (Alt+` to hide)", true,
+                qt_outer, qt_title, true,
                 cfg.window_outline, &palette, &glyphs, buf,
             );
+            if cfg.liquid_glass {
+                visual_style::polish_glass_panel_rect(buf, qt_outer, palette.window_frame_bg, &palette, true);
+            }
             let qt_inner = inset_window_frame(qt_outer);
             CompositePaneWidget::with_config(&self.wm.quick_terminal().pane, true, cfg)
                 .render(qt_inner, buf);

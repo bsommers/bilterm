@@ -645,8 +645,8 @@ impl GuiWorkspaceRenderer {
             let local_inner = Rect::new(0, 0, scaled_inner.width.max(1), scaled_inner.height.max(1));
             let mut pane_buf = Buffer::empty(local_inner);
             let is_active = top_id == Some(id);
-            let pane_pal = wm.pane_chrome(id).resolve_palette(wm.config());
-            crate::ui::CompositePaneWidget::with_config(pane, is_active, wm.config())
+            let (pane_cfg, pane_pal) = wm.pane_chrome(id).resolve_config_and_palette(wm.config());
+            crate::ui::CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                 .with_palette(Some(pane_pal))
                 .render(local_inner, &mut pane_buf);
             let pane_x0 = f32::from(inner.x.saturating_sub(viewport.x)) * cw;

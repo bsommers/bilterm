@@ -3,7 +3,76 @@
 use crate::clipboard::set_system_clipboard;
 use crate::pane::prompt_editor::FloatingPromptState;
 
+/// Maximum number of cut/copy/yank entries retained in the per-session yank history ring.
+pub const MAX_YANK_HISTORY: usize = 50;
+
 impl FloatingPromptState {
+    /// Records `text` into `yank_buffer` and the top of `yank_history` (deduplicated, up to 50 items).
+    pub fn push_yank_entry(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        self.yank_buffer = text.to_string();
+        self.yank_history.retain(|existing| existing != text);
+        self.yank_history.insert(0, text.to_string());
+        if self.yank_history.len() > MAX_YANK_HISTORY {
+            self.yank_history.truncate(MAX_YANK_HISTORY);
+        }
+        self.yank_ring_index = 0;
+    }
+
+    /// Cycles through `yank_history` (`Alt+Y` yank-pop) and updates `yank_buffer`.
+    pub fn yank_pop(&mut self) -> Option<String> {
+        if self.yank_history.is_empty() {
+            return None;
+        }
+        self.yank_ring_index = (self.yank_ring_index + 1) % self.yank_history.len();
+        let entry = self.yank_history[self.yank_ring_index].clone();
+        self.yank_buffer = entry.clone();
+        set_system_clipboard(&entry);
+        Some(entry)
+    }
+
+    /// Scrolls the command prompt's multi-line viewport up by `rows`.
+    pub fn scroll_up(&mut self, rows: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(rows);
+    }
+
+    /// Scrolls the command prompt's multi-line viewport down by `rows`.
+    pub fn scroll_down(&mut self, rows: usize) {
+        let max_scroll = self.lines.len().saturating_sub(1);
+        self.scroll_offset = (self.scroll_offset + rows).min(max_scroll);
+    }
+
+    /// Opens or closes the Borland-style Command History Pop-up Window.
+    pub fn toggle_history_popup(&mut self) {
+        self.history_popup_open = !self.history_popup_open;
+        if self.history_popup_open && !self.history.is_empty() {
+            self.history_popup_selected = self.history.len() - 1;
+        }
+    }
+
+    pub fn history_popup_prev(&mut self) {
+        if self.history_popup_selected > 0 {
+            self.history_popup_selected -= 1;
+        }
+    }
+
+    pub fn history_popup_next(&mut self) {
+        if self.history_popup_selected + 1 < self.history.len() {
+            self.history_popup_selected += 1;
+        }
+    }
+
+    pub fn accept_history_popup_selection(&mut self) -> bool {
+        self.history_popup_open = false;
+        if let Some(cmd) = self.history.get(self.history_popup_selected).cloned() {
+            self.set_text(&cmd);
+            true
+        } else {
+            false
+        }
+    }
     /// Returns the raw selection anchor `(row, col)`, if any.
     pub fn selection_anchor(&self) -> Option<(usize, usize)> {
         self.selection_anchor
@@ -122,7 +191,7 @@ impl FloatingPromptState {
     pub fn copy_selection(&mut self) -> Option<String> {
         let text = self.selected_text()?;
         if !text.is_empty() {
-            self.yank_buffer = text.clone();
+            self.push_yank_entry(&text);
             set_system_clipboard(&text);
         }
         Some(text)
@@ -133,7 +202,7 @@ impl FloatingPromptState {
     pub fn cut_selection_or_line(&mut self) -> Option<String> {
         if let Some(deleted) = self.delete_selection() {
             if !deleted.is_empty() {
-                self.yank_buffer = deleted.clone();
+                self.push_yank_entry(&deleted);
                 set_system_clipboard(&deleted);
             }
             return Some(deleted);
@@ -156,7 +225,7 @@ impl FloatingPromptState {
         self.selection_anchor = None;
         self.sync_from_lines();
         if !line_text.is_empty() {
-            self.yank_buffer = line_text.clone();
+            self.push_yank_entry(&line_text);
             set_system_clipboard(&line_text);
         }
         Some(line_text)

@@ -20,25 +20,13 @@ use crate::ui::gui_window::pixel_to_cell_coords;
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
 use crate::wm::WindowManager;
 
-const KEY_PRESS_MASK: c_long = 1 << 0;
-const BUTTON_PRESS_MASK: c_long = 1 << 2;
-const BUTTON_RELEASE_MASK: c_long = 1 << 3;
-const POINTER_MOTION_MASK: c_long = 1 << 6;
-const EXPOSURE_MASK: c_long = 1 << 15;
-const STRUCTURE_NOTIFY_MASK: c_long = 1 << 17;
-
-const KEY_PRESS: c_int = 2;
-const BUTTON_PRESS: c_int = 4;
-const BUTTON_RELEASE: c_int = 5;
-const MOTION_NOTIFY: c_int = 6;
-const EXPOSE: c_int = 12;
-const CONFIGURE_NOTIFY: c_int = 22;
-const CLIENT_MESSAGE: c_int = 33;
-const Z_PIXMAP: c_int = 2;
-
-const SHIFT_MASK: c_uint = 1 << 0;
-const CONTROL_MASK: c_uint = 1 << 2;
-const MOD1_MASK: c_uint = 1 << 3;
+const KEY_PRESS_MASK: c_long = 1 << 0; const BUTTON_PRESS_MASK: c_long = 1 << 2;
+const BUTTON_RELEASE_MASK: c_long = 1 << 3; const POINTER_MOTION_MASK: c_long = 1 << 6;
+const EXPOSURE_MASK: c_long = 1 << 15; const STRUCTURE_NOTIFY_MASK: c_long = 1 << 17;
+const KEY_PRESS: c_int = 2; const BUTTON_PRESS: c_int = 4; const BUTTON_RELEASE: c_int = 5;
+const MOTION_NOTIFY: c_int = 6; const EXPOSE: c_int = 12; const CONFIGURE_NOTIFY: c_int = 22;
+const CLIENT_MESSAGE: c_int = 33; const Z_PIXMAP: c_int = 2;
+const SHIFT_MASK: c_uint = 1 << 0; const CONTROL_MASK: c_uint = 1 << 2; const MOD1_MASK: c_uint = 1 << 3;
 
 #[repr(C)]
 struct XftFont { ascent: c_int, descent: c_int, height: c_int, max_advance_width: c_int, charset: *mut c_void, pattern: *mut c_void }
@@ -473,10 +461,22 @@ impl<'a> X11GuiCanvas<'a> {
 
         let (cell_w, cell_h) = (u32::from(surface.cell_width_px.max(4)), u32::from(surface.cell_height_px.max(8)));
         for g in &surface.glyphs {
-            if let Some(ch) = g.text.chars().next() && is_geometric_glyph(ch) {
+            let Some(ch) = g.text.chars().next() else { continue };
+            let draw_ch = if is_geometric_glyph(ch) {
+                Some(ch)
+            } else if !ch.is_ascii()
+                && let Some(exists_fn) = self.api.xft_char_exists
+                && (self.font_regular.is_null() || unsafe { exists_fn(self.dpy, self.font_regular, ch as u32) } == 0)
+                && (self.font_fallback.is_null() || unsafe { exists_fn(self.dpy, self.font_fallback, ch as u32) } == 0)
+            {
+                Some(crate::ui::gui_font::geometric::map_pua_icon_fallback(ch))
+            } else {
+                None
+            };
+            if let Some(geom_ch) = draw_ch {
                 let gw = u32::from(g.cell_width_px.max(4)).max(cell_w.min(4));
                 let gh = u32::from(g.cell_height_px.max(8)).max(cell_h.min(8));
-                draw_geometric_cell_bgra(&mut self.pixels, fb_w, fb_h, g.x_px.max(0.0) as u32, g.y_px.max(0.0) as u32, gw, gh, ch, g.fg_rgba);
+                draw_geometric_cell_bgra(&mut self.pixels, fb_w, fb_h, g.x_px.max(0.0) as u32, g.y_px.max(0.0) as u32, gw, gh, geom_ch, g.fg_rgba);
             }
         }
 
@@ -531,11 +531,14 @@ impl<'a> X11GuiCanvas<'a> {
                     (f_use, asc)
                 };
                 if !ch.is_ascii()
-                    && !self.font_fallback.is_null()
                     && let Some(exists_fn) = self.api.xft_char_exists
                     && unsafe { exists_fn(self.dpy, font, ch as u32) } == 0
                 {
-                    font = self.font_fallback;
+                    if !self.font_fallback.is_null() && unsafe { exists_fn(self.dpy, self.font_fallback, ch as u32) } != 0 {
+                        font = self.font_fallback;
+                    } else {
+                        continue;
+                    }
                 }
                 let (r, gr, b) = (g.fg_rgba[0], g.fg_rgba[1], g.fg_rgba[2]);
                 let col = XftColor {
@@ -634,8 +637,16 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
 
     let root = unsafe { (api.x_default_root_window)(dpy) };
     let (mut win_w, mut win_h) = (1120u32, 720u32);
-    let win = unsafe { (api.x_create_simple_window)(dpy, root, 80, 60, win_w, win_h, 0, 0, 0x0000_0084) };
-    let title = CString::new("Bilterm — IBM 3270 x Borland Turbo Vision (Native GUI)").unwrap();
+    let init_bg = if app.wm.config().is_modern() { 0x000A_101D } else { 0x0000_0084 };
+    let win = unsafe { (api.x_create_simple_window)(dpy, root, 80, 60, win_w, win_h, 0, 0, init_bg) };
+    let title_str = if app.wm.config().liquid_glass {
+        "Bilterm — Liquid Glass"
+    } else if app.wm.config().is_modern() {
+        "Bilterm"
+    } else {
+        "Bilterm — IBM 3270 x Borland Turbo Vision (Native GUI)"
+    };
+    let title = CString::new(title_str).unwrap();
     let mut wm_delete = unsafe { (api.x_intern_atom)(dpy, c"WM_DELETE_WINDOW".as_ptr(), 0) };
     unsafe {
         (api.x_store_name)(dpy, win, title.as_ptr());
@@ -653,11 +664,13 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
     let vp = Rect::new(0, 0, cols, rows);
     app.wm.resize_all(vp)?;
     app.last_viewport = vp;
-    let font_pt = app.wm.config().scaled_font_size_pt();
-    app.wm.active_pane_mut().set_status_message(Some(format!(
-        "GUI Font: {} ({}pt Xft/FreeType) — :font <jetbrains|firacode|cascadia|vga|cycle|add> or Ctrl+Wheel",
-        x11_canvas.resolved_face_name, font_pt
-    )));
+    if !app.wm.config().is_modern() {
+        let font_pt = app.wm.config().scaled_font_size_pt();
+        app.wm.active_pane_mut().set_status_message(Some(format!(
+            "GUI Font: {} ({}pt Xft/FreeType) — :font <jetbrains|firacode|cascadia|vga|cycle|add> or Ctrl+Wheel",
+            x11_canvas.resolved_face_name, font_pt
+        )));
+    }
     app.needs_redraw = true;
     let mut left_down = false;
 

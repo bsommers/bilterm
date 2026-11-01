@@ -13,9 +13,7 @@ use crate::error::Result;
 use crate::pane::history_store::HistorySettings;
 use crate::pane::{CompositePane, PaneId, PromptAnchor};
 use crate::pty::PtyConfig;
-use crate::remote::{
-    FleetNodeKind, FleetSelector, RemoteHostProfile, remote_osc133_bootstrap_command,
-};
+use crate::remote::{FleetNodeKind, FleetSelector, RemoteHostProfile};
 use crate::vt::scrollback::{PaneUsage, format_mib, plan_capacities};
 use crate::wm::split_tree::{SplitDirection, SplitTree};
 
@@ -52,6 +50,9 @@ pub struct SavedPaneState {
     pub scrollback_lines: Vec<String>,
     pub read_only: bool,
     pub history: Vec<String>,
+    /// Per-session cut-and-paste yank buffer history ring when `clipboard_history_persist` is enabled.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub yank_history: Vec<String>,
     /// Per-window theme name (re-resolved via `resolve_named_palette`); `None` = global.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
@@ -210,7 +211,11 @@ impl WindowManager {
         let new_id = self.split_focused(SplitDirection::Vertical)?;
         let dest = profile.destination.clone();
         if !self.headless_mode {
-            let (rows, cols) = self.default_size;
+            let (rows, cols) = self
+                .panes
+                .get(&new_id)
+                .map(|p| p.vt().size())
+                .unwrap_or(self.default_size);
             let pty_cfg = PtyConfig {
                 program: "ssh".to_string(),
                 args,
@@ -220,13 +225,11 @@ impl WindowManager {
                 env: BTreeMap::new(),
             };
             if let Ok(mut live_pane) = CompositePane::spawn(new_id, pty_cfg) {
-                if profile.remote_osc133_bootstrap {
-                    let _ = live_pane.write_to_pty(remote_osc133_bootstrap_command().as_bytes());
-                }
                 live_pane.set_title(format!("SSH:{dest} [#{new_id}]"));
                 live_pane.set_remote_target(Some(dest.clone()));
                 Self::attach_history(&mut live_pane, &self.config.history_settings());
                 self.panes.insert(new_id, live_pane);
+                self.reflow_default_viewport();
             }
         }
         if let Some(pane) = self.panes.get_mut(&new_id) {
@@ -420,6 +423,11 @@ impl WindowManager {
                     scrollback_lines,
                     read_only: p.is_read_only(),
                     history: p.prompt().history.clone(),
+                    yank_history: if self.config.clipboard_history_persist {
+                        p.prompt().yank_history.clone()
+                    } else {
+                        Vec::new()
+                    },
                     theme: chrome.theme_name,
                     outline: chrome.outline,
                     bold: chrome.bold,

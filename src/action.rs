@@ -47,6 +47,11 @@ pub enum Action {
     DeckNext,
     DeckPrev,
     FocusPane(usize),
+    /// Switches focus to the adjacent window/pane in direction `(dx, dy)` (Arrow / VIM `hjkl` / WASD `wasd`).
+    PaneFocusDirection {
+        dx: i16,
+        dy: i16,
+    },
     ZoomToggle,
     ClosePane,
     LayoutMode(WorkspaceLayoutMode),
@@ -273,6 +278,7 @@ mod tests {
             Action::DeckNext => Some(":deck next"),
             Action::DeckPrev => Some(":deck prev"),
             Action::FocusPane(_) => Some(":focus 1"),
+            Action::PaneFocusDirection { .. } => Some(":focus right"),
             Action::ZoomToggle => Some(":zoom"),
             Action::ClosePane => Some(":close"),
             Action::LayoutMode(_) => Some(":layout tiled"),
@@ -401,6 +407,7 @@ mod tests {
             Action::DeckNext,
             Action::DeckPrev,
             Action::FocusPane(1),
+            Action::PaneFocusDirection { dx: 1, dy: 0 },
             Action::ZoomToggle,
             Action::ClosePane,
             Action::LayoutMode(WorkspaceLayoutMode::Tiled),

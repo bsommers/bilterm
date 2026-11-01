@@ -157,6 +157,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "monokai-remastered",
             "tron-grid",
             "window ",
+            "global ",
             "list",
             "browse ",
             "import ",
@@ -260,85 +261,15 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":browse", &[]),
     (":files", &[]),
     (":glyphs", &["unicode", "cp437", "nerd-font", "ascii"]),
-    (
-        ":cursor",
-        &[
-            "block",
-            "hollow",
-            "underline",
-            "underscore",
-            "bar",
-            "custom ",
-            "blink",
-            "solid",
-            "rapid",
-            "color ",
-            "fg ",
-            "green",
-            "amber",
-            "cyan",
-            "yellow",
-            "crimson",
-            "magenta",
-            "purple",
-            "orange",
-            "white",
-            "theme",
-            "reset",
-            "list",
-        ],
-    ),
+    (":cursor", &[
+        "block", "hollow", "underline", "underscore", "bar", "custom ", "blink", "solid",
+        "rapid", "color ", "cursor-color ", "fg ", "window ", "global ", "green", "amber",
+        "cyan", "yellow", "crimson", "magenta", "purple", "orange", "white", "theme", "reset", "list",
+    ]),
     (":crosshair", &["on", "off", "full", "pane"]),
-    (
-        ":spotlight",
-        &[
-            "circle",
-            "ellipse",
-            "pixel",
-            "fuzzy",
-            "full",
-            "pane",
-            "+",
-            "-",
-            "size ",
-            "feather ",
-            "off",
-        ],
-    ),
-    (
-        ":focalzoom",
-        &[
-            "1.25x",
-            "1.5x",
-            "2x",
-            "3x",
-            "circle",
-            "ellipse",
-            "fuzzy",
-            "pixel",
-            "+",
-            "-",
-            "grow",
-            "shrink",
-            "size ",
-            "feather ",
-            "off",
-        ],
-    ),
-    (
-        ":lens",
-        &[
-            "1.25x",
-            "1.5x",
-            "2x",
-            "3x",
-            "circle",
-            "ellipse",
-            "fuzzy",
-            "pixel",
-            "off",
-        ],
-    ),
+    (":spotlight", &["circle", "ellipse", "pixel", "fuzzy", "full", "pane", "+", "-", "size ", "feather ", "off"]),
+    (":focalzoom", &["1.25x", "1.5x", "2x", "3x", "circle", "ellipse", "fuzzy", "pixel", "+", "-", "grow", "shrink", "size ", "feather ", "off"]),
+    (":lens", &["1.25x", "1.5x", "2x", "3x", "circle", "ellipse", "fuzzy", "pixel", "off"]),
     (":fkeybar", &["on", "off"]),
     (":search", &["next", "prev", "off"]),
     (":find", &["next", "prev", "off"]),
@@ -478,8 +409,11 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":canvas", &["hires", "res", "backend", "demo", "tek", "mode", "line", "circle", "bezier", "sprite", "step", "plot", "image", "pan", "zoom", "export", "encode", "clear", "status"]),
     (":record", &["start", "workspace", "pane", "stop"]),
     (":remote", &["list", "add ", "exec ", "disconnect "]),
-    (":ssh", &[]),
-    (":ssh-tmux", &[]),
+    (":ssh", &["list", "-p ", "user@host"]),
+    (":ssh-tmux", &["list", "user@host"]),
+    (":modern", &["on", "off", "toggle"]),
+    (":liquid", &["on", "off", "toggle"]),
+    (":style", &["classic", "snazzy", "glass", "both", "modern", "liquid", "cycle"]),
     (":scrollback", &["clear", "status"]),
     (":block", &["prev", "next"]),
     (":yank", &[]),
@@ -533,6 +467,19 @@ pub fn compute_completions(
                                 is_dir: sub.ends_with(' '),
                             });
                         }
+                    }
+                }
+            }
+            if matches!(cmd_name.as_str(), ":ssh" | ":ssh-tmux") {
+                for host in crate::remote::discover_ssh_config_hosts() {
+                    if host.starts_with(arg_trimmed)
+                        && !out.iter().any(|c| c.display == host)
+                    {
+                        out.push(CompletionCandidate {
+                            display: host.clone(),
+                            replacement: host,
+                            is_dir: false,
+                        });
                     }
                 }
             }

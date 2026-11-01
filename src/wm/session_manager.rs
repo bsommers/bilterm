@@ -740,6 +740,8 @@ mod tests {
         }
         assert!(wm.active_pane().copy_mode().active);
         assert_eq!(wm.active_pane().copy_mode().selection_kind, crate::pane::CopySelectionKind::Block);
+        assert_eq!(wm.active_pane().prompt().yank_buffer, "111\n222\n333");
+        wm.apply(parse_colon_command(":rect copy").unwrap().unwrap()).unwrap();
         assert_eq!(wm.active_pane().prompt().yank_buffer, "ALPHA\nBETA_");
     }
 
@@ -749,29 +751,20 @@ mod tests {
         let mut wm = WindowManager::new_headless(24, 80);
         wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
         wm.config_mut().history_session = "dev-stack".to_string();
-
-        // Pane #1: configure shell, cd into /tmp/frontend, and start a long-running dev server
         execute_wm_colon_command(&mut wm, parse_colon_command(":session shell /bin/zsh -l").unwrap().unwrap());
         wm.active_pane_mut().submit_command("cd /tmp/frontend").unwrap();
         wm.active_pane_mut().submit_command("npm run dev -- --port 3000").unwrap();
         assert_eq!(wm.active_pane().resolve_cwd(), std::path::PathBuf::from("/tmp/frontend"));
         assert_eq!(wm.active_pane().resolve_running_command().as_deref(), Some("npm run dev -- --port 3000"));
-
-        // Split Pane #2: configure shell, cwd via :session cwd, and command via :session cmd
         let p2 = wm.split_focused(crate::wm::SplitDirection::Vertical).unwrap();
         assert_eq!(wm.active_pane_id(), p2);
         execute_wm_colon_command(&mut wm, parse_colon_command(":session shell /usr/bin/fish -i").unwrap().unwrap());
         execute_wm_colon_command(&mut wm, parse_colon_command(":session cwd /var/log/nginx").unwrap().unwrap());
         execute_wm_colon_command(&mut wm, parse_colon_command(":session cmd tail -f access.log").unwrap().unwrap());
-
-        // Save session "dev-stack"
         execute_wm_colon_command(&mut wm, parse_colon_command(":session save dev-stack").unwrap().unwrap());
-
-        // Restore into a fresh WindowManager with session_restore_processes = true (default)
         let mut wm2 = WindowManager::new_headless(24, 80);
         wm2.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
         execute_wm_colon_command(&mut wm2, parse_colon_command(":session restore dev-stack").unwrap().unwrap());
-
         assert_eq!(wm2.pane_count(), 2);
         let pane1 = wm2.panes().get(&1).unwrap();
         assert_eq!(pane1.shell_program(), "/bin/zsh");

@@ -93,9 +93,9 @@ fn lesson_2_powerline_and_nerd_font_pua_glyphs_preserve_codepoints_and_rasterize
     let viewport = Rect::new(0, 0, 80, 12);
     wm.resize_all(viewport).unwrap();
 
-    // Feed the exact Powerline prompt reported in this session: " bill@bigmac  ~ "
+    // Feed the exact Powerline prompt reported in this session: " user@devbox  ~ "
     // plus branch icon (U+E0A0 '') and right-pointing/left-pointing Powerline dividers
-    let sample = "\r\n\r\n\r\n bill@bigmac \u{E0B0} ~ \u{E0B0} \u{E0A0}main \u{E0B2}\r\n";
+    let sample = "\r\n\r\n\r\n user@devbox \u{E0B0} ~ \u{E0B0} \u{E0A0}main \u{E0B2}\r\n";
     wm.active_pane_mut().process_pty_output(sample.as_bytes());
 
     let line3 = wm.active_pane().vt().viewport_line_text(3);
@@ -321,7 +321,7 @@ fn lesson_6_three_signal_echo_lock_protects_sudo_without_locking_normal_shell_re
 
     // Case 1: Normal zsh/bash/fish Readline prompt disables termios ECHO while waiting for input,
     // with no foreground subcommand and a normal shell prompt line. Must NOT lock!
-    pane.process_pty_output(b"bill@bigmac ~ % ");
+    pane.process_pty_output(b"user@devbox ~ % ");
     *pane.line_discipline_mut() = LineDisciplineState {
         canonical_mode: false,
         echo_enabled: false,

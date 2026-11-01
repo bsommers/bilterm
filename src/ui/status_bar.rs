@@ -17,20 +17,33 @@ use crate::ui::cursor::{
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
 
-/// Renders the classic Borland Turbo Vision / DOS IDE bottom Function-Key status bar (`UI-03`).
+/// Renders the classic Borland Turbo Vision / DOS IDE bottom Function-Key status bar (`UI-03`),
+/// or a clean modern shortcut strip when Modern / Liquid Glass palette is active.
 pub fn render_dos_fkey_bar(rect: Rect, palette: &ThemePalette, buf: &mut Buffer) {
     if rect.width == 0 || rect.height == 0 {
         return;
     }
 
-    let items = [
-        ("F1", "Help "),
-        ("F2", "Split "),
-        ("F5", "Zoom "),
-        ("F6", "Next "),
-        ("F10", "Quake "),
-        ("F12", "Raw "),
-    ];
+    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
+    let items = if is_modern {
+        [
+            ("F1", "Help  ·"),
+            ("F2", "Split  ·"),
+            ("F5", "Zoom  ·"),
+            ("F7", "Drawer  ·"),
+            ("F11", "Style  ·"),
+            ("F12", "Raw "),
+        ]
+    } else {
+        [
+            ("F1", "Help "),
+            ("F2", "Split "),
+            ("F5", "Zoom "),
+            ("F6", "Next "),
+            ("F10", "Quake "),
+            ("F12", "Raw "),
+        ]
+    };
 
     let mut spans = Vec::new();
     for (key, label) in items {
@@ -49,8 +62,13 @@ pub fn render_dos_fkey_bar(rect: Rect, palette: &ThemePalette, buf: &mut Buffer)
         ));
     }
 
+    let badge = if is_modern {
+        format!(" · {}", palette.name)
+    } else {
+        format!("[{}]", palette.name)
+    };
     spans.push(Span::styled(
-        format!("[{}]", palette.name),
+        badge,
         Style::default()
             .fg(palette.fkey_num_fg)
             .bg(palette.fkey_bar_bg)
@@ -78,7 +96,9 @@ pub(super) fn render_floating_prompt(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let effective_outline = if !active && cfg.prompt_outline == OutlineStyle::Double {
+    let effective_outline = if cfg.is_modern() && cfg.prompt_outline == OutlineStyle::Double {
+        OutlineStyle::Rounded
+    } else if !active && cfg.prompt_outline == OutlineStyle::Double {
         OutlineStyle::Solid
     } else {
         cfg.prompt_outline
@@ -107,7 +127,18 @@ pub(super) fn render_floating_prompt(
     let base_text_fg = palette.text_fg.unwrap_or(Color::White);
     let pin_fg = palette.controls_fg.unwrap_or(Color::Rgb(85, 255, 255));
     let corner_fg = palette.controls_fg.unwrap_or(palette.title_fg);
-    let title = if cfg.snazzy_mode {
+    let title = if cfg.is_modern() {
+        let liq = if cfg.liquid_glass { "💧 " } else { "" };
+        if cfg.snazzy_mode {
+            let cmd_lbl = pane
+                .resolve_running_command()
+                .unwrap_or_else(|| pane.shell_program().to_string());
+            let icon = crate::ui::visual_style::herdr_process_icon(&cmd_lbl);
+            format!(" {liq}{icon} ❯ Command · {anchor_badge} ")
+        } else {
+            format!(" {liq}❯ Command · {anchor_badge} ")
+        }
+    } else if cfg.snazzy_mode {
         let cmd_lbl = pane
             .resolve_running_command()
             .unwrap_or_else(|| pane.shell_program().to_string());
@@ -131,7 +162,7 @@ pub(super) fn render_floating_prompt(
 
     let inner = block.inner(prompt_rect);
     block.render(prompt_rect, buf);
-    if cfg.glass_mode {
+    if cfg.is_glass() {
         crate::ui::visual_style::polish_glass_panel_rect(buf, prompt_rect, surface_bg, palette, active);
     }
 
@@ -214,22 +245,41 @@ pub(super) fn render_floating_prompt(
         && has_running_banner
     {
         let status_tag = if pane.has_foreground_subcommand() {
-            format!("{} RUNNING: ", glyphs.status_run_icon)
+            if cfg.is_modern() {
+                format!(" {} Running ", glyphs.status_run_icon)
+            } else {
+                format!("{} RUNNING: ", glyphs.status_run_icon)
+            }
+        } else if cfg.is_modern() {
+            format!(" {} Last ", glyphs.status_ready_icon)
         } else {
             format!("{} LAST CMD: ", glyphs.status_ready_icon)
+        };
+        let (tag_fg, tag_bg, cmd_fg) = if cfg.is_modern() {
+            (
+                Color::Rgb(125, 211, 252),
+                Color::Rgb(24, 46, 78),
+                Color::Rgb(226, 232, 240),
+            )
+        } else {
+            (
+                Color::Black,
+                Color::Rgb(255, 255, 85),
+                Color::Rgb(85, 255, 255),
+            )
         };
         let mut banner_spans = vec![
             Span::styled(
                 status_tag,
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Rgb(255, 255, 85))
+                    .fg(tag_fg)
+                    .bg(tag_bg)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!(" {run_cmd} "),
                 Style::default()
-                    .fg(Color::Rgb(85, 255, 255))
+                    .fg(cmd_fg)
                     .bg(surface_bg)
                     .add_modifier(Modifier::BOLD),
             ),
@@ -342,10 +392,20 @@ pub(super) fn render_floating_prompt(
         let thumb_rel = (start_row * usize::from(inner.height)) / lines_slice.len().max(1);
         for r in 0..inner.height {
             let y = inner.y + r;
-            let sym = if usize::from(r) == thumb_rel { "█" } else { "░" };
+            let (sym, fg_col) = if usize::from(r) == thumb_rel {
+                if cfg.is_modern() {
+                    ("┃", palette.active_border_fg)
+                } else {
+                    ("█", palette.title_fg)
+                }
+            } else if cfg.is_modern() {
+                ("│", palette.inactive_border_fg)
+            } else {
+                ("░", palette.title_fg)
+            };
             if let Some(cell) = buf.cell_mut((sb_x, y)) {
                 cell.set_symbol(sym);
-                cell.set_style(Style::default().fg(palette.title_fg).bg(surface_bg));
+                cell.set_style(Style::default().fg(fg_col).bg(surface_bg));
             }
         }
     }
@@ -408,7 +468,7 @@ pub(super) fn render_floating_prompt(
         };
         render_crosshair_cursor(buf, target_rect, cx, cy, palette.crosshair_bg);
     }
-    if !pane.copy_mode().active {
+    if active && !pane.copy_mode().active {
         crate::ui::cursor_cmd::render_caret_configured(buf, cx, cy, cfg, palette);
     }
 }

@@ -108,9 +108,32 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some("next") | None => Some(Ok(ColonCommand::DeckNext)),
             _ => Some(Err("Usage: :deck next | prev".to_string())),
         },
-        "focus" | "raise" => match parts.get(1).and_then(|s| s.parse::<usize>().ok()) {
-            Some(id) => Some(Ok(ColonCommand::FocusPane(id))),
-            None => Some(Err("Usage: :focus <pane_id>".to_string())),
+        "focus" | "raise" => match parts.get(1).copied() {
+            Some("left" | "h" | "a" | "west") => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: -1, dy: 0 }))
+            }
+            Some("right" | "l" | "d" | "east") => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 1, dy: 0 }))
+            }
+            Some("up" | "k" | "w" | "north") => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 0, dy: -1 }))
+            }
+            Some("down" | "j" | "s" | "south") => {
+                Some(Ok(ColonCommand::PaneFocusDirection { dx: 0, dy: 1 }))
+            }
+            Some("next" | "n") => Some(Ok(ColonCommand::DeckNext)),
+            Some("prev" | "p") => Some(Ok(ColonCommand::DeckPrev)),
+            Some(s) => match s.parse::<usize>().ok() {
+                Some(id) => Some(Ok(ColonCommand::FocusPane(id))),
+                None => Some(Err(
+                    "Usage: :focus <pane_id|left|right|up|down|h|j|k|l|w|a|s|d|next|prev>"
+                        .to_string(),
+                )),
+            },
+            None => Some(Err(
+                "Usage: :focus <pane_id|left|right|up|down|h|j|k|l|w|a|s|d|next|prev>"
+                    .to_string(),
+            )),
         },
         "zoom" => Some(Ok(ColonCommand::ZoomToggle)),
         "close" => Some(Ok(ColonCommand::ClosePane)),
@@ -370,21 +393,59 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             )),
         },
         "ssh" => {
-            let Some(&target) = parts.get(1) else {
-                return Some(Err("Usage: :ssh <user@host|profile> [port]".to_string()));
+            if parts.len() == 1
+                || matches!(
+                    parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref(),
+                    Some("list" | "ls" | "status")
+                )
+            {
+                return Some(Ok(ColonCommand::RemoteList));
+            }
+            let (target, port) = if parts.get(1) == Some(&"-p") {
+                let Some(p) = parts.get(2).and_then(|s| s.parse::<u16>().ok()) else {
+                    return Some(Err("Usage: :ssh [-p <port>] <user@host|profile> [port]".to_string()));
+                };
+                let Some(&t) = parts.get(3) else {
+                    return Some(Err("Usage: :ssh [-p <port>] <user@host|profile> [port]".to_string()));
+                };
+                (t, Some(p))
+            } else {
+                let target = parts[1];
+                let port = if parts.get(2) == Some(&"-p") {
+                    let Some(p) = parts.get(3).and_then(|s| s.parse::<u16>().ok()) else {
+                        return Some(Err("Usage: :ssh [-p <port>] <user@host|profile> [port]".to_string()));
+                    };
+                    Some(p)
+                } else if let Some(&p_str) = parts.get(2) {
+                    let Some(p) = p_str.parse::<u16>().ok() else {
+                        return Some(Err(format!("Invalid SSH port '{p_str}'. Usage: :ssh <user@host|profile> [port]")));
+                    };
+                    Some(p)
+                } else {
+                    None
+                };
+                (target, port)
             };
-            let port = parts.get(2).and_then(|p| p.parse::<u16>().ok());
             Some(Ok(ColonCommand::SshConnect {
                 target: target.to_string(),
                 port,
             }))
         }
         "ssh-tmux" | "sshtmux" => {
-            let Some(&target) = parts.get(1) else {
+            if parts.len() == 1
+                || matches!(
+                    parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref(),
+                    Some("list" | "ls" | "status")
+                )
+            {
+                return Some(Ok(ColonCommand::RemoteList));
+            }
+            let target = parts[1];
+            if target.starts_with('-') {
                 return Some(Err(
                     "Usage: :ssh-tmux <user@host|profile> [session]".to_string(),
                 ));
-            };
+            }
             let session = parts.get(2).copied().unwrap_or("bilterm").to_string();
             Some(Ok(ColonCommand::SshTmuxConnect {
                 target: target.to_string(),
@@ -443,8 +504,31 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                     .to_string(),
             )),
         },
-        "yank" => Some(Ok(ColonCommand::Yank)),
-        "paste" | "p" => Some(Ok(ColonCommand::PasteClipboard)),
+        "yank" => {
+            if parts.len() <= 1 {
+                Some(Ok(ColonCommand::Yank))
+            } else {
+                Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
+            }
+        }
+        "clipboard" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
+            let sub = if parts.len() > 1 {
+                format!("clipboard {}", parts[1..].join(" "))
+            } else {
+                "clipboard list".to_string()
+            };
+            Some(Ok(ColonCommand::SelectCommand(Some(sub))))
+        }
+        "paste" | "p" => {
+            if parts.len() <= 1 {
+                Some(Ok(ColonCommand::PasteClipboard))
+            } else {
+                Some(Ok(ColonCommand::SelectCommand(Some(format!(
+                    "clipboard {}",
+                    parts[1..].join(" ")
+                )))))
+            }
+        }
         "clear" => Some(Ok(ColonCommand::Clear)),
         "scrollback" | "sb" => match parts.get(1).copied() {
             None | Some("info" | "status") => Some(Ok(ColonCommand::Scrollback { clear: false })),

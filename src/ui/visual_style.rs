@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::BiltermConfig;
 use crate::pane::{CompositePane, PaneId};
+use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
 use crate::wm::drawer::BRAILLE_SPINNER_FRAMES;
 use crate::wm::WindowManager;
@@ -124,43 +125,190 @@ pub fn herdr_process_icon(cmd_or_title: &str) -> &'static str {
     }
 }
 
-/// Formats the visual style status badge (`✨ SNAZZY`, `💎 GLASS`, `✨💎 SNAZZY+GLASS`, or `CLASSIC`).
-pub fn visual_style_label(cfg: &BiltermConfig) -> &'static str {
-    match (cfg.snazzy_mode, cfg.glass_mode) {
-        (false, false) => "CLASSIC (3270/Borland)",
-        (true, false) => "✨ SNAZZY (herdr Rich Glyphs)",
-        (false, true) => "💎 GLASS (Frosted Translucent)",
-        (true, true) => "✨💎 SNAZZY + GLASS (herdr Glyphs + Frosted Glass)",
+/// Modern Obsidian / Liquid Glass Slate palette used when `--modern` or `--liquid-glass` is active
+/// and the user has not selected a custom theme.
+pub fn modern_obsidian_palette(liquid_glass: bool) -> ThemePalette {
+    let mut pal = if liquid_glass {
+        ThemePalette::new(
+            "LIQUID-GLASS".to_string(),
+            Color::Rgb(20, 30, 48),     // prompt_surface_bg: translucent deep midnight glass
+            Color::Rgb(11, 15, 25),     // window_frame_bg: deep obsidian canvas
+            Color::Rgb(110, 231, 255),  // prompt_prefix_fg: luminous ice cyan
+            Color::Rgb(125, 211, 252),  // active_border_fg: specular sky refraction
+            Color::Rgb(238, 246, 255),  // title_fg: crisp ice white
+            Color::Rgb(71, 85, 105),    // inactive_border_fg: muted slate hairline
+            Color::Rgb(15, 23, 38),     // oia_bg: minimal dark glass footer
+            Color::Rgb(56, 189, 248),   // oia_badge_bg: electric sky badge
+            Color::Rgb(11, 15, 25),     // oia_badge_fg
+            Color::Rgb(15, 23, 38),     // fkey_bar_bg
+            Color::Rgb(203, 213, 225),  // fkey_bar_fg
+            Color::Rgb(125, 211, 252),  // fkey_num_fg
+            Color::Rgb(22, 36, 58),     // crosshair_bg
+            Color::Rgb(56, 189, 248),   // shadow_fg: soft ambient cyan glow
+            Color::Rgb(9, 13, 22),      // shadow_bg
+        )
+    } else {
+        ThemePalette::new(
+            "MODERN-SLATE".to_string(),
+            Color::Rgb(22, 27, 34),     // prompt_surface_bg: clean GitHub/Warp dark card
+            Color::Rgb(13, 17, 23),     // window_frame_bg: deep neutral obsidian
+            Color::Rgb(88, 166, 255),   // prompt_prefix_fg: clean modern blue
+            Color::Rgb(88, 166, 255),   // active_border_fg: crisp hairline accent
+            Color::Rgb(230, 237, 243),  // title_fg: crisp neutral white
+            Color::Rgb(68, 76, 86),     // inactive_border_fg: subtle slate border
+            Color::Rgb(17, 22, 29),     // oia_bg: minimal status strip
+            Color::Rgb(88, 166, 255),   // oia_badge_bg
+            Color::Rgb(13, 17, 23),     // oia_badge_fg
+            Color::Rgb(17, 22, 29),     // fkey_bar_bg
+            Color::Rgb(201, 209, 217),  // fkey_bar_fg
+            Color::Rgb(88, 166, 255),   // fkey_num_fg
+            Color::Rgb(24, 32, 44),     // crosshair_bg
+            Color::Rgb(48, 54, 61),     // shadow_fg
+            Color::Rgb(9, 12, 16),      // shadow_bg
+        )
+    };
+    if liquid_glass {
+        pal.text_fg = Some(Color::Rgb(230, 238, 248));
+        pal.controls_fg = Some(Color::Rgb(148, 163, 184));
+        pal.cursor_fg = Some(Color::Rgb(110, 231, 255));
+    } else {
+        pal.text_fg = Some(Color::Rgb(230, 237, 243));
+        pal.controls_fg = Some(Color::Rgb(139, 148, 158));
+        pal.cursor_fg = Some(Color::Rgb(88, 166, 255));
+    }
+    pal
+}
+
+/// Clean, non-retro minimal glyph set preserving exact cell widths (`6`, `3`, `3`, `3`, `4`)
+/// so all mouse hit-boxes and editor cursor columns remain 100% invariant.
+pub const fn modern_glyph_set() -> GlyphSet {
+    GlyphSet {
+        pin_top_bottom: " ↑  ↓ ",
+        minimize_badge: " ─ ",
+        close_badge: " × ",
+        zoom_badge: " □ ",
+        resize_corner: "⌟",
+        oia_separator: "·",
+        prompt_prefix: "  ❯ ",
+        prompt_continuation: "  · ",
+        status_ready_icon: "●",
+        status_run_icon: "◌",
+        status_lock_icon: "◈",
+        status_alt_icon: "◇",
+        status_scroll_icon: "↕",
+        output_len_icon: "≡",
+        cursor_pos_icon: "⌖",
     }
 }
 
-/// Cycles `BiltermConfig` through `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Classic`
-/// or applies an explicit style token (`classic`, `snazzy`, `glass`, `both`, `toggle`).
+/// Formats the visual style status badge (`CLASSIC`, `✨ SNAZZY`, `💎 GLASS`, `◢ MODERN`, or `💧 LIQUID GLASS`).
+pub fn visual_style_label(cfg: &BiltermConfig) -> &'static str {
+    if cfg.liquid_glass {
+        if cfg.snazzy_mode {
+            "💧✨ LIQUID GLASS + SNAZZY (Modern Specular Refraction + Rich Glyphs)"
+        } else {
+            "💧 LIQUID GLASS (Modern Non-Retro + Specular Refraction)"
+        }
+    } else if cfg.modern_mode {
+        if cfg.glass_mode {
+            "◢💎 MODERN + GLASS (Clean Minimal Non-Retro + Frosted Glass)"
+        } else if cfg.snazzy_mode {
+            "◢✨ MODERN + SNAZZY (Clean Minimal Non-Retro + Rich Glyphs)"
+        } else {
+            "◢ MODERN (Clean Minimal Non-Retro)"
+        }
+    } else {
+        match (cfg.snazzy_mode, cfg.glass_mode) {
+            (false, false) => "CLASSIC (3270/Borland)",
+            (true, false) => "✨ SNAZZY (Rich Glyphs)",
+            (false, true) => "💎 GLASS (Frosted Translucent)",
+            (true, true) => "✨💎 SNAZZY + GLASS (Rich Glyphs + Frosted Glass)",
+        }
+    }
+}
+
+/// Cycles `BiltermConfig` through `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> Classic`
+/// or applies an explicit style token (`classic`, `snazzy`, `glass`, `both`, `modern`, `liquid`, `toggle`).
 pub fn apply_visual_style_mode(cfg: &mut BiltermConfig, mode_opt: Option<&str>) -> &'static str {
     match mode_opt.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
         None | Some("" | "cycle" | "next" | "toggle") => {
-            match (cfg.snazzy_mode, cfg.glass_mode) {
-                (false, false) => {
-                    cfg.snazzy_mode = true;
-                    cfg.glass_mode = false;
-                }
-                (true, false) => {
-                    cfg.snazzy_mode = false;
-                    cfg.glass_mode = true;
-                }
-                (false, true) => {
-                    cfg.snazzy_mode = true;
-                    cfg.glass_mode = true;
-                }
-                (true, true) => {
-                    cfg.snazzy_mode = false;
-                    cfg.glass_mode = false;
+            if cfg.liquid_glass {
+                cfg.modern_mode = false;
+                cfg.liquid_glass = false;
+                cfg.snazzy_mode = false;
+                cfg.glass_mode = false;
+            } else if cfg.modern_mode {
+                cfg.modern_mode = true;
+                cfg.liquid_glass = true;
+                cfg.glass_mode = true;
+            } else {
+                match (cfg.snazzy_mode, cfg.glass_mode) {
+                    (false, false) => {
+                        cfg.snazzy_mode = true;
+                        cfg.glass_mode = false;
+                    }
+                    (true, false) => {
+                        cfg.snazzy_mode = false;
+                        cfg.glass_mode = true;
+                    }
+                    (false, true) => {
+                        cfg.snazzy_mode = true;
+                        cfg.glass_mode = true;
+                    }
+                    (true, true) => {
+                        cfg.snazzy_mode = false;
+                        cfg.glass_mode = false;
+                        cfg.modern_mode = true;
+                        cfg.liquid_glass = false;
+                    }
                 }
             }
         }
-        Some("classic" | "off" | "reset" | "default" | "retro") => {
+        Some("classic" | "off" | "reset" | "default" | "retro" | "borland" | "dos") => {
             cfg.snazzy_mode = false;
             cfg.glass_mode = false;
+            cfg.modern_mode = false;
+            cfg.liquid_glass = false;
+        }
+        Some("modern" | "minimal" | "non-retro" | "nonretro" | "clean") => {
+            cfg.modern_mode = true;
+            cfg.liquid_glass = false;
+        }
+        Some("modern-only") => {
+            cfg.modern_mode = true;
+            cfg.liquid_glass = false;
+            cfg.snazzy_mode = false;
+            cfg.glass_mode = false;
+        }
+        Some("modern-off") => {
+            cfg.modern_mode = false;
+            cfg.liquid_glass = false;
+        }
+        Some("modern-toggle") => {
+            if cfg.modern_mode || cfg.liquid_glass {
+                cfg.modern_mode = false;
+                cfg.liquid_glass = false;
+            } else {
+                cfg.modern_mode = true;
+            }
+        }
+        Some("liquid" | "liquid-glass" | "liquidglass" | "aqua") => {
+            cfg.modern_mode = true;
+            cfg.glass_mode = true;
+            cfg.liquid_glass = true;
+        }
+        Some("liquid-off" | "liquid-glass-off") => {
+            cfg.liquid_glass = false;
+        }
+        Some("liquid-toggle" | "liquid-glass-toggle") => {
+            if cfg.liquid_glass {
+                cfg.liquid_glass = false;
+                cfg.glass_mode = false;
+            } else {
+                cfg.modern_mode = true;
+                cfg.glass_mode = true;
+                cfg.liquid_glass = true;
+            }
         }
         Some("snazzy" | "herdr" | "rich") => {
             cfg.snazzy_mode = true;
@@ -168,6 +316,8 @@ pub fn apply_visual_style_mode(cfg: &mut BiltermConfig, mode_opt: Option<&str>) 
         Some("snazzy-only") => {
             cfg.snazzy_mode = true;
             cfg.glass_mode = false;
+            cfg.modern_mode = false;
+            cfg.liquid_glass = false;
         }
         Some("snazzy-off") => {
             cfg.snazzy_mode = false;
@@ -181,12 +331,18 @@ pub fn apply_visual_style_mode(cfg: &mut BiltermConfig, mode_opt: Option<&str>) 
         Some("glass-only") => {
             cfg.snazzy_mode = false;
             cfg.glass_mode = true;
+            cfg.modern_mode = false;
+            cfg.liquid_glass = false;
         }
         Some("glass-off") => {
             cfg.glass_mode = false;
+            cfg.liquid_glass = false;
         }
         Some("glass-toggle") => {
             cfg.glass_mode = !cfg.glass_mode;
+            if !cfg.glass_mode {
+                cfg.liquid_glass = false;
+            }
         }
         Some("both" | "all" | "snazzy-glass" | "snazzy+glass" | "max" | "ultra") => {
             cfg.snazzy_mode = true;
@@ -195,6 +351,43 @@ pub fn apply_visual_style_mode(cfg: &mut BiltermConfig, mode_opt: Option<&str>) 
         _ => {}
     }
     visual_style_label(cfg)
+}
+
+/// Formats a clean, non-retro window header pill when `cfg.is_modern()` is active.
+pub fn format_modern_window_title(
+    wm: &WindowManager,
+    pane: &CompositePane,
+    id: PaneId,
+    _z_badge: &str,
+    lock_tag: &str,
+) -> String {
+    let state_glyph = if pane.has_foreground_subcommand() {
+        " ◌"
+    } else if pane.vt().is_alternate_screen() {
+        " ◇"
+    } else {
+        ""
+    };
+    let liq = if wm.config().liquid_glass {
+        " · 💧"
+    } else {
+        ""
+    };
+    if wm.config().snazzy_mode {
+        let active_cmd = pane
+            .prompt()
+            .running_command
+            .as_deref()
+            .or_else(|| pane.vt().command_blocks().last().map(|b| b.command.as_str()))
+            .unwrap_or_else(|| pane.title());
+        let icon = herdr_process_icon(active_cmd);
+        let spark = wm
+            .drawer()
+            .sparkline_for(id, pane.vt().total_bytes_processed());
+        format!("● ● ●  {id} · {icon} {} {spark}{state_glyph}{lock_tag}{liq}", pane.title())
+    } else {
+        format!("● ● ●  {id} · {}{state_glyph}{lock_tag}{liq}", pane.title())
+    }
 }
 
 /// Formats a rich `herdr`-inspired window title bar string when `cfg.snazzy_mode` is active.
@@ -378,7 +571,49 @@ pub fn polish_glass_panel_rect(
                     let hg = (i32::from(cur_fg.1) + 36).clamp(0, 255) as u8;
                     let hb = (i32::from(cur_fg.2) + 42).clamp(0, 255) as u8;
                     cell.set_fg(Color::Rgb(hr, hg, hb));
+                } else if (y == bounds.y + bounds.height - 1 || x == bounds.x + bounds.width - 1)
+                    && active
+                    && palette.name == "LIQUID-GLASS"
+                {
+                    // Bottom/right chromatic refraction edge (cool indigo/cyan dispersion)
+                    cell.set_fg(Color::Rgb(96, 165, 250));
                 }
+            }
+        }
+    }
+}
+
+/// Renders a soft 1-cell ambient outer glow halo around `rect` inside `bounds` when `liquid_glass`
+/// is active (replaces the heavy DOS `░`/`█` checkerboard drop-shadow with a subtle translucent glow).
+pub fn render_liquid_ambient_halo(
+    buf: &mut Buffer,
+    rect: Rect,
+    bounds: Rect,
+    palette: &ThemePalette,
+) {
+    let clamped = bounds.intersection(*buf.area());
+    if rect.width == 0 || rect.height == 0 || clamped.width == 0 || clamped.height == 0 {
+        return;
+    }
+    let glow_rgb = color_to_rgb(palette.active_border_fg, (88, 196, 255));
+    let x0 = rect.x.saturating_sub(1).max(clamped.x);
+    let y0 = rect.y.saturating_sub(1).max(clamped.y);
+    let x1 = (rect.x + rect.width + 1).min(clamped.x + clamped.width);
+    let y1 = (rect.y + rect.height + 1).min(clamped.y + clamped.height);
+
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let inside =
+                x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
+            if inside {
+                continue;
+            }
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                let bg = color_to_rgb(cell.bg, (11, 15, 25));
+                let r = ((u16::from(bg.0) * 82 + u16::from(glow_rgb.0) * 18) / 100) as u8;
+                let g = ((u16::from(bg.1) * 82 + u16::from(glow_rgb.1) * 18) / 100) as u8;
+                let b = ((u16::from(bg.2) * 82 + u16::from(glow_rgb.2) * 18) / 100) as u8;
+                cell.set_bg(Color::Rgb(r, g, b));
             }
         }
     }

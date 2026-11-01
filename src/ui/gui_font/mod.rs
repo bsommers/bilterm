@@ -112,7 +112,7 @@ mod tests {
 
         let area = Rect::new(0, 0, 24, 1);
         let mut buf = Buffer::empty(area);
-        buf.set_string(0, 0, " bill@bigmac \u{e0b0} ~ \u{e0b0}", ratatui::style::Style::default());
+        buf.set_string(0, 0, " user@devbox \u{e0b0} ~ \u{e0b0}", ratatui::style::Style::default());
         sanitize_tui_pua_buffer(&mut buf, GlyphPack::Unicode);
         assert_eq!(buf.cell((13, 0)).unwrap().symbol(), "▶");
         assert_eq!(buf.cell((17, 0)).unwrap().symbol(), "▶");

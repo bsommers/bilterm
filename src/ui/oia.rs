@@ -35,10 +35,19 @@ pub fn render_oia_status_bar_themed(
 
     let oia_bg = palette.oia_bg;
     let sep = glyphs.oia_separator;
+    let is_modern =
+        sep == "·" || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
     let system_state = if pane.is_password_prompt() {
         (format!(" {} !ECHO LOCK ", glyphs.status_lock_icon), Color::Red)
     } else if pane.vt().is_alternate_screen() {
-        (format!(" {} ALT SCR ", glyphs.status_alt_icon), Color::Yellow)
+        (
+            format!(
+                " {} {} ",
+                glyphs.status_alt_icon,
+                if is_modern { "Alt" } else { "ALT SCR" }
+            ),
+            Color::Yellow,
+        )
     } else if pane.is_holding_inspected() {
         (
             format!(" {} HOLDING ", glyphs.status_scroll_icon),
@@ -53,12 +62,20 @@ pub fn render_oia_status_bar_themed(
         (format!(" {} SCROLL ", glyphs.status_scroll_icon), Color::Cyan)
     } else if pane.has_foreground_subcommand() {
         (
-            format!(" {} RUNNING ", glyphs.status_run_icon),
+            format!(
+                " {} {} ",
+                glyphs.status_run_icon,
+                if is_modern { "Running" } else { "RUNNING" }
+            ),
             Color::Rgb(85, 255, 255),
         )
     } else {
         (
-            format!(" {} READY ", glyphs.status_ready_icon),
+            format!(
+                " {} {} ",
+                glyphs.status_ready_icon,
+                if is_modern { "Ready" } else { "READY" }
+            ),
             Color::Rgb(0, 255, 102),
         )
     };
@@ -73,6 +90,11 @@ pub fn render_oia_status_bar_themed(
         }
     } else if pane.copy_mode().rect_mode {
         (" INPUT: RECT BOX ", Color::Rgb(255, 215, 0))
+    } else if is_modern {
+        match pane.effective_routing_mode() {
+            InputRoutingMode::CommandPrompt => (" ❯ Command ", Color::Rgb(110, 231, 255)),
+            InputRoutingMode::RawPtyPassthrough => (" ⇄ Raw PTY ", Color::Rgb(255, 200, 0)),
+        }
     } else {
         match pane.effective_routing_mode() {
             InputRoutingMode::CommandPrompt => (" INPUT: CMD BOX ", Color::Rgb(0, 255, 102)),
@@ -81,13 +103,15 @@ pub fn render_oia_status_bar_themed(
     };
 
     let anchor_label = match pane.prompt().anchor {
-        PromptAnchor::Top => "PIN:TOP",
-        PromptAnchor::Bottom => "PIN:BOT",
-        PromptAnchor::SplitTop => "PIN:SPL-T",
-        PromptAnchor::SplitBottom => "PIN:SPL-B",
+        PromptAnchor::Top => if is_modern { "Top" } else { "PIN:TOP" },
+        PromptAnchor::Bottom => if is_modern { "Bottom" } else { "PIN:BOT" },
+        PromptAnchor::SplitTop => if is_modern { "Split-T" } else { "PIN:SPL-T" },
+        PromptAnchor::SplitBottom => if is_modern { "Split-B" } else { "PIN:SPL-B" },
         PromptAnchor::Floating { y_offset } => {
             if y_offset == 0 {
-                "PIN:TOP"
+                if is_modern { "Top" } else { "PIN:TOP" }
+            } else if is_modern {
+                "Float"
             } else {
                 "PIN:FLT"
             }
@@ -111,7 +135,11 @@ pub fn render_oia_status_bar_themed(
             }
         }
     };
-    let coord_str = format!(" {} R:{:02} C:{:03} ", glyphs.cursor_pos_icon, disp_r, disp_c);
+    let coord_str = if is_modern {
+        format!(" Ln {disp_r}, Col {disp_c} ")
+    } else {
+        format!(" {} R:{:02} C:{:03} ", glyphs.cursor_pos_icon, disp_r, disp_c)
+    };
     let out_lines = pane.vt().output_line_count();
     let out_bytes = pane.vt().total_bytes_processed();
     let out_bytes_label = if out_bytes >= 1_048_576 {
@@ -121,8 +149,24 @@ pub fn render_oia_status_bar_themed(
     } else {
         format!("{out_bytes}B")
     };
-    let out_str = format!(" {} OUT:{out_lines}L/{out_bytes_label}", glyphs.output_len_icon);
-    let oia_title = if pane.show_version_badge() {
+    let out_str = if is_modern {
+        format!(" {out_lines}L · {out_bytes_label}")
+    } else {
+        format!(" {} OUT:{out_lines}L/{out_bytes_label}", glyphs.output_len_icon)
+    };
+    let oia_title = if is_modern {
+        if palette.name == "LIQUID-GLASS" {
+            if pane.show_version_badge() {
+                concat!(" 💧 Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+            } else {
+                " 💧 Bilterm "
+            }
+        } else if pane.show_version_badge() {
+            concat!(" ◢ Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+        } else {
+            " ◢ Bilterm "
+        }
+    } else if pane.show_version_badge() {
         concat!("3270-OIA v", env!("CARGO_PKG_VERSION"))
     } else {
         "3270-OIA"

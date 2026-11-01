@@ -587,10 +587,29 @@ Plans:
 - [x] 41-02-PLAN.md — `src/wm/session.rs`, `src/wm/layout_profile.rs`, `src/wm/journal.rs`, `src/wm/session_manager.rs`, `src/pane/mod.rs`, `src/pane/scroll.rs`, & `src/config/mod.rs`: Per-pane `shell`, `shell_args`, `running_command`, and `cwd` persistence, auto-relaunch (`session_restore_processes`), and `:session processes|cmd|shell|cwd|relaunch|info` commands (wave 2)
 - [x] 41-03-PLAN.md — Unit & integration test suite verification, full documentation & cross-link synchronization, and `v2.5.0` multi-platform release binaries (wave 3)
 
+### Phase 42: Non-Retro Modern Minimal & Liquid Glass Modes, Per-Window vs. Global Theme & Cursor Isolation, Drawer Controls, RAW F-Keys & SSH Hardening (`v2.5.1`–`v2.5.2`)
+
+**Goal**: As a user who wants either classic DOS/3270 retro chrome or a sleek, minimal modern/liquid-glass terminal aesthetic — plus independent per-window vs. global control over themes and cursors, enhanced drawer ergonomics, RAW mode F-key routing, and clean SSH login without pre-login `PROMPT_COMMAND` echo — I want first-class runtime and CLI switches for all of these capabilities.
+**Depends on**: Phase 41
+**Requirements**: MOD-01, LIQ-01, WIN-05, CUR-03, SSH-02
+**Success Criteria** (what must be TRUE):
+
+  1. `--modern` (`--minimal`, `--non-retro`) and `--liquid-glass` (`--liquid`), plus `:modern [on|off|toggle]`, `:liquid [on|off|toggle]`, `:style [classic|snazzy|glass|both|modern|liquid]`, and `F11` switch between Classic Borland/3270 Retro, Snazzy, Frosted Glass, Modern Minimal (`╭─╮` rounded chrome, obsidian slate palette, `● 1 · PANE #1` headers, `❯ Command · TOP` prompt bar, `◢ Bilterm` status pills), and Liquid Glass (optical specular top/left bevel, bottom/right chromatic refraction edge, and 2-cell ambient drop halo).
+  2. Changing theme (`:theme <preset>`, `:theme` picker, `:itermcolors` picker) or cursor (`:cursor <args>`, `:cursor cursor-color <color>`, `:window cursor-color <color>`) applies to the currently focused active window pane by default without mutating sibling windows, while `:theme global <preset>` / `:theme all <preset>` and `:cursor global <args>` / `:cursor all <args>` update all windows globally (allowing any combination of global and per-window themes/cursors).
+  3. Slide-Out Drawer (`F7` / `:drawer`) supports `[_][□][X]` minimize/maximize/close controls, `Ctrl+X` leader chords while focused, top-level `:save [name]` and `:rename [old] <new>` session commands, and configurable `raw_fkeys` (`bilterm|app|auto`, `Shift+F1..F12` escape passthrough).
+  4. `:ssh` and `:ssh-tmux` work with or without arguments (`:ssh` / `:ssh list`, `:ssh [-p <port>] <user@host> [port]`), appear in `<Tab>` completion (including `~/.ssh/config` `Host` aliases) and `<F1>` `:help`, and spawn SSH sessions at the split pane's exact viewport size without echoing `PROMPT_COMMAND=...` before/after login.
+
+**Plans**: 3/3 plans complete
+
+Plans:
+- [x] 42-01-PLAN.md — `src/ui/visual_style.rs`, `src/ui/oia.rs`, `src/ui/status_bar.rs`, `src/ui/mod.rs`, `src/config/mod.rs`, `src/main.rs`: Non-Retro Modern Minimal (`--modern`, `:modern`) and Liquid Glass (`--liquid-glass`, `:liquid`), Drawer controls, `:save`/`:rename`, and RAW F-Key routing (wave 1)
+- [x] 42-02-PLAN.md — `src/wm/chrome_style.rs`, `src/wm/v2_runtime.rs`, `src/ui/file_browser.rs`, `src/ui/cursor_cmd.rs`, `src/remote/mod.rs`, `src/wm/session.rs`, `src/colon_command/parse.rs`, `src/pane/completion.rs`: Per-window vs. global `:theme` and `:cursor` (`:cursor cursor-color`), and `:ssh` parsing, `<Tab>` completion, `<F1>` help, and `PROMPT_COMMAND` echo fix (wave 2)
+- [x] 42-03-PLAN.md — `tests/slide_out_drawer_and_telemetry.rs` regression suite, `.planning/ROADMAP.md` & `.planning/STATE.md` backfill, and full verification (wave 3)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -636,3 +655,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 39. `v2.4.0` Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`WIN-01..02`, `VT-CLAMP-01`) | 2/2 | Complete | 2026-10-29 |
 | 40. `v2.4.1` Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`WIN-03`, `WIN-04`) | 3/3 | Complete | 2026-10-31 |
 | 41. `v2.5.0` 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`RECT-01`, `SESS-03`) | 3/3 | Complete | 2026-10-31 |
+| 42. `v2.5.1`–`v2.5.2` Non-Retro Modern Minimal & Liquid Glass Modes, Per-Window vs. Global Theme & Cursor Isolation, Drawer Controls & SSH Hardening (`MOD-01`, `LIQ-01`, `WIN-05`, `CUR-03`, `SSH-02`) | 3/3 | Complete | 2026-10-31 |

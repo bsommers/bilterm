@@ -37,6 +37,14 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.focus_and_raise(id);
             false
         }
+        ColonCommand::PaneFocusDirection { dx, dy } => {
+            let _ = wm.focus_direction(dx, dy);
+            false
+        }
+        ColonCommand::SelectCommand(ref subcmd) => {
+            wm.execute_select_or_clipboard_command(subcmd.as_deref());
+            false
+        }
         ColonCommand::ZoomToggle => {
             wm.toggle_zoom();
             false
@@ -380,10 +388,16 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::RemoteList => {
             let names: Vec<String> = wm.fleet().nodes.keys().cloned().collect();
-            wm.active_pane_mut().set_status_message(Some(if names.is_empty() {
-                "Fleet nodes: (local only)".to_string()
+            let ssh_hosts = crate::remote::discover_ssh_config_hosts();
+            let host_hint = if ssh_hosts.is_empty() {
+                String::new()
             } else {
-                format!("Fleet nodes ({}): {}", names.len(), names.join(", "))
+                format!(" | ~/.ssh/config hosts: {}", ssh_hosts.join(", "))
+            };
+            wm.active_pane_mut().set_status_message(Some(if names.is_empty() {
+                format!("Fleet nodes: (local only){host_hint} — Connect via :ssh <user@host> [port]")
+            } else {
+                format!("Fleet nodes ({}): {}{host_hint}", names.len(), names.join(", "))
             }));
             false
         }
@@ -413,7 +427,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::Cursor(style) => {
+            let active_id = wm.active_pane_id();
+            wm.pin_other_panes_cursor(active_id);
             wm.config_mut().cursor_style = style;
+            wm.sync_active_pane_cursor_from_config();
             if wm.mcp_console().active && wm.mcp_console().title.contains("CURSOR") {
                 let lines = crate::ui::cursor_cmd::build_cursor_catalog_lines(wm.config());
                 wm.open_mcp_popup_window(
@@ -422,7 +439,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 );
             }
             let msg = format!(
-                "Cursor updated: style={}, blink={}, color={}",
+                "Cursor updated (Window #{active_id}): style={}, blink={}, color={}",
                 style.label(),
                 wm.config().cursor_blink.label(),
                 wm.config().cursor_color.as_deref().unwrap_or("theme")
@@ -729,7 +746,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 mode_opt.as_deref(),
             );
             wm.active_pane_mut().set_status_message(Some(format!(
-                "Visual Style: {label} (toggle via F11, :snazzy, :glass, or :style)"
+                "Visual Style: {label} (toggle via F11, :modern, :liquid, :snazzy, :glass, or :style)"
             )));
             false
         }

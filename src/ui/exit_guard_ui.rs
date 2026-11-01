@@ -33,8 +33,13 @@ pub fn render_exit_guard_modal(
     let modal_y = clamped_area.y + (clamped_area.height.saturating_sub(modal_h)) / 2;
     let modal_rect = Rect::new(modal_x, modal_y, modal_w, modal_h);
 
+    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
     occlude_rect(buf, modal_rect);
-    render_drop_shadow_styled(buf, modal_rect, clamped_area, ShadowStyle::ThemeTinted, palette);
+    if is_modern {
+        crate::ui::visual_style::render_liquid_ambient_halo(buf, modal_rect, clamped_area, palette);
+    } else {
+        render_drop_shadow_styled(buf, modal_rect, clamped_area, ShadowStyle::ThemeTinted, palette);
+    }
 
     let frame_bg = palette.window_frame_bg;
     let title_style = Style::default()
@@ -45,13 +50,15 @@ pub fn render_exit_guard_modal(
         .fg(palette.active_border_fg)
         .bg(frame_bg)
         .add_modifier(Modifier::BOLD);
+    let title_str = if is_modern {
+        " ● ● ●  ◈ EXIT GUARD · Active Session "
+    } else {
+        " ⚠ IBM 3270 / BORLAND EXIT GUARD [SAFE-01] "
+    };
     let block = Block::default()
-        .title(Span::styled(
-            " ⚠ IBM 3270 / BORLAND EXIT GUARD [SAFE-01] ",
-            title_style,
-        ))
+        .title(Span::styled(title_str, title_style))
         .borders(Borders::ALL)
-        .border_set(border::DOUBLE)
+        .border_set(if is_modern { border::ROUNDED } else { border::DOUBLE })
         .border_style(border_style)
         .style(Style::default().fg(Color::White).bg(frame_bg));
 

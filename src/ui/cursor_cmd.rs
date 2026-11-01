@@ -69,9 +69,11 @@ pub fn render_caret_configured(
     if cfg.cursor_blink_hidden && cfg.cursor_blink.blink_interval(cfg.cursor_style).is_some() {
         return;
     }
-    let custom_color = palette
-        .cursor_fg
-        .or_else(|| cfg.cursor_color.as_deref().and_then(parse_cursor_color));
+    let custom_color = cfg
+        .cursor_color
+        .as_deref()
+        .and_then(parse_cursor_color)
+        .or(palette.cursor_fg);
     let custom_text = cfg
         .cursor_text_color
         .as_deref()
@@ -185,7 +187,17 @@ pub fn validate_cursor_command_args(tokens: &[&str]) -> Result<(), String> {
         let lower = tok.to_ascii_lowercase();
         if matches!(
             lower.as_str(),
-            "reset" | "default" | "defaults" | "theme" | "theme-color"
+            "reset"
+                | "default"
+                | "defaults"
+                | "theme"
+                | "theme-color"
+                | "global"
+                | "all"
+                | "window"
+                | "win"
+                | "pane"
+                | "this"
         ) {
             idx += 1;
             continue;
@@ -197,7 +209,7 @@ pub fn validate_cursor_command_args(tokens: &[&str]) -> Result<(), String> {
                 && parse_cursor_color(next_tok).is_none()
                 && !matches!(
                     next_tok.to_ascii_lowercase().as_str(),
-                    "color" | "fg" | "bg" | "text" | "blink" | "solid"
+                    "color" | "cursor-color" | "fg" | "bg" | "text" | "blink" | "solid" | "global" | "window"
                 )
             {
                 idx += 2;
@@ -225,10 +237,19 @@ pub fn validate_cursor_command_args(tokens: &[&str]) -> Result<(), String> {
         }
         if matches!(
             lower.as_str(),
-            "color" | "colour" | "bg" | "fg" | "text" | "text-color"
+            "color"
+                | "colour"
+                | "bg"
+                | "cursor-color"
+                | "cursor_color"
+                | "caret-color"
+                | "fg"
+                | "text"
+                | "text-color"
+                | "cursor-text-color"
         ) {
             let Some(&next_tok) = tokens.get(idx + 1) else {
-                return Err("Usage: :cursor color <#RRGGBB|green|amber|cyan|yellow|crimson|magenta|purple|orange|white|theme>".to_string());
+                return Err("Usage: :cursor [window|global] color <#RRGGBB|green|amber|cyan|yellow|crimson|magenta|purple|orange|white|theme>".to_string());
             };
             if matches!(
                 next_tok.to_ascii_lowercase().as_str(),
@@ -246,7 +267,7 @@ pub fn validate_cursor_command_args(tokens: &[&str]) -> Result<(), String> {
             continue;
         }
         return Err(
-            "Usage: :cursor [block | hollow | underline | bar | custom <char>] [blink | solid | rapid] [color <#hex|name|theme> | reset]"
+            "Usage: :cursor [window|global] [block | hollow | underline | bar | custom <char>] [blink | solid | rapid] [color <#hex|name|theme> | reset]"
                 .to_string(),
         );
     }
@@ -278,12 +299,27 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
     }
 
     let tokens: Vec<&str> = body.split_whitespace().collect();
+    let is_global = tokens
+        .iter()
+        .any(|t| matches!(t.to_ascii_lowercase().as_str(), "global" | "all"));
+    let active_id = wm.active_pane_id();
+    if !is_global {
+        wm.pin_other_panes_cursor(active_id);
+    }
     let mut idx = 0usize;
     let mut changed = false;
 
     while idx < tokens.len() {
         let tok = tokens[idx];
         let lower = tok.to_ascii_lowercase();
+
+        if matches!(
+            lower.as_str(),
+            "global" | "all" | "window" | "win" | "pane" | "this"
+        ) {
+            idx += 1;
+            continue;
+        }
 
         if matches!(lower.as_str(), "reset" | "default" | "defaults") {
             let cfg = wm.config_mut();
@@ -305,7 +341,7 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
                 && parse_cursor_color(next_tok).is_none()
                 && !matches!(
                     next_tok.to_ascii_lowercase().as_str(),
-                    "color" | "fg" | "bg" | "text" | "blink" | "solid"
+                    "color" | "cursor-color" | "fg" | "bg" | "text" | "blink" | "solid" | "global" | "window"
                 )
             {
                 let ch = next_tok
@@ -355,7 +391,10 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
             continue;
         }
 
-        if matches!(lower.as_str(), "color" | "colour" | "bg") {
+        if matches!(
+            lower.as_str(),
+            "color" | "colour" | "bg" | "cursor-color" | "cursor_color" | "caret-color"
+        ) {
             if let Some(&next_tok) = tokens.get(idx + 1) {
                 if matches!(
                     next_tok.to_ascii_lowercase().as_str(),
@@ -380,7 +419,10 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
             return;
         }
 
-        if matches!(lower.as_str(), "fg" | "text" | "text-color") {
+        if matches!(
+            lower.as_str(),
+            "fg" | "text" | "text-color" | "cursor-text-color"
+        ) {
             if let Some(&next_tok) = tokens.get(idx + 1) {
                 if matches!(
                     next_tok.to_ascii_lowercase().as_str(),
@@ -435,8 +477,10 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
     }
 
     if changed {
-        if wm.config().cursor_color.is_some() {
-            wm.clear_active_pane_color_override("cursor-color");
+        if is_global {
+            wm.clear_all_pane_cursor_overrides();
+        } else {
+            wm.sync_active_pane_cursor_from_config();
         }
         wm.reset_cursor_blink();
         if wm.mcp_console().active && wm.mcp_console().title.contains("CURSOR") {
@@ -455,7 +499,12 @@ pub fn execute_cursor_command(wm: &mut crate::wm::WindowManager, raw_args: &str)
             };
             let blink_lbl = cfg.cursor_blink.label();
             let color_lbl = cfg.cursor_color.as_deref().unwrap_or("theme");
-            format!("Cursor updated: style={style_lbl}, blink={blink_lbl}, color={color_lbl}")
+            let scope_lbl = if is_global {
+                "all windows".to_string()
+            } else {
+                format!("Window #{active_id}")
+            };
+            format!("Cursor updated ({scope_lbl}): style={style_lbl}, blink={blink_lbl}, color={color_lbl}")
         };
         wm.active_pane_mut().set_status_message(Some(msg));
     }

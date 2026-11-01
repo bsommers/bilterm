@@ -79,6 +79,10 @@ pub struct FloatingPromptState {
     pub(crate) history_index: Option<usize>,
     /// Last killed text (`Ctrl+K`, `Ctrl+U`, `Ctrl+W`) available for `Ctrl+Y` yank.
     pub yank_buffer: String,
+    /// Cut-and-paste yank buffer history ring (newest first, up to 50 entries).
+    pub yank_history: Vec<String>,
+    /// Active cursor index inside `yank_history` for `Alt+Y` yank-pop cycling.
+    pub yank_ring_index: usize,
     undo_stack: Vec<EditorSnapshot>,
     redo_stack: Vec<EditorSnapshot>,
     /// Interactive `Ctrl+R` fuzzy history search state (`nucleo-matcher`).
@@ -114,6 +118,8 @@ impl Default for FloatingPromptState {
             history: Vec::new(),
             history_index: None,
             yank_buffer: String::new(),
+            yank_history: Vec::new(),
+            yank_ring_index: 0,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             fuzzy_search: FuzzyHistorySearchState::default(),
@@ -407,7 +413,7 @@ impl FloatingPromptState {
     pub fn kill_to_end_of_line(&mut self) {
         if let Some(killed) = self.delete_selection() {
             if !killed.is_empty() {
-                self.yank_buffer = killed.clone();
+                self.push_yank_entry(&killed);
                 crate::clipboard::set_system_clipboard(&killed);
             }
             return;
@@ -416,7 +422,7 @@ impl FloatingPromptState {
         let byte_idx = Self::char_to_byte(&self.lines[self.cursor_row], self.cursor_col);
         let killed = self.lines[self.cursor_row].split_off(byte_idx);
         if !killed.is_empty() {
-            self.yank_buffer = killed.clone();
+            self.push_yank_entry(&killed);
             crate::clipboard::set_system_clipboard(&killed);
         }
         self.sync_from_lines();
@@ -426,7 +432,7 @@ impl FloatingPromptState {
     pub fn kill_prev_word(&mut self) {
         if let Some(killed) = self.delete_selection() {
             if !killed.is_empty() {
-                self.yank_buffer = killed.clone();
+                self.push_yank_entry(&killed);
                 crate::clipboard::set_system_clipboard(&killed);
             }
             return;
@@ -446,7 +452,8 @@ impl FloatingPromptState {
         }
         let start_byte = Self::char_to_byte(&self.lines[self.cursor_row], start_col);
         let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], orig_col);
-        self.yank_buffer = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        let killed = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        self.push_yank_entry(&killed);
         crate::clipboard::set_system_clipboard(&self.yank_buffer);
         self.lines[self.cursor_row].replace_range(start_byte..end_byte, "");
         self.cursor_col = start_col;
@@ -471,7 +478,8 @@ impl FloatingPromptState {
         }
         let start_byte = Self::char_to_byte(&self.lines[self.cursor_row], orig_col);
         let end_byte = Self::char_to_byte(&self.lines[self.cursor_row], end_col);
-        self.yank_buffer = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        let killed = self.lines[self.cursor_row][start_byte..end_byte].to_string();
+        self.push_yank_entry(&killed);
         crate::clipboard::set_system_clipboard(&self.yank_buffer);
         self.lines[self.cursor_row].replace_range(start_byte..end_byte, "");
         self.sync_from_lines();
@@ -520,7 +528,8 @@ impl FloatingPromptState {
         self.selection_anchor = None;
         if !self.input.is_empty() {
             self.record_undo();
-            self.yank_buffer = self.input.clone();
+            let killed = self.input.clone();
+            self.push_yank_entry(&killed);
             crate::clipboard::set_system_clipboard(&self.yank_buffer);
         }
         self.lines = vec![String::new()];
@@ -726,47 +735,6 @@ impl FloatingPromptState {
             (self.lines.len() as u16 + 2 + running_extra).clamp(self.height.min(12), 12)
         };
         content_rows.clamp(3, canvas_height.max(3)).min(canvas_height)
-    }
-
-    /// Scrolls the command prompt's multi-line viewport up by `rows`.
-    pub fn scroll_up(&mut self, rows: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(rows);
-    }
-
-    /// Scrolls the command prompt's multi-line viewport down by `rows`.
-    pub fn scroll_down(&mut self, rows: usize) {
-        let max_scroll = self.lines.len().saturating_sub(1);
-        self.scroll_offset = (self.scroll_offset + rows).min(max_scroll);
-    }
-
-    /// Opens or closes the Borland-style Command History Pop-up Window.
-    pub fn toggle_history_popup(&mut self) {
-        self.history_popup_open = !self.history_popup_open;
-        if self.history_popup_open && !self.history.is_empty() {
-            self.history_popup_selected = self.history.len() - 1;
-        }
-    }
-
-    pub fn history_popup_prev(&mut self) {
-        if self.history_popup_selected > 0 {
-            self.history_popup_selected -= 1;
-        }
-    }
-
-    pub fn history_popup_next(&mut self) {
-        if self.history_popup_selected + 1 < self.history.len() {
-            self.history_popup_selected += 1;
-        }
-    }
-
-    pub fn accept_history_popup_selection(&mut self) -> bool {
-        self.history_popup_open = false;
-        if let Some(cmd) = self.history.get(self.history_popup_selected).cloned() {
-            self.set_text(&cmd);
-            true
-        } else {
-            false
-        }
     }
 
     pub(crate) fn char_to_byte(s: &str, char_idx: usize) -> usize {
