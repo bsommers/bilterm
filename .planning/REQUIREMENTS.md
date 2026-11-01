@@ -66,7 +66,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **ARCH-R01**: Unified `Action` command vocabulary and data-driven keymap replacing duplicate dispatch paths across key handlers, `:colon` commands, playbooks, and JSON-RPC/MCP, including context-aware `Ctrl+B` / `Ctrl+X` leader prefix handling (`Ctrl+B` standalone with `$TMUX` auto-fallback to `Ctrl+X`), `tmux`/`herdr` post-leader chord parity (`"`, `%`, `n`, `p`), held-`Ctrl` leader chord normalization (`Ctrl+X Ctrl+<key>` / `Ctrl+B Ctrl+<key>`), and `asciinema` PTY-wrapper control harmonization (`Phase 22`, review P1.1).
 - [x] **ARCH-R02**: Encapsulated `WindowManager` and `CompositePane` invariants behind private fields, single `remove_pane` / `submit_command` methods, `enum Modal`, and `enum Focus` (`Phase 21`, review P1.2).
 - [x] **ARCH-R03**: `TerminalBackend` trait decoupling `vt100_ctt` from `ui/` and `pane/` via `GridSnapshot` / cell views (`Phase 23`, review P1.3).
-- [x] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so no source file exceeds ~800 lines, `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).
+- [x] **ARCH-R04**: Mega-module decomposition splitting `vt/`, `pane/`, `input/`, `api/`, `ui/`, and `wm/` along functional seams so source files trend toward a soft ~800–1000 line target (relaxed in Phase 43; 1200-line backstop), `cell_to_ratatui_style` moves to `ui/`, `colon_command` moves out of `pane/`, and the `pane ↔ wm` cycle is eliminated (`Phase 20`, review P1.4).
 - [x] **ARCH-R05**: Unwired-subsystem resolution and CI feature matrix (`cargo hack check --each-feature`) for `VtWorkerHandle`, `TmuxControlSubprocess`, and `ghostty-vt` (`Phase 23`, review P1.5).
 - [x] **REC-02**: Built-in Whole-Workspace Asciicast v2 (`.cast`) compositor frame recorder (`:record start [path]` / `:record workspace [path]` / `:record pane [path]` / `:record stop` + `Action::RecordStart` / `Action::RecordStop`) that diffs rendered `ratatui::buffer::Buffer` frames into ANSI escape sequences so multi-pane splits, z-order stacks, floating command prompts, Borland menus, 3270 cross-hairs, and modals are captured into a single playable `.cast` stream (`Phase 22`).
 
@@ -103,6 +103,15 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PERS-02**: Automatic layout and session tree restoration after crash, system reboot, intentional exit/restart, or new client attachment (`herdr`-style session resurrection) (`Phase 33`).
 - [ ] **MCP-01**: Dedicated Root Terminal interfacing to the overall background daemon — the **Master Control Program (`MCP`)** (classic TRON homage; accessible via `bilterm --mcp-console`, `:mcp`, or `◈ ROOT [MCP]` in the `Herdr` Drawer) that never kills the daemon when closed (`Phase 34`).
 - [ ] **MCP-02**: TRON-inspired `MCP` control-plane commands and live system grid monitor (`mcp status`, `mcp tree`, `mcp attach`, `mcp spawn`, `mcp graft`, `mcp broadcast`, `mcp freeze`/`thaw`, `mcp derez <session|pane>`, `mcp checkpoint`, `mcp shutdown --confirm`) with optional TRON Red/Cyan/Gold grid theme (`Phase 34`).
+
+## UI Modernization (Phases 43-48, per `spec/`)
+
+- [ ] **UIM-00**: Read-only architecture audit; `ARCH-R04` relaxed to soft ~800–1000 lines (Phase 43).
+- [ ] **UIM-01**: Visual design proposal with working previews, user-approved (Phase 44).
+- [ ] **UIM-02**: Design tokens, materials, 8 theme profiles, `[appearance]` config, backward compatible (Phase 45).
+- [ ] **UIM-03**: Display modes (Standard/Minimal/Zen), workspace navigator, pane chrome (Phase 46).
+- [ ] **UIM-04**: Drawers, panels, palette, context menus, live-preview Appearance Settings (Phase 47).
+- [ ] **UIM-05**: Regression, performance, accessibility, polish, release (Phase 48).
 
 ## Out of Scope
 

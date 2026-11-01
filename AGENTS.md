@@ -153,7 +153,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 > **Full Engineering & Agent Reference:** Always consult [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md), [`docs/LESSONS_LEARNED_COMPOUNDED.md`](docs/LESSONS_LEARNED_COMPOUNDED.md), and [`docs/AGENT_AUTONOMY_AND_PERMISSIONS.md`](docs/AGENT_AUTONOMY_AND_PERMISSIONS.md) before modifying state, keybindings, commands, security boundaries, or agent execution permissions.
 
 1. **Module & Function Size Ceilings (`ARCH-R04`, `ARCH-R01`)**:
-   - Every Rust source file under `src/**/*.rs` MUST remain **`<= 800` lines**. Split cohesive submodules (`foo/mod.rs` + children) rather than growing monolithic files.
+   - Every Rust source file under `src/**/*.rs` SHOULD target **~800–1000 lines** (soft goal; test backstop 1200). The aim is modular, understandable, maintainable code: split into cohesive submodules (`foo/mod.rs` + children) when it makes sense, not to satisfy a fixed threshold.
    - `src/input/mod.rs::handle_wm_key_event` MUST remain **`<= 80` lines**; all keyboard shortcuts live in declarative `KeyBinding` tables in `src/input/keymap.rs`.
 2. **Unified `Action` Dispatch (`ARCH-R01`)**:
    - Every user-triggerable operation (leader chord, global/pane shortcut, `:colon` command, Fuzzy Command Palette item, top menu bar action, JSON-RPC `"wm.command"`/`"command.execute"`, MCP tool, or TOML Playbook `colon` step) MUST lower to `crate::action::Action` (`pub type ColonCommand = crate::action::Action;`) and execute through `WindowManager::apply(&mut self, action: Action) -> ActionResult`.

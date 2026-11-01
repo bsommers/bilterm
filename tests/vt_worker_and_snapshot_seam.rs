@@ -205,8 +205,8 @@ fn no_vt100_ctt_types_appear_outside_src_vt() {
         let content = std::fs::read_to_string(&file).expect("read source file");
         let lines = content.lines().count();
         assert!(
-            lines <= 800,
-            "{} exceeds 800-line ceiling ({} lines)",
+            lines <= 1200,
+            "{} exceeds 1200-line backstop ({} lines; soft target ~800-1000)",
             file.display(),
             lines
         );

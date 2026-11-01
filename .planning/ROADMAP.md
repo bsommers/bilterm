@@ -41,6 +41,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 39: Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`v2.4.0`)** - Per-pane `PaneChromeStyle` (`:window theme|outline|bold|reset|show`), `[_][□][X]` window control badges, and `>= 2×2` VT grid clamp preventing 1-row soft-wrap underflow (`WIN-01`, `WIN-02`, `VT-CLAMP-01`) (completed 2026-10-29)
 - [x] **Phase 40: Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`v2.4.1`)** - Interactive `:window` / `:window theme` browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`WIN-03`, `WIN-04`) (completed 2026-10-31)
 - [x] **Phase 41: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`v2.5.0`)** - First-class `:rect` / `:select` / `:copy rect` / `Alt+R` / `Alt+LeftDrag` 2D rectangular block selection, highlight, and copy plus full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`RECT-01`, `SESS-03`) (completed 2026-10-31)
+- [ ] **Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment** - Read-only audit, roadmap realignment, `ARCH-R04` relaxed to a soft ~800–1000-line goal (`UIM-00`)
+- [ ] **Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews** - Proposed redesign backed by real `--gui-dump` previews; user sign-off gate (`UIM-01`)
+- [ ] **Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config** - Design tokens, 5 materials, 8 theme profiles, backward-compatible `[appearance]` config, animation clock (`UIM-02`)
+- [ ] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
+- [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
+- [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 
 ## Phase Details
 
@@ -606,10 +612,137 @@ Plans:
 - [x] 42-02-PLAN.md — `src/wm/chrome_style.rs`, `src/wm/v2_runtime.rs`, `src/ui/file_browser.rs`, `src/ui/cursor_cmd.rs`, `src/remote/mod.rs`, `src/wm/session.rs`, `src/colon_command/parse.rs`, `src/pane/completion.rs`: Per-window vs. global `:theme` and `:cursor` (`:cursor cursor-color`), and `:ssh` parsing, `<Tab>` completion, `<F1>` help, and `PROMPT_COMMAND` echo fix (wave 2)
 - [x] 42-03-PLAN.md — `tests/slide_out_drawer_and_telemetry.rs` regression suite, `.planning/ROADMAP.md` & `.planning/STATE.md` backfill, and full verification (wave 3)
 
+### Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment
+
+**Goal**: Produce Phase 0 audit deliverables with zero behavior change and realign the roadmap.
+**Depends on**: Phase 42
+**Requirements**: UIM-00
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. `AUDIT.md` covers the 9 spec Phase 0 deliverables and 15-point assessment.
+  2. Native-Rust GUI finding recorded (ratatui buffer → `GuiWorkspaceRenderer` → Win32/X11/CoreText).
+  3. clippy `-D warnings` and `cargo test -q` green; no behavior change.
+
+**Plans**: 0/1 plans complete
+
+Plans:
+- [ ] 43-01-PLAN.md — Persist audit, fix stale `CLAUDE.md` stack list, verify baseline (wave 1)
+
+### Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews
+
+**Goal**: Show before building: proposed redesign with real previews from the existing renderer.
+**Depends on**: Phase 43
+**Requirements**: UIM-01
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. Previews for Obsidian, Midnight, Arctic, Liquid across pane, split, drawer, palette, settings.
+  2. Existing→redesigned component mapping and TUI-vs-GUI blur/radius fallback documented.
+  3. User approves proposal before Phase 45.
+
+**Plans**: 0/1 plans complete
+
+Plans:
+- [ ] 44-01-PLAN.md — Preview harness, proposal doc, sign-off gate (wave 1)
+
+### Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config
+
+**Goal**: One reusable design system: tokens, five materials, eight profiles, glass controls with opaque fallback, `[appearance]` config.
+**Depends on**: Phase 44
+**Requirements**: UIM-02
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. New `src/ui/design/` module; existing flags/`ThemePalette`/`PaneChromeStyle` resolve through it with identical default output (existing snapshots unchanged).
+  2. Old configs load unchanged; missing keys default; invalid values degrade gracefully; no PTY effects.
+  3. Profiles select/duplicate/modify/save/import/export/reset via `:appearance ...` Actions.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 45-01-PLAN.md — Tokens, materials, motion clock (wave 1)
+- [ ] 45-02-PLAN.md — Profiles, `[appearance]` config, migration tests (wave 2)
+- [ ] 45-03-PLAN.md — Re-point existing styles at tokens; equivalence tests (wave 3)
+
+### Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome
+
+**Goal**: Modernize shell and workspace presentation.
+**Depends on**: Phase 45
+**Requirements**: UIM-03
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. `:mode standard|minimal|zen`; Zen hides chrome, all actions still reachable.
+  2. Pane radius/border/spacing/title/focus configurable; key delivery unchanged.
+  3. Existing workspace/session system extended, not duplicated.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1)
+- [ ] 46-02-PLAN.md — Navigator + pane chrome options (wave 2)
+- [ ] 46-03-PLAN.md — Contextual pane actions + tests (wave 3)
+
+### Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings
+
+**Goal**: Apply the system to drawers, panels, palette, menus, dialogs; add live-preview Appearance modal.
+**Depends on**: Phase 46
+**Requirements**: UIM-04
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. Drawers, MCP deck, exit guard, file browser, help/inspector use materials.
+  2. Palette grouped/fuzzy with shortcuts, Action-only execution.
+  3. Appearance changes apply live, persist via existing config, never restart sessions.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 47-01-PLAN.md — Drawers/panels/dialogs (wave 1)
+- [ ] 47-02-PLAN.md — Palette + context menus (wave 2)
+- [ ] 47-03-PLAN.md — Appearance modal + live preview (wave 3)
+
+### Phase 48: UI Modernization Step 6 — Regression, Performance & Polish
+
+**Goal**: Verify nothing regressed; polish.
+**Depends on**: Phase 47
+**Requirements**: UIM-05
+**Governing documents**: `spec/detailed_specification_EXISTING_TERMINAL_APPLICATION_UI_MOD.md`, `spec/pre_implemenation_and_goals.md`, `spec/Recommended execution sequence` (Phases 43–48 map 1:1 to its six steps).
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Classic/Snazzy/Glass/Modern/Liquid styles, all CLI switches (`--modern`, `--liquid-glass`, `--glass`, `--gui`, ...) and `:` commands (`:style`, `:modern`, `:liquid`, `:theme`, `:window ...`) keep working and resolve through the new token layer. New features lower to `Action` and run via `WindowManager::apply`.
+**Terminal engine rule**: `vt100-ctt` stays the default behind `TerminalBackend`. `libghostty-vt` (feature `ghostty-vt`) may be used where it adds value as an additional, selectable backend living alongside the default; never a forced replacement.
+**File size**: `ARCH-R04` is a soft ~800–1000-line goal (1200 test backstop); split for modularity, not for a number.
+**Success Criteria** (what must be TRUE):
+
+  1. Spec §13 checklist verified (I/O, shells, sessions, panes, scrolling, selection, clipboard, shortcuts, restore, config, themes, resize, shutdown, recovery).
+  2. High-volume, long-running and appearance-change-while-active tests pass; no frame-time regression.
+  3. Reduced motion/transparency and contrast checks pass; HiDPI checked where available; release built.
+
+**Plans**: 0/2 plans complete
+
+Plans:
+- [ ] 48-01-PLAN.md — Regression + perf + accessibility (wave 1)
+- [ ] 48-02-PLAN.md — Polish, docs, release (wave 2)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -656,3 +789,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 40. `v2.4.1` Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`WIN-03`, `WIN-04`) | 3/3 | Complete | 2026-10-31 |
 | 41. `v2.5.0` 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`RECT-01`, `SESS-03`) | 3/3 | Complete | 2026-10-31 |
 | 42. `v2.5.1`–`v2.5.2` Non-Retro Modern Minimal & Liquid Glass Modes, Per-Window vs. Global Theme & Cursor Isolation, Drawer Controls & SSH Hardening (`MOD-01`, `LIQ-01`, `WIN-05`, `CUR-03`, `SSH-02`) | 3/3 | Complete | 2026-10-31 |
+| 43. UI Modernization Step 1 — Architecture Audit & Plan Realignment (`UIM-00`) | 0/1 | Planned | - |
+| 44. UI Modernization Step 2 — Visual Design Proposal with Working Previews (`UIM-01`) | 0/1 | Planned | - |
+| 45. UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config (`UIM-02`) | 0/3 | Planned | - |
+| 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
+| 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
+| 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |

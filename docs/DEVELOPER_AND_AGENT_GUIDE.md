@@ -42,7 +42,7 @@ Bilterm targets **Rust 2024 Edition** (`rust-version = "1.88"`). Every dependenc
 
 ## 2. Complete Source Tree & Module Boundaries (`<= 800` Lines Gate)
 
-Every file under `src/**/*.rs` is enforced to stay **`<= 800` lines** (`ARCH-R04`). There are **no circular dependencies** between `pane` and `wm` (`wm` depends on `pane`; `colon_command` and `action` sit above or alongside cleanly).
+Every file under `src/**/*.rs` targets **~800–1000 lines** (`ARCH-R04`, soft goal; 1200-line test backstop). There are **no circular dependencies** between `pane` and `wm` (`wm` depends on `pane`; `colon_command` and `action` sit above or alongside cleanly).
 
 ```text
 src/
@@ -289,6 +289,6 @@ cargo clippy --all-targets -- -D warnings
 # 3. Handle_wm_key_event <= 80 lines gate
 test $(awk '/^pub fn handle_wm_key_event/,/^}/' src/input/mod.rs | wc -l) -le 80
 
-# 4. Global <= 800 lines per source file gate
-awk 'ENDFILE{if(FNR>800){print FILENAME,FNR; e=1}} END{exit e}' $(find src -name '*.rs')
+# 4. Global 1200-line backstop (soft target ~800-1000)
+awk 'ENDFILE{if(FNR>1200){print FILENAME,FNR; e=1}} END{exit e}' $(find src -name '*.rs')
 ```

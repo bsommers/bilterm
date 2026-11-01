@@ -1,0 +1,26 @@
+Recommended execution sequence
+1. Step 1 — Architecture audit
+
+   Give Antigravity the specification and instruct it to execute Phase 0 only.
+
+   It should return an architecture map, existing component inventory, and proposed modification plan.
+   No code changes
+2. Step 2 — Visual design proposal
+
+   Have it examine the actual UI and produce a proposed redesign, including the main window, terminal panes, navigation, drawers, and settings.
+
+   Require screenshots or working visual previews using the existing application framework.
+3. Step 3 — Design system implementation
+
+   Implement the tokens, materials, themes, and visual configuration infrastructure.
+
+   Verify that existing settings and configuration remain compatible.
+4. Step 4 — Main interface modernization
+
+   Redesign the application shell, terminal presentation, navigation, and workspace layout.
+5. Step 5 — Remaining UI modernization
+
+   Update drawers, floating panels, contextual menus, command palette, and settings.
+6. Step 6 — Regression and polish
+
+   Verify existing terminal functionality, session persistence, rendering performance, and visual consistency.

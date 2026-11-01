@@ -8,7 +8,7 @@
 //! 4. Toggleable version badge (`:version`) in 3270-OIA & `<F1>` Help without snapshot pollution
 //! 5. Persistent, scrollable `herdr`-style Sessions/Terminals drawer (`F7` / `Ctrl+X d`)
 //! 6. 3-signal `!ECHO LOCK` password detection vs. normal Readline/ZLE `!ECHO`
-//! 7. Enforced `<= 800`-line module ceiling (`ARCH-R04`) and `<= 80`-line `handle_wm_key_event` (`ARCH-R01`)
+//! 7. Soft ~800-1000-line module target (1200 hard backstop) (`ARCH-R04`) and `<= 80`-line `handle_wm_key_event` (`ARCH-R01`)
 
 use std::path::Path;
 
@@ -369,9 +369,11 @@ fn lesson_7_architectural_complexity_ceilings_and_file_line_budgets() {
     for file in files {
         let content = std::fs::read_to_string(&file).expect("read source file");
         let line_count = content.lines().count();
+        // ARCH-R04 (relaxed): soft target ~800-1000 lines; split when it improves modularity.
+        // This is only a hard backstop against runaway monoliths.
         assert!(
-            line_count <= 800,
-            "ARCH-R04 violation: {} has {} lines (must be <= 800 lines)",
+            line_count <= 1200,
+            "ARCH-R04 backstop: {} has {} lines (soft target ~800-1000; hard backstop 1200)",
             file.display(),
             line_count
         );
