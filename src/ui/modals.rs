@@ -13,6 +13,7 @@ use ratatui::widgets::{Block, Paragraph, Widget};
 use crate::config::BiltermConfig;
 use crate::pane::CompositePane;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
+use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::theme::ThemePalette;
@@ -20,6 +21,14 @@ use crate::ui::visual_style::{
     apply_frosted_glass_surface, polish_glass_panel_rect, render_liquid_ambient_halo,
 };
 use crate::wm::{WindowManager, inset_window_frame};
+
+fn role(cfg: &BiltermConfig, palette: &ThemePalette, role: ColorRole, legacy: Color) -> Color {
+    if AppearanceProfile::resolve(cfg) == AppearanceProfile::Legacy {
+        legacy
+    } else {
+        DesignTokens::from_palette(palette).get(role)
+    }
+}
 
 /// Returns the number of header rows inside `render_palette_modal` (`2` in modern mode with `inner.height >= 6`, else `1`).
 pub fn palette_header_rows(cfg: &BiltermConfig, inner_height: u16) -> u16 {
@@ -100,7 +109,7 @@ pub(super) fn render_palette_modal(
         lines.push(Line::from(Span::styled(
             format!("Search > {palette_query}_"),
             Style::default()
-                .fg(Color::Rgb(255, 255, 85))
+                .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 255, 85)))
                 .bg(palette.window_frame_bg)
                 .add_modifier(Modifier::BOLD),
         )));
@@ -113,7 +122,11 @@ pub(super) fn render_palette_modal(
         let is_sel = idx == sel;
         if cfg.is_modern() {
             let bg = if is_sel {
-                if cfg.liquid_glass { Color::Rgb(24, 46, 78) } else { Color::Rgb(30, 41, 59) }
+                if cfg.liquid_glass {
+                    role(cfg, palette, ColorRole::Overlay, Color::Rgb(24, 46, 78))
+                } else {
+                    role(cfg, palette, ColorRole::Overlay, Color::Rgb(30, 41, 59))
+                }
             } else {
                 palette.window_frame_bg
             };
@@ -178,7 +191,7 @@ pub(super) fn render_history_popup(
     lines.push(Line::from(Span::styled(
         header,
         Style::default()
-            .fg(Color::Rgb(85, 255, 255))
+            .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(85, 255, 255)))
             .bg(palette.window_frame_bg)
             .add_modifier(Modifier::BOLD),
     )));
@@ -271,14 +284,14 @@ pub(super) fn render_unsafe_paste_modal(
         Line::from(Span::styled(
             format!(" Multi-line/raw paste ({line_count} lines) into active PTY:"),
             Style::default()
-                .fg(Color::Rgb(255, 255, 85))
+                .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 255, 85)))
                 .bg(palette.window_frame_bg)
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             format!(" {preview}"),
             Style::default()
-                .fg(Color::Rgb(85, 255, 255))
+                .fg(role(cfg, palette, ColorRole::TextPrimary, Color::Rgb(85, 255, 255)))
                 .bg(palette.window_frame_bg),
         )),
         Line::from(Span::styled(
@@ -338,7 +351,7 @@ pub(super) fn render_help_modal(
             rendered.push(Line::from(Span::styled(
                 format!(" {lhs}"),
                 Style::default()
-                    .fg(Color::Rgb(255, 255, 85))
+                    .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 255, 85)))
                     .bg(palette.window_frame_bg)
                     .add_modifier(Modifier::BOLD),
             )));
@@ -347,7 +360,7 @@ pub(super) fn render_help_modal(
                 Span::styled(
                     format!(" {:<32}", lhs),
                     Style::default()
-                        .fg(Color::Rgb(85, 255, 255))
+                        .fg(role(cfg, palette, ColorRole::TextPrimary, Color::Rgb(85, 255, 255)))
                         .bg(palette.window_frame_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -461,11 +474,12 @@ pub(super) fn render_top_menubar(
     if rect.width == 0 || rect.height == 0 {
         return;
     }
-    let is_modern = wm.config().is_modern();
+    let cfg = wm.config();
+    let is_modern = cfg.is_modern();
     let bar_bg = if is_modern {
         palette.oia_bg
     } else {
-        Color::Rgb(170, 170, 170)
+        role(cfg, palette, ColorRole::Overlay, Color::Rgb(170, 170, 170))
     };
     let bar_fg = if is_modern {
         palette.title_fg
@@ -477,9 +491,15 @@ pub(super) fn render_top_menubar(
         let is_open = wm.menubar_open_category() == Some(idx);
         let (fg, bg) = if is_open {
             if is_modern {
-                (Color::Rgb(11, 15, 25), palette.active_border_fg)
+                (
+                    role(cfg, palette, ColorRole::Scrim, Color::Rgb(11, 15, 25)),
+                    palette.active_border_fg,
+                )
             } else {
-                (Color::White, Color::Rgb(0, 128, 0))
+                (
+                    Color::White,
+                    role(cfg, palette, ColorRole::BorderFocus, Color::Rgb(0, 128, 0)),
+                )
             }
         } else {
             (bar_fg, bar_bg)
@@ -494,7 +514,7 @@ pub(super) fn render_top_menubar(
             " 📡 BCAST ",
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Rgb(255, 176, 0))
+                .bg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 176, 0)))
                 .add_modifier(Modifier::BOLD),
         ));
     } else if wm.config().liquid_glass {
@@ -547,13 +567,20 @@ pub(super) fn render_menubar_dropdown(
             if is_sel {
                 (
                     palette.title_fg,
-                    if cfg.liquid_glass { Color::Rgb(24, 46, 78) } else { Color::Rgb(30, 41, 59) },
+                    if cfg.liquid_glass {
+                        role(cfg, palette, ColorRole::Overlay, Color::Rgb(24, 46, 78))
+                    } else {
+                        role(cfg, palette, ColorRole::Overlay, Color::Rgb(30, 41, 59))
+                    },
                 )
             } else {
                 (palette.text_fg.unwrap_or(Color::White), palette.window_frame_bg)
             }
         } else if is_sel {
-            (Color::Black, Color::Rgb(0, 255, 102))
+            (
+                Color::Black,
+                role(cfg, palette, ColorRole::BorderFocus, Color::Rgb(0, 255, 102)),
+            )
         } else {
             (Color::White, palette.window_frame_bg)
         };
@@ -737,6 +764,7 @@ pub(super) fn render_inspector_modal(
     let max_scroll = info_rows.len().saturating_sub(usize::from(inner.height));
     let start = wm.inspector_scroll().min(max_scroll);
     let mut lines = Vec::with_capacity(usize::from(inner.height));
+    let cfg = wm.config();
     for (k, v) in info_rows
         .into_iter()
         .skip(start)
@@ -746,14 +774,14 @@ pub(super) fn render_inspector_modal(
             Span::styled(
                 format!(" {:<16} ", k),
                 Style::default()
-                    .fg(Color::Rgb(255, 255, 85))
+                    .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 255, 85)))
                     .bg(palette.window_frame_bg)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 v,
                 Style::default()
-                    .fg(Color::Rgb(85, 255, 255))
+                    .fg(role(cfg, palette, ColorRole::TextPrimary, Color::Rgb(85, 255, 255)))
                     .bg(palette.window_frame_bg),
             ),
         ]));
