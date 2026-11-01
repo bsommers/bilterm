@@ -1,4 +1,4 @@
-# Bilterm Session Checkpoint (2026-11-01, post-freeze)
+# Bilterm Session Checkpoint (2026-11-01, post-freeze + verify.sh)
 
 ## User decisions (verbatim)
 - Phase 44 sign-off: direction approved; default Obsidian; bundle mixed-case mono font; Zen keeps one-line input (see .planning/phases/44-*/DECISIONS.md)
@@ -18,3 +18,9 @@
 1. When user reports branches done: review each diff (spec then quality), run `scripts/verify.sh` (prints one line: `PASS n/n Ns` or `FAIL ...`; on FAIL read only `target/verify/<stage>/fail.txt`, then `log` if needed; never paste full logs), commit per branch, merge to main.
 2. 45-04 bundled font; Phase 46 shell/Zen/`:appearance` command + Obsidian default for fresh installs (Claude, serial, sonnet; opus only for shell design).
 3. Then agy: 47-01/02/03, Phase 48 tests (see .planning/DISPATCH_PLAN.md).
+
+## Added after freeze
+- `scripts/verify.sh` (7201ad1): one-line PASS/FAIL gate; on FAIL read only `target/verify/<stage>/fail.txt`. Flags --quick/--failed/--only/--list/--status. fmt opt-in (legacy drift). Documented in AGENTS.md + CLAUDE.md; used in all agy tasks.
+- swe-skills-2 (1665094): layered-verification-gates, orchestrating-subagents, writing-agent-context-files updated for scripted gates.
+- `.planning/dispatch/RUN.sh` has user's uncommitted edit (--model gemini-3.8-flash-medium); leave it.
+- Still waiting: user reports which agy branches (ui/oia, ui/status, ui/modals-tok, ui/cursor, ui/theme-import) are done.
