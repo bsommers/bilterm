@@ -4,9 +4,23 @@
 //! hit-testing must agree on. Phase 46 adds display modes here; for the Legacy profile the result is
 //! exactly the pre-Phase-46 behaviour (a 1-row menubar and/or 1-row F-key bar controlled by config flags).
 
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 
 use crate::config::BiltermConfig;
+use crate::pane::CompositePane;
+use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens, DisplayMode};
+use crate::ui::theme::ThemePalette;
+
+/// The display mode that actually applies: Legacy ignores `[appearance].display_mode` entirely.
+pub fn effective_display_mode(cfg: &BiltermConfig) -> DisplayMode {
+    if AppearanceProfile::resolve(cfg) == AppearanceProfile::Legacy {
+        DisplayMode::Standard
+    } else {
+        cfg.appearance.display_mode
+    }
+}
 
 /// Rectangles for the fixed rows around the workspace.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +55,24 @@ impl ShellLayout {
     /// Rows consumed above the workspace (0 or 1).
     pub fn top_offset(&self) -> u16 {
         u16::from(self.top_bar.is_some())
+    }
+}
+
+/// Zen's bottom row: blank canvas with only the pane's transient notice, if any.
+pub fn render_zen_row(pane: &CompositePane, rect: Rect, palette: &ThemePalette, buf: &mut Buffer) {
+    if rect.width == 0 || rect.height == 0 {
+        return;
+    }
+    let tokens = DesignTokens::from_palette(palette);
+    let base = Style::default().fg(tokens.get(ColorRole::TextMuted)).bg(tokens.get(ColorRole::Canvas));
+    for x in rect.x..rect.x + rect.width {
+        if let Some(cell) = buf.cell_mut((x, rect.y)) {
+            cell.set_symbol(" ").set_style(base);
+        }
+    }
+    if let Some(msg) = pane.status_message() {
+        let style = Style::default().fg(tokens.get(ColorRole::Accent)).bg(tokens.get(ColorRole::Canvas));
+        buf.set_stringn(rect.x + 1, rect.y, msg, usize::from(rect.width.saturating_sub(2)), style);
     }
 }
 

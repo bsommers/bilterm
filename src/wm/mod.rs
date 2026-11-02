@@ -709,6 +709,10 @@ impl WindowManager {
     /// bottom-most pane first, topmost focused pane last).
     pub fn compute_workspace_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
         let area = self.effective_workspace_area(area);
+        // Zen (non-Legacy only): the focused pane fills the workspace; others keep running unseen.
+        if crate::ui::shell::effective_display_mode(&self.config) == crate::ui::design::DisplayMode::Zen {
+            return vec![(self.active_pane_id(), area)];
+        }
         if let Some(zoomed_id) = self.zoomed_pane
             && self.panes.contains_key(&zoomed_id)
         {

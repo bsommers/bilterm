@@ -442,7 +442,11 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 ""
             };
             wm.active_pane_mut()
-                .set_status_message(Some(format!("Mode: {}{note}", mode.label())));
+                .set_status_message(Some(if mode == crate::ui::design::DisplayMode::Zen && note.is_empty() {
+                    "Zen: :mode standard to leave".to_string()
+                } else {
+                    format!("Mode: {}{note}", mode.label())
+                }));
             false
         }
         ColonCommand::Cursor(style) => {

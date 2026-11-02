@@ -58,6 +58,7 @@ use crate::ui::modals::{
     render_palette_modal, render_top_menubar, render_unsafe_paste_modal,
 };
 use crate::ui::occlusion::occlude_rect;
+use crate::ui::design::DisplayMode;
 use crate::ui::status_bar::{render_dos_fkey_bar, render_floating_prompt};
 use crate::ui::theme::ThemePalette;
 use crate::vt::snapshot::CellSnapshot;
@@ -138,7 +139,11 @@ impl Widget for CompositePaneWidget<'_> {
         }
 
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
-        render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
+        if shell::effective_display_mode(cfg) == DisplayMode::Zen {
+            shell::render_zen_row(self.pane, status_rect, &palette, buf);
+        } else {
+            render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
+        }
 
         // Pass 4: Render optional Borland-style Command History Pop-up Window if active on this pane
         if self.pane.is_prompt_visible()
@@ -619,6 +624,11 @@ impl Widget for WorkspaceWidget<'_> {
                     visual_style::format_snazzy_window_title(self.wm, pane, id, &z_badge, lock_tag)
                 } else {
                     format!("[{id}] {}{lock_tag} ({z_badge})", pane.title())
+                };
+                let frame_title = if shell::effective_display_mode(cfg) == DisplayMode::Focus {
+                    String::new()
+                } else {
+                    frame_title
                 };
                 chrome::render_borland_frame_ext(
                     outer, &frame_title, is_active, chrome_style.resolve_outline(cfg),

@@ -373,6 +373,9 @@ impl ZStack {
 impl WindowManager {
     /// Returns `true` when workspace panes should render a 1-cell Borland window frame (`╔═╗`).
     pub fn is_framed(&self) -> bool {
+        if crate::ui::shell::effective_display_mode(&self.config) == crate::ui::design::DisplayMode::Zen {
+            return false;
+        }
         self.panes.len() > 1
             || self.layout_mode == WorkspaceLayoutMode::Stacked
             || self.z_stack.has_any_custom_geometry()
