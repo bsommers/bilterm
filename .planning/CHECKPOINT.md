@@ -21,3 +21,9 @@
 - JetBrains Mono v2.304 (OFL) bundled in assets/fonts/ (download worked on retry). Loader: src/ui/gui_font/bundled.rs; called from all three platform canvases (linux_x11/win32_gdi/macos_ct `new()`) via `install_if_wanted(wm.config())`; installs to private runtime dir only when AppearanceProfile::resolve(cfg) != Legacy. Legacy font resolution unchanged.
 - Verified: 3 new unit tests, verify.sh PASS 31/31. NOT verified: Windows/macOS compile of the one-line call sites, and live GUI rendering (needs `bilterm --gui` with [appearance] profile=obsidian).
 - Next: Phase 46 (shell/Zen/`:appearance`, Obsidian default for fresh installs only). Make non-Legacy profiles select the "JetBrains Mono" family explicitly in sync_font (currently only resolves via existing candidate list / Ibm3270 default).
+
+## Phase 46 progress (2026-11-02)
+- Done+committed: c5a95f9 font default, 2456157 `:appearance`, 1fe1227 fresh-install Obsidian. verify PASS 31/31.
+- Design doc written (uncommitted until review): .planning/phases/46-shell-display-modes/DESIGN.md. Awaiting user answers to its section 8 (5 questions) before building 46-04..46-09.
+- `:appearance` is session-only (no config write path exists). User's ~/.config/bilterm/config.toml exists, so fresh-install default does not apply to them.
+- Commits end with: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
