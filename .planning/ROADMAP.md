@@ -693,7 +693,7 @@ Plans:
 **Plans**: 0/3 plans complete (in progress: 46-01 has 46-04/05/06 done; see phase 46 plan files)
 
 Plans:
-- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04, 46-05, 46-06 done; 46-06b (compact Zen prompt) open
+- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04, 46-05, 46-06 done; 46-06b resolved (prompt is already one text row)
 - [ ] 46-02-PLAN.md — Navigator + pane chrome options (wave 2)
 - [ ] 46-03-PLAN.md — Contextual pane actions + tests (wave 3)
 
