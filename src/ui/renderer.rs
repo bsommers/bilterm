@@ -523,14 +523,8 @@ impl GuiWorkspaceRenderer {
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
 
-        let top_off = u16::from(wm.config().show_top_menubar && viewport.height > 3);
-        let bot_off = u16::from(wm.config().show_dos_fkey_bar && viewport.height > 2 + top_off);
-        let ws_area = Rect::new(
-            viewport.x,
-            viewport.y + top_off,
-            viewport.width,
-            viewport.height.saturating_sub(top_off + bot_off).max(1),
-        );
+        let shell = crate::ui::shell::ShellLayout::compute(viewport, wm.config());
+        let ws_area = shell.workspace;
         let pane_rects = wm.compute_workspace_rects(ws_area);
         let vp_scale = wm.viewport_scale_pct();
         let framed = wm.is_framed();

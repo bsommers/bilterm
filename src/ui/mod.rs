@@ -20,6 +20,7 @@ pub mod occlusion;
 pub mod oia;
 pub mod pixel_canvas;
 pub mod renderer;
+pub mod shell;
 pub mod status_bar;
 pub mod theme;
 pub mod theme_import;
@@ -576,17 +577,8 @@ impl Widget for WorkspaceWidget<'_> {
         let palette = cfg.palette();
         let glyphs = cfg.glyph_set();
 
-        let top_offset = u16::from(cfg.show_top_menubar && area.height > 3);
-        let bottom_offset = u16::from(cfg.show_dos_fkey_bar && area.height > 2 + top_offset);
-        let workspace_area = Rect {
-            x: area.x,
-            y: area.y + top_offset,
-            width: area.width,
-            height: area
-                .height
-                .saturating_sub(top_offset + bottom_offset)
-                .max(1),
-        };
+        let shell = shell::ShellLayout::compute(area, cfg);
+        let workspace_area = shell.workspace;
 
         let mut rects = self.wm.compute_workspace_rects(workspace_area);
         let framed = self.wm.is_framed();
@@ -677,8 +669,7 @@ impl Widget for WorkspaceWidget<'_> {
                 .render(qt_inner, buf);
         }
 
-        if top_offset > 0 {
-            let menubar_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        if let Some(menubar_rect) = shell.top_bar {
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
             if let Some((cat, sel_item)) = self.wm.menubar_state()
                 && workspace_area.height >= 6
@@ -688,8 +679,7 @@ impl Widget for WorkspaceWidget<'_> {
             }
         }
 
-        if bottom_offset > 0 {
-            let fkey_rect = Rect { x: area.x, y: area.y + area.height - 1, width: area.width, height: 1 };
+        if let Some(fkey_rect) = shell.bottom_bar {
             render_dos_fkey_bar(fkey_rect, &palette, buf);
         }
 
