@@ -692,7 +692,7 @@ Plans:
 **Plans**: 0/3 plans complete
 
 Plans:
-- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1)
+- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04 done
 - [ ] 46-02-PLAN.md — Navigator + pane chrome options (wave 2)
 - [ ] 46-03-PLAN.md — Contextual pane actions + tests (wave 3)
 
