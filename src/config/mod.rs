@@ -283,6 +283,14 @@ impl BiltermConfig {
             .map_err(|e| format!("invalid {}: {e}", path.display()))
     }
 
+    /// Config for a machine with no config file yet: the defaults plus the Obsidian profile.
+    /// `Default` stays Legacy so existing configs and tests without `[appearance]` are unchanged.
+    pub fn fresh_install() -> Self {
+        let mut cfg = Self::default();
+        cfg.appearance.profile = Some(crate::ui::design::AppearanceProfile::Obsidian);
+        cfg
+    }
+
     /// Loads `BiltermConfig` from `path` if it exists, or returns `BiltermConfig::default()`.
     pub fn load_or_default(path: &Path) -> Self {
         std::fs::read_to_string(path)
@@ -568,6 +576,15 @@ mod tests {
             Some(std::path::PathBuf::from("/home/u/.config/bilterm/config.toml"))
         );
         assert_eq!(config_path_from_env(None, None), None);
+    }
+
+    #[test]
+    fn fresh_install_is_obsidian_but_default_stays_legacy() {
+        use crate::ui::design::AppearanceProfile;
+        assert_eq!(AppearanceProfile::resolve(&BiltermConfig::default()), AppearanceProfile::Legacy);
+        assert_eq!(AppearanceProfile::resolve(&BiltermConfig::fresh_install()), AppearanceProfile::Obsidian);
+        let parsed = BiltermConfig::from_toml_str("leader_key = \"Ctrl+A\"").unwrap();
+        assert_eq!(AppearanceProfile::resolve(&parsed), AppearanceProfile::Legacy);
     }
 
     #[test]

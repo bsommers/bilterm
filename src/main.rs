@@ -330,7 +330,7 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(cfg_path) = custom_cfg_path.or_else(BiltermConfig::default_path) {
         match BiltermConfig::load(&cfg_path) {
             Ok(Some(loaded)) => cfg = loaded,
-            Ok(None) => {}
+            Ok(None) => cfg = BiltermConfig::fresh_install(),
             Err(msg) => {
                 tracing::warn!("{msg}; using built-in defaults");
                 cfg_error = Some(format!("config error: {msg} (using defaults)"));
