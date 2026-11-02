@@ -776,7 +776,9 @@ pub(super) fn handle_drawer_mouse_event(
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let delta: isize = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
-            if wm.drawer_config().edge.is_vertical() {
+            if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {
+                wm.drawer_hscroll_by(delta * 2);
+            } else if wm.drawer_config().edge.is_vertical() {
                 let inner_h = dr.height.saturating_sub(2);
                 let rows_len = wm.drawer_rows().len();
                 let (hdr_h, ftr_h, row_step) =

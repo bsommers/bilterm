@@ -337,3 +337,24 @@ fn pane_action_strip_buttons_run_the_same_actions() {
     click(&mut wm, area, 2);
     assert_eq!(wm.pane_count(), n - 1, "close button");
 }
+
+#[test]
+fn drawer_arrow_keys_scroll_rows_and_right_still_leaves_at_the_end() {
+    use bilterm::input::handle_wm_key_event;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let (mut wm, _) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    wm.toggle_drawer();
+    wm.drawer_mut().focused = true;
+    // Make a long row so there is something to scroll to.
+    wm.active_pane_mut().set_title("x".repeat(200));
+    let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+    handle_wm_key_event(&mut wm, key(KeyCode::Right)).unwrap();
+    if wm.drawer().h_scroll > 0 {
+        assert!(wm.drawer().focused, "Right scrolls while text overflows");
+        handle_wm_key_event(&mut wm, key(KeyCode::Left)).unwrap();
+        assert_eq!(wm.drawer().h_scroll, 0);
+    }
+    wm.drawer_hscroll_by(10_000);
+    handle_wm_key_event(&mut wm, key(KeyCode::Right)).unwrap();
+    assert!(!wm.drawer().focused, "Right at the end leaves the drawer");
+}

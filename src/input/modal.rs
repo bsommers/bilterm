@@ -350,6 +350,11 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('M') | KeyCode::F(5) => {
                 let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX));
             }
+            // Left/Right scroll long rows like the MCP console; Right at the end of the text still leaves the drawer.
+            KeyCode::Left => {
+                wm.drawer_hscroll_by(-6);
+            }
+            KeyCode::Right if wm.drawer_hscroll_by(6) => {}
             KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
                 wm.drawer_mut().focused = false;
             }
@@ -399,8 +404,8 @@ pub(super) fn handle_wm_modal_key(
             }
             KeyCode::Down | KeyCode::Char('j') => wm.drawer_select_next(),
             KeyCode::Up | KeyCode::Char('k') => wm.drawer_select_prev(),
-            KeyCode::Char('h') | KeyCode::Char('<') => wm.drawer_hscroll_by(-6),
-            KeyCode::Char('l') | KeyCode::Char('>') => wm.drawer_hscroll_by(6),
+            KeyCode::Char('h') | KeyCode::Char('<') => { wm.drawer_hscroll_by(-6); }
+            KeyCode::Char('l') | KeyCode::Char('>') => { wm.drawer_hscroll_by(6); }
             KeyCode::PageDown => wm.drawer_scroll_by(5),
             KeyCode::PageUp => wm.drawer_scroll_by(-5),
             KeyCode::Home | KeyCode::Char('g') => wm.drawer_mut().selected_index = 0,

@@ -609,7 +609,7 @@ impl WindowManager {
     }
 
     /// Scrolls drawer row text horizontally; clamped so the longest row's tail stays reachable.
-    pub fn drawer_hscroll_by(&mut self, delta: isize) {
+    pub fn drawer_hscroll_by(&mut self, delta: isize) -> bool {
         let max = self
             .drawer_rows()
             .iter()
@@ -619,6 +619,7 @@ impl WindowManager {
             .saturating_sub(12);
         let cur = self.drawer.h_scroll as isize;
         self.drawer.h_scroll = cur.saturating_add(delta).clamp(0, max as isize) as usize;
+        self.drawer.h_scroll as isize != cur
     }
 
     pub fn drawer_scroll_by(&mut self, delta: isize) {
