@@ -127,6 +127,36 @@ pub fn herdr_process_icon(cmd_or_title: &str) -> &'static str {
 
 /// Modern Obsidian / Liquid Glass Slate palette used when `--modern` or `--liquid-glass` is active
 /// and the user has not selected a custom theme.
+/// Palette for an explicitly selected non-Legacy look, or `None` for Legacy / Obsidian / Liquid
+/// (those reuse `modern_obsidian_palette`). Midnight and Arctic are additive new looks.
+pub fn profile_palette(profile: crate::ui::design::AppearanceProfile) -> Option<ThemePalette> {
+    use crate::ui::design::AppearanceProfile as P;
+    let c = |r, g, b| Color::Rgb(r, g, b);
+    let (name, p, text, controls) = match profile {
+        P::Midnight => (
+            "MIDNIGHT",
+            [c(16, 18, 34), c(8, 10, 20), c(167, 139, 250), c(167, 139, 250), c(232, 232, 255), c(55, 60, 90),
+             c(12, 14, 28), c(167, 139, 250), c(8, 10, 20), c(12, 14, 28), c(196, 198, 230), c(167, 139, 250),
+             c(20, 22, 44), c(40, 36, 80), c(5, 6, 14)],
+            c(226, 228, 250), c(140, 144, 190),
+        ),
+        P::Arctic => (
+            "ARCTIC",
+            [c(255, 255, 255), c(246, 248, 251), c(37, 99, 235), c(37, 99, 235), c(15, 23, 42), c(203, 213, 225),
+             c(234, 239, 246), c(37, 99, 235), c(255, 255, 255), c(234, 239, 246), c(51, 65, 85), c(37, 99, 235),
+             c(226, 232, 240), c(148, 163, 184), c(226, 232, 240)],
+            c(15, 23, 42), c(71, 85, 105),
+        ),
+        _ => return None,
+    };
+    let [a, b, c1, d, e, f, g, h, i, j, k, l, m, n, o] = p;
+    let mut pal = ThemePalette::new(name.to_string(), a, b, c1, d, e, f, g, h, i, j, k, l, m, n, o);
+    pal.text_fg = Some(text);
+    pal.controls_fg = Some(controls);
+    pal.cursor_fg = Some(c1);
+    Some(pal)
+}
+
 pub fn modern_obsidian_palette(liquid_glass: bool) -> ThemePalette {
     let mut pal = if liquid_glass {
         ThemePalette::new(

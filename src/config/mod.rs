@@ -249,12 +249,18 @@ impl Default for BiltermConfig {
 impl BiltermConfig {
     /// Returns `true` when non-retro Modern Minimal or Liquid Glass UI mode is active.
     pub const fn is_modern(&self) -> bool {
-        self.modern_mode || self.liquid_glass
+        self.modern_mode || self.liquid_glass || self.explicit_new_look()
+    }
+
+    /// `true` when `[appearance].profile` (or `:appearance`) explicitly selects a non-Legacy look.
+    pub const fn explicit_new_look(&self) -> bool {
+        use crate::ui::design::AppearanceProfile as P;
+        matches!(self.appearance.profile, Some(P::Obsidian | P::Midnight | P::Arctic | P::Liquid))
     }
 
     /// Returns `true` when Frosted Glass or Liquid Glass optical mode is active.
     pub const fn is_glass(&self) -> bool {
-        self.glass_mode || self.liquid_glass
+        self.glass_mode || self.liquid_glass || matches!(self.appearance.profile, Some(crate::ui::design::AppearanceProfile::Liquid))
     }
 
     /// Parses a TOML configuration string into `BiltermConfig`.
@@ -318,6 +324,12 @@ impl BiltermConfig {
     pub fn palette(&self) -> ThemePalette {
         if let Some(custom) = &self.custom_palette_override {
             return custom.clone();
+        }
+        if self.explicit_new_look() && self.theme == ThemePreset::TurboBlue {
+            use crate::ui::design::AppearanceProfile as P;
+            let profile = self.appearance.profile.unwrap_or(P::Obsidian);
+            return crate::ui::visual_style::profile_palette(profile)
+                .unwrap_or_else(|| crate::ui::visual_style::modern_obsidian_palette(profile == P::Liquid));
         }
         if self.is_modern() && self.theme == ThemePreset::TurboBlue {
             return crate::ui::visual_style::modern_obsidian_palette(self.liquid_glass);

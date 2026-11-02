@@ -33,7 +33,7 @@ pub fn render_exit_guard_modal(
     let modal_y = clamped_area.y + (clamped_area.height.saturating_sub(modal_h)) / 2;
     let modal_rect = Rect::new(modal_x, modal_y, modal_w, modal_h);
 
-    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS");
+    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC");
     occlude_rect(buf, modal_rect);
     if is_modern {
         crate::ui::visual_style::render_liquid_ambient_halo(buf, modal_rect, clamped_area, palette);

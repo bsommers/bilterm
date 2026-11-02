@@ -358,3 +358,22 @@ fn drawer_arrow_keys_scroll_rows_and_right_still_leaves_at_the_end() {
     handle_wm_key_event(&mut wm, key(KeyCode::Right)).unwrap();
     assert!(!wm.drawer().focused, "Right at the end leaves the drawer");
 }
+
+fn style_dump(buf: &Buffer, area: Rect) -> Vec<(ratatui::style::Color, ratatui::style::Color)> {
+    (0..area.height).flat_map(|y| (0..area.width).map(move |x| (x, y))).map(|(x, y)| (buf[(x, y)].fg, buf[(x, y)].bg)).collect()
+}
+
+#[test]
+fn appearance_profiles_visibly_restyle_and_legacy_restores_exactly() {
+    let (mut wm, area) = two_pane_wm(None, DisplayMode::Standard);
+    let legacy = style_dump(&render(&wm, area), area);
+    let mut seen = vec![legacy.clone()];
+    for p in [AppearanceProfile::Obsidian, AppearanceProfile::Midnight, AppearanceProfile::Arctic, AppearanceProfile::Liquid] {
+        wm.config_mut().appearance.profile = Some(p);
+        let d = style_dump(&render(&wm, area), area);
+        assert!(!seen.contains(&d), "{p:?} must look different from the other looks");
+        seen.push(d);
+    }
+    wm.config_mut().appearance.profile = Some(AppearanceProfile::Legacy);
+    assert_eq!(style_dump(&render(&wm, area), area), legacy, ":appearance legacy restores the original look exactly");
+}
