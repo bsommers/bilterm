@@ -126,3 +126,22 @@ fn old_modern_and_liquid_flags_do_not_get_pills() {
         assert_eq!(bilterm::ui::shell::ShellLayout::compute(area, wm.config(), 2).workspace, area);
     }
 }
+
+#[test]
+fn mcp_console_rows_scroll_horizontally_to_show_full_text() {
+    let mut wm = WindowManager::new_headless(24, 100);
+    let tail = "TAIL_MARKER_END";
+    let long = format!("{}{}", "x".repeat(150), tail);
+    wm.open_mcp_popup_window("TEST", vec![long, "short".into()]);
+    let area = Rect::new(0, 0, 100, 24);
+    let before = buffer_to_snapshot_string(&render(&wm, area));
+    assert!(!before.contains(tail), "tail should be clipped before scrolling");
+    for _ in 0..40 {
+        wm.mcp_console_mut().scroll_right(8);
+    }
+    let after = buffer_to_snapshot_string(&render(&wm, area));
+    assert!(after.contains(tail), "tail should be reachable after scrolling right:\n{after}");
+    assert!(after.contains('‹'), "left indicator missing");
+    wm.mcp_console_mut().scroll_left(10_000);
+    assert_eq!(wm.mcp_console().h_scroll, 0);
+}

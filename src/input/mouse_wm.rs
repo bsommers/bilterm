@@ -140,6 +140,8 @@ pub(super) fn handle_modal_mouse_event(
             }
             MouseEventKind::ScrollUp => wm.mcp_console_mut().scroll_up(2),
             MouseEventKind::ScrollDown => wm.mcp_console_mut().scroll_down(2),
+            MouseEventKind::ScrollLeft => wm.mcp_console_mut().scroll_left(6),
+            MouseEventKind::ScrollRight => wm.mcp_console_mut().scroll_right(6),
             _ => {}
         }
         return Some(AppAction::Handled);

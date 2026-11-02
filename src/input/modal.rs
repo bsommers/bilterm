@@ -502,6 +502,14 @@ pub(super) fn handle_wm_modal_key(
                     wm.reflow_default_viewport();
                     return Ok(Some(AppAction::Handled));
                 }
+                KeyCode::Left | KeyCode::Char('h') => {
+                    wm.mcp_console_mut().scroll_left(8);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    wm.mcp_console_mut().scroll_right(8);
+                    return Ok(Some(AppAction::Handled));
+                }
                 KeyCode::Char('m') | KeyCode::Char('M') => {
                     let mode = wm.mcp_console_mut().toggle_layout_mode();
                     wm.reflow_default_viewport();

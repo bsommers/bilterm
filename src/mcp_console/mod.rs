@@ -256,6 +256,8 @@ pub struct McpConsoleState {
     pub selected_row: usize,
     pub row_actions: Vec<McpRowAction>,
     pub scroll_offset: usize,
+    /// Horizontal scroll (in characters) applied to every row so long text can be read in full.
+    pub h_scroll: usize,
     /// `DrawerLayoutMode::Overlay` (Floating pop-up window) vs `DrawerLayoutMode::Push` (pushes workspace panes).
     pub layout_mode: DrawerLayoutMode,
     /// Dock edge (`Top`, `Bottom`, `Left`, `Right`) used when `layout_mode == DrawerLayoutMode::Push`.
@@ -284,6 +286,7 @@ impl McpConsoleState {
             selected_row: 0,
             row_actions: Vec::new(),
             scroll_offset: 0,
+            h_scroll: 0,
             layout_mode: DrawerLayoutMode::Overlay,
             edge: DrawerEdge::Top,
             log_lines: vec![
@@ -301,6 +304,7 @@ impl McpConsoleState {
         self.file_browser = None;
         self.window_theme_target = None;
         self.scroll_offset = 0;
+        self.h_scroll = 0;
     }
 
     /// Opens the MCP floating/push window with a specific title and multi-line content view,
@@ -347,6 +351,7 @@ impl McpConsoleState {
         self.view_lines = lines;
         self.row_actions = actions;
         self.scroll_offset = 0;
+        self.h_scroll = 0;
     }
 
     /// Moves `selected_row` to the next interactive row (or increments by 1 if none are interactive) (`MCP-03`).
@@ -420,6 +425,31 @@ impl McpConsoleState {
         self.edge
     }
 
+    /// Longest row, in characters.
+    pub fn max_line_width(&self) -> usize {
+        self.view_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0)
+    }
+
+    /// Scrolls every row left (towards the start of the text) by `cols` characters.
+    pub fn scroll_left(&mut self, cols: usize) {
+        self.h_scroll = self.h_scroll.saturating_sub(cols);
+    }
+
+    /// Scrolls every row right by `cols` characters, stopping when the longest row's end is reachable.
+    pub fn scroll_right(&mut self, cols: usize) {
+        let max = self.max_line_width().saturating_sub(24); // keep the last 24 chars of the longest row visible
+        self.h_scroll = (self.h_scroll + cols).min(max);
+    }
+
+    /// Row text after horizontal scrolling; a leading `‹` marks hidden text on the left.
+    pub fn clip_row(&self, line: &str) -> String {
+        if self.h_scroll == 0 {
+            return line.to_string();
+        }
+        let rest: String = line.chars().skip(self.h_scroll).collect();
+        format!("‹{rest}")
+    }
+
     /// Scrolls the MCP pop-up/panel content up by `rows` and moves `selected_row` accordingly.
     pub fn scroll_up(&mut self, rows: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(rows);
@@ -445,6 +475,7 @@ impl McpConsoleState {
             .position(|a| *a != McpRowAction::None)
             .unwrap_or(0);
         self.scroll_offset = 0;
+        self.h_scroll = 0;
     }
 
     /// Selects the last interactive row (`End`).

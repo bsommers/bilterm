@@ -244,10 +244,12 @@ fn render_mcp_console_modern(
     let inner_right = right.saturating_sub(1);
 
     if !state.view_lines.is_empty() {
-        for (idx, line) in state.view_lines.iter().skip(state.scroll_offset).enumerate() {
+        for (idx, raw_line) in state.view_lines.iter().skip(state.scroll_offset).enumerate() {
             if row >= max_row {
                 break;
             }
+            let clipped = state.clip_row(raw_line);
+            let line = &clipped;
             let row_idx = state.scroll_offset + idx;
             let is_selected = row_idx == state.selected_row;
             let is_interactive = state
@@ -394,10 +396,12 @@ pub fn render_mcp_console(
     let inner_right = right.saturating_sub(1);
 
     if !state.view_lines.is_empty() {
-        for (idx, line) in state.view_lines.iter().skip(state.scroll_offset).enumerate() {
+        for (idx, raw_line) in state.view_lines.iter().skip(state.scroll_offset).enumerate() {
             if row >= max_row {
                 break;
             }
+            let clipped = state.clip_row(raw_line);
+            let line = &clipped;
             let row_idx = state.scroll_offset + idx;
             let is_selected = row_idx == state.selected_row;
             let is_interactive = state
