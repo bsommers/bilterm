@@ -379,10 +379,24 @@ mod tests {
             .and_then(parse_colon_command)
             .is_some_and(|r| r.is_ok());
 
+        if let Some(first) = colon_expr.filter(|_| in_colon).and_then(|e| e.split_whitespace().next()) {
+            assert!(
+                crate::pane::completion::colon_command_names().contains(&first),
+                "{action:?}: `{first}` parses but is missing from the completion list (COLON_COMMANDS)"
+            );
+        }
+
         assert!(
             in_keymap || in_colon,
             "Action variant {action:?} must be reachable from keymap or colon/RPC parser"
         );
+    }
+
+    #[test]
+    fn every_completion_entry_is_a_command_the_parser_recognises() {
+        for name in crate::pane::completion::colon_command_names() {
+            assert!(parse_colon_command(name).is_some(), "`{name}` is offered by completion but the parser does not know it");
+        }
     }
 
     #[test]
