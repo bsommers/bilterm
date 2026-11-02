@@ -385,7 +385,7 @@ impl MacosGuiCanvas {
         } else if !wm.config().font_family.trim().is_empty() {
             wm.config().font_family.trim().to_string()
         } else {
-            "Menlo".to_string()
+            super::bundled::default_family(wm.config(), "Menlo")
         };
 
         let eff_pt = wm.active_pane().font_options().effective_size_pt(wm.config());

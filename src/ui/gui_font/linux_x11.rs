@@ -320,7 +320,7 @@ impl<'a> X11GuiCanvas<'a> {
         } else if !wm.config().font_family.trim().is_empty() {
             wm.config().font_family.trim().to_string()
         } else {
-            "JetBrains Mono".to_string()
+            super::bundled::default_family(wm.config(), "JetBrains Mono")
         };
 
         let eff_pt = wm.config().font_size_pt.clamp(6, 72);

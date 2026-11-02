@@ -29,6 +29,12 @@ pub fn wants_bundled_font(cfg: &BiltermConfig) -> bool {
     AppearanceProfile::resolve(cfg) != AppearanceProfile::Legacy
 }
 
+/// Family used when nothing else is configured: the bundled font for non-Legacy profiles,
+/// otherwise the platform's historical default (Legacy behaviour is unchanged).
+pub fn default_family(cfg: &BiltermConfig, platform_default: &str) -> String {
+    if wants_bundled_font(cfg) { BUNDLED_FAMILY.to_string() } else { platform_default.to_string() }
+}
+
 /// Writes the bundled faces into `dir` (created private) and registers them. Returns the written paths.
 pub fn install_into(dir: &Path) -> io::Result<Vec<PathBuf>> {
     secure_fs::ensure_private_dir(dir)?;
@@ -79,6 +85,14 @@ mod tests {
         assert!(wants_bundled_font(&cfg));
         cfg.appearance.profile = Some(AppearanceProfile::Legacy);
         assert!(!wants_bundled_font(&cfg));
+    }
+
+    #[test]
+    fn default_family_keeps_platform_default_for_legacy() {
+        let mut cfg = BiltermConfig::default();
+        assert_eq!(default_family(&cfg, "Menlo"), "Menlo");
+        cfg.appearance.profile = Some(AppearanceProfile::Obsidian);
+        assert_eq!(default_family(&cfg, "Menlo"), BUNDLED_FAMILY);
     }
 
     #[test]
