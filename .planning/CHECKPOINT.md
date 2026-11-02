@@ -44,3 +44,9 @@ Done on main: 46 steps :appearance, :mode, ShellLayout, Zen/Minimal, navigator p
 2. DONE (drawer also scrolls via Left/Right and Shift+wheel like MCP): 46-04, 46-08 (title/focus_ring, :chrome), 46-09 (pane action strip). Phase 46 code complete. Next: user live `bilterm --gui` pass with Obsidian (panel scale, Zen, pills, strip, font), then release decision. Deferred: [appearance] padding.
 3. Then 46-08 pane chrome options (title/focus_ring/padding), 46-09 contextual pane actions + snapshot tests (candidate for interactive agy).
 Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameSnapshot::capture ignores top menubar (pre-existing); Phase 45 GAPS.md (profile management, 8 vs 5 profiles); optional borderless Zen prompt; CodeGraph 1.6.2 upgrade available (user runs `codegraph upgrade`).
+
+## 2026-11-02 release state
+- v2.6.0 tagged, released (15 assets, CI mac/win OK). main pushed. Installed to ~/.local/bin/bilterm (backup bilterm.bak-2.6.0). Tree clean.
+- :appearance now restyles palette/glyphs/chrome (6f847e1). Midnight/Arctic palettes are my own picks; Arctic readability UNVERIFIED (user unsure; wait for their live-GUI feedback, do not change blindly).
+- Palette (Ctrl+X :) is PALETTE_CATALOG in src/ui/help_catalog.rs; Tab completion is COLON_COMMANDS in src/pane/completion.rs.
+- Next: user live `bilterm --gui` pass; deferred: [appearance] padding, persistence of :appearance/:mode/:panel, Phase 45 gaps (GAPS.md), Phase 47/48 agy tasks.
