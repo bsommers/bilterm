@@ -22,11 +22,37 @@ pub fn effective_display_mode(cfg: &BiltermConfig) -> DisplayMode {
     }
 }
 
+/// What the top row holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TopBarKind {
+    /// The classic menubar (`show_top_menubar`).
+    Menubar,
+    /// Workspace navigator pills (non-Legacy profiles only).
+    Pills,
+}
+
+/// `true` when the navigator pill bar should occupy the top row: a profile explicitly selected via
+/// `[appearance].profile` / `:appearance` (looks that merely come from the old `--modern` / `--liquid-glass`
+/// flags are existing looks and stay unchanged), no classic menubar, not Zen, and (in Minimal) only
+/// when there is more than one pane.
+pub fn wants_pill_bar(cfg: &BiltermConfig, pane_count: usize, area_height: u16) -> bool {
+    let explicit_new_look = cfg.appearance.profile.is_some_and(|p| p != AppearanceProfile::Legacy);
+    if area_height <= 3 || cfg.show_top_menubar || !explicit_new_look {
+        return false;
+    }
+    match effective_display_mode(cfg) {
+        DisplayMode::Standard => true,
+        DisplayMode::Focus => pane_count > 1,
+        DisplayMode::Zen => false,
+    }
+}
+
 /// Rectangles for the fixed rows around the workspace.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ShellLayout {
     /// One-row bar at the top of the viewport, when shown.
     pub top_bar: Option<Rect>,
+    pub top_bar_kind: Option<TopBarKind>,
     /// Area handed to the tiled/stacked panes and overlays.
     pub workspace: Rect,
     /// One-row bar at the bottom of the viewport, when shown.
@@ -35,8 +61,10 @@ pub struct ShellLayout {
 
 impl ShellLayout {
     /// Computes the layout for `area` under `cfg`.
-    pub fn compute(area: Rect, cfg: &BiltermConfig) -> Self {
-        let top = u16::from(cfg.show_top_menubar && area.height > 3);
+    pub fn compute(area: Rect, cfg: &BiltermConfig, pane_count: usize) -> Self {
+        let menubar = cfg.show_top_menubar && area.height > 3;
+        let pills = !menubar && wants_pill_bar(cfg, pane_count, area.height);
+        let top = u16::from(menubar || pills);
         let bottom = u16::from(cfg.show_dos_fkey_bar && area.height > 2 + top);
         let workspace = Rect {
             x: area.x,
@@ -45,6 +73,7 @@ impl ShellLayout {
             height: area.height.saturating_sub(top + bottom).max(1),
         };
         Self {
+            top_bar_kind: if menubar { Some(TopBarKind::Menubar) } else if pills { Some(TopBarKind::Pills) } else { None },
             top_bar: (top > 0).then_some(Rect { x: area.x, y: area.y, width: area.width, height: 1 }),
             workspace,
             bottom_bar: (bottom > 0)
@@ -106,7 +135,7 @@ mod tests {
                     for (x, y, w) in [(0u16, 0u16, 80u16), (3, 2, 1), (0, 0, 0)] {
                         let area = Rect { x, y, width: w, height: h };
                         let (t, b, ws) = legacy_reference(area, menubar, fkey);
-                        let got = ShellLayout::compute(area, &cfg);
+                        let got = ShellLayout::compute(area, &cfg, 3);
                         assert_eq!(got.workspace, ws, "{area:?} menubar={menubar} fkey={fkey}");
                         assert_eq!(got.top_bar.is_some(), t == 1);
                         assert_eq!(got.bottom_bar.is_some(), b == 1);
@@ -129,10 +158,10 @@ mod tests {
             show_dos_fkey_bar: true,
             ..BiltermConfig::default()
         };
-        let base = ShellLayout::compute(area, &cfg);
+        let base = ShellLayout::compute(area, &cfg, 2);
         for m in [DisplayMode::Standard, DisplayMode::Focus, DisplayMode::Zen] {
             cfg.appearance.display_mode = m;
-            assert_eq!(ShellLayout::compute(area, &cfg), base);
+            assert_eq!(ShellLayout::compute(area, &cfg, 2), base);
         }
     }
 }

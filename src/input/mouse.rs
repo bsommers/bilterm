@@ -586,10 +586,20 @@ pub fn handle_wm_mouse_event(
     mouse: MouseEvent,
     screen_area: Rect,
 ) -> Result<AppAction> {
-    let shell = crate::ui::shell::ShellLayout::compute(screen_area, wm.config());
+    let shell = crate::ui::shell::ShellLayout::compute(screen_area, wm.config(), wm.pane_count());
     let top_off = shell.top_offset();
     let bot_off = u16::from(shell.bottom_bar.is_some());
     let workspace_area = shell.workspace;
+
+    if shell.top_bar_kind == Some(crate::ui::shell::TopBarKind::Pills) && mouse.row == screen_area.y {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+            && let Some(bar) = shell.top_bar
+            && let Some(pid) = crate::ui::navigator::pill_at(wm, bar, mouse.column)
+        {
+            wm.focus_and_raise(pid);
+        }
+        return Ok(AppAction::Handled);
+    }
 
     if top_off > 0 && mouse.row == screen_area.y {
         let rel_col = mouse.column.saturating_sub(screen_area.x);

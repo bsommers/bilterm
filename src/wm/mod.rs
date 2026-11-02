@@ -742,7 +742,10 @@ impl WindowManager {
     /// inversely by its per-pane font scale so larger fonts have fewer cols/rows and smaller fonts have more.
     pub fn resize_all(&mut self, area: Rect) -> Result<()> {
         self.default_size = (area.height.max(1), area.width.max(1));
-        let top_off = u16::from(self.config.show_top_menubar && area.y == 0 && area.height >= 4);
+        let mut top_off = u16::from(self.config.show_top_menubar && area.y == 0 && area.height >= 4);
+        if top_off == 0 && crate::ui::shell::wants_pill_bar(&self.config, self.panes.len(), area.height) {
+            top_off = 1; // navigator pills (non-Legacy only; never true for Legacy)
+        }
         let bot_off = u16::from(self.config.show_dos_fkey_bar && area.height >= 4 + top_off);
         let ws_area = Rect::new(
             area.x,

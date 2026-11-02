@@ -19,6 +19,7 @@ pub mod modals;
 pub mod occlusion;
 pub mod oia;
 pub mod pixel_canvas;
+pub mod navigator;
 pub mod renderer;
 pub mod shell;
 pub mod status_bar;
@@ -582,7 +583,7 @@ impl Widget for WorkspaceWidget<'_> {
         let palette = cfg.palette();
         let glyphs = cfg.glyph_set();
 
-        let shell = shell::ShellLayout::compute(area, cfg);
+        let shell = shell::ShellLayout::compute(area, cfg, self.wm.pane_count());
         let workspace_area = shell.workspace;
 
         let mut rects = self.wm.compute_workspace_rects(workspace_area);
@@ -679,7 +680,11 @@ impl Widget for WorkspaceWidget<'_> {
                 .render(qt_inner, buf);
         }
 
-        if let Some(menubar_rect) = shell.top_bar {
+        if shell.top_bar_kind == Some(shell::TopBarKind::Pills)
+            && let Some(bar) = shell.top_bar
+        {
+            navigator::render_navigator(self.wm, bar, &palette, buf);
+        } else if let Some(menubar_rect) = shell.top_bar {
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
             if let Some((cat, sel_item)) = self.wm.menubar_state()
                 && workspace_area.height >= 6

@@ -523,7 +523,7 @@ impl GuiWorkspaceRenderer {
         let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
         let default_fg = ratatui_color_to_rgba(palette.title_fg, [255, 255, 255, 255]);
 
-        let shell = crate::ui::shell::ShellLayout::compute(viewport, wm.config());
+        let shell = crate::ui::shell::ShellLayout::compute(viewport, wm.config(), wm.pane_count());
         let ws_area = shell.workspace;
         let pane_rects = wm.compute_workspace_rects(ws_area);
         let vp_scale = wm.viewport_scale_pct();
