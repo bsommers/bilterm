@@ -601,6 +601,20 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Handled);
     }
 
+    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && wm.is_framed() {
+        let active = wm.active_pane_id();
+        let hit = wm
+            .compute_workspace_rects(workspace_area)
+            .into_iter()
+            .find(|&(id, _)| id == active)
+            .and_then(|(_, outer)| crate::ui::pane_actions::action_at(wm.config(), outer, mouse.column, mouse.row));
+        if let Some(action) = hit {
+            let _ = wm.apply(action);
+            wm.resize_all(workspace_area)?;
+            return Ok(AppAction::Handled);
+        }
+    }
+
     if top_off > 0 && mouse.row == screen_area.y {
         let rel_col = mouse.column.saturating_sub(screen_area.x);
         match mouse.kind {

@@ -75,6 +75,36 @@ impl DisplayMode {
     }
 }
 
+/// Which pane frames show a title (non-Legacy only; `None` in config keeps the display-mode default).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TitlePolicy {
+    #[default]
+    All,
+    Focused,
+    None,
+}
+
+impl TitlePolicy {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "all" => Some(Self::All),
+            "focused" | "focus" => Some(Self::Focused),
+            "none" | "off" => Some(Self::None),
+            _ => Option::None,
+        }
+    }
+
+    /// Whether a pane with focus state `active` shows its title.
+    pub const fn shows(self, active: bool) -> bool {
+        match self {
+            Self::All => true,
+            Self::Focused => active,
+            Self::None => false,
+        }
+    }
+}
+
 /// `[appearance]` section. Percent fields are `0..=100`; `None` means "use the profile default".
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -90,6 +120,10 @@ pub struct AppearanceConfig {
     pub border: BorderWeight,
     pub density: Density,
     pub display_mode: DisplayMode,
+    /// Pane title policy override. `None` keeps the display-mode default (Standard: all, Minimal: none).
+    pub title: Option<TitlePolicy>,
+    /// Accent-colored border on the focused pane (non-Legacy only).
+    pub focus_ring: bool,
     /// Optional bundled/UI font family for chrome text (GUI only; `None` keeps `font_family`).
     pub ui_font: Option<String>,
 }

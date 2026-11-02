@@ -236,3 +236,104 @@ fn drawer_wheel_moves_viewport_not_selection() {
     d.wheel_scroll(0, 5, 20, 100);
     assert_eq!(d.effective_scroll(0, 5, 20), 15);
 }
+
+use bilterm::ui::design::TitlePolicy;
+
+#[test]
+fn chrome_title_policy_applies_to_new_looks_and_legacy_ignores_it() {
+    let (mut legacy, area) = two_pane_wm(None, DisplayMode::Standard);
+    let base = buffer_to_snapshot_string(&render(&legacy, area));
+    legacy.config_mut().appearance.title = Some(TitlePolicy::None);
+    legacy.config_mut().appearance.focus_ring = true;
+    assert_eq!(buffer_to_snapshot_string(&render(&legacy, area)), base, "Legacy must ignore title/focus_ring");
+
+    let (mut wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    let all = buffer_to_snapshot_string(&render(&wm, area));
+    wm.config_mut().appearance.title = Some(TitlePolicy::None);
+    let none = buffer_to_snapshot_string(&render(&wm, area));
+    wm.config_mut().appearance.title = Some(TitlePolicy::Focused);
+    let focused = buffer_to_snapshot_string(&render(&wm, area));
+    assert_ne!(all, none);
+    assert_ne!(all, focused);
+    assert_ne!(focused, none);
+    wm.config_mut().appearance.title = None;
+    assert_eq!(buffer_to_snapshot_string(&render(&wm, area)), all, "None keeps the mode default");
+}
+
+#[test]
+fn focus_ring_recolors_only_the_focused_border() {
+    let (mut wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    let before = render(&wm, area);
+    wm.config_mut().appearance.focus_ring = true;
+    let after = render(&wm, area);
+    assert_eq!(buffer_to_snapshot_string(&before), buffer_to_snapshot_string(&after), "ring changes colour only");
+    let accent = bilterm::ui::design::DesignTokens::from_palette(&wm.config().palette()).accent;
+    let count = |b: &Buffer| (0..area.height).flat_map(|y| (0..area.width).map(move |x| (x, y))).filter(|&(x, y)| b[(x, y)].fg == accent).count();
+    assert!(count(&after) > 0 && count(&after) >= count(&before), "focused border must carry the accent colour");
+}
+
+#[test]
+fn chrome_commands_parse_and_apply() {
+    use bilterm::colon_command::parse_colon_command;
+    use bilterm::action::Action;
+    assert!(matches!(parse_colon_command(":chrome title focused").unwrap().unwrap(), Action::ChromeTitle(Some(TitlePolicy::Focused))));
+    assert!(matches!(parse_colon_command(":chrome title auto").unwrap().unwrap(), Action::ChromeTitle(None)));
+    assert!(matches!(parse_colon_command(":chrome ring on").unwrap().unwrap(), Action::ChromeRing(true)));
+    assert!(parse_colon_command(":chrome ring maybe").unwrap().is_err());
+}
+
+fn strip_cells(wm: &WindowManager, area: Rect) -> usize {
+    let buf = render(wm, area);
+    (0..area.width)
+        .flat_map(|x| (0..area.height).map(move |y| (x, y)))
+        .filter(|&(x, y)| matches!(buf[(x, y)].symbol(), "⊞" | "⤢" | "✕"))
+        .count()
+}
+
+#[test]
+fn pane_action_strip_only_in_non_legacy_standard() {
+    let (legacy, area) = two_pane_wm(None, DisplayMode::Standard);
+    assert_eq!(strip_cells(&legacy, area), 0);
+    let (std_wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    assert_eq!(strip_cells(&std_wm, area), 3, "one strip, on the focused pane only");
+    for mode in [DisplayMode::Focus, DisplayMode::Zen] {
+        let (wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), mode);
+        assert_eq!(strip_cells(&wm, area), 0, "{mode:?}");
+    }
+}
+
+#[test]
+fn pane_action_strip_buttons_run_the_same_actions() {
+    // 2 panes in 120 columns so the pane stays wide enough after a split.
+    use bilterm::input::mouse::handle_wm_mouse_event;
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    let click = |wm: &mut WindowManager, area: Rect, idx: usize| {
+        let ws = bilterm::ui::shell::ShellLayout::compute(area, wm.config(), wm.pane_count()).workspace;
+        let active = wm.active_pane_id();
+        let outer = wm.compute_workspace_rects(ws).into_iter().find(|&(id, _)| id == active).unwrap().1;
+        let (x, ..) = bilterm::ui::pane_actions::buttons(outer)[idx];
+        let ev = MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: x, row: outer.y, modifiers: KeyModifiers::NONE };
+        handle_wm_mouse_event(wm, ev, area).unwrap();
+    };
+    let (mut wm, _) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    let area = Rect::new(0, 0, 120, 20);
+    wm.resize_all(area).unwrap();
+    assert!(wm.zoomed_pane().is_none());
+    click(&mut wm, area, 1);
+    assert!(wm.zoomed_pane().is_some(), "zoom button");
+    click(&mut wm, area, 1);
+    assert!(wm.zoomed_pane().is_none());
+    let before = wm.pane_count();
+    click(&mut wm, area, 0);
+    assert_eq!(wm.pane_count(), before + 1, "split button");
+    click(&mut wm, area, 1);
+    wm.resize_all(area).unwrap();
+    click(&mut wm, area, 1); // unzoom
+    // The split pane is now narrower than the strip threshold, so close from the other pane.
+    let narrow = wm.active_pane_id();
+    assert!(bilterm::ui::pane_actions::buttons(Rect::new(0, 0, 26, 10)).is_empty());
+    let _ = narrow;
+    let n = wm.pane_count();
+    click(&mut wm, area, 2);
+    assert_eq!(wm.pane_count(), n - 1, "close button");
+}

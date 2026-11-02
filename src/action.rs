@@ -69,6 +69,10 @@ pub enum Action {
     Mode(crate::ui::design::DisplayMode),
     /// Drawer / `:mcp` console font scale in percent (`75..=200`), GUI only.
     PanelScale(u16),
+    /// Pane title policy for non-Legacy looks (`None` = display-mode default).
+    ChromeTitle(Option<crate::ui::design::TitlePolicy>),
+    /// Accent border on the focused pane (non-Legacy looks).
+    ChromeRing(bool),
     Cursor(CaretStyle),
     Outline {
         window: Option<OutlineStyle>,
@@ -299,6 +303,8 @@ mod tests {
             Action::Appearance(_) => Some(":appearance obsidian"),
             Action::Mode(_) => Some(":mode zen"),
             Action::PanelScale(_) => Some(":panel scale 125"),
+            Action::ChromeTitle(_) => Some(":chrome title focused"),
+            Action::ChromeRing(_) => Some(":chrome ring on"),
             Action::Cursor(_) => Some(":cursor block"),
             Action::Outline { .. } => Some(":outline double"),
             Action::CrosshairToggle { .. } => Some(":crosshair"),
@@ -431,6 +437,8 @@ mod tests {
             Action::Appearance(crate::ui::design::AppearanceProfile::Obsidian),
             Action::Mode(crate::ui::design::DisplayMode::Zen),
             Action::PanelScale(125),
+            Action::ChromeTitle(Some(crate::ui::design::TitlePolicy::Focused)),
+            Action::ChromeRing(true),
             Action::Cursor(CaretStyle::SolidBlock),
             Action::Outline {
                 window: Some(OutlineStyle::Double),

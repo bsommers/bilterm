@@ -130,6 +130,8 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":window bold [on|off] / :window reset", "Per-window bold border, or reset window to global theme, colors & style"),
     (":shadows [on|off|translucent|tinted|solid]", "Configure Borland Turbo Vision window & prompt drop shadows"),
     (":appearance <legacy|obsidian|midnight|arctic|liquid>", "Switch the visual look; legacy restores the classic retro style"),
+    (":chrome title all|focused|none|auto", "Non-Legacy looks: which pane frames show a title"),
+    (":chrome ring on|off", "Non-Legacy looks: accent-colored border on the focused pane"),
     (":panel scale <75..200>", "GUI only: scale the font of the side drawer and :mcp console (100 = normal)"),
     (":glyphs <unicode|cp437|nerd-font|ascii>", "Switch box-drawing & status indicator glyph pack"),
     (":cursor [window|global] [shape|blink|color]", "Customize active window or global cursor (block|hollow|underline|bar|custom, cursor-color)"),

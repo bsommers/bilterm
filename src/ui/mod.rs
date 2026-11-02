@@ -17,6 +17,7 @@ pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod modals;
 pub mod occlusion;
+pub mod pane_actions;
 pub mod oia;
 pub mod pixel_canvas;
 pub mod navigator;
@@ -626,15 +627,23 @@ impl Widget for WorkspaceWidget<'_> {
                 } else {
                     format!("[{id}] {}{lock_tag} ({z_badge})", pane.title())
                 };
-                let frame_title = if shell::effective_display_mode(cfg) == DisplayMode::Focus {
-                    String::new()
-                } else {
-                    frame_title
+                let non_legacy = design::AppearanceProfile::resolve(cfg) != design::AppearanceProfile::Legacy;
+                let show_title = match cfg.appearance.title {
+                    Some(policy) if non_legacy => policy.shows(is_active),
+                    _ => shell::effective_display_mode(cfg) != DisplayMode::Focus,
                 };
+                let frame_title = if show_title { frame_title } else { String::new() };
+                let mut frame_palette = pane_palette.clone();
+                if non_legacy && cfg.appearance.focus_ring {
+                    frame_palette.active_border_fg = design::DesignTokens::from_palette(&pane_palette).accent;
+                }
                 chrome::render_borland_frame_ext(
                     outer, &frame_title, is_active, chrome_style.resolve_outline(cfg),
-                    chrome_style.resolve_bold(cfg), &pane_palette, &glyphs, buf,
+                    chrome_style.resolve_bold(cfg), &frame_palette, &glyphs, buf,
                 );
+                if is_active {
+                    pane_actions::render(cfg, outer, &pane_palette, buf);
+                }
                 if cfg.liquid_glass {
                     visual_style::polish_glass_panel_rect(buf, outer, pane_palette.window_frame_bg, &pane_palette, is_active);
                 }

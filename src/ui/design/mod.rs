@@ -10,7 +10,7 @@ pub mod materials;
 pub mod profiles;
 pub mod tokens;
 
-pub use config::{AppearanceConfig, BorderWeight, Density, DisplayMode};
+pub use config::{AppearanceConfig, BorderWeight, Density, DisplayMode, TitlePolicy};
 pub use materials::{Material, MaterialKind, Materials};
 pub use profiles::AppearanceProfile;
 pub use tokens::{ColorRole, DesignTokens};

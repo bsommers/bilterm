@@ -81,6 +81,19 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             (Some("scale"), Some(n)) if (75..=200).contains(&n) => Some(Ok(ColonCommand::PanelScale(n))),
             _ => Some(Err("Usage: :panel scale <75..200> (GUI only; 100 = normal)".to_string())),
         },
+        "chrome" => {
+            let usage = || Some(Err("Usage: :chrome title all|focused|none|auto | :chrome ring on|off".to_string()));
+            match (parts.get(1).copied(), parts.get(2).map(|s| s.to_ascii_lowercase())) {
+                (Some("title"), Some(v)) if v == "auto" => Some(Ok(ColonCommand::ChromeTitle(None))),
+                (Some("title"), Some(v)) => match crate::ui::design::TitlePolicy::from_name(&v) {
+                    Some(p) => Some(Ok(ColonCommand::ChromeTitle(Some(p)))),
+                    None => usage(),
+                },
+                (Some("ring"), Some(v)) if matches!(v.as_str(), "on" | "true" | "yes") => Some(Ok(ColonCommand::ChromeRing(true))),
+                (Some("ring"), Some(v)) if matches!(v.as_str(), "off" | "false" | "no") => Some(Ok(ColonCommand::ChromeRing(false))),
+                _ => usage(),
+            }
+        }
         "help" | "h" | "?" => Some(Ok(ColonCommand::HelpToggle)),
         "history" | "hist" => match parts.get(1).copied() {
             None | Some("popup" | "list" | "show") => Some(Ok(ColonCommand::HistoryPopupToggle)),

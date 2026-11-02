@@ -440,6 +440,22 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 .set_status_message(Some(format!("Panel scale: {shown}%{note}")));
             false
         }
+        ColonCommand::ChromeTitle(policy) => {
+            wm.config_mut().appearance.title = policy;
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("Pane titles: {} (non-Legacy looks)", policy.map_or("auto", |p| match p {
+                    crate::ui::design::TitlePolicy::All => "all",
+                    crate::ui::design::TitlePolicy::Focused => "focused",
+                    crate::ui::design::TitlePolicy::None => "none",
+                }))));
+            false
+        }
+        ColonCommand::ChromeRing(on) => {
+            wm.config_mut().appearance.focus_ring = on;
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("Focus ring: {} (non-Legacy looks)", if on { "on" } else { "off" })));
+            false
+        }
         ColonCommand::Mode(mode) => {
             wm.config_mut().appearance.display_mode = mode;
             let note = if crate::ui::design::AppearanceProfile::resolve(wm.config())
