@@ -106,8 +106,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ## UI Modernization (Phases 43-48, per `spec/`)
 
-- [ ] **UIM-00**: Read-only architecture audit; `ARCH-R04` relaxed to soft ~800–1000 lines (Phase 43).
-- [ ] **UIM-01**: Visual design proposal with working previews, user-approved (Phase 44).
+- [x] **UIM-00**: Read-only architecture audit; `ARCH-R04` relaxed to soft ~800–1000 lines (Phase 43).
+- [x] **UIM-01**: Visual design proposal with working previews, user-approved (Phase 44).
 - [ ] **UIM-02**: Design tokens, materials, 8 theme profiles, `[appearance]` config, backward compatible (Phase 45).
 - [ ] **UIM-03**: Display modes (Standard/Minimal/Zen), workspace navigator, pane chrome (Phase 46).
 - [ ] **UIM-04**: Drawers, panels, palette, context menus, live-preview Appearance Settings (Phase 47).

@@ -41,8 +41,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 39: Per-Window Themes, Outlines, Bold Borders, `[_][□][X]` Controls & `MIN_GRID_DIM` `2×2` Clamp (`v2.4.0`)** - Per-pane `PaneChromeStyle` (`:window theme|outline|bold|reset|show`), `[_][□][X]` window control badges, and `>= 2×2` VT grid clamp preventing 1-row soft-wrap underflow (`WIN-01`, `WIN-02`, `VT-CLAMP-01`) (completed 2026-10-29)
 - [x] **Phase 40: Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`v2.4.1`)** - Interactive `:window` / `:window theme` browser, per-window `.itermcolors` file browser routing (`window_theme_target`), and 13 individual per-window theme element color overrides (`font-color`, `cursor-color`, `frame-color`, `inactive-border`, `controls-color`, `status-color`, `badge-color`, `title-color`, `bg`, `prompt-bg`, `prompt-color`, `crosshair-color`, `shadow-color`) with session TOML persistence (`WIN-03`, `WIN-04`) (completed 2026-10-31)
 - [x] **Phase 41: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`v2.5.0`)** - First-class `:rect` / `:select` / `:copy rect` / `Alt+R` / `Alt+LeftDrag` 2D rectangular block selection, highlight, and copy plus full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`RECT-01`, `SESS-03`) (completed 2026-10-31)
-- [ ] **Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment** - Read-only audit, roadmap realignment, `ARCH-R04` relaxed to a soft ~800–1000-line goal (`UIM-00`)
-- [ ] **Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews** - Proposed redesign backed by real `--gui-dump` previews; user sign-off gate (`UIM-01`)
+- [x] **Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment** - Read-only audit, roadmap realignment, `ARCH-R04` relaxed to a soft ~800–1000-line goal (`UIM-00`)
+- [x] **Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews** - Proposed redesign backed by real `--gui-dump` previews; user sign-off gate (`UIM-01`)
 - [ ] **Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config** - Design tokens, 5 materials, 8 theme profiles, backward-compatible `[appearance]` config, animation clock (`UIM-02`)
 - [ ] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
@@ -627,10 +627,10 @@ Plans:
   2. Native-Rust GUI finding recorded (ratatui buffer → `GuiWorkspaceRenderer` → Win32/X11/CoreText).
   3. clippy `-D warnings` and `cargo test -q` green; no behavior change.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
-- [ ] 43-01-PLAN.md — Persist audit, fix stale `CLAUDE.md` stack list, verify baseline (wave 1)
+- [x] 43-01-PLAN.md — Persist audit, fix stale `CLAUDE.md` stack list, verify baseline (wave 1)
 
 ### Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews
 
@@ -647,10 +647,10 @@ Plans:
   2. Existing→redesigned component mapping and TUI-vs-GUI blur/radius fallback documented.
   3. User approves proposal before Phase 45.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
-- [ ] 44-01-PLAN.md — Preview harness, proposal doc, sign-off gate (wave 1)
+- [x] 44-01-PLAN.md — Preview harness, proposal doc, sign-off gate (wave 1)
 
 ### Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config
 
@@ -667,12 +667,13 @@ Plans:
   2. Old configs load unchanged; missing keys default; invalid values degrade gracefully; no PTY effects.
   3. Profiles select/duplicate/modify/save/import/export/reset via `:appearance ...` Actions.
 
-**Plans**: 0/3 plans complete
+**Plans**: 4/4 plans complete (criterion 3 gap: see phases/45-design-system/GAPS.md)
 
 Plans:
-- [ ] 45-01-PLAN.md — Tokens, materials, motion clock (wave 1)
-- [ ] 45-02-PLAN.md — Profiles, `[appearance]` config, migration tests (wave 2)
-- [ ] 45-03-PLAN.md — Re-point existing styles at tokens; equivalence tests (wave 3)
+- [x] 45-01-PLAN.md — Tokens, materials, motion clock (wave 1)
+- [x] 45-02-PLAN.md — Profiles, `[appearance]` config, migration tests (wave 2)
+- [x] 45-03-PLAN.md — Re-point existing styles at tokens; equivalence tests (wave 3)
+- [x] 45-04-PLAN.md — Bundled JetBrains Mono for non-Legacy profiles (wave 3)
 
 ### Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome
 
@@ -689,10 +690,10 @@ Plans:
   2. Pane radius/border/spacing/title/focus configurable; key delivery unchanged.
   3. Existing workspace/session system extended, not duplicated.
 
-**Plans**: 0/3 plans complete
+**Plans**: 0/3 plans complete (in progress: 46-01 has 46-04/05/06 done; see phase 46 plan files)
 
 Plans:
-- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04 done
+- [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04, 46-05, 46-06 done; 46-06b (compact Zen prompt) open
 - [ ] 46-02-PLAN.md — Navigator + pane chrome options (wave 2)
 - [ ] 46-03-PLAN.md — Contextual pane actions + tests (wave 3)
 

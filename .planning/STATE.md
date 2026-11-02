@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.5.3
-milestone_name: Explicit Copy Protection, Session-Persisted Clipboard History, Directional Window Switching, Single-Cursor Invariant & SESSIONS Drawer
-current_phase: 42
-current_phase_name: modern-liquid-glass-per-window-theme-cursor-and-ssh-hardening
-status: milestone_v2_5_3_complete
-stopped_at: Completed v2.5.3 (Explicit Copy by default, Per-Session Cut & Paste Buffer History, Directional Arrow/VIM/WASD Window Switching, Multi-Window Single-Cursor Fix, and SESSIONS Drawer Header)
-last_updated: "2026-10-31"
-last_activity: 2026-10-31
-last_activity_desc: Bumped version to v2.5.3, updated STATE.md & CHECKPOINT.md, verified test suite and installed release binary
+milestone: v2.6.0
+milestone_name: UI Modernization (Phases 43-48): design system, display modes, new looks; Legacy looks unchanged
+current_phase: 46
+current_phase_name: shell-display-modes
+status: in_progress
+stopped_at: 46-06 done (Zen/Minimal modes); next 46-06b compact Zen prompt, then 46-07 navigator
+last_updated: "2026-11-02"
+last_activity: 2026-11-02
+last_activity_desc: Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45
 progress:
-  total_phases: 42
-  completed_phases: 42
-  total_plans: 92
-  completed_plans: 92
+  total_phases: 48
+  completed_phases: 44
+  total_plans: 101
+  completed_plans: 100
 ---
 
 # Project State
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.5.2` (`Phase 42`) — **COMPLETE (`42/42` Phases)**.
+**Current focus:** Milestone `v2.6.0` UI Modernization — Phase 46 in progress (43, 44 done; 45 done except `:appearance` profile management, see `phases/45-design-system/GAPS.md`). Standing rule: add new looks, take NOTHING away from Legacy.
 
 ## Current Position
 
