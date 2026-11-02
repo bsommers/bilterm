@@ -315,6 +315,36 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":help", "Ctrl+X ? / F1", "Open Borland Turbo Vision Quick Reference Help"),
     (":quit", "Ctrl+Q", "Cleanly exit Bilterm (honors Exit Guard)"),
     (":quit!", "—", "Force immediate exit bypassing Exit Guard"),
+    (":appearance obsidian", "—", "Look: Obsidian (modern dark default)"),
+    (":appearance midnight", "—", "Look: Midnight"),
+    (":appearance arctic", "—", "Look: Arctic (light)"),
+    (":appearance liquid", "—", "Look: Liquid glass"),
+    (":appearance legacy", "—", "Look: Legacy retro style (the classic 3270/Borland look)"),
+    (":mode standard", "—", "Display mode: standard chrome (non-Legacy looks)"),
+    (":mode minimal", "—", "Display mode: minimal chrome, no pane titles (non-Legacy looks)"),
+    (":mode zen", "—", "Display mode: Zen, focused pane plus one input row (:mode standard to leave)"),
+    (":panel scale 125", "—", "GUI only: scale drawer and :mcp console text (75..200, 100 = normal)"),
+    (":chrome title focused", "—", "Non-Legacy looks: title on the focused pane only (all|focused|none|auto)"),
+    (":chrome ring on", "—", "Non-Legacy looks: accent border on the focused pane (on|off)"),
+    (":autosave", "—", "Run :autosave (see :help for options)"),
+    (":bell", "—", "Run :bell (see :help for options)"),
+    (":buffers", "—", "Run :buffers (see :help for options)"),
+    (":commands", "—", "Run :commands (see :help for options)"),
+    (":equalize", "—", "Run :equalize (see :help for options)"),
+    (":find", "—", "Run :find (see :help for options)"),
+    (":fkeys", "—", "Run :fkeys (see :help for options)"),
+    (":inspect", "—", "Run :inspect (see :help for options)"),
+    (":lens", "—", "Run :lens (see :help for options)"),
+    (":notify", "—", "Run :notify (see :help for options)"),
+    (":palette", "—", "Run :palette (see :help for options)"),
+    (":profiles", "—", "Run :profiles (see :help for options)"),
+    (":respawn", "—", "Run :respawn (see :help for options)"),
+    (":resume", "—", "Run :resume (see :help for options)"),
+    (":save", "—", "Run :save (see :help for options)"),
+    (":scanlines", "—", "Run :scanlines (see :help for options)"),
+    (":sessions", "—", "Run :sessions (see :help for options)"),
+    (":urls", "—", "Run :urls (see :help for options)"),
+    (":guake", "—", "Run :guake (see :help for options)"),
 ];
 
 #[cfg(test)]
@@ -324,6 +354,61 @@ mod tests {
     use crate::pane::completion::compute_completions;
     use crate::wm::split_tree::SplitDirection;
     use crate::wm::{WindowManager, WorkspaceLayoutMode};
+
+    #[test]
+    fn every_palette_entry_with_complete_args_parses_ok() {
+        for &(cmd, _, _) in PALETTE_CATALOG {
+            if cmd.ends_with(' ') || cmd.contains('<') || cmd.contains('[') {
+                continue; // needs an argument typed by the user
+            }
+            match parse_colon_command(cmd) {
+                Some(Ok(_)) => {}
+                other => panic!("palette entry `{cmd}` does not parse: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn appearance_mode_panel_chrome_are_in_palette_completion_and_work() {
+        let cwd = std::path::Path::new(".");
+        for prefix in [":appear", ":mod", ":pane", ":chro"] {
+            let (_, _, c) = compute_completions(prefix, prefix.len(), cwd);
+            assert!(!c.is_empty(), "no completion for {prefix}");
+        }
+        let (_, _, c) = compute_completions(":appearance ", 12, cwd);
+        assert_eq!(c.len(), 5);
+        let (_, _, c) = compute_completions(":mode ", 6, cwd);
+        assert!(["standard", "minimal", "zen"].iter().all(|m| c.iter().any(|x| x.display == *m)));
+        for cmd in [":appearance obsidian", ":mode standard", ":mode minimal", ":mode zen", ":panel scale 125", ":chrome ring on"] {
+            assert!(PALETTE_CATALOG.iter().any(|e| e.0 == cmd), "{cmd} missing from palette");
+        }
+        let mut wm = WindowManager::new_headless(24, 80);
+        for (cmd, check) in [
+            (":appearance midnight", "midnight"),
+            (":mode zen", "zen"),
+        ] {
+            let action = parse_colon_command(cmd).unwrap().unwrap();
+            execute_wm_colon_command(&mut wm, action);
+            match check {
+                "midnight" => assert_eq!(crate::ui::design::AppearanceProfile::resolve(wm.config()).label(), "midnight"),
+                _ => assert_eq!(wm.config().appearance.display_mode.label(), "zen"),
+            }
+        }
+    }
+
+    #[test]
+    fn ctrl_x_colon_palette_finds_appearance_and_mode_by_typing() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let mut wm = WindowManager::new_headless(24, 80);
+        let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        crate::input::handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
+        crate::input::handle_wm_key_event(&mut wm, key(KeyCode::Char(':'))).unwrap();
+        assert!(wm.is_palette_visible(), "Ctrl+X : opens the palette");
+        for (typed, want) in [("appearance", ":appearance obsidian"), ("zen", ":mode zen"), ("chrome", ":chrome ring on"), ("panel", ":panel scale 125")] {
+            wm.open_palette_with_query(typed);
+            assert!(wm.filtered_palette_items().iter().any(|e| e.0 == want), "`{typed}` should list {want}");
+        }
+    }
 
     #[test]
     fn detach_and_attach_preserve_full_multi_pane_window_layout_and_geometries() {
