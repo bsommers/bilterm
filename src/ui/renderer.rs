@@ -487,6 +487,7 @@ impl GuiWorkspaceRenderer {
     ) -> crate::error::Result<Rect> {
         let vp = self.viewport_for_pixel_window(wm, width_px, height_px);
         wm.set_viewport_scale_pct(wm.config().font_scale_pct);
+        wm.set_gui_surface(true);
         wm.resize_all(vp)?;
         Ok(vp)
     }
@@ -565,6 +566,17 @@ impl GuiWorkspaceRenderer {
             false
         };
 
+        // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
+        let panel_scale = wm.panel_scale_pct();
+        let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
+            panel_scale != 100
+                && (drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                    || mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+                && !(modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                    || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                    || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+        };
+
         let mut push_cell = |cell: &ratatui::buffer::Cell, r: u16, c: u16, x_px: f32, y_px: f32, w_f: f32, h_f: f32, cw_u: u16, ch_u: u16, pt: u16| {
             let mut fg = ratatui_color_to_rgba(cell.fg, default_fg);
             let mut bg = ratatui_color_to_rgba(cell.bg, default_bg);
@@ -610,7 +622,7 @@ impl GuiWorkspaceRenderer {
         for r in 0..viewport.height {
             for c in 0..viewport.width {
                 let (abs_c, abs_r) = (viewport.x + c, viewport.y + r);
-                if cell_in_scaled_pane(abs_c, abs_r) {
+                if cell_in_scaled_pane(abs_c, abs_r) || cell_in_scaled_panel(abs_c, abs_r) {
                     continue;
                 }
                 if let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
@@ -681,6 +693,48 @@ impl GuiWorkspaceRenderer {
                             pane_ch_u16,
                             pane_pt,
                         );
+                    }
+                }
+            }
+        }
+
+        if panel_scale != 100 {
+            let cfg = wm.config();
+            let (pal, glyphs) = (cfg.palette(), cfg.glyph_set());
+            let vws = wm.panel_virtual_area(ws_area);
+            let k = f32::from(panel_scale) / 100.0;
+            let (pcw, pch) = (cw * k, ch * k);
+            let (pcw_u, pch_u) = (pcw.round().clamp(4.0, 128.0) as u16, pch.round().clamp(8.0, 256.0) as u16);
+            let ppt = ((u32::from(surface.font_size_pt) * u32::from(panel_scale) + 50) / 100).clamp(6, 72) as u16;
+            let mut draw_panel = |scratch: &Buffer, vr: Rect| {
+                for vr_row in vr.y..vr.y + vr.height {
+                    for vr_col in vr.x..vr.x + vr.width {
+                        let Some(cell) = scratch.cell((vr_col, vr_row)) else { continue };
+                        let x_px = f32::from(ws_area.x.saturating_sub(viewport.x)) * cw + f32::from(vr_col - ws_area.x) * pcw;
+                        let y_px = f32::from(ws_area.y.saturating_sub(viewport.y)) * ch + f32::from(vr_row - ws_area.y) * pch;
+                        push_cell(cell, vr_row.saturating_sub(viewport.y), vr_col.saturating_sub(viewport.x), x_px, y_px, pcw, pch, pcw_u, pch_u, ppt);
+                    }
+                }
+            };
+            if let Some(vr) = wm.drawer_rect(vws) {
+                let mut scratch = Buffer::empty(vws);
+                crate::ui::render_workspace_drawer(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                draw_panel(&scratch, vr);
+            }
+            if let Some(vr) = wm.mcp_console().panel_rect(vws) {
+                let mut scratch = Buffer::empty(vws);
+                crate::ui::mcp_ui::render_mcp_console_overlay(wm, vws, cfg, &pal, &mut scratch);
+                draw_panel(&scratch, vr);
+            }
+            // Modals, menus and the quick terminal stay above the scaled panels.
+            for r in 0..viewport.height {
+                for c in 0..viewport.width {
+                    let (abs_c, abs_r) = (viewport.x + c, viewport.y + r);
+                    let top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                    if top && let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
+                        push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
                     }
                 }
             }

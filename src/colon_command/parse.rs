@@ -77,6 +77,10 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 "Usage: :mode [float | fixed | terminal | cycle] | standard | minimal | zen".to_string(),
             )),
         },
+        "panel" => match (parts.get(1).copied(), parts.get(2).and_then(|v| v.trim_end_matches('%').parse::<u16>().ok())) {
+            (Some("scale"), Some(n)) if (75..=200).contains(&n) => Some(Ok(ColonCommand::PanelScale(n))),
+            _ => Some(Err("Usage: :panel scale <75..200> (GUI only; 100 = normal)".to_string())),
+        },
         "help" | "h" | "?" => Some(Ok(ColonCommand::HelpToggle)),
         "history" | "hist" => match parts.get(1).copied() {
             None | Some("popup" | "list" | "show") => Some(Ok(ColonCommand::HistoryPopupToggle)),

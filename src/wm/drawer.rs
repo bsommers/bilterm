@@ -192,6 +192,8 @@ pub struct WorkspaceDrawer {
     pub hover_active: bool,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    /// Columns the row text is scrolled left by (46-04); 0 = unchanged rendering.
+    pub h_scroll: usize,
     pub resizing_drag: bool,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
@@ -580,6 +582,19 @@ impl WindowManager {
         }
     }
 
+    /// Scrolls drawer row text horizontally; clamped so the longest row's tail stays reachable.
+    pub fn drawer_hscroll_by(&mut self, delta: isize) {
+        let max = self
+            .drawer_rows()
+            .iter()
+            .map(|r| r.formatted_line().chars().count())
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(12);
+        let cur = self.drawer.h_scroll as isize;
+        self.drawer.h_scroll = cur.saturating_add(delta).clamp(0, max as isize) as usize;
+    }
+
     pub fn drawer_scroll_by(&mut self, delta: isize) {
         let len = self.drawer_rows().len();
         if len > 0 {
@@ -722,7 +737,7 @@ impl WindowManager {
     pub fn resize_drawer(&mut self, size: u16) {
         self.drawer.maximized = false;
         if self.config.drawer.edge.is_vertical() {
-            self.config.drawer.width_cols = size.clamp(16, 60);
+            self.config.drawer.width_cols = size.clamp(16, 100);
         } else {
             self.config.drawer.height_rows = size.clamp(3, 14);
         }

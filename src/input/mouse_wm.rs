@@ -96,20 +96,21 @@ pub(super) fn handle_modal_mouse_event(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
-    if let Some(mcp_rect) = wm.mcp_console().panel_rect(workspace_area)
-        && rect_contains(mcp_rect, mouse.column, mouse.row)
+    let (pm, pws) = wm.panel_space(mouse, workspace_area);
+    if let Some(mcp_rect) = wm.mcp_console().panel_rect(pws)
+        && rect_contains(mcp_rect, pm.column, pm.row)
     {
-        match mouse.kind {
+        match pm.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                let rel_col = mouse.column.saturating_sub(mcp_rect.x);
-                if mouse.row == mcp_rect.y {
+                let rel_col = pm.column.saturating_sub(mcp_rect.x);
+                if pm.row == mcp_rect.y {
                     if rel_col >= mcp_rect.width.saturating_sub(6) {
                         wm.mcp_console_mut().close_root_terminal();
                     } else if rel_col >= mcp_rect.width / 2 {
                         wm.mcp_console_mut().toggle_layout_mode();
                     }
                     wm.reflow_default_viewport();
-                } else if mouse.row == mcp_rect.y + mcp_rect.height.saturating_sub(1) {
+                } else if pm.row == mcp_rect.y + mcp_rect.height.saturating_sub(1) {
                     if (16..31).contains(&rel_col) {
                         wm.mcp_console_mut().toggle_layout_mode();
                     } else if (31..40).contains(&rel_col) {
@@ -122,7 +123,7 @@ pub(super) fn handle_modal_mouse_event(
                     let (hdr_rows, ftr_rows) = crate::ui::mcp_ui::mcp_console_layout_metrics(wm.config(), mcp_rect.height);
                     let list_start_y = mcp_rect.y + 1 + hdr_rows;
                     let list_end_y = mcp_rect.y + mcp_rect.height.saturating_sub(1 + ftr_rows);
-                    if hdr_rows >= 2 && mouse.row == mcp_rect.y + 1 {
+                    if hdr_rows >= 2 && pm.row == mcp_rect.y + 1 {
                         if rel_col < 38 {
                             wm.mcp_console_mut().toggle_layout_mode();
                         } else if rel_col < 58 {
@@ -131,8 +132,8 @@ pub(super) fn handle_modal_mouse_event(
                             wm.mcp_console_mut().close_root_terminal();
                         }
                         wm.reflow_default_viewport();
-                    } else if mouse.row >= list_start_y && mouse.row < list_end_y {
-                        let line_idx = wm.mcp_console().scroll_offset + usize::from(mouse.row - list_start_y);
+                    } else if pm.row >= list_start_y && pm.row < list_end_y {
+                        let line_idx = wm.mcp_console().scroll_offset + usize::from(pm.row - list_start_y);
                         wm.mcp_console_mut().select_row_at(line_idx);
                         wm.activate_selected_mcp_row();
                     }
@@ -646,6 +647,8 @@ pub(super) fn handle_drawer_mouse_event(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
+    // GUI panel scale (46-04d): work in the panel's own coordinate space; identity at 100%.
+    let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area);
     match mouse.kind {
         MouseEventKind::Moved => {
             if wm.update_drawer_hover(mouse.column, mouse.row, workspace_area) {
@@ -779,6 +782,8 @@ pub(super) fn handle_drawer_mouse_event(
         }
         MouseEventKind::ScrollUp => { wm.drawer_select_prev(); Some(AppAction::Handled) }
         MouseEventKind::ScrollDown => { wm.drawer_select_next(); Some(AppAction::Handled) }
+        MouseEventKind::ScrollLeft => { wm.drawer_hscroll_by(-6); Some(AppAction::Handled) }
+        MouseEventKind::ScrollRight => { wm.drawer_hscroll_by(6); Some(AppAction::Handled) }
         _ => Some(AppAction::Handled),
     }
 }

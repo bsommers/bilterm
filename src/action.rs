@@ -67,6 +67,8 @@ pub enum Action {
     Glyphs(GlyphPack),
     Appearance(crate::ui::design::AppearanceProfile),
     Mode(crate::ui::design::DisplayMode),
+    /// Drawer / `:mcp` console font scale in percent (`75..=200`), GUI only.
+    PanelScale(u16),
     Cursor(CaretStyle),
     Outline {
         window: Option<OutlineStyle>,
@@ -296,6 +298,7 @@ mod tests {
             Action::Glyphs(_) => Some(":glyphs unicode"),
             Action::Appearance(_) => Some(":appearance obsidian"),
             Action::Mode(_) => Some(":mode zen"),
+            Action::PanelScale(_) => Some(":panel scale 125"),
             Action::Cursor(_) => Some(":cursor block"),
             Action::Outline { .. } => Some(":outline double"),
             Action::CrosshairToggle { .. } => Some(":crosshair"),
@@ -427,6 +430,7 @@ mod tests {
             Action::Glyphs(GlyphPack::Unicode),
             Action::Appearance(crate::ui::design::AppearanceProfile::Obsidian),
             Action::Mode(crate::ui::design::DisplayMode::Zen),
+            Action::PanelScale(125),
             Action::Cursor(CaretStyle::SolidBlock),
             Action::Outline {
                 window: Some(OutlineStyle::Double),

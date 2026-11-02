@@ -187,6 +187,54 @@ impl WindowManager {
         self.viewport_scale_pct = pct.clamp(50, 400);
     }
 
+    /// Marks this manager as driving a GUI surface (the only place panel scaling can apply).
+    pub fn set_gui_surface(&mut self, on: bool) {
+        self.gui_surface = on;
+    }
+
+    /// Requested drawer/MCP panel scale (`75..=200`), regardless of surface.
+    pub fn panel_scale_setting(&self) -> u16 {
+        self.panel_scale_pct.clamp(75, 200)
+    }
+
+    /// Sets the drawer/MCP panel scale (session only).
+    pub fn set_panel_scale_pct(&mut self, pct: u16) {
+        self.panel_scale_pct = pct.clamp(75, 200);
+    }
+
+    /// Scale actually applied: always `100` outside the GUI, so the TUI and every test default are unchanged.
+    pub fn panel_scale_pct(&self) -> u16 {
+        if self.gui_surface { self.panel_scale_setting() } else { 100 }
+    }
+
+    /// Workspace area as the scaled panels see it: `ws` shrunk by `100 / scale` (identity at 100).
+    pub fn panel_virtual_area(&self, ws: ratatui::layout::Rect) -> ratatui::layout::Rect {
+        let s = u32::from(self.panel_scale_pct());
+        if s == 100 {
+            return ws;
+        }
+        let w = (u32::from(ws.width) * 100 / s).max(1) as u16;
+        let h = (u32::from(ws.height) * 100 / s).max(1) as u16;
+        ratatui::layout::Rect::new(ws.x, ws.y, w, h)
+    }
+
+    /// Maps a real mouse position into the scaled-panel coordinate space (identity at 100).
+    pub fn panel_space(
+        &self,
+        mouse: crossterm::event::MouseEvent,
+        ws: ratatui::layout::Rect,
+    ) -> (crossterm::event::MouseEvent, ratatui::layout::Rect) {
+        let s = u32::from(self.panel_scale_pct());
+        if s == 100 {
+            return (mouse, ws);
+        }
+        let map = |v: u16, o: u16| o + (u32::from(v.saturating_sub(o)) * 100 / s) as u16;
+        (
+            crossterm::event::MouseEvent { column: map(mouse.column, ws.x), row: map(mouse.row, ws.y), ..mouse },
+            self.panel_virtual_area(ws),
+        )
+    }
+
     /// Returns the effective font scale percentage (`50..=400`) for pane `id` (independent per pane).
     pub fn pane_effective_scale_pct(&self, id: usize) -> u16 {
         let Some(pane) = self.pane(id) else {

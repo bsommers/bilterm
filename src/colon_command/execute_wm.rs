@@ -432,6 +432,14 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 .set_status_message(Some(format!("Appearance: {}", profile.label())));
             false
         }
+        ColonCommand::PanelScale(n) => {
+            wm.set_panel_scale_pct(n);
+            let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+            let shown = wm.panel_scale_setting();
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("Panel scale: {shown}%{note}")));
+            false
+        }
         ColonCommand::Mode(mode) => {
             wm.config_mut().appearance.display_mode = mode;
             let note = if crate::ui::design::AppearanceProfile::resolve(wm.config())

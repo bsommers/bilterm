@@ -122,6 +122,10 @@ pub struct WindowManager {
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
     pub(crate) viewport_scale_pct: u16,
+    /// Font scale percentage for the side drawer and `:mcp` console (`100` = unchanged). GUI only (46-04d).
+    pub(crate) panel_scale_pct: u16,
+    /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
+    pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
     pub(crate) daemon_state: crate::daemon::DaemonServerState,
     /// TRON Master Control Program (`MCP`) root terminal state (`MCP-01..02`).
@@ -187,6 +191,8 @@ impl WindowManager {
             drawer: WorkspaceDrawer::new(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
+            panel_scale_pct: 100,
+            gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,

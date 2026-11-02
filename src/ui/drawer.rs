@@ -57,6 +57,15 @@ fn write_clipped_line(
     buf.set_stringn(x, y, text, usize::from(avail), style);
 }
 
+/// Drops the first `h` chars of `text` (marking the cut with `‹`); `h == 0` returns the text unchanged.
+fn h_clip(text: &str, h: usize) -> String {
+    if h == 0 {
+        text.to_string()
+    } else {
+        std::iter::once('‹').chain(text.chars().skip(h + 1)).collect()
+    }
+}
+
 /// Fills `rect` in `buf` with space characters and `style`.
 fn fill_rect(buf: &mut Buffer, rect: Rect, style: Style) {
     for y in rect.y..rect.y + rect.height {
@@ -301,9 +310,9 @@ pub fn render_workspace_drawer(
                     });
                 let st2 = Style::default().fg(fg2).bg(bg);
                 fill_rect(buf, Rect::new(inner.x, y, row_text_w, 2), st2);
-                write_clipped_line(buf, inner.x, y, row_text_w, &line1, st1);
+                write_clipped_line(buf, inner.x, y, row_text_w, &h_clip(&line1, drawer.h_scroll), st1);
                 if y + 1 < inner.y + inner.height.saturating_sub(footer_h) {
-                    write_clipped_line(buf, inner.x, y + 1, row_text_w, &line2, st2);
+                    write_clipped_line(buf, inner.x, y + 1, row_text_w, &h_clip(&line2, drawer.h_scroll), st2);
                 }
             } else {
                 let mut row_style = match row.kind {
@@ -336,7 +345,7 @@ pub fn render_workspace_drawer(
                 } else {
                     row.formatted_line()
                 };
-                write_clipped_line(buf, inner.x, y, row_text_w, &line, row_style);
+                write_clipped_line(buf, inner.x, y, row_text_w, &h_clip(&line, drawer.h_scroll), row_style);
             }
         }
 

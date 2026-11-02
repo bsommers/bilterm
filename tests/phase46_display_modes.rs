@@ -145,3 +145,69 @@ fn mcp_console_rows_scroll_horizontally_to_show_full_text() {
     wm.mcp_console_mut().scroll_left(10_000);
     assert_eq!(wm.mcp_console().h_scroll, 0);
 }
+
+// ---- 46-04d: GUI-only drawer / :mcp panel scale ----
+
+fn gui_frame(wm: &mut WindowManager, area: Rect) -> bilterm::ui::renderer::GuiFrameSurface {
+    use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
+    wm.set_gui_surface(true);
+    let mut renderer = GuiWorkspaceRenderer::new(8, 16);
+    let mut surface = GuiFrameSurface::new(8, 16);
+    renderer.render_workspace_with_cell_size(wm, area, 8, 16, &mut surface);
+    surface
+}
+
+#[test]
+fn panel_scale_default_is_identical_and_ignored_off_gui() {
+    let (mut wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    wm.toggle_drawer();
+    let base = gui_frame(&mut wm, area);
+    wm.set_panel_scale_pct(100);
+    let same = gui_frame(&mut wm, area);
+    assert_eq!(base.glyphs.len(), same.glyphs.len());
+    assert_eq!(base.quads.len(), same.quads.len());
+    // Off the GUI the setting never applies.
+    let mut tui = WindowManager::new_headless(20, 80);
+    tui.set_panel_scale_pct(150);
+    assert_eq!(tui.panel_scale_pct(), 100);
+    assert_eq!(tui.panel_scale_setting(), 150);
+}
+
+#[test]
+fn panel_scale_enlarges_drawer_glyphs_in_gui() {
+    let (mut wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    wm.toggle_drawer();
+    let base = gui_frame(&mut wm, area);
+    wm.set_panel_scale_pct(150);
+    let big = gui_frame(&mut wm, area);
+    let base_max = base.glyphs.iter().map(|g| g.cell_width_px).max().unwrap();
+    assert!(big.glyphs.iter().any(|g| g.cell_width_px > base_max), "drawer cells should be wider at 150%");
+}
+
+#[test]
+fn panel_scale_maps_mouse_into_panel_space() {
+    use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+    let mut wm = WindowManager::new_headless(20, 80);
+    let area = Rect::new(0, 0, 80, 20);
+    wm.set_gui_surface(true);
+    wm.set_panel_scale_pct(200);
+    let m = MouseEvent { kind: MouseEventKind::Moved, column: 40, row: 10, modifiers: KeyModifiers::NONE };
+    let (pm, vws) = wm.panel_space(m, area);
+    assert_eq!((pm.column, pm.row, vws.width, vws.height), (20, 5, 40, 10));
+}
+
+#[test]
+fn drawer_rows_scroll_horizontally_and_default_is_unchanged() {
+    let (mut wm, area) = two_pane_wm(Some(AppearanceProfile::Obsidian), DisplayMode::Standard);
+    wm.toggle_drawer();
+    let base = buffer_to_snapshot_string(&render(&wm, area));
+    wm.drawer_hscroll_by(0);
+    assert_eq!(base, buffer_to_snapshot_string(&render(&wm, area)));
+    wm.drawer_hscroll_by(6);
+    if wm.drawer().h_scroll > 0 {
+        assert!(buffer_to_snapshot_string(&render(&wm, area)).contains('‹'));
+    }
+    wm.drawer_hscroll_by(-100);
+    assert_eq!(wm.drawer().h_scroll, 0);
+    assert_eq!(base, buffer_to_snapshot_string(&render(&wm, area)));
+}
