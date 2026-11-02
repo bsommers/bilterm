@@ -178,6 +178,15 @@ pub(super) fn parse_visual_colon_command(
                 }
             },
         },
+        "appearance" => match parts
+            .get(1)
+            .and_then(|s| crate::ui::design::AppearanceProfile::from_name(s))
+        {
+            Some(p) => Some(Ok(ColonCommand::Appearance(p))),
+            None => Some(Err(
+                "Usage: :appearance legacy | obsidian | midnight | arctic | liquid".to_string(),
+            )),
+        },
         "glyphs" => match parts.get(1).and_then(|s| GlyphPack::from_name(s)) {
             Some(pack) => Some(Ok(ColonCommand::Glyphs(pack))),
             None => Some(Err(

@@ -261,6 +261,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":browse", &[]),
     (":files", &[]),
     (":glyphs", &["unicode", "cp437", "nerd-font", "ascii"]),
+    (":appearance", &["legacy", "obsidian", "midnight", "arctic", "liquid"]),
     (":cursor", &[
         "block", "hollow", "underline", "underscore", "bar", "custom ", "blink", "solid",
         "rapid", "color ", "cursor-color ", "fg ", "window ", "global ", "green", "amber",

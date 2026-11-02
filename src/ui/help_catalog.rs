@@ -129,6 +129,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":window outline <style|next|reset>", "Per-window outline frame style (double, thin, dashed, thick, ...)"),
     (":window bold [on|off] / :window reset", "Per-window bold border, or reset window to global theme, colors & style"),
     (":shadows [on|off|translucent|tinted|solid]", "Configure Borland Turbo Vision window & prompt drop shadows"),
+    (":appearance <legacy|obsidian|midnight|arctic|liquid>", "Switch the visual look; legacy restores the classic retro style"),
     (":glyphs <unicode|cp437|nerd-font|ascii>", "Switch box-drawing & status indicator glyph pack"),
     (":cursor [window|global] [shape|blink|color]", "Customize active window or global cursor (block|hollow|underline|bar|custom, cursor-color)"),
     (":crosshair [on|off|full|pane]", "Configure IBM 3270 full-screen or pane-local cross-hair ruler"),

@@ -108,6 +108,17 @@ fn end_to_end_colon_commands_and_keyboard_chords_across_window_manager() {
     assert_eq!(run_colon(&mut wm, ":glyphs nerd-font"), AppAction::Handled);
     assert_eq!(wm.config().glyphs, GlyphPack::NerdFont);
 
+    assert_eq!(run_colon(&mut wm, ":appearance midnight"), AppAction::Handled);
+    assert_eq!(
+        bilterm::ui::design::AppearanceProfile::resolve(wm.config()),
+        bilterm::ui::design::AppearanceProfile::Midnight
+    );
+    assert_eq!(run_colon(&mut wm, ":appearance legacy"), AppAction::Handled);
+    assert_eq!(
+        bilterm::ui::design::AppearanceProfile::resolve(wm.config()),
+        bilterm::ui::design::AppearanceProfile::Legacy
+    );
+
     assert_eq!(run_colon(&mut wm, ":cursor underscore"), AppAction::Handled);
     assert_eq!(wm.config().cursor_style, CaretStyle::Underscore);
 

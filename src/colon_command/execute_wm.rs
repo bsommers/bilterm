@@ -426,6 +426,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.config_mut().glyphs = pack;
             false
         }
+        ColonCommand::Appearance(profile) => {
+            wm.config_mut().appearance.profile = Some(profile);
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("Appearance: {}", profile.label())));
+            false
+        }
         ColonCommand::Cursor(style) => {
             let active_id = wm.active_pane_id();
             wm.pin_other_panes_cursor(active_id);
