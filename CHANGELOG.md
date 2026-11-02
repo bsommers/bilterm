@@ -5,6 +5,22 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.6.0] - 2026-11-02
+
+### Added
+- **New appearance system (Phases 44-46)**: `[appearance]` config section and `:appearance legacy|obsidian|midnight|arctic|liquid` (session-only). Obsidian is the default for fresh installs; existing configs keep their look until `profile` is set. Legacy renders exactly as before; nothing was removed.
+  - Non-Legacy looks restyle palette, glyphs and chrome; Midnight and Arctic are new palettes. A bundled JetBrains Mono (SIL OFL) is the default font for non-Legacy looks.
+  - Display modes `:mode standard|minimal|zen` (Zen keeps a one-line input and shows notices there), `ShellLayout` as the single source of bar offsets for the TUI, GUI and mouse hit-testing.
+  - Navigator pills in the top bar, pane chrome options (`[appearance] title = all|focused|none`, `focus_ring`; `:chrome title|ring`), and a contextual split/zoom/close strip on the focused pane.
+- **Drawer and `:mcp` console**: horizontal and vertical scrolling (wheel, Shift+wheel, arrows, `h`/`l`), viewport wheel scrolling without moving the selection, `:mcp size <cols>x<rows>|auto`, wider drawer clamp, and GUI-only text scale `:panel scale <75..200>`.
+- Command palette (Ctrl+X `:`) entries for the new commands plus about 20 previously missing ones; Tab completion lists every parser command. Parity tests keep both lists in sync with the parser.
+
+### Fixed
+- `scripts/verify.sh` isolates `XDG_STATE_HOME` so tests no longer read real sessions.
+
+### Known limitations
+- Live-GUI rendering of the new looks, Zen, pills and panel scale is test-verified only; Windows/macOS builds of the bundled-font call sites are verified by CI only. `:appearance`, `:mode` and `:panel` do not persist; `[appearance] padding` is not implemented.
+
 ## [v2.5.1] - 2026-10-31
 
 ### Added
