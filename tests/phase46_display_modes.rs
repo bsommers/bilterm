@@ -211,3 +211,28 @@ fn drawer_rows_scroll_horizontally_and_default_is_unchanged() {
     assert_eq!(wm.drawer().h_scroll, 0);
     assert_eq!(base, buffer_to_snapshot_string(&render(&wm, area)));
 }
+
+#[test]
+fn mcp_size_override_sets_panel_rect_and_auto_restores() {
+    let mut wm = WindowManager::new_headless(30, 100);
+    let area = Rect::new(0, 0, 100, 30);
+    wm.execute_mcp_command("open");
+    let auto = wm.mcp_console().panel_rect(area).unwrap();
+    wm.execute_mcp_command("size 70x12");
+    let r = wm.mcp_console().panel_rect(area).unwrap();
+    assert_eq!((r.width, r.height), (70, 12));
+    wm.execute_mcp_command("size auto");
+    assert_eq!(wm.mcp_console().panel_rect(area).unwrap(), auto);
+}
+
+#[test]
+fn drawer_wheel_moves_viewport_not_selection() {
+    let mut d = bilterm::wm::WorkspaceDrawer::new();
+    assert_eq!(d.effective_scroll(0, 5, 20), 0);
+    d.wheel_scroll(0, 5, 20, 3);
+    assert_eq!(d.effective_scroll(0, 5, 20), 3);
+    // Selection moved: viewport falls back to pinning.
+    assert_eq!(d.effective_scroll(1, 5, 20), 0);
+    d.wheel_scroll(0, 5, 20, 100);
+    assert_eq!(d.effective_scroll(0, 5, 20), 15);
+}

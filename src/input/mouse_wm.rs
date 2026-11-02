@@ -760,13 +760,7 @@ pub(super) fn handle_drawer_mouse_event(
                     let list_rows_px = usize::from(inner_h.saturating_sub(hdr_h + ftr_h)).max(1);
                     let list_items_cap = (list_rows_px / row_step).max(1);
                     let selected = wm.drawer().selected_index.min(rows_len.saturating_sub(1));
-                    let mut scroll = wm.drawer().scroll_offset;
-                    if selected < scroll {
-                        scroll = selected;
-                    } else if selected >= scroll + list_items_cap {
-                        scroll = selected + 1 - list_items_cap;
-                    }
-                    scroll = scroll.min(rows_len.saturating_sub(list_items_cap));
+                    let scroll = wm.drawer().effective_scroll(selected, list_items_cap, rows_len);
                     let row_idx = scroll + (usize::from(mouse.row.saturating_sub(list_start_y)) / row_step);
                     if row_idx < rows_len {
                         wm.drawer_mut().selected_index = row_idx;
@@ -780,8 +774,23 @@ pub(super) fn handle_drawer_mouse_event(
             }
             Some(AppAction::Handled)
         }
-        MouseEventKind::ScrollUp => { wm.drawer_select_prev(); Some(AppAction::Handled) }
-        MouseEventKind::ScrollDown => { wm.drawer_select_next(); Some(AppAction::Handled) }
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            let delta: isize = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
+            if wm.drawer_config().edge.is_vertical() {
+                let inner_h = dr.height.saturating_sub(2);
+                let rows_len = wm.drawer_rows().len();
+                let (hdr_h, ftr_h, row_step) =
+                    crate::ui::drawer::drawer_vertical_layout_metrics(wm.config(), inner_h, rows_len);
+                let cap = (usize::from(inner_h.saturating_sub(hdr_h + ftr_h)).max(1) / row_step).max(1);
+                let selected = wm.drawer().selected_index.min(rows_len.saturating_sub(1));
+                wm.drawer_mut().wheel_scroll(selected, cap, rows_len, delta);
+            } else if delta < 0 {
+                wm.drawer_select_prev();
+            } else {
+                wm.drawer_select_next();
+            }
+            Some(AppAction::Handled)
+        }
         MouseEventKind::ScrollLeft => { wm.drawer_hscroll_by(-6); Some(AppAction::Handled) }
         MouseEventKind::ScrollRight => { wm.drawer_hscroll_by(6); Some(AppAction::Handled) }
         _ => Some(AppAction::Handled),

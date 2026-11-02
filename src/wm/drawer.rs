@@ -194,6 +194,8 @@ pub struct WorkspaceDrawer {
     pub scroll_offset: usize,
     /// Columns the row text is scrolled left by (46-04); 0 = unchanged rendering.
     pub h_scroll: usize,
+    /// Wheel-set viewport `(selected_index it was set for, first visible row)`; ignored once the selection moves.
+    pub view_scroll: Option<(usize, usize)>,
     pub resizing_drag: bool,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
@@ -203,6 +205,30 @@ pub struct WorkspaceDrawer {
 impl WorkspaceDrawer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// First visible row: a wheel-set viewport while the selection is unchanged, else pinned to keep `selected` visible.
+    pub fn effective_scroll(&self, selected: usize, cap: usize, len: usize) -> usize {
+        let max = len.saturating_sub(cap);
+        if let Some((sel, v)) = self.view_scroll
+            && sel == selected
+        {
+            return v.min(max);
+        }
+        let mut scroll = self.scroll_offset;
+        if selected < scroll {
+            scroll = selected;
+        } else if selected >= scroll + cap {
+            scroll = selected + 1 - cap;
+        }
+        scroll.min(max)
+    }
+
+    /// Wheel scroll: moves the viewport by `delta` rows without touching the selection.
+    pub fn wheel_scroll(&mut self, selected: usize, cap: usize, len: usize, delta: isize) {
+        let cur = self.effective_scroll(selected, cap, len) as isize;
+        let v = cur.saturating_add(delta).clamp(0, len.saturating_sub(cap) as isize) as usize;
+        self.view_scroll = Some((selected, v));
     }
 
     pub fn sparkline_for(&self, pane_id: PaneId, total_bytes: usize) -> String {

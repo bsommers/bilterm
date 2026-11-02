@@ -692,6 +692,23 @@ impl WindowManager {
             )));
             return false;
         }
+        if first_verb.eq_ignore_ascii_case("size") {
+            let arg = parts.get(1).copied().unwrap_or("");
+            let parsed = arg.split_once(['x', 'X']).and_then(|(c, r)| Some((c.parse::<u16>().ok()?, r.parse::<u16>().ok()?)));
+            let msg = match (arg, parsed) {
+                ("auto", _) => {
+                    self.mcp_console.size_override = None;
+                    "MCP size: auto".to_string()
+                }
+                (_, Some((c, r))) => {
+                    self.mcp_console.size_override = Some((c.clamp(20, 400), r.clamp(6, 200)));
+                    format!("MCP size: {c}x{r}")
+                }
+                _ => "Usage: :mcp size <cols>x<rows> | auto".to_string(),
+            };
+            self.active_pane_mut().set_status_message(Some(msg));
+            return false;
+        }
         if first_verb.eq_ignore_ascii_case("close") || first_verb.eq_ignore_ascii_case("exit") {
             self.mcp_console.close_root_terminal();
             let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);

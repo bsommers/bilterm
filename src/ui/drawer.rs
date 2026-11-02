@@ -251,13 +251,7 @@ pub fn render_workspace_drawer(
         let list_y = inner.y + header_h;
         let list_rows_px = inner.height.saturating_sub(header_h + footer_h).max(1) as usize;
         let list_items_cap = (list_rows_px / row_step).max(1);
-        let mut scroll = drawer.scroll_offset;
-        if selected < scroll {
-            scroll = selected;
-        } else if selected >= scroll + list_items_cap {
-            scroll = selected + 1 - list_items_cap;
-        }
-        scroll = scroll.min(rows.len().saturating_sub(list_items_cap));
+        let scroll = drawer.effective_scroll(selected, list_items_cap, rows.len());
         let show_scrollbar = rows.len() > list_items_cap && inner.width >= 8;
         let row_text_w = if show_scrollbar {
             inner.width.saturating_sub(1)

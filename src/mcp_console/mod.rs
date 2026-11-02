@@ -258,6 +258,8 @@ pub struct McpConsoleState {
     pub scroll_offset: usize,
     /// Horizontal scroll (in characters) applied to every row so long text can be read in full.
     pub h_scroll: usize,
+    /// User-chosen `(cols, rows)` for the overlay panel (`:mcp size`); `None` = auto-size as before.
+    pub size_override: Option<(u16, u16)>,
     /// `DrawerLayoutMode::Overlay` (Floating pop-up window) vs `DrawerLayoutMode::Push` (pushes workspace panes).
     pub layout_mode: DrawerLayoutMode,
     /// Dock edge (`Top`, `Bottom`, `Left`, `Right`) used when `layout_mode == DrawerLayoutMode::Push`.
@@ -287,6 +289,7 @@ impl McpConsoleState {
             row_actions: Vec::new(),
             scroll_offset: 0,
             h_scroll: 0,
+            size_override: None,
             layout_mode: DrawerLayoutMode::Overlay,
             edge: DrawerEdge::Top,
             log_lines: vec![
@@ -511,6 +514,13 @@ impl McpConsoleState {
                 let h = desired_h
                     .min(workspace_area.height.saturating_sub(2).max(4))
                     .min(workspace_area.height);
+                let (w, h) = match self.size_override {
+                    Some((ow, oh)) => (
+                        ow.clamp(20.min(workspace_area.width), workspace_area.width),
+                        oh.clamp(6.min(workspace_area.height), workspace_area.height),
+                    ),
+                    None => (w, h),
+                };
                 let x = workspace_area.x + workspace_area.width.saturating_sub(w) / 2;
                 let y = workspace_area.y + workspace_area.height.saturating_sub(h) / 2;
                 Some(Rect::new(x, y, w, h))

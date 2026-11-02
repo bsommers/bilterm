@@ -5,7 +5,7 @@ milestone_name: UI Modernization (Phases 43-48): design system, display modes, n
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: 46-04d panel scale + drawer h-scroll done; next MCP resize + drawer wheel viewport, then 46-08
+stopped_at: 46-04 done; next 46-08 pane chrome, 46-09 actions strip
 last_updated: "2026-11-02"
 last_activity: 2026-11-02
 last_activity_desc: Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45
