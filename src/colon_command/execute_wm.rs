@@ -432,6 +432,19 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 .set_status_message(Some(format!("Appearance: {}", profile.label())));
             false
         }
+        ColonCommand::Mode(mode) => {
+            wm.config_mut().appearance.display_mode = mode;
+            let note = if crate::ui::design::AppearanceProfile::resolve(wm.config())
+                == crate::ui::design::AppearanceProfile::Legacy
+            {
+                " (takes effect on non-Legacy looks; try :appearance obsidian)"
+            } else {
+                ""
+            };
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("Mode: {}{note}", mode.label())));
+            false
+        }
         ColonCommand::Cursor(style) => {
             let active_id = wm.active_pane_id();
             wm.pin_other_panes_cursor(active_id);

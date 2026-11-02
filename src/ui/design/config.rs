@@ -49,10 +49,30 @@ pub enum DisplayMode {
     /// Top bar, pane titles, status bar.
     #[default]
     Standard,
-    /// Top bar only on focus; minimal pane chrome.
+    /// Top bar only on focus; minimal pane chrome. Also spelled `minimal`.
+    #[serde(alias = "minimal")]
     Focus,
     /// All chrome hidden except a one-line input row.
     Zen,
+}
+
+impl DisplayMode {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "standard" | "std" => Some(Self::Standard),
+            "minimal" | "focus" => Some(Self::Focus),
+            "zen" => Some(Self::Zen),
+            _ => None,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Focus => "minimal",
+            Self::Zen => "zen",
+        }
+    }
 }
 
 /// `[appearance]` section. Percent fields are `0..=100`; `None` means "use the profile default".

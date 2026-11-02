@@ -59,7 +59,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "width ",
         ],
     ),
-    (":mode", &["float", "fixed", "terminal", "cycle"]),
+    (":mode", &["float", "fixed", "terminal", "cycle", "standard", "minimal", "zen"]),
     (":split", &["h", "v", "horizontal", "vertical"]),
     (":deck", &["next", "prev"]),
     (":focus", &["1", "2", "3", "4"]),

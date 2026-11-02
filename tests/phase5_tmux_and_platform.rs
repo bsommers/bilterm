@@ -113,6 +113,11 @@ fn end_to_end_colon_commands_and_keyboard_chords_across_window_manager() {
         bilterm::ui::design::AppearanceProfile::resolve(wm.config()),
         bilterm::ui::design::AppearanceProfile::Midnight
     );
+    assert_eq!(run_colon(&mut wm, ":mode zen"), AppAction::Handled);
+    assert_eq!(wm.config().appearance.display_mode, bilterm::ui::design::DisplayMode::Zen);
+    assert_eq!(run_colon(&mut wm, ":mode minimal"), AppAction::Handled);
+    assert_eq!(wm.config().appearance.display_mode, bilterm::ui::design::DisplayMode::Focus);
+    assert_eq!(run_colon(&mut wm, ":mode standard"), AppAction::Handled);
     assert_eq!(run_colon(&mut wm, ":appearance legacy"), AppAction::Handled);
     assert_eq!(
         bilterm::ui::design::AppearanceProfile::resolve(wm.config()),

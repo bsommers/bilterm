@@ -27,3 +27,4 @@
 - Design doc written (uncommitted until review): .planning/phases/46-shell-display-modes/DESIGN.md. Awaiting user answers to its section 8 (5 questions) before building 46-04..46-09.
 - `:appearance` is session-only (no config write path exists). User's ~/.config/bilterm/config.toml exists, so fresh-install default does not apply to them.
 - Commits end with: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+- 46-04 done: `:mode standard|minimal|zen` extends the EXISTING `:mode` (prompt mode float/fixed/terminal/cycle, unchanged) in parse.rs. DesignDoc answers: all defaults accepted. Session-only; renders nothing yet (46-05/06 do layout). Next: 46-05 ShellLayout extraction with Legacy parity tests.

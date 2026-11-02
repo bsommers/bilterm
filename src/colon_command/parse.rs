@@ -69,8 +69,12 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some("terminal" | "term" | "regular" | "raw" | "off") => Some(Ok(
                 ColonCommand::PromptModeSet(Some(PromptMode::RegularTerminal)),
             )),
+            // Display modes (non-Legacy looks); prompt-mode words above are unchanged.
+            Some(word @ ("standard" | "std" | "minimal" | "zen")) => {
+                crate::ui::design::DisplayMode::from_name(word).map(|m| Ok(ColonCommand::Mode(m)))
+            }
             _ => Some(Err(
-                "Usage: :mode [float | fixed | terminal | cycle]".to_string(),
+                "Usage: :mode [float | fixed | terminal | cycle] | standard | minimal | zen".to_string(),
             )),
         },
         "help" | "h" | "?" => Some(Ok(ColonCommand::HelpToggle)),

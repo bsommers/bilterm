@@ -84,7 +84,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":prompt split-top | split-bottom", "Dock Fixed (Non-Overlapping) Command Prompt at Top or Bottom"),
     (":prompt height <3..12>", "Set Command Prompt box height in rows"),
     (":prompt width <cols|full>", "Set Command Prompt box width in columns or full pane width"),
-    (":mode [float|fixed|terminal|cycle]", "Switch between Floating Prompt, Fixed Prompt, & Raw Terminal"),
+    (":mode [float|fixed|terminal|cycle|standard|minimal|zen]", "Switch Floating/Fixed/Raw prompt; standard|minimal|zen sets display chrome (non-Legacy looks)"),
     (":raw", "Toggle manual Raw PTY Passthrough override"),
     (":history [popup|runs|on|off]", "Open History Pop-up, inspect run segments, or toggle disk log"),
     (":history save [path]", "Export session command history to a shell script"),

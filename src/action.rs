@@ -66,6 +66,7 @@ pub enum Action {
     Theme(ThemePreset),
     Glyphs(GlyphPack),
     Appearance(crate::ui::design::AppearanceProfile),
+    Mode(crate::ui::design::DisplayMode),
     Cursor(CaretStyle),
     Outline {
         window: Option<OutlineStyle>,
@@ -294,6 +295,7 @@ mod tests {
             Action::Theme(_) => Some(":theme borland"),
             Action::Glyphs(_) => Some(":glyphs unicode"),
             Action::Appearance(_) => Some(":appearance obsidian"),
+            Action::Mode(_) => Some(":mode zen"),
             Action::Cursor(_) => Some(":cursor block"),
             Action::Outline { .. } => Some(":outline double"),
             Action::CrosshairToggle { .. } => Some(":crosshair"),
@@ -424,6 +426,7 @@ mod tests {
             Action::Theme(ThemePreset::default()),
             Action::Glyphs(GlyphPack::Unicode),
             Action::Appearance(crate::ui::design::AppearanceProfile::Obsidian),
+            Action::Mode(crate::ui::design::DisplayMode::Zen),
             Action::Cursor(CaretStyle::SolidBlock),
             Action::Outline {
                 window: Some(OutlineStyle::Double),
