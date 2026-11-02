@@ -694,6 +694,7 @@ Plans:
 
 Plans:
 - [ ] 46-01-PLAN.md — Display modes + chrome (wave 1) — 46-04, 46-05, 46-06 done; 46-06b resolved (prompt is already one text row)
+- [ ] 46-04-PLAN.md — Drawer & MCP console: resize, scale, horizontal and vertical scroll (user request 2026-11-02)
 - [ ] 46-02-PLAN.md — Navigator + pane chrome options (wave 2)
 - [ ] 46-03-PLAN.md — Contextual pane actions + tests (wave 3)
 
