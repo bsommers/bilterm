@@ -297,8 +297,10 @@ fn appearance_resolve_wires_profile_tokens_materials() {
     assert_eq!(a.display_mode, DisplayMode::Standard);
 
     // Obsidian via modern_mode with density/display overrides
-    let mut cfg = BiltermConfig::default();
-    cfg.modern_mode = true;
+    let mut cfg = BiltermConfig {
+        modern_mode: true,
+        ..BiltermConfig::default()
+    };
     cfg.appearance.density = Density::Spacious;
     cfg.appearance.display_mode = DisplayMode::Zen;
     cfg.appearance.opacity_pct = Some(50);
