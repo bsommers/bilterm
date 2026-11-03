@@ -140,6 +140,10 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":crosshair [on|off|full|pane]", "Configure IBM 3270 full-screen or pane-local cross-hair ruler"),
     (":spotlight <circle|ellipse|pixel|fuzzy|off>", "Configure focal spotlight shape, feathering, or radius (+/-)"),
     (":focalzoom <1.25x|1.5x|2x|3x|pixel|fuzzy|off>", "Configure focal zoom magnification lens"),
+    (":crosshair cycle / :layout cycle", "Cycle crosshair (off/pane/full) or workspace layout mode (Alt+X / Alt+M)"),
+    (":focal radius <+N|-N> [+N|-N]", "Grow/shrink focal spotlight & zoom radius (Alt+} / Alt+{)"),
+    (":prompt move up|down / resize-height|resize-width <+N|-N>", "Move or resize the floating prompt (Alt+Up/Down, Alt++/-, Alt+[/])"),
+    (":search prefill", "Open the prompt pre-filled with `:search ` (Alt+/)"),
     (":crt [on|off]", "Toggle retro CRT phosphor scanline shader effect"),
     (":menubar [on|off] / :fkeybar [on|off]", "Toggle top Borland Menu Bar or bottom DOS F-Key Bar"),
     (":version [on|off] / :inspector [on|off]", "Toggle OIA version badge or F9 3270 Terminal Inspector"),
@@ -349,6 +353,15 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":triggers add ", "—", "Add an output trigger: :triggers add <pattern> (also :triggers clear; alias of :trigger)"),
     (":urls", "—", "Copy/yank the links found in the active pane (alias of :links)"),
     (":guake", "—", "Toggle the drop-down quick terminal (alias of :quake)"),
+    (":crosshair cycle", "Alt+X", "Cycle crosshair: off / pane / fullscreen"),
+    (":layout cycle", "Alt+M", "Cycle workspace layout mode (tiled / stacked)"),
+    (":focal radius +4 +1", "Alt+}", "Grow focal spotlight/zoom radius"),
+    (":focal radius -4 -1", "Alt+{", "Shrink focal spotlight/zoom radius"),
+    (":prompt move up", "Alt+Up", "Move the floating prompt up"),
+    (":prompt move down", "Alt+Down", "Move the floating prompt down"),
+    (":prompt resize-height +1", "Alt++", "Increase prompt height"),
+    (":prompt resize-width +4", "Alt+]", "Widen the prompt"),
+    (":search prefill", "Alt+/", "Open prompt pre-filled with :search"),
 ];
 
 #[cfg(test)]

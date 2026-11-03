@@ -262,6 +262,14 @@ pub(super) fn parse_visual_colon_command(
                     .to_string(),
             )),
         },
+        "crosshair" if parts.get(1) == Some(&"cycle") => Some(Ok(ColonCommand::CrosshairCycle)),
+        "focal" => match (parts.get(1), parts.get(2).and_then(|s| s.parse::<i16>().ok())) {
+            (Some(&"radius"), Some(dx)) => {
+                let dy = parts.get(3).and_then(|s| s.parse::<i16>().ok()).unwrap_or(0);
+                Some(Ok(ColonCommand::FocalRadiusResize(dx, dy)))
+            }
+            _ => Some(Err("Usage: :focal radius <+N|-N> [+N|-N]".to_string())),
+        },
         "crosshair" => {
             let (enabled, fullscreen) = match parts.get(1).copied() {
                 Some("on" | "true") => (Some(true), None),

@@ -34,6 +34,19 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::PromptModeSet(Some(PromptMode::RegularTerminal))))
             }
             Some("mode" | "cycle") => Some(Ok(ColonCommand::PromptModeSet(None))),
+            Some("move") => match parts.get(2).copied() {
+                Some("up") => Some(Ok(ColonCommand::PromptMoveVertical(-1))),
+                Some("down") => Some(Ok(ColonCommand::PromptMoveVertical(1))),
+                _ => Some(Err("Usage: :prompt move up|down".to_string())),
+            },
+            Some("resize-height") => match parts.get(2).and_then(|s| s.parse::<i16>().ok()) {
+                Some(d) => Some(Ok(ColonCommand::PromptResizeHeight(d))),
+                None => Some(Err("Usage: :prompt resize-height <+N|-N>".to_string())),
+            },
+            Some("resize-width") => match parts.get(2).and_then(|s| s.parse::<i16>().ok()) {
+                Some(d) => Some(Ok(ColonCommand::PromptResizeWidth(d))),
+                None => Some(Err("Usage: :prompt resize-width <+N|-N>".to_string())),
+            },
             Some("float") => {
                 if let Some(row) = parts.get(2).and_then(|s| s.parse::<u16>().ok()) {
                     Some(Ok(ColonCommand::PromptFloat(row)))
@@ -54,7 +67,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 None => Some(Err("Usage: :prompt width <16..cols | full>".to_string())),
             },
             _ => Some(Err(
-                "Usage: :prompt top | bottom | fixed | floating | terminal | split-top | split-bottom | split | float [row] | height <3..12> | width <cols|full>"
+                "Usage: :prompt move up|down | resize-height <+N|-N> | resize-width <+N|-N> | top | bottom | fixed | floating | terminal | split-top | split-bottom | split | float [row] | height <3..12> | width <cols|full>"
                     .to_string(),
             )),
         },
@@ -165,6 +178,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             ))))
         }
         "layout" => match parts.get(1).copied() {
+            Some("cycle") => Some(Ok(ColonCommand::LayoutCycle)),
             Some("stack") => {
                 Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Stacked)))
             }
@@ -250,6 +264,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         "quake" | "guake" => Some(Ok(ColonCommand::QuakeToggle)),
         "search" | "find" => match parts.get(1).copied() {
             None | Some("off" | "clear") => Some(Ok(ColonCommand::SearchOff)),
+            Some("prefill") => Some(Ok(ColonCommand::SearchPromptPrefill)),
             Some("next" | "n") => Some(Ok(ColonCommand::SearchNext)),
             Some("prev" | "p") => Some(Ok(ColonCommand::SearchPrev)),
             Some(_) => {
