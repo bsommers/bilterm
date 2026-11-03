@@ -1,7 +1,7 @@
 ---
 phase: 49-command-parity-api
 type: plan
-status: IN PROGRESS (49-01..49-06 done 2026-11-02; 49-07 pending; API docs packet with agy)
+status: IN PROGRESS (49-01..49-07 done 2026-11-02; release pending; API docs packet with agy)
 requirements: [API-01]
 ---
 # Phase 49: Command parity and a full public API
@@ -88,3 +88,5 @@ Gaps:
 - Agy packet: .planning/dispatch/49-doc.md (docs/API.md) - user-run, not yet run.
 - 49-04 DONE: `:get <key>`, `:set <key> <value>`, `:config list|save`, `:appearance save`, `:state` (generic over all config fields via dotted keys, src/config/dotted.rs, toml_edit keeps comments). API writes gated by `[api] allow_config_write` (default false) in `WindowManager::config_write_denied`, called from `apply_automation` and the executor (`api_origin`); `api.*` is never settable over the API; `pane.send_keys` is covered. `wm.command` returns a `data` field. Limitations: unset Option keys may report "unknown config key"; `:config save` writes every differing leaf (including runtime changes) and removes keys that are now unset; in-process `run_playbook` is Trusted (ungated by design); `pane.exec` can still edit the file by shell (pre-existing).
 - Weak test: the pane.send_keys gate test only asserts the value did not change.
+- 49-07 DONE: tests/api_conformance.rs (8 tests: 19-case table via direct/TCP/HTTP/MCP, write gate on every transport, catalog sweep 151 handled / 2 clean errors / 62 skipped with reasons), `RPC_METHODS` const + ctl reachability test, `bilterm ctl workspace.status` (endpoint omitted) fixed, docs section in AGENTS.md + developer guide, CHANGELOG Unreleased.
+- Open (from 49-07): JSON-RPC uses -32000 for unknown method/missing param (MCP uses -32601/-32602; left because tests assert -32000); MCP drops unparseable lines silently; HTTP empty body 400 vs garbage body -32700; RPC wraps gate error in "action execution error: "; ctl replaces bad JSON params with {}; 2 catalog examples error on headless workspace (not investigated).

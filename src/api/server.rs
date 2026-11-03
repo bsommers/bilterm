@@ -236,6 +236,23 @@ where
 
 /// Sends a single line-delimited JSON-RPC 2.0 request with an optional bearer token
 /// to a TCP (`host:port`) or Unix domain socket path and returns the JSON-RPC response string (`bilterm ctl`).
+/// Parses `bilterm ctl` positional arguments (after `-t/--token-file` removal) into
+/// `(endpoint, method, params)`. The endpoint is optional: a first argument without a `:`
+/// (`workspace.status`) is the method, so `bilterm ctl workspace.status` works against the default
+/// endpoint. Unparsable JSON params fall back to `{}` (legacy behaviour).
+pub fn parse_ctl_args(rest: &[String], default_endpoint: &str) -> (String, String, JsonValue) {
+    let (endpoint, tail) = match rest.first() {
+        Some(first) if first.contains(':') => (first.as_str(), &rest[1..]),
+        _ => (default_endpoint, rest),
+    };
+    let method = tail.first().map_or("workspace.status", String::as_str);
+    let params = tail
+        .get(1)
+        .and_then(|raw| JsonValue::parse(raw))
+        .unwrap_or_else(|| JsonValue::obj([] as [(&str, JsonValue); 0]));
+    (endpoint.to_string(), method.to_string(), params)
+}
+
 pub async fn send_rpc_request_with_token(
     endpoint: &str,
     method: &str,

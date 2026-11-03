@@ -187,6 +187,22 @@ Bilterm is organized as a cycle-free 48-file modular DAG under `src/` (`vt` / `c
 - **`src/api/{mod,rpc,mcp,playbook,gui_renderer}.rs`**: JSON-RPC 2.0 server/client, native MCP `2024-11-05` stdio server, TOML automation playbooks, and headless `.ppm` renderer.
 
 See [`docs/DEVELOPER_AND_AGENT_GUIDE.md`](docs/DEVELOPER_AND_AGENT_GUIDE.md) and [`docs/architecture.md`](docs/architecture.md) for full details, Mermaid diagrams, and live debugging workflows (`<F9>` 3270 Inspector, `RUST_LOG=bilterm=debug` -> `bilterm.log`, `bilterm ctl`).
+## Automation API and command parity (Phase 49)
+
+- **Every action has a colon command.** All keybindings, palette entries, RPC and MCP calls lower to `Action` and run through `WindowManager::apply`. `src/command_registry.rs::catalog()` joins Tab completion (`COLON_COMMANDS`), the Ctrl+X palette (`PALETTE_CATALOG`), F1 help and `EXTRA` (descriptions and alias targets) into one read-only catalog that backs `:commands` and `bilterm://commands`. The parser stays hand-written. Drift tests fail when a completion command has no description, an alias target is missing, names are duplicated, a palette example head is not in the catalog, or the parser does not know a catalog command; `src/action.rs` tests cover that every `Action` has a colon form and keymap entries round-trip.
+- **Transports** (all run the same `AutomationControlPlane::dispatch_method`; method list: `bilterm::api::RPC_METHODS`):
+  1. JSON-RPC 2.0 over a Unix socket (default) or `--headless --listen` TCP; `bilterm ctl [-t FILE] [ENDPOINT] <METHOD> [JSON_PARAMS]` (the endpoint may be omitted).
+  2. Loopback-only HTTP + SSE: `bilterm --headless --http 127.0.0.1:PORT` (`POST /rpc`, `GET /events`, `GET /health`, bearer token file written 0600 to the private runtime dir, Host/Origin checks, size limits).
+  3. MCP over stdio (`bilterm --mcp`): 10 tools plus resources `bilterm://state|config|commands|pane/<id>`. Error codes: JSON-RPC dispatch failures are `-32000` (parse `-32700`, invalid request `-32600`); MCP uses `-32602` for missing params/unknown tool and `-32601` for unknown methods.
+- **Write gate.** Over RPC/HTTP/MCP/`pane.send_keys`, config-mutating commands (`:set`, `:config save`, `:appearance save`) are refused unless `[api] allow_config_write = true` in `config.toml` (default `false`); the `[api]` section is never settable over the API. Reads (`:get`, `:state`, `:config list`, `:commands`) always work and return structured `data` in the `wm.command` result. Persistence only happens on explicit `:config save` / `:appearance save`.
+- **Conformance.** `tests/api_conformance.rs` drives one request table through direct dispatch, TCP, HTTP and MCP (identical results, error shapes, write gate), sweeps every runnable non-alias catalog example through `wm.command` (explicit skip list with reasons), and checks `RPC_METHODS` against the dispatcher source and `parse_ctl_args`.
+- **Checklist: adding a command so everything stays in sync.**
+  1. `Action` variant (`src/action.rs`) + parse (`src/colon_command/parse.rs`) + execute (`execute*.rs`).
+  2. Add the name (and sub-arguments) to the Tab-completion table (`src/pane/completion.rs`), a palette entry in `PALETTE_CATALOG` and/or a help line; add an `EXTRA` row in `src/command_registry.rs` only if neither has a description (aliases: set the target).
+  3. Make it reachable from keymap, colon or RPC in `every_action_is_reachable_from_keymap_colon_or_rpc`.
+  4. Return structured output through `take_command_data` if callers should read it back; config-writing commands must go through `config_write_denied`.
+  5. A new RPC method goes in `dispatch_method` AND `RPC_METHODS` (the conformance test fails otherwise); a new MCP tool needs a mapping in `src/api/mcp.rs` and `mcp_tools_list`.
+  6. Run `scripts/verify.sh` (one line: `PASS n/n`; on FAIL read `target/verify/<stage>/fail.txt`).
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->

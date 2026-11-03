@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use bilterm::api::{
     default_socket_path, load_token_file, run_headless_server_with_http, run_mcp_stdio_server_with_plane,
-    send_rpc_request_with_token, validate_listen_config, AutomationControlPlane, JsonValue,
+    send_rpc_request_with_token, validate_listen_config, AutomationControlPlane,
     generate_http_token, validate_http_bind, write_http_token_file, HttpListen, ListenEndpoint, Playbook, DEFAULT_TCP_LISTEN,
 };
 use bilterm::app::App;
@@ -156,14 +156,9 @@ async fn main() -> color_eyre::Result<()> {
             .map(|p| format!("unix:{}", p.display()))
             .unwrap_or_else(|_| DEFAULT_TCP_LISTEN.to_string());
 
-        let endpoint = rest.first().map(String::as_str).unwrap_or(&default_ep);
-        let method = rest.get(1).map_or("workspace.status", String::as_str);
-        let params = rest
-            .get(2)
-            .and_then(|raw| JsonValue::parse(raw))
-            .unwrap_or_else(|| JsonValue::obj([] as [(&str, JsonValue); 0]));
+        let (endpoint, method, params) = bilterm::api::parse_ctl_args(&rest, &default_ep);
         let resp =
-            send_rpc_request_with_token(endpoint, method, params, ctl_token.as_deref()).await?;
+            send_rpc_request_with_token(&endpoint, &method, params, ctl_token.as_deref()).await?;
         println!("{resp}");
         return Ok(());
     }

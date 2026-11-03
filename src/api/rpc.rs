@@ -20,6 +20,30 @@ pub(super) fn extract_vt_row_text(vt: &VtParser, row: u16) -> String {
     vt.row_text(row)
 }
 
+/// Every method name `AutomationControlPlane::dispatch_method` handles (drift-tested against the dispatcher).
+pub const RPC_METHODS: &[&str] = &[
+    "workspace.status",
+    "workspace.snapshot",
+    "workspace.fontsize",
+    "pane.exec",
+    "pane.read",
+    "pane.feed_output",
+    "pane.send_keys",
+    "wm.command",
+    "events.poll",
+    "playbook.run",
+    "remote.connect_ssh",
+    "remote.connect_tmux",
+    "fleet.register",
+    "fleet.list",
+    "fleet.exec",
+    "fleet.disconnect",
+    "canvas.command",
+    "canvas.status",
+    "session.save",
+    "session.restore",
+];
+
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
 pub struct AutomationControlPlane {
     pub wm: WindowManager,

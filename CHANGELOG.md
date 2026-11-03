@@ -5,6 +5,19 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added (Phase 49: command parity and API)
+- **Colon parity**: every key-only action now has a colon form (`:crosshair cycle`, `:layout cycle`, `:focal radius`, `:prompt move|resize-height|resize-width`, `:search prefill`).
+- **Command registry** (`src/command_registry.rs`): one catalog (name, sub-arguments, summary, alias target, examples, shortcut) joined from completion, palette and help, with drift tests; `bilterm://commands` reads it. Descriptions added for about 80 previously undocumented commands.
+- **MCP resources** (`bilterm://state`, `config`, `commands`, `pane/<id>`) and granular error codes (`-32602` invalid params/unknown tool, `-32601` unknown method, `-32603` internal).
+- **HTTP + SSE transport**: `bilterm --headless --http 127.0.0.1:PORT` (loopback only, bearer token file 0600, Host/Origin checks, body/header limits; `POST /rpc`, `GET /events`, `GET /health`).
+- **`:get`, `:set`, `:config list|save`, `:state`, `:appearance save`** with dotted config keys; `wm.command` results carry a `data` field. API callers (RPC, HTTP, MCP, `pane.send_keys`) cannot write config unless `[api] allow_config_write = true` (default off); the `[api]` section is never settable over the API.
+- **Conformance suite** `tests/api_conformance.rs`, `bilterm::api::RPC_METHODS`, and `bilterm::api::parse_ctl_args`.
+
+### Fixed
+- `bilterm ctl workspace.status` (endpoint omitted) now treats the first argument as the method when it is not an endpoint; it was previously taken as the endpoint.
+
 ## [v2.6.0] - 2026-11-02
 
 ### Added
