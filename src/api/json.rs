@@ -3,11 +3,13 @@
 use std::collections::BTreeMap;
 
 /// Lightweight, zero-external-dependency RFC 8259 JSON AST used by the JSON-RPC 2.0 and MCP servers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
     Null,
     Bool(bool),
     Number(i64),
+    /// Finite non-integer (fraction/exponent) number; integer literals always parse to `Number`.
+    Float(f64),
     String(String),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
@@ -39,6 +41,17 @@ impl JsonValue {
     pub fn as_i64(&self) -> Option<i64> {
         match self {
             Self::Number(n) => Some(*n),
+            Self::Float(f) if f.is_finite() && f.fract() == 0.0 && *f >= -9.223_372_036_854_776e18 && *f < 9.223_372_036_854_776e18 => {
+                Some(*f as i64)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::Number(n) => Some(*n as f64),
+            Self::Float(f) => Some(*f),
             _ => None,
         }
     }
@@ -74,6 +87,8 @@ impl JsonValue {
             Self::Bool(true) => out.push_str("true"),
             Self::Bool(false) => out.push_str("false"),
             Self::Number(n) => out.push_str(&n.to_string()),
+            Self::Float(f) if f.is_finite() => out.push_str(&format!("{f:?}")),
+            Self::Float(_) => out.push_str("null"),
             Self::String(s) => {
                 out.push('"');
                 for ch in s.chars() {
@@ -214,26 +229,65 @@ fn parse_json_value(bytes: &[u8], pos: &mut usize, depth: usize) -> Option<JsonV
                 }
             }
         }
-        b'-' | b'0'..=b'9' => {
-            let start = *pos;
-            if bytes[*pos] == b'-' {
-                *pos += 1;
-            }
-            while *pos < bytes.len() && bytes[*pos].is_ascii_digit() {
-                *pos += 1;
-            }
-            let int_end = *pos;
-            while *pos < bytes.len()
-                && matches!(bytes[*pos], b'.' | b'e' | b'E' | b'+' | b'-' | b'0'..=b'9')
-            {
-                *pos += 1;
-            }
-            let num_str = std::str::from_utf8(&bytes[start..int_end]).ok()?;
-            let n = num_str.parse::<i64>().ok()?;
-            Some(JsonValue::Number(n))
-        }
+        b'-' | b'0'..=b'9' => parse_json_number(bytes, pos),
         _ => None,
     }
+}
+
+/// RFC 8259 number: `-? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)?`.
+fn parse_json_number(bytes: &[u8], pos: &mut usize) -> Option<JsonValue> {
+    let digits = |pos: &mut usize| {
+        let s = *pos;
+        while *pos < bytes.len() && bytes[*pos].is_ascii_digit() {
+            *pos += 1;
+        }
+        *pos - s
+    };
+    let start = *pos;
+    if bytes[*pos] == b'-' {
+        *pos += 1;
+    }
+    match bytes.get(*pos) {
+        Some(b'0') => *pos += 1,
+        Some(b'1'..=b'9') => {
+            digits(pos);
+        }
+        _ => return None,
+    }
+    let mut is_float = false;
+    if bytes.get(*pos) == Some(&b'.') {
+        *pos += 1;
+        is_float = true;
+        if digits(pos) == 0 {
+            return None;
+        }
+    }
+    if matches!(bytes.get(*pos), Some(b'e' | b'E')) {
+        *pos += 1;
+        is_float = true;
+        if matches!(bytes.get(*pos), Some(b'+' | b'-')) {
+            *pos += 1;
+        }
+        if digits(pos) == 0 {
+            return None;
+        }
+    }
+    let text = std::str::from_utf8(&bytes[start..*pos]).ok()?;
+    if is_float {
+        let f = text.parse::<f64>().ok().filter(|f| f.is_finite())?;
+        Some(JsonValue::Float(f))
+    } else {
+        text.parse::<i64>().ok().map(JsonValue::Number)
+    }
+}
+
+fn parse_hex4(bytes: &[u8], pos: &mut usize) -> Option<u32> {
+    let chunk = bytes.get(*pos..*pos + 4)?;
+    if !chunk.iter().all(u8::is_ascii_hexdigit) {
+        return None;
+    }
+    *pos += 4;
+    u32::from_str_radix(std::str::from_utf8(chunk).ok()?, 16).ok()
 }
 
 fn parse_json_string(bytes: &[u8], pos: &mut usize) -> Option<String> {
@@ -263,20 +317,36 @@ fn parse_json_string(bytes: &[u8], pos: &mut usize) -> Option<String> {
                     b'b' => out.push('\u{0008}'),
                     b'f' => out.push('\u{000c}'),
                     b'u' => {
-                        if *pos + 4 > bytes.len() {
-                            return None;
-                        }
-                        let hex = std::str::from_utf8(&bytes[*pos..*pos + 4]).ok()?;
-                        *pos += 4;
-                        let code = u32::from_str_radix(hex, 16).ok()?;
-                        out.push(char::from_u32(code)?);
+                        let code = parse_hex4(bytes, pos)?;
+                        let ch = match code {
+                            0xD800..=0xDBFF => {
+                                if bytes.get(*pos..*pos + 2) != Some(b"\\u") {
+                                    return None;
+                                }
+                                *pos += 2;
+                                let low = parse_hex4(bytes, pos)?;
+                                if !(0xDC00..=0xDFFF).contains(&low) {
+                                    return None;
+                                }
+                                char::from_u32(0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00))?
+                            }
+                            _ => char::from_u32(code)?, // lone low surrogate -> None
+                        };
+                        out.push(ch);
                     }
-                    _ => out.push(esc as char),
+                    _ => return None,
                 }
             }
+            b if b < 0x20 => return None,
             _ => {
                 let start = *pos - 1;
-                let rest = std::str::from_utf8(&bytes[start..]).ok()?;
+                let len = match b {
+                    0..=0x7f => 1,
+                    0xc0..=0xdf => 2,
+                    0xe0..=0xef => 3,
+                    _ => 4,
+                };
+                let rest = std::str::from_utf8(bytes.get(start..start + len)?).ok()?;
                 let ch = rest.chars().next()?;
                 *pos = start + ch.len_utf8();
                 out.push(ch);
@@ -284,4 +354,69 @@ fn parse_json_string(bytes: &[u8], pos: &mut usize) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn floats_and_exponents_parse() {
+        assert_eq!(JsonValue::parse("1.5"), Some(JsonValue::Float(1.5)));
+        assert_eq!(JsonValue::parse("-0.5"), Some(JsonValue::Float(-0.5)));
+        assert_eq!(JsonValue::parse("2e3").and_then(|v| v.as_i64()), Some(2000));
+        assert_eq!(JsonValue::parse("1E-2"), Some(JsonValue::Float(0.01)));
+        assert_eq!(JsonValue::parse("1.5").unwrap().as_i64(), None);
+        assert_eq!(JsonValue::parse("7"), Some(JsonValue::Number(7)));
+        for bad in ["1.", ".5", "1e", "1e+", "1e999", "-", "--1", "+1", "1.e2"] {
+            assert_eq!(JsonValue::parse(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn float_round_trip_and_non_finite() {
+        for f in [1.5, -0.5, 0.01, 1e300, 2.0] {
+            let v = JsonValue::Float(f);
+            let back = JsonValue::parse(&v.to_json_string()).unwrap();
+            assert_eq!(back.as_f64(), Some(f));
+        }
+        assert_eq!(JsonValue::Float(f64::NAN).to_json_string(), "null");
+        assert_eq!(JsonValue::Float(f64::INFINITY).to_json_string(), "null");
+    }
+
+    #[test]
+    fn leading_zeros() {
+        for bad in ["01", "-01", "00", "[01]", "01.5"] {
+            assert_eq!(JsonValue::parse(bad), None, "{bad}");
+        }
+        for ok in ["0", "-0", "0.5", "0e1"] {
+            assert!(JsonValue::parse(ok).is_some(), "{ok}");
+        }
+    }
+
+    #[test]
+    fn surrogates() {
+        let s = |t: &str| JsonValue::parse(t).and_then(|v| v.as_str().map(String::from));
+        assert_eq!(s(r#""\ud83d\ude00""#).as_deref(), Some("\u{1F600}"));
+        for bad in [r#""\ud83d""#, r#""\ude00""#, r#""\ud83dx""#, r#""\ud83d\u0041""#, r#""\ud83d\ud83d""#, r#""\u+123""#, r#""\u12""#] {
+            assert_eq!(s(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn strings_strict() {
+        assert_eq!(JsonValue::parse("\"a\nb\""), None, "raw control char");
+        assert_eq!(JsonValue::parse(r#""\q""#), None, "unknown escape");
+        assert_eq!(JsonValue::parse("\"héllo😀\"").unwrap().as_str(), Some("héllo😀"));
+    }
+
+    #[test]
+    fn deep_nesting_rejected() {
+        let t = "[".repeat(10_000) + &"]".repeat(10_000);
+        assert_eq!(JsonValue::parse(&t), None);
+        let o = "{\"a\":".repeat(10_000);
+        assert_eq!(JsonValue::parse(&o), None);
+        let ok = "[".repeat(100) + &"]".repeat(100);
+        assert!(JsonValue::parse(&ok).is_some());
+    }
 }

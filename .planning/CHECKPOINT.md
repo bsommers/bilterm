@@ -71,3 +71,9 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Then: rerun coverage (`cargo llvm-cov --summary-only --json --output-path /tmp/cov.json </dev/null` in background, ~12 min) to confirm the numbers moved.
 - Noted gaps: Materials does not clamp corner_radius_px (only AppearanceConfig::sanitized does); no mutation check was run on design tests; focus-ring and pane.send_keys gate tests are weak.
 - Still user-run: agy API-doc packet (.planning/dispatch/49-doc.md; run `.planning/dispatch/RUN.sh 49-doc apidoc`), live `bilterm --gui` pass, install v2.6.1+ builds (this machine and bigmac.local both at 2.6.0), `codegraph upgrade`. No release has been requested for Phase 49.
+
+## 2026-11-02 latest: test-gap bugs fixed
+- Committed 6b82dc4 (tests for API error paths, config edges, drawer, layout profiles) and the fixes below. verify PASS 41/41 incl. clippy. No `#[ignore = "bug` tests remain. Nothing pushed (main ahead of origin ~20).
+- Fixed: JSON parser (src/api/json.rs): floats via new `JsonValue::Float(f64)` (Eq derive dropped), RFC 8259 numbers (no leading zeros), surrogate pairs, unknown escapes and raw control chars in strings now REJECTED (behaviour change for lax clients; bilterm's own writer escapes them). Config (src/config/dotted.rs): `:config save` keeps comments above/inline on changed keys and CRLF; `:get theme.sub` => unknown key.
+- Coverage run after fixes: pending (`cargo llvm-cov --summary-only --json --output-path $CLAUDE_JOB_DIR/tmp/cov.json </dev/null`, ~12 min, background).
+- Remaining small gaps: Materials does not clamp corner_radius_px; no mutation check on design tests; focus-ring + pane.send_keys gate tests weak; JSON-RPC uses -32000 where MCP uses -32601/-32602.

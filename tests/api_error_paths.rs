@@ -624,7 +624,6 @@ fn json_strings_and_escapes() {
 }
 
 #[test]
-#[ignore = "bug: JSON \\u surrogate pairs are rejected; JsonValue::parse(r#\"\"\\ud83d\\ude00\"\"#) returns None instead of \"😀\" (RFC 8259 section 7)"]
 fn json_surrogate_pair_escape() {
     assert_eq!(
         JsonValue::parse(r#""😀""#).and_then(|v| v.as_str().map(String::from)).as_deref(),
@@ -671,16 +670,15 @@ fn json_numbers() {
 }
 
 #[test]
-#[ignore = "bug: JsonValue::parse(\"1.5\") returns Number(1) (also 2e3 -> 2, -0.5 -> 0): fraction/exponent silently truncated instead of rejected"]
 fn json_fractional_and_exponent_numbers_are_not_silently_truncated() {
-    // The AST is integer-only; "1.5" / "2e3" must not parse as a different integer.
+    // Fractions/exponents parse as Float and never as a truncated integer.
     for t in ["1.5", "2e3", "1E2", "-0.5"] {
-        assert_eq!(JsonValue::parse(t), None, "{t} must be rejected, not truncated");
+        assert!(matches!(JsonValue::parse(t), Some(JsonValue::Float(_))), "{t}");
     }
+    assert_eq!(JsonValue::parse("1.5").unwrap().as_i64(), None);
 }
 
 #[test]
-#[ignore = "bug: JsonValue::parse(\"01\") returns Number(1); RFC 8259 forbids leading zeros"]
 fn json_leading_zero_is_rejected() {
     assert_eq!(JsonValue::parse("01"), None, "RFC 8259 forbids leading zeros");
 }

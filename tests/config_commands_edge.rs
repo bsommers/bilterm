@@ -390,7 +390,6 @@ fn rpc_error_surface_for_config_commands() {
 }
 
 #[test]
-#[ignore = "bug: `:config save` drops a comment line directly above a changed key (key decor not preserved): file `# my hand-written config\nfont_size_pt = 14` + `:set font_size_pt 19` + `:config save` loses the header comment"]
 fn save_preserves_leading_comment_above_changed_key() {
     with_xdg("leadcomment", |dir| {
         let path = cfg_path(dir);
@@ -406,7 +405,6 @@ fn save_preserves_leading_comment_above_changed_key() {
 }
 
 #[test]
-#[ignore = "bug: `:get theme.sub` (child of a scalar key) reports `theme.sub = (unset)` instead of `unknown config key`; get_key treats the non-'unknown config key' error `is not inside a table` as proof the key exists"]
 fn get_child_of_scalar_key_is_unknown() {
     let mut wm = WindowManager::new_headless(24, 80);
     run(&mut wm, ":get theme.sub");

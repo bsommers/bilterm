@@ -53,6 +53,13 @@ pub fn get_key(cfg: &BiltermConfig, key: &str) -> Result<String, String> {
     if let Some(v) = walk(&root, key) {
         return Ok(render(v));
     }
+    // A path that descends through a non-table value can never be valid.
+    let parts: Vec<&str> = key.split('.').collect();
+    for n in 1..parts.len() {
+        if walk(&root, &parts[..n].join(".")).is_some_and(|v| !v.is_table()) {
+            return Err(format!("unknown config key `{key}`"));
+        }
+    }
     // Known-but-None probe: a type error (not "unknown key") proves the field exists.
     for probe in ["true", "0", "\"x\""] {
         let mut copy = cfg.clone();
@@ -194,10 +201,15 @@ pub fn save_changes(cfg: &BiltermConfig, path: &Path, prefix: Option<&str>) -> R
         let (last, parents) = parts.split_last().ok_or("empty key")?;
         let table = table_for(&mut doc, parents)?;
         let mut item = item_from(v)?;
-        if let (Some(old), Some(new)) = (table.get(last).and_then(toml_edit::Item::as_value), item.as_value_mut()) {
-            *new.decor_mut() = old.decor().clone();
+        if let Some(slot) = table.get_mut(last) {
+            // Replace in place so the key (and its leading comments) is untouched.
+            if let (Some(old), Some(new)) = (slot.as_value(), item.as_value_mut()) {
+                *new.decor_mut() = old.decor().clone();
+            }
+            *slot = item;
+        } else {
+            table.insert(last, item);
         }
-        table.insert(last, item);
         written.push(k.clone());
     }
     for k in disk.keys().filter(|k| wanted(k) && !running.contains_key(*k)) {
@@ -214,7 +226,12 @@ pub fn save_changes(cfg: &BiltermConfig, path: &Path, prefix: Option<&str>) -> R
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
     }
-    crate::secure_fs::write_private_file(path, doc.to_string().as_bytes())
+    let mut out = doc.to_string();
+    if text.contains("\r\n") {
+        // toml_edit re-emits key/value line ends as `\n`; keep the file's CRLF convention.
+        out = out.replace("\r\n", "\n").replace('\n', "\r\n");
+    }
+    crate::secure_fs::write_private_file(path, out.as_bytes())
         .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(written)
 }
@@ -292,5 +309,43 @@ mod tests {
         let back = BiltermConfig::load(&path).unwrap().unwrap();
         assert_eq!(back.font_size_pt, BiltermConfig::default().font_size_pt);
         assert!(back.appearance.profile.is_some());
+    }
+
+    fn save_with(orig: &str, key: &str, raw: &str) -> String {
+        let p = tmp("edit").join("c.toml");
+        std::fs::write(&p, orig).unwrap();
+        let mut cfg = BiltermConfig::load(&p).unwrap().unwrap();
+        set_key(&mut cfg, key, raw).unwrap();
+        save_changes(&cfg, &p, None).unwrap();
+        std::fs::read_to_string(&p).unwrap()
+    }
+
+    #[test]
+    fn save_keeps_leading_and_inline_comments() {
+        let t = save_with("# hdr\nfont_size_pt = 14  # note\n", "font_size_pt", "19");
+        assert_eq!(t, "# hdr\nfont_size_pt = 19  # note\n");
+    }
+
+    #[test]
+    fn save_keeps_table_comments_and_neighbours() {
+        let orig = "# top\n\n# about appearance\n[appearance]\n# p\nprofile = \"midnight\"\n# between\n";
+        let t = save_with("# top\n\n# about appearance\n[appearance]\n# p\nprofile = \"midnight\"\n# between\n", "appearance.profile", "arctic");
+        assert!(t.contains("# about appearance\n[appearance]\n# p\nprofile = \"arctic\"\n# between\n"), "{t}");
+        let _ = orig;
+    }
+
+    #[test]
+    fn save_new_key_does_not_disturb_neighbours_and_crlf_kept() {
+        let t = save_with("# hdr\r\nfont_size_pt = 14\r\nfont_family = \"x\"\r\n", "font_size_pt", "19");
+        assert_eq!(t, "# hdr\r\nfont_size_pt = 19\r\nfont_family = \"x\"\r\n");
+        let t = save_with("# hdr\nfont_size_pt = 14 # n\n", "appearance.profile", "arctic");
+        assert!(t.starts_with("# hdr\nfont_size_pt = 14 # n\n"), "{t}");
+        assert!(t.contains("profile = \"arctic\""), "{t}");
+    }
+
+    #[test]
+    fn get_child_of_scalar_is_unknown() {
+        let c = BiltermConfig::default();
+        assert!(get_key(&c, "font_size_pt.sub").unwrap_err().starts_with("unknown config key"));
     }
 }
