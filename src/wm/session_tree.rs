@@ -213,6 +213,49 @@ impl SessionTree {
         Ok(())
     }
 
+    /// Moves `name` up or down among its siblings (root list or parent's `children` list) (`TREE-01`).
+    pub fn move_node(&mut self, name: &str, up: bool) -> bool {
+        let name = name.trim();
+        let Some(parent_opt) = self.node(name).map(|n| n.parent.clone()) else {
+            return false;
+        };
+        if let Some(parent) = parent_opt {
+            if let Some(p_node) = self.node_mut(&parent)
+                && let Some(idx) = p_node.children.iter().position(|c| c == name)
+            {
+                let target_idx = if up {
+                    if idx == 0 { return false; }
+                    idx - 1
+                } else {
+                    if idx + 1 >= p_node.children.len() { return false; }
+                    idx + 1
+                };
+                p_node.children.swap(idx, target_idx);
+                return true;
+            }
+            false
+        } else {
+            let root_indices: Vec<usize> = self
+                .nodes
+                .iter()
+                .enumerate()
+                .filter_map(|(i, n)| n.parent.is_none().then_some(i))
+                .collect();
+            let Some(pos) = root_indices.iter().position(|&i| self.nodes[i].name == name) else {
+                return false;
+            };
+            let target_pos = if up {
+                if pos == 0 { return false; }
+                pos - 1
+            } else {
+                if pos + 1 >= root_indices.len() { return false; }
+                pos + 1
+            };
+            self.nodes.swap(root_indices[pos], root_indices[target_pos]);
+            true
+        }
+    }
+
     /// Removes `name` from the tree and re-parents its direct children to `name`'s parent (or `Independent`).
     pub fn remove_session(&mut self, name: &str) -> bool {
         let Some(idx) = self.nodes.iter().position(|n| n.name == name) else {

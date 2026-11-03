@@ -100,6 +100,9 @@ for triple in $TARGETS; do
         BUILT+=("$name.zip" "$BIN-$triple.zip")
     else
         chmod 0755 "$DIST/$name/$exe"
+        if [[ "$OS" == Darwin && "$triple" == *apple-darwin* ]] && command -v codesign >/dev/null 2>&1; then
+            codesign --force --sign - "$DIST/$name/$exe" >/dev/null 2>&1 || true
+        fi
         tar -czf "$DIST/$name.tar.gz" -C "$DIST" "$name"
         cp "$DIST/$name.tar.gz" "$DIST/$BIN-$triple.tar.gz"
         BUILT+=("$name.tar.gz" "$BIN-$triple.tar.gz")

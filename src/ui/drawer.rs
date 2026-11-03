@@ -225,14 +225,14 @@ pub fn render_workspace_drawer(
         fill_rect(buf, Rect::new(inner.x, inner.y, inner.width, 1), header_style);
         let header_line = if is_modern {
             format!(
-                " ◧ {}  ·  ⧉ {}  ·  ◈ {}  ·  + New",
+                " ◧ {}  ·  ⧉ {}  ·  ◈ {}  ·  +Win  ·  +Sess",
                 dcfg.edge.label(),
                 dcfg.layout.label(),
                 dcfg.visibility.label()
             )
         } else {
             format!(
-                "[D:{}] [M:{}] [P:{}] [+New]",
+                "[D:{}] [M:{}] [P:{}] [+Win] [+Sess]",
                 dcfg.edge.label(),
                 dcfg.layout.label(),
                 dcfg.visibility.label()
@@ -392,11 +392,11 @@ pub fn render_workspace_drawer(
                 footer_style,
             );
             let footer_text = if wm.is_leader_pending() {
-                " ⌨ LEADER [Ctrl+X] — d:Close  c:New  w:ClosePane  ?:Help "
+                " ⌨ LEADER [Ctrl+X] — d:Close  c:NewWin  N:NewSess  ?:Help "
             } else if is_modern {
-                " ↑↓ Select · ⏎ Focus · s Save · r Rename · N New · F7 Hide"
+                " +Win · +Sess · JK Move · <> Par · F7/^Xd"
             } else {
-                "↑↓:Nav Ent:Sel s:Save r:Rename N:New m:Push F7:Hide"
+                "[+Win][+Sess] JK:Move <>:Par F7"
             };
             write_clipped_line(
                 buf,

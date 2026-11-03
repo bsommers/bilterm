@@ -113,3 +113,138 @@ fn multiple_layout_profiles_dynamic_switching_and_active_default_selection() {
     assert_eq!(wm_startup.active_layout_profile(), "quad");
     assert_eq!(wm_startup.pane_count(), 4);
 }
+
+#[test]
+fn mid_flight_auto_arrange_and_position_save_restore_preserve_live_pane_output() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut wm = WindowManager::new_headless(24, 80);
+    wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+    let ws_area = ratatui::layout::Rect::new(0, 0, 80, 24);
+
+    // Spawn 4 panes and inject unique live PTY output into each pane
+    run_cmd(&mut wm, ":split v");
+    run_cmd(&mut wm, ":split h");
+    run_cmd(&mut wm, ":split v");
+    assert_eq!(wm.pane_count(), 4);
+
+    let pane_ids = wm.ordered_pane_ids();
+    assert_eq!(pane_ids, vec![1, 2, 3, 4]);
+    for &id in &pane_ids {
+        let marker = format!("LIVE_PANE_{id}\r\n");
+        wm.pane_mut(id)
+            .expect("pane exists")
+            .process_pty_output(marker.as_bytes());
+    }
+
+    let assert_all_panes_preserved = |wm: &WindowManager| {
+        assert_eq!(wm.pane_count(), 4);
+        for &id in &pane_ids {
+            let contents = wm
+                .pane(id)
+                .expect("pane still open")
+                .vt()
+                .contents()
+                .replace('\n', "");
+            assert!(
+                contents.contains(&format!("LIVE_PANE_{id}")),
+                "pane #{id} live PTY output must be preserved in-place, got: {contents:?}"
+            );
+        }
+    };
+
+    // 1. :arrange columns -> 4 side-by-side vertical columns in Tiled mode
+    run_cmd(&mut wm, ":arrange columns");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Tiled);
+    assert_all_panes_preserved(&wm);
+    let col_rects = wm.split_tree().compute_rects(ws_area);
+    assert_eq!(col_rects.len(), 4);
+    for (_, r) in &col_rects {
+        assert_eq!(r.y, ws_area.y);
+        assert_eq!(r.height, ws_area.height);
+    }
+    assert!(col_rects[0].1.x < col_rects[1].1.x);
+    assert!(col_rects[1].1.x < col_rects[2].1.x);
+    assert!(col_rects[2].1.x < col_rects[3].1.x);
+
+    // 2. :arrange rows -> 4 stacked horizontal rows in Tiled mode
+    run_cmd(&mut wm, ":arrange rows");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Tiled);
+    assert_all_panes_preserved(&wm);
+    let row_rects = wm.split_tree().compute_rects(ws_area);
+    assert_eq!(row_rects.len(), 4);
+    for (_, r) in &row_rects {
+        assert_eq!(r.x, ws_area.x);
+        assert_eq!(r.width, ws_area.width);
+    }
+    assert!(row_rects[0].1.y < row_rects[1].1.y);
+    assert!(row_rects[1].1.y < row_rects[2].1.y);
+    assert!(row_rects[2].1.y < row_rects[3].1.y);
+
+    // 3. :arrange main-side -> main pane on left (50%), remaining 3 stacked horizontally on right
+    run_cmd(&mut wm, ":arrange main-side");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Tiled);
+    assert_all_panes_preserved(&wm);
+    let main_side_rects = wm.split_tree().compute_rects(ws_area);
+    assert_eq!(main_side_rects.len(), 4);
+    assert_eq!(main_side_rects[0].1.x, ws_area.x);
+    assert_eq!(main_side_rects[0].1.width, ws_area.width / 2);
+    assert_eq!(main_side_rects[0].1.height, ws_area.height);
+    for (_, r) in &main_side_rects[1..] {
+        assert_eq!(r.x, ws_area.x + ws_area.width / 2);
+    }
+    assert!(main_side_rects[1].1.y < main_side_rects[2].1.y);
+    assert!(main_side_rects[2].1.y < main_side_rects[3].1.y);
+
+    // 4. :arrange grid -> balanced 2x2 grid in Tiled mode
+    run_cmd(&mut wm, ":arrange grid");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Tiled);
+    assert_all_panes_preserved(&wm);
+    let grid_rects = wm.split_tree().compute_rects(ws_area);
+    assert_eq!(grid_rects.len(), 4);
+    assert_eq!(grid_rects[0].1.x, ws_area.x);
+    assert_eq!(grid_rects[0].1.y, ws_area.y);
+    assert_eq!(grid_rects[1].1.x, ws_area.x);
+    assert!(grid_rects[1].1.y > ws_area.y);
+    assert!(grid_rects[2].1.x > ws_area.x);
+    assert_eq!(grid_rects[2].1.y, ws_area.y);
+    assert!(grid_rects[3].1.x > ws_area.x);
+    assert!(grid_rects[3].1.y > ws_area.y);
+
+    // 5. :arrange cascade -> Stacked mode with clean Borland cascade (no custom geometries)
+    run_cmd(&mut wm, ":arrange cascade");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Stacked);
+    assert!(!wm.z_stack().has_any_custom_geometry());
+    assert_all_panes_preserved(&wm);
+
+    // 6. :arrange stack-grid -> Stacked mode with non-overlapping 2D grid rectangles
+    run_cmd(&mut wm, ":arrange stack-grid");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Stacked);
+    assert!(wm.z_stack().has_any_custom_geometry());
+    assert_all_panes_preserved(&wm);
+    let stack_grid_rects = wm.compute_workspace_rects(ws_area);
+    assert_eq!(stack_grid_rects.len(), 4);
+    for i in 0..stack_grid_rects.len() {
+        for j in (i + 1)..stack_grid_rects.len() {
+            let a = stack_grid_rects[i].1;
+            let b = stack_grid_rects[j].1;
+            let horiz_disjoint = a.x + a.width <= b.x || b.x + b.width <= a.x;
+            let vert_disjoint = a.y + a.height <= b.y || b.y + b.height <= a.y;
+            assert!(
+                horiz_disjoint || vert_disjoint,
+                "stack-grid windows must not overlap: {a:?} vs {b:?}"
+            );
+        }
+    }
+
+    // 7. Save mid-flight window positions via :layout save-pos, rearrange to columns, then restore-pos
+    run_cmd(&mut wm, ":layout save-pos");
+    run_cmd(&mut wm, ":arrange columns");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Tiled);
+    assert!(!wm.z_stack().has_any_custom_geometry());
+
+    run_cmd(&mut wm, ":layout restore-pos");
+    assert_eq!(wm.layout_mode(), WorkspaceLayoutMode::Stacked);
+    assert!(wm.z_stack().has_any_custom_geometry());
+    assert_eq!(wm.compute_workspace_rects(ws_area), stack_grid_rects);
+    assert_all_panes_preserved(&wm);
+}

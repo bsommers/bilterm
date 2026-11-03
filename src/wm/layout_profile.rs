@@ -149,6 +149,11 @@ impl WindowManager {
         true
     }
 
+    /// Autosaves the active layout profile when `config.layout_autosave` is enabled.
+    pub fn autosave_active_layout_profile(&mut self) -> bool {
+        self.maybe_autosave_layout()
+    }
+
     /// Explicitly saves the current workspace pane/window layout under profile `name` (or the active profile if `None`).
     pub fn save_layout_profile(&mut self, name: Option<&str>) -> Result<String> {
         let profile = match name.filter(|s| !s.trim().is_empty()) {
@@ -157,12 +162,250 @@ impl WindowManager {
         };
         self.config.active_layout_profile = profile.clone();
         let snap = self.snapshot_session(&profile);
+        self.layout_profiles_mem
+            .insert("layout_profile_meta".to_string(), snap.clone());
         self.layout_profiles_mem.insert(profile.clone(), snap);
         if self.should_persist_profiles_to_disk() {
             let _ = self.save_session(&profile)?;
             self.persist_layout_profile_meta();
         }
         Ok(profile)
+    }
+
+    fn build_balanced_split_tree(ids: &[PaneId]) -> SplitTree {
+        let first = ids.first().copied().unwrap_or(1);
+        let mut tree = SplitTree::new(first);
+        Self::subdivide_balanced(&mut tree, ids, 0);
+        tree
+    }
+
+    fn subdivide_balanced(tree: &mut SplitTree, slice: &[PaneId], depth: usize) {
+        if slice.len() <= 1 {
+            return;
+        }
+        let mid = slice.len() / 2;
+        let left = &slice[..mid];
+        let right = &slice[mid..];
+        let dir = if depth.is_multiple_of(2) {
+            SplitDirection::Vertical
+        } else {
+            SplitDirection::Horizontal
+        };
+        tree.split_leaf(left[0], right[0], dir);
+        Self::subdivide_balanced(tree, left, depth + 1);
+        Self::subdivide_balanced(tree, right, depth + 1);
+    }
+
+    fn build_directional_split_tree(ids: &[PaneId], dir: SplitDirection) -> SplitTree {
+        let first = ids.first().copied().unwrap_or(1);
+        let mut tree = SplitTree::new(first);
+        Self::subdivide_directional(&mut tree, ids, dir);
+        tree
+    }
+
+    fn subdivide_directional(tree: &mut SplitTree, slice: &[PaneId], dir: SplitDirection) {
+        if slice.len() <= 1 {
+            return;
+        }
+        let mid = slice.len() / 2;
+        let left = &slice[..mid];
+        let right = &slice[mid..];
+        tree.split_leaf(left[0], right[0], dir);
+        Self::subdivide_directional(tree, left, dir);
+        Self::subdivide_directional(tree, right, dir);
+    }
+
+    fn arrange_workspace_area(&self) -> ratatui::layout::Rect {
+        let (rows, cols) = self.default_size;
+        let full = ratatui::layout::Rect::new(0, 0, cols.max(1), rows.max(1));
+        let mut top_off =
+            u16::from(self.config.show_top_menubar && full.y == 0 && full.height >= 4);
+        if top_off == 0
+            && crate::ui::shell::wants_pill_bar(&self.config, self.panes.len(), full.height)
+        {
+            top_off = 1;
+        }
+        let bot_off = u16::from(self.config.show_dos_fkey_bar && full.height >= 4 + top_off);
+        let ws = ratatui::layout::Rect::new(
+            full.x,
+            full.y + top_off,
+            full.width,
+            full.height.saturating_sub(top_off + bot_off),
+        );
+        self.effective_workspace_area(ws)
+    }
+
+    /// Rearranges all currently open panes IN-PLACE according to `pattern` (`:arrange [pattern]`, `:layout <pattern>`),
+    /// preserving all live PTYs, scrollback, and command state without spawning or closing panes.
+    pub fn auto_arrange_windows(&mut self, pattern: &str) -> usize {
+        let ids = self.ordered_pane_ids();
+        if ids.is_empty() {
+            return 0;
+        }
+        for &id in &ids {
+            if !self.z_stack.order().contains(&id) {
+                self.z_stack.push(id);
+            }
+        }
+
+        let norm = pattern.trim().to_ascii_lowercase();
+        match norm.as_str() {
+            "columns" | "cols" | "vertical" | "v" | "side-by-side" => {
+                self.layout_mode = WorkspaceLayoutMode::Tiled;
+                self.z_stack.reset_geometries();
+                self.split_tree = Self::build_directional_split_tree(&ids, SplitDirection::Vertical);
+            }
+            "rows" | "horizontal" | "h" | "top-bottom" => {
+                self.layout_mode = WorkspaceLayoutMode::Tiled;
+                self.z_stack.reset_geometries();
+                self.split_tree =
+                    Self::build_directional_split_tree(&ids, SplitDirection::Horizontal);
+            }
+            "main-side" | "main-vertical" | "ide" => {
+                self.layout_mode = WorkspaceLayoutMode::Tiled;
+                self.z_stack.reset_geometries();
+                let mut tree = SplitTree::new(ids[0]);
+                if ids.len() >= 2 {
+                    tree.split_leaf(ids[0], ids[1], SplitDirection::Vertical);
+                    Self::subdivide_directional(&mut tree, &ids[1..], SplitDirection::Horizontal);
+                }
+                self.split_tree = tree;
+            }
+            "main-top" | "main-horizontal" => {
+                self.layout_mode = WorkspaceLayoutMode::Tiled;
+                self.z_stack.reset_geometries();
+                let mut tree = SplitTree::new(ids[0]);
+                if ids.len() >= 2 {
+                    tree.split_leaf(ids[0], ids[1], SplitDirection::Horizontal);
+                    Self::subdivide_directional(&mut tree, &ids[1..], SplitDirection::Vertical);
+                }
+                self.split_tree = tree;
+            }
+            "stack" | "stacked" | "cascade" | "deck" => {
+                self.layout_mode = WorkspaceLayoutMode::Stacked;
+                self.z_stack.reset_geometries();
+            }
+            "stack-grid" | "float-grid" => {
+                self.layout_mode = WorkspaceLayoutMode::Stacked;
+                self.z_stack.reset_geometries();
+                let grid_tree = Self::build_balanced_split_tree(&ids);
+                let ws_area = self.arrange_workspace_area();
+                for (id, rect) in grid_tree.compute_rects(ws_area) {
+                    self.z_stack.set_window_rect(id, rect, ws_area);
+                }
+                self.split_tree = grid_tree;
+            }
+            // "grid" | "tile" | "tiled" | "equal" | "auto" | "" and any default fallback
+            _ => {
+                self.layout_mode = WorkspaceLayoutMode::Tiled;
+                self.z_stack.reset_geometries();
+                self.split_tree = Self::build_balanced_split_tree(&ids);
+            }
+        }
+
+        self.zoomed_pane = None;
+        let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
+        let _ = self.resize_all(vp);
+        if self.config.layout_autosave {
+            self.autosave_active_layout_profile();
+        }
+        self.panes.len()
+    }
+
+    /// Saves the current `layout_mode`, `split_tree`, and `z_stack` floating window geometries
+    /// mid-flight under profile `name` (or the active profile when `None`) via [`Self::save_layout_profile`].
+    pub fn save_window_positions(&mut self, name: Option<&str>) -> Result<String> {
+        let prev_active = self.config.active_layout_profile.clone();
+        let has_explicit_name = name.is_some_and(|s| !s.trim().is_empty());
+        let saved = self.save_layout_profile(name)?;
+        if has_explicit_name && !prev_active.trim().is_empty() {
+            self.config.active_layout_profile = prev_active;
+            self.persist_layout_profile_meta();
+        }
+        Ok(saved)
+    }
+
+    /// Restores a saved profile's `layout_mode`, `split_tree`, and `z_geometries` / `z_order`
+    /// IN-PLACE onto the currently running panes without replacing `self.panes` or respawning PTYs.
+    pub fn restore_window_positions(&mut self, name: Option<&str>) -> Result<usize> {
+        let explicit_name = name.map(str::trim).filter(|s| !s.is_empty());
+        let saved = if let Some(raw) = explicit_name {
+            let target = sanitize_profile_name(raw);
+            if let Some(mem) = self.layout_profiles_mem.get(&target).cloned() {
+                mem
+            } else {
+                let path = self.resolve_session_dir()?.join(format!("{target}.toml"));
+                let raw_toml = std::fs::read_to_string(&path)?;
+                let parsed: SavedWorkspaceSession = toml::from_str(&raw_toml)
+                    .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+                self.layout_profiles_mem.insert(target, parsed.clone());
+                parsed
+            }
+        } else if let Some(mem) = self.layout_profiles_mem.get("layout_profile_meta").cloned() {
+            mem
+        } else {
+            let target = sanitize_profile_name(&self.config.active_layout_profile);
+            if let Some(mem) = self.layout_profiles_mem.get(&target).cloned() {
+                mem
+            } else {
+                let path = self.resolve_session_dir()?.join(format!("{target}.toml"));
+                let raw_toml = std::fs::read_to_string(&path)?;
+                let parsed: SavedWorkspaceSession = toml::from_str(&raw_toml)
+                    .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+                self.layout_profiles_mem.insert(target, parsed.clone());
+                parsed
+            }
+        };
+
+        let current_ids = self.ordered_pane_ids();
+        if current_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let saved_leaves = saved.split_tree.leaves();
+        if saved_leaves.len() == current_ids.len()
+            && saved_leaves.iter().all(|id| self.panes.contains_key(id))
+        {
+            self.split_tree = saved.split_tree.clone();
+        } else {
+            self.split_tree = Self::build_balanced_split_tree(&current_ids);
+        }
+
+        let mut new_z_order: Vec<PaneId> = saved
+            .z_order
+            .iter()
+            .copied()
+            .filter(|id| self.panes.contains_key(id))
+            .collect();
+        for &id in &current_ids {
+            if !new_z_order.contains(&id) {
+                new_z_order.push(id);
+            }
+        }
+
+        let mut geom_map = BTreeMap::new();
+        for (k, v) in &saved.z_geometries {
+            if let Ok(id) = k.parse::<PaneId>() {
+                if self.panes.contains_key(&id) {
+                    geom_map.insert(id, *v);
+                } else if let Some(pos) = saved.z_order.iter().position(|&old_id| old_id == id)
+                    && let Some(&mapped_id) = current_ids.get(pos)
+                {
+                    geom_map.insert(mapped_id, *v);
+                }
+            }
+        }
+
+        self.z_stack = ZStack::from_order_and_geometries(new_z_order, geom_map);
+        self.layout_mode = saved.layout_mode;
+        self.zoomed_pane = saved.zoomed_pane.filter(|id| self.panes.contains_key(id));
+
+        let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
+        let _ = self.resize_all(vp);
+        if self.config.layout_autosave {
+            self.autosave_active_layout_profile();
+        }
+        Ok(self.panes.len())
     }
 
     /// Sets `name` as the active default layout profile (`default_layout_profile`) loaded on startup.
@@ -598,6 +841,59 @@ impl WindowManager {
                     ),
                     Err(e) => format!("Profile save error: {e}"),
                 };
+                self.active_pane_mut().set_status_message(Some(msg));
+            }
+            "save-pos" | "snapshot" => {
+                let name = parts.get(1).copied();
+                let msg = match self.save_window_positions(name) {
+                    Ok(saved) => format!(
+                        "Saved mid-flight window positions to '{saved}' ({} pane(s), mode={:?})",
+                        self.panes.len(),
+                        self.layout_mode
+                    ),
+                    Err(e) => format!("Save window positions error: {e}"),
+                };
+                self.active_pane_mut().set_status_message(Some(msg));
+            }
+            "restore-pos" | "apply-pos" => {
+                let name = parts.get(1).copied();
+                let msg = match self.restore_window_positions(name) {
+                    Ok(count) => format!(
+                        "Restored mid-flight window positions ({count} live pane(s) preserved, mode={:?})",
+                        self.layout_mode
+                    ),
+                    Err(e) => format!("Restore window positions error: {e}"),
+                };
+                self.active_pane_mut().set_status_message(Some(msg));
+            }
+            "arrange" => {
+                let pat = parts.get(1).copied().unwrap_or("grid");
+                let count = self.auto_arrange_windows(pat);
+                let msg = format!(
+                    "Auto-arranged {count} window(s) as '{pat}' (mode={:?})",
+                    self.layout_mode
+                );
+                self.active_pane_mut().set_status_message(Some(msg));
+            }
+            pat @ ("grid"
+            | "equal"
+            | "columns"
+            | "cols"
+            | "vertical"
+            | "rows"
+            | "horizontal"
+            | "main-side"
+            | "main-vertical"
+            | "ide"
+            | "main-top"
+            | "main-horizontal"
+            | "stack-grid"
+            | "float-grid") => {
+                let count = self.auto_arrange_windows(pat);
+                let msg = format!(
+                    "Auto-arranged {count} window(s) as '{pat}' (mode={:?})",
+                    self.layout_mode
+                );
                 self.active_pane_mut().set_status_message(Some(msg));
             }
             "default" | "set-default" => {

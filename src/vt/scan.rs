@@ -168,13 +168,23 @@ impl VtParser {
                 .chars()
                 .take_while(|c| c.is_ascii_digit())
                 .collect();
-            if after_gt[digits.len()..].starts_with('u') {
+            let tail = &after_gt[digits.len()..];
+            if tail.starts_with('u') {
                 let flags = digits.parse::<u8>().unwrap_or(0) & 0x1F;
                 let stack = self.kitty_keyboard_stack_mut();
                 if stack.len() >= 16 {
                     stack.remove(0);
                 }
                 stack.push(flags);
+            } else if tail.starts_with('c') && (digits.is_empty() || digits == "0") {
+                self.pending_query_responses
+                    .push(b"\x1b[>62;260;0c".to_vec());
+                self.record_escape_sequence("CSI >c -> >62;260;0c".to_string());
+            } else if tail.starts_with('q') && (digits.is_empty() || digits == "0") {
+                self.pending_query_responses.push(
+                    format!("\x1bP>|bilterm({})\x1b\\", env!("CARGO_PKG_VERSION")).into_bytes(),
+                );
+                self.record_escape_sequence("CSI >q -> XTVERSION".to_string());
             }
         } else if let Some(after_lt) = rest.strip_prefix('<') {
             let digits: String = after_lt

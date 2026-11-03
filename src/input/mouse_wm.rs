@@ -718,8 +718,23 @@ pub(super) fn handle_drawer_mouse_event(
             if mouse.row == dr.y || (edge.is_vertical() && mouse.row == dr.y + 1) {
                 let rel_x = mouse.column.saturating_sub(dr.x);
                 let title_shift = if mouse.row == dr.y { 6 } else { 0 };
-                if edge.is_vertical() && mouse.row == dr.y + 1 && rel_x >= dr.width.saturating_sub(8) {
-                    let _ = wm.split_focused(SplitDirection::Horizontal);
+                if edge.is_vertical() && mouse.row == dr.y + 1 && rel_x >= 38 {
+                    if let Ok(name) = wm.create_new_session(None, false) {
+                        wm.drawer_mut().focused = true;
+                        wm.sync_drawer_selection_to_active_pane();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("Created new session '{name}'")));
+                    }
+                } else if edge.is_vertical()
+                    && mouse.row == dr.y + 1
+                    && (rel_x >= 31 || rel_x >= dr.width.saturating_sub(8))
+                {
+                    if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
+                        wm.drawer_mut().focused = true;
+                        wm.sync_drawer_selection_to_active_pane();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("Created new window #{id}")));
+                    }
                 } else if rel_x < 10 + title_shift {
                     wm.set_drawer_edge(None);
                 } else if rel_x < 20 + title_shift {
@@ -738,11 +753,29 @@ pub(super) fn handle_drawer_mouse_event(
             }
             if edge.is_vertical() && dr.height >= 5 && mouse.row == dr.y + dr.height.saturating_sub(2) {
                 let rel_x = mouse.column.saturating_sub(dr.x + 1);
-                if (33..40).contains(&rel_x) {
-                    let _ = wm.split_focused(SplitDirection::Horizontal);
-                } else if (40..47).contains(&rel_x) {
-                    wm.set_drawer_layout(None);
-                } else if rel_x >= 47 {
+                let is_mod = wm.config().is_modern();
+                let win_end = if is_mod { 7 } else { 6 };
+                let sess_end = if is_mod { 15 } else { 13 };
+                let move_end = if is_mod { 24 } else { 21 };
+                let par_end = if is_mod { 32 } else { 28 };
+                wm.drawer_mut().focused = true;
+                if rel_x < win_end {
+                    if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
+                        wm.sync_drawer_selection_to_active_pane();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("Created new window #{id}")));
+                    }
+                } else if rel_x < sess_end {
+                    if let Ok(name) = wm.create_new_session(None, false) {
+                        wm.sync_drawer_selection_to_active_pane();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("Created new session '{name}'")));
+                    }
+                } else if rel_x < move_end {
+                    wm.drawer_move_selected_session(false);
+                } else if rel_x < par_end {
+                    wm.drawer_reparent_selected_session(true);
+                } else {
                     wm.close_drawer();
                 }
                 return Some(AppAction::Handled);
@@ -790,6 +823,27 @@ pub(super) fn handle_drawer_mouse_event(
                 wm.drawer_select_prev();
             } else {
                 wm.drawer_select_next();
+            }
+            Some(AppAction::Handled)
+        }
+        MouseEventKind::Drag(MouseButton::Left) => {
+            if wm.drawer_config().edge.is_vertical() {
+                let inner_h = dr.height.saturating_sub(2);
+                let rows_len = wm.drawer_rows().len();
+                let (hdr_h, ftr_h, row_step) =
+                    crate::ui::drawer::drawer_vertical_layout_metrics(wm.config(), inner_h, rows_len);
+                let list_start_y = dr.y + 1 + hdr_h;
+                let list_end_y = dr.y + dr.height.saturating_sub(1 + ftr_h);
+                if mouse.row >= list_start_y && mouse.row < list_end_y {
+                    let list_rows_px = usize::from(inner_h.saturating_sub(hdr_h + ftr_h)).max(1);
+                    let list_items_cap = (list_rows_px / row_step).max(1);
+                    let selected = wm.drawer().selected_index.min(rows_len.saturating_sub(1));
+                    let scroll = wm.drawer().effective_scroll(selected, list_items_cap, rows_len);
+                    let row_idx = scroll + (usize::from(mouse.row.saturating_sub(list_start_y)) / row_step);
+                    if row_idx < rows_len && row_idx != selected {
+                        wm.drawer_move_selected_session(row_idx < selected);
+                    }
+                }
             }
             Some(AppAction::Handled)
         }

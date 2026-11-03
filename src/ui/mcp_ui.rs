@@ -228,7 +228,7 @@ fn render_mcp_console_modern(
         }
     }
 
-    let footer = "  ↑↓ Select  ·  ⏎ Activate  ·  r Refresh  ·  f Freeze  ·  n Branch  ·  m Float/Push  ·  d Edge  ·  Esc Close  ";
+    let footer = "  ↑↓ Select · ⏎ Activate · JK Move · <> Parent · + Win · n Branch · f Freeze · m/d Mode · Esc  ";
     write_clipped(
         buf,
         bounds.x + 2,
@@ -387,7 +387,7 @@ pub fn render_mcp_console(
     let title = format!(" ◈ {} {mode_tag} [X] ", state.title);
     write_clipped(buf, bounds.x + 2, bounds.y, right.saturating_sub(1), &title, gold_style);
 
-    let footer = " ↑/↓:Select │ Enter/Click:Activate │ r:Refresh │ f:Freeze │ n:Branch │ m:Float/Push │ d:Edge │ Esc:Close ";
+    let footer = " ↑/↓:Select │ Enter/Click:Activate │ r:Refresh │ J/K:Move │ </>:Parent │ f:Freeze │ n:Branch │ m/d │ Esc ";
     write_clipped(buf, bounds.x + 2, bottom, right.saturating_sub(1), footer, gold_style);
 
     let mut row = bounds.y + 1;

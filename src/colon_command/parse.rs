@@ -158,6 +158,12 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         },
         "zoom" => Some(Ok(ColonCommand::ZoomToggle)),
         "close" => Some(Ok(ColonCommand::ClosePane)),
+        "arrange" | "auto-arrange" => {
+            let pattern = parts.get(1).copied().unwrap_or("grid");
+            Some(Ok(ColonCommand::LayoutProfileCommand(format!(
+                "arrange {pattern}"
+            ))))
+        }
         "layout" => match parts.get(1).copied() {
             Some("stack") => {
                 Some(Ok(ColonCommand::LayoutMode(WorkspaceLayoutMode::Stacked)))
@@ -170,6 +176,19 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
             Some(
                 "save"
+                | "save-pos"
+                | "snapshot"
+                | "restore-pos"
+                | "apply-pos"
+                | "arrange"
+                | "grid"
+                | "columns"
+                | "cols"
+                | "rows"
+                | "main-side"
+                | "main-top"
+                | "stack-grid"
+                | "float-grid"
                 | "load"
                 | "switch"
                 | "use"
@@ -202,14 +221,13 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 name @ ("single"
                 | "dual-v"
                 | "dual-h"
-                | "main-side"
                 | "quad"
                 | "side-by-side"
                 | "top-bottom"
                 | "grid-4"),
             ) => Some(Ok(ColonCommand::LayoutProfileCommand(format!("switch {name}")))),
             _ => Some(Err(
-                "Usage: :layout tile | stack | save [name] | switch <profile> | default [name] | autosave [on|off] | list | next | prev"
+                "Usage: :layout tile | stack | arrange [pattern] | grid | columns | rows | main-side | main-top | stack-grid | save [name] | save-pos [name] | restore-pos [name] | switch <profile> | default [name] | autosave [on|off] | list | next | prev"
                     .to_string(),
             )),
         },

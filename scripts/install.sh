@@ -275,8 +275,7 @@ try_download_prebuilt() {
             found_bin="$(find "$tmp_dir" -name "bilterm" -type f | head -n 1 || true)"
         fi
         if [[ -n "$found_bin" && -f "$found_bin" ]]; then
-            cp -f "$found_bin" "$dest_bin"
-            chmod 0755 "$dest_bin"
+            install_bin_file "$found_bin" "$dest_bin"
             rm -rf "$tmp_dir"
             log_ok "Downloaded prebuilt bilterm (${triple})"
             return 0
@@ -292,8 +291,9 @@ install_bin_file() {
     run_cmd rm -f "$dest_bin"
     run_cmd cp -f "$src_bin" "$dest_bin"
     run_cmd chmod 0755 "$dest_bin"
-    if [[ "$DRY_RUN" -eq 0 && "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1; then
-        codesign --force --sign - "$dest_bin" >/dev/null 2>&1 || true
+    if [[ "$DRY_RUN" -eq 0 && "$(uname -s)" == "Darwin" ]]; then
+        command -v xattr >/dev/null 2>&1 && xattr -cr "$dest_bin" 2>/dev/null || true
+        command -v codesign >/dev/null 2>&1 && codesign --force --sign - "$dest_bin" >/dev/null 2>&1 || true
     fi
 }
 
@@ -476,6 +476,8 @@ export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bi
 exec "${TARGET_BIN}" --gui "\$@"
 LAUNCH_EOF
             chmod 0755 "${TARGET_MAC_APP}/Contents/MacOS/bilterm-launcher"
+            command -v xattr >/dev/null 2>&1 && xattr -cr "${TARGET_MAC_APP}" 2>/dev/null || true
+            command -v codesign >/dev/null 2>&1 && codesign --force --deep --sign - "${TARGET_MAC_APP}" >/dev/null 2>&1 || true
             touch "${TARGET_MAC_APP}" 2>/dev/null || true
             if [[ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]]; then
                 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${TARGET_MAC_APP}" >/dev/null 2>&1 || true

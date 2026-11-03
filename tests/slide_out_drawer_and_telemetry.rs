@@ -17,10 +17,10 @@ fn drawer_supports_all_four_edges_and_visibility_modes_including_autohide_trigge
     let mut wm = WindowManager::new_headless(24, 100);
     let area = Rect::new(0, 0, 100, 24);
 
-    // Default: OnDemand, Left, Overlay -> initially hidden
+    // Default: OnDemand, Left, Push -> initially hidden
     assert_eq!(wm.drawer_config().edge, DrawerEdge::Left);
     assert_eq!(wm.drawer_config().visibility, DrawerVisibilityMode::OnDemand);
-    assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Overlay);
+    assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Push);
     assert!(!wm.is_drawer_effectively_visible());
     assert!(wm.drawer_rect(area).is_none());
 
@@ -214,9 +214,11 @@ fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
     assert_eq!(wm.active_pane_id(), 1);
     assert!(wm.drawer().focused);
 
-    // Press 'd' to cycle edge (Left -> Right), 'm' to toggle Overlay -> Push, 'p' to pin Fixed
+    // Press 'd' to cycle edge (Left -> Right), 'm' to toggle Push -> Overlay -> Push, 'p' to pin Fixed
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
     assert_eq!(wm.drawer_config().edge, DrawerEdge::Right);
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
+    assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Overlay);
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
     assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Push);
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)).unwrap();
@@ -967,4 +969,96 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
             );
         }
     }
+}
+
+#[test]
+fn da2_query_drawer_new_win_sess_and_visual_parent_moves_work() {
+    use bilterm::vt::VtParser;
+    use bilterm::wm::drawer::DrawerRowKind;
+
+    // 1. Secondary Device Attributes (DA2: CSI > c / CSI > 0 c) & XTVERSION (CSI > q) for `agy` CLI
+    let mut vt = VtParser::new(24, 80, 1000);
+    vt.process(b"\x1b[>c");
+    assert_eq!(vt.take_query_responses(), vec![b"\x1b[>62;260;0c".to_vec()]);
+    vt.process(b"\x1b[>0c");
+    assert_eq!(vt.take_query_responses(), vec![b"\x1b[>62;260;0c".to_vec()]);
+    vt.process(b"\x1b[>q");
+    let xtver = vt.take_query_responses();
+    assert_eq!(xtver.len(), 1);
+    assert!(String::from_utf8_lossy(&xtver[0]).starts_with("\x1bP>|bilterm("));
+
+    // 2. Slide-out drawer defaults to Push and supports new windows & sessions via keyboard & mouse
+    let tmp = tempfile::tempdir().unwrap();
+    let mut wm = WindowManager::new_headless(24, 100);
+    wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
+    let area = Rect::new(0, 0, 100, 24);
+    assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Push);
+
+    // Open drawer via control sequence `Ctrl+X d`
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
+    assert!(wm.drawer().open && wm.drawer().focused);
+
+    // Create a new window with 'c' while drawer is focused
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)).unwrap();
+    assert_eq!(wm.pane_count(), 2);
+    assert!(wm.drawer().focused);
+
+    // Create another window by clicking `[+Win]` in the drawer footer (`dr.y + dr.height - 2`, `dr.x + 2`)
+    let dr = wm.drawer_rect(area).unwrap();
+    let footer_row = dr.y + dr.height - 2;
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: dr.x + 2,
+            row: footer_row,
+            modifiers: KeyModifiers::NONE,
+        },
+        area,
+    )
+    .unwrap();
+    assert_eq!(wm.pane_count(), 3);
+    assert_eq!(wm.ordered_pane_ids(), vec![1, 2, 3]);
+
+    // Visually move Pane #3 up above Pane #2 using 'K' in the drawer
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('K'), KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(wm.ordered_pane_ids(), vec![1, 3, 2]);
+    // Move Pane #3 back down below Pane #2 using 'J'
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('J'), KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(wm.ordered_pane_ids(), vec![1, 2, 3]);
+
+    // Create a new session by clicking `[+Sess]` in the drawer footer (`dr.x + 8`)
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: dr.x + 8,
+            row: footer_row,
+            modifiers: KeyModifiers::NONE,
+        },
+        area,
+    )
+    .unwrap();
+    assert_eq!(wm.config().history_session, "session-2");
+
+    // Select the saved "default" session row in the drawer and reparent it under "session-2" with '>'
+    let def_pos = wm
+        .drawer_rows()
+        .iter()
+        .position(|r| r.kind == DrawerRowKind::SessionHeader("default".to_string()))
+        .expect("default session row in drawer");
+    wm.drawer_mut().selected_index = def_pos;
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('>'), KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(
+        wm.session_tree().node("default").and_then(|n| n.parent.as_deref()),
+        Some("session-2")
+    );
+
+    // Promote "default" back to a root session with '<'
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('<'), KeyModifiers::SHIFT)).unwrap();
+    assert_eq!(
+        wm.session_tree().node("default").and_then(|n| n.parent.as_deref()),
+        None
+    );
 }

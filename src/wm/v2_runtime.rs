@@ -375,8 +375,7 @@ impl WindowManager {
             .daemon_state
             .session_tree
             .render_herdr_tree_lines(&active_sess);
-        let mut pane_ids: Vec<PaneId> = self.panes.keys().copied().collect();
-        pane_ids.sort_unstable();
+        let pane_ids: Vec<PaneId> = self.ordered_pane_ids();
 
         let mut out = Vec::new();
         for line in base_lines {
@@ -545,6 +544,119 @@ impl WindowManager {
         self.active_pane_mut()
             .set_status_message(Some(format!("MCP: Spawned session branch '{child}'")));
         true
+    }
+
+    /// Visually moves the selected session or pane up/down inside the `:mcp` console (`MCP-03`, `TREE-01`).
+    pub fn move_selected_mcp_item(&mut self, up: bool) -> bool {
+        match self.mcp_console.selected_action() {
+            Some(McpRowAction::FocusPane(pane_id)) => {
+                let ordered = self.ordered_pane_ids();
+                if let Some(pos) = ordered.iter().position(|&p| p == pane_id) {
+                    let partner_opt = if up {
+                        pos.checked_sub(1).and_then(|i| ordered.get(i).copied())
+                    } else {
+                        ordered.get(pos + 1).copied()
+                    };
+                    if let Some(partner_id) = partner_opt
+                        && self.split_tree.swap_leaves(pane_id, partner_id)
+                    {
+                        self.reflow_default_viewport();
+                        self.refresh_mcp_console_view();
+                        if let Some(new_row) = self
+                            .mcp_console
+                            .row_actions
+                            .iter()
+                            .position(|a| *a == McpRowAction::FocusPane(pane_id))
+                        {
+                            self.mcp_console.selected_row = new_row;
+                        }
+                        self.active_pane_mut().set_status_message(Some(format!(
+                            "MCP: Moved Pane #{pane_id} {}",
+                            if up { "up" } else { "down" }
+                        )));
+                        return true;
+                    }
+                }
+                false
+            }
+            Some(McpRowAction::SessionNode(node)) => {
+                let moved = self.daemon_state.session_tree.move_node(&node, up);
+                let _ = self.move_session_in_order(Some(&node), if up { "up" } else { "down" });
+                self.refresh_mcp_console_view();
+                if let Some(new_row) = self
+                    .mcp_console
+                    .row_actions
+                    .iter()
+                    .position(|a| *a == McpRowAction::SessionNode(node.clone()))
+                {
+                    self.mcp_console.selected_row = new_row;
+                }
+                if moved {
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "MCP: Moved session '{node}' {}",
+                        if up { "up" } else { "down" }
+                    )));
+                }
+                moved
+            }
+            _ => false,
+        }
+    }
+
+    /// Reparents (`indent == true`, grafts under preceding session) or detaches to root (`indent == false`)
+    /// the selected session node in `:mcp` (`MCP-03`, `TREE-01`).
+    pub fn reparent_selected_mcp_node(&mut self, indent: bool) -> bool {
+        let Some(McpRowAction::SessionNode(target)) = self.mcp_console.selected_action() else {
+            return false;
+        };
+        let ok = if indent {
+            let sess_nodes: Vec<String> = self
+                .mcp_console
+                .row_actions
+                .iter()
+                .filter_map(|a| match a {
+                    McpRowAction::SessionNode(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect();
+            let pos = sess_nodes.iter().position(|s| s == &target).unwrap_or(0);
+            let parent_cand = if pos > 0 {
+                sess_nodes.get(pos - 1).cloned()
+            } else {
+                sess_nodes.get(pos + 1).cloned()
+            };
+            if let Some(parent) = parent_cand
+                && parent != target
+            {
+                let _ = self
+                    .mcp_console
+                    .execute(&format!("graft {target} {parent}"), &mut self.daemon_state);
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "MCP: Grafted '{target}' under '{parent}'"
+                )));
+                true
+            } else {
+                false
+            }
+        } else {
+            let _ = self
+                .mcp_console
+                .execute(&format!("detach-subtree {target}"), &mut self.daemon_state);
+            self.active_pane_mut().set_status_message(Some(format!(
+                "MCP: Promoted '{target}' to root [IND]"
+            )));
+            true
+        };
+        self.refresh_mcp_console_view();
+        if let Some(new_row) = self
+            .mcp_console
+            .row_actions
+            .iter()
+            .position(|a| *a == McpRowAction::SessionNode(target.clone()))
+        {
+            self.mcp_console.selected_row = new_row;
+        }
+        ok
     }
 
     /// Applies a built-in [`ThemePreset`] to the focused window (preserving other windows' themes).

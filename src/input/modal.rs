@@ -350,6 +350,12 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('M') | KeyCode::F(5) => {
                 let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX));
             }
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => {
+                wm.drawer_reparent_selected_session(false);
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::ALT) => {
+                wm.drawer_reparent_selected_session(true);
+            }
             // Left/Right scroll long rows like the MCP console; Right at the end of the text still leaves the drawer.
             KeyCode::Left => {
                 wm.drawer_hscroll_by(-6);
@@ -374,9 +380,28 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('K') => wm.drawer_move_selected_session(true),
             KeyCode::Char('N') => {
                 if let Ok(name) = wm.create_new_session(None, false) {
+                    wm.sync_drawer_selection_to_active_pane();
                     wm.active_pane_mut()
                         .set_status_message(Some(format!("Created new session '{name}'")));
                 }
+            }
+            KeyCode::Char('b') | KeyCode::Char('B') => {
+                wm.drawer_branch_selected_session();
+            }
+            KeyCode::Char('>') => {
+                wm.drawer_reparent_selected_session(true);
+            }
+            KeyCode::Char('<') | KeyCode::Char('u') | KeyCode::Char('U') => {
+                wm.drawer_reparent_selected_session(false);
+            }
+            KeyCode::Char('P') => {
+                let target = wm.selected_drawer_session_name();
+                wm.drawer_mut().focused = false;
+                wm.active_pane_mut().prompt_mut().manual_raw_override = false;
+                wm.active_pane_mut().prompt_mut().force_command_prompt = true;
+                wm.active_pane_mut()
+                    .prompt_mut()
+                    .set_text(&format!(":session graft {target} "));
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
                 let target = wm.selected_drawer_session_name();
@@ -404,25 +429,33 @@ pub(super) fn handle_wm_modal_key(
             }
             KeyCode::Down | KeyCode::Char('j') => wm.drawer_select_next(),
             KeyCode::Up | KeyCode::Char('k') => wm.drawer_select_prev(),
-            KeyCode::Char('h') | KeyCode::Char('<') => { wm.drawer_hscroll_by(-6); }
-            KeyCode::Char('l') | KeyCode::Char('>') => { wm.drawer_hscroll_by(6); }
+            KeyCode::Char('h') => { wm.drawer_hscroll_by(-6); }
+            KeyCode::Char('l') => { wm.drawer_hscroll_by(6); }
             KeyCode::PageDown => wm.drawer_scroll_by(5),
             KeyCode::PageUp => wm.drawer_scroll_by(-5),
             KeyCode::Home | KeyCode::Char('g') => wm.drawer_mut().selected_index = 0,
             KeyCode::End | KeyCode::Char('G') => wm.drawer_scroll_by(10_000),
             KeyCode::Enter | KeyCode::Char(' ') => wm.drawer_activate_selected(false),
-            KeyCode::Char('n') | KeyCode::Char('+') => {
-                let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+            KeyCode::Char('n') | KeyCode::Char('+') | KeyCode::Char('c') | KeyCode::Char('w') => {
+                if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
+                    wm.sync_drawer_selection_to_active_pane();
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("Created new window #{id}")));
+                }
             }
-            KeyCode::Char('v') => {
-                let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical);
+            KeyCode::Char('v') | KeyCode::Char('|') | KeyCode::Char('%') => {
+                if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical) {
+                    wm.sync_drawer_selection_to_active_pane();
+                    wm.active_pane_mut()
+                        .set_status_message(Some(format!("Created new vertical window #{id}")));
+                }
             }
             KeyCode::Char('x') | KeyCode::Delete => {
                 wm.drawer_close_selected_pane();
             }
             KeyCode::Char('z') => wm.drawer_zoom_selected_pane(),
             KeyCode::Char('d') => { wm.set_drawer_edge(None); }
-            KeyCode::Char('m') | KeyCode::Char('p' | 'P') if key.code == KeyCode::Char('m') => {
+            KeyCode::Char('m') => {
                 let mode = wm.set_drawer_layout(None);
                 wm.active_pane_mut().set_status_message(Some(format!(
                     "Slide-Out Drawer Layout Mode: {} ({})",
@@ -431,6 +464,17 @@ pub(super) fn handle_wm_modal_key(
                 )));
             }
             KeyCode::Char('p') => { wm.set_drawer_visibility(None); }
+            KeyCode::Char('a') => { wm.execute_layout_profile_command("arrange grid"); }
+            KeyCode::Char('A') => { wm.execute_layout_profile_command("arrange stack-grid"); }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                let pat = if wm.layout_mode() == crate::wm::WorkspaceLayoutMode::Tiled {
+                    "arrange cascade"
+                } else {
+                    "arrange grid"
+                };
+                wm.execute_layout_profile_command(pat);
+            }
+            KeyCode::Char('L') => { wm.execute_layout_profile_command("save-pos"); }
             _ => {}
         }
         return Ok(Some(AppAction::Handled));
@@ -502,11 +546,63 @@ pub(super) fn handle_wm_modal_key(
                 }
                 _ => {}
             }
-        } else if key.modifiers.is_empty() {
+        } else if !key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => {
                     wm.mcp_console_mut().close_root_terminal();
                     wm.reflow_default_viewport();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => {
+                    wm.reparent_selected_mcp_node(false);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Right if key.modifiers.contains(KeyModifiers::ALT) => {
+                    wm.reparent_selected_mcp_node(true);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Down
+                    if key.modifiers.contains(KeyModifiers::SHIFT)
+                        || key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    wm.move_selected_mcp_item(false);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Up
+                    if key.modifiers.contains(KeyModifiers::SHIFT)
+                        || key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    wm.move_selected_mcp_item(true);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('J') => {
+                    wm.move_selected_mcp_item(false);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('K') => {
+                    wm.move_selected_mcp_item(true);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('>') => {
+                    wm.reparent_selected_mcp_node(true);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('<') | KeyCode::Char('u' | 'U') => {
+                    wm.reparent_selected_mcp_node(false);
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('g' | 'G' | 'p' | 'P') => {
+                    let target = match wm.mcp_console().selected_action() {
+                        Some(crate::mcp_console::McpRowAction::SessionNode(n)) => n,
+                        _ => wm.config().history_session.clone(),
+                    };
+                    wm.mcp_console_mut().close_root_terminal();
+                    wm.reflow_default_viewport();
+                    wm.active_pane_mut().prompt_mut().manual_raw_override = false;
+                    wm.active_pane_mut().prompt_mut().force_command_prompt = true;
+                    wm.active_pane_mut()
+                        .prompt_mut()
+                        .set_text(&format!(":mcp graft {target} "));
                     return Ok(Some(AppAction::Handled));
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -556,8 +652,24 @@ pub(super) fn handle_wm_modal_key(
                     wm.toggle_freeze_selected_mcp_node();
                     return Ok(Some(AppAction::Handled));
                 }
-                KeyCode::Char('n') | KeyCode::Char('N') => {
+                KeyCode::Char('n' | 'N' | 'b' | 'B') => {
                     wm.spawn_branch_under_selected_mcp_node();
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('c' | '+') => {
+                    if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
+                        wm.refresh_mcp_console_view();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("MCP: Created new window #{id}")));
+                    }
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char('v' | '|') => {
+                    if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical) {
+                        wm.refresh_mcp_console_view();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("MCP: Created new vertical window #{id}")));
+                    }
                     return Ok(Some(AppAction::Handled));
                 }
                 KeyCode::PageUp => {

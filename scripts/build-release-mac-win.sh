@@ -66,6 +66,9 @@ pkg_unix() {
     mkdir -p "$DIST/$name"
     cp "$TGT/$triple/release/bilterm" "$DIST/$name/"
     chmod 0755 "$DIST/$name/bilterm"
+    if [[ "$(uname -s)" == "Darwin" && "$triple" == *apple-darwin* ]] && command -v codesign >/dev/null 2>&1; then
+        codesign --force --sign - "$DIST/$name/bilterm" >/dev/null 2>&1 || true
+    fi
     cp "$WT"/{README.md,LICENSE,CHANGELOG.md} "$DIST/$name/"
     tar -czf "$DIST/$name.tar.gz" -C "$DIST" "$name"
     cp "$DIST/$name.tar.gz" "$DIST/bilterm-$triple.tar.gz"

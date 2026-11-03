@@ -70,9 +70,9 @@ impl DrawerVisibilityMode {
 #[serde(rename_all = "kebab-case")]
 pub enum DrawerLayoutMode {
     /// Floats over the active workspace with `occlude_rect` and Borland drop shadow (`zero SIGWINCH`).
-    #[default]
     Overlay,
     /// Subtracts `drawer_rect` from `workspace_area` and reflows panes (`Push`).
+    #[default]
     Push,
 }
 
@@ -101,7 +101,7 @@ impl Default for DrawerConfig {
         Self {
             edge: DrawerEdge::Left,
             visibility: DrawerVisibilityMode::OnDemand,
-            layout: DrawerLayoutMode::Overlay,
+            layout: DrawerLayoutMode::Push,
             width_cols: 34,
             height_rows: 6,
         }
@@ -386,6 +386,18 @@ impl WindowManager {
         }
     }
 
+    /// Returns all active `PaneId`s in their visual layout (`SplitTree` leaf) order (`DRW-02`).
+    pub fn ordered_pane_ids(&self) -> Vec<PaneId> {
+        let mut ids = self.split_tree.leaves();
+        for &id in self.panes.keys() {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        ids.retain(|id| self.panes.contains_key(id));
+        ids
+    }
+
     /// Builds the complete list of hierarchical [`DrawerRow`]s with live telemetry glyphs (`DRW-02`).
     pub fn drawer_rows(&self) -> Vec<DrawerRow> {
         let mut rows = Vec::new();
@@ -395,6 +407,14 @@ impl WindowManager {
         }
         if self.broadcast_input {
             sess_modes.push("📡 BCAST".to_string());
+        }
+        if let Some(p) = self
+            .daemon_state
+            .session_tree
+            .node(&self.config.history_session)
+            .and_then(|n| n.parent.clone())
+        {
+            sess_modes.push(format!("[↳ {p}]"));
         }
         let mut sess_transports = Vec::new();
         if self.is_tmux_control_attached() {
@@ -432,9 +452,13 @@ impl WindowManager {
 
         let top_id = self.z_stack.top();
         let qt_visible = self.quick_terminal.visible;
-        let pane_count = self.panes.len();
+        let ordered_ids = self.ordered_pane_ids();
+        let pane_count = ordered_ids.len();
 
-        for (idx, (&id, pane)) in self.panes.iter().enumerate() {
+        for (idx, id) in ordered_ids.into_iter().enumerate() {
+            let Some(pane) = self.panes.get(&id) else {
+                continue;
+            };
             let connector = if idx + 1 == pane_count && !has_extra_groups { "╰─" } else { "├─" };
             let is_focused = !qt_visible && top_id == Some(id);
             let (z_pos, z_tot) = self.z_stack.rank_of(id).unwrap_or((idx + 1, pane_count));
@@ -520,16 +544,34 @@ impl WindowManager {
                 is_focused_pane: false,
             });
         }
-        for saved in self.list_sessions() {
+        let mut extra_sessions = self.list_sessions();
+        for node in &self.daemon_state.session_tree.nodes {
+            let is_explicit = node.parent.is_some()
+                || !node.children.is_empty()
+                || (node.name != "main" && node.name != self.config.history_session);
+            if is_explicit && !extra_sessions.iter().any(|s| s == &node.name) {
+                extra_sessions.push(node.name.clone());
+            }
+        }
+        for saved in extra_sessions {
             if saved != self.config.history_session {
+                let parent_opt = self
+                    .daemon_state
+                    .session_tree
+                    .node(&saved)
+                    .and_then(|n| n.parent.clone());
+                let mut mode_badges = vec!["[SAVED]".to_string()];
+                if let Some(ref p) = parent_opt {
+                    mode_badges.push(format!("[↳ {p}]"));
+                }
                 rows.push(DrawerRow {
                     kind: DrawerRowKind::SessionHeader(saved.clone()),
-                    connector: "",
+                    connector: if parent_opt.is_some() { "├─" } else { "" },
                     focus_rank_badge: String::new(),
                     spinner: '◈',
                     sparkline: String::new(),
                     cmd_badge: "SAVED".to_string(),
-                    mode_badges: vec!["[SAVED]".to_string()],
+                    mode_badges,
                     transport_badges: Vec::new(),
                     title: saved,
                     is_focused_pane: false,
@@ -718,10 +760,53 @@ impl WindowManager {
 
     pub fn drawer_move_selected_session(&mut self, up: bool) {
         let rows = self.drawer_rows();
+        if let Some(DrawerRow {
+            kind: DrawerRowKind::Pane(id),
+            ..
+        }) = rows.get(self.drawer.selected_index)
+        {
+            let pane_id = *id;
+            let ordered = self.ordered_pane_ids();
+            if let Some(pos) = ordered.iter().position(|&p| p == pane_id) {
+                let partner_opt = if up {
+                    pos.checked_sub(1).and_then(|i| ordered.get(i).copied())
+                } else {
+                    ordered.get(pos + 1).copied()
+                };
+                if let Some(partner_id) = partner_opt
+                    && self.split_tree.swap_leaves(pane_id, partner_id)
+                {
+                    self.reflow_default_viewport();
+                    if let Some(new_row) = self
+                        .drawer_rows()
+                        .iter()
+                        .position(|r| r.kind == DrawerRowKind::Pane(pane_id))
+                    {
+                        self.drawer.selected_index = new_row;
+                    }
+                    let dir = if up { "up" } else { "down" };
+                    let order_lbl: Vec<String> = self
+                        .ordered_pane_ids()
+                        .into_iter()
+                        .map(|p| format!("#{p}"))
+                        .collect();
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Moved Pane #{pane_id} {dir} (Window order: {})",
+                        order_lbl.join(", ")
+                    )));
+                    return;
+                }
+            }
+        }
+
         let target_sess = rows.get(self.drawer.selected_index).and_then(|r| match &r.kind {
             DrawerRowKind::SessionHeader(s) => Some(s.clone()),
             _ => None,
         });
+        let name = target_sess
+            .clone()
+            .unwrap_or_else(|| self.config.history_session.clone());
+        let _ = self.daemon_state.session_tree.move_node(&name, up);
         let dir = if up { "up" } else { "down" };
         if let Ok(order) = self.move_session_in_order(target_sess.as_deref(), dir) {
             if let Some(ref s) = target_sess
@@ -735,6 +820,104 @@ impl WindowManager {
             self.active_pane_mut()
                 .set_status_message(Some(format!("Session order: {}", order.join(", "))));
         }
+    }
+
+    /// Branches a new child session under the selected session in the drawer (`TREE-01`).
+    pub fn drawer_branch_selected_session(&mut self) -> Option<String> {
+        let parent = self.selected_drawer_session_name();
+        self.sync_daemon_state_from_workspace();
+        let child = format!(
+            "{parent}/sub-{}",
+            self.daemon_state.session_tree.nodes.len() + 1
+        );
+        if self.daemon_state.session_tree.branch(&parent, &child).is_ok() {
+            if let Some(pos) = self
+                .drawer_rows()
+                .iter()
+                .position(|r| r.kind == DrawerRowKind::SessionHeader(child.clone()))
+            {
+                self.drawer.selected_index = pos;
+            }
+            self.active_pane_mut().set_status_message(Some(format!(
+                "Branched child session '{child}' under '{parent}'"
+            )));
+            Some(child)
+        } else {
+            None
+        }
+    }
+
+    /// Reparents (`indent == true`, grafts under preceding session) or promotes to root (`indent == false`)
+    /// the selected session in the drawer (`TREE-01`).
+    pub fn drawer_reparent_selected_session(&mut self, indent: bool) -> bool {
+        let rows = self.drawer_rows();
+        let target = self.selected_drawer_session_name();
+        self.sync_daemon_state_from_workspace();
+        for r in &rows {
+            if let DrawerRowKind::SessionHeader(s) = &r.kind
+                && self.daemon_state.session_tree.node(s).is_none()
+            {
+                self.daemon_state.session_tree.upsert_session(
+                    s,
+                    crate::wm::session_tree::SessionNodeKind::Independent,
+                    None,
+                );
+            }
+        }
+        let ok = if indent {
+            let sess_names: Vec<String> = rows
+                .iter()
+                .filter_map(|r| match &r.kind {
+                    DrawerRowKind::SessionHeader(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect();
+            let pos = sess_names.iter().position(|s| s == &target).unwrap_or(0);
+            let parent_cand = if pos > 0 {
+                sess_names.get(pos - 1).cloned()
+            } else {
+                sess_names.get(pos + 1).cloned()
+            };
+            if let Some(parent) = parent_cand
+                && parent != target
+            {
+                match self.daemon_state.session_tree.graft(&target, &parent) {
+                    Ok(()) => {
+                        self.active_pane_mut().set_status_message(Some(format!(
+                            "Reparented session '{target}' under '{parent}'"
+                        )));
+                        true
+                    }
+                    Err(e) => {
+                        self.active_pane_mut().set_status_message(Some(e));
+                        false
+                    }
+                }
+            } else {
+                false
+            }
+        } else {
+            match self.daemon_state.session_tree.detach_subtree(&target) {
+                Ok(()) => {
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "Promoted session '{target}' to root [IND]"
+                    )));
+                    true
+                }
+                Err(e) => {
+                    self.active_pane_mut().set_status_message(Some(e));
+                    false
+                }
+            }
+        };
+        if let Some(pos) = self
+            .drawer_rows()
+            .iter()
+            .position(|r| r.kind == DrawerRowKind::SessionHeader(target.clone()))
+        {
+            self.drawer.selected_index = pos;
+        }
+        ok
     }
 
     pub fn set_drawer_edge(&mut self, edge: Option<DrawerEdge>) -> DrawerEdge {
