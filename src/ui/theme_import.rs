@@ -433,7 +433,7 @@ fn parse_toml_theme(
         let mut kv = std::collections::BTreeMap::new();
         for (k, v) in tbl {
             if let Some(s) = v.as_str() {
-                kv.insert(k.clone(), s.to_string());
+                kv.insert(k.to_ascii_lowercase(), s.to_string());
             }
         }
         apply_base16_map(&kv, &mut scheme)?;

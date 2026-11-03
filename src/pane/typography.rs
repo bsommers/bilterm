@@ -175,9 +175,9 @@ pub enum FontFamilyPreset {
 impl FontFamilyPreset {
     pub fn from_name(raw: &str) -> Option<Self> {
         match raw.trim().to_ascii_lowercase().as_str() {
-            "ibm3270" | "3270" | "ibm" | "mainframe" => Some(Self::Ibm3270),
-            "vga" | "vga8" | "dos" | "borland" | "cp437" | "turbo" => Some(Self::BorlandDosVga),
-            "tek" | "tek4014" | "tektronix" | "vector" => Some(Self::Tektronix4014),
+            "ibm3270" | "ibm 3270" | "3270" | "ibm" | "mainframe" => Some(Self::Ibm3270),
+            "vga" | "vga8" | "pxplus ibm vga8" | "dos" | "borland" | "cp437" | "turbo" => Some(Self::BorlandDosVga),
+            "tek" | "tek4014" | "tektronix 4014" | "tektronix" | "vector" => Some(Self::Tektronix4014),
             "jetbrains" | "jetbrains-mono" | "jetbrains mono" | "jbmono" | "jb" => {
                 Some(Self::JetBrainsMono)
             }
