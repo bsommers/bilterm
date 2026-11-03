@@ -8,6 +8,7 @@
 
 pub mod json;
 pub mod mcp;
+pub mod mcp_resources;
 pub mod playbook;
 pub mod rpc;
 pub mod rpc_handlers;

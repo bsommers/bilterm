@@ -615,13 +615,13 @@ async fn script_api_json_parser_mcp_tools_and_unix_socket_rpc_work() {
         );
     }
 
-    // Unknown MCP tool returns -32601 error
+    // Unknown MCP tool returns -32602 (invalid params) error
     let bad_tool = plane
         .handle_mcp_line(
             r#"{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"nonexistent_tool"}}"#,
         )
         .unwrap();
-    assert!(bad_tool.contains("-32601"));
+    assert!(bad_tool.contains("-32602"));
 
     // 4. Test Unix Domain Socket RPC roundtrip on Unix
     #[cfg(unix)]
