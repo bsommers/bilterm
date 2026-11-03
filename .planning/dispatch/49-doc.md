@@ -1,4 +1,4 @@
-Read .planning/dispatch/COMMON.md first and follow its rules.
+Repo: Bilterm (Rust). Rules: edit/create ONLY docs/API.md. Do NOT run git add/commit/push (leave uncommitted). Do not change src/ or tests/. Ignore .planning/dispatch/COMMON.md (it is for a different task). `scripts/verify.sh` prints one line PASS/FAIL; on FAIL read only target/verify/<stage>/fail.txt.
 
 Task 49-doc: write docs/API.md, a reference of Bilterm's EXISTING automation API. Documentation only.
 Files you may create/edit: docs/API.md ONLY. Do not touch src/, tests/, Cargo.toml, or any other file.
