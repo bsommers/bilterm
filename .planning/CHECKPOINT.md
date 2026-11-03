@@ -82,3 +82,10 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - 173 new tests in 5 files (tests/input_modal*_coverage.rs, tests/input_mouse_wm_coverage*.rs); verify PASS 46/46. modal.rs ~98.7% and mouse_wm.rs ~80% from these alone.
 - Oddities, not pinned: MCP console `>` graft reports success but tree unchanged; MCP `K` at top is a silent no-op (no status, unlike `J`).
 - Not yet re-measured overall (cargo llvm-cov, ~12 min). Nothing pushed.
+
+## restart point (after 6b1d82f)
+- main @ 6b1d82f, tree clean, ~21 commits ahead of origin, nothing pushed. verify PASS 46/46.
+- No subagents running. Nothing in flight.
+- Pending (user-run): agy `.planning/dispatch/RUN.sh 49-doc apidoc` (then fix docs/API.md "planned" section); live `bilterm --gui` pass; install builds >2.6.0 here and on bigmac.local; `codegraph upgrade`.
+- Optional next: re-run cargo llvm-cov (</dev/null, background, ~12 min); investigate the two MCP console oddities (graft no-op success, silent K at top); api/server.rs 84%.
+- Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
