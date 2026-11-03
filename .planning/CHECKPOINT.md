@@ -50,3 +50,7 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - :appearance now restyles palette/glyphs/chrome (6f847e1). Midnight/Arctic palettes are my own picks; Arctic readability UNVERIFIED (user unsure; wait for their live-GUI feedback, do not change blindly).
 - Palette (Ctrl+X :) is PALETTE_CATALOG in src/ui/help_catalog.rs; Tab completion is COLON_COMMANDS in src/pane/completion.rs.
 - Next: user live `bilterm --gui` pass; deferred: [appearance] padding, persistence of :appearance/:mode/:panel, Phase 45 gaps (GAPS.md), Phase 47/48 agy tasks.
+
+## 2026-11-02 Phase 49 planned
+- Plan: .planning/phases/49-command-parity-api/49-PLAN.md (audit done, no code). Next: 49-02 colon parity for 7 key-only Actions; open questions at the end of the plan need the user's answers before 49-06.
+- Note: plain `cargo test` fails 1 test on machines with real saved sessions; use scripts/verify.sh (isolates XDG_STATE_HOME).

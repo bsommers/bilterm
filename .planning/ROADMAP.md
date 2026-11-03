@@ -47,6 +47,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
+- [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 
 ## Phase Details
 
