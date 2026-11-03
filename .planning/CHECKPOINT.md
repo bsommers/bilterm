@@ -116,3 +116,9 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Tests: tests/panel_pin_scale.rs (7). verify.sh PASS 51/51. CHANGELOG has `[Unreleased]` entry.
 - NOT verified: live `bilterm --gui`. No clickable pin button (title-bar hit targets are fixed column offsets). Pin/scale are session-only. `[`/`]` not active in MCP file browser.
 - Open question for user: per-panel independent scale?
+
+## 2026-11-02 night: v2.8.0 released; Milestone v2.9 planned
+- v2.8.0 tagged, pushed, released with 15 assets (Linux local zigbuild; Windows x64 via local win-devvm VM; Windows ARM64 + macOS on bigmac.local; CI not used by user's choice). Local win-devvm vm.sh lacks push/pull; used a wrapper copy in /tmp. SHA256SUMS regenerated over all 14 archives. NOT yet done: install 2.8.0 here and on bigmac.
+- Panel pin (MCP `:mcp pin`, `*`; drawer `:drawer pin|unpin`, `*`) and independent drawer/MCP scale (Ctrl+wheel, `[` `]`, `:drawer scale`, `:mcp scale`, `:panel scale` both) shipped in 2.8.0.
+- Milestone v2.9 Agent Fleet added to ROADMAP/REQUIREMENTS (8c92254): Phase 50 herdr-style left sidebar (FLT-01), Phase 51 agent-to-agent messaging (AGT-01..03). Next: 50-01 research/design (needs user input on what herdr's left side does), then sign-off before code.
+- Ask before: push, release, install.
