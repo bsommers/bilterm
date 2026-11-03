@@ -189,6 +189,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCP-01 | Phase 34 | Planned |
 | MCP-02 | Phase 34 | Planned |
 
+## Milestone v2.9 — Agent Fleet (Phases 50–51)
+
+- [ ] **FLT-01**: The slide-out drawer offers a `herdr`-style left sidebar (`[drawer] style = "herdr"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected.
+- [ ] **AGT-01**: Agents running in panes/sessions can be addressed by stable names and exchange structured messages through a per-recipient mailbox (`agent.send`, `agent.inbox`, `agent.ack`, `agent.list`) over RPC, HTTP, MCP and `bilterm ctl`.
+- [ ] **AGT-02**: Messages can be delivered as mailbox entries, as a one-line "nudge" typed only into an idle/waiting pane, or as a `0600` file whose path is nudged; senders can wait for a reply with a timeout.
+- [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| FLT-01 | Phase 50 | Planned |
+| AGT-01 | Phase 51 | Planned |
+| AGT-02 | Phase 51 | Planned |
+| AGT-03 | Phase 51 | Planned |
+
 **Coverage:**
 
 - Total tracked requirements: 58 total

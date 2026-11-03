@@ -48,6 +48,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
+- [ ] **Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first (`FLT-01`)
+- [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 
 ## Phase Details
 
@@ -742,6 +744,53 @@ Plans:
 - [ ] 48-01-PLAN.md — Regression + perf + accessibility (wave 1)
 - [ ] 48-02-PLAN.md — Polish, docs, release (wave 2)
 
+### Milestone v2.9 — Agent Fleet (Phases 50–51)
+
+Goal: make Bilterm a place where several AI agents run side by side, are visible at a glance, and can talk to each other. Phase 50 is the human-facing view; Phase 51 is the agent-facing channel. 51 builds on 50's agent-state model, so run 50 first.
+
+### Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)
+
+**Goal**: The slide-out drawer (Phase 24, scaled/pinnable since v2.8.0) looks and works like `herdr`'s left side: a compact, always-available navigator listing workspaces, sessions and panes with a live state per agent, so you can see who is working, blocked, idle or done and jump straight to it.
+**Depends on**: Phase 47 (drawer on the design system); reuses `WorkspaceDrawer`, `DrawerRow`, pin (`Fixed`) and panel scale from v2.8.0.
+**Requirements**: FLT-01
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. The current drawer rows, `F7`, `:drawer ...`, Legacy looks and every existing key keep working. The new layout is an additional `[drawer] style = "classic" | "herdr"` (default `classic` until signed off). New features lower to `Action` and run via `WindowManager::apply`.
+**Success Criteria** (what must be TRUE):
+
+  1. Tree view: workspace > session > pane, one line per pane, collapse/expand, current pane marked, narrow by default (about 24-30 columns), pinned-open friendly.
+  2. Agent state per pane (working / waiting-for-input or blocked / idle / done / errored), derived from existing signals (OSC 133 phase, output activity, exit code, running command), shown as a state dot plus a per-workspace count summary. No per-agent configuration needed.
+  3. Keyboard-first: `j`/`k`/arrows, Enter focuses the pane, a "jump to next blocked/needs-attention" key, new-session/new-pane/rename/close from the list, all with `:drawer` command equivalents.
+  4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI.
+  5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 50-01-PLAN.md — Research and design: capture what `herdr`'s left side does (screenshots/docs, user-confirmed list), define `AgentState` and the row model; no code (wave 1)
+- [ ] 50-02-PLAN.md — `AgentState` detector + `[drawer] style` + tree rendering with collapse/state dots/counts (wave 2)
+- [ ] 50-03-PLAN.md — Keys/mouse/commands, jump-to-attention, GUI scale/pin check, Legacy-parity snapshots, docs (wave 3)
+
+### Phase 51: Agent-to-Agent Messaging & Coordination
+
+**Goal**: AI agents running in different panes or sessions can address each other, pass structured messages, wait for replies, and be coordinated, without the sender needing to know terminal internals.
+**Depends on**: Phase 49 (API/MCP surface), Phase 50 (`AgentState`).
+**Requirements**: AGT-01, AGT-02, AGT-03
+**Today (baseline)**: agents can only talk by keystroke injection: `pane.send_keys` over RPC/HTTP/MCP, `:mcp broadcast <subtree> <cmd>`, shared files, and `GET /events`. There is no mailbox, no addressing by name, no delivery receipt, and no reply path.
+**Harmony rule**: Add new paths; existing RPC methods, `pane.send_keys`, `:mcp broadcast` and their gating are unchanged. New features lower to `Action`, are reachable from `bilterm ctl`, HTTP, MCP and `:` commands, and are documented in `docs/API.md`.
+**Success Criteria** (what must be TRUE):
+
+  1. Addressing and mailbox (`AGT-01`): panes/sessions get stable agent names (`:agent name <n>`, env `BILTERM_AGENT`); `agent.send {to, body, kind, reply_to?}`, `agent.inbox`, `agent.ack`, `agent.list` exist as RPC methods and MCP tools; messages are queued per recipient, ordered, size-limited and survive a pane redraw; an unknown recipient is a clear error, not a silent drop.
+  2. Delivery modes (`AGT-02`): `mailbox` (read via API/MCP resource `bilterm://agent/<name>/inbox`), `nudge` (a short one-line "you have mail from X: read ..." typed into the pane only when its state is idle/waiting, never into a running full-screen app), and `file` (message body written under a private `0600` runtime dir, path passed in the nudge). `wait` lets a sender block with a timeout until a reply or ack arrives.
+  3. Coordination (`AGT-03`): `agent.broadcast` to a subtree; `/events` carries `agent.message`, `agent.state` events; a sidebar badge shows unread mail per agent (Phase 50 hook); a `:agent` command family (`list`, `send`, `inbox`, `broadcast`, `name`) and a documented coordinator pattern with an example script.
+  4. Safety: off by default behind `[api] allow_agent_messaging` (or a per-session opt-in); per-sender rate limits and max queue depth; loop guard (hop count / `reply_to` chain limit) so two agents cannot ping-pong forever; all messages and nudges logged; nothing is injected into password prompts (`!ECHO` lock) or alternate-screen apps; paths use `secure_fs`.
+  5. Tests: headless two-agent round trip, rate-limit and loop-guard cases, gating off/on, nudge refused when busy, restart behavior of the queue, fuzz for oversized or malformed bodies.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 51-01-PLAN.md — Spec: message schema, addressing, delivery semantics, threat model (prompt-injection between agents), loop guard; user sign-off before code (wave 1)
+- [ ] 51-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
+- [ ] 51-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -760,7 +809,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -813,3 +862,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
+| 50. `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator) (`FLT-01`) | 0/3 | Planned | - |
+| 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
