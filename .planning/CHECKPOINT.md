@@ -77,3 +77,8 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Fixed: JSON parser (src/api/json.rs): floats via new `JsonValue::Float(f64)` (Eq derive dropped), RFC 8259 numbers (no leading zeros), surrogate pairs, unknown escapes and raw control chars in strings now REJECTED (behaviour change for lax clients; bilterm's own writer escapes them). Config (src/config/dotted.rs): `:config save` keeps comments above/inline on changed keys and CRLF; `:get theme.sub` => unknown key.
 - Coverage run after fixes: pending (`cargo llvm-cov --summary-only --json --output-path $CLAUDE_JOB_DIR/tmp/cov.json </dev/null`, ~12 min, background).
 - Remaining small gaps: Materials does not clamp corner_radius_px; no mutation check on design tests; focus-ring + pane.send_keys gate tests weak; JSON-RPC uses -32000 where MCP uses -32601/-32602.
+
+## latest: input coverage tests (modal.rs, mouse_wm.rs)
+- 173 new tests in 5 files (tests/input_modal*_coverage.rs, tests/input_mouse_wm_coverage*.rs); verify PASS 46/46. modal.rs ~98.7% and mouse_wm.rs ~80% from these alone.
+- Oddities, not pinned: MCP console `>` graft reports success but tree unchanged; MCP `K` at top is a silent no-op (no status, unlike `J`).
+- Not yet re-measured overall (cargo llvm-cov, ~12 min). Nothing pushed.
