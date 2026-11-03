@@ -6,6 +6,7 @@
 //! 2. **Model Context Protocol (MCP) Server** (`bilterm --mcp` over `stdio` JSON-RPC 2.0)
 //! 3. **Real-Time Event Subscription Bus & Declarative Robot Playbooks** (`AutomationEvent`, `Playbook`, `bilterm --playbook`)
 
+pub mod http;
 pub mod json;
 pub mod mcp;
 pub mod playbook;
@@ -15,6 +16,7 @@ pub mod server;
 #[cfg(test)]
 mod tests;
 
+pub use http::*;
 pub use json::*;
 pub use mcp::*;
 pub use playbook::*;
