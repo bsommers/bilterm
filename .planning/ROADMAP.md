@@ -762,12 +762,22 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
   4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI.
   5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
 
-**Plans**: 0/3 plans complete
+**Plans**: 13 plans (0/13 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10 (traffic bus, zoom window, snoop, GUI vector graph), all tracked under FLT-01; proposed follow-up IDs FLT-02 (bus + zoom window + snoop) and FLT-03 (GUI vector graph + icons) await sign-off
 
 Plans:
-- [ ] 50-01-PLAN.md — Research and design: capture what `herdr`'s left side does (screenshots/docs, user-confirmed list), define `AgentState` and the row model; no code (wave 1)
-- [ ] 50-02-PLAN.md — `AgentState` detector + `[drawer] style` + tree rendering with collapse/state dots/counts (wave 2)
-- [ ] 50-03-PLAN.md — Keys/mouse/commands, jump-to-attention, GUI scale/pin check, Legacy-parity snapshots, docs (wave 3)
+- [ ] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
+- [ ] 50-02-PLAN.md — `[drawer] style = "herdr"`: workspace > session > pane tree rows + renderer, `sanitize_display` (wave 2)
+- [ ] 50-03-PLAN.md — `AgentState` classifier/tracker, `[agents.<name>]` profiles, `:agents list` (wave 2)
+- [ ] 50-04-PLAN.md — State dots, per-workspace counts, jump-to-attention (`:drawer attention`, leader `!`), `:drawer style` (wave 3)
+- [ ] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 51 (wave 3)
+- [ ] 50-06-PLAN.md — Herdr keyboard + mouse parity, `:drawer` verbs, pin/scale, throttled animation (wave 4)
+- [ ] 50-07-PLAN.md — Agent traffic zoom window: braille graph, stable layout, node/edge cursor, `:agents zoom`, leader `a` (wave 5)
+- [ ] 50-08-PLAN.md — Zoom window chrome: drag move/resize, splitter, node drag, pin, `PanelTarget::Agents` scale (wave 6)
+- [ ] 50-09-PLAN.md — Snoop view: follow/filter/scroll/copy, disabled `send as me` compose line (wave 7)
+- [ ] 50-10-PLAN.md — GUI vector rendering: AA curved edges, flow particles, glow, sidebar state icons (wave 7)
+- [ ] 50-11-PLAN.md — Row comms indicators (pair / fan-out) opening the window on an edge (wave 8)
+- [ ] 50-12-PLAN.md — GUI runtime scope decision (checkpoint) + panel-scale/modifier wiring in GUI runners (wave 7)
+- [ ] 50-13-PLAN.md — User guide chapter 11, config/reference/API docs, final phase gate (wave 9)
 
 ### Phase 51: Agent-to-Agent Messaging & Coordination
 
@@ -862,5 +872,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
-| 50. `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator) (`FLT-01`) | 0/3 | Planned | - |
+| 50. `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator) (`FLT-01`) | 0/13 | Planned | - |
 | 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
