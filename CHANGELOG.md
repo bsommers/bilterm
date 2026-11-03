@@ -5,7 +5,7 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v2.7.0] - 2026-11-02
 
 ### Added (Phase 49: command parity and API)
 - **Colon parity**: every key-only action now has a colon form (`:crosshair cycle`, `:layout cycle`, `:focal radius`, `:prompt move|resize-height|resize-width`, `:search prefill`).
@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`:get`, `:set`, `:config list|save`, `:state`, `:appearance save`** with dotted config keys; `wm.command` results carry a `data` field. API callers (RPC, HTTP, MCP, `pane.send_keys`) cannot write config unless `[api] allow_config_write = true` (default off); the `[api]` section is never settable over the API.
 - **Conformance suite** `tests/api_conformance.rs`, `bilterm::api::RPC_METHODS`, and `bilterm::api::parse_ctl_args`.
 
+### Changed
+- **JSON parser is now strict (RFC 8259)**: leading-zero numbers, unknown escapes and raw control characters in strings are rejected (floats and surrogate pairs are now accepted). Lax clients may need adjusting; bilterm's own writer is unaffected.
+
 ### Fixed
+- Base16 TOML themes with standard mixed-case keys (`base0B`) no longer silently keep default colours for those slots; font family display names ("IBM 3270", "PxPlus IBM VGA8", "Tektronix 4014") are accepted by `:font`.
+- MCP console: grafting a session onto its current parent is an error; `J`/`K` at a list edge report "already at the top/bottom". `:config save` keeps comments and CRLF; `:get` on a scalar's child key reports an unknown key.
 - `bilterm ctl workspace.status` (endpoint omitted) now treats the first argument as the method when it is not an endpoint; it was previously taken as the endpoint.
 
 ## [v2.6.0] - 2026-11-02
