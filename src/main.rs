@@ -2,9 +2,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use bilterm::api::{
-    default_socket_path, load_token_file, run_headless_server, run_mcp_stdio_server_with_plane,
+    default_socket_path, load_token_file, run_headless_server_with_http, run_mcp_stdio_server_with_plane,
     send_rpc_request_with_token, validate_listen_config, AutomationControlPlane, JsonValue,
-    ListenEndpoint, Playbook, DEFAULT_TCP_LISTEN,
+    generate_http_token, validate_http_bind, write_http_token_file, HttpListen, ListenEndpoint, Playbook, DEFAULT_TCP_LISTEN,
 };
 use bilterm::app::App;
 use bilterm::config::BiltermConfig;
@@ -78,6 +78,7 @@ async fn main() -> color_eyre::Result<()> {
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
+               --http <ADDR>                    With --headless: also serve loopback-only HTTP+SSE (POST /rpc, GET /events, GET /health); random bearer token written 0600 to the private runtime dir\n  \
                -r, --allow-remote               Allow listening on non-loopback TCP addresses (requires -t/--token-file)\n  \
                -t, --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
                -S, --snapshot-dir <PATH>        Directory for confined workspace snapshots (default: XDG state dir)\n  \
@@ -262,13 +263,28 @@ async fn main() -> color_eyre::Result<()> {
             ListenEndpoint::Tcp(addr) => addr.to_string(),
         };
         eprintln!("bilterm: JSON-RPC listening on {endpoint_display}");
-        run_headless_server(cfg, plane).await?;
+        let http = match switch_value(&args, &["--http"]) {
+            Some(addr_str) => {
+                let addr = validate_http_bind(addr_str)?;
+                let tok = generate_http_token()?;
+                let tok_path = write_http_token_file(&tok)?;
+                let listener = tokio::net::TcpListener::bind(addr).await?;
+                eprintln!(
+                    "bilterm: HTTP+SSE listening on http://{} (bearer token file: {})",
+                    listener.local_addr()?,
+                    tok_path.display()
+                );
+                Some(HttpListen { listener, token: tok.into() })
+            }
+            None => None,
+        };
+        run_headless_server_with_http(cfg, plane, http).await?;
         return Ok(());
     }
     if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
         match shell {
             "bash" => println!(
-                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
+                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen --http -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
                 "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"

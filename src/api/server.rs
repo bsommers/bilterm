@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use super::http::{HttpListen, RpcRequest};
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
 use crate::error::{BiltermError, Result};
@@ -342,12 +343,22 @@ impl Drop for SocketFileGuard {
 
 /// Runs a headless JSON-RPC 2.0 daemon configured according to security policy (SEC-R01).
 pub async fn run_headless_server(config: ListenConfig, plane: AutomationControlPlane) -> Result<()> {
+    run_headless_server_with_http(config, plane, None).await
+}
+
+/// Like [`run_headless_server`], additionally serving the opt-in loopback HTTP+SSE transport
+/// (listener + bearer token) against the SAME control plane.
+pub async fn run_headless_server_with_http(
+    config: ListenConfig,
+    plane: AutomationControlPlane,
+    http: Option<HttpListen>,
+) -> Result<()> {
     let token = config.token.map(std::sync::Arc::from);
     match config.endpoint {
         ListenEndpoint::Tcp(addr) => {
             let listener = tokio::net::TcpListener::bind(addr).await?;
             tracing::info!(endpoint = %addr, "JSON-RPC daemon listening on TCP");
-            serve_jsonrpc_tcp(listener, plane, token).await
+            serve_loop(listener, plane, token, http).await
         }
         #[cfg(unix)]
         ListenEndpoint::Unix(path) => {
@@ -392,7 +403,7 @@ pub async fn run_headless_server(config: ListenConfig, plane: AutomationControlP
             let _guard = SocketFileGuard(path.clone());
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
             tracing::info!(endpoint = %path.display(), "JSON-RPC daemon listening on Unix socket");
-            serve_jsonrpc_unix(listener, plane, token).await
+            serve_loop(listener, plane, token, http).await
         }
         #[cfg(not(unix))]
         ListenEndpoint::Unix(_) => Err(BiltermError::Config(
@@ -413,7 +424,7 @@ pub async fn serve_jsonrpc_tcp(
     plane: AutomationControlPlane,
     token: Option<std::sync::Arc<str>>,
 ) -> Result<()> {
-    serve_loop(listener, plane, token).await
+    serve_loop(listener, plane, token, None).await
 }
 
 /// Serves JSON-RPC over `listener` without requiring authentication (legacy wrapper).
@@ -431,16 +442,24 @@ pub async fn serve_jsonrpc_unix(
     plane: AutomationControlPlane,
     token: Option<std::sync::Arc<str>>,
 ) -> Result<()> {
-    serve_loop(listener, plane, token).await
+    serve_loop(listener, plane, token, None).await
 }
 
 async fn serve_loop<A: RpcAcceptor>(
     acceptor: A,
     mut plane: AutomationControlPlane,
     token: Option<std::sync::Arc<str>>,
+    http: Option<HttpListen>,
 ) -> Result<()> {
-    type RpcRequest = (String, tokio::sync::oneshot::Sender<String>);
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<RpcRequest>(64);
+    if let Some(h) = http {
+        let tx = req_tx.clone();
+        tokio::spawn(async move {
+            if let Err(e) = super::http::serve_http(h.listener, tx, h.token).await {
+                tracing::warn!(error = %e, "HTTP transport stopped");
+            }
+        });
+    }
 
     loop {
         tokio::select! {
