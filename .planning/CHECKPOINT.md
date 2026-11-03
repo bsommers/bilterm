@@ -89,3 +89,12 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Pending (user-run): agy `.planning/dispatch/RUN.sh 49-doc apidoc` (then fix docs/API.md "planned" section); live `bilterm --gui` pass; install builds >2.6.0 here and on bigmac.local; `codegraph upgrade`.
 - Optional next: re-run cargo llvm-cov (</dev/null, background, ~12 min); investigate the two MCP console oddities (graft no-op success, silent K at top); api/server.rs 84%.
 - Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
+
+## restart point 2 (after daded18, 2026-11-02)
+- main @ daded18, tree clean (after this doc commit), ~23 commits ahead of origin, nothing pushed. verify PASS 47/47.
+- Done this session: coverage re-measured = 79.2% lines (31727/40064). Biggest gaps: gui_font/linux_x11.rs 0% (512 missed), pane/typography.rs 46%, ui/canvas_raster.rs 47%, main.rs 41%, ui/theme_import.rs 62%.
+- 7d41e69: MCP oddities fixed. `graft` onto current parent is now an Err ("already a child of"); tests/layout_profile_coverage.rs `graft_errors_and_success_relink` updated (was pinning idempotent success). J/K at session-list edge now sets status "already at the top/bottom" (no test for the message yet).
+- daded18: tests/api_server_edges.rs (7 tests) for listen-config validation and token-gated RPC handshake. api/server.rs was 83.9% before; not re-measured. Remaining misses are mostly unix socket probe / peer-UID mismatch.
+- Pending (user-run): agy `.planning/dispatch/RUN.sh 49-doc apidoc` (then fix docs/API.md "planned" section); live `bilterm --gui` pass; install builds >2.6.0 here and on bigmac.local; `codegraph upgrade` (server v1.6.0, v1.6.2 available).
+- Optional next: test for J/K edge status message; cover typography.rs / theme_import.rs / main.rs; re-run `cargo llvm-cov` (XDG_STATE_HOME=$(mktemp -d), </dev/null, background, ~12 min).
+- Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
