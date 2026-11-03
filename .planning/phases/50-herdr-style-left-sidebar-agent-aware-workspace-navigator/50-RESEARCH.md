@@ -419,7 +419,9 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 | A9 | tiny-skia 0.12.0 is a viable but unnecessary option | Standard Stack | None (not recommended) |
 | A10 | `ratatui` `Buffer::set_stringn` does not strip control characters, so sanitising is required | Pitfall 14 | If it does sanitise, helper is harmless redundancy; not verified in ratatui source this session |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED 2026-11-03 by user sign-off: accept all research defaults (FLT-02/FLT-03 added to REQUIREMENTS.md; compose line disabled stub until Phase 51; no built-in agent profiles; live session only shows panes; graph shows external senders and fan-out; event naming deferred to Phase 51; GUI runtime gaps decided at checkpoint 50-13).
 
 1. **Requirement coverage for the bus + zoom window + GUI graph (D-01, D-06..D-10).**
    - Known: only FLT-01 (sidebar) exists; ROADMAP lists 3 plans; CONTEXT locks a much larger scope.

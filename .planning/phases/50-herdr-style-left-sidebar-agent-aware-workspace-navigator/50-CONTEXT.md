@@ -97,6 +97,10 @@ None - discussion stayed within phase scope. (Agent messaging itself stays in Ph
 
 </deferred>
 
+## Sequencing Note (user-confirmed 2026-11-03)
+
+Phase 50 declares a dependency on Phase 47, which is unchecked. Decision: proceed; the plans build on the drawer shipped in v2.8.0 and do not need Phase 47 output.
+
 ---
 
 *Phase: 50-herdr-style-left-sidebar-agent-aware-workspace-navigator*
