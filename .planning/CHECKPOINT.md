@@ -98,3 +98,13 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Pending (user-run): agy `.planning/dispatch/RUN.sh 49-doc apidoc` (then fix docs/API.md "planned" section); live `bilterm --gui` pass; install builds >2.6.0 here and on bigmac.local; `codegraph upgrade` (server v1.6.0, v1.6.2 available).
 - Optional next: test for J/K edge status message; cover typography.rs / theme_import.rs / main.rs; re-run `cargo llvm-cov` (XDG_STATE_HOME=$(mktemp -d), </dev/null, background, ~12 min).
 - Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
+
+## 2026-11-02 end: v2.7.0 released
+- v2.7.0 tagged, pushed, released (15 assets; mac/win via CI workflow, Linux built locally from the tag in a clean worktree; SHA256SUMS merged). main pushed through 2d1abfd (API docs). Installed 2.7.0 on this machine and bigmac.local (backups `bilterm.bak-2.6.0`).
+- New tests: tests/mcp_list_edge_status.rs, pane_typography_coverage.rs, theme_import_coverage.rs. Fixed: Base16 TOML mixed-case keys; FontFamilyPreset::from_name accepts display names.
+- docs/API.md written by agy with `--dangerously-skip-permissions` (user approved once, for this run). Headless RUN.sh allow-list is still insufficient for 49-doc (denied command not logged). RUN.sh now branches from HEAD (BASE= overrides), not stale ui-api-frozen.
+- codegraph upgraded to 1.6.2 (restored source-ui/package-lock.json, pull, npm install, build). Running MCP server needs a restart to pick it up.
+- Linux release recipe: scripts/build-release-assets.sh also tries darwin (cannot link on Linux); instead use zigbuild for x86_64-unknown-linux-gnu.2.28, x86_64/aarch64 musl from a `git worktree` of the tag, then `gh release upload` with merged SHA256SUMS after the CI workflow finishes. aarch64 Linux archive not run (no ARM host).
+- Untracked, not ours: docs/mcp-usecases/.
+- Still pending: live `bilterm --gui` pass (Phases 44-46); Phase 45 gaps; `[appearance] padding`; persistence of :appearance/:mode/:panel; re-measure coverage (llvm-cov ~12 min, XDG_STATE_HOME=$(mktemp -d), </dev/null); local swe-skills-2 diverged from remote (1 ahead, 3 behind), untouched.
+- Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
