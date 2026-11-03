@@ -3,8 +3,8 @@
 # Headless agy cannot prompt, so shell commands the tasks need are allow-listed
 # (literal command prefixes, not regex) for this session only (--settings is never saved). Fails loudly if agy did nothing.
 set -euo pipefail
-id=$1; slug=$2
-git worktree add "../bilterm-$slug" -b "ui/$slug" ui-api-frozen
+id=$1; slug=$2; base=${BASE:-HEAD}   # default HEAD (was the stale ui-api-frozen tag)
+git worktree add "../bilterm-$slug" -b "ui/$slug" "$base"
 cd "../bilterm-$slug"
 settings='{"permissions":{"allow":["command(pwd)","command(ls)","command(cat)","command(grep)","command(head)","command(tail)","command(rg)","command(sed)","command(wc)","command(find)","command(git)","command(cargo)","command(scripts/verify.sh)"]}}'
 out=$(agy -p "$(cat "/home/bill/src/ai/bilterm/.planning/dispatch/$id.md")" \
