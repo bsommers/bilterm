@@ -263,9 +263,9 @@ mod tests {
             Action::PromptFloat(_) => Some(":prompt float 5"),
             Action::PromptHeight(_) => Some(":prompt height 5"),
             Action::PromptWidth(_) => Some(":prompt width 60"),
-            Action::PromptMoveVertical(_) => None,
-            Action::PromptResizeHeight(_) => None,
-            Action::PromptResizeWidth(_) => None,
+            Action::PromptMoveVertical(_) => Some(":prompt move up"),
+            Action::PromptResizeHeight(_) => Some(":prompt resize-height +1"),
+            Action::PromptResizeWidth(_) => Some(":prompt resize-width +4"),
             Action::BlockPrev => Some(":prev"),
             Action::BlockNext => Some(":next"),
             Action::Yank => Some(":yank"),
@@ -290,7 +290,7 @@ mod tests {
             Action::ZoomToggle => Some(":zoom"),
             Action::ClosePane => Some(":close"),
             Action::LayoutMode(_) => Some(":layout tiled"),
-            Action::LayoutCycle => None,
+            Action::LayoutCycle => Some(":layout cycle"),
             Action::QuakeToggle => Some(":quake"),
             Action::HelpToggle => Some(":help"),
             Action::HistoryPopupToggle => Some(":history"),
@@ -308,14 +308,14 @@ mod tests {
             Action::Cursor(_) => Some(":cursor block"),
             Action::Outline { .. } => Some(":outline double"),
             Action::CrosshairToggle { .. } => Some(":crosshair"),
-            Action::CrosshairCycle => None,
+            Action::CrosshairCycle => Some(":crosshair cycle"),
             Action::Spotlight { .. } => Some(":spotlight"),
             Action::FocalZoom { .. } => Some(":focalzoom"),
-            Action::FocalRadiusResize(_, _) => None,
+            Action::FocalRadiusResize(_, _) => Some(":focal radius +4 +1"),
             Action::Shadows(_) => Some(":shadows"),
             Action::FKeyBarToggle(_) => Some(":fkeybar"),
             Action::SearchQuery(_) => Some(":search foo"),
-            Action::SearchPromptPrefill => None,
+            Action::SearchPromptPrefill => Some(":search prefill"),
             Action::SearchNext => Some(":search next"),
             Action::SearchPrev => Some(":search prev"),
             Action::SearchOff => Some(":search off"),
@@ -390,6 +390,39 @@ mod tests {
             in_keymap || in_colon,
             "Action variant {action:?} must be reachable from keymap or colon/RPC parser"
         );
+    }
+
+    #[test]
+    fn key_only_actions_round_trip_through_colon_strings() {
+        use crate::input::keymap::{DEFAULT_GLOBAL_BINDINGS, DEFAULT_LEADER_BINDINGS, DEFAULT_PANE_BINDINGS};
+        let colon_for = |a: &Action| -> Option<String> {
+            Some(match a {
+                Action::CrosshairCycle => ":crosshair cycle".into(),
+                Action::LayoutCycle => ":layout cycle".into(),
+                Action::SearchPromptPrefill => ":search prefill".into(),
+                Action::FocalRadiusResize(x, y) => format!(":focal radius {x:+} {y:+}"),
+                Action::PromptMoveVertical(d) => {
+                    format!(":prompt move {}", if *d < 0 { "up" } else { "down" })
+                }
+                Action::PromptResizeHeight(d) => format!(":prompt resize-height {d:+}"),
+                Action::PromptResizeWidth(d) => format!(":prompt resize-width {d:+}"),
+                _ => return None,
+            })
+        };
+        let all: Vec<&Action> = DEFAULT_LEADER_BINDINGS
+            .iter()
+            .map(|(_, a)| a)
+            .chain(DEFAULT_GLOBAL_BINDINGS.iter().map(|(_, _, a)| a))
+            .chain(DEFAULT_PANE_BINDINGS.iter().map(|(_, _, a)| a))
+            .collect();
+        let mut seen = 0;
+        for a in all {
+            if let Some(cmd) = colon_for(a) {
+                seen += 1;
+                assert_eq!(parse_colon_command(&cmd).and_then(|r| r.ok()).as_ref(), Some(a), "{cmd}");
+            }
+        }
+        assert!(seen >= 10);
     }
 
     #[test]
