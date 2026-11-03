@@ -519,7 +519,6 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":block", &["prev", "next"]),
     (":yank", &[]),
     (":paste", &[]),
-    (":itermcolors", &["list", "import "]),
     (":clear", &[]),
     (":raw", &[]),
     (":palette", &[]),
