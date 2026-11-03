@@ -661,7 +661,10 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             DrawerVisibilityMode::OnDemand,
         )))),
         Some("scale") => match parts.get(2).and_then(|v| v.trim_end_matches('%').parse::<u16>().ok()) {
-            Some(n) if (75..=200).contains(&n) => Some(Ok(ColonCommand::PanelScale(n))),
+            Some(n) if (75..=200).contains(&n) => Some(Ok(ColonCommand::PanelScaleOf(
+                crate::ui::typography::PanelTarget::Drawer,
+                n,
+            ))),
             _ => Some(Err("Usage: :drawer scale <75..200> (GUI only)".to_string())),
         },
         Some("autohide" | "auto" | "auto-hide") => Some(Ok(ColonCommand::DrawerVisibility(Some(

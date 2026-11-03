@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 
 use bilterm::colon_command::parse_colon_command;
 use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
+use bilterm::ui::typography::PanelTarget::{Drawer, Mcp};
 use bilterm::wm::{DrawerVisibilityMode, WindowManager};
 
 fn run(wm: &mut WindowManager, cmd: &str) {
@@ -66,26 +67,32 @@ fn star_in_the_focused_drawer_toggles_its_pin() {
 }
 
 #[test]
-fn bracket_keys_and_commands_scale_the_panels_within_bounds() {
+fn bracket_keys_and_commands_scale_each_panel_independently() {
     let mut wm = WindowManager::new_headless(30, 100);
     run(&mut wm, ":mcp");
     handle_wm_key_event(&mut wm, key(']')).unwrap();
-    assert_eq!(wm.panel_scale_setting(), 110);
+    assert_eq!((wm.scale_setting(Mcp), wm.scale_setting(Drawer)), (110, 100));
     handle_wm_key_event(&mut wm, key('[')).unwrap();
     handle_wm_key_event(&mut wm, key('[')).unwrap();
-    assert_eq!(wm.panel_scale_setting(), 90);
+    assert_eq!(wm.scale_setting(Mcp), 90);
     run(&mut wm, ":mcp scale 150");
-    assert_eq!(wm.panel_scale_setting(), 150);
     run(&mut wm, ":drawer scale 80");
-    assert_eq!(wm.panel_scale_setting(), 80);
+    assert_eq!((wm.scale_setting(Mcp), wm.scale_setting(Drawer)), (150, 80));
+    run(&mut wm, ":panel scale 120");
+    assert_eq!((wm.scale_setting(Mcp), wm.scale_setting(Drawer)), (120, 120));
     for _ in 0..30 {
-        wm.step_panel_scale(10);
+        wm.step_scale(Mcp, 10);
+        wm.step_scale(Drawer, -10);
     }
-    assert_eq!(wm.panel_scale_setting(), 200);
-    for _ in 0..30 {
-        wm.step_panel_scale(-10);
-    }
-    assert_eq!(wm.panel_scale_setting(), 75);
+    assert_eq!((wm.scale_setting(Mcp), wm.scale_setting(Drawer)), (200, 75));
+}
+
+#[test]
+fn drawer_keys_scale_only_the_drawer() {
+    let mut wm = WindowManager::new_headless(30, 100);
+    run(&mut wm, ":drawer focus");
+    handle_wm_key_event(&mut wm, key(']')).unwrap();
+    assert_eq!((wm.scale_setting(Drawer), wm.scale_setting(Mcp)), (110, 100));
 }
 
 #[test]
@@ -101,9 +108,9 @@ fn ctrl_wheel_over_the_mcp_window_scales_it_and_plain_wheel_does_not() {
         modifiers: mods,
     };
     let _ = handle_wm_mouse_event(&mut wm, at(KeyModifiers::NONE), ws);
-    assert_eq!(wm.panel_scale_setting(), 100);
+    assert_eq!(wm.scale_setting(Mcp), 100);
     let _ = handle_wm_mouse_event(&mut wm, at(KeyModifiers::CONTROL), ws);
-    assert_eq!(wm.panel_scale_setting(), 110);
+    assert_eq!((wm.scale_setting(Mcp), wm.scale_setting(Drawer)), (110, 100));
     let _ = MouseButton::Left;
 }
 

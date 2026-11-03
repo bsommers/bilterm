@@ -112,7 +112,7 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 ## 2026-11-02 late: panel pin + interactive scale (20ad5a0, pushed; unreleased)
 - MCP window pin: `McpConsoleState.pinned/focused`, `captures_input()`; `:mcp pin|unpin`, `*` key, Esc/outside-click drops focus, inside-click regains, `:mcp close` unpins. Title shows `[PIN]`.
 - Drawer: `:drawer unpin` added; `*` in focused drawer toggles Fixed/OnDemand (`:drawer pin` already existed).
-- Scale: Ctrl+wheel over drawer/MCP, `[`/`]` keys, `:drawer scale N`, `:mcp scale N`; `WindowManager::step_panel_scale`. Still ONE shared scale for both panels (per-panel scale would need splitting `panel_scale_pct` + renderer/mouse paths).
+- Scale: Ctrl+wheel over drawer/MCP, `[`/`]` keys, `:drawer scale N`, `:mcp scale N`; `WindowManager::step_panel_scale`. Scale is now independent per panel (PanelTarget::{Drawer,Mcp}); `:panel scale` sets both.
 - Tests: tests/panel_pin_scale.rs (7). verify.sh PASS 51/51. CHANGELOG has `[Unreleased]` entry.
 - NOT verified: live `bilterm --gui`. No clickable pin button (title-bar hit targets are fixed column offsets). Pin/scale are session-only. `[`/`]` not active in MCP file browser.
 - Open question for user: per-panel independent scale?

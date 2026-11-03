@@ -843,10 +843,10 @@ impl WindowManager {
         if first_verb.eq_ignore_ascii_case("scale") {
             let msg = match parts.get(1).and_then(|v| v.trim_end_matches('%').parse::<u16>().ok()) {
                 Some(n) if (75..=200).contains(&n) => {
-                    self.set_panel_scale_pct(n);
+                    self.set_scale(crate::ui::typography::PanelTarget::Mcp, n);
                     format!("Panel scale: {n}%{}", if self.gui_surface { "" } else { " (applies in the GUI only)" })
                 }
-                _ => "Usage: :mcp scale <75..200> (GUI only; shared with the drawer)".to_string(),
+                _ => "Usage: :mcp scale <75..200> (GUI only)".to_string(),
             };
             self.active_pane_mut().set_status_message(Some(msg));
             return false;

@@ -1,4 +1,5 @@
 use bilterm::ui::design::{AppearanceProfile, DisplayMode};
+use bilterm::ui::typography::PanelTarget;
 use bilterm::ui::buffer_to_snapshot_string;
 use bilterm::ui::WorkspaceWidget;
 use bilterm::wm::{SplitDirection, WindowManager};
@@ -169,8 +170,9 @@ fn panel_scale_default_is_identical_and_ignored_off_gui() {
     // Off the GUI the setting never applies.
     let mut tui = WindowManager::new_headless(20, 80);
     tui.set_panel_scale_pct(150);
-    assert_eq!(tui.panel_scale_pct(), 100);
-    assert_eq!(tui.panel_scale_setting(), 150);
+    assert_eq!(tui.scale_pct(PanelTarget::Drawer), 100);
+    assert_eq!(tui.scale_setting(PanelTarget::Drawer), 150);
+    assert_eq!(tui.scale_setting(PanelTarget::Mcp), 150);
 }
 
 #[test]
@@ -192,7 +194,7 @@ fn panel_scale_maps_mouse_into_panel_space() {
     wm.set_gui_surface(true);
     wm.set_panel_scale_pct(200);
     let m = MouseEvent { kind: MouseEventKind::Moved, column: 40, row: 10, modifiers: KeyModifiers::NONE };
-    let (pm, vws) = wm.panel_space(m, area);
+    let (pm, vws) = wm.panel_space(m, area, PanelTarget::Drawer);
     assert_eq!((pm.column, pm.row, vws.width, vws.height), (20, 5, 40, 10));
 }
 

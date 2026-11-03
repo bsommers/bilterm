@@ -74,6 +74,13 @@ pub fn render_double_width_row(
     }
 }
 
+/// Which GUI-scaled panel a scale setting applies to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelTarget {
+    Drawer,
+    Mcp,
+}
+
 impl WindowManager {
     /// Enables or disables 1:1 host-terminal character cell grid mode (disabling per-pane pixel scaling in TUI mode).
     pub fn set_tui_cell_grid_mode(&mut self, enabled: bool) {
@@ -192,31 +199,45 @@ impl WindowManager {
         self.gui_surface = on;
     }
 
-    /// Requested drawer/MCP panel scale (`75..=200`), regardless of surface.
-    pub fn panel_scale_setting(&self) -> u16 {
-        self.panel_scale_pct.clamp(75, 200)
+    /// Requested scale (`75..=200`) of one panel, regardless of surface.
+    pub fn scale_setting(&self, target: PanelTarget) -> u16 {
+        match target {
+            PanelTarget::Drawer => self.drawer_scale_pct,
+            PanelTarget::Mcp => self.mcp_scale_pct,
+        }
+        .clamp(75, 200)
     }
 
-    /// Sets the drawer/MCP panel scale (session only).
+    /// Sets one panel's scale (session only).
+    pub fn set_scale(&mut self, target: PanelTarget, pct: u16) {
+        let pct = pct.clamp(75, 200);
+        match target {
+            PanelTarget::Drawer => self.drawer_scale_pct = pct,
+            PanelTarget::Mcp => self.mcp_scale_pct = pct,
+        }
+    }
+
+    /// Sets both panels to the same scale (`:panel scale`).
     pub fn set_panel_scale_pct(&mut self, pct: u16) {
-        self.panel_scale_pct = pct.clamp(75, 200);
+        self.set_scale(PanelTarget::Drawer, pct);
+        self.set_scale(PanelTarget::Mcp, pct);
     }
 
-    /// Steps the drawer/MCP panel scale by `delta` percent (clamped to `75..=200`); returns the new setting.
-    pub fn step_panel_scale(&mut self, delta: i16) -> u16 {
-        let next = (i32::from(self.panel_scale_setting()) + i32::from(delta)).clamp(75, 200) as u16;
-        self.panel_scale_pct = next;
+    /// Steps one panel's scale by `delta` percent (clamped to `75..=200`); returns the new setting.
+    pub fn step_scale(&mut self, target: PanelTarget, delta: i16) -> u16 {
+        let next = (i32::from(self.scale_setting(target)) + i32::from(delta)).clamp(75, 200) as u16;
+        self.set_scale(target, next);
         next
     }
 
     /// Scale actually applied: always `100` outside the GUI, so the TUI and every test default are unchanged.
-    pub fn panel_scale_pct(&self) -> u16 {
-        if self.gui_surface { self.panel_scale_setting() } else { 100 }
+    pub fn scale_pct(&self, target: PanelTarget) -> u16 {
+        if self.gui_surface { self.scale_setting(target) } else { 100 }
     }
 
-    /// Workspace area as the scaled panels see it: `ws` shrunk by `100 / scale` (identity at 100).
-    pub fn panel_virtual_area(&self, ws: ratatui::layout::Rect) -> ratatui::layout::Rect {
-        let s = u32::from(self.panel_scale_pct());
+    /// Workspace area as one scaled panel sees it: `ws` shrunk by `100 / scale` (identity at 100).
+    pub fn panel_virtual_area(&self, ws: ratatui::layout::Rect, target: PanelTarget) -> ratatui::layout::Rect {
+        let s = u32::from(self.scale_pct(target));
         if s == 100 {
             return ws;
         }
@@ -225,20 +246,21 @@ impl WindowManager {
         ratatui::layout::Rect::new(ws.x, ws.y, w, h)
     }
 
-    /// Maps a real mouse position into the scaled-panel coordinate space (identity at 100).
+    /// Maps a real mouse position into one panel's scaled coordinate space (identity at 100).
     pub fn panel_space(
         &self,
         mouse: crossterm::event::MouseEvent,
         ws: ratatui::layout::Rect,
+        target: PanelTarget,
     ) -> (crossterm::event::MouseEvent, ratatui::layout::Rect) {
-        let s = u32::from(self.panel_scale_pct());
+        let s = u32::from(self.scale_pct(target));
         if s == 100 {
             return (mouse, ws);
         }
         let map = |v: u16, o: u16| o + (u32::from(v.saturating_sub(o)) * 100 / s) as u16;
         (
             crossterm::event::MouseEvent { column: map(mouse.column, ws.x), row: map(mouse.row, ws.y), ..mouse },
-            self.panel_virtual_area(ws),
+            self.panel_virtual_area(ws, target),
         )
     }
 

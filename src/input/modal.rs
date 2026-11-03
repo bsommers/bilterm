@@ -356,7 +356,7 @@ pub(super) fn handle_wm_modal_key(
                 wm.set_drawer_visibility(Some(next));
             }
             KeyCode::Char(c @ ('[' | ']')) => {
-                let n = wm.step_panel_scale(if c == ']' { 10 } else { -10 });
+                let n = wm.step_scale(crate::ui::typography::PanelTarget::Drawer, if c == ']' { 10 } else { -10 });
                 let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
                 wm.active_pane_mut().set_status_message(Some(format!("Panel scale: {n}%{note}")));
             }
@@ -510,7 +510,7 @@ pub(super) fn handle_wm_modal_key(
                     return Ok(Some(AppAction::Handled));
                 }
                 KeyCode::Char(c @ ('[' | ']')) => {
-                    let n = wm.step_panel_scale(if c == ']' { 10 } else { -10 });
+                    let n = wm.step_scale(crate::ui::typography::PanelTarget::Mcp, if c == ']' { 10 } else { -10 });
                     let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
                     wm.active_pane_mut().set_status_message(Some(format!("Panel scale: {n}%{note}")));
                     return Ok(Some(AppAction::Handled));

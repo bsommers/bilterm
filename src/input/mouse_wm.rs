@@ -1,4 +1,5 @@
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crate::ui::typography::PanelTarget;
 use ratatui::layout::Rect;
 
 use crate::error::Result;
@@ -108,7 +109,7 @@ pub(super) fn handle_modal_mouse_event(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
-    let (pm, pws) = wm.panel_space(mouse, workspace_area);
+    let (pm, pws) = wm.panel_space(mouse, workspace_area, PanelTarget::Mcp);
     // A pinned MCP window gives the keyboard back to the panes when the user clicks anywhere else.
     if wm.mcp_console().pinned
         && matches!(pm.kind, MouseEventKind::Down(_))
@@ -123,7 +124,7 @@ pub(super) fn handle_modal_mouse_event(
             wm.mcp_console_mut().focused = true;
         }
         if let Some(delta) = ctrl_wheel_scale_delta(&pm) {
-            wm.step_panel_scale(delta);
+            wm.step_scale(PanelTarget::Mcp, delta);
             return Some(AppAction::Handled);
         }
         match pm.kind {
@@ -674,11 +675,11 @@ pub(super) fn handle_drawer_mouse_event(
     workspace_area: Rect,
 ) -> Option<AppAction> {
     // GUI panel scale (46-04d): work in the panel's own coordinate space; identity at 100%.
-    let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area);
+    let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area, PanelTarget::Drawer);
     if let Some(delta) = ctrl_wheel_scale_delta(&mouse)
         && wm.drawer_rect(workspace_area).is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
     {
-        wm.step_panel_scale(delta);
+        wm.step_scale(PanelTarget::Drawer, delta);
         return Some(AppAction::Handled);
     }
     match mouse.kind {

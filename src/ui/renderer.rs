@@ -567,11 +567,11 @@ impl GuiWorkspaceRenderer {
         };
 
         // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
-        let panel_scale = wm.panel_scale_pct();
+        let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
+        let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
-            panel_scale != 100
-                && (drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
-                    || mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+            (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
                 && !(modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
@@ -698,15 +698,14 @@ impl GuiWorkspaceRenderer {
             }
         }
 
-        if panel_scale != 100 {
+        if drawer_scale != 100 || mcp_scale != 100 {
             let cfg = wm.config();
             let (pal, glyphs) = (cfg.palette(), cfg.glyph_set());
-            let vws = wm.panel_virtual_area(ws_area);
-            let k = f32::from(panel_scale) / 100.0;
-            let (pcw, pch) = (cw * k, ch * k);
-            let (pcw_u, pch_u) = (pcw.round().clamp(4.0, 128.0) as u16, pch.round().clamp(8.0, 256.0) as u16);
-            let ppt = ((u32::from(surface.font_size_pt) * u32::from(panel_scale) + 50) / 100).clamp(6, 72) as u16;
-            let mut draw_panel = |scratch: &Buffer, vr: Rect| {
+            let mut draw_panel = |scratch: &Buffer, vr: Rect, scale: u16| {
+                let k = f32::from(scale) / 100.0;
+                let (pcw, pch) = (cw * k, ch * k);
+                let (pcw_u, pch_u) = (pcw.round().clamp(4.0, 128.0) as u16, pch.round().clamp(8.0, 256.0) as u16);
+                let ppt = ((u32::from(surface.font_size_pt) * u32::from(scale) + 50) / 100).clamp(6, 72) as u16;
                 for vr_row in vr.y..vr.y + vr.height {
                     for vr_col in vr.x..vr.x + vr.width {
                         let Some(cell) = scratch.cell((vr_col, vr_row)) else { continue };
@@ -716,15 +715,21 @@ impl GuiWorkspaceRenderer {
                     }
                 }
             };
-            if let Some(vr) = wm.drawer_rect(vws) {
-                let mut scratch = Buffer::empty(vws);
-                crate::ui::render_workspace_drawer(wm, vws, cfg, &pal, &glyphs, &mut scratch);
-                draw_panel(&scratch, vr);
+            if drawer_scale != 100 {
+                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::Drawer);
+                if let Some(vr) = wm.drawer_rect(vws) {
+                    let mut scratch = Buffer::empty(vws);
+                    crate::ui::render_workspace_drawer(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    draw_panel(&scratch, vr, drawer_scale);
+                }
             }
-            if let Some(vr) = wm.mcp_console().panel_rect(vws) {
-                let mut scratch = Buffer::empty(vws);
-                crate::ui::mcp_ui::render_mcp_console_overlay(wm, vws, cfg, &pal, &mut scratch);
-                draw_panel(&scratch, vr);
+            if mcp_scale != 100 {
+                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::Mcp);
+                if let Some(vr) = wm.mcp_console().panel_rect(vws) {
+                    let mut scratch = Buffer::empty(vws);
+                    crate::ui::mcp_ui::render_mcp_console_overlay(wm, vws, cfg, &pal, &mut scratch);
+                    draw_panel(&scratch, vr, mcp_scale);
+                }
             }
             // Modals, menus and the quick terminal stay above the scaled panels.
             for r in 0..viewport.height {

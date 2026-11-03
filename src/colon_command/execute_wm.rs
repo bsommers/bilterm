@@ -1,5 +1,6 @@
 //! Multi-pane `WindowManager` `:colon` command executor (`execute_wm_colon_command`, `ARCH-R01`).
 
+use crate::ui::typography::PanelTarget;
 use crate::colon_command::ColonCommand;
 use crate::colon_command::execute::execute_colon_command;
 use crate::remote::{FleetSelector, RemoteHostProfile};
@@ -435,9 +436,17 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::PanelScale(n) => {
             wm.set_panel_scale_pct(n);
             let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
-            let shown = wm.panel_scale_setting();
+            let shown = wm.scale_setting(PanelTarget::Drawer);
             wm.active_pane_mut()
                 .set_status_message(Some(format!("Panel scale: {shown}%{note}")));
+            false
+        }
+        ColonCommand::PanelScaleOf(target, n) => {
+            wm.set_scale(target, n);
+            let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+            let (name, shown) = (panel_name(target), wm.scale_setting(target));
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("{name} scale: {shown}%{note}")));
             false
         }
         ColonCommand::ChromeTitle(policy) => {
@@ -833,5 +842,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             quit
         }
+    }
+}
+
+fn panel_name(target: PanelTarget) -> &'static str {
+    match target {
+        PanelTarget::Drawer => "Drawer",
+        PanelTarget::Mcp => "MCP",
     }
 }
