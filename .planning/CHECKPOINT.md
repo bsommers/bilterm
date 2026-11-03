@@ -108,3 +108,11 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Untracked, not ours: docs/mcp-usecases/.
 - Still pending: live `bilterm --gui` pass (Phases 44-46); Phase 45 gaps; `[appearance] padding`; persistence of :appearance/:mode/:panel; re-measure coverage (llvm-cov ~12 min, XDG_STATE_HOME=$(mktemp -d), </dev/null); local swe-skills-2 diverged from remote (1 ahead, 3 behind), untouched.
 - Ask before: push, release, `[appearance] padding`, Phase 45 gaps.
+
+## 2026-11-02 late: panel pin + interactive scale (20ad5a0, pushed; unreleased)
+- MCP window pin: `McpConsoleState.pinned/focused`, `captures_input()`; `:mcp pin|unpin`, `*` key, Esc/outside-click drops focus, inside-click regains, `:mcp close` unpins. Title shows `[PIN]`.
+- Drawer: `:drawer unpin` added; `*` in focused drawer toggles Fixed/OnDemand (`:drawer pin` already existed).
+- Scale: Ctrl+wheel over drawer/MCP, `[`/`]` keys, `:drawer scale N`, `:mcp scale N`; `WindowManager::step_panel_scale`. Still ONE shared scale for both panels (per-panel scale would need splitting `panel_scale_pct` + renderer/mouse paths).
+- Tests: tests/panel_pin_scale.rs (7). verify.sh PASS 51/51. CHANGELOG has `[Unreleased]` entry.
+- NOT verified: live `bilterm --gui`. No clickable pin button (title-bar hit targets are fixed column offsets). Pin/scale are session-only. `[`/`]` not active in MCP file browser.
+- Open question for user: per-panel independent scale?
