@@ -1,0 +1,9 @@
+Read .planning/dispatch/COMMON.md first and follow its rules.
+
+Task 49-doc: write docs/API.md, a reference of Bilterm's EXISTING automation API. Documentation only.
+Files you may create/edit: docs/API.md ONLY. Do not touch src/, tests/, Cargo.toml, or any other file.
+Sources of truth (read, do not guess): src/api/rpc.rs (every JSON-RPC method name and its params/result), src/api/mcp.rs (every MCP tool, with its input schema), src/api/server.rs (transports: Unix socket path rule, `--headless --listen`, default 127.0.0.1:7370), src/main.rs (`bilterm ctl <method>`, `--mcp`).
+Contents: (1) overview of the three surfaces: JSON-RPC 2.0 over Unix socket/TCP, MCP over stdio, `bilterm ctl`; (2) a table of every RPC method: name, params, result shape, one example request/response; (3) a table of every MCP tool: name, params, what it does; (4) how colon commands relate (`wm.command` / `bilterm_colon_command` run any `:command`), pointing to the in-app `:commands`; (5) security notes taken from the code (socket permissions, loopback-only TCP) - state only what the code does; (6) a final section "Planned (Phase 49)" listing, as planned and NOT implemented: HTTP+SSE transport, MCP resources, `:get`/`:set`/`:config`, an `[api] allow_config_write` switch defaulting to off. Mark each clearly "planned".
+Acceptance: every method/tool in the code appears exactly once; every example uses real names from the code; nothing is documented that the code does not do.
+Verify: `grep -c` each method name from src/api/rpc.rs appears in docs/API.md; `scripts/verify.sh` still PASS.
+Report: status, file, count of methods and tools documented, any method whose params you could not determine.
