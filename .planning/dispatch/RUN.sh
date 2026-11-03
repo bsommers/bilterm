@@ -6,7 +6,7 @@ set -euo pipefail
 id=$1; slug=$2; base=${BASE:-HEAD}   # default HEAD (was the stale ui-api-frozen tag)
 git worktree add "../bilterm-$slug" -b "ui/$slug" "$base"
 cd "../bilterm-$slug"
-settings='{"permissions":{"allow":["command(pwd)","command(ls)","command(cat)","command(grep)","command(head)","command(tail)","command(rg)","command(sed)","command(wc)","command(find)","command(git)","command(cargo)","command(scripts/verify.sh)"]}}'
+settings='{"permissions":{"allow":["command(pwd)","command(ls)","command(cat)","command(grep)","command(head)","command(tail)","command(rg)","command(sed)","command(wc)","command(find)","command(git)","command(cargo)","command(scripts/verify.sh)","command(cd)","command(echo)","command(awk)","command(python3)","command(true)","command(test)","command(mkdir)","command(tee)","command(diff)","command(sort)","command(uniq)","command(cut)","command(tr)"]}}'
 out=$(agy -p "$(cat "/home/bill/src/ai/bilterm/.planning/dispatch/$id.md")" \
   --mode accept-edits --model gemini-3.8-flash-medium --settings "$settings" 2>&1) || rc=$?
 printf '%s\n' "$out"
