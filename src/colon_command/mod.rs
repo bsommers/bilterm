@@ -1,6 +1,8 @@
 pub mod execute;
+mod execute_config;
 pub mod execute_wm;
 pub mod parse;
+mod parse_config;
 mod parse_visual;
 
 pub use crate::action::Action;

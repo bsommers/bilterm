@@ -407,12 +407,18 @@ impl AutomationControlPlane {
                         chords.push(token.to_string());
                     }
                 }
-                for chord in &chords {
-                    let key_ev = parse_key_chord_str(chord)
-                        .ok_or_else(|| format!("unrecognized key chord: {chord}"))?;
-                    handle_wm_key_event(&mut self.wm, key_ev)
-                        .map_err(|e| format!("key dispatch error: {e}"))?;
-                }
+                self.wm.set_api_origin(true);
+                let sent = (|| {
+                    for chord in &chords {
+                        let key_ev = parse_key_chord_str(chord)
+                            .ok_or_else(|| format!("unrecognized key chord: {chord}"))?;
+                        handle_wm_key_event(&mut self.wm, key_ev)
+                            .map_err(|e| format!("key dispatch error: {e}"))?;
+                    }
+                    Ok::<(), String>(())
+                })();
+                self.wm.set_api_origin(false);
+                sent?;
                 Ok(JsonValue::obj([
                     ("status", JsonValue::String("dispatched".to_string())),
                     ("count", JsonValue::Number(chords.len() as i64)),
@@ -438,7 +444,7 @@ impl AutomationControlPlane {
                 } else {
                     "handled"
                 };
-                Ok(JsonValue::obj([
+                let mut out = vec![
                     ("status", JsonValue::String(outcome_str.to_string())),
                     ("command", JsonValue::String(normalized)),
                     (
@@ -449,7 +455,11 @@ impl AutomationControlPlane {
                         "pane_count",
                         JsonValue::Number(self.wm.pane_count() as i64),
                     ),
-                ]))
+                ];
+                if let Some(data) = self.wm.take_command_data().and_then(|d| JsonValue::parse(&d)) {
+                    out.push(("data", data));
+                }
+                Ok(JsonValue::obj(out))
             }
             "events.poll" => {
                 let drain = params

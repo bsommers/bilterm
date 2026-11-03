@@ -1,7 +1,7 @@
 ---
 phase: 49-command-parity-api
 type: plan
-status: IN PROGRESS (49-01, 49-02, 49-03, 49-05, 49-06 done 2026-11-02; 49-04 and 49-07 pending; API docs packet with agy)
+status: IN PROGRESS (49-01..49-06 done 2026-11-02; 49-07 pending; API docs packet with agy)
 requirements: [API-01]
 ---
 # Phase 49: Command parity and a full public API
@@ -86,3 +86,5 @@ Gaps:
 - 49-06 DONE (transport): `--headless --http 127.0.0.1:PORT`, bearer token 0600, Host/Origin checks, limits. Open: `/events` shares the `events.poll` queue; token generator is Unix-only.
 - Decisions (user): HTTP+SSE AND JSON-RPC both; config write gated by `[api] allow_config_write` default off; persist only on explicit `:appearance save` / `:config save` (assumed).
 - Agy packet: .planning/dispatch/49-doc.md (docs/API.md) - user-run, not yet run.
+- 49-04 DONE: `:get <key>`, `:set <key> <value>`, `:config list|save`, `:appearance save`, `:state` (generic over all config fields via dotted keys, src/config/dotted.rs, toml_edit keeps comments). API writes gated by `[api] allow_config_write` (default false) in `WindowManager::config_write_denied`, called from `apply_automation` and the executor (`api_origin`); `api.*` is never settable over the API; `pane.send_keys` is covered. `wm.command` returns a `data` field. Limitations: unset Option keys may report "unknown config key"; `:config save` writes every differing leaf (including runtime changes) and removes keys that are now unset; in-process `run_playbook` is Trusted (ungated by design); `pane.exec` can still edit the file by shell (pre-existing).
+- Weak test: the pane.send_keys gate test only asserts the value did not change.

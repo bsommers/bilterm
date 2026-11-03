@@ -144,6 +144,9 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":focal radius <+N|-N> [+N|-N]", "Grow/shrink focal spotlight & zoom radius (Alt+} / Alt+{)"),
     (":prompt move up|down / resize-height|resize-width <+N|-N>", "Move or resize the floating prompt (Alt+Up/Down, Alt++/-, Alt+[/])"),
     (":search prefill", "Open the prompt pre-filled with `:search ` (Alt+/)"),
+    (":get <key> / :set <key> <value>", "Read or change any config.toml key by dotted path (e.g. appearance.profile)"),
+    (":config list / :config save / :appearance save", "List config keys; persist changed keys (comments kept) to config.toml"),
+    (":state", "Show appearance, mode, layout, active pane, pane count and drawer state"),
     (":crt [on|off]", "Toggle retro CRT phosphor scanline shader effect"),
     (":menubar [on|off] / :fkeybar [on|off]", "Toggle top Borland Menu Bar or bottom DOS F-Key Bar"),
     (":version [on|off] / :inspector [on|off]", "Toggle OIA version badge or F9 3270 Terminal Inspector"),
@@ -362,6 +365,12 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":prompt resize-height +1", "Alt++", "Increase prompt height"),
     (":prompt resize-width +4", "Alt+]", "Widen the prompt"),
     (":search prefill", "Alt+/", "Open prompt pre-filled with :search"),
+    (":get ", "—", "Read a config value by dotted key (:get <key>)"),
+    (":set ", "—", "Set a config value in the running session (:set <key> <value>)"),
+    (":state", "—", "Show workspace state (appearance, mode, layout, panes, drawer)"),
+    (":config list", "—", "List every config key and value"),
+    (":config save", "—", "Persist changed config keys to config.toml"),
+    (":appearance save", "—", "Persist the appearance settings to config.toml"),
 ];
 
 #[cfg(test)]
@@ -393,7 +402,7 @@ mod tests {
             assert!(!c.is_empty(), "no completion for {prefix}");
         }
         let (_, _, c) = compute_completions(":appearance ", 12, cwd);
-        assert_eq!(c.len(), 5);
+        assert_eq!(c.len(), 6); // + `save` (Phase 49-04)
         let (_, _, c) = compute_completions(":mode ", 6, cwd);
         assert!(["standard", "minimal", "zen"].iter().all(|m| c.iter().any(|x| x.display == *m)));
         for cmd in [":appearance obsidian", ":mode standard", ":mode minimal", ":mode zen", ":panel scale 125", ":chrome ring on"] {

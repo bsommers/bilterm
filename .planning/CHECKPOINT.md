@@ -54,3 +54,12 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 ## 2026-11-02 Phase 49 planned
 - Plan: .planning/phases/49-command-parity-api/49-PLAN.md (audit done, no code). Next: 49-02 colon parity for 7 key-only Actions; open questions at the end of the plan need the user's answers before 49-06.
 - Note: plain `cargo test` fails 1 test on machines with real saved sessions; use scripts/verify.sh (isolates XDG_STATE_HOME).
+
+## 2026-11-02 end of session: Phase 49 state
+- main is ahead of origin by ~14 commits, NOTHING pushed. v2.6.1 tag already exists (user-made); install on this machine is still v2.6.0 (~/.local/bin/bilterm); bigmac.local also v2.6.0.
+- Phase 49 done: 49-01..49-06 (see 49-PLAN.md progress log). Pending: 49-07 conformance tests over Unix/TCP/HTTP/MCP + `bilterm ctl` for all endpoints + docs + release; user-run agy packet .planning/dispatch/49-doc.md (docs/API.md; run `.planning/dispatch/RUN.sh 49-doc apidoc`; then correct its "planned" section: HTTP+SSE, MCP resources and :get/:set are now implemented).
+- User decisions: HTTP+SSE AND JSON-RPC both; config write over API behind `[api] allow_config_write` (default off); persistence only on explicit `:appearance save`/`:config save`.
+- Test-coverage request (/eng) NOT done: `cargo llvm-cov` was started with isolated XDG_STATE_HOME and was killed by the restart. Rerun: `export XDG_STATE_HOME=$(mktemp -d); cargo llvm-cov --summary-only --json --output-path /tmp/cov.json` (takes >10 min, run in background), rank files changed since v2.5.0, then add tests (hunting-silent-failures lens). Known weak tests: focus-ring (phase46), pane.send_keys gate.
+- Plain `cargo test` fails 1 drawer test when real saved sessions exist; use scripts/verify.sh (35/35 at last run).
+- Process: worktree subagents branch from origin/main, NOT local HEAD (they lacked the plan file) - run in place or push first. Agents never commit; orchestrator reviews and commits. Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>.
+- Still deferred: 49-07; Phase 45 gaps (GAPS.md); `[appearance] padding`; minimize-pane/MCP-console freeze+move need Actions; HTTP token generator is Unix-only; `/events` shares the events.poll queue; live `bilterm --gui` pass for Phases 44-46; user runs `codegraph upgrade` (v1.6.2).

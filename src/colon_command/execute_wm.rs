@@ -805,6 +805,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 true
             }
         }
+        ColonCommand::ConfigGet(_)
+        | ColonCommand::ConfigSet(..)
+        | ColonCommand::ConfigList
+        | ColonCommand::ConfigSave
+        | ColonCommand::AppearanceSave
+        | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         other => {
             let is_prompt_layout = matches!(
                 other,

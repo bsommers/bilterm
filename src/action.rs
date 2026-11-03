@@ -108,6 +108,18 @@ pub enum Action {
     FKeyBarToggle(Option<bool>),
     SearchQuery(String),
     SearchPromptPrefill,
+    /// `:get <key>` - read one config value (Phase 49-04).
+    ConfigGet(String),
+    /// `:set <key> <value>` - set one config value in the running config.
+    ConfigSet(String, String),
+    /// `:config list` - list every config key.
+    ConfigList,
+    /// `:config save` - persist differing config keys to config.toml.
+    ConfigSave,
+    /// `:appearance save` - persist only `appearance.*` keys.
+    AppearanceSave,
+    /// `:state` - structured workspace state query.
+    StateQuery,
     SearchNext,
     SearchPrev,
     SearchOff,
@@ -316,6 +328,12 @@ mod tests {
             Action::FKeyBarToggle(_) => Some(":fkeybar"),
             Action::SearchQuery(_) => Some(":search foo"),
             Action::SearchPromptPrefill => Some(":search prefill"),
+            Action::ConfigGet(_) => Some(":get appearance.profile"),
+            Action::ConfigSet(..) => Some(":set theme turbo-blue"),
+            Action::ConfigList => Some(":config list"),
+            Action::ConfigSave => Some(":config save"),
+            Action::AppearanceSave => Some(":appearance save"),
+            Action::StateQuery => Some(":state"),
             Action::SearchNext => Some(":search next"),
             Action::SearchPrev => Some(":search prev"),
             Action::SearchOff => Some(":search off"),
@@ -503,6 +521,12 @@ mod tests {
             Action::FKeyBarToggle(None),
             Action::SearchQuery("foo".to_string()),
             Action::SearchPromptPrefill,
+            Action::ConfigGet("theme".to_string()),
+            Action::ConfigSet("theme".to_string(), "turbo-blue".to_string()),
+            Action::ConfigList,
+            Action::ConfigSave,
+            Action::AppearanceSave,
+            Action::StateQuery,
             Action::SearchNext,
             Action::SearchPrev,
             Action::SearchOff,

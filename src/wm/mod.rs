@@ -112,6 +112,10 @@ pub struct WindowManager {
     automation_confine_dir: Option<PathBuf>,
     /// First error raised by a command whose `apply` arm otherwise reports only via the status bar.
     automation_error: Option<String>,
+    /// Structured JSON result of the last query command (`:get`, `:config list`, `:state`).
+    command_data: Option<String>,
+    /// `true` while an API-originated action (RPC/MCP/playbook-confined/send_keys) runs.
+    api_origin: bool,
     /// Optional attached `tmux -CC` Control Mode subprocess (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
@@ -186,6 +190,8 @@ impl WindowManager {
             workspace_recorder: Mutex::new(None),
             automation_confine_dir: None,
             automation_error: None,
+            command_data: None,
+            api_origin: false,
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
@@ -223,14 +229,61 @@ impl WindowManager {
         action: Action,
         confine: Option<&Path>,
     ) -> std::result::Result<AppAction, String> {
+        if confine.is_some()
+            && let Some(err) = self.config_write_denied(&action)
+        {
+            return Err(err);
+        }
         self.automation_confine_dir = confine.map(Path::to_path_buf);
         self.automation_error = None;
+        self.command_data = None;
+        let prev_origin = self.api_origin;
+        self.api_origin = prev_origin || confine.is_some();
         let res = self.apply(action);
+        self.api_origin = prev_origin;
         self.automation_confine_dir = None;
         if let Some(err) = self.automation_error.take() {
             return Err(err);
         }
         res.map_err(|e| e.to_string())
+    }
+
+    /// Marks subsequent actions as API-originated (used while `pane.send_keys` drives the prompt).
+    pub fn set_api_origin(&mut self, on: bool) {
+        self.api_origin = on;
+    }
+
+    /// Stores the structured JSON payload of the last query command.
+    pub fn set_command_data(&mut self, s: String) {
+        self.command_data = Some(s);
+    }
+
+    /// Takes the structured JSON payload of the last query command, if any.
+    pub fn take_command_data(&mut self) -> Option<String> {
+        self.command_data.take()
+    }
+
+    /// Why `action` must be refused for an API-originated caller (config write gate, `[api]`).
+    /// Returns `None` when the action is allowed. Local (non-API) callers are never gated.
+    pub fn config_write_denied(&self, action: &Action) -> Option<String> {
+        let writes = matches!(action, Action::ConfigSet(..) | Action::ConfigSave | Action::AppearanceSave);
+        if !writes {
+            return None;
+        }
+        if let Action::ConfigSet(key, _) = action
+            && (key.trim() == "api" || key.trim().starts_with("api."))
+        {
+            return Some("the [api] section cannot be changed over the API".to_string());
+        }
+        if !self.config.api.allow_config_write {
+            return Some("config writes over the API are disabled; set [api] allow_config_write = true in config.toml".to_string());
+        }
+        None
+    }
+
+    /// `true` while an API-originated action is executing.
+    pub fn is_api_origin(&self) -> bool {
+        self.api_origin
     }
 
     /// Directory the running automation action is confined to, if any.
