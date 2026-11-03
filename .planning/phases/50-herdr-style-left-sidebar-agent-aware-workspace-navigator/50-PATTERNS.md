@@ -6,7 +6,7 @@
 
 Line numbers are from the tree at commit 0915792. Re-grep before relying on them.
 
-**Reconciled with the plans (revision, 2026-11-03):** paths and mechanisms below match `50-01..50-14-PLAN.md`. Herdr modules are child modules (`src/wm/drawer/herdr.rs`, `src/wm/drawer/nav.rs`, `src/ui/drawer/herdr.rs`), not `drawer_herdr.rs` siblings (the only `drawer_herdr.rs` is the input module `src/input/drawer_herdr.rs`). No `WmMouseDrag` variants are added: the agents window keeps its own `AgentsDrag` state. Where this file and a plan still disagree, the plan wins.
+**Reconciled with the plans (revision, 2026-11-03):** paths and mechanisms below match `50-01..50-16-PLAN.md` (round 3: key tables in `src/input/keymap.rs`, herdr mouse in 50-15, agents pin/scale in 50-16). Herdr modules are child modules (`src/wm/drawer/herdr.rs`, `src/wm/drawer/nav.rs`, `src/ui/drawer/herdr.rs`), not `drawer_herdr.rs` siblings (the only `drawer_herdr.rs` is the input module `src/input/drawer_herdr.rs`). No `WmMouseDrag` variants are added: the agents window keeps its own `AgentsDrag` state. Where this file and a plan still disagree, the plan wins.
 
 ## File Classification
 
@@ -26,7 +26,7 @@ Line numbers are from the tree at commit 0915792. Re-grep before relying on them
 | `src/ui/typography.rs` (mod: `PanelTarget::Agents`) | config | CRUD | `PanelTarget::Mcp` arms, lines 203-216 | exact |
 | `src/input/drawer_herdr.rs` (new) | controller | event-driven | `handle_wm_modal_key` drawer block (`modal.rs:334+`) and `handle_drawer_mouse_event` (`mouse_wm.rs:672+`) | exact |
 | `src/input/agents_window.rs` (new) | controller | event-driven | modal drag/resize in `mouse_wm.rs:218-228, 631-650` | role-match |
-| `src/input/mouse_wm.rs`, `modal.rs`, `mouse.rs` (mod: delegation lines only; mouse_wm.rs gets the herdr drawer branch (50-06), modal.rs the herdr drawer and agents window key delegations (50-06, 50-08), mouse.rs the agents window mouse call (50-09); no new `WmMouseDrag` variants) | controller | event-driven | existing arms | exact |
+| `src/input/mouse_wm.rs`, `modal.rs`, `mouse.rs` (mod: delegation lines only; mouse_wm.rs gets the herdr drawer branch and the herdr resize-drag branch (50-15), modal.rs the herdr drawer and agents window key delegations (50-06, 50-08), mouse.rs the agents window mouse call (50-09); no new `WmMouseDrag` variants) | controller | event-driven | existing arms | exact |
 | `src/wm/agents_window.rs` (rect clamp `set_agents_rect`; `src/wm/z_stack.rs` is not edited) | utility | transform | `active_modal_rect`/`set_modal_rect` `z_stack.rs:470-495` | exact |
 | `src/action.rs`, `src/colon_command/*`, `src/pane/completion.rs`, `src/command_registry.rs` (mod) | route | request-response | existing `Drawer*` actions and `:drawer` rows | exact |
 | `src/wm/mod.rs` (mod: fields, `poll_all_ptys` hook) | service | event-driven | `update_drawer_telemetry()` at line 700 | exact |
@@ -77,7 +77,7 @@ if wm.drawer().focused {
     if super::keymap::is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) { return Ok(None); }
     match key.code { KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(), ...
 ```
-Handlers lower to actions: `let _ = wm.apply(crate::action::Action::DrawerSize(0));`. Free keys: `!` (next blocked), `e` (fold); leader `!`, `a` (zoom). Add a keymap-uniqueness test (a lib unit test inside the module, since `input::drawer_herdr` is private). `HERDR_DRAWER_KEYS` (and the agents window table in `src/input/agents_window.rs`) live outside `keymap.rs` under a documented key-table exception (ARCH-R01, AGENTS.md line 157), recorded in each module's `//! Key-table exception (ARCH-R01):` doc comment; see 50-06 and 50-09 context. Note `:drawer close` is already the minimize alias (`DrawerSize(0)`, parse_visual.rs:692); the herdr pane-close verb is `:drawer close-pane`.
+Handlers lower to actions: `let _ = wm.apply(crate::action::Action::DrawerSize(0));`. Free keys: `!` (next blocked), `e` (fold), `{` / `}` (width); leader `!`, `a` (zoom). The key tables live in `src/input/keymap.rs` next to the existing ones (AGENTS.md Conventions item 1): `HERDR_DRAWER_BINDINGS` (scopes `DrawerKeyScope { Herdr, HerdrComms }`, 50-06/50-12) and `AGENTS_WINDOW_BINDINGS` (scopes `AgentsKeyScope { Window, Graph, Grab, Snoop, KeywordEntry, Compose }`, 50-08/50-09/50-16/50-10); every row maps a chord to an `Action`. The input modules only resolve the active scopes, look the key up and call `wm.apply`; uniqueness, no-shadow-of-globals and per-op colon/completion/help drift tests are integration tests over `bilterm::input::keymap`. Note `:drawer close` is already the minimize alias (`DrawerSize(0)`, parse_visual.rs:692); the herdr pane-close verb is `:drawer close-pane`.
 
 **Mouse** (`src/input/mouse_wm.rs:672-700`): `handle_drawer_mouse_event` begins with panel-scale remap and Ctrl+wheel:
 ```rust
@@ -86,7 +86,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse)
     && wm.drawer_rect(workspace_area).is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
 { wm.step_scale(PanelTarget::Drawer, delta); return Some(AppAction::Handled); }
 ```
-Branch to the herdr mouse fn right after the outside-click early return (lines ~716-722), BEFORE the classic title badges, resize border and hard-coded header/footer column hit zones (lines ~751-815; `rel_x >= 38`, `dr.width-8`); the herdr handler re-implements badges and edge resize with the shared `pub(super)` helpers (50-06). Call sites of `drawer_vertical_layout_metrics` in mouse_wm.rs: ~822, 851, 867 (untouched).
+Branch to the herdr mouse fn right after the outside-click early return (lines ~716-722), BEFORE the classic title badges, resize border and hard-coded header/footer column hit zones (lines ~751-815; `rel_x >= 38`, `dr.width-8`); the herdr handler re-implements badges and edge resize with the shared `pub(super)` helpers, lowering each to an `Action` (50-15). Call sites of `drawer_vertical_layout_metrics` in mouse_wm.rs: ~822, 851, 867 (untouched).
 
 ### `src/wm/agents_window.rs` (zoom window state)
 
@@ -111,7 +111,7 @@ WmMouseDrag::ResizeModal { edge, initial_rect } => {
     let resized = apply_rect_edge_resize(initial_rect, edge, mouse.column, mouse.row, workspace_area);
     wm.set_modal_rect(resized, workspace_area); Ok(Some(AppAction::Handled)) }
 ```
-Helpers are `pub(super)` in `input`, so keep the new module under `src/input/` (or widen). The agents window does NOT use `wm.set_wm_mouse_drag` / `WmMouseDrag`: it stores `AgentsDrag { Move, Resize, Splitter, Node }` in `AgentsWindowState.drag`, so src/input/mouse_wm.rs is not edited for it (50-09). Do NOT make a `Modal` variant (MCP does not drag-resize either; RESEARCH Pattern 5). Precedence: zoom handler before `handle_drawer_mouse_event` in `src/input/mouse.rs:677-685`; zoom key handling before the drawer block in `handle_wm_modal_key`.
+Helpers are `pub(super)` in `input`, so keep the new module under `src/input/` (or widen). The agents window does NOT use `wm.set_wm_mouse_drag` / `WmMouseDrag`: it stores `AgentsDrag { Move, Resize, Splitter, Node }` in `AgentsWindowState.drag` (pointer-gesture bookkeeping only; every visible effect of a drag lowers to `Action::Agents(AgentsOp::SetRect | Split | PinNode ..)`), so src/input/mouse_wm.rs is not edited for it (50-09). Do NOT make a `Modal` variant (MCP does not drag-resize either; RESEARCH Pattern 5). Precedence: zoom handler before `handle_drawer_mouse_event` in `src/input/mouse.rs:677-685`; zoom key handling before the drawer block in `handle_wm_modal_key`.
 
 ### `src/ui/typography.rs` (`PanelTarget::Agents`)
 

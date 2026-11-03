@@ -48,7 +48,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
-- [ ] **Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first (`FLT-01`)
+- [ ] **Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 
 ## Phase Details
@@ -752,17 +752,17 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
 
 **Goal**: The slide-out drawer (Phase 24, scaled/pinnable since v2.8.0) looks and works like `herdr`'s left side: a compact, always-available navigator listing workspaces, sessions and panes with a live state per agent, so you can see who is working, blocked, idle or done and jump straight to it.
 **Depends on**: Phase 47 (drawer on the design system); reuses `WorkspaceDrawer`, `DrawerRow`, pin (`Fixed`) and panel scale from v2.8.0.
-**Requirements**: FLT-01
+**Requirements**: FLT-01, FLT-02, FLT-03
 **Harmony rule**: Add new paths; do not remove or rewire existing ones. The current drawer rows, `F7`, `:drawer ...`, Legacy looks and every existing key keep working. The new layout is an additional `[drawer] style = "classic" | "herdr"` (default `classic` until signed off). New features lower to `Action` and run via `WindowManager::apply`.
 **Success Criteria** (what must be TRUE):
 
   1. Tree view: workspace > session > pane, one line per pane, collapse/expand, current pane marked, narrow by default (about 24-30 columns), pinned-open friendly.
   2. Agent state per pane (working / waiting-for-input or blocked / idle / done / errored), derived from existing signals (OSC 133 phase, output activity, exit code, running command), shown as a state dot plus a per-workspace count summary. No per-agent configuration needed.
   3. Keyboard-first: `j`/`k`/arrows, Enter focuses the pane, a "jump to next blocked/needs-attention" key, new-session/new-pane/rename/close from the list, all with `:drawer` command equivalents.
-  4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI.
+  4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI. *The GUI part is conditional on the 50-13 checkpoint decision:* `fix-all` = also in real GUI windows on Linux, Windows and macOS; `fix-linux` = also in the real X11 GUI, while on Windows/macOS Ctrl+wheel over a panel still zooms the font (`[` / `]` and `:... scale` do scale panels there); `scope-out` = proven only on the headless GUI surface, real GUI windows keep font zoom and panel scale stays a no-op there (documented known gap). 50-14 records which option holds.
   5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
 
-**Plans**: 14 plans (0/14 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10 (traffic bus, zoom window, snoop, GUI vector graph), all tracked under FLT-01; proposed follow-up IDs FLT-02 (bus + zoom window + snoop) and FLT-03 (GUI vector graph + icons) await sign-off
+**Plans**: 16 plans (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
 
 Plans:
 - [ ] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
@@ -770,15 +770,17 @@ Plans:
 - [ ] 50-03-PLAN.md — `AgentState` classifier/tracker, `[agents.<name>]` profiles, `:agents list` (wave 2)
 - [ ] 50-04-PLAN.md — State dots, per-workspace counts, jump-to-attention (`:drawer attention`, leader `!`), `:drawer style` (wave 3)
 - [ ] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 51 (wave 3)
-- [ ] 50-06-PLAN.md — Herdr keyboard + mouse parity, `:drawer` verbs (incl. `close-pane`), pin/scale, throttled animation (wave 4)
+- [ ] 50-06-PLAN.md — Herdr keyboard: `HERDR_DRAWER_BINDINGS` in keymap.rs, full `DrawerNavOp` set with `:drawer` verbs (incl. `close-pane`), drift/no-shadow tests, pin/scale, throttled animation (wave 4)
 - [ ] 50-07-PLAN.md — Agent traffic zoom window skeleton: state, braille graph, stable layout, selection model, render (wave 4)
-- [ ] 50-08-PLAN.md — Zoom window wiring: `:agents zoom|close`, leader `a`, Esc, node/edge keyboard cursor, Enter-to-focus, redraw cadence (wave 5)
-- [ ] 50-09-PLAN.md — Zoom window chrome: drag move/resize, splitter, node drag, pin, `PanelTarget::Agents` scale (wave 6)
-- [ ] 50-10-PLAN.md — Snoop view: follow/filter/scroll/copy, disabled `send as me` compose line (wave 7)
-- [ ] 50-11-PLAN.md — GUI vector rendering: AA curved edges, flow particles, glow, sidebar state icons (wave 7)
-- [ ] 50-12-PLAN.md — Row comms indicators (pair / fan-out) opening the window on an edge (wave 8)
-- [ ] 50-13-PLAN.md — GUI runtime scope decision (checkpoint) + panel-scale/modifier wiring in GUI runners (wave 7)
-- [ ] 50-14-PLAN.md — User guide chapter 11, config/reference/API docs, final phase gate (wave 9)
+- [ ] 50-08-PLAN.md — Zoom window keys: `AGENTS_WINDOW_BINDINGS` in keymap.rs, `:agents zoom/close/dismiss/select/edge/enter`, leader `a`, Esc, node/edge cursor, Enter-to-focus, op drift tests, redraw cadence (wave 5)
+- [ ] 50-09-PLAN.md — Zoom window chrome: title-drag/Shift+arrows move, edge-drag/Alt+arrows resize, maximize/close badges, splitter, node/edge clicks, node drag + grab mode, parity test (wave 6)
+- [ ] 50-10-PLAN.md — Snoop view: Ctrl+O pane focus, follow/filter/scroll/copy by key, mouse and command, disabled `send as me` compose line (wave 8)
+- [ ] 50-11-PLAN.md — GUI vector rendering: AA curved edges, flow particles, glow, sidebar state icons (wave 8)
+- [ ] 50-12-PLAN.md — Row comms indicators (pair / fan-out) opening the window on an edge, comms keys in keymap.rs (wave 9)
+- [ ] 50-13-PLAN.md — GUI runtime scope decision (checkpoint) + panel-scale/modifier wiring in GUI runners (wave 8)
+- [ ] 50-14-PLAN.md — User guide chapter 11 + doc coverage script, config/reference/API docs, SC4 outcome, final phase gate (wave 10)
+- [ ] 50-15-PLAN.md — Herdr sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
+- [ ] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
 
 ### Phase 51: Agent-to-Agent Messaging & Coordination
 
