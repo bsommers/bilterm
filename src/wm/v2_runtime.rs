@@ -596,6 +596,11 @@ impl WindowManager {
                         "MCP: Moved session '{node}' {}",
                         if up { "up" } else { "down" }
                     )));
+                } else {
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "MCP: Session '{node}' is already at the {}",
+                        if up { "top" } else { "bottom" }
+                    )));
                 }
                 moved
             }

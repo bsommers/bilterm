@@ -169,6 +169,11 @@ impl SessionTree {
                 "destination parent session '{dst_parent}' does not exist"
             ));
         }
+        if self.node(src).and_then(|n| n.parent.as_deref()) == Some(dst_parent) {
+            return Err(format!(
+                "session '{src}' is already a child of '{dst_parent}'"
+            ));
+        }
         let descendants = self.subtree_session_names(src);
         if descendants.iter().any(|d| d == dst_parent) {
             return Err(format!(
@@ -456,6 +461,15 @@ mod tests {
             tree.subtree_session_names("ops"),
             vec!["ops", "build", "test-runner"]
         );
+    }
+
+    #[test]
+    fn session_tree_graft_onto_current_parent_is_an_error() {
+        let mut tree = SessionTree::new();
+        tree.branch("main", "build").unwrap();
+        let err = tree.graft("build", "main").unwrap_err();
+        assert!(err.contains("already a child"), "{err}");
+        assert_eq!(tree.subtree_session_names("main"), vec!["main", "build"]);
     }
 
     #[test]

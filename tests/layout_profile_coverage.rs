@@ -696,8 +696,11 @@ fn graft_errors_and_success_relink() {
     assert_eq!(t.node("a").unwrap().parent.as_deref(), Some("other"));
     assert_eq!(t.node("a").unwrap().kind, SessionNodeKind::Subtree);
     assert_eq!(t.subtree_session_names("other"), vec!["other", "a", "a1"]);
-    // idempotent
-    t.graft("a", "other").unwrap();
+    // re-grafting under the current parent is reported, not silently accepted
+    assert_eq!(
+        t.graft("a", "other").unwrap_err(),
+        "session 'a' is already a child of 'other'"
+    );
     assert_eq!(t.node("other").unwrap().children.len(), 1);
 }
 
