@@ -17,6 +17,11 @@ pub fn colon_command_names() -> Vec<&'static str> {
     COLON_COMMANDS.iter().map(|(c, _)| *c).collect()
 }
 
+/// Every `:command` with its known sub-arguments (Tab completion table).
+pub fn colon_command_table() -> &'static [(&'static str, &'static [&'static str])] {
+    COLON_COMMANDS
+}
+
 /// Interactive Tab completion state attached to `FloatingPromptState`.
 #[derive(Clone, Debug, Default)]
 pub struct TabCompletionState {
