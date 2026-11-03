@@ -68,6 +68,12 @@ fn resources_read_each_uri() {
 
     let cmds = text_of(&read(&mut plane, "bilterm://commands"));
     assert!(cmds.get("count").and_then(JsonValue::as_i64).unwrap() > 10);
+    let text = cmds.to_json_string();
+    // Catalog fields come from the command registry: every entry has a summary,
+    // aliases name their canonical command, and examples/shortcuts are exposed.
+    assert!(!text.contains("\"summary\":\"\""), "a command has an empty summary");
+    assert!(text.contains("\"alias_of\":\":remote\""), "`:fleet` should alias `:remote`");
+    assert!(text.contains("\"examples\":[\":split h\""), "`:split` should list its palette examples");
 
     let pane = text_of(&read(&mut plane, "bilterm://pane/1"));
     assert!(pane.get("lines").is_some() || pane.get("pane_id").is_some());

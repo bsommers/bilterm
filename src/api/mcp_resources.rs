@@ -142,9 +142,19 @@ impl AutomationControlPlane {
     }
 
     fn mcp_commands_resource() -> JsonValue {
-        let cmds: Vec<JsonValue> = crate::pane::completion::colon_command_names()
+        let cmds: Vec<JsonValue> = crate::command_registry::catalog()
             .into_iter()
-            .map(|n| JsonValue::obj([("name", s(n))]))
+            .map(|c| {
+                let strs = |v: &[&str]| JsonValue::Array(v.iter().map(|x| s(*x)).collect());
+                JsonValue::obj([
+                    ("name", s(c.name)),
+                    ("summary", s(c.summary)),
+                    ("alias_of", c.alias_of.map_or(JsonValue::Null, s)),
+                    ("subargs", strs(c.subargs)),
+                    ("examples", strs(&c.examples)),
+                    ("shortcut", c.shortcut.map_or(JsonValue::Null, s)),
+                ])
+            })
             .collect();
         JsonValue::obj([
             ("count", JsonValue::Number(cmds.len() as i64)),

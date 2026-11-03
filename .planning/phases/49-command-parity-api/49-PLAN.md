@@ -1,7 +1,7 @@
 ---
 phase: 49-command-parity-api
 type: plan
-status: PLANNED (49-01 audit done 2026-11-02; no code yet)
+status: IN PROGRESS (49-01, 49-02, 49-03, 49-05, 49-06 done 2026-11-02; 49-04 and 49-07 pending; API docs packet with agy)
 requirements: [API-01]
 ---
 # Phase 49: Command parity and a full public API
@@ -78,3 +78,11 @@ Gaps:
 2. Should `:set`/`:config save` be allowed over MCP/RPC by default, or behind a
    `[api] allow_config_write = true` switch (recommended: switch, default off)?
 3. Session-only appearance commands: persist automatically, or only on `:appearance save`?
+
+## Progress log (2026-11-02)
+- 49-02 DONE: 7 key-only Actions now have colon forms (`:crosshair cycle`, `:layout cycle`, `:focal radius`, `:prompt move|resize-height|resize-width`, `:search prefill`). Uncovered input mutations: minimize-pane by mouse, MCP-console freeze/move (need Actions); modal/drawer drag geometry stays mouse-only.
+- 49-03 DONE: `src/command_registry.rs` = one catalog (name, subargs, summary, alias_of, examples, shortcut) joined from completion/palette/help + EXTRA; 5 drift tests; `bilterm://commands` reads it. The parser stays hand-written (Legacy parity).
+- 49-05 DONE: MCP resources (state/config/commands/pane) and -32602/-32601/-32603 codes.
+- 49-06 DONE (transport): `--headless --http 127.0.0.1:PORT`, bearer token 0600, Host/Origin checks, limits. Open: `/events` shares the `events.poll` queue; token generator is Unix-only.
+- Decisions (user): HTTP+SSE AND JSON-RPC both; config write gated by `[api] allow_config_write` default off; persist only on explicit `:appearance save` / `:config save` (assumed).
+- Agy packet: .planning/dispatch/49-doc.md (docs/API.md) - user-run, not yet run.
