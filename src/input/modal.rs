@@ -347,6 +347,19 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('_') | KeyCode::Char('-') => {
                 let _ = wm.apply(crate::action::Action::DrawerSize(0));
             }
+            KeyCode::Char('*') => {
+                let next = if wm.drawer_config().visibility == crate::wm::DrawerVisibilityMode::Fixed {
+                    crate::wm::DrawerVisibilityMode::OnDemand
+                } else {
+                    crate::wm::DrawerVisibilityMode::Fixed
+                };
+                wm.set_drawer_visibility(Some(next));
+            }
+            KeyCode::Char(c @ ('[' | ']')) => {
+                let n = wm.step_panel_scale(if c == ']' { 10 } else { -10 });
+                let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+                wm.active_pane_mut().set_status_message(Some(format!("Panel scale: {n}%{note}")));
+            }
             KeyCode::Char('M') | KeyCode::F(5) => {
                 let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX));
             }
@@ -480,7 +493,31 @@ pub(super) fn handle_wm_modal_key(
         return Ok(Some(AppAction::Handled));
     }
 
-    if wm.mcp_console().active && !wm.is_leader_pending() {
+    if wm.mcp_console().captures_input() && !wm.is_leader_pending() {
+        // Pinned window: Esc hands the keyboard back to the panes without closing it.
+        if wm.mcp_console().pinned && key.code == KeyCode::Esc {
+            wm.mcp_console_mut().focused = false;
+            return Ok(Some(AppAction::Handled));
+        }
+        if wm.mcp_console().file_browser.is_none() && !key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('*') => {
+                    let pin = !wm.mcp_console().pinned;
+                    wm.mcp_console_mut().set_pinned(pin);
+                    wm.active_pane_mut().set_status_message(Some(
+                        if pin { "MCP window pinned (Esc returns focus to panes; :mcp close unpins)" } else { "MCP window unpinned" }.to_string(),
+                    ));
+                    return Ok(Some(AppAction::Handled));
+                }
+                KeyCode::Char(c @ ('[' | ']')) => {
+                    let n = wm.step_panel_scale(if c == ']' { 10 } else { -10 });
+                    let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+                    wm.active_pane_mut().set_status_message(Some(format!("Panel scale: {n}%{note}")));
+                    return Ok(Some(AppAction::Handled));
+                }
+                _ => {}
+            }
+        }
         if wm.mcp_console().file_browser.is_some() {
             match key.code {
                 KeyCode::Esc => {

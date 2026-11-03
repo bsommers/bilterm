@@ -260,6 +260,10 @@ pub struct McpConsoleState {
     pub h_scroll: usize,
     /// User-chosen `(cols, rows)` for the overlay panel (`:mcp size`); `None` = auto-size as before.
     pub size_override: Option<(u16, u16)>,
+    /// Pinned windows stay open and stop capturing the keyboard unless `focused` (click or `:mcp focus`).
+    pub pinned: bool,
+    /// Keyboard focus while pinned (ignored when not pinned: an unpinned window is always modal).
+    pub focused: bool,
     /// `DrawerLayoutMode::Overlay` (Floating pop-up window) vs `DrawerLayoutMode::Push` (pushes workspace panes).
     pub layout_mode: DrawerLayoutMode,
     /// Dock edge (`Top`, `Bottom`, `Left`, `Right`) used when `layout_mode == DrawerLayoutMode::Push`.
@@ -290,6 +294,8 @@ impl McpConsoleState {
             scroll_offset: 0,
             h_scroll: 0,
             size_override: None,
+            pinned: false,
+            focused: false,
             layout_mode: DrawerLayoutMode::Overlay,
             edge: DrawerEdge::Top,
             log_lines: vec![
@@ -407,9 +413,22 @@ impl McpConsoleState {
         self.row_actions.get(self.selected_row).cloned()
     }
 
+    /// `true` when key events belong to the console: open and either unpinned (modal) or focused.
+    pub fn captures_input(&self) -> bool {
+        self.active && (!self.pinned || self.focused)
+    }
+
+    /// Pins or unpins the window; a freshly pinned window keeps focus until the user clicks elsewhere or presses Esc.
+    pub fn set_pinned(&mut self, pinned: bool) {
+        self.pinned = pinned;
+        self.focused = pinned;
+    }
+
     /// Closes the MCP root terminal without terminating the daemon or any child sessions (`MCP-01`).
     pub fn close_root_terminal(&mut self) {
         self.active = false;
+        self.pinned = false;
+        self.focused = false;
         self.file_browser = None;
         self.window_theme_target = None;
         self.last_status_banner =

@@ -202,6 +202,13 @@ impl WindowManager {
         self.panel_scale_pct = pct.clamp(75, 200);
     }
 
+    /// Steps the drawer/MCP panel scale by `delta` percent (clamped to `75..=200`); returns the new setting.
+    pub fn step_panel_scale(&mut self, delta: i16) -> u16 {
+        let next = (i32::from(self.panel_scale_setting()) + i32::from(delta)).clamp(75, 200) as u16;
+        self.panel_scale_pct = next;
+        next
+    }
+
     /// Scale actually applied: always `100` outside the GUI, so the TUI and every test default are unchanged.
     pub fn panel_scale_pct(&self) -> u16 {
         if self.gui_surface { self.panel_scale_setting() } else { 100 }

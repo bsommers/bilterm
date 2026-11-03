@@ -384,7 +384,8 @@ pub fn render_mcp_console(
             DrawerEdge::Right => "[m:PUSH-RIGHT][d:Edge]",
         },
     };
-    let title = format!(" ◈ {} {mode_tag} [X] ", state.title);
+    let pin_tag = if state.pinned { " [PIN]" } else { "" };
+    let title = format!(" ◈ {}{pin_tag} {mode_tag} [X] ", state.title);
     write_clipped(buf, bounds.x + 2, bounds.y, right.saturating_sub(1), &title, gold_style);
 
     let footer = " ↑/↓:Select │ Enter/Click:Activate │ r:Refresh │ J/K:Move │ </>:Parent │ f:Freeze │ n:Branch │ m/d │ Esc ";

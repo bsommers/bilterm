@@ -657,6 +657,13 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
         Some("fixed" | "pin") => Some(Ok(ColonCommand::DrawerVisibility(Some(
             DrawerVisibilityMode::Fixed,
         )))),
+        Some("unpin") => Some(Ok(ColonCommand::DrawerVisibility(Some(
+            DrawerVisibilityMode::OnDemand,
+        )))),
+        Some("scale") => match parts.get(2).and_then(|v| v.trim_end_matches('%').parse::<u16>().ok()) {
+            Some(n) if (75..=200).contains(&n) => Some(Ok(ColonCommand::PanelScale(n))),
+            _ => Some(Err("Usage: :drawer scale <75..200> (GUI only)".to_string())),
+        },
         Some("autohide" | "auto" | "auto-hide") => Some(Ok(ColonCommand::DrawerVisibility(Some(
             DrawerVisibilityMode::AutoHide,
         )))),

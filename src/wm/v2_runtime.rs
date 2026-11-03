@@ -826,6 +826,31 @@ impl WindowManager {
             self.active_pane_mut().set_status_message(Some(msg));
             return false;
         }
+        if first_verb.eq_ignore_ascii_case("pin") || first_verb.eq_ignore_ascii_case("unpin") {
+            let pin = first_verb.eq_ignore_ascii_case("pin");
+            if pin && !self.mcp_console.active {
+                let lines = self.build_mcp_status_lines();
+                self.mcp_console.open_with_view("MASTER CONTROL PROGRAM // SYSTEM & DAEMON STATUS", lines);
+            }
+            self.mcp_console.set_pinned(pin);
+            let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
+            let _ = self.resize_all(vp);
+            self.active_pane_mut().set_status_message(Some(
+                if pin { "MCP window pinned (Esc returns focus to panes)" } else { "MCP window unpinned" }.to_string(),
+            ));
+            return false;
+        }
+        if first_verb.eq_ignore_ascii_case("scale") {
+            let msg = match parts.get(1).and_then(|v| v.trim_end_matches('%').parse::<u16>().ok()) {
+                Some(n) if (75..=200).contains(&n) => {
+                    self.set_panel_scale_pct(n);
+                    format!("Panel scale: {n}%{}", if self.gui_surface { "" } else { " (applies in the GUI only)" })
+                }
+                _ => "Usage: :mcp scale <75..200> (GUI only; shared with the drawer)".to_string(),
+            };
+            self.active_pane_mut().set_status_message(Some(msg));
+            return false;
+        }
         if first_verb.eq_ignore_ascii_case("close") || first_verb.eq_ignore_ascii_case("exit") {
             self.mcp_console.close_root_terminal();
             let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);

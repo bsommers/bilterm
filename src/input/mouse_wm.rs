@@ -91,15 +91,41 @@ pub(super) fn apply_rect_edge_resize(
     Rect::new(new_x, new_y, new_w, new_h)
 }
 
+/// Ctrl + wheel over a drawer/MCP panel steps its GUI text scale by 10% (`None` for any other event).
+fn ctrl_wheel_scale_delta(mouse: &MouseEvent) -> Option<i16> {
+    if !mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+        return None;
+    }
+    match mouse.kind {
+        MouseEventKind::ScrollUp => Some(10),
+        MouseEventKind::ScrollDown => Some(-10),
+        _ => None,
+    }
+}
+
 pub(super) fn handle_modal_mouse_event(
     wm: &mut WindowManager,
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
     let (pm, pws) = wm.panel_space(mouse, workspace_area);
+    // A pinned MCP window gives the keyboard back to the panes when the user clicks anywhere else.
+    if wm.mcp_console().pinned
+        && matches!(pm.kind, MouseEventKind::Down(_))
+        && wm.mcp_console().panel_rect(pws).is_none_or(|r| !rect_contains(r, pm.column, pm.row))
+    {
+        wm.mcp_console_mut().focused = false;
+    }
     if let Some(mcp_rect) = wm.mcp_console().panel_rect(pws)
         && rect_contains(mcp_rect, pm.column, pm.row)
     {
+        if matches!(pm.kind, MouseEventKind::Down(_)) && wm.mcp_console().pinned {
+            wm.mcp_console_mut().focused = true;
+        }
+        if let Some(delta) = ctrl_wheel_scale_delta(&pm) {
+            wm.step_panel_scale(delta);
+            return Some(AppAction::Handled);
+        }
         match pm.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let rel_col = pm.column.saturating_sub(mcp_rect.x);
@@ -649,6 +675,12 @@ pub(super) fn handle_drawer_mouse_event(
 ) -> Option<AppAction> {
     // GUI panel scale (46-04d): work in the panel's own coordinate space; identity at 100%.
     let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area);
+    if let Some(delta) = ctrl_wheel_scale_delta(&mouse)
+        && wm.drawer_rect(workspace_area).is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
+    {
+        wm.step_panel_scale(delta);
+        return Some(AppAction::Handled);
+    }
     match mouse.kind {
         MouseEventKind::Moved => {
             if wm.update_drawer_hover(mouse.column, mouse.row, workspace_area) {

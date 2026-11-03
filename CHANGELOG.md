@@ -5,6 +5,13 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Pin the MCP window**: `:mcp pin|unpin` or `*` in the console. A pinned window stays open and stops grabbing the keyboard: Esc (or a click elsewhere) returns focus to the panes, a click inside takes it back, `:mcp close` unpins and closes. The title shows `[PIN]`.
+- **Pin the drawer from the keyboard/commands**: `*` in the focused drawer toggles Fixed/OnDemand; `:drawer unpin` added (`:drawer pin` already existed).
+- **Interactive panel scale (GUI)**: Ctrl+wheel over the drawer or MCP window, `[` / `]` in either, `:drawer scale N`, `:mcp scale N` (all share the existing `:panel scale 75..200`).
+
 ## [v2.7.0] - 2026-11-02
 
 ### Added (Phase 49: command parity and API)
