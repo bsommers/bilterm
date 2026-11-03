@@ -22,7 +22,7 @@ impl AutomationControlPlane {
 
         let id = id?;
 
-        let result = match method {
+        let result: std::result::Result<JsonValue, (i64, String)> = match method {
             "initialize" => Ok(JsonValue::obj([
                 (
                     "protocolVersion",
@@ -30,10 +30,19 @@ impl AutomationControlPlane {
                 ),
                 (
                     "capabilities",
-                    JsonValue::obj([(
-                        "tools",
-                        JsonValue::obj([("listChanged", JsonValue::Bool(false))]),
-                    )]),
+                    JsonValue::obj([
+                        (
+                            "tools",
+                            JsonValue::obj([("listChanged", JsonValue::Bool(false))]),
+                        ),
+                        (
+                            "resources",
+                            JsonValue::obj([
+                                ("subscribe", JsonValue::Bool(false)),
+                                ("listChanged", JsonValue::Bool(false)),
+                            ]),
+                        ),
+                    ]),
                 ),
                 (
                     "serverInfo",
@@ -48,7 +57,19 @@ impl AutomationControlPlane {
             ])),
             "ping" => Ok(JsonValue::Object(BTreeMap::new())),
             "tools/list" => Ok(Self::mcp_tools_list()),
+            "resources/list" => Ok(self.mcp_resources_list()),
+            "resources/read" => self.mcp_resources_read(&params),
             "tools/call" => {
+                if !matches!(params.get("arguments"), None | Some(JsonValue::Object(_))) {
+                    return Some(
+                        Self::error_response(
+                            id,
+                            -32602,
+                            "Invalid params: 'arguments' must be an object",
+                        )
+                        .to_json_string(),
+                    );
+                }
                 let tool_name = params.get("name").and_then(JsonValue::as_str).unwrap_or("");
                 let args = params
                     .get("arguments")
@@ -79,6 +100,9 @@ impl AutomationControlPlane {
                             ),
                             ("isError", JsonValue::Bool(false)),
                         ])),
+                        Err(err_msg) if err_msg.starts_with("missing ") => {
+                            Err((-32602, format!("Invalid params: {err_msg}")))
+                        }
                         Err(err_msg) => Ok(JsonValue::obj([
                             (
                                 "content",
@@ -90,10 +114,10 @@ impl AutomationControlPlane {
                             ("isError", JsonValue::Bool(true)),
                         ])),
                     },
-                    None => Err(format!("Unknown MCP tool: {tool_name}")),
+                    None => Err((-32602, format!("Invalid params: unknown MCP tool: {tool_name}"))),
                 }
             }
-            _ => Err(format!("Unsupported MCP method: {method}")),
+            _ => Err((-32601, format!("Method not found: {method}"))),
         };
 
         Some(match result {
@@ -103,7 +127,7 @@ impl AutomationControlPlane {
                 ("result", res),
             ])
             .to_json_string(),
-            Err(msg) => Self::error_response(id, -32601, &msg).to_json_string(),
+            Err((code, msg)) => Self::error_response(id, code, &msg).to_json_string(),
         })
     }
 
