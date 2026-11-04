@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use bilterm::colon_command::parse_colon_command;
 use bilterm::ui::WorkspaceWidget;
+use bilterm::wm::agent_state::AgentState;
 use bilterm::wm::drawer::{DrawerConfig, DrawerStyle};
 use bilterm::wm::{DrawerRowKind, SplitDirection, WindowManager};
 use ratatui::buffer::Buffer;
@@ -200,7 +201,7 @@ fn tree_saved_session_rollup() {
         assert_eq!(meta.pane_count, 3);
         open_drawer(&mut wm);
         let inner = drawer_interior(&wm, area);
-        assert!(inner.iter().any(|l| l.contains("archive") && l.trim_end().ends_with("3p")), "{}", inner.join("\n"));
+        assert!(inner.iter().any(|l| l.contains("archive") && l.trim_end().ends_with("3p -")), "{}", inner.join("\n"));
     });
 }
 
@@ -294,5 +295,32 @@ fn tree_top_edge_renders_vertical_list() {
         let b = lines.iter().position(|l| l.contains("#2 beta")).expect("beta line");
         assert_eq!(b, a + 1);
         assert!(a as u16 >= r.y && (b as u16) < r.y + r.height, "pane lines must sit inside the top drawer rect");
+    });
+}
+
+// ---- Phase 50-04: state dots, counts, attention navigation (FLT-01, D-04/D-05) ----
+
+/// Three-pane herdr fixture (ids 1..=3), titles alpha/beta/gamma.
+fn three_pane_herdr(cols: u16, rows: u16) -> (WindowManager, Rect) {
+    let (mut wm, area) = herdr_wm(cols, rows);
+    let p3 = wm.split_focused(SplitDirection::Vertical).unwrap();
+    wm.pane_mut(p3).unwrap().process_pty_output(b"\x1b]2;gamma\x07GAMMA_OUT\r\n");
+    wm.resize_all(area).unwrap();
+    (wm, area)
+}
+
+#[test]
+fn attention_tracer_blocked_dot_and_jump() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = three_pane_herdr(100, 30);
+        wm.focus_and_raise(1);
+        wm.report_agent_state(3, Some(AgentState::Blocked));
+        wm.update_agent_states(std::time::Instant::now());
+        open_drawer(&mut wm);
+        let inner = drawer_interior(&wm, area);
+        let line = inner.iter().find(|l| l.contains("#3 ")).expect("#3 line");
+        assert!(line.contains('▲'), "blocked dot missing: {line:?}");
+        run_colon(&mut wm, ":drawer attention");
+        assert_eq!(wm.active_pane_id(), 3);
     });
 }

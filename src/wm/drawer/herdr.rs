@@ -8,9 +8,10 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::{DrawerConfig, DrawerRow, DrawerRowKind};
+use super::{DrawerConfig, DrawerRow, DrawerRowKind, WorkspaceDrawer};
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
+use crate::wm::agent_state::{AgentCounts, AgentState};
 use crate::wm::{SessionNodeKind, SessionTreeNode, WindowManager};
 
 /// Visual style of the slide-out drawer (`drawer.style`).
@@ -60,6 +61,17 @@ pub struct HerdrRowMeta {
     pub live: bool,
     /// Pane count rollup (live count for the active session, stored count for saved ones).
     pub pane_count: usize,
+    /// Agent state of a live pane row (`None` for every other row).
+    pub agent: Option<AgentState>,
+    /// Per-state pane counts on the live session/workspace row (`None` for every other row).
+    pub counts: Option<AgentCounts>,
+}
+
+impl WorkspaceDrawer {
+    /// Animation tick used for the working spinner (deterministic in tests).
+    pub fn spinner_tick(&self) -> usize {
+        self.tick_counter
+    }
 }
 
 impl DrawerConfig {
@@ -154,6 +166,8 @@ fn other_meta() -> HerdrRowMeta {
         has_children: false,
         live: true,
         pane_count: 0,
+        agent: None,
+        counts: None,
     }
 }
 
@@ -185,6 +199,8 @@ impl WalkCtx<'_> {
                 has_children,
                 live,
                 pane_count: if live { self.pane_ids.len() } else { node.pane_count },
+                agent: None,
+                counts: live.then(|| self.wm.agent_counts()),
             },
         ));
         if collapsed {
@@ -214,6 +230,8 @@ impl WalkCtx<'_> {
                     has_children: false,
                     live: true,
                     pane_count: 0,
+                    agent: self.wm.agent_state(id),
+                    counts: None,
                 },
             ));
         }

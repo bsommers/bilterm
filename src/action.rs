@@ -172,6 +172,7 @@ pub enum Action {
     DrawerVisibility(Option<DrawerVisibilityMode>),
     DrawerLayout(Option<DrawerLayoutMode>),
     DrawerSize(u16),
+    DrawerNav(crate::wm::drawer::DrawerNavOp),
     /// `:agents [list]` - per-pane agent state (Phase 50-03, FLT-01).
     Agents(crate::wm::agents_cmd::AgentsOp),
     FontZoomIn,
@@ -375,6 +376,7 @@ mod tests {
             Action::DrawerVisibility(_) => Some(":drawer fixed"),
             Action::DrawerLayout(_) => Some(":drawer push"),
             Action::DrawerSize(_) => Some(":drawer size 32"),
+            Action::DrawerNav(_) => Some(":drawer attention"),
             Action::Agents(_) => Some(":agents list"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
@@ -583,6 +585,7 @@ mod tests {
             Action::DrawerVisibility(Some(DrawerVisibilityMode::Fixed)),
             Action::DrawerLayout(Some(DrawerLayoutMode::Push)),
             Action::DrawerSize(32),
+            Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::FontZoomIn,
             Action::FontZoomOut,

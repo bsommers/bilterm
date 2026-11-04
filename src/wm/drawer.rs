@@ -17,7 +17,9 @@ use crate::vt::Osc133Phase;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
 pub mod herdr;
+pub mod nav;
 pub use herdr::{DrawerStyle, HerdrLevel, HerdrRowMeta};
+pub use nav::DrawerNavOp;
 
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
 pub const BRAILLE_SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];

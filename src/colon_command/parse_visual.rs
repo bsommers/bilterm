@@ -689,6 +689,9 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             None => Some(Ok(ColonCommand::DrawerLayout(None))),
             _ => Some(Err("Usage: :drawer mode [float|push]".to_string())),
         },
+        Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
+            crate::wm::drawer::DrawerNavOp::NextAttention,
+        ))),
         Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
         Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
