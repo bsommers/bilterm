@@ -221,6 +221,8 @@ pub struct WorkspaceDrawer {
     /// after [`Self::invalidate_saved_sessions`], so one frame or event sees one list and the
     /// directory is not rescanned by every layout helper.
     saved_sessions: std::cell::RefCell<Option<Vec<String>>>,
+    /// Pane and tick of a pending Navigator close of a Working pane (WR-06).
+    close_armed: Option<(PaneId, usize)>,
 }
 
 impl WorkspaceDrawer {

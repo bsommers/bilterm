@@ -11,6 +11,9 @@ use crate::wm::{SessionNodeKind, SplitDirection, WindowManager};
 use crate::wm::agent_state::AgentState;
 use crate::wm::agents_window::NodeKey;
 
+/// Ticks (about 16 ms each) a Working-pane close stays armed for confirmation.
+const CLOSE_CONFIRM_TICKS: usize = 300;
+
 /// One drawer navigation operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DrawerNavOp {
@@ -77,7 +80,38 @@ impl WindowManager {
         changed
     }
 
+    /// Navigator close (`x`, `Delete`, footer `x`, menu `Close`): a pane whose agent is `Working` is
+    /// only closed by a second close on the same pane within [`CLOSE_CONFIRM_TICKS`]; the first one
+    /// arms it and says so in the status bar (WR-06). Idle, done, blocked and errored panes close at once.
+    fn drawer_nav_close(&mut self) -> bool {
+        let Some(id) = self.selected_drawer_pane_id() else {
+            return self.drawer_close_selected_pane();
+        };
+        let tick = self.drawer.spinner_tick();
+        let armed = self
+            .drawer
+            .close_armed
+            .is_some_and(|(p, t)| p == id && tick.wrapping_sub(t) <= CLOSE_CONFIRM_TICKS);
+        if self.agent_state(id) == Some(AgentState::Working) && !armed {
+            self.drawer.close_armed = Some((id, tick));
+            self.active_pane_mut().set_status_message(Some(format!(
+                "Pane #{id} is Working: close again to confirm (any other key cancels)"
+            )));
+            return true;
+        }
+        self.drawer.close_armed = None;
+        self.drawer_close_selected_pane()
+    }
+
     fn apply_drawer_nav_op(&mut self, op: DrawerNavOp) -> bool {
+        // Close confirmation (WR-06) survives only an immediate repeat (or the menu that leads
+        // to it); any other navigation disarms it.
+        if !matches!(
+            op,
+            DrawerNavOp::Close | DrawerNavOp::MenuOpen(_) | DrawerNavOp::MenuClose | DrawerNavOp::MenuPick(_)
+        ) {
+            self.drawer.close_armed = None;
+        }
         match op {
             DrawerNavOp::NextAttention => self.jump_next_attention().is_some(),
             DrawerNavOp::Fold => self.fold_selected_navigator_row(),
@@ -119,7 +153,7 @@ impl WindowManager {
                 true
             }
             DrawerNavOp::Rename(name) => self.drawer_rename_selected(&name),
-            DrawerNavOp::Close => self.drawer_close_selected_pane(),
+            DrawerNavOp::Close => self.drawer_nav_close(),
             DrawerNavOp::ExpandAll => self.expand_all_navigator_rows(),
             DrawerNavOp::CollapseAll => self.collapse_all_navigator_rows(),
             DrawerNavOp::AddWindow(session) => self.drawer_add_in_selected(SplitDirection::Horizontal, session),

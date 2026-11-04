@@ -736,6 +736,35 @@ fn keys_x_and_delete_close_selected_pane() {
     });
 }
 
+/// WR-06: closing a Working pane from the Navigator needs a confirming second close.
+#[test]
+fn close_of_working_pane_needs_confirmation() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(4);
+        let n = wm.pane_count();
+        with_states(&mut wm, &[(2, Some(AgentState::Working)), (3, Some(AgentState::Idle))]);
+        let row_of = |wm: &WindowManager, id: usize| {
+            wm.drawer_rows().iter().position(|r| r.kind == DrawerRowKind::Pane(id as _)).unwrap()
+        };
+        wm.drawer_mut().selected_index = row_of(&wm, 2);
+        ch(&mut wm, 'x');
+        assert_eq!(wm.pane_count(), n, "first close only arms");
+        let msg = wm.active_pane().status_message().unwrap_or_default().to_string();
+        assert!(msg.contains("Working") && msg.contains("confirm"), "{msg}");
+        // Another navigation key disarms: the next close arms again instead of closing.
+        press(&mut wm, KeyCode::Down);
+        wm.drawer_mut().selected_index = row_of(&wm, 2);
+        ch(&mut wm, 'x');
+        assert_eq!(wm.pane_count(), n, "navigation disarmed the confirmation");
+        ch(&mut wm, 'x');
+        assert_eq!(wm.pane_count(), n - 1, "immediate repeat confirms and closes");
+        // A non-Working pane closes at once.
+        wm.drawer_mut().selected_index = row_of(&wm, 3);
+        ch(&mut wm, 'x');
+        assert_eq!(wm.pane_count(), n - 2);
+    });
+}
+
 #[test]
 fn keys_colon_close_keeps_minimize_meaning() {
     with_temp_xdg(|| {
