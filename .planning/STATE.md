@@ -4,11 +4,11 @@ milestone: v2.6.0
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: Completed 50-02-PLAN.md
-last_updated: "2026-11-04T00:42:52.721Z"
+stopped_at: Completed 50-03-PLAN.md
+last_updated: "2026-11-04T00:50:16.285Z"
 last_activity: 2026-11-02
 last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
-state_head: f4d9eb025f29005a9dd043d33d33e58bbfe8c8db
+state_head: e34bfa4c54f6fbbd70ae2432e7bd9cbaaa193c58
 progress:
   total_phases: 48
   completed_phases: 44
@@ -65,6 +65,7 @@ Progress: [██████████] 100% (42/42 Phases)
 |------|----------|-------|-------|
 | Phase 50 P01 | 40 min | 2 tasks | 13 files |
 | Phase 50 P02 | 5 min | 2 tasks | 6 files |
+| Phase 50 P03 | 15 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
 - [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
 - [Phase 50]: 50-02: herdr roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
+- [Phase 50]: 50-03: first observation of a pane applies its agent state without dwell; later Working/Idle flips need 500 ms; finish detected from OSC 133 D transition or (last_exit_code,last_duration_ms) change
+- [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
 
 ### Pending Todos
 
@@ -98,8 +101,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-04T00:42:52.551Z
-Stopped at: Completed 50-02-PLAN.md
+Last session: 2026-11-04T00:50:16.114Z
+Stopped at: Completed 50-03-PLAN.md
 Resume file: None
 
 ## Quick Tasks Completed
