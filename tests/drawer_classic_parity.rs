@@ -235,7 +235,7 @@ fn gui_surface_left() {
         wm.set_gui_surface(true);
         let mut renderer = GuiWorkspaceRenderer::new(8, 16);
         let mut surface = GuiFrameSurface::new(8, 16);
-        renderer.render_workspace_with_cell_size(&mut wm, area, 8, 16, &mut surface);
+        renderer.render_workspace_with_cell_size(&wm, area, 8, 16, &mut surface);
         let (_, _, rgba) = surface.rasterize_rgba();
         let text = format!(
             "quads: {}\nglyphs: {}\nimages: {}\nrgba-digest: {:016x}\n",
