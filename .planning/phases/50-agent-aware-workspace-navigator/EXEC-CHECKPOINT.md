@@ -1,6 +1,6 @@
 # Phase 50 execution checkpoint (2026-11-03)
 
-**Status:** IN PROGRESS - needs resume. 6/16 plans done (50-01..06), all SUMMARY committed.
+**Status:** IN PROGRESS - needs resume. 10/16 plans done (50-01..09, 50-15, 50-16; 50-15 includes right-click menu + [+] buttons), all SUMMARY committed.
 
 ## Goal (user words)
 `/gsd-execute-phase 50 - parallelize as much as possible`; then: "continue with the remaining waves"; "switch to a gsd/phase-50-* branch instead, cut a PR. check with updates on remote. see if it is safe to merge".
@@ -18,10 +18,10 @@ Renamed by user request: stop calling it "herdr sidebar" -> **Navigator** (done,
 
 ## Remaining waves
 5: 50-08 | 4: 50-07 (pending) | 6: 50-09, 50-15 | 7: 50-16 | 8: 50-10, 50-11, 50-13 | 9: 50-12 | 10: 50-14.
-Order next: 50-07, 50-08, 50-09, 50-15, 50-16, 50-10, 50-11, 50-13, 50-12, 50-14.
+Order next: 50-10, 50-11, 50-13, 50-12, 50-14 (50-07,08,09,15,16 done). Last verify PASS 56/56, GOLDENS OK 11.
 
 ## After execution (workflow gates + user request)
 code review gate, verifier (gsd-verifier), update roadmap; then `git fetch origin`, check origin/main divergence, push branch, `gh pr create` (PR body ends with "🤖 Generated with [Claude Code](https://claude.com/claude-code)"), assess merge safety (CI status, conflicts, mergeable). Outward-facing: re-confirm before push/PR if approvals feel stale (user's request to cut PR is genuine but push not yet done).
 
 ## Next command
-Spawn gsd-executor for plan 50-07.
+Spawn gsd-executor for plan 50-10 (or next unfinished in order above).
