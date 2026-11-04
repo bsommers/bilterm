@@ -123,11 +123,11 @@ fn session(name: &str) -> DrawerRowKind {
     DrawerRowKind::SessionHeader(name.to_string())
 }
 
-/// Active session "default" is not in the tree; the tree holds main > build > test.
+/// Tree main > build > default, where "default" is the active session (headless default name).
 fn nested_tree(wm: &mut WindowManager) {
     let t = wm.session_tree_mut();
     t.branch("main", "build").unwrap();
-    t.branch("build", "test").unwrap();
+    t.branch("build", "default").unwrap();
 }
 
 /// Lines of the drawer interior only (inside the frame), for glyph checks.
@@ -144,14 +144,13 @@ fn tree_nested_sessions_indent_by_depth() {
     with_temp_xdg(|| {
         let (mut wm, _a) = herdr_wm(100, 30);
         nested_tree(&mut wm);
-        wm.config_mut().history_session = "test".to_string();
         let got = kinds_depths(&wm);
         assert_eq!(
             got,
             vec![
                 (session("main"), 0),
                 (session("build"), 1),
-                (session("test"), 2),
+                (session("default"), 2),
                 (DrawerRowKind::Pane(1), 3),
                 (DrawerRowKind::Pane(2), 3),
             ]
@@ -180,7 +179,6 @@ fn tree_fold_hides_descendants() {
     with_temp_xdg(|| {
         let (mut wm, _a) = herdr_wm(100, 30);
         nested_tree(&mut wm);
-        wm.config_mut().history_session = "test".to_string();
         assert!(wm.session_tree_mut().toggle_fold("main"));
         let rows = wm.drawer_rows();
         assert_eq!(rows.len(), 1, "only the collapsed workspace remains: {:?}", rows.iter().map(|r| &r.kind).collect::<Vec<_>>());
@@ -247,10 +245,10 @@ fn tree_sanitizes_titles() {
             assert!(!r.title.contains('\u{202E}') && !r.title.contains('\u{009B}'), "{:?}", r.title);
             assert!(r.title.chars().count() <= 64);
         }
-        let text = buffer_lines(&render(&wm, area)).join("\n");
+        let inner = drawer_interior(&wm, area);
+        let text = inner.join("\n");
         assert!(text.contains("#1 eviltitle"), "sanitised title missing:\n{text}");
         assert!(!text.contains('\u{202E}') && !text.contains('\u{009B}'));
-        let inner = drawer_interior(&wm, area);
         let long = inner.iter().find(|l| l.contains("#2 LLL")).expect("long title line");
         assert!(long.contains('…'), "truncated title needs an ellipsis: {long:?}");
     });

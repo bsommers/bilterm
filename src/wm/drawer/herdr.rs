@@ -4,10 +4,14 @@
 //! style dispatcher [`WindowManager::drawer_rows`], the herdr row builder and the per-style width
 //! helpers on [`DrawerConfig`].
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use super::{DrawerConfig, DrawerRow, DrawerRowKind};
-use crate::wm::WindowManager;
+use crate::pane::PaneId;
+use crate::vt::sanitize_display;
+use crate::wm::{SessionNodeKind, SessionTreeNode, WindowManager};
 
 /// Visual style of the slide-out drawer (`drawer.style`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,34 +90,125 @@ impl WindowManager {
         }
     }
 
-    /// Herdr rows: the active workspace followed by one row per live pane.
+    /// Herdr rows (`FLT-01`): workspaces (session-tree roots) > sessions (descendants) > live panes.
+    ///
+    /// Live panes appear only under the active session (`config.history_session`); saved sessions show
+    /// a `pane_count` rollup. Quick terminal and fleet nodes follow at depth 0 as `Other`.
     pub(crate) fn herdr_drawer_rows(&self) -> Vec<DrawerRow> {
+        let tree = &self.daemon_state.session_tree;
+        let active = self.config.history_session.as_str();
+        let saved = self.list_sessions();
+        let ctx = WalkCtx { wm: self, active, pane_ids: self.ordered_pane_ids() };
         let mut rows = Vec::new();
-        let ids = self.ordered_pane_ids();
-        let name = self.config.history_session.clone();
+        let mut visited = BTreeSet::new();
+
+        if tree.node(active).is_none() {
+            let node = SessionTreeNode::new(active, SessionNodeKind::Independent, None);
+            ctx.walk(&node, 0, &mut visited, &mut rows);
+        }
+        for node in &tree.nodes {
+            let is_root = node.parent.as_deref().is_none_or(|p| tree.node(p).is_none());
+            let explicit = node.parent.is_some() || !node.children.is_empty() || node.name != "main";
+            if is_root && (explicit || node.name == active || saved.contains(&node.name)) {
+                ctx.walk(node, 0, &mut visited, &mut rows);
+            }
+        }
+        for name in saved {
+            if !visited.contains(&name) && tree.node(&name).is_none() && name != active {
+                let mut node = SessionTreeNode::new(name, SessionNodeKind::Independent, None);
+                node.pane_count = 0;
+                ctx.walk(&node, 0, &mut visited, &mut rows);
+            }
+        }
+
+        if self.quick_terminal.visible {
+            rows.push(herdr_row(
+                DrawerRowKind::QuickTerminal,
+                "Quick Terminal".to_string(),
+                true,
+                other_meta(),
+            ));
+        }
+        for name in self.fleet.nodes.keys() {
+            rows.push(herdr_row(
+                DrawerRowKind::FleetNode(name.clone()),
+                sanitize_display(name, TITLE_MAX_CHARS),
+                false,
+                other_meta(),
+            ));
+        }
+        rows
+    }
+}
+
+/// Maximum chars of any title/name that reaches the layout (T-50-04).
+const TITLE_MAX_CHARS: usize = 64;
+/// Maximum tree depth emitted (T-50-04).
+const MAX_DEPTH: usize = 8;
+
+fn other_meta() -> HerdrRowMeta {
+    HerdrRowMeta {
+        depth: 0,
+        level: HerdrLevel::Other,
+        collapsed: false,
+        has_children: false,
+        live: true,
+        pane_count: 0,
+    }
+}
+
+/// Read-only context for the depth-first session-tree walk.
+struct WalkCtx<'a> {
+    wm: &'a WindowManager,
+    active: &'a str,
+    pane_ids: Vec<PaneId>,
+}
+
+impl WalkCtx<'_> {
+    fn walk(&self, node: &SessionTreeNode, depth: usize, visited: &mut BTreeSet<String>, rows: &mut Vec<DrawerRow>) {
+        if depth > MAX_DEPTH || !visited.insert(node.name.clone()) {
+            return;
+        }
+        let tree = &self.wm.daemon_state.session_tree;
+        let live = node.name == self.active;
+        let children: Vec<&SessionTreeNode> = node.children.iter().filter_map(|c| tree.node(c)).collect();
+        let has_children = !children.is_empty() || (live && !self.pane_ids.is_empty());
+        let collapsed = node.collapsed && has_children;
         rows.push(herdr_row(
-            DrawerRowKind::SessionHeader(name.clone()),
-            name,
+            DrawerRowKind::SessionHeader(node.name.clone()),
+            sanitize_display(&node.name, TITLE_MAX_CHARS),
             false,
             HerdrRowMeta {
-                depth: 0,
-                level: HerdrLevel::Workspace,
-                collapsed: false,
-                has_children: !ids.is_empty(),
-                live: true,
-                pane_count: ids.len(),
+                depth: depth as u8,
+                level: if depth == 0 { HerdrLevel::Workspace } else { HerdrLevel::Session },
+                collapsed,
+                has_children,
+                live,
+                pane_count: if live { self.pane_ids.len() } else { node.pane_count },
             },
         ));
-        let top_id = self.z_stack.top();
-        let qt_visible = self.quick_terminal.visible;
-        for id in ids {
-            let Some(pane) = self.panes.get(&id) else { continue };
+        if collapsed {
+            return;
+        }
+        if live {
+            self.push_panes(depth + 1, rows);
+        }
+        for child in children {
+            self.walk(child, depth + 1, visited, rows);
+        }
+    }
+
+    fn push_panes(&self, depth: usize, rows: &mut Vec<DrawerRow>) {
+        let top_id = self.wm.z_stack.top();
+        let qt_visible = self.wm.quick_terminal.visible;
+        for &id in &self.pane_ids {
+            let Some(pane) = self.wm.panes.get(&id) else { continue };
             rows.push(herdr_row(
                 DrawerRowKind::Pane(id),
-                pane.title().to_string(),
+                sanitize_display(pane.title(), TITLE_MAX_CHARS),
                 !qt_visible && top_id == Some(id),
                 HerdrRowMeta {
-                    depth: 1,
+                    depth: depth.min(usize::from(u8::MAX)) as u8,
                     level: HerdrLevel::Pane,
                     collapsed: false,
                     has_children: false,
@@ -122,7 +217,6 @@ impl WindowManager {
                 },
             ));
         }
-        rows
     }
 }
 
