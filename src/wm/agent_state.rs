@@ -450,3 +450,33 @@ impl WindowManager {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wm::drawer::DrawerStyle;
+
+    #[test]
+    fn dots_tick_agent_ui_redraws_only_for_visible_herdr() {
+        let mut wm = WindowManager::new_headless(30, 100);
+        wm.config_mut().drawer.style = DrawerStyle::Herdr;
+        let t0 = Instant::now();
+        let _ = wm.tick_agent_ui(t0); // first look registers the pane
+        wm.toggle_drawer();
+        assert!(wm.is_drawer_effectively_visible());
+
+        wm.report_agent_state(1, Some(AgentState::Blocked));
+        assert!(wm.tick_agent_ui(t0), "visible herdr drawer + state change -> redraw");
+        assert!(!wm.tick_agent_ui(t0), "no change -> no redraw");
+
+        wm.report_agent_state(1, Some(AgentState::Errored));
+        wm.config_mut().drawer.style = DrawerStyle::Classic;
+        assert!(!wm.tick_agent_ui(t0), "classic style keeps its redraw cadence");
+
+        wm.report_agent_state(1, Some(AgentState::Done));
+        wm.config_mut().drawer.style = DrawerStyle::Herdr;
+        wm.toggle_drawer();
+        assert!(!wm.is_drawer_effectively_visible());
+        assert!(!wm.tick_agent_ui(t0), "hidden drawer -> no redraw");
+    }
+}

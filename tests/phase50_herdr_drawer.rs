@@ -324,3 +324,202 @@ fn attention_tracer_blocked_dot_and_jump() {
         assert_eq!(wm.active_pane_id(), 3);
     });
 }
+
+fn now() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+/// Reports `states[i]` for pane `i + 1`, applies them and returns the WM.
+fn with_states(wm: &mut WindowManager, states: &[(u32, Option<AgentState>)]) {
+    for &(id, st) in states {
+        wm.report_agent_state(id as _, st);
+    }
+    wm.update_agent_states(now());
+}
+
+/// Splits until `n` panes exist and focuses pane 1.
+fn n_pane_herdr(n: u32, cols: u16, rows: u16) -> (WindowManager, Rect) {
+    let (mut wm, area) = herdr_wm(cols, rows);
+    while (wm.pane_count() as u32) < n {
+        wm.split_focused(SplitDirection::Vertical).unwrap();
+    }
+    wm.resize_all(area).unwrap();
+    wm.focus_and_raise(1);
+    (wm, area)
+}
+
+fn line_of<'a>(lines: &'a [String], needle: &str) -> &'a str {
+    lines.iter().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?}:\n{}", lines.join("\n")))
+}
+
+#[test]
+fn dots_render_all_five_states() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_herdr(5, 100, 30);
+        with_states(
+            &mut wm,
+            &[
+                (1, Some(AgentState::Working)),
+                (2, Some(AgentState::Blocked)),
+                (3, Some(AgentState::Idle)),
+                (4, Some(AgentState::Done)),
+                (5, Some(AgentState::Errored)),
+            ],
+        );
+        open_drawer(&mut wm);
+        let inner = drawer_interior(&wm, area);
+        for (id, glyph) in [(1, '⠋'), (2, '▲'), (3, '○'), (4, '●'), (5, '✗')] {
+            let l = line_of(&inner, &format!("#{id} "));
+            assert!(l.contains(glyph), "#{id} wants {glyph}: {l:?}");
+        }
+        run_colon(&mut wm, ":set glyphs ascii");
+        let inner = drawer_interior(&wm, area);
+        for (id, glyph) in [(1, '*'), (2, '!'), (3, '-'), (4, '+'), (5, 'x')] {
+            let l = line_of(&inner, &format!("#{id} "));
+            let prefix: String = l.chars().take_while(|c| *c != '#').collect();
+            assert!(prefix.contains(glyph), "#{id} ascii dot {glyph} missing before label: {l:?}");
+            assert!(l.is_ascii(), "{l:?}");
+        }
+    });
+}
+
+#[test]
+fn dots_real_signal_errored() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_herdr(2, 100, 30);
+        wm.pane_mut(2).unwrap().process_pty_output(b"boom\r\n\x1b]133;D;42\x07");
+        wm.update_agent_states(now());
+        open_drawer(&mut wm);
+        let inner = drawer_interior(&wm, area);
+        assert!(line_of(&inner, "#2 ").contains('✗'), "{}", inner.join("\n"));
+        assert!(!line_of(&inner, "#1 ").contains('✗'));
+    });
+}
+
+#[test]
+fn dots_workspace_counts_summary() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_herdr(3, 100, 30);
+        with_states(
+            &mut wm,
+            &[(1, Some(AgentState::Blocked)), (2, Some(AgentState::Errored)), (3, Some(AgentState::Working))],
+        );
+        open_drawer(&mut wm);
+        let inner = drawer_interior(&wm, area);
+        let ws = line_of(&inner, "default");
+        assert!(ws.contains("▲1 ✗1 ⠋1"), "counts summary missing: {ws:?}");
+        assert!(ws.trim_end().ends_with("⠋1"), "counts are right aligned: {ws:?}");
+        // Narrow drawer: only the segments that fit the space left after the name remain.
+        run_colon(&mut wm, ":drawer size 18");
+        let inner = drawer_interior(&wm, area);
+        let ws = line_of(&inner, "default");
+        assert!(ws.contains("▲1 ✗1") && !ws.contains("⠋1"), "truncated summary wrong: {ws:?}");
+        assert!(unicode_width::UnicodeWidthStr::width(ws) <= 16, "{ws:?}");
+    });
+}
+
+#[test]
+fn dots_saved_workspace_shows_count_and_dash() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_herdr(2, 100, 30);
+        wm.session_tree_mut().upsert_session("archive", bilterm::wm::SessionNodeKind::Independent, None);
+        wm.session_tree_mut().node_mut("archive").unwrap().pane_count = 3;
+        with_states(&mut wm, &[(1, Some(AgentState::Blocked))]);
+        open_drawer(&mut wm);
+        let inner = drawer_interior(&wm, area);
+        let saved = line_of(&inner, "archive");
+        assert!(saved.trim_end().ends_with("3p -"), "{saved:?}");
+        for g in ['▲', '○', '●', '✗', '⠋'] {
+            assert!(!saved.contains(g), "saved workspace must show no dots: {saved:?}");
+        }
+    });
+}
+
+fn jump(wm: &mut WindowManager) -> u32 {
+    run_colon(wm, ":drawer attention");
+    wm.active_pane_id() as u32
+}
+
+#[test]
+fn attention_prefers_blocked_then_errored_then_done() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = n_pane_herdr(4, 100, 30);
+        with_states(
+            &mut wm,
+            &[(1, Some(AgentState::Blocked)), (2, Some(AgentState::Errored)), (3, Some(AgentState::Done))],
+        );
+        wm.focus_and_raise(4);
+        assert_eq!(jump(&mut wm), 1);
+        assert_eq!(jump(&mut wm), 1, "stays in the Blocked tier while one remains");
+        with_states(&mut wm, &[(1, None)]);
+        assert_eq!(jump(&mut wm), 2, "then Errored");
+        with_states(&mut wm, &[(2, None)]);
+        assert_eq!(jump(&mut wm), 3, "then Done");
+    });
+}
+
+#[test]
+fn attention_cycles_and_wraps() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = n_pane_herdr(4, 100, 30);
+        with_states(&mut wm, &[(2, Some(AgentState::Blocked)), (4, Some(AgentState::Blocked))]);
+        assert_eq!(wm.active_pane_id(), 1);
+        assert_eq!(jump(&mut wm), 2, "starts after the active pane");
+        assert_eq!(jump(&mut wm), 4);
+        assert_eq!(jump(&mut wm), 2, "wraps around");
+    });
+}
+
+#[test]
+fn attention_noop_when_none_sets_status() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = n_pane_herdr(3, 100, 30);
+        wm.focus_and_raise(2);
+        with_states(&mut wm, &[(1, Some(AgentState::Working))]);
+        run_colon(&mut wm, ":drawer attention");
+        assert_eq!(wm.active_pane_id(), 2);
+        assert_eq!(wm.active_pane().status_message(), Some("No pane needs attention"));
+    });
+}
+
+#[test]
+fn attention_leader_bang_with_drawer_closed() {
+    use bilterm::input::handle_wm_key_event;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_herdr(3, 100, 30);
+        with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+        assert!(wm.drawer_rect(area).is_none(), "drawer starts closed");
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
+        assert!(wm.is_leader_pending());
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE)).unwrap();
+        assert_eq!(wm.active_pane_id(), 3);
+    });
+}
+
+#[test]
+fn style_colon_drawer_style_sets_and_toggles() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        run_colon(&mut wm, ":drawer style herdr");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Herdr);
+        open_drawer(&mut wm);
+        assert_eq!(wm.drawer_rect(area).unwrap().width, 28);
+        run_colon(&mut wm, ":drawer style classic");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
+        assert_eq!(wm.drawer_rect(area).unwrap().width, 34);
+        run_colon(&mut wm, ":drawer style");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Herdr, "bare form toggles");
+        run_colon(&mut wm, ":drawer style toggle");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
+        assert!(parse_colon_command(":drawer style nope").unwrap().is_err());
+    });
+}
+
+#[test]
+fn keymap_leader_bindings_have_unique_keys() {
+    let mut seen = std::collections::HashSet::new();
+    for (key, _) in bilterm::input::keymap::DEFAULT_LEADER_BINDINGS {
+        assert!(seen.insert(*key), "duplicate leader key {key:?}");
+    }
+}
