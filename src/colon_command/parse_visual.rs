@@ -321,7 +321,7 @@ pub(super) fn parse_visual_colon_command(
             };
             Some(Ok(ColonCommand::CrtToggle(arg)))
         }
-        "drawer" | "sidebar" | "panels" => parse_drawer_command(parts),
+        "drawer" | "sidebar" | "panels" | "navigator" => parse_drawer_command(parts),
         "fkeys" | "fkey" | "function-keys" => parse_fkeys_command(parts),
         "snazzy" | "herdr-style" => match parts.get(1).copied() {
             None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
@@ -660,6 +660,12 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
             Ok(n) => Op::Widen(n),
             Err(e) => return Some(Err(e)),
         },
+        // `:drawer expand` without `all` keeps its older meaning (maximize) in the caller.
+        "expand" if parts.get(2) == Some(&"all") => Op::ExpandAll,
+        "collapse" => match parts.get(2) {
+            Some(&"all") => Op::CollapseAll,
+            _ => return Some(Err("Usage: :drawer expand all | collapse all".to_string())),
+        },
         "new-session" => Op::NewSession,
         "new-pane" | "new-window" => Op::NewPane,
         "rename" => match parts.len() {
@@ -754,7 +760,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

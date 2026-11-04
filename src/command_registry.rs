@@ -73,6 +73,7 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":pager", ":scroll", "Alias of :scroll."),
     (":pane-style", "", "Style the focused pane: theme, outline, bold and colors; same as :window."),
     (":panefont", "", "Show or change the focused pane's font settings."),
+    (":navigator", ":drawer", "Alias of :drawer for the Navigator tree (expand all, collapse all, style)."),
     (":panels", ":drawer", "Alias of :drawer."),
     (":prot", ":lock", "Alias of :lock."),
     (":q", ":quit", "Alias of :quit."),

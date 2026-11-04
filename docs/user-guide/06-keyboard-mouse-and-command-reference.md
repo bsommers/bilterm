@@ -264,6 +264,26 @@
 |------------|---------|-----------|-------------|
 | `:drawer` | `:sidebar`, `:panels` | `[toggle \| focus \| left \| right \| top \| bottom \| edge <edge> \| fixed \| autohide \| ondemand \| float \| push \| mode <float\|push> \| size <N> \| style <classic\|navigator\|toggle>]` | Toggle, focus, dock (`Left`/`Right`/`Top`/`Bottom`), pin (`Fixed`/`AutoHide`/`OnDemand`), or set layout (`Overlay`/`Push`) of the Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer; `style navigator` selects the compact agent-aware Navigator tree (`herdr` is a deprecated alias; config key `navigator_width_cols`) |
 
+**Navigator drawer keys.** With `drawer.style = navigator` and the drawer focused, these keys are consulted first (declarative table `NAVIGATOR_DRAWER_BINDINGS` in `src/input/keymap.rs`); every other key keeps its classic drawer meaning (`q`, `*`, `[`, `]`, `d`, `m`, `p`, `J`/`K`, Shift/Alt+arrows, ...). Each key lowers to an `Action` and has a `:drawer` command twin.
+
+| Key | `:drawer` twin | Effect |
+|-----|----------------|--------|
+| `j` / `Down`, `k` / `Up` | `:drawer next`, `:drawer prev` | Move the selection |
+| `Enter` / `Space` | `:drawer enter` | Focus the selected row |
+| `!` | `:drawer attention` | Jump to the next pane needing attention |
+| `e` | `:drawer fold` | Fold or unfold the selected session (a pane row folds its session) |
+| `E` | `:drawer expand all`, `:navigator expand all` | Unfold every workspace and session |
+| `C` | `:drawer collapse all`, `:navigator collapse all` | Fold everything to workspace rows; pressing it again on a fully folded tree unfolds all |
+| `N` | `:drawer new-session` | Create a new session and switch to it |
+| `n` / `c` / `+` / `w` | `:drawer new-pane` (`new-window`) | Split the focused pane into a new window |
+| `r` / `R` | `:drawer rename [name]` | Rename the selected session (without a name the prompt opens prefilled) |
+| `x` / `Delete` | `:drawer close-pane` | Close the selected pane (`:drawer close` still minimizes the drawer) |
+| `PageUp` / `PageDown` | `:drawer scroll -5`, `:drawer scroll 5` | Move the selection by five rows |
+| `{` / `}` | `:drawer widen -2`, `:drawer widen 2` | Narrow or widen the drawer (`navigator_width_cols`) |
+| (mouse click) | `:drawer row <n>` | Select row `n` (1-based) |
+
+`:navigator` is an alias of `:drawer` for the Navigator tree (`:navigator expand all`, `:navigator collapse all`, `:navigator style classic`). `:drawer expand` without `all` keeps its older meaning (maximize the drawer).
+
 ### 6.7 Remote SSH Domains, Remote `tmux -CC` & `herdr` Fleet Federation
 
 | `:command` | Aliases | Arguments | Description |

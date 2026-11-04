@@ -589,6 +589,8 @@ mod tests {
             Action::DrawerLayout(Some(DrawerLayoutMode::Push)),
             Action::DrawerSize(32),
             Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention),
+            Action::DrawerNav(crate::wm::drawer::DrawerNavOp::ExpandAll),
+            Action::DrawerNav(crate::wm::drawer::DrawerNavOp::CollapseAll),
             Action::DrawerStyle(Some(crate::wm::drawer::DrawerStyle::Navigator)),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::FontZoomIn,

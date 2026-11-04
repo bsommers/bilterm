@@ -818,6 +818,8 @@ fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
         DrawerNavOp::RenamePrompt => ":drawer rename".into(),
         DrawerNavOp::Rename(name) => format!(":drawer rename {name}"),
         DrawerNavOp::Close => ":drawer close-pane".into(),
+        DrawerNavOp::ExpandAll => ":drawer expand all".into(),
+        DrawerNavOp::CollapseAll => ":drawer collapse all".into(),
     }
 }
 
@@ -839,6 +841,8 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
         DrawerNavOp::RenamePrompt,
         DrawerNavOp::Rename("renamed".into()),
         DrawerNavOp::Close,
+        DrawerNavOp::ExpandAll,
+        DrawerNavOp::CollapseAll,
     ]
 }
 
@@ -966,5 +970,137 @@ fn pin_scale_gui_scale_enlarges_navigator_glyphs() {
         }
         assert_eq!(wm.scale_setting(bilterm::ui::typography::PanelTarget::Drawer), 150);
         assert!(max_width(&gui_frame(&mut wm, area)) > base, "] steps the scale in navigator style too");
+    });
+}
+
+// ---- Task 4: expand all / collapse all ----
+
+/// Three workspaces: main > build > default (active, with panes) and a saved root "archive".
+fn folded_forest(wm: &mut WindowManager) {
+    nested_tree(wm);
+    wm.session_tree_mut().upsert_session("archive", bilterm::wm::SessionNodeKind::Independent, None);
+    wm.session_tree_mut().branch("archive", "old").unwrap();
+    for name in ["main", "build", "archive"] {
+        wm.session_tree_mut().node_mut(name).unwrap().collapsed = true;
+    }
+}
+
+fn kinds(wm: &WindowManager) -> Vec<DrawerRowKind> {
+    wm.drawer_rows().into_iter().map(|r| r.kind).collect()
+}
+
+#[test]
+fn expand_all_unfolds_every_workspace_and_session() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = navigator_wm(100, 30);
+        folded_forest(&mut wm);
+        assert_eq!(kinds(&wm), vec![session("main"), session("archive")], "folded down to workspaces");
+        wm.drawer_mut().selected_index = 1;
+        wm.apply(Action::DrawerNav(DrawerNavOp::ExpandAll)).unwrap();
+        let k = kinds(&wm);
+        for want in [session("main"), session("build"), session("default"), DrawerRowKind::Pane(1), DrawerRowKind::Pane(2), session("archive"), session("old")] {
+            assert!(k.contains(&want), "{want:?} missing after expand all: {k:?}");
+        }
+        assert_eq!(k[wm.drawer().selected_index], session("archive"), "selection stays on the same logical row");
+    });
+}
+
+#[test]
+fn collapse_all_folds_every_tree_to_workspace_rows() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = navigator_wm(100, 30);
+        nested_tree(&mut wm);
+        wm.session_tree_mut().upsert_session("archive", bilterm::wm::SessionNodeKind::Independent, None);
+        wm.session_tree_mut().branch("archive", "old").unwrap();
+        let k = kinds(&wm);
+        let pane1 = k.iter().position(|x| *x == DrawerRowKind::Pane(1)).unwrap();
+        wm.drawer_mut().selected_index = pane1;
+        wm.apply(Action::DrawerNav(DrawerNavOp::CollapseAll)).unwrap();
+        assert_eq!(kinds(&wm), vec![session("main"), session("archive")]);
+        assert_eq!(wm.drawer().selected_index, 0, "selection moves to the pane's workspace (main)");
+    });
+}
+
+#[test]
+fn collapse_all_on_single_workspace_hides_panes_and_toggles_back() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = navigator_wm(100, 30);
+        open_drawer(&mut wm);
+        wm.drawer_mut().selected_index = 2;
+        wm.apply(Action::DrawerNav(DrawerNavOp::CollapseAll)).unwrap();
+        assert_eq!(kinds(&wm), vec![session("default")]);
+        assert_eq!(wm.drawer().selected_index, 0);
+        wm.apply(Action::DrawerNav(DrawerNavOp::CollapseAll)).unwrap();
+        assert_eq!(pane_row_count(&wm), 2, "collapsing a fully collapsed tree expands it");
+    });
+}
+
+#[test]
+fn keys_e_upper_expands_all_and_c_upper_collapses_all() {
+    with_temp_xdg(|| {
+        let rows: Vec<_> = NAVIGATOR_DRAWER_BINDINGS
+            .iter()
+            .filter(|(_, m, c, _)| *m == KeyModifiers::NONE && matches!(c, KeyCode::Char('E' | 'C')))
+            .collect();
+        assert_eq!(rows.len(), 2, "E and C are rows of the navigator key table");
+        let (mut wm, _a) = navigator_wm(100, 30);
+        folded_forest(&mut wm);
+        open_drawer(&mut wm);
+        // Shifted letters arrive with SHIFT set; the table lookup normalises it away.
+        press_mod(&mut wm, KeyCode::Char('E'), KeyModifiers::SHIFT);
+        assert!(pane_row_count(&wm) == 2 && kinds(&wm).contains(&session("old")));
+        press_mod(&mut wm, KeyCode::Char('C'), KeyModifiers::SHIFT);
+        assert_eq!(kinds(&wm), vec![session("main"), session("archive")]);
+        press_mod(&mut wm, KeyCode::Char('C'), KeyModifiers::SHIFT);
+        assert!(pane_row_count(&wm) == 2, "second C on a fully collapsed tree expands all");
+    });
+}
+
+#[test]
+fn colon_navigator_and_drawer_expand_collapse_all_match() {
+    for (cmd, op) in [
+        (":navigator expand all", DrawerNavOp::ExpandAll),
+        (":navigator collapse all", DrawerNavOp::CollapseAll),
+        (":drawer expand all", DrawerNavOp::ExpandAll),
+        (":drawer collapse all", DrawerNavOp::CollapseAll),
+    ] {
+        assert_eq!(parse_colon_command(cmd).unwrap().unwrap(), Action::DrawerNav(op), "{cmd}");
+    }
+    assert!(parse_colon_command(":drawer collapse").unwrap().is_err(), "collapse needs `all`");
+    assert!(parse_colon_command(":navigator collapse now").unwrap().is_err());
+    // `:navigator` forwards everything else to the :drawer parser, including `style`.
+    assert_eq!(
+        parse_colon_command(":navigator style classic").unwrap().unwrap(),
+        parse_colon_command(":drawer style classic").unwrap().unwrap()
+    );
+    // The older `:drawer expand` (maximize) alias keeps its meaning.
+    assert_eq!(parse_colon_command(":drawer expand").unwrap().unwrap(), Action::DrawerSize(u16::MAX));
+}
+
+#[test]
+fn expand_collapse_all_have_completion_and_help() {
+    let table = bilterm::pane::completion::colon_command_table();
+    for head in [":drawer", ":navigator"] {
+        let row = table.iter().find(|(c, _)| *c == head).unwrap_or_else(|| panic!("{head} completion row")).1;
+        assert!(row.contains(&"expand all") && row.contains(&"collapse all"), "{head}: {row:?}");
+    }
+    let help = bilterm::ui::modals::HELP_LINES;
+    let palette = bilterm::ui::modals::PALETTE_CATALOG;
+    for cmd in [":drawer expand all", ":drawer collapse all", ":navigator expand all", ":navigator collapse all"] {
+        assert!(help.iter().any(|(c, _)| *c == cmd), "help row for {cmd}");
+        assert!(palette.iter().any(|e| e.0 == cmd), "palette row for {cmd}");
+    }
+}
+
+#[test]
+fn classic_unaffected_by_expand_collapse_all() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = fixture(100, 30);
+        open_drawer(&mut wm);
+        wm.drawer_mut().selected_index = 0;
+        let before = observe(&wm);
+        ch(&mut wm, 'E');
+        ch(&mut wm, 'C');
+        assert_eq!(observe(&wm), before);
     });
 }

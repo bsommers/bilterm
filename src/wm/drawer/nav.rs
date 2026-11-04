@@ -4,7 +4,7 @@
 //! [`DrawerNavOp`] inside [`crate::action::Action::DrawerNav`] and runs through
 //! [`WindowManager::apply_drawer_nav`]. Later Phase 50 plans extend the enum.
 
-use super::{DrawerRowKind, DrawerStyle};
+use super::{DrawerRow, DrawerRowKind, DrawerStyle};
 use crate::action::Action;
 use crate::pane::PaneId;
 use crate::wm::{SessionNodeKind, SplitDirection, WindowManager};
@@ -39,6 +39,11 @@ pub enum DrawerNavOp {
     Rename(String),
     /// Close the selected pane.
     Close,
+    /// Unfold every workspace and session; the selection stays on the same row.
+    ExpandAll,
+    /// Fold every workspace and session down to workspace rows (on an already fully folded tree it
+    /// unfolds everything again, so the key toggles); the selection moves to its workspace row.
+    CollapseAll,
 }
 
 /// Attention tiers in priority order.
@@ -89,7 +94,73 @@ impl WindowManager {
             }
             DrawerNavOp::Rename(name) => self.drawer_rename_selected(&name),
             DrawerNavOp::Close => self.drawer_close_selected_pane(),
+            DrawerNavOp::ExpandAll => self.expand_all_navigator_rows(),
+            DrawerNavOp::CollapseAll => self.collapse_all_navigator_rows(),
         }
+    }
+
+    /// Session name the selected row belongs to (its own name, or the enclosing session of a pane row).
+    fn selected_navigator_session(&self, rows: &[DrawerRow]) -> Option<String> {
+        let sel = self.drawer.selected_index;
+        match rows.get(sel)?.kind {
+            DrawerRowKind::SessionHeader(ref name) => Some(name.clone()),
+            DrawerRowKind::Pane(_) => rows[..sel].iter().rev().find_map(|r| match &r.kind {
+                DrawerRowKind::SessionHeader(name) => Some(name.clone()),
+                _ => None,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Name of the workspace (session-tree root) containing `session`.
+    fn navigator_workspace_of(&self, session: &str) -> String {
+        let tree = &self.daemon_state.session_tree;
+        let mut cur = session;
+        for _ in 0..16 {
+            match tree.node(cur).and_then(|n| n.parent.as_deref()).filter(|p| tree.node(p).is_some()) {
+                Some(parent) => cur = parent,
+                None => break,
+            }
+        }
+        cur.to_string()
+    }
+
+    /// Unfolds every workspace and session and keeps the selection on the same logical row.
+    fn expand_all_navigator_rows(&mut self) -> bool {
+        let anchor = self.drawer_rows().get(self.drawer.selected_index).map(|r| r.kind.clone());
+        for node in &mut self.daemon_state.session_tree.nodes {
+            node.collapsed = false;
+        }
+        self.reselect_navigator_row(anchor.as_ref());
+        true
+    }
+
+    /// Folds every workspace and session; a fully folded tree unfolds instead (toggle).
+    fn collapse_all_navigator_rows(&mut self) -> bool {
+        let rows = self.drawer_rows();
+        let fully_collapsed =
+            rows.iter().all(|r| r.navigator.as_ref().is_none_or(|m| !m.has_children || m.collapsed));
+        if fully_collapsed {
+            return self.expand_all_navigator_rows();
+        }
+        let root = self.selected_navigator_session(&rows).map(|s| self.navigator_workspace_of(&s));
+        let active = self.config.history_session.clone();
+        if self.daemon_state.session_tree.node(&active).is_none() {
+            self.daemon_state.session_tree.upsert_session(&active, SessionNodeKind::Independent, None);
+        }
+        for node in &mut self.daemon_state.session_tree.nodes {
+            node.collapsed = true;
+        }
+        self.reselect_navigator_row(root.map(DrawerRowKind::SessionHeader).as_ref());
+        true
+    }
+
+    /// Selects the row of `kind` when it is still listed, else clamps the selection.
+    fn reselect_navigator_row(&mut self, kind: Option<&DrawerRowKind>) {
+        if let Some(pos) = kind.and_then(|k| self.drawer_rows().iter().position(|r| &r.kind == k)) {
+            self.drawer.selected_index = pos;
+        }
+        self.clamp_drawer_selection();
     }
 
     /// Creates a new session, switches to it and selects its active pane (classic `N`).
