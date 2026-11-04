@@ -5,8 +5,9 @@
 //! [`WindowManager::apply_drawer_nav`]. Later Phase 50 plans extend the enum.
 
 use super::{DrawerRowKind, DrawerStyle};
+use crate::action::Action;
 use crate::pane::PaneId;
-use crate::wm::{SessionNodeKind, WindowManager};
+use crate::wm::{SessionNodeKind, SplitDirection, WindowManager};
 use crate::wm::agent_state::AgentState;
 
 /// One drawer navigation operation.
@@ -18,6 +19,26 @@ pub enum DrawerNavOp {
     Fold,
     /// Focus the selected row (the keyboard twin of a click).
     Activate,
+    /// Move the selection to the next row (wraps).
+    Next,
+    /// Move the selection to the previous row (wraps).
+    Prev,
+    /// Select a row by 0-based index (clamped); the operation a mouse click applies.
+    Row(usize),
+    /// Move the selection by `n` rows (clamped).
+    Scroll(i16),
+    /// Grow (`n > 0`) or shrink (`n < 0`) the drawer along its docking axis (clamped).
+    Widen(i16),
+    /// Create a new session and switch to it.
+    NewSession,
+    /// Split the focused pane into a new window.
+    NewPane,
+    /// Open the command prompt prefilled with `:drawer rename `.
+    RenamePrompt,
+    /// Rename the selected session.
+    Rename(String),
+    /// Close the selected pane.
+    Close,
 }
 
 /// Attention tiers in priority order.
@@ -33,7 +54,69 @@ impl WindowManager {
                 self.drawer_activate_selected(false);
                 true
             }
+            DrawerNavOp::Next => {
+                self.drawer_select_next();
+                true
+            }
+            DrawerNavOp::Prev => {
+                self.drawer_select_prev();
+                true
+            }
+            DrawerNavOp::Row(i) => {
+                let len = self.drawer_rows().len();
+                self.drawer.selected_index = i.min(len.saturating_sub(1));
+                len > 0
+            }
+            DrawerNavOp::Scroll(n) => {
+                self.drawer_scroll_by(isize::from(n));
+                true
+            }
+            DrawerNavOp::Widen(n) => {
+                let cfg = &self.config.drawer;
+                let cur = if cfg.edge.is_vertical() { cfg.effective_width_cols() } else { cfg.height_rows };
+                self.resize_drawer(i32::from(cur).saturating_add(i32::from(n)).clamp(0, 1000) as u16);
+                true
+            }
+            DrawerNavOp::NewSession => self.drawer_new_session(),
+            DrawerNavOp::NewPane => self.drawer_new_pane(SplitDirection::Horizontal),
+            DrawerNavOp::RenamePrompt => {
+                self.drawer.focused = false;
+                let prompt = self.active_pane_mut().prompt_mut();
+                prompt.manual_raw_override = false;
+                prompt.force_command_prompt = true;
+                prompt.set_text(":drawer rename ");
+                true
+            }
+            DrawerNavOp::Rename(name) => self.drawer_rename_selected(&name),
+            DrawerNavOp::Close => self.drawer_close_selected_pane(),
         }
+    }
+
+    /// Creates a new session, switches to it and selects its active pane (classic `N`).
+    fn drawer_new_session(&mut self) -> bool {
+        let Ok(name) = self.create_new_session(None, false) else { return false };
+        self.sync_drawer_selection_to_active_pane();
+        self.active_pane_mut().set_status_message(Some(format!("Created new session '{name}'")));
+        true
+    }
+
+    /// Splits the focused pane in `dir` and selects the new pane (classic `n`).
+    fn drawer_new_pane(&mut self, dir: SplitDirection) -> bool {
+        let Ok(id) = self.split_focused(dir) else { return false };
+        self.sync_drawer_selection_to_active_pane();
+        let kind = if dir == SplitDirection::Vertical { "vertical window" } else { "window" };
+        self.active_pane_mut().set_status_message(Some(format!("Created new {kind} #{id}")));
+        true
+    }
+
+    /// Renames the selected session through the existing `rename` session-tree command (T-50-17).
+    fn drawer_rename_selected(&mut self, name: &str) -> bool {
+        if name.is_empty() || name.chars().any(char::is_whitespace) {
+            self.active_pane_mut().set_status_message(Some("Usage: :drawer rename <name>".to_string()));
+            return false;
+        }
+        let target = self.selected_drawer_session_name();
+        self.apply(Action::SessionTreeCommand(format!("rename {target} {name}"))).is_ok()
     }
 
     /// Folds the selected session row; a pane (or other nested) row folds its enclosing session row and

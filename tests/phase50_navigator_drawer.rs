@@ -583,3 +583,337 @@ fn keys_tracer_fold_by_key_and_command() {
         assert_eq!(wm.active_pane_id(), 1);
     });
 }
+
+// ---- Task 2: full navigator key table ----
+
+use bilterm::action::Action;
+use bilterm::input::keymap::{DEFAULT_GLOBAL_BINDINGS, NAVIGATOR_DRAWER_BINDINGS, default_global_action};
+use bilterm::wm::drawer::DrawerNavOp;
+
+/// Focused navigator drawer over `n` panes (focus on pane 1, selection on the first pane row).
+fn focused_navigator(n: u32) -> (WindowManager, Rect) {
+    let (mut wm, area) = n_pane_navigator(n, 100, 30);
+    open_drawer(&mut wm);
+    wm.drawer_mut().selected_index = 1;
+    (wm, area)
+}
+
+#[test]
+fn keys_jk_and_arrows_move_selection() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(3);
+        wm.drawer_mut().selected_index = 0;
+        ch(&mut wm, 'j');
+        assert_eq!(wm.drawer().selected_index, 1);
+        press(&mut wm, KeyCode::Down);
+        assert_eq!(wm.drawer().selected_index, 2);
+        ch(&mut wm, 'k');
+        assert_eq!(wm.drawer().selected_index, 1);
+        press(&mut wm, KeyCode::Up);
+        assert_eq!(wm.drawer().selected_index, 0);
+        // Shift/Alt+arrows keep their classic session-move meaning and never step the selection.
+        press_mod(&mut wm, KeyCode::Down, KeyModifiers::SHIFT);
+        assert_eq!(wm.drawer().selected_index, 0);
+        press_mod(&mut wm, KeyCode::Down, KeyModifiers::ALT);
+        assert_eq!(wm.drawer().selected_index, 0);
+    });
+}
+
+#[test]
+fn keys_enter_and_space_focus_selected_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(3);
+        wm.drawer_mut().selected_index = 3;
+        press(&mut wm, KeyCode::Enter);
+        assert_eq!(wm.active_pane_id(), 3);
+        wm.drawer_mut().selected_index = 2;
+        ch(&mut wm, ' ');
+        assert_eq!(wm.active_pane_id(), 2);
+    });
+}
+
+#[test]
+fn keys_bang_jumps_to_attention_in_drawer() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(3);
+        with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+        ch(&mut wm, '!');
+        assert_eq!(wm.active_pane_id(), 3);
+        assert_eq!(wm.selected_drawer_pane_id(), Some(3), "selection follows the jump");
+    });
+}
+
+#[test]
+fn keys_capital_n_creates_session_and_selects_it() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(2);
+        let before = wm.config().history_session.clone();
+        ch(&mut wm, 'N');
+        assert_ne!(wm.config().history_session, before, "N switches to a new session");
+        assert!(wm.active_pane().status_message().is_some_and(|m| m.contains("Created new session")));
+        assert_eq!(wm.selected_drawer_pane_id(), Some(wm.active_pane_id()));
+    });
+}
+
+#[test]
+fn keys_n_c_plus_w_create_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(2);
+        for (i, c) in ['n', 'c', '+', 'w'].into_iter().enumerate() {
+            ch(&mut wm, c);
+            assert_eq!(wm.pane_count(), 3 + i, "key {c:?} adds one pane");
+            assert_eq!(wm.selected_drawer_pane_id(), Some(wm.active_pane_id()));
+        }
+    });
+}
+
+#[test]
+fn keys_r_opens_rename_prompt_and_rename_applies() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(2);
+        ch(&mut wm, 'r');
+        assert!(!wm.drawer().focused, "the prompt takes the keyboard");
+        assert_eq!(wm.active_pane().prompt().text(), ":drawer rename ");
+
+        wm.drawer_mut().focused = true;
+        wm.active_pane_mut().prompt_mut().set_text("");
+        run_colon(&mut wm, ":drawer rename");
+        assert!(!wm.drawer().focused);
+        assert_eq!(wm.active_pane().prompt().text(), ":drawer rename ");
+
+        wm.drawer_mut().selected_index = 0;
+        run_colon(&mut wm, ":drawer rename newname");
+        assert_eq!(wm.config().history_session, "newname");
+    });
+}
+
+#[test]
+fn keys_x_and_delete_close_selected_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(4);
+        wm.drawer_mut().selected_index = 4;
+        ch(&mut wm, 'x');
+        assert_eq!(wm.pane_count(), 3);
+        wm.drawer_mut().selected_index = 3;
+        press(&mut wm, KeyCode::Delete);
+        assert_eq!(wm.pane_count(), 2);
+        wm.drawer_mut().selected_index = 2;
+        run_colon(&mut wm, ":drawer close-pane");
+        assert_eq!(wm.pane_count(), 1);
+    });
+}
+
+#[test]
+fn keys_colon_close_keeps_minimize_meaning() {
+    with_temp_xdg(|| {
+        let parsed = parse_colon_command(":drawer close").unwrap().unwrap();
+        assert_eq!(parsed, Action::DrawerSize(0));
+        let (mut wm, _a) = focused_navigator(3);
+        wm.apply(parsed).unwrap();
+        assert_eq!(wm.pane_count(), 3, "minimize closes no pane");
+    });
+}
+
+#[test]
+fn keys_pageup_pagedown_scroll_and_braces_resize() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(8);
+        wm.drawer_mut().selected_index = 0;
+        press(&mut wm, KeyCode::PageDown);
+        assert_eq!(wm.drawer().selected_index, 5);
+        press(&mut wm, KeyCode::PageDown);
+        assert_eq!(wm.drawer().selected_index, 8, "clamped to the last row");
+        press(&mut wm, KeyCode::PageUp);
+        assert_eq!(wm.drawer().selected_index, 3);
+        run_colon(&mut wm, ":drawer scroll -2");
+        assert_eq!(wm.drawer().selected_index, 1);
+        run_colon(&mut wm, ":drawer scroll 5");
+        assert_eq!(wm.drawer().selected_index, 6);
+
+        let classic_width = wm.drawer_config().width_cols;
+        ch(&mut wm, '}');
+        assert_eq!(wm.drawer_config().navigator_width_cols, 30);
+        ch(&mut wm, '{');
+        ch(&mut wm, '{');
+        assert_eq!(wm.drawer_config().navigator_width_cols, 26);
+        run_colon(&mut wm, ":drawer widen 2");
+        assert_eq!(wm.drawer_config().navigator_width_cols, 28);
+        run_colon(&mut wm, ":drawer widen -500");
+        assert_eq!(wm.drawer_config().navigator_width_cols, 16, "clamped");
+        assert_eq!(wm.drawer_config().width_cols, classic_width);
+    });
+}
+
+#[test]
+fn keys_unclaimed_keys_fall_through_to_classic() {
+    use bilterm::wm::DrawerVisibilityMode;
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(2);
+        let edge = wm.drawer_config().edge;
+        ch(&mut wm, 'd');
+        assert_ne!(wm.drawer_config().edge, edge, "d cycles the edge");
+        ch(&mut wm, '*');
+        assert_eq!(wm.drawer_config().visibility, DrawerVisibilityMode::Fixed, "* pins");
+        ch(&mut wm, ']');
+        assert!(wm.active_pane().status_message().is_some_and(|m| m.starts_with("Panel scale")));
+        ch(&mut wm, 'q');
+        assert!(!wm.drawer().focused, "q leaves the drawer");
+    });
+}
+
+/// Observable drawer/pane/session state used to compare two runs.
+fn observe(wm: &WindowManager) -> String {
+    let rows: Vec<String> = wm
+        .drawer_rows()
+        .iter()
+        .map(|r| match &r.kind {
+            DrawerRowKind::SessionHeader(_) => match r.navigator.as_ref() {
+                Some(m) => format!("S(d{} c{})", m.depth, m.collapsed),
+                None => "S".to_string(),
+            },
+            k => format!("{k:?}"),
+        })
+        .collect();
+    format!(
+        "sel={} active={} panes={} focused={} nav_w={} w={} prompt={:?} rows={rows:?}",
+        wm.drawer().selected_index,
+        wm.active_pane_id(),
+        wm.pane_count(),
+        wm.drawer().focused,
+        wm.drawer_config().navigator_width_cols,
+        wm.drawer_config().width_cols,
+        wm.active_pane().prompt().text(),
+    )
+}
+
+#[test]
+fn keys_e_and_bang_unclaimed_by_classic() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = fixture(100, 30);
+        open_drawer(&mut wm);
+        wm.drawer_mut().selected_index = 0;
+        with_states(&mut wm, &[(2, Some(AgentState::Blocked))]);
+        let before = observe(&wm);
+        ch(&mut wm, 'e');
+        ch(&mut wm, '!');
+        assert_eq!(observe(&wm), before);
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
+    });
+}
+
+/// The `:drawer` colon form of an op, written as an exhaustive match (no wildcard): a new variant
+/// fails to compile until it is listed here.
+fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
+    match op {
+        DrawerNavOp::NextAttention => ":drawer attention".into(),
+        DrawerNavOp::Fold => ":drawer fold".into(),
+        DrawerNavOp::Activate => ":drawer enter".into(),
+        DrawerNavOp::Next => ":drawer next".into(),
+        DrawerNavOp::Prev => ":drawer prev".into(),
+        DrawerNavOp::Row(i) => format!(":drawer row {}", i + 1),
+        DrawerNavOp::Scroll(n) => format!(":drawer scroll {n}"),
+        DrawerNavOp::Widen(n) => format!(":drawer widen {n}"),
+        DrawerNavOp::NewSession => ":drawer new-session".into(),
+        DrawerNavOp::NewPane => ":drawer new-pane".into(),
+        DrawerNavOp::RenamePrompt => ":drawer rename".into(),
+        DrawerNavOp::Rename(name) => format!(":drawer rename {name}"),
+        DrawerNavOp::Close => ":drawer close-pane".into(),
+    }
+}
+
+/// One representative of every `DrawerNavOp` variant.
+fn all_nav_ops() -> Vec<DrawerNavOp> {
+    vec![
+        DrawerNavOp::NextAttention,
+        DrawerNavOp::Fold,
+        DrawerNavOp::Activate,
+        DrawerNavOp::Next,
+        DrawerNavOp::Prev,
+        DrawerNavOp::Row(2),
+        DrawerNavOp::Scroll(-5),
+        DrawerNavOp::Scroll(5),
+        DrawerNavOp::Widen(-2),
+        DrawerNavOp::Widen(2),
+        DrawerNavOp::NewSession,
+        DrawerNavOp::NewPane,
+        DrawerNavOp::RenamePrompt,
+        DrawerNavOp::Rename("renamed".into()),
+        DrawerNavOp::Close,
+    ]
+}
+
+#[test]
+fn keys_colon_equivalents_match_keys() {
+    for (scope, mods, code, action) in NAVIGATOR_DRAWER_BINDINGS {
+        let Action::DrawerNav(op) = action else { panic!("navigator row {code:?} must lower to DrawerNav") };
+        let (mods, code, form) = (*mods, *code, drawer_nav_colon_form(op));
+        let _ = scope;
+        let by_key = with_temp_xdg(|| {
+            let (mut wm, _a) = focused_navigator(4);
+            with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+            press_mod(&mut wm, code, mods);
+            observe(&wm)
+        });
+        let by_colon = with_temp_xdg(|| {
+            let (mut wm, _a) = focused_navigator(4);
+            with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+            run_colon(&mut wm, &form);
+            observe(&wm)
+        });
+        assert_eq!(by_key, by_colon, "key {code:?} vs `{form}`");
+    }
+}
+
+#[test]
+fn keymap_navigator_drawer_keys_unique() {
+    let mut seen = Vec::new();
+    for (scope, mods, code, _) in NAVIGATOR_DRAWER_BINDINGS {
+        let triple = (*scope, *mods, *code);
+        assert!(!seen.contains(&triple), "duplicate navigator drawer chord {triple:?}");
+        seen.push(triple);
+    }
+}
+
+#[test]
+fn keymap_navigator_drawer_keys_do_not_shadow_globals() {
+    for (_, mods, code, _) in NAVIGATOR_DRAWER_BINDINGS {
+        let key = KeyEvent::new(*code, *mods);
+        assert!(
+            default_global_action(key, false).is_none(),
+            "navigator row {code:?}+{mods:?} shadows a DEFAULT_GLOBAL_BINDINGS chord"
+        );
+        assert!(
+            !DEFAULT_GLOBAL_BINDINGS.iter().any(|(m, c, _)| c == code && *m == *mods),
+            "navigator row {code:?}+{mods:?} is bound in DEFAULT_GLOBAL_BINDINGS"
+        );
+    }
+}
+
+#[test]
+fn drawer_nav_ops_have_colon_completion_and_help() {
+    let drawer_row = bilterm::pane::completion::colon_command_table()
+        .iter()
+        .find(|(c, _)| *c == ":drawer")
+        .expect(":drawer completion row")
+        .1;
+    let sampled = all_nav_ops();
+    for op in &sampled {
+        let form = drawer_nav_colon_form(op);
+        let parsed = parse_colon_command(&form).unwrap().unwrap_or_else(|e| panic!("`{form}`: {e}"));
+        assert_eq!(parsed, Action::DrawerNav(op.clone()), "`{form}` must parse to its op");
+        let verb = form.split_whitespace().nth(1).unwrap();
+        assert!(
+            drawer_row.iter().any(|s| s.split_whitespace().next() == Some(verb)),
+            "verb `{verb}` missing from the :drawer completion row"
+        );
+        let prefix = format!(":drawer {verb}");
+        assert!(
+            bilterm::ui::modals::HELP_LINES.iter().any(|(c, _)| c.starts_with(&prefix)),
+            "no HELP_LINES row for `{prefix}`"
+        );
+    }
+    for (_, _, _, action) in NAVIGATOR_DRAWER_BINDINGS {
+        let Action::DrawerNav(op) = action else { panic!("{action:?} is not a DrawerNav action") };
+        assert!(sampled.contains(op), "table op {op:?} is not covered by the sampled ops");
+    }
+}

@@ -6,6 +6,7 @@ use crate::error::Result;
 use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
+use crate::wm::drawer::DrawerNavOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -275,12 +276,27 @@ pub enum DrawerKeyScope {
 /// to the unchanged classic drawer handler. Every row lowers to [`Action::DrawerNav`] and runs through
 /// `WindowManager::apply`; each operation has a `:drawer` colon twin.
 pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, Action)] = &[
-    (
-        DrawerKeyScope::Navigator,
-        KeyModifiers::NONE,
-        KeyCode::Char('e'),
-        Action::DrawerNav(crate::wm::drawer::DrawerNavOp::Fold),
-    ),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('j'), Action::DrawerNav(DrawerNavOp::Next)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Down, Action::DrawerNav(DrawerNavOp::Next)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('k'), Action::DrawerNav(DrawerNavOp::Prev)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Up, Action::DrawerNav(DrawerNavOp::Prev)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Enter, Action::DrawerNav(DrawerNavOp::Activate)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char(' '), Action::DrawerNav(DrawerNavOp::Activate)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('!'), Action::DrawerNav(DrawerNavOp::NextAttention)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('e'), Action::DrawerNav(DrawerNavOp::Fold)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('N'), Action::DrawerNav(DrawerNavOp::NewSession)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('n'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('c'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('+'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('w'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('r'), Action::DrawerNav(DrawerNavOp::RenamePrompt)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('R'), Action::DrawerNav(DrawerNavOp::RenamePrompt)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('x'), Action::DrawerNav(DrawerNavOp::Close)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Delete, Action::DrawerNav(DrawerNavOp::Close)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::PageUp, Action::DrawerNav(DrawerNavOp::Scroll(-5))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::PageDown, Action::DrawerNav(DrawerNavOp::Scroll(5))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('{'), Action::DrawerNav(DrawerNavOp::Widen(-2))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('}'), Action::DrawerNav(DrawerNavOp::Widen(2))),
 ];
 
 /// Looks up `key` in [`NAVIGATOR_DRAWER_BINDINGS`] for the active `scopes` (first scope wins).

@@ -636,7 +636,47 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
     }))
 }
 
+/// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
+/// new-pane|rename|close-pane`); `None` for every other verb. `:drawer close` stays the classic minimize.
+fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
+    use crate::wm::drawer::DrawerNavOp as Op;
+    let num = |usage: &str| -> Result<i16, String> {
+        parts.get(2).and_then(|v| v.parse::<i16>().ok()).ok_or_else(|| usage.to_string())
+    };
+    let op = match parts.get(1).copied()? {
+        "fold" => Op::Fold,
+        "enter" | "activate" => Op::Activate,
+        "next" | "down" => Op::Next,
+        "prev" | "up" => Op::Prev,
+        "row" => match parts.get(2).and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {
+            Some(n) => Op::Row(n - 1),
+            None => return Some(Err("Usage: :drawer row <n>".to_string())),
+        },
+        "scroll" => match num("Usage: :drawer scroll <+-n>") {
+            Ok(n) => Op::Scroll(n),
+            Err(e) => return Some(Err(e)),
+        },
+        "widen" => match num("Usage: :drawer widen <+-n>") {
+            Ok(n) => Op::Widen(n),
+            Err(e) => return Some(Err(e)),
+        },
+        "new-session" => Op::NewSession,
+        "new-pane" | "new-window" => Op::NewPane,
+        "rename" => match parts.len() {
+            2 => Op::RenamePrompt,
+            3 => Op::Rename(parts[2].to_string()),
+            _ => return Some(Err("Usage: :drawer rename [name]".to_string())),
+        },
+        "close-pane" => Op::Close,
+        _ => return None,
+    };
+    Some(Ok(ColonCommand::DrawerNav(op)))
+}
+
 fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
+    if let Some(nav) = parse_drawer_nav(parts) {
+        return Some(nav);
+    }
     match parts.get(1).copied() {
         None | Some("toggle") => Some(Ok(ColonCommand::DrawerToggle)),
         Some("focus" | "open" | "show") => Some(Ok(ColonCommand::DrawerFocus)),
@@ -704,8 +744,6 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
             crate::wm::drawer::DrawerNavOp::NextAttention,
         ))),
-        Some("fold") => Some(Ok(ColonCommand::DrawerNav(crate::wm::drawer::DrawerNavOp::Fold))),
-        Some("enter" | "activate") => Some(Ok(ColonCommand::DrawerNav(crate::wm::drawer::DrawerNavOp::Activate))),
         Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
         Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
@@ -716,7 +754,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }
