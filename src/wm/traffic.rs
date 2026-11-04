@@ -234,6 +234,27 @@ impl WindowManager {
         self.traffic.record(from, to, kind, raw, redact, now)
     }
 
+    /// Records one `Mcp -> Session(name)` broadcast event for every `broadcast_log` entry added
+    /// since `before` (the log length captured before an `:mcp` directive ran).
+    pub(crate) fn record_new_mcp_broadcasts(&mut self, before: usize, now: Instant) {
+        let fresh: Vec<(String, String)> = self
+            .daemon_state
+            .broadcast_log
+            .get(before..)
+            .map(<[_]>::to_vec)
+            .unwrap_or_default();
+        for (session, command) in fresh {
+            self.traffic.record(
+                TrafficEndpoint::Mcp,
+                TrafficEndpoint::Session(session),
+                TrafficKind::Broadcast,
+                &command,
+                false,
+                now,
+            );
+        }
+    }
+
     /// Communication partners of `pane` within `window` before `now`, most recent first.
     pub fn partners_of(&self, pane: PaneId, window: Duration, now: Instant) -> Vec<TrafficPartner> {
         let me = TrafficEndpoint::Pane(pane);

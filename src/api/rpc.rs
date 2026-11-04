@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use ratatui::layout::Rect;
 
@@ -14,6 +15,7 @@ use crate::pty::line_discipline::InputRoutingMode;
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use crate::vt::VtParser;
+use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
 pub(super) fn extract_vt_row_text(vt: &VtParser, row: u16) -> String {
@@ -304,7 +306,16 @@ impl AutomationControlPlane {
                         "pane #{target_id} is in !ECHO LOCK password prompt; set allow_echo_lock=true to override"
                     ));
                 }
+                let redact = pane.is_password_prompt();
                 pane.submit_command(cmd).map_err(|e| e.to_string())?;
+                self.wm.record_traffic_with(
+                    TrafficEndpoint::Api,
+                    TrafficEndpoint::Pane(target_id),
+                    TrafficKind::Exec,
+                    cmd,
+                    redact,
+                    Instant::now(),
+                );
 
                 self.push_event(AutomationEvent::CommandSubmitted {
                     pane_id: target_id,
@@ -431,6 +442,9 @@ impl AutomationControlPlane {
                         chords.push(token.to_string());
                     }
                 }
+                // Redaction is decided before dispatch: the chords may leave the prompt state.
+                let target = self.wm.active_pane_id();
+                let redact = self.wm.pane_mut(target).is_some_and(|p| p.is_password_prompt());
                 self.wm.set_api_origin(true);
                 let sent = (|| {
                     for chord in &chords {
@@ -443,6 +457,14 @@ impl AutomationControlPlane {
                 })();
                 self.wm.set_api_origin(false);
                 sent?;
+                self.wm.record_traffic_with(
+                    TrafficEndpoint::Api,
+                    TrafficEndpoint::Pane(target),
+                    TrafficKind::Keys,
+                    &chords.join(" "),
+                    redact,
+                    Instant::now(),
+                );
                 Ok(JsonValue::obj([
                     ("status", JsonValue::String("dispatched".to_string())),
                     ("count", JsonValue::Number(chords.len() as i64)),

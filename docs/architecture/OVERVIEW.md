@@ -85,3 +85,4 @@ flowchart TD
 - [ADR-005: Dual-Mode `tmux` Coexistence & `tmux -CC` Control Mode Bridge](adr/ADR-005-dual-mode-tmux-integration.md)
 - [ADR-006: Unified `Action` Command Vocabulary, Encapsulated Workspace Invariants & Whole-Workspace `.cast` Compositor Recorder](adr/ADR-006-unified-action-keymap-and-workspace-recorder.md)
 - [ADR-007: `TerminalBackend` Port Trait & Unwired-Subsystem Resolution (`ARCH-R03`, `ARCH-R05`)](adr/ADR-007-terminal-backend-trait-and-subsystem-resolution.md)
+- [ADR-008: Agent Traffic Bus (`FLT-02`, Phase 50)](adr/ADR-008-agent-traffic-bus.md)
