@@ -2204,6 +2204,26 @@ fn compose_typing_sends_nothing() {
     });
 }
 
+/// WR-04: distinct raw names never collapse into one graph node.
+#[test]
+fn node_keys_are_injective_over_untrusted_names() {
+    let key = |ep: TrafficEndpoint| NodeKey::from_endpoint(&ep);
+    let plain = key(TrafficEndpoint::Session("work".into()));
+    assert_eq!(plain.as_str(), "session:work", "ordinary names keep a readable key");
+    let spoofed = key(TrafficEndpoint::Session("wo\u{200B}rk".into()));
+    let bidi = key(TrafficEndpoint::Session("wo\u{202E}rk".into()));
+    assert_ne!(spoofed, plain);
+    assert_ne!(bidi, plain);
+    assert_ne!(spoofed, bidi);
+    let long_a = key(TrafficEndpoint::Agent(format!("{}A", "x".repeat(80))));
+    let long_b = key(TrafficEndpoint::Agent(format!("{}B", "x".repeat(80))));
+    assert_ne!(long_a, long_b, "names sharing a long prefix stay distinct");
+    // A raw name that imitates an encoded key cannot collide with the encoded form.
+    let imitation = key(TrafficEndpoint::Session(spoofed.as_str().trim_start_matches("session:").to_string()));
+    assert_ne!(imitation, spoofed);
+    assert_eq!(key(TrafficEndpoint::Session("wo\u{200B}rk".into())), spoofed, "keys are stable");
+}
+
 /// WR-02: geometry setters clamp against the scaled (virtual) workspace the window renders in.
 #[test]
 fn geometry_setters_use_scaled_virtual_workspace() {

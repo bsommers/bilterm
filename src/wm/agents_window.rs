@@ -33,6 +33,24 @@ const ACTIVE_EVENTS: u64 = 3;
 /// Maximum characters of a session / agent name inside a [`NodeKey`].
 const KEY_NAME_CAP: usize = 64;
 
+/// Node-key form of an untrusted session / agent name (WR-04).
+///
+/// A name that survives sanitising unchanged (and holds no `~`) is its own key, so ordinary keys
+/// stay readable and typable. Any other name gets the sanitised, capped text plus `~<hash of the
+/// RAW name>`; since only that class contains `~`, two distinct raw names can never share a key
+/// (short of a 64-bit hash collision), whatever control, bidi, invisible or over-long text they
+/// differ in. The visible label still comes from the sanitised text alone.
+fn name_key(raw: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let clean = sanitize_display(raw, KEY_NAME_CAP);
+    if clean == raw && !raw.contains('~') {
+        return clean;
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    raw.hash(&mut h);
+    format!("{}~{:016x}", clean.replace('~', "-"), h.finish())
+}
+
 /// Stable string id of a graph node: `user`, `api`, `mcp`, `pane:<id>`, `session:<name>`, `agent:<name>`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeKey(pub String);
@@ -45,8 +63,8 @@ impl NodeKey {
             TrafficEndpoint::Api => "api".to_string(),
             TrafficEndpoint::Mcp => "mcp".to_string(),
             TrafficEndpoint::Pane(id) => format!("pane:{id}"),
-            TrafficEndpoint::Session(n) => format!("session:{}", sanitize_display(n, KEY_NAME_CAP)),
-            TrafficEndpoint::Agent(n) => format!("agent:{}", sanitize_display(n, KEY_NAME_CAP)),
+            TrafficEndpoint::Session(n) => format!("session:{}", name_key(n)),
+            TrafficEndpoint::Agent(n) => format!("agent:{}", name_key(n)),
         })
     }
 
