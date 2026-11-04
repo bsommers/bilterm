@@ -80,7 +80,7 @@ Recent decisions affecting current work:
 - [Init]: Three-signal input routing (`OSC 133` + `tcgetpgrp` + `termios !ECHO` + `DECSET 1049`) prevents `sudo` password echo leaks and interactive REPL lockouts.
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
 - [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
-- [Phase 50]: 50-02: herdr roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
+- [Phase 50]: 50-02: navigator roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
 - [Phase 50]: 50-03: first observation of a pane applies its agent state without dwell; later Working/Idle flips need 500 ms; finish detected from OSC 133 D transition or (last_exit_code,last_duration_ms) change
 - [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
 - [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'

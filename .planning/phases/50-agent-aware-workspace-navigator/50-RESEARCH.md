@@ -1,4 +1,4 @@
-# Phase 50: herdr-Style Left Sidebar (Agent-Aware Workspace Navigator) - Research
+# Phase 50: navigator-Style Left Sidebar (Agent-Aware Workspace Navigator) - Research
 
 **Researched:** 2026-11-03
 **Domain:** Rust / ratatui 0.30 TUI multiplexer (Bilterm): slide-out drawer re-layout, per-pane agent-state heuristics, internal traffic-event bus, resizable agent-traffic zoom window (graph + snoop), TUI braille and GUI RGBA-texture rendering
@@ -11,7 +11,7 @@
 
 **Scope split with Phase 51**
 - **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 51's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 51 and the API events (`agent.message`).
-- **D-02:** The drawer's new layout is `[drawer] style = "classic" | "herdr"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
+- **D-02:** The drawer's new layout is `[drawer] style = "classic" | "navigator"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
 
 **Agent state**
 - **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 51) override heuristics.
@@ -41,18 +41,18 @@ None - discussion stayed within phase scope. (Agent messaging itself stays in Ph
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| FLT-01 | The slide-out drawer offers a `herdr`-style left sidebar (`[drawer] style = "herdr"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected. (REQUIREMENTS.md:194) | Sections "Drawer integration seams", "AgentState detector", "Keys/mouse", "Classic parity proof", "Validation Architecture". D-01, D-06..D-10 (bus + zoom window) have **no requirement ID** - see Open Question 1. |
+| FLT-01 | The slide-out drawer offers a Navigator left sidebar (`[drawer] style = "navigator"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected. (REQUIREMENTS.md:194) | Sections "Drawer integration seams", "AgentState detector", "Keys/mouse", "Classic parity proof", "Validation Architecture". D-01, D-06..D-10 (bus + zoom window) have **no requirement ID** - see Open Question 1. |
 </phase_requirements>
 
 ## Summary
 
-The existing drawer is a single code path: `WindowManager::drawer_rows()` (src/wm/drawer.rs:402) builds a flat `Vec<DrawerRow>`, `render_workspace_drawer` (src/ui/drawer.rs:147) draws it, and `selected_index` is an index into that same vector for **every** key and mouse handler (modal.rs:334-492, mouse_wm.rs:672-886). The safest herdr implementation is therefore: add `DrawerConfig.style`, make `drawer_rows()` dispatch on style (classic body untouched), reuse `DrawerRowKind::SessionHeader`/`Pane` for the new tree rows so all index-based helpers keep working, and branch once at the top of the renderer and once at the top of the mouse/key handlers. All new logic goes into new modules because `src/wm/drawer.rs` is 1015 lines, `src/input/modal.rs` 925, `src/input/mouse_wm.rs` 887, `src/colon_command/execute_wm.rs` 853, `src/wm/mod.rs` 865 against a hard test backstop of 1200 [VERIFIED: tests/session_lessons_and_regression_suite.rs:375 `line_count <= 1200`].
+The existing drawer is a single code path: `WindowManager::drawer_rows()` (src/wm/drawer.rs:402) builds a flat `Vec<DrawerRow>`, `render_workspace_drawer` (src/ui/drawer.rs:147) draws it, and `selected_index` is an index into that same vector for **every** key and mouse handler (modal.rs:334-492, mouse_wm.rs:672-886). The safest navigator implementation is therefore: add `DrawerConfig.style`, make `drawer_rows()` dispatch on style (classic body untouched), reuse `DrawerRowKind::SessionHeader`/`Pane` for the new tree rows so all index-based helpers keep working, and branch once at the top of the renderer and once at the top of the mouse/key handlers. All new logic goes into new modules because `src/wm/drawer.rs` is 1015 lines, `src/input/modal.rs` 925, `src/input/mouse_wm.rs` 887, `src/colon_command/execute_wm.rs` 853, `src/wm/mod.rs` 865 against a hard test backstop of 1200 [VERIFIED: tests/session_lessons_and_regression_suite.rs:375 `line_count <= 1200`].
 
 CONTEXT.md is considerably larger than the roadmap's 3-plan sidebar scope: it adds a traffic-event bus, a resizable zoom window with an agent graph and snoop view, and a GUI vector renderer. These are all locked, so research covers them, but only FLT-01 exists as a requirement. The honest picture of "agent-to-agent traffic" today is thin: the only real sources are input broadcast (`wm.broadcast_command`, src/input/mod.rs:651-653), `:mcp broadcast` (daemon `broadcast_log: Vec<(String, String)>`, src/daemon/mod.rs:160) and API calls such as `pane.send_keys`/`pane.exec`. No agent addressing exists until Phase 51, so the graph is star-shaped (one external sender node fanning out to panes) until then and tests must inject synthetic events.
 
 No new dependency is needed. The existing `PixelCanvasBuffer` already has anti-aliased lines, cubic Beziers, SDF circles and a braille/sextant/octant cell flusher, and all three GUI backends (X11, Win32, macOS) already paint `GuiFrameSurface.images` RGBA textures. One raster function can feed both modes: flush to braille cells in the TUI, push one `GuiImageTexture` in the GUI. Do not add tiny-skia.
 
-**Primary recommendation:** Land a committed classic-drawer golden snapshot set FIRST (none exists today), then add `style` + a pure `AgentState` classifier + herdr rows/renderer (FLT-01), then the traffic bus + `AgentsWindow`, then the GUI texture pass; keep every new `Action` reachable per the 6-step command checklist, and ship the compose line disabled because `[api] allow_agent_messaging` does not exist yet.
+**Primary recommendation:** Land a committed classic-drawer golden snapshot set FIRST (none exists today), then add `style` + a pure `AgentState` classifier + navigator rows/renderer (FLT-01), then the traffic bus + `AgentsWindow`, then the GUI texture pass; keep every new `Action` reachable per the 6-step command checklist, and ship the compose line disabled because `[api] allow_agent_messaging` does not exist yet.
 
 ## Project Constraints (from CLAUDE.md / AGENTS.md)
 
@@ -72,9 +72,9 @@ This is a single-process Rust TUI/GUI, so "tiers" are the crate's layered DAG (`
 |------------|-------------|----------------|-----------|
 | AgentState classification + hysteresis | `wm` (new `agent_state.rs`) | `pane` (read-only signals) | Needs pane signals and a per-pane history; must be testable headless and callable from `poll_all_ptys`. |
 | `[drawer] style`, `[agents.<name>]` profiles | `wm::drawer` (`DrawerConfig`) / `config` | - | `DrawerConfig` lives in `wm` and is embedded in `BiltermConfig` (src/config/mod.rs:133). |
-| Herdr row model (tree, counts, fold) | `wm` (new `drawer_herdr.rs`) | session tree (`SessionTree.collapsed`) | `drawer_rows()` is the single index source for selection. |
-| Herdr rendering (TUI cells) | `ui` (new `drawer_herdr.rs`) | - | Mirrors `render_workspace_drawer`. |
-| Key/mouse handling | `input` (new `drawer_herdr.rs`, `agents_window.rs`) | `wm` helpers | `handle_wm_modal_key`/`handle_drawer_mouse_event` delegate; handlers lower to `Action`. |
+| Navigator row model (tree, counts, fold) | `wm` (new `drawer_navigator.rs`) | session tree (`SessionTree.collapsed`) | `drawer_rows()` is the single index source for selection. |
+| Navigator rendering (TUI cells) | `ui` (new `drawer_navigator.rs`) | - | Mirrors `render_workspace_drawer`. |
+| Key/mouse handling | `input` (new `drawer_navigator.rs`, `agents_window.rs`) | `wm` helpers | `handle_wm_modal_key`/`handle_drawer_mouse_event` delegate; handlers lower to `Action`. |
 | Traffic-event bus | `wm` (new `traffic.rs`) | `api` reads via cursor | The `api` layer is ABOVE `wm`; `AutomationEvent` lives in `src/api/playbook.rs:14` so the bus cannot live there. |
 | Agents zoom window state (rect, pin, scale, splitter, selection) | `wm` (new `agents_window.rs`) | `ui` | Same pattern as `McpConsoleState` on `WindowManager`. |
 | Graph layout (stable positions) | `wm` (pure, deterministic) | - | Pure data; unit-testable. |
@@ -136,11 +136,11 @@ This is a single-process Rust TUI/GUI, so "tiers" are the crate's layered DAG (`
                                          │  (pure classify() + hysteresis + "seen" flag; profiles)
                                          ▼
  [drawer].style ─┬─ classic ──> drawer_rows() classic body (UNCHANGED) ──> render_workspace_drawer (UNCHANGED)
-                 └─ herdr  ───> herdr_rows(): SessionTree roots/descendants + live panes + counts + fold
+                 └─ navigator  ───> navigator_rows(): SessionTree roots/descendants + live panes + counts + fold
                                    │  (reuses DrawerRowKind::SessionHeader / Pane; adds depth + agent meta)
                                    ▼
-        keys (modal.rs drawer.focused block) ──> herdr key fn ──> Action::* ──> WindowManager::apply
-        mouse (handle_drawer_mouse_event) ──────> herdr mouse fn ─┘
+        keys (modal.rs drawer.focused block) ──> navigator key fn ──> Action::* ──> WindowManager::apply
+        mouse (handle_drawer_mouse_event) ──────> navigator mouse fn ─┘
                                    │ comms glyph / :agents zoom / leader chord
                                    ▼
  Traffic sources ──> TrafficBus.record(event)            AgentsWindow (pin, rect, scale, splitter, selection, filter)
@@ -154,23 +154,23 @@ This is a single-process Rust TUI/GUI, so "tiers" are the crate's layered DAG (`
 ### Recommended Project Structure (all new files; each well under ~800 lines)
 ```
 src/wm/agent_state.rs      # AgentState, AgentSignals, classify(), AgentTracker (per-pane history, hysteresis, seen)
-src/wm/drawer_herdr.rs     # impl WindowManager { herdr_rows, jump_next_attention, fold toggle, counts }
+src/wm/drawer_navigator.rs     # impl WindowManager { navigator_rows, jump_next_attention, fold toggle, counts }
 src/wm/traffic.rs          # TrafficEvent, TrafficKind, TrafficBus (ring, seq cursor, drain_since)
 src/wm/agents_window.rs    # AgentsWindowState + graph model + deterministic layout + snoop filter
 src/config/agents.rs       # AgentProfile ([agents.<name>]) - serde, skip_serializing_if empty
-src/ui/drawer_herdr.rs     # render_herdr_drawer (TUI cells), glyph tables (unicode/ascii)
+src/ui/drawer_navigator.rs     # render_navigator_drawer (TUI cells), glyph tables (unicode/ascii)
 src/ui/agents_ui.rs        # zoom window chrome + snoop pane + status line (cell renderer)
 src/ui/graph_raster.rs     # draw_agent_graph(&mut PixelCanvasBuffer, &GraphScene, tick) + capsule/glow helpers
-src/input/drawer_herdr.rs  # herdr key + mouse handling called from the classic handlers
+src/input/drawer_navigator.rs  # navigator key + mouse handling called from the classic handlers
 src/input/agents_window.rs # zoom window keys + mouse (drag/resize/splitter/wheel)
 tests/drawer_classic_parity.rs   # Wave 0 goldens (committed BEFORE any src change)
-tests/phase50_herdr_drawer.rs    # detector, rows, keys, mouse, commands
+tests/phase50_navigator_drawer.rs    # detector, rows, keys, mouse, commands
 tests/phase50_agents_window.rs   # bus, layout, zoom window, snoop, GUI texture
 ```
 `WindowManager` stores `pub(crate)` fields (`agents: AgentTracker`, `traffic: TrafficBus`, `agents_window: AgentsWindowState`) next to `mcp_console` (src/wm/mod.rs:138) and exposes accessors; child modules of `wm` can read the private fields directly (same as `wm/drawer.rs` does with `self.panes`).
 
 ### Pattern 1: Style dispatch with an untouched classic body
-**What:** `drawer_rows()` becomes a 4-line dispatcher; the existing body is renamed `classic_drawer_rows()` byte-for-byte. Renderer: `if dcfg.style == DrawerStyle::Herdr { return render_herdr_drawer(...) }` placed after the shared chrome (shadow/occlusion/frame) is drawn or before it - decide in plan, but the classic branch must run the identical statements in identical order.
+**What:** `drawer_rows()` becomes a 4-line dispatcher; the existing body is renamed `classic_drawer_rows()` byte-for-byte. Renderer: `if dcfg.style == DrawerStyle::Navigator { return render_navigator_drawer(...) }` placed after the shared chrome (shadow/occlusion/frame) is drawn or before it - decide in plan, but the classic branch must run the identical statements in identical order.
 **When to use:** every shared entry point (`drawer_rows`, `render_workspace_drawer`, `handle_drawer_mouse_event`, `handle_wm_modal_key` drawer block, `drawer_rect` width).
 **Why:** the classic proof is "same statements, same order" + a golden snapshot; a rewrite of the shared body would risk subtle drift.
 
@@ -202,13 +202,13 @@ There is NO foreground-process-name accessor - only `foreground_pgid` (src/pty/l
 Add hysteresis (minimum dwell ~500 ms per state) to stop dot flicker; scan only the last ~8 visible rows, and only when `total_bytes_processed` changed or every ~250 ms (the tick runs every 16 ms: src/app.rs:56 `Duration::from_millis(16)`).
 
 ### Pattern 3: Reuse `DrawerRowKind`, add metadata instead of variants
-`DrawerRowKind` is `SessionHeader(String) | LayoutGroup(WorkspaceLayoutMode) | Pane(PaneId) | QuickTerminal | FleetNode(String)` [VERIFIED: src/wm/drawer.rs:113-119]. Represent workspace and session rows as `SessionHeader(name)` and panes as `Pane(id)`; add fields to `DrawerRow` (`depth: u8`, `agent: Option<AgentRowMeta>`). `DrawerRow` struct literals exist only in `drawer.rs` (six `rows.push(DrawerRow {` sites at lines 423, 437, 497, 513, 534, 567) [VERIFIED: grep], so adding fields means six one-line edits (+6 lines, file stays ~1021 < 1200). Existing helpers (`drawer_activate_selected`, `selected_drawer_pane_id`, `drawer_close_selected_pane`, `drawer_zoom_selected_pane`, `drawer_move_selected_session`) then work unchanged on herdr rows. No new enum variants means no exhaustive-match fallout in `ui/drawer.rs`.
+`DrawerRowKind` is `SessionHeader(String) | LayoutGroup(WorkspaceLayoutMode) | Pane(PaneId) | QuickTerminal | FleetNode(String)` [VERIFIED: src/wm/drawer.rs:113-119]. Represent workspace and session rows as `SessionHeader(name)` and panes as `Pane(id)`; add fields to `DrawerRow` (`depth: u8`, `agent: Option<AgentRowMeta>`). `DrawerRow` struct literals exist only in `drawer.rs` (six `rows.push(DrawerRow {` sites at lines 423, 437, 497, 513, 534, 567) [VERIFIED: grep], so adding fields means six one-line edits (+6 lines, file stays ~1021 < 1200). Existing helpers (`drawer_activate_selected`, `selected_drawer_pane_id`, `drawer_close_selected_pane`, `drawer_zoom_selected_pane`, `drawer_move_selected_session`) then work unchanged on navigator rows. No new enum variants means no exhaustive-match fallout in `ui/drawer.rs`.
 
 ### Pattern 4: Tree mapping (workspace > session > pane)
 The session tree is `SessionTree { nodes: Vec<SessionTreeNode> }` where node has `name, kind (Independent|Rooted|Subtree), parent, children, collapsed, frozen, pane_count, active_commands` [VERIFIED: src/wm/session_tree.rs:28-50]. Only the **active** session has live panes (`self.panes`, `drawer_rows()` renders other sessions as `[SAVED]` headers). Recommended mapping:
 - Workspace = session-tree root (`parent == None`); Session = its descendants (indented by depth, arbitrary nesting); Pane = live panes under the active session only.
 - Non-active sessions show a `pane_count` rollup and no state dots (no live panes exist). Per-workspace state counts aggregate live panes only; saved subtrees show `-`. (Open Question 2: user may want last-known counts.)
-- Fold/expand: reuse `SessionTree::toggle_fold(name)` / `collapsed` ("drawer fold state", src/wm/session_tree.rs:319-327). Note it also changes the MCP `tree` output because `render_herdr_tree_lines` honours `collapsed` (src/wm/session_tree.rs:386,410).
+- Fold/expand: reuse `SessionTree::toggle_fold(name)` / `collapsed` ("drawer fold state", src/wm/session_tree.rs:319-327). Note it also changes the MCP `tree` output because `render_navigator_tree_lines` honours `collapsed` (src/wm/session_tree.rs:386,410).
 - A root with no children collapses the middle level (panes appear directly under the workspace) so the "one line per pane" criterion holds in the common single-session case.
 
 ### Pattern 5: Zoom window = standalone panel state (MCP pattern) with Modal-style drag
@@ -230,9 +230,9 @@ Render into `PixelCanvasBuffer::new(w_px, h_px, [bg opaque])`; TUI: `canvas.flus
 - **Rewriting the shared classic render/rows body "to share code":** breaks byte-identical proof; add branches instead.
 - **Adding a Modal variant for the zoom window** (see Pattern 5).
 - **Putting traffic types in `api/playbook.rs`:** wrong layer direction; `wm` cannot import `api`.
-- **Using the hard-coded header/footer x-ranges for herdr:** see Pitfall 3.
+- **Using the hard-coded header/footer x-ranges for navigator:** see Pitfall 3.
 - **Adding keys to `:state` JSON:** pinned by test (Pitfall 5).
-- **Emoji in herdr rows** (the classic rows use `📡 🔑 🔔 🌐`): double-width/variation-selector glyphs break 24-30 col alignment; use single-width BMP symbols.
+- **Emoji in navigator rows** (the classic rows use `📡 🔑 🔔 🌐`): double-width/variation-selector glyphs break 24-30 col alignment; use single-width BMP symbols.
 
 ## Don't Hand-Roll
 
@@ -243,7 +243,7 @@ Render into `PixelCanvasBuffer::new(w_px, h_px, [bg opaque])`; TUI: `canvas.flus
 | Window drag/resize hit-testing | New edge detection | `detect_border_resize_edge`, `apply_rect_edge_resize` | identical semantics to all other windows ("resizable like all other windows") |
 | Per-panel scale | New scale plumbing | `PanelTarget` + `step_scale/scale_pct/panel_space/panel_virtual_area` | Only add the `Agents` variant |
 | Command/palette/help sync | Ad-hoc command strings | The 6-step "adding a command" checklist (AGENTS.md "Automation API and command parity") + drift tests | Drift tests fail otherwise |
-| Config get/set for `[drawer] style` | Custom setter | Serde field + `dotted::set_key` (`:set drawer.style herdr` works automatically) | `dotted` round-trips through `toml::Value` (src/config/dotted.rs:28-34) |
+| Config get/set for `[drawer] style` | Custom setter | Serde field + `dotted::set_key` (`:set drawer.style navigator` works automatically) | `dotted` round-trips through `toml::Value` (src/config/dotted.rs:28-34) |
 | Column-width truncation | `chars().take(n)` | `unicode-width` (already a dep) | wide chars/ellipsis at 24-30 cols |
 | Terminal-safe text for untrusted strings | Passing titles/bodies straight to `set_stringn` | One `sanitize_display(&str)` helper (strip C0/C1 controls, bidi overrides U+202A-202E/U+2066-2069, cap length) used by sidebar rows AND snoop view | Pane titles and agent messages are attacker-influenced |
 | Force-directed layout crate | `fdg`/`forceatlas2` | ~100-line deterministic Fruchterman-Reingold with fixed iterations, seeded from node-id hash, warm-started from previous positions | <= ~30 nodes; determinism + no new dependency |
@@ -263,16 +263,16 @@ Not a rename/refactor/migration phase - section omitted per template. (Adding `[
 **Warning signs:** snapshot contains absolute paths, a home dir, or a changing spinner glyph.
 
 ### Pitfall 2: `drawer_rows()` is the shared index space
-**What goes wrong:** `selected_index`, `drawer_select_next/prev`, `drawer_scroll_by`, `sync_drawer_selection_to_active_pane`, `drawer_hscroll_by`, and the mouse hit-test all call `drawer_rows()`. If herdr rows live in a separate list, each call site needs a branch and one missed site gives off-by-N clicks.
+**What goes wrong:** `selected_index`, `drawer_select_next/prev`, `drawer_scroll_by`, `sync_drawer_selection_to_active_pane`, `drawer_hscroll_by`, and the mouse hit-test all call `drawer_rows()`. If navigator rows live in a separate list, each call site needs a branch and one missed site gives off-by-N clicks.
 **How to avoid:** Pattern 1 + Pattern 3 (single dispatching `drawer_rows()`). Keep `selected_index` semantics.
 
-### Pitfall 3: Hard-coded click zones in the classic mouse handler misfire on a narrow herdr drawer
-**What goes wrong:** `handle_drawer_mouse_event` hit-tests the header and footer by absolute column ranges tuned to the classic text: row `dr.y+1` with `rel_x >= 38` creates a session, `rel_x >= 31 || rel_x >= dr.width-8` creates a window, and the footer row `dr.height-2` uses `win_end/sess_end/move_end/par_end` thresholds (src/input/mouse_wm.rs:751-815). In a 24-30 column herdr drawer the `dr.width-8` rule makes a plain click on the second header row open a new window; the footer thresholds map to different glyphs.
-**How to avoid:** Branch to a herdr mouse function BEFORE those blocks (after the title-bar badge and edge-resize handling, which are geometry-based and safe to share). Add tests clicking every header/footer cell of a 26-col herdr drawer and asserting no pane/session is created.
+### Pitfall 3: Hard-coded click zones in the classic mouse handler misfire on a narrow navigator drawer
+**What goes wrong:** `handle_drawer_mouse_event` hit-tests the header and footer by absolute column ranges tuned to the classic text: row `dr.y+1` with `rel_x >= 38` creates a session, `rel_x >= 31 || rel_x >= dr.width-8` creates a window, and the footer row `dr.height-2` uses `win_end/sess_end/move_end/par_end` thresholds (src/input/mouse_wm.rs:751-815). In a 24-30 column navigator drawer the `dr.width-8` rule makes a plain click on the second header row open a new window; the footer thresholds map to different glyphs.
+**How to avoid:** Branch to a navigator mouse function BEFORE those blocks (after the title-bar badge and edge-resize handling, which are geometry-based and safe to share). Add tests clicking every header/footer cell of a 26-col navigator drawer and asserting no pane/session is created.
 
 ### Pitfall 4: Layout metrics are shared with the mouse handler
-**What goes wrong:** `drawer_vertical_layout_metrics(cfg, inner_height, item_count)` returns step 2 for liquid glass; the mouse handler calls it directly in three places (mouse_wm.rs:822, 851, 867). Herdr must be strictly one row per item (success criterion 1).
-**How to avoid:** Add `WindowManager::drawer_metrics(inner_h, rows_len)` that returns the classic function result for Classic and `(1, 1, 1)`-style herdr metrics for Herdr, and switch the three call sites to it (mechanical; identical results in classic). Renderer uses the same function.
+**What goes wrong:** `drawer_vertical_layout_metrics(cfg, inner_height, item_count)` returns step 2 for liquid glass; the mouse handler calls it directly in three places (mouse_wm.rs:822, 851, 867). Navigator must be strictly one row per item (success criterion 1).
+**How to avoid:** Add `WindowManager::drawer_metrics(inner_h, rows_len)` that returns the classic function result for Classic and `(1, 1, 1)`-style navigator metrics for Navigator, and switch the three call sites to it (mechanical; identical results in classic). Renderer uses the same function.
 
 ### Pitfall 5: `:state` and config-list tests are exact
 **What goes wrong:** `tests/config_commands_edge.rs:196` asserts the exact `:state` key list `["active_pane_id", "appearance", "display_mode", "drawer_visible", "layout_mode", "pane_count"]`. Adding agent counts to `state_json` breaks it. `:config list` only asserts `> 20` keys (config_commands_edge.rs:181-186), so new `drawer.style` is safe.
@@ -280,15 +280,15 @@ Not a rename/refactor/migration phase - section omitted per template. (Adding `[
 
 ### Pitfall 6: Serialized-config side effects
 **What goes wrong:** `DrawerConfig` derives `Serialize`; a new `style` field will appear in `:config save` output and in `get_key` listings. An `agents: BTreeMap` field would emit an empty `[agents]` table.
-**How to avoid:** Always serialize `style` (discoverable; `:get drawer.style` works) but mark `agents` with `#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]`. Use `#[serde(rename_all = "kebab-case")]` on `DrawerStyle` like the sibling enums (`classic`/`herdr`). Verify `Config: N keys` tests still hold.
+**How to avoid:** Always serialize `style` (discoverable; `:get drawer.style` works) but mark `agents` with `#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]`. Use `#[serde(rename_all = "kebab-case")]` on `DrawerStyle` like the sibling enums (`classic`/`navigator`). Verify `Config: N keys` tests still hold.
 
 ### Pitfall 7: Width default
-**What goes wrong:** `DrawerConfig::default().width_cols` is 34 and `resize_drawer` clamps to 16..=100 (src/wm/drawer.rs:105, 950). Success criterion wants ~24-30 columns by default for herdr, but `width_cols` is shared with classic (changing it changes classic).
-**How to avoid:** Add `herdr_width_cols: u16` (default 28) used by `drawer_rect` only when style is Herdr, and make `resize_drawer`/mouse edge-drag write the field matching the active style. (Alternative: set 28 once on the first switch to herdr; rejected because it silently mutates config.)
+**What goes wrong:** `DrawerConfig::default().width_cols` is 34 and `resize_drawer` clamps to 16..=100 (src/wm/drawer.rs:105, 950). Success criterion wants ~24-30 columns by default for navigator, but `width_cols` is shared with classic (changing it changes classic).
+**How to avoid:** Add `navigator_width_cols: u16` (default 28) used by `drawer_rect` only when style is Navigator, and make `resize_drawer`/mouse edge-drag write the field matching the active style. (Alternative: set 28 once on the first switch to navigator; rejected because it silently mutates config.)
 
 ### Pitfall 8: Animation needs a redraw trigger
 **What goes wrong:** `poll_all_ptys` returns `true` only on real changes (src/wm/mod.rs:659-703) and the result of `update_drawer_telemetry()` is ignored, so spinners/flow particles advance only when something else redraws.
-**How to avoid:** Return `true` at a throttled cadence (~100-150 ms) ONLY when (style == Herdr and drawer visible and any pane is Working) or (zoom window open and traffic active). Keep classic returning exactly what it returns today (no extra redraws). All GUI loops already gate on this return value (`app.poll_all_ptys()` in gui_window.rs:565, gui_macos.rs:674, linux_x11.rs:766).
+**How to avoid:** Return `true` at a throttled cadence (~100-150 ms) ONLY when (style == Navigator and drawer visible and any pane is Working) or (zoom window open and traffic active). Keep classic returning exactly what it returns today (no extra redraws). All GUI loops already gate on this return value (`app.poll_all_ptys()` in gui_window.rs:565, gui_macos.rs:674, linux_x11.rs:766).
 
 ### Pitfall 9: GUI plumbing gaps that CONTEXT assumes are working
 **What goes wrong (all `[VERIFIED: grep over src/ and tests/ this session]`; re-run before relying):**
@@ -306,7 +306,7 @@ Not a rename/refactor/migration phase - section omitted per template. (Adding `[
 
 ### Pitfall 12: Key collisions inside the focused drawer
 **What goes wrong:** `handle_wm_modal_key` already consumes (when `drawer.focused`): `q F7 F11 _ - * [ ] M F5 J K N b B > < u U P s S r R : j k h l g G n + c w v | % x z d m p a A t T L space Enter Esc Tab Left Right PageUp PageDown Home End Delete`, plus Shift/Alt+Up/Down and Alt+Left/Right (src/input/modal.rs:342-491). Unused letters include `e f i o y C D E F H I O Q V W X Y Z` and symbols like `!`, `@`, `#`.
-**How to avoid:** Suggested bindings (Claude's discretion, re-verify with a keymap-uniqueness test): in-drawer `!` = jump to next blocked/attention; `e` = fold/expand the selected workspace/session row (keep Enter = focus pane / switch session exactly as classic, because `drawer_activate_selected` is shared); leader chord `!` = jump-to-attention (works with the drawer closed) and leader `a` = open the agents zoom window. Leader table currently uses `" - h % | \ V z Z F5 o O n Tab BackTab p v ] 1-9 w W d D F7 F11 M q ` ~ F10 Space : ? F1 i I F9 x X L { } t T b B s S e E m F4 g G F12 c C [ F8 r f F l / N P H R j k < > J K + = 0` [VERIFIED: src/input/keymap.rs:14-136 read this session] - `!` and `a` do not appear. The herdr key function is a NEW function called from the `if wm.drawer().focused` block (so `handle_wm_key_event` stays <= 80 lines and `modal.rs` stays < 1000).
+**How to avoid:** Suggested bindings (Claude's discretion, re-verify with a keymap-uniqueness test): in-drawer `!` = jump to next blocked/attention; `e` = fold/expand the selected workspace/session row (keep Enter = focus pane / switch session exactly as classic, because `drawer_activate_selected` is shared); leader chord `!` = jump-to-attention (works with the drawer closed) and leader `a` = open the agents zoom window. Leader table currently uses `" - h % | \ V z Z F5 o O n Tab BackTab p v ] 1-9 w W d D F7 F11 M q ` ~ F10 Space : ? F1 i I F9 x X L { } t T b B s S e E m F4 g G F12 c C [ F8 r f F l / N P H R j k < > J K + = 0` [VERIFIED: src/input/keymap.rs:14-136 read this session] - `!` and `a` do not appear. The navigator key function is a NEW function called from the `if wm.drawer().focused` block (so `handle_wm_key_event` stays <= 80 lines and `modal.rs` stays < 1000).
 
 ### Pitfall 13: `Action` derives `Eq`
 `Action` is `#[derive(Clone, Debug, PartialEq, Eq)]` (src/action.rs:14): no `f32` payloads. Scale/splitter values must be integers (percent as `u16`). New variants need entries in the exhaustive samples and `colon_expr` match inside `every_action_is_reachable_from_keymap_colon_or_rpc` (src/action.rs:457-...), the completion table row (`(":drawer", &["toggle", ...])`, src/pane/completion.rs:483), and a description via `HELP_LINES`/`PALETTE_CATALOG`/`EXTRA` (drift tests in src/command_registry.rs:155-195).
@@ -338,10 +338,10 @@ pub enum DrawerRowKind {
 pub enum DrawerStyle {
     #[default]
     Classic,
-    Herdr,
+    Navigator,
 }
-// DrawerConfig (src/wm/drawer.rs:89-97) gains: pub style: DrawerStyle, pub herdr_width_cols: u16
-// and Default (src/wm/drawer.rs:99-109) gains: style: DrawerStyle::Classic, herdr_width_cols: 28
+// DrawerConfig (src/wm/drawer.rs:89-97) gains: pub style: DrawerStyle, pub navigator_width_cols: u16
+// and Default (src/wm/drawer.rs:99-109) gains: style: DrawerStyle::Classic, navigator_width_cols: 28
 ```
 
 ### Classifier signature (pure, testable)
@@ -412,7 +412,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 | A2 | Threshold values: `working_hold` ~1.5 s, min dwell ~500 ms, scan last ~8 rows every ~250 ms | Pattern 2 | Flicker or laggy states; tunable constants, low blast radius |
 | A3 | Per-agent screen patterns (e.g. "esc to interrupt", "Do you want to proceed", "(y/n)") for claude/codex/gemini | Pattern 2 / profiles | False blocked/working states; user must supply/confirm profile defaults; ship profiles empty-by-default or clearly marked |
 | A4 | Agents like claude/codex repaint a spinner while working and are silent when idle, so "running command + recent output = Working, silent = Idle" is a usable heuristic | Pattern 2 | Long silent builds look Idle; accepted limitation |
-| A5 | Default herdr width 28 columns | Pitfall 7 | Cosmetic; roadmap says "about 24-30" |
+| A5 | Default navigator width 28 columns | Pitfall 7 | Cosmetic; roadmap says "about 24-30" |
 | A6 | Leader chords `!` and `a`, in-drawer `!`/`e` are free and acceptable | Pitfall 12 | Collisions; re-verify with a keymap uniqueness test at plan time |
 | A7 | Mapping workspace = session-tree root, session = descendant, panes only for the active session | Pattern 4 | Wrong tree semantics; Open Question 2 |
 | A8 | Single-width BMP glyphs (`⠋ ▲ ○ ● ✗` and ASCII `* ! - + x`) render as 1 column in the user's terminals | Glyphs | Alignment drift; selector is `GlyphPack::Ascii` fallback |
@@ -426,7 +426,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 1. **Requirement coverage for the bus + zoom window + GUI graph (D-01, D-06..D-10).**
    - Known: only FLT-01 (sidebar) exists; ROADMAP lists 3 plans; CONTEXT locks a much larger scope.
    - Unclear: whether the user wants new IDs (e.g. FLT-02 bus+zoom window, FLT-03 GUI vector graph) and a re-planned wave structure.
-   - Recommendation: planner proposes FLT-02/FLT-03 in REQUIREMENTS.md/ROADMAP.md for sign-off and splits into roughly: 50-01 spec + classic goldens (Wave 0/1) -> 50-02 AgentState + config + herdr rows -> 50-03 herdr render/keys/mouse/commands + parity -> 50-04 traffic bus + AgentsWindow (TUI) -> 50-05 GUI texture/scale/pin + docs. Do not silently drop locked decisions.
+   - Recommendation: planner proposes FLT-02/FLT-03 in REQUIREMENTS.md/ROADMAP.md for sign-off and splits into roughly: 50-01 spec + classic goldens (Wave 0/1) -> 50-02 AgentState + config + navigator rows -> 50-03 navigator render/keys/mouse/commands + parity -> 50-04 traffic bus + AgentsWindow (TUI) -> 50-05 GUI texture/scale/pin + docs. Do not silently drop locked decisions.
 2. **What are "workspace" and "session" in this codebase's tree?** Only the live session has panes. Recommendation in Pattern 4; ask whether saved sessions should show last-known state counts (needs a small cache written when switching away).
 3. **Default per-agent profiles.** Ship none (heuristics only) or ship claude/codex/gemini defaults whose strings are unverified (A3)? Recommend ship none plus documented examples; user supplies patterns.
 4. **GUI runtime gaps (Pitfall 9).** Fix `set_gui_surface`/modifier pass-through in the three runners now, or scope out? Affects whether "Ctrl+wheel scale works in GUI" can truthfully be claimed.
@@ -453,20 +453,20 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 |----------|-------|
 | Framework | `cargo test` (Rust 1.90) + `insta` 1.42.2 snapshots + `ratatui::backend::TestBackend` |
 | Config file | none (Cargo-native); `scripts/verify.sh` stages one per `tests/*.rs` (auto-discovered) |
-| Quick run command | `scripts/verify.sh --only t:drawer_classic_parity t:phase50_herdr_drawer t:phase50_agents_window` |
+| Quick run command | `scripts/verify.sh --only t:drawer_classic_parity t:phase50_navigator_drawer t:phase50_agents_window` |
 | Full suite command | `scripts/verify.sh` (baseline PASS 51/51; new files become `t:<name>` stages automatically) |
 
 ### Phase Requirements -> Test Map
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
 | FLT-01 | Classic output byte-identical (all edges/looks) | snapshot | `cargo test -q --test drawer_classic_parity` | No - Wave 0 |
-| FLT-01 | `[drawer] style` parses/serialises; `:set drawer.style herdr`; default classic | unit/integration | `cargo test -q --test phase50_herdr_drawer style_` | No - Wave 0 |
-| FLT-01 | Tree rows (workspace>session>pane), one line per pane, fold/expand, focused marker, width 24-30 | integration | `cargo test -q --test phase50_herdr_drawer tree_` | No - Wave 0 |
-| FLT-01 | `classify()` table: working/blocked/idle/done/errored, hysteresis, seen, profiles | unit (synthetic `Instant`) | `cargo test -q --test phase50_herdr_drawer state_` | No - Wave 0 |
-| FLT-01 | Per-workspace counts + jump-to-next-blocked (wraps, no-op when none) | integration | `cargo test -q --test phase50_herdr_drawer attention_` | No - Wave 0 |
-| FLT-01 | Keyboard parity (j/k/arrows/Enter/new/rename/close, `:drawer` equivalents all `Action`) | integration | `cargo test -q --test phase50_herdr_drawer keys_` and `cargo test -q --lib action::tests` | No - Wave 0 / existing lib tests |
-| FLT-01 | Mouse parity (click focus, wheel, Ctrl+wheel scale, edge-drag resize, header/footer no misfire) | integration | `cargo test -q --test phase50_herdr_drawer mouse_` | No - Wave 0 |
-| FLT-01 | Pin (`Fixed`) + scale with herdr style (`set_gui_surface(true)` as in phase46) | integration | `cargo test -q --test phase50_herdr_drawer pin_scale_` | No - Wave 0 |
+| FLT-01 | `[drawer] style` parses/serialises; `:set drawer.style navigator`; default classic | unit/integration | `cargo test -q --test phase50_navigator_drawer style_` | No - Wave 0 |
+| FLT-01 | Tree rows (workspace>session>pane), one line per pane, fold/expand, focused marker, width 24-30 | integration | `cargo test -q --test phase50_navigator_drawer tree_` | No - Wave 0 |
+| FLT-01 | `classify()` table: working/blocked/idle/done/errored, hysteresis, seen, profiles | unit (synthetic `Instant`) | `cargo test -q --test phase50_navigator_drawer state_` | No - Wave 0 |
+| FLT-01 | Per-workspace counts + jump-to-next-blocked (wraps, no-op when none) | integration | `cargo test -q --test phase50_navigator_drawer attention_` | No - Wave 0 |
+| FLT-01 | Keyboard parity (j/k/arrows/Enter/new/rename/close, `:drawer` equivalents all `Action`) | integration | `cargo test -q --test phase50_navigator_drawer keys_` and `cargo test -q --lib action::tests` | No - Wave 0 / existing lib tests |
+| FLT-01 | Mouse parity (click focus, wheel, Ctrl+wheel scale, edge-drag resize, header/footer no misfire) | integration | `cargo test -q --test phase50_navigator_drawer mouse_` | No - Wave 0 |
+| FLT-01 | Pin (`Fixed`) + scale with navigator style (`set_gui_surface(true)` as in phase46) | integration | `cargo test -q --test phase50_navigator_drawer pin_scale_` | No - Wave 0 |
 | D-01 | Bus ring cap, seq cursor, sources (broadcast, mcp broadcast, rpc) | unit/integration | `cargo test -q --test phase50_agents_window bus_` | No - Wave 0 |
 | D-07..D-09 | Zoom window open/close/pin/resize/splitter/scale/snoop filter/compose disabled | integration | `cargo test -q --test phase50_agents_window window_` | No - Wave 0 |
 | D-08 | Layout deterministic + stable on insertion | unit | `cargo test -q --test phase50_agents_window layout_` | No - Wave 0 |
@@ -480,7 +480,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 
 ### Wave 0 Gaps
 - [ ] `tests/drawer_classic_parity.rs` + committed `tests/snapshots/drawer_classic_parity__*.snap` generated on the UNCHANGED tree (`INSTA_UPDATE=always` once).
-- [ ] `tests/phase50_herdr_drawer.rs`, `tests/phase50_agents_window.rs` (skeletons with the fixture helpers above, env-lock + temp XDG pattern from `tests/api_config_commands.rs:14-25`).
+- [ ] `tests/phase50_navigator_drawer.rs`, `tests/phase50_agents_window.rs` (skeletons with the fixture helpers above, env-lock + temp XDG pattern from `tests/api_config_commands.rs:14-25`).
 - [ ] A keymap/drawer-key uniqueness test for the new bindings (none verified to exist; grep found no duplicate-key test).
 - Framework install: none needed.
 
@@ -522,8 +522,8 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 - `scripts/verify.sh --status` -> `PASS 51/51 52s`; `cargo --version`/`rustc --version` -> 1.90.0
 
 ### Secondary (MEDIUM confidence)
-- [Herdr: Terminal Multiplexer with Built-in AI Agent State Awareness (Better Stack)](https://betterstack.com/community/guides/ai/herdr-ai-agent.md) - states, two-layer sidebar, zero-config detection (no glyph/keys/width detail)
-- [herdr agent guide](https://herdr.dev/agent-guide.md), [herdr on docs.rs](https://docs.rs/herdr), GitHub results (maxjendrall/herdr, naaive/herdr, ttbug/herdr) - search summary only; several projects share the name, not individually verified
+- [Navigator: Terminal Multiplexer with Built-in AI Agent State Awareness (Better Stack)](https://betterstack.com/community/guides/ai/navigator-ai-agent.md) - states, two-layer sidebar, zero-config detection (no glyph/keys/width detail)
+- [navigator agent guide](https://navigator.dev/agent-guide.md), [navigator on docs.rs](https://docs.rs/navigator), GitHub results (maxjendrall/navigator, naaive/navigator, ttbug/navigator) - search summary only; several projects share the name, not individually verified
 
 ### Tertiary (LOW confidence)
 - Training-knowledge claims about agent TUI behaviour (A3, A4) - tagged `[ASSUMED]`

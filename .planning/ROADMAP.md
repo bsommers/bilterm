@@ -48,7 +48,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
-- [ ] **Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
+- [ ] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 
 ## Phase Details
@@ -748,12 +748,12 @@ Plans:
 
 Goal: make Bilterm a place where several AI agents run side by side, are visible at a glance, and can talk to each other. Phase 50 is the human-facing view; Phase 51 is the agent-facing channel. 51 builds on 50's agent-state model, so run 50 first.
 
-### Phase 50: `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator)
+### Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)
 
-**Goal**: The slide-out drawer (Phase 24, scaled/pinnable since v2.8.0) looks and works like `herdr`'s left side: a compact, always-available navigator listing workspaces, sessions and panes with a live state per agent, so you can see who is working, blocked, idle or done and jump straight to it.
+**Goal**: The slide-out drawer (Phase 24, scaled/pinnable since v2.8.0) looks and works like a compact left-side navigator: an always-available tree listing workspaces, sessions and panes with a live state per agent, so you can see who is working, blocked, idle or done and jump straight to it.
 **Depends on**: Phase 47 (drawer on the design system); reuses `WorkspaceDrawer`, `DrawerRow`, pin (`Fixed`) and panel scale from v2.8.0.
 **Requirements**: FLT-01, FLT-02, FLT-03
-**Harmony rule**: Add new paths; do not remove or rewire existing ones. The current drawer rows, `F7`, `:drawer ...`, Legacy looks and every existing key keep working. The new layout is an additional `[drawer] style = "classic" | "herdr"` (default `classic` until signed off). New features lower to `Action` and run via `WindowManager::apply`.
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. The current drawer rows, `F7`, `:drawer ...`, Legacy looks and every existing key keep working. The new layout is an additional `[drawer] style = "classic" | "navigator"` (default `classic` until signed off). New features lower to `Action` and run via `WindowManager::apply`.
 **Success Criteria** (what must be TRUE):
 
   1. Tree view: workspace > session > pane, one line per pane, collapse/expand, current pane marked, narrow by default (about 24-30 columns), pinned-open friendly.
@@ -766,11 +766,11 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
 
 Plans:
 - [x] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
-- [x] 50-02-PLAN.md — `[drawer] style = "herdr"`: workspace > session > pane tree rows + renderer, `sanitize_display` (wave 2)
+- [x] 50-02-PLAN.md — `[drawer] style = "navigator"`: workspace > session > pane tree rows + renderer, `sanitize_display` (wave 2)
 - [x] 50-03-PLAN.md — `AgentState` classifier/tracker, `[agents.<name>]` profiles, `:agents list` (wave 2)
 - [x] 50-04-PLAN.md — State dots, per-workspace counts, jump-to-attention (`:drawer attention`, leader `!`), `:drawer style` (wave 3)
 - [ ] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 51 (wave 3)
-- [ ] 50-06-PLAN.md — Herdr keyboard: `HERDR_DRAWER_BINDINGS` in keymap.rs, full `DrawerNavOp` set with `:drawer` verbs (incl. `close-pane`), drift/no-shadow tests, pin/scale, throttled animation (wave 4)
+- [ ] 50-06-PLAN.md — Navigator keyboard: `NAVIGATOR_DRAWER_BINDINGS` in keymap.rs, full `DrawerNavOp` set with `:drawer` verbs (incl. `close-pane`), drift/no-shadow tests, pin/scale, throttled animation (wave 4)
 - [ ] 50-07-PLAN.md — Agent traffic zoom window skeleton: state, braille graph, stable layout, selection model, render (wave 4)
 - [ ] 50-08-PLAN.md — Zoom window keys: `AGENTS_WINDOW_BINDINGS` in keymap.rs, `:agents zoom/close/dismiss/select/edge/enter`, leader `a`, Esc, node/edge cursor, Enter-to-focus, op drift tests, redraw cadence (wave 5)
 - [ ] 50-09-PLAN.md — Zoom window chrome: title-drag/Shift+arrows move, edge-drag/Alt+arrows resize, maximize/close badges, splitter, node/edge clicks, node drag + grab mode, parity test (wave 6)
@@ -779,7 +779,7 @@ Plans:
 - [ ] 50-12-PLAN.md — Row comms indicators (pair / fan-out) opening the window on an edge, comms keys in keymap.rs (wave 9)
 - [ ] 50-13-PLAN.md — GUI runtime scope decision (checkpoint) + panel-scale/modifier wiring in GUI runners (wave 8)
 - [ ] 50-14-PLAN.md — User guide chapter 11 + doc coverage script, config/reference/API docs, SC4 outcome, final phase gate (wave 10)
-- [ ] 50-15-PLAN.md — Herdr sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
+- [ ] 50-15-PLAN.md — Navigator sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
 - [ ] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
 
 ### Phase 51: Agent-to-Agent Messaging & Coordination
@@ -875,5 +875,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
-| 50. `herdr`-Style Left Sidebar (Agent-Aware Workspace Navigator) (`FLT-01`) | 4/16 | In Progress | - |
+| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 4/16 | In Progress | - |
 | 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |

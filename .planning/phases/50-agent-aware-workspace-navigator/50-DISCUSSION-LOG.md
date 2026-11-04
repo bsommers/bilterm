@@ -1,4 +1,4 @@
-# Phase 50: herdr-Style Left Sidebar - Discussion Log
+# Phase 50: navigator-Style Left Sidebar - Discussion Log
 
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in 50-CONTEXT.md.

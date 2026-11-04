@@ -1,4 +1,4 @@
-# Phase 50: herdr-Style Left Sidebar (Agent-Aware Workspace Navigator) - Context
+# Phase 50: navigator-Style Left Sidebar (Agent-Aware Workspace Navigator) - Context
 
 **Gathered:** 2026-11-03
 **Status:** Ready for planning
@@ -6,9 +6,9 @@
 <domain>
 ## Phase Boundary
 
-Make the slide-out drawer look and work like herdr's left side: a compact tree (workspace > session > pane) with per-pane state glyphs, per-row pairing/fan-out comms indicators, full keyboard and mouse parity. Add a resizable zoom window showing an agent-to-agent traffic graph plus a conversation (snoop) view. Phase 50 also owns the traffic-event bus the window reads; Phase 51 (agent messaging) plugs into the same bus.
+Make the slide-out drawer look and work like a compact left-side navigator: a tree (workspace > session > pane) with per-pane state glyphs, per-row pairing/fan-out comms indicators, full keyboard and mouse parity. Add a resizable zoom window showing an agent-to-agent traffic graph plus a conversation (snoop) view. Phase 50 also owns the traffic-event bus the window reads; Phase 51 (agent messaging) plugs into the same bus.
 
-Fixed by the user's brief: glyph status like herdr; arrow- and mouse-friendly; show agent state and pairing/fan-out comms; zoom pop-up with connection/flow graph and snoop; keys and mouse/scroll equal; popup resizable like all other windows; text graphics in text mode, high-resolution smooth graphics in GUI mode.
+Fixed by the user's brief: glyph status per pane; arrow- and mouse-friendly; show agent state and pairing/fan-out comms; zoom pop-up with connection/flow graph and snoop; keys and mouse/scroll equal; popup resizable like all other windows; text graphics in text mode, high-resolution smooth graphics in GUI mode.
 
 </domain>
 
@@ -17,7 +17,7 @@ Fixed by the user's brief: glyph status like herdr; arrow- and mouse-friendly; s
 
 ### Scope split with Phase 51
 - **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 51's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 51 and the API events (`agent.message`).
-- **D-02:** The drawer's new layout is `[drawer] style = "classic" | "herdr"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
+- **D-02:** The drawer's new layout is `[drawer] style = "classic" | "navigator"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
 
 ### Agent state
 - **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 51) override heuristics.
@@ -59,7 +59,7 @@ Fixed by the user's brief: glyph status like herdr; arrow- and mouse-friendly; s
 - `src/wm/z_stack.rs` — window stacking
 - `tests/panel_pin_scale.rs`, `tests/phase46_display_modes.rs` — test patterns
 
-No external specs; herdr was described by the user, not read.
+No external specs; navigator was described by the user, not read.
 
 </canonical_refs>
 
@@ -85,7 +85,7 @@ No external specs; herdr was described by the user, not read.
 <specifics>
 ## Specific Ideas
 
-- "Like herdr's left side": status glyphs, running agent visible at a glance.
+- "Glanceable left-side navigator": status glyphs, running agent visible at a glance.
 - Zoom window: connections, flows, snoop on conversations, resizable like all other windows.
 
 </specifics>
@@ -103,5 +103,5 @@ Phase 50 declares a dependency on Phase 47, which is unchecked. Decision: procee
 
 ---
 
-*Phase: 50-herdr-style-left-sidebar-agent-aware-workspace-navigator*
+*Phase: 50-agent-aware-workspace-navigator*
 *Context gathered: 2026-11-03*

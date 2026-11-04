@@ -191,7 +191,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Milestone v2.9 — Agent Fleet (Phases 50–51)
 
-- [ ] **FLT-01**: The slide-out drawer offers a `herdr`-style left sidebar (`[drawer] style = "herdr"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected.
+- [ ] **FLT-01**: The slide-out drawer offers a Navigator left sidebar (`[drawer] style = "navigator"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected.
 - [ ] **FLT-02**: Agent traffic is observable: a bounded, redacted traffic bus, an `:agents zoom` window with a deterministic node/edge graph, and a read-only snoop view (compose line disabled until Phase 51).
 - [ ] **FLT-03**: The agents graph and sidebar state icons render as GUI vector graphics (no new dependency), with TUI braille fallback.
 - [ ] **AGT-01**: Agents running in panes/sessions can be addressed by stable names and exchange structured messages through a per-recipient mailbox (`agent.send`, `agent.inbox`, `agent.ack`, `agent.list`) over RPC, HTTP, MCP and `bilterm ctl`.
