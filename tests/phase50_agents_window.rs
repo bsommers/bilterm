@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use bilterm::action::Action;
 use bilterm::colon_command::parse_colon_command;
-use bilterm::input::handle_wm_key_event;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use bilterm::ui::WorkspaceWidget;
 use bilterm::ui::design::DesignTokens;
 use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey};
@@ -349,11 +349,39 @@ fn with_temp_xdg<T>(f: impl FnOnce() -> T) -> T {
     out
 }
 
-type Observed = (bool, bool, Option<NodeKey>, Option<(NodeKey, NodeKey)>, usize);
+#[derive(Debug, PartialEq)]
+struct Observed {
+    active: bool,
+    focused: bool,
+    node: Option<NodeKey>,
+    edge: Option<(NodeKey, NodeKey)>,
+    active_pane: usize,
+    rect: Option<Rect>,
+    maximized: bool,
+    splitter_pct: u16,
+    grab: bool,
+    pinned: Vec<(NodeKey, u32, u32)>,
+}
 
 fn observe(wm: &WindowManager) -> Observed {
     let w = wm.agents_window();
-    (w.active, w.focused, w.selection.node.clone(), w.selection.edge.clone(), wm.active_pane_id())
+    Observed {
+        active: w.active,
+        focused: w.focused,
+        node: w.selection.node.clone(),
+        edge: w.selection.edge.clone(),
+        active_pane: wm.active_pane_id(),
+        rect: w.rect,
+        maximized: w.maximized,
+        splitter_pct: w.splitter_pct,
+        grab: w.grab_mode,
+        pinned: w
+            .layout
+            .pinned
+            .iter()
+            .map(|(k, p)| (k.clone(), p.0.to_bits(), p.1.to_bits()))
+            .collect(),
+    }
 }
 
 fn leftmost(wm: &WindowManager) -> NodeKey {
@@ -488,6 +516,32 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::CycleEdge(true) => ":agents edge next".to_string(),
         AgentsOp::CycleEdge(false) => ":agents edge prev".to_string(),
         AgentsOp::Activate => ":agents enter".to_string(),
+        AgentsOp::Move { dx, dy } => format!(":agents move {dx} {dy}"),
+        AgentsOp::Resize { dw, dh } => format!(":agents resize {dw} {dh}"),
+        AgentsOp::SetRect { x, y, w, h } => format!(":agents rect {x} {y} {w} {h}"),
+        AgentsOp::Size(None) => ":agents size auto".to_string(),
+        AgentsOp::Size(Some((c, r))) => format!(":agents size {c}x{r}"),
+        AgentsOp::Maximize => ":agents max".to_string(),
+        AgentsOp::Split(n) => format!(":agents split {n}"),
+        AgentsOp::SplitStep(n) if *n >= 0 => format!(":agents split +{n}"),
+        AgentsOp::SplitStep(n) => format!(":agents split {n}"),
+        AgentsOp::SelectNode(k) => format!(":agents select {}", k.as_str()),
+        AgentsOp::SelectEdge(a, b) => format!(":agents edge {} {}", a.as_str(), b.as_str()),
+        AgentsOp::Grab(None) => ":agents grab".to_string(),
+        AgentsOp::Grab(Some(true)) => ":agents grab on".to_string(),
+        AgentsOp::Grab(Some(false)) => ":agents grab off".to_string(),
+        AgentsOp::NudgeNode(dir) => format!(
+            ":agents nudge {}",
+            match dir {
+                GraphDir::Left => "left",
+                GraphDir::Right => "right",
+                GraphDir::Up => "up",
+                GraphDir::Down => "down",
+            }
+        ),
+        AgentsOp::PinNode { key, x_pm, y_pm } => format!(":agents node-pin {} {x_pm} {y_pm}", key.as_str()),
+        AgentsOp::UnpinNode(None) => ":agents node-unpin".to_string(),
+        AgentsOp::UnpinNode(Some(k)) => format!(":agents node-unpin {}", k.as_str()),
     })
 }
 
@@ -505,19 +559,50 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::CycleEdge(true),
         AgentsOp::CycleEdge(false),
         AgentsOp::Activate,
+        AgentsOp::Move { dx: -1, dy: 0 },
+        AgentsOp::Move { dx: 1, dy: 0 },
+        AgentsOp::Move { dx: 0, dy: -1 },
+        AgentsOp::Move { dx: 0, dy: 1 },
+        AgentsOp::Resize { dw: 1, dh: 0 },
+        AgentsOp::Resize { dw: -1, dh: 0 },
+        AgentsOp::Resize { dw: 0, dh: 1 },
+        AgentsOp::Resize { dw: 0, dh: -1 },
+        AgentsOp::SetRect { x: 10, y: 5, w: 80, h: 24 },
+        AgentsOp::Size(Some((90, 30))),
+        AgentsOp::Size(None),
+        AgentsOp::Maximize,
+        AgentsOp::Split(60),
+        AgentsOp::SplitStep(-5),
+        AgentsOp::SplitStep(5),
+        AgentsOp::SelectNode(NodeKey::pane(2)),
+        AgentsOp::SelectEdge(NodeKey::pane(1), NodeKey("user".to_string())),
+        AgentsOp::Grab(None),
+        AgentsOp::Grab(Some(true)),
+        AgentsOp::Grab(Some(false)),
+        AgentsOp::NudgeNode(GraphDir::Left),
+        AgentsOp::NudgeNode(GraphDir::Right),
+        AgentsOp::NudgeNode(GraphDir::Up),
+        AgentsOp::NudgeNode(GraphDir::Down),
+        AgentsOp::PinNode { key: NodeKey::pane(1), x_pm: 300, y_pm: 700 },
+        AgentsOp::UnpinNode(None),
+        AgentsOp::UnpinNode(Some(NodeKey::pane(1))),
     ]
 }
 
 #[test]
 fn window_keys_match_colon_forms() {
     use bilterm::input::keymap::AGENTS_WINDOW_BINDINGS;
-    for (_, mods, code, action) in AGENTS_WINDOW_BINDINGS {
+    for (scope, mods, code, action) in AGENTS_WINDOW_BINDINGS {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
         let form = agents_op_colon_form(op).expect("every table op has a colon form");
+        let in_grab = *scope == bilterm::input::keymap::AgentsKeyScope::Grab;
         let setup = |wm: &mut WindowManager| {
             assert!(wm.agents_select_node(&NodeKey("user".to_string())));
             wm.agents_cycle_edge(true);
             wm.focus_and_raise(1);
+            if in_grab {
+                run_colon(wm, ":agents grab on");
+            }
         };
         let by_key = with_temp_xdg(|| {
             let (mut wm, _) = traffic_fixture();
@@ -547,7 +632,13 @@ fn keymap_agents_window_keys_unique() {
     for (scope, mods, code, _) in AGENTS_WINDOW_BINDINGS {
         if *scope == AgentsKeyScope::Window {
             assert!(
-                !AGENTS_WINDOW_BINDINGS.iter().any(|(s, m, c, _)| s != scope && m == mods && c == code),
+                !AGENTS_WINDOW_BINDINGS.iter().any(|(s, m, c, _)| {
+                    // Documented override: Esc in grab mode drops the grab instead of dismissing.
+                    s != scope
+                        && m == mods
+                        && c == code
+                        && !(*s == AgentsKeyScope::Grab && *c == KeyCode::Esc)
+                }),
                 "Window-scope chord {code:?}+{mods:?} is also bound in another scope"
             );
         }
@@ -608,4 +699,645 @@ fn agents_ops_have_colon_completion_and_help() {
         .find(|(k, _)| *k == KeyCode::Char('a'))
         .expect("leader a row");
     assert!(matches!(&leader.1, Action::Agents(op) if samples.contains(op)));
+}
+
+// ---- Plan 50-09: window chrome (move, resize, maximize, splitter) and node/edge gestures ----
+
+fn ws_of(wm: &WindowManager, area: Rect) -> Rect {
+    bilterm::ui::shell::ShellLayout::compute(area, wm.config(), wm.pane_count()).workspace
+}
+
+fn mouse(wm: &mut WindowManager, area: Rect, kind: MouseEventKind, col: u16, row: u16) {
+    let ev = MouseEvent { kind, column: col, row, modifiers: KeyModifiers::NONE };
+    handle_wm_mouse_event(wm, ev, area).unwrap();
+}
+
+fn click(wm: &mut WindowManager, area: Rect, col: u16, row: u16) {
+    mouse(wm, area, MouseEventKind::Down(MouseButton::Left), col, row);
+    mouse(wm, area, MouseEventKind::Up(MouseButton::Left), col, row);
+}
+
+fn drag(wm: &mut WindowManager, area: Rect, from: (u16, u16), to: (u16, u16)) {
+    mouse(wm, area, MouseEventKind::Down(MouseButton::Left), from.0, from.1);
+    mouse(wm, area, MouseEventKind::Drag(MouseButton::Left), to.0, to.1);
+    mouse(wm, area, MouseEventKind::Up(MouseButton::Left), to.0, to.1);
+}
+
+fn win_rect(wm: &WindowManager, area: Rect) -> Rect {
+    wm.agents_window_rect(ws_of(wm, area)).expect("window rect")
+}
+
+/// First cell of the label of node `key`.
+fn node_cell(wm: &WindowManager, area: Rect, key: &str) -> (u16, u16) {
+    let rects = wm.agents_pane_rects(ws_of(wm, area)).unwrap();
+    let scene = wm.agents_graph_scene();
+    let node = scene.nodes.iter().find(|n| n.key.as_str() == key).expect("node in scene");
+    let (lx, ly, _) = bilterm::ui::graph_raster::label_cell(node, rects.graph).unwrap();
+    (rects.graph.x + lx, rects.graph.y + ly)
+}
+
+fn user() -> NodeKey {
+    NodeKey("user".to_string())
+}
+
+#[test]
+fn window_tracer_drag_title_and_shift_arrows_move() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        assert_eq!(ws_of(&wm, area), area_workspace(&wm), "mouse and action paths share one workspace");
+        let r0 = win_rect(&wm, area);
+
+        drag(&mut wm, area, (r0.x + 5, r0.y), (r0.x + 12, r0.y + 3));
+        let r1 = win_rect(&wm, area);
+        assert_eq!((r1.x, r1.y, r1.width, r1.height), (r0.x + 7, r0.y + 3, r0.width, r0.height));
+        assert!(wm.agents_window().drag.is_none(), "drag bookkeeping cleared on release");
+
+        let (mut other, oarea) = traffic_fixture();
+        run_colon(&mut other, &format!(":agents rect {} {} {} {}", r1.x, r1.y, r1.width, r1.height));
+        assert_eq!(win_rect(&other, oarea), r1, ":agents rect gives the dragged rect");
+
+        press_mod(&mut wm, KeyCode::Left, KeyModifiers::SHIFT);
+        press_mod(&mut wm, KeyCode::Left, KeyModifiers::SHIFT);
+        let r2 = win_rect(&wm, area);
+        assert_eq!(r2.x, r1.x - 2);
+        run_colon(&mut other, ":agents move -2 0");
+        assert_eq!(win_rect(&other, oarea), r2, "Shift+Left x2 equals :agents move -2 0");
+
+        // Clicks inside the window never reach the drawer or panes beneath it.
+        let (mut wm, area) = traffic_fixture();
+        wm.toggle_drawer();
+        let drawer = wm.drawer_rect(ws_of(&wm, area)).expect("drawer rect");
+        run_colon(&mut wm, ":agents max");
+        let before = (wm.drawer().selected_index, wm.active_pane_id());
+        let wr = win_rect(&wm, area);
+        let (c, r) = (drawer.x + 2, drawer.y + 3);
+        assert!(c > wr.x && c < wr.x + wr.width - 1 && r > wr.y && r < wr.y + wr.height - 1, "probe cell lies inside the window");
+        click(&mut wm, area, c, r);
+        assert_eq!((wm.drawer().selected_index, wm.active_pane_id()), before);
+
+        // Pinned window: a click outside releases the keyboard.
+        run_colon(&mut wm, ":agents max");
+        assert!(!wm.agents_window().maximized);
+        wm.agents_window_mut().pinned = true;
+        wm.agents_window_mut().focused = true;
+        assert!(wm.agents_window().captures_input());
+        mouse(&mut wm, area, MouseEventKind::Down(MouseButton::Left), area.width - 1, area.height - 3);
+        assert!(!wm.agents_window().captures_input());
+        assert!(wm.agents_window().active, "pinned window stays open");
+    });
+}
+
+/// The workspace the `Action` paths clamp against (same formula the shell uses).
+fn area_workspace(wm: &WindowManager) -> Rect {
+    let (cols, rows) = (120u16, 40u16);
+    ws_of(wm, Rect::new(0, 0, cols, rows))
+}
+
+#[test]
+fn window_edge_drag_resizes() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let r0 = win_rect(&wm, area);
+        let right = r0.x + r0.width - 1;
+        let bottom = r0.y + r0.height - 1;
+        drag(&mut wm, area, (right, r0.y + 5), (right + 10, r0.y + 5));
+        let r1 = win_rect(&wm, area);
+        assert_eq!((r1.x, r1.y, r1.width, r1.height), (r0.x, r0.y, r0.width + 10, r0.height));
+
+        let (mut wm, area) = traffic_fixture();
+        drag(&mut wm, area, (right, bottom), (right + 5, bottom + 3));
+        let r2 = win_rect(&wm, area);
+        assert_eq!((r2.width, r2.height), (r0.width + 5, r0.height + 3));
+        assert!(wm.agents_window().rect.is_some(), "the drag stores an explicit rect");
+    });
+}
+
+#[test]
+fn window_alt_arrows_resize() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let (mut other, oarea) = traffic_fixture();
+        let r0 = win_rect(&wm, area);
+        press_mod(&mut wm, KeyCode::Right, KeyModifiers::ALT);
+        run_colon(&mut other, ":agents resize 1 0");
+        assert_eq!(win_rect(&wm, area), win_rect(&other, oarea));
+        assert_eq!(win_rect(&wm, area).width, r0.width + 1);
+        press_mod(&mut wm, KeyCode::Down, KeyModifiers::ALT);
+        run_colon(&mut other, ":agents resize 0 1");
+        assert_eq!(win_rect(&wm, area), win_rect(&other, oarea));
+        for _ in 0..200 {
+            press_mod(&mut wm, KeyCode::Left, KeyModifiers::ALT);
+            press_mod(&mut wm, KeyCode::Up, KeyModifiers::ALT);
+        }
+        let r = win_rect(&wm, area);
+        assert_eq!((r.width, r.height), (40, 12), "never below 40x12");
+    });
+}
+
+#[test]
+fn window_rect_clamped_to_workspace() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let ws = ws_of(&wm, area);
+        run_colon(&mut wm, ":agents rect 0 0 500 500");
+        let r = win_rect(&wm, area);
+        assert_eq!((r.width, r.height), (ws.width, ws.height));
+        run_colon(&mut wm, ":agents rect 1000 1000 50 20");
+        let r = win_rect(&wm, area);
+        assert!(r.x + r.width <= ws.x + ws.width && r.y + r.height <= ws.y + ws.height, "{r:?} outside {ws:?}");
+        run_colon(&mut wm, ":agents rect 5 5 3 3");
+        let r = win_rect(&wm, area);
+        assert_eq!((r.width, r.height), (40, 12), "tiny rects grow to the minimum");
+
+        let r0 = win_rect(&wm, area);
+        drag(&mut wm, area, (r0.x + 5, r0.y), (area.width - 1, area.height - 1));
+        let r = win_rect(&wm, area);
+        assert!(r.x + r.width <= ws.x + ws.width && r.y + r.height <= ws.y + ws.height, "{r:?} outside {ws:?}");
+    });
+}
+
+/// Title badge columns `(minimize, zoom, close)` of a window rect.
+fn badge_cols(wm: &WindowManager, r: Rect) -> (u16, u16, u16) {
+    let g = wm.config().glyph_set();
+    let len = |s: &str| s.chars().count() as u16;
+    let start = (r.x + r.width).saturating_sub(len(g.minimize_badge) + len(g.zoom_badge) + len(g.close_badge) + 2);
+    (start, start + len(g.minimize_badge), start + len(g.minimize_badge) + len(g.zoom_badge))
+}
+
+#[test]
+fn window_title_badges_close_and_maximize() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let r = win_rect(&wm, area);
+        let (_, zoom, _) = badge_cols(&wm, r);
+        click(&mut wm, area, zoom, r.y);
+        assert!(wm.agents_window().maximized, "badge 1 maximizes");
+        assert!(wm.agents_window().drag.is_none(), "a badge click does not start a drag");
+        assert_eq!(win_rect(&wm, area), ws_of(&wm, area));
+        let rm = win_rect(&wm, area);
+        let (_, zoom, _) = badge_cols(&wm, rm);
+        click(&mut wm, area, zoom, rm.y);
+        assert!(!wm.agents_window().maximized, "badge 1 toggles back");
+
+        for badge in [0usize, 2] {
+            let (mut wm, area) = traffic_fixture();
+            let r = win_rect(&wm, area);
+            let (min, _, close) = badge_cols(&wm, r);
+            click(&mut wm, area, [min, 0, close][badge], r.y);
+            assert!(!wm.agents_window().active, "badge {badge} closes");
+        }
+    });
+}
+
+#[test]
+fn window_m_key_and_colon_max_toggle_maximize() {
+    with_temp_xdg(|| {
+        let (mut a, aarea) = traffic_fixture();
+        let (mut b, barea) = traffic_fixture();
+        press(&mut a, KeyCode::Char('m'));
+        run_colon(&mut b, ":agents max");
+        assert!(a.agents_window().maximized);
+        assert_eq!(observe(&a), observe(&b));
+        assert_eq!(win_rect(&a, aarea), win_rect(&b, barea));
+        press(&mut a, KeyCode::Char('m'));
+        run_colon(&mut b, ":agents max");
+        assert!(!a.agents_window().maximized);
+        assert_eq!(observe(&a), observe(&b));
+    });
+}
+
+#[test]
+fn window_splitter_drag_and_keys() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let rects = wm.agents_pane_rects(ws_of(&wm, area)).unwrap();
+        let from = (rects.splitter_col, rects.inner.y + 2);
+        drag(&mut wm, area, from, (from.0 + 10, from.1));
+        let pct = wm.agents_window().splitter_pct;
+        assert!(pct > 55 && (20..=80).contains(&pct), "splitter moved right: {pct}");
+        let after = wm.agents_pane_rects(ws_of(&wm, area)).unwrap().splitter_col;
+        assert!(after.abs_diff(from.0 + 10) <= 1, "divider follows the pointer ({after} vs {})", from.0 + 10);
+
+        let (mut other, oarea) = traffic_fixture();
+        run_colon(&mut other, &format!(":agents split {pct}"));
+        assert_eq!(
+            other.agents_pane_rects(ws_of(&other, oarea)).unwrap().splitter_col,
+            after,
+            "drag equals :agents split <pct>"
+        );
+
+        let (mut a, _) = traffic_fixture();
+        let (mut b, _) = traffic_fixture();
+        press(&mut a, KeyCode::Char('<'));
+        run_colon(&mut b, ":agents split -5");
+        assert_eq!(a.agents_window().splitter_pct, 50);
+        assert_eq!(observe(&a), observe(&b));
+        press(&mut a, KeyCode::Char('>'));
+        press(&mut a, KeyCode::Char('>'));
+        run_colon(&mut b, ":agents split +5");
+        run_colon(&mut b, ":agents split +5");
+        assert_eq!(a.agents_window().splitter_pct, 60);
+        assert_eq!(observe(&a), observe(&b));
+        run_colon(&mut b, ":agents split +100");
+        assert_eq!(b.agents_window().splitter_pct, 80);
+        run_colon(&mut b, ":agents split -100");
+        assert_eq!(b.agents_window().splitter_pct, 20);
+    });
+}
+
+#[test]
+fn window_colon_size_forms() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let default = win_rect(&wm, area);
+        run_colon(&mut wm, ":agents size 90x30");
+        let r = win_rect(&wm, area);
+        assert_eq!((r.width, r.height), (90, 30));
+        run_colon(&mut wm, ":agents size auto");
+        assert_eq!(win_rect(&wm, area), default);
+        for bad in [":agents size 5x5", ":agents size 500x30", ":agents size 90", ":agents split 95", ":agents split 10", ":agents resize x 1", ":agents move 1", ":agents rect 1 2 3"] {
+            let err = parse_colon_command(bad).unwrap();
+            assert!(err.is_err(), "`{bad}` must be a usage error, got {err:?}");
+            assert!(err.unwrap_err().starts_with("Usage:"), "{bad}");
+        }
+    });
+}
+
+#[test]
+fn window_click_node_selects_and_second_click_activates() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        wm.focus_and_raise(1);
+        let (c, r) = node_cell(&wm, area, "pane:2");
+        click(&mut wm, area, c, r);
+        assert_eq!(wm.agents_window().selection.node, Some(NodeKey::pane(2)));
+        let (mut other, _) = traffic_fixture();
+        other.focus_and_raise(1);
+        run_colon(&mut other, ":agents select pane:2");
+        assert_eq!(observe(&wm), observe(&other));
+        assert_eq!(wm.active_pane_id(), 1, "the first click only selects");
+
+        click(&mut wm, area, c, r);
+        assert_eq!(wm.active_pane_id(), 2, "the second click activates like Enter");
+        assert!(!wm.agents_window().active);
+    });
+}
+
+#[test]
+fn window_click_edge_selects_edge() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let rects = wm.agents_pane_rects(ws_of(&wm, area)).unwrap();
+        let scene = wm.agents_graph_scene();
+        let find = |k: &str| scene.nodes.iter().find(|n| n.key.as_str() == k).unwrap().clone();
+        let (a, b) = (find("pane:1"), find("user"));
+        let pair = (a.key.clone(), b.key.clone());
+        let cells = bilterm::wm::agents_geometry::edge_curve_cells(&a, &b, rects.graph);
+        let on_edge = cells
+            .iter()
+            .map(|&(x, y)| (rects.graph.x + x as u16, rects.graph.y + y as u16))
+            .find(|&(x, y)| wm.agents_hit(ws_of(&wm, area), x, y) == bilterm::wm::agents_geometry::AgentsHit::Edge(pair.0.clone(), pair.1.clone()))
+            .expect("a cell of the user - #1 edge that is not a node");
+        click(&mut wm, area, on_edge.0, on_edge.1);
+        assert_eq!(wm.agents_window().selection.edge, Some(pair));
+
+        let (mut other, _) = traffic_fixture();
+        run_colon(&mut other, ":agents edge user pane:1");
+        assert_eq!(observe(&wm), observe(&other));
+    });
+}
+
+#[test]
+fn window_node_drag_pins_node() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let rects = wm.agents_pane_rects(ws_of(&wm, area)).unwrap();
+        let from = node_cell(&wm, area, "pane:1");
+        let to = (rects.graph.x + rects.graph.width / 2, rects.graph.y + rects.graph.height / 2);
+        drag(&mut wm, area, from, to);
+        let pinned = wm.agents_window().layout.pinned.get(&NodeKey::pane(1)).copied().expect("pinned");
+        assert!(wm.agents_window().active, "a drag never activates");
+        assert_eq!(wm.agents_window().selection.node, Some(NodeKey::pane(1)));
+        let scene = wm.agents_graph_scene();
+        let node = scene.nodes.iter().find(|n| n.key == NodeKey::pane(1)).unwrap();
+        assert_eq!(node.pos, pinned, "the scene shows the pinned position");
+
+        let (x_pm, y_pm) = ((pinned.0 * 1000.0).round() as u16, (pinned.1 * 1000.0).round() as u16);
+        let (mut other, _) = traffic_fixture();
+        run_colon(&mut other, ":agents select pane:1");
+        run_colon(&mut other, &format!(":agents node-pin pane:1 {x_pm} {y_pm}"));
+        assert_eq!(observe(&wm), observe(&other), "drag equals :agents node-pin with its permille");
+
+        // A later layout pass (new traffic, new node) leaves the node where it is.
+        wm.record_traffic(
+            TrafficEndpoint::User,
+            TrafficEndpoint::Session("later".into()),
+            TrafficKind::Broadcast,
+            "x",
+            Instant::now(),
+        );
+        let scene = wm.agents_graph_scene();
+        assert_eq!(scene.nodes.iter().find(|n| n.key == NodeKey::pane(1)).unwrap().pos, pinned);
+    });
+}
+
+#[test]
+fn window_grab_mode_moves_node_with_keys() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = traffic_fixture();
+        assert!(wm.agents_select_node(&NodeKey::pane(1)));
+        let x0 = wm.agents_graph_scene().nodes.iter().find(|n| n.key == NodeKey::pane(1)).unwrap().pos.0;
+        press(&mut wm, KeyCode::Char('g'));
+        assert!(wm.agents_window().grab_mode);
+        for _ in 0..3 {
+            press(&mut wm, KeyCode::Right);
+        }
+        press(&mut wm, KeyCode::Char('g'));
+        assert!(!wm.agents_window().grab_mode);
+        let pos = wm.agents_window().layout.pinned.get(&NodeKey::pane(1)).copied().expect("pinned by nudging");
+        assert!(pos.0 > x0, "moved right ({} vs {x0})", pos.0);
+
+        let (mut other, _) = traffic_fixture();
+        assert!(other.agents_select_node(&NodeKey::pane(1)));
+        run_colon(&mut other, ":agents grab on");
+        for _ in 0..3 {
+            run_colon(&mut other, ":agents nudge right");
+        }
+        run_colon(&mut other, ":agents grab off");
+        assert_eq!(observe(&wm), observe(&other));
+
+        // Esc in grab mode drops the grab without dismissing the window.
+        press(&mut wm, KeyCode::Char('g'));
+        press(&mut wm, KeyCode::Esc);
+        assert!(!wm.agents_window().grab_mode && wm.agents_window().active);
+        // Enter drops it too, and grabbing needs a selected node.
+        press(&mut wm, KeyCode::Char('g'));
+        press(&mut wm, KeyCode::Enter);
+        assert!(!wm.agents_window().grab_mode);
+        let (mut bare, _) = traffic_fixture();
+        run_colon(&mut bare, ":agents grab on");
+        assert!(!bare.agents_window().grab_mode, "no node selected: grab refused");
+    });
+}
+
+#[test]
+fn window_right_click_and_u_unpin_node() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        run_colon(&mut wm, ":agents node-pin pane:1 300 300");
+        assert!(wm.agents_window().layout.pinned.contains_key(&NodeKey::pane(1)));
+        let (c, r) = node_cell(&wm, area, "pane:1");
+        mouse(&mut wm, area, MouseEventKind::Down(MouseButton::Right), c, r);
+        assert!(wm.agents_window().layout.pinned.is_empty(), "right-click unpins");
+
+        run_colon(&mut wm, ":agents node-pin pane:1 300 300");
+        run_colon(&mut wm, ":agents select pane:1");
+        press(&mut wm, KeyCode::Char('u'));
+        assert!(wm.agents_window().layout.pinned.is_empty(), "u unpins the selected node");
+
+        let (mut other, _) = traffic_fixture();
+        run_colon(&mut other, ":agents node-pin pane:1 300 300");
+        run_colon(&mut other, ":agents select pane:1");
+        run_colon(&mut other, ":agents node-unpin");
+        assert_eq!(observe(&wm), observe(&other));
+    });
+}
+
+#[test]
+fn window_colon_node_forms() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = traffic_fixture();
+        let before = observe(&wm);
+        run_colon(&mut wm, ":agents select pane:99");
+        run_colon(&mut wm, ":agents node-pin pane:99 10 10");
+        run_colon(&mut wm, ":agents node-unpin pane:1");
+        run_colon(&mut wm, ":agents edge pane:1 pane:2");
+        assert_eq!(observe(&wm), before, "unknown nodes and edges change nothing");
+        for bad in [
+            ":agents node-pin pane:1 2000 5",
+            ":agents node-pin pane:1 5",
+            ":agents node-pin nonsense 5 5",
+            ":agents select nonsense",
+            ":agents edge user user",
+            ":agents nudge sideways",
+            ":agents grab maybe",
+        ] {
+            let res = parse_colon_command(bad).unwrap();
+            assert!(res.is_err(), "`{bad}` must be a usage error, got {res:?}");
+        }
+    });
+}
+
+/// Observable window state for the cross-path parity test.
+fn state_of(wm: &WindowManager, area: Rect) -> (Option<Rect>, Observed) {
+    (wm.agents_window_rect(ws_of(wm, area)), observe(wm))
+}
+
+#[test]
+fn parity_window_geometry_key_mouse_colon_match() {
+    use bilterm::wm::agents_geometry::AgentsHit;
+    type Path = Box<dyn Fn(&mut WindowManager, Rect)>;
+    struct Case {
+        name: &'static str,
+        setup: fn(&mut WindowManager),
+        key: Option<Path>,
+        mouse: Option<Path>,
+        colon: &'static str,
+    }
+    fn select_user(wm: &mut WindowManager) {
+        assert!(wm.agents_select_node(&user()));
+    }
+    fn select_pane2_focus1(wm: &mut WindowManager) {
+        wm.focus_and_raise(1);
+        assert!(wm.agents_select_node(&NodeKey::pane(2)));
+    }
+    fn select_pane1(wm: &mut WindowManager) {
+        assert!(wm.agents_select_node(&NodeKey::pane(1)));
+    }
+    fn pinned_pane1(wm: &mut WindowManager) {
+        assert!(wm.pin_agents_node(&NodeKey::pane(1), 300, 300));
+        assert!(wm.agents_select_node(&NodeKey::pane(1)));
+    }
+    fn nothing(_: &mut WindowManager) {}
+
+    let cases: Vec<Case> = vec![
+        Case {
+            name: "Move",
+            setup: nothing,
+            key: Some(Box::new(|wm, _| {
+                for _ in 0..3 {
+                    press_mod(wm, KeyCode::Right, KeyModifiers::SHIFT);
+                }
+                for _ in 0..2 {
+                    press_mod(wm, KeyCode::Down, KeyModifiers::SHIFT);
+                }
+            })),
+            mouse: Some(Box::new(|wm, area| {
+                let r = win_rect(wm, area);
+                drag(wm, area, (r.x + 5, r.y), (r.x + 8, r.y + 2));
+            })),
+            colon: ":agents move 3 2",
+        },
+        Case {
+            name: "Resize",
+            setup: nothing,
+            key: Some(Box::new(|wm, _| {
+                for _ in 0..5 {
+                    press_mod(wm, KeyCode::Right, KeyModifiers::ALT);
+                }
+                for _ in 0..3 {
+                    press_mod(wm, KeyCode::Down, KeyModifiers::ALT);
+                }
+            })),
+            mouse: Some(Box::new(|wm, area| {
+                let r = win_rect(wm, area);
+                let (right, bottom) = (r.x + r.width - 1, r.y + r.height - 1);
+                drag(wm, area, (right, bottom), (right + 5, bottom + 3));
+            })),
+            colon: ":agents resize 5 3",
+        },
+        Case {
+            name: "Maximize",
+            setup: nothing,
+            key: Some(Box::new(|wm, _| press(wm, KeyCode::Char('m')))),
+            mouse: Some(Box::new(|wm, area| {
+                let r = win_rect(wm, area);
+                click(wm, area, badge_cols(wm, r).1, r.y);
+            })),
+            colon: ":agents max",
+        },
+        Case {
+            name: "Split",
+            setup: nothing,
+            key: Some(Box::new(|wm, _| press(wm, KeyCode::Char('>')))),
+            mouse: Some(Box::new(|wm, area| {
+                let rects = wm.agents_pane_rects(ws_of(wm, area)).unwrap();
+                let w = u32::from(rects.inner.width);
+                let d = (0..rects.inner.width)
+                    .find(|d| (u32::from(*d) * 100 + w / 2) / w == 60)
+                    .expect("a column giving 60%");
+                drag(wm, area, (rects.splitter_col, rects.inner.y + 1), (rects.inner.x + d, rects.inner.y + 1));
+            })),
+            colon: ":agents split 60",
+        },
+        Case {
+            name: "SelectNode",
+            setup: nothing,
+            key: None,
+            mouse: Some(Box::new(|wm, area| {
+                let (c, r) = node_cell(wm, area, "pane:2");
+                click(wm, area, c, r);
+            })),
+            colon: ":agents select pane:2",
+        },
+        Case {
+            name: "SelectEdge",
+            setup: select_user,
+            key: Some(Box::new(|wm, _| press(wm, KeyCode::Tab))),
+            mouse: Some(Box::new(|wm, area| {
+                let rects = wm.agents_pane_rects(ws_of(wm, area)).unwrap();
+                let scene = wm.agents_graph_scene();
+                let find = |k: &str| scene.nodes.iter().find(|n| n.key.as_str() == k).unwrap().clone();
+                let (a, b) = (find("pane:1"), find("user"));
+                let want = AgentsHit::Edge(a.key.clone(), b.key.clone());
+                let (x, y) = bilterm::wm::agents_geometry::edge_curve_cells(&a, &b, rects.graph)
+                    .into_iter()
+                    .map(|(x, y)| (rects.graph.x + x as u16, rects.graph.y + y as u16))
+                    .find(|&(x, y)| wm.agents_hit(ws_of(wm, area), x, y) == want)
+                    .expect("edge cell");
+                click(wm, area, x, y);
+            })),
+            colon: ":agents edge user pane:1",
+        },
+        Case {
+            name: "Activate",
+            setup: select_pane2_focus1,
+            key: Some(Box::new(|wm, _| press(wm, KeyCode::Enter))),
+            mouse: Some(Box::new(|wm, area| {
+                let (c, r) = node_cell(wm, area, "pane:2");
+                click(wm, area, c, r);
+            })),
+            colon: ":agents enter",
+        },
+        Case {
+            name: "PinNode",
+            setup: select_pane1,
+            key: None,
+            mouse: Some(Box::new(|wm, area| {
+                let rects = wm.agents_pane_rects(ws_of(wm, area)).unwrap();
+                let from = node_cell(wm, area, "pane:1");
+                let to = (rects.graph.x + rects.graph.width / 3, rects.graph.y + rects.graph.height / 2);
+                drag(wm, area, from, to);
+            })),
+            // Permille of the cell the drag ends on, computed independently of the handler.
+            colon: ":agents node-pin pane:1 PM",
+        },
+        Case {
+            name: "UnpinNode",
+            setup: pinned_pane1,
+            key: Some(Box::new(|wm, _| press(wm, KeyCode::Char('u')))),
+            mouse: Some(Box::new(|wm, area| {
+                let (c, r) = node_cell(wm, area, "pane:1");
+                mouse(wm, area, MouseEventKind::Down(MouseButton::Right), c, r);
+            })),
+            colon: ":agents node-unpin",
+        },
+    ];
+
+    for case in cases {
+        let run_path = |path: &Path| {
+            let (mut wm, area) = traffic_fixture();
+            (case.setup)(&mut wm);
+            path(&mut wm, area);
+            state_of(&wm, area)
+        };
+        // PinNode: derive the colon form from what the mouse path produced.
+        let colon = if case.colon.ends_with(" PM") {
+            let (wm, _) = {
+                let (mut wm, area) = traffic_fixture();
+                (case.mouse.as_ref().unwrap())(&mut wm, area);
+                (wm, area)
+            };
+            let p = wm.agents_window().layout.pinned[&NodeKey::pane(1)];
+            case.colon.replace("PM", &format!("{} {}", (p.0 * 1000.0).round() as u16, (p.1 * 1000.0).round() as u16))
+        } else {
+            case.colon.to_string()
+        };
+        let by_colon = {
+            let (mut wm, area) = traffic_fixture();
+            (case.setup)(&mut wm);
+            run_colon(&mut wm, &colon);
+            state_of(&wm, area)
+        };
+        if let Some(path) = &case.key {
+            assert_eq!(run_path(path), by_colon, "{}: key path vs `{colon}`", case.name);
+        }
+        if let Some(path) = &case.mouse {
+            assert_eq!(run_path(path), by_colon, "{}: mouse path vs `{colon}`", case.name);
+        }
+    }
+}
+
+#[test]
+fn window_swallows_pointer_events_and_ignores_stale_drags() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        wm.focus_and_raise(1);
+        let r = win_rect(&wm, area);
+        let ws = ws_of(&wm, area);
+        // Wheel and right-click inside the window are swallowed, whatever lies beneath.
+        for kind in [MouseEventKind::ScrollUp, MouseEventKind::Down(MouseButton::Right), MouseEventKind::Moved] {
+            mouse(&mut wm, area, kind, r.x + 3, r.y + 3);
+        }
+        assert_eq!(wm.active_pane_id(), 1);
+        // An unpinned window also swallows clicks elsewhere in the workspace (modal-like) ...
+        let outside = (ws.x, ws.y + ws.height - 1);
+        assert!(!bilterm::wm::rect_contains(r, outside.0, outside.1));
+        click(&mut wm, area, outside.0, outside.1);
+        assert_eq!(wm.active_pane_id(), 1, "the click did not reach a pane");
+        assert!(wm.agents_window().active, "an unpinned window is not closed by a click");
+        // ... a drag release without a press is a no-op.
+        mouse(&mut wm, area, MouseEventKind::Up(MouseButton::Left), r.x + 3, r.y + 3);
+        assert!(wm.agents_window().drag.is_none());
+    });
 }
