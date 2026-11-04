@@ -5,7 +5,7 @@
 //! [`Action`](crate::action::Action) through `WindowManager::apply`. It never changes drawer, pane or
 //! prompt state itself (`ARCH-R01`).
 
-use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use super::AppAction;
@@ -13,7 +13,8 @@ use super::mouse_wm::detect_title_bar_badge_click;
 use super::keymap::{DrawerKeyScope, navigator_drawer_action};
 use crate::action::Action;
 use crate::ui::drawer::navigator::{
-    NavigatorButtonKind, navigator_fold_marker_cells, navigator_footer_buttons, navigator_row_at,
+    NavigatorButtonKind, navigator_fold_marker_cells, navigator_footer_buttons, navigator_header_plus,
+    navigator_menu_entry_at, navigator_plus_cells, navigator_row_at,
 };
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::drawer::DrawerNavOp;
@@ -21,6 +22,13 @@ use crate::wm::{DrawerEdge, DrawerRowKind, DrawerVisibilityMode, WindowManager};
 
 /// Looks `key` up in the navigator key table; `None` lets the classic drawer handler run.
 pub(super) fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
+    // An open context menu is dismissed by any key; Esc is consumed by the dismissal.
+    if wm.drawer().navigator_menu_open() {
+        let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
+        if key.code == KeyCode::Esc {
+            return Some(AppAction::Handled);
+        }
+    }
     let scopes = [DrawerKeyScope::Navigator];
     let action = navigator_drawer_action(&scopes, key)?;
     let _ = wm.apply(action);
@@ -65,13 +73,38 @@ pub(super) fn handle_navigator_drawer_mouse(
     workspace_area: Rect,
 ) -> Option<AppAction> {
     if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+        let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
         // Navigator rows truncate instead of scrolling sideways, so Shift scrolls like the plain wheel.
         let step = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
         let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Scroll(step)));
         return Some(AppAction::Handled);
     }
+    if let MouseEventKind::Down(MouseButton::Right) = mouse.kind {
+        // Right-click on a row selects it and opens the context menu there; elsewhere inside the drawer it
+        // only dismisses an open menu (the paste behaviour stays with right-clicks outside the drawer).
+        match navigator_row_at(wm, workspace_area, mouse.column, mouse.row) {
+            Some(i) => {
+                let _ = wm.apply(Action::DrawerFocus);
+                let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Row(i)));
+                let at = Some((mouse.column, mouse.row));
+                let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuOpen(at)));
+            }
+            None => {
+                let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
+            }
+        }
+        return Some(AppAction::Handled);
+    }
     if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
         let (col, row) = (mouse.column, mouse.row);
+        if wm.drawer().navigator_menu_open() {
+            let action = match navigator_menu_entry_at(wm, workspace_area, col, row) {
+                Some(i) => DrawerNavOp::MenuPick(i),
+                None => DrawerNavOp::MenuClose,
+            };
+            let _ = wm.apply(Action::DrawerNav(action));
+            return Some(AppAction::Handled);
+        }
         if row == dr.y
             && let Some(badge) = detect_title_bar_badge_click(wm, dr, col)
         {
@@ -100,6 +133,12 @@ pub(super) fn handle_navigator_drawer_mouse(
             wm.drawer_mut().resizing_drag = true;
             return Some(AppAction::Handled);
         }
+        if row == dr.y
+            && navigator_header_plus(wm, workspace_area).is_some_and(|r| col >= r.x && col < r.x + r.width)
+        {
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::NewSession));
+            return Some(AppAction::Handled);
+        }
         let button = navigator_footer_buttons(wm, workspace_area)
             .into_iter()
             .find(|b| b.y == row && col >= b.x && col < b.x + b.width);
@@ -107,6 +146,15 @@ pub(super) fn handle_navigator_drawer_mouse(
             if let Some(action) = navigator_button_action(wm, b.kind) {
                 let _ = wm.apply(action);
             }
+            return Some(AppAction::Handled);
+        }
+        let plus = navigator_plus_cells(wm, workspace_area)
+            .into_iter()
+            .find(|c| c.y == row && col >= c.x && col < c.x + 3);
+        if let Some(cell) = plus {
+            let _ = wm.apply(Action::DrawerFocus);
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Row(cell.row_index)));
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(None)));
             return Some(AppAction::Handled);
         }
         let marker = navigator_fold_marker_cells(wm, workspace_area).into_iter().find(|c| c.x == col && c.y == row);
@@ -128,4 +176,16 @@ pub(super) fn handle_navigator_drawer_mouse(
 pub(super) fn navigator_drag_resize(wm: &mut WindowManager, new_size: u16) -> Option<AppAction> {
     let _ = wm.apply(Action::DrawerSize(new_size.clamp(1, u16::MAX - 1)));
     Some(AppAction::Handled)
+}
+
+/// Click-away for the context menu: a press outside the drawer closes it, then the event proceeds normally
+/// (so a right-click elsewhere still pastes). A no-op unless the navigator menu is open.
+pub(super) fn navigator_menu_click_away(wm: &mut WindowManager, mouse: &MouseEvent, dr: Rect) {
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator
+        && wm.drawer().navigator_menu_open()
+        && matches!(mouse.kind, MouseEventKind::Down(_))
+        && !crate::wm::rect_contains(dr, mouse.column, mouse.row)
+    {
+        let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
+    }
 }

@@ -49,6 +49,13 @@ pub enum DrawerNavOp {
     AddWindow(Option<String>),
     /// Split the selected pane in the given direction and focus the new pane.
     AddPane(SplitDirection),
+    /// Open the right-click context menu at a screen cell (`None`: at the selected row).
+    MenuOpen(Option<(u16, u16)>),
+    /// Dismiss the context menu.
+    MenuClose,
+    /// Run entry `n` (0-based, see [`super::menu::NavigatorMenuEntry::ALL`]) on the selected row and
+    /// close the menu.
+    MenuPick(usize),
 }
 
 /// Attention tiers in priority order.
@@ -103,6 +110,9 @@ impl WindowManager {
             DrawerNavOp::CollapseAll => self.collapse_all_navigator_rows(),
             DrawerNavOp::AddWindow(session) => self.drawer_add_in_selected(SplitDirection::Horizontal, session),
             DrawerNavOp::AddPane(dir) => self.drawer_add_in_selected(dir, None),
+            op @ (DrawerNavOp::MenuOpen(_) | DrawerNavOp::MenuClose | DrawerNavOp::MenuPick(_)) => {
+                self.apply_navigator_menu(op)
+            }
         }
     }
 

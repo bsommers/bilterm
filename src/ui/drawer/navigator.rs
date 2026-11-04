@@ -20,7 +20,8 @@ use crate::ui::visual_style::{
     apply_frosted_glass_surface, polish_glass_panel_rect, render_liquid_ambient_halo,
 };
 use crate::wm::agent_state::{AgentCounts, AgentState};
-use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, NavigatorLevel};
+use crate::vt::sanitize_display;
+use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, NavigatorLevel, NavigatorMenuEntry};
 use crate::wm::{DrawerLayoutMode, DrawerRow, DrawerRowKind, WindowManager, inset_window_frame};
 
 /// Computes `(header_rows, footer_rows, rows_per_item)` for the navigator layout: no header, an optional
@@ -314,6 +315,144 @@ fn footer_buttons_in(lay: &NavigatorLayout) -> Vec<NavigatorButton> {
         .collect()
 }
 
+/// Display columns of the `[+]` add button.
+const PLUS_COLS: u16 = 3;
+
+/// Title text of the navigator drawer frame.
+fn navigator_title(is_modern: bool) -> &'static str {
+    if is_modern { "◢ WORKSPACES" } else { "WORKSPACES" }
+}
+
+/// Columns (relative to the inner left edge) where the left text of a row ends and where its right-aligned
+/// rollup or state counts begin, mirroring exactly what [`render_navigator_drawer`] draws.
+fn row_extent(row: &DrawerRow, g: &NavigatorGlyphs, tick: usize, width: usize) -> (usize, usize) {
+    let (left, rollup) = row_parts(row, g);
+    let avail = width.saturating_sub(1);
+    let segments = row
+        .navigator
+        .as_ref()
+        .and_then(|m| m.counts.as_ref())
+        .map(|c| counts_segments(c, g, tick))
+        .unwrap_or_default();
+    if segments.is_empty() {
+        let rollup_w = rollup.as_ref().map_or(0, |r| r.width() + 1);
+        let rollup = rollup.filter(|_| width >= rollup_w + 6);
+        let left_w = avail.saturating_sub(if rollup.is_some() { rollup_w } else { 0 });
+        let right = rollup.map_or(width, |r| width - r.width());
+        (1 + fit_width(&left, left_w, g.ellipsis).width(), right)
+    } else {
+        let space = avail.saturating_sub(left.width() + 1);
+        let fitted = fit_segments(segments, space);
+        let total: usize = fitted.iter().map(|(_, t)| t.width()).sum::<usize>() + fitted.len().saturating_sub(1);
+        (1 + fit_width(&left, avail, g.ellipsis).width(), width - total.min(width))
+    }
+}
+
+/// `[+]` cells of the visible workspace and session rows: one gap column after the label, only where the
+/// button fits before the row's right-aligned rollup or counts (`x` is the first of `PLUS_COLS` cells).
+fn plus_cells_in(wm: &WindowManager, lay: &NavigatorLayout) -> Vec<NavigatorCell> {
+    let g = NavigatorGlyphs::for_pack(wm.config().glyphs);
+    let tick = wm.drawer().spinner_tick();
+    let width = usize::from(lay.inner.width);
+    let mut cells = Vec::new();
+    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
+        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+        if y >= lay.list_bottom {
+            break;
+        }
+        let is_session = row
+            .navigator
+            .as_ref()
+            .is_some_and(|m| matches!(m.level, NavigatorLevel::Workspace | NavigatorLevel::Session));
+        if !is_session {
+            continue;
+        }
+        let (left_end, right_start) = row_extent(row, &g, tick, width);
+        let col = left_end + 1;
+        // Keep one blank column before right-aligned content (none needed when the row has none).
+        let gap = usize::from(right_start < width);
+        if col + usize::from(PLUS_COLS) + gap <= right_start {
+            cells.push(NavigatorCell { x: lay.inner.x + col as u16, y, row_index });
+        }
+    }
+    cells
+}
+
+/// `[+]` buttons of the visible workspace and session rows: clicking one adds a window to that session.
+/// A row without room before its rollup or counts has no button.
+pub fn navigator_plus_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<NavigatorCell> {
+    let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
+        return Vec::new();
+    };
+    navigator_layout(wm, drawer_rect).map(|lay| plus_cells_in(wm, &lay)).unwrap_or_default()
+}
+
+/// Rect (3x1) of the header `[+]` button on the title row, right after the title text: clicking it creates
+/// a session. `None` when the title row has no room for it before the title-bar badges.
+pub fn navigator_header_plus(wm: &WindowManager, workspace_area: Rect) -> Option<Rect> {
+    let dr = wm.drawer_rect(workspace_area)?;
+    let title_w = navigator_title(wm.config().is_modern()).width() as u16;
+    let x = dr.x + 1 + title_w + 2 + 1;
+    let limit = if dr.width >= 24 {
+        let g = wm.config().glyph_set();
+        let badges = (g.minimize_badge.chars().count() + g.zoom_badge.chars().count() + g.close_badge.chars().count()) as u16;
+        (dr.x + dr.width).saturating_sub(badges + 2)
+    } else {
+        dr.x + dr.width.saturating_sub(1)
+    };
+    (dr.width >= 4 && x + PLUS_COLS <= limit).then(|| Rect::new(x, dr.y, PLUS_COLS, 1))
+}
+
+/// Placement of the open context menu: a title line (the selected row's name) followed by the entries.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NavigatorMenuLayout {
+    pub rect: Rect,
+    /// `(entry, screen row)` of every visible entry, in display order.
+    pub entries: Vec<(NavigatorMenuEntry, u16)>,
+}
+
+fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout) -> Option<NavigatorMenuLayout> {
+    let menu = wm.navigator_menu()?;
+    let inner = lay.inner;
+    let longest = NavigatorMenuEntry::ALL.iter().map(|e| e.label().width()).max().unwrap_or(0) as u16;
+    let w = (longest + 2).min(inner.width);
+    let h = (NavigatorMenuEntry::ALL.len() as u16 + 1).min(inner.height);
+    if w < 4 || h < 2 {
+        return None;
+    }
+    let (ax, ay) = menu.anchor().unwrap_or_else(|| {
+        let vis = lay.selected.saturating_sub(lay.scroll).min(lay.cap.saturating_sub(1));
+        (inner.x + 1, lay.list_y + (vis * lay.row_step) as u16)
+    });
+    let x = ax.clamp(inner.x, inner.x + inner.width - w);
+    let bottom = inner.y + inner.height;
+    let below = ay.saturating_add(1);
+    let y = if below + h <= bottom { below.max(inner.y) } else { bottom.saturating_sub(h).max(inner.y) };
+    let entries = NavigatorMenuEntry::ALL
+        .iter()
+        .take(usize::from(h - 1))
+        .enumerate()
+        .map(|(i, &e)| (e, y + 1 + i as u16))
+        .collect();
+    Some(NavigatorMenuLayout { rect: Rect::new(x, y, w, h), entries })
+}
+
+/// Placement of the open context menu; `None` when no menu is open or the drawer is too small for it.
+pub fn navigator_menu_layout(wm: &WindowManager, workspace_area: Rect) -> Option<NavigatorMenuLayout> {
+    let drawer_rect = wm.drawer_rect(workspace_area)?;
+    let lay = navigator_layout(wm, drawer_rect)?;
+    menu_layout_in(wm, &lay)
+}
+
+/// Index into [`NavigatorMenuEntry::ALL`] of the menu entry under `(col, row)`.
+pub fn navigator_menu_entry_at(wm: &WindowManager, workspace_area: Rect, col: u16, row: u16) -> Option<usize> {
+    let menu = navigator_menu_layout(wm, workspace_area)?;
+    if col < menu.rect.x || col >= menu.rect.x + menu.rect.width {
+        return None;
+    }
+    menu.entries.iter().find(|&&(_, y)| y == row).and_then(|&(e, _)| NavigatorMenuEntry::ALL.iter().position(|&a| a == e))
+}
+
 /// Index into [`WindowManager::drawer_rows`] of the list row under screen cell `(col, row)`, `None` outside
 /// the rendered list rows. Uses the same layout as [`render_navigator_drawer`].
 pub fn navigator_row_at(wm: &WindowManager, workspace_area: Rect, col: u16, row: u16) -> Option<usize> {
@@ -405,7 +544,7 @@ pub fn render_navigator_drawer(
         apply_frosted_glass_surface(buf, drawer_rect, palette.window_frame_bg, palette);
     }
 
-    let title = if is_modern { "◢ WORKSPACES" } else { "WORKSPACES" };
+    let title = navigator_title(is_modern);
     render_borland_frame_styled(
         drawer_rect,
         title,
@@ -420,6 +559,8 @@ pub fn render_navigator_drawer(
         return;
     };
     let buttons = footer_buttons_in(&lay);
+    let plus_cells = plus_cells_in(wm, &lay);
+    let menu_layout = menu_layout_in(wm, &lay);
     let NavigatorLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step, .. } = lay;
     let base_style = Style::default()
         .fg(palette.text_fg.unwrap_or(palette.inactive_border_fg))
@@ -456,6 +597,7 @@ pub fn render_navigator_drawer(
         }
         let marker = if row.is_focused_pane { hg.current } else { " " };
         let (left, rollup) = row_parts(row, &hg);
+        let plus = plus_cells.iter().find(|c| c.row_index == row_idx);
         let width = usize::from(inner.width);
         let avail = width.saturating_sub(1);
         let segments = row
@@ -489,6 +631,9 @@ pub fn render_navigator_drawer(
                 x += text.width() as u16 + 1;
             }
         }
+        if let Some(c) = plus {
+            write_clipped_line(buf, c.x, y, PLUS_COLS, "[+]", style);
+        }
     }
 
     for cell in navigator_dot_cells(wm, workspace_area) {
@@ -512,6 +657,24 @@ pub fn render_navigator_drawer(
         for b in &buttons {
             let mut tmp = [0u8; 4];
             write_clipped_line(buf, b.x, b.y, 1, b.kind.label().encode_utf8(&mut tmp), label_style);
+        }
+    }
+
+    if let Some(r) = navigator_header_plus(wm, workspace_area) {
+        let st = Style::default().fg(palette.title_fg).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD);
+        write_clipped_line(buf, r.x, r.y, r.width, "[+]", st);
+    }
+
+    if let Some(menu) = menu_layout {
+        let body = Style::default().fg(palette.window_frame_bg).bg(palette.title_fg);
+        fill_rect(buf, menu.rect, body);
+        let w = usize::from(menu.rect.width);
+        let name = rows.get(selected).map(|r| sanitize_display(&r.title, 64)).unwrap_or_default();
+        let head = fit_width(&format!(" {name}"), w, hg.ellipsis);
+        write_clipped_line(buf, menu.rect.x, menu.rect.y, menu.rect.width, &head, body.add_modifier(Modifier::BOLD));
+        for (entry, y) in &menu.entries {
+            let line = fit_width(&format!(" {}", entry.label()), w, hg.ellipsis);
+            write_clipped_line(buf, menu.rect.x, *y, menu.rect.width, &line, body);
         }
     }
 

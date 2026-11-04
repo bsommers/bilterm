@@ -18,8 +18,10 @@ use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
 pub mod navigator;
 pub mod nav;
+pub mod menu;
 pub use navigator::{DrawerStyle, NavigatorLevel, NavigatorRowMeta};
 pub use nav::DrawerNavOp;
+pub use menu::{NavigatorMenu, NavigatorMenuEntry};
 
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
 pub const BRAILLE_SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -209,6 +211,8 @@ pub struct WorkspaceDrawer {
     /// Wheel-set viewport `(selected_index it was set for, first visible row)`; ignored once the selection moves.
     pub view_scroll: Option<(usize, usize)>,
     pub resizing_drag: bool,
+    /// Open navigator right-click menu (Phase 50-15); changed only through `DrawerNavOp::Menu*`.
+    nav_menu: Option<NavigatorMenu>,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
@@ -217,6 +221,11 @@ pub struct WorkspaceDrawer {
 impl WorkspaceDrawer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// `true` while the navigator right-click menu is open (raw state; see `WindowManager::navigator_menu`).
+    pub fn navigator_menu_open(&self) -> bool {
+        self.nav_menu.is_some()
     }
 
     /// First visible row: a wheel-set viewport while the selection is unchanged, else pinned to keep `selected` visible.
@@ -608,6 +617,7 @@ impl WindowManager {
         if self.is_drawer_effectively_visible() && (self.drawer.open || self.drawer.focused) {
             self.drawer.open = false;
             self.drawer.focused = false;
+            self.drawer.nav_menu = None;
             self.drawer.hover_active = false;
             self.drawer.maximized = false;
             if self.config.drawer.visibility == DrawerVisibilityMode::Fixed {
@@ -630,6 +640,7 @@ impl WindowManager {
 
     pub fn close_drawer(&mut self) {
         self.drawer.focused = false;
+        self.drawer.nav_menu = None;
         self.drawer.maximized = false;
         if self.config.drawer.visibility != DrawerVisibilityMode::Fixed {
             self.drawer.open = false;

@@ -717,6 +717,7 @@ pub(super) fn handle_drawer_mouse_event(
     }
 
     let dr = wm.drawer_rect(workspace_area)?;
+    super::drawer_navigator::navigator_menu_click_away(wm, &mouse, dr);
     if !rect_contains(dr, mouse.column, mouse.row) {
         if matches!(mouse.kind, MouseEventKind::Down(_)) && wm.drawer().focused {
             wm.drawer_mut().focused = false;

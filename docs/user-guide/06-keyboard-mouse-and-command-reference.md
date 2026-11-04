@@ -171,6 +171,12 @@
 | **`Alt + LeftClick + Drag` over `OutputCanvas`** | **2D Rectangular Block Selection**: Drag-select a rectangular region on the canvas (even inside `RawPtyPassthrough` apps); keeps highlight visible on release and yanks the block to the system/OSC 52 clipboard (or plain `LeftDrag` when `:rect mode on` is active) |
 | **`Ctrl + LeftClick` on `OutputCanvas` URL / `OSC 8` link** | Copy URL to clipboard via `OSC 52` (`:links`) |
 | **Click Bottom DOS Function-Key Bar (`F1 Help` .. `F12 Raw`)** | Execute the clicked function-key action immediately |
+| **Navigator drawer: click a row** | Select and focus that row's pane (`:drawer row <n>` then `:drawer enter`) |
+| **Navigator drawer: click a fold marker (`▾` / `▸`, ASCII `-` / `+`)** | Fold or unfold that workspace or session (`:drawer fold`) |
+| **Navigator drawer: click `[+]` after a session or workspace name** | Add a window to that session (key `a`); the `[+]` beside the `WORKSPACES` title creates a session (key `N`) |
+| **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
+| **Navigator drawer: footer buttons `* ! N + r x @`** | Pin, jump to attention, new session, new pane, rename, close the selected pane, open the agent traffic window on it; each is the key of the same character (buttons that do not fit are dropped from the right) |
+| **Navigator drawer: title badges, wheel, edge drag** | Minimize / maximize / close; wheel moves the selection by 3 rows; dragging the edge resizes `navigator_width_cols`; `Ctrl + wheel` scales the drawer on the GUI surface |
 
 ---
 
@@ -283,6 +289,7 @@
 | `PageUp` / `PageDown` | `:drawer scroll -5`, `:drawer scroll 5` | Move the selection by five rows |
 | `{` / `}` | `:drawer widen -2`, `:drawer widen 2` | Narrow or widen the drawer (`navigator_width_cols`) |
 | (mouse click) | `:drawer row <n>` | Select row `n` (1-based) |
+| (mouse right-click) | `:drawer menu`, `:drawer menu close`, `:drawer menu pick <n>` | Open, dismiss, or run an entry of the row context menu (entries apply `N`, `a`, `A` (horizontal and vertical), `r` and `x`) |
 
 `:navigator` is an alias of `:drawer` for the Navigator tree (`:navigator expand all`, `:navigator collapse all`, `:navigator style classic`). `:drawer expand` without `all` keeps its older meaning (maximize the drawer).
 

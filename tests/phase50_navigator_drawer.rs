@@ -824,6 +824,10 @@ fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
         DrawerNavOp::AddWindow(Some(session)) => format!(":drawer add window {session}"),
         DrawerNavOp::AddPane(SplitDirection::Horizontal) => ":drawer add pane h".into(),
         DrawerNavOp::AddPane(SplitDirection::Vertical) => ":drawer add pane v".into(),
+        DrawerNavOp::MenuOpen(None) => ":drawer menu".into(),
+        DrawerNavOp::MenuOpen(Some((x, y))) => format!(":drawer menu {x} {y}"),
+        DrawerNavOp::MenuClose => ":drawer menu close".into(),
+        DrawerNavOp::MenuPick(i) => format!(":drawer menu pick {}", i + 1),
     }
 }
 
@@ -851,6 +855,10 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
         DrawerNavOp::AddWindow(Some("other".into())),
         DrawerNavOp::AddPane(SplitDirection::Horizontal),
         DrawerNavOp::AddPane(SplitDirection::Vertical),
+        DrawerNavOp::MenuOpen(None),
+        DrawerNavOp::MenuOpen(Some((4, 7))),
+        DrawerNavOp::MenuClose,
+        DrawerNavOp::MenuPick(1),
     ]
 }
 
@@ -1469,6 +1477,7 @@ fn mouse_non_button_cells_create_nothing() {
         let buttons = navigator_footer_buttons(&wm, area);
         let footer = buttons[0].y;
         let markers = navigator_fold_marker_cells(&wm, area);
+        let plus = bilterm::ui::drawer::navigator::navigator_plus_cells(&wm, area);
         let before = observe(&wm);
         let vis = wm.drawer_config().visibility;
         for x in dr.x + 1..dr.x + dr.width - 1 {
@@ -1476,7 +1485,8 @@ fn mouse_non_button_cells_create_nothing() {
             if !on_button {
                 click_at(&mut wm, area, x, footer);
             }
-            let on_marker = markers.iter().any(|m| m.x == x && m.y == dr.y + 1);
+            let on_marker = markers.iter().any(|m| m.x == x && m.y == dr.y + 1)
+                || plus.iter().any(|c| x >= c.x && x < c.x + 3 && c.y == dr.y + 1);
             if !on_marker {
                 // Header-ish first inner row: only the row label itself selects; nothing is created.
                 let (panes, sessions) = (wm.pane_count(), wm.list_sessions().len());
@@ -1663,4 +1673,258 @@ fn parity_navigator_key_and_mouse_paths_match() {
     parity("close", &nothing, &|wm| ch(wm, 'x'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Close));
     parity("pin", &nothing, &|wm| ch(wm, '*'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Pin));
     // Key-only ops with no mouse requirement: E / C (expand / collapse all) have key and colon twins only.
+}
+
+// ---- Task 4: right-click context menu and [+] buttons ----
+
+use bilterm::ui::drawer::navigator::{
+    navigator_header_plus, navigator_menu_entry_at, navigator_menu_layout, navigator_plus_cells,
+};
+use bilterm::wm::drawer::NavigatorMenuEntry;
+
+fn right_click_at(wm: &mut WindowManager, area: Rect, col: u16, row: u16) {
+    handle_wm_mouse_event(wm, mouse_ev(MouseEventKind::Down(MouseButton::Right), col, row, KeyModifiers::NONE), area)
+        .unwrap();
+}
+
+/// Any cell of the list row of `kind` (two columns in, clear of the fold marker).
+fn cell_of_row(wm: &WindowManager, area: Rect, kind: &DrawerRowKind) -> (u16, u16) {
+    let idx = row_of(wm, kind);
+    let (x, y) = (0..area.width)
+        .flat_map(|x| (0..area.height).map(move |y| (x, y)))
+        .find(|&(x, y)| navigator_row_at(wm, area, x, y) == Some(idx))
+        .expect("row has a cell");
+    (x + 4, y)
+}
+
+fn menu_entry_cell(wm: &WindowManager, area: Rect, entry: NavigatorMenuEntry) -> (u16, u16) {
+    let menu = navigator_menu_layout(wm, area).expect("menu open");
+    let y = menu.entries.iter().find(|(e, _)| *e == entry).expect("entry shown").1;
+    (menu.rect.x + 2, y)
+}
+
+#[test]
+fn rclick_row_opens_menu_and_entries_match_key_twins() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        assert!(navigator_menu_layout(&wm, area).is_none());
+        let (x, y) = cell_of_row(&wm, area, &DrawerRowKind::Pane(2));
+        right_click_at(&mut wm, area, x, y);
+        let menu = navigator_menu_layout(&wm, area).expect("right-click opens the menu");
+        assert_eq!(wm.selected_drawer_pane_id(), Some(2), "right-click selects the row");
+        assert_eq!(menu.entries.len(), 6);
+        let dr = wm.drawer_rect(area).unwrap();
+        assert!(menu.rect.x > dr.x && menu.rect.x + menu.rect.width < dr.x + dr.width);
+        assert!(menu.rect.y > dr.y && menu.rect.y + menu.rect.height < dr.y + dr.height);
+        let text = buffer_lines(&render(&wm, area)).join("\n");
+        for e in NavigatorMenuEntry::ALL {
+            assert!(text.contains(e.label()), "menu entry `{}` not rendered:\n{text}", e.label());
+        }
+    });
+    type Key = fn(&mut WindowManager);
+    let twins: [(NavigatorMenuEntry, Key); 5] = [
+        (NavigatorMenuEntry::NewSession, |wm| ch(wm, 'N')),
+        (NavigatorMenuEntry::NewWindow, |wm| ch(wm, 'a')),
+        (NavigatorMenuEntry::SplitHorizontal, |wm| press_mod(wm, KeyCode::Char('A'), KeyModifiers::SHIFT)),
+        (NavigatorMenuEntry::Rename, |wm| ch(wm, 'r')),
+        (NavigatorMenuEntry::Close, |wm| ch(wm, 'x')),
+    ];
+    for (entry, key) in twins {
+        let by_key = with_temp_xdg(|| {
+            let (mut wm, area) = open_navigator(100, 30);
+            wm.drawer_mut().selected_index = row_of(&wm, &DrawerRowKind::Pane(2));
+            let _ = area;
+            key(&mut wm);
+            observe(&wm)
+        });
+        let by_menu = with_temp_xdg(|| {
+            let (mut wm, area) = open_navigator(100, 30);
+            let (x, y) = cell_of_row(&wm, area, &DrawerRowKind::Pane(2));
+            right_click_at(&mut wm, area, x, y);
+            let (ex, ey) = menu_entry_cell(&wm, area, entry);
+            click_at(&mut wm, area, ex, ey);
+            assert!(navigator_menu_layout(&wm, area).is_none(), "picking closes the menu");
+            observe(&wm)
+        });
+        assert_eq!(by_key, by_menu, "menu entry {entry:?}");
+    }
+    // Split vertical has no single-key twin on `A`; it equals the colon twin.
+    let by_colon = with_temp_xdg(|| {
+        let (mut wm, _a) = open_navigator(100, 30);
+        wm.drawer_mut().selected_index = row_of(&wm, &DrawerRowKind::Pane(2));
+        run_colon(&mut wm, ":drawer add pane v");
+        observe(&wm)
+    });
+    let by_menu = with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        let (x, y) = cell_of_row(&wm, area, &DrawerRowKind::Pane(2));
+        right_click_at(&mut wm, area, x, y);
+        let (ex, ey) = menu_entry_cell(&wm, area, NavigatorMenuEntry::SplitVertical);
+        click_at(&mut wm, area, ex, ey);
+        observe(&wm)
+    });
+    assert_eq!(by_colon, by_menu);
+}
+
+#[test]
+fn rclick_menu_colon_twins_match_mouse() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        run_colon(&mut wm, ":drawer menu");
+        assert!(navigator_menu_layout(&wm, area).is_some());
+        run_colon(&mut wm, ":drawer menu close");
+        assert!(navigator_menu_layout(&wm, area).is_none());
+        run_colon(&mut wm, ":drawer menu 6 4");
+        let menu = navigator_menu_layout(&wm, area).unwrap();
+        assert_eq!(menu.rect.x, 6);
+        wm.drawer_mut().selected_index = row_of(&wm, &DrawerRowKind::Pane(2));
+        let before = wm.pane_count();
+        run_colon(&mut wm, ":drawer menu pick 6");
+        assert_eq!(wm.pane_count(), before - 1, "entry 6 is Close");
+        assert!(navigator_menu_layout(&wm, area).is_none());
+        for bad in [":drawer menu pick", ":drawer menu pick 0", ":drawer menu x", ":drawer menu 1 2 3"] {
+            assert!(parse_colon_command(bad).unwrap().is_err(), "{bad} must be a usage error");
+        }
+    });
+}
+
+#[test]
+fn rclick_esc_and_click_away_close_menu() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        let (x, y) = cell_of_row(&wm, area, &DrawerRowKind::Pane(1));
+        right_click_at(&mut wm, area, x, y);
+        assert!(navigator_menu_layout(&wm, area).is_some());
+        press(&mut wm, KeyCode::Esc);
+        assert!(navigator_menu_layout(&wm, area).is_none(), "Esc closes the menu");
+        assert_eq!(wm.pane_count(), 2);
+
+        right_click_at(&mut wm, area, x, y);
+        click_at(&mut wm, area, 90, 20);
+        assert!(navigator_menu_layout(&wm, area).is_none(), "click outside the drawer closes the menu");
+
+        right_click_at(&mut wm, area, x, y);
+        let menu = navigator_menu_layout(&wm, area).unwrap();
+        assert!(navigator_menu_entry_at(&wm, area, menu.rect.x, menu.rect.y).is_none(), "the title line is no entry");
+        let dr = wm.drawer_rect(area).unwrap();
+        click_at(&mut wm, area, dr.x + 2, dr.y + dr.height - 3);
+        assert!(navigator_menu_layout(&wm, area).is_none(), "click on the drawer away from the menu closes it");
+        assert_eq!(wm.pane_count(), 2, "dismissing creates nothing");
+    });
+}
+
+#[test]
+fn rclick_elsewhere_still_pastes() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        // Pre-seed the yank buffer so a paste has content even without a system clipboard.
+        wm.pane_mut(2).unwrap().record_yank("PASTED");
+        wm.pane_mut(1).unwrap().record_yank("PASTED");
+        let dr = wm.drawer_rect(area).unwrap();
+        let (x, y) = (dr.x + dr.width + 10, 5);
+        right_click_at(&mut wm, area, x, y);
+        assert!(navigator_menu_layout(&wm, area).is_none(), "outside the drawer no menu opens");
+        assert!(
+            !wm.active_pane().prompt().text().is_empty(),
+            "right-click outside the navigator pastes into the pane"
+        );
+    });
+}
+
+#[test]
+fn rclick_menu_text_is_sanitized_and_clipped() {
+    with_temp_xdg(|| {
+        // A 24-column workspace caps the drawer at 12 columns: the menu must shrink to the drawer.
+        let (mut wm, area) = navigator_wm(24, 30);
+        wm.pane_mut(1).unwrap().set_title("ev\u{202E}il\u{009B}title");
+        wm.toggle_drawer();
+        let before = render(&wm, area);
+        let dr = wm.drawer_rect(area).unwrap();
+        // Anchor in the bottom-right corner of the drawer to force clamping on both axes.
+        run_colon(&mut wm, &format!(":drawer menu {} {}", dr.x + dr.width - 2, dr.y + dr.height - 2));
+        let menu = navigator_menu_layout(&wm, area).expect("menu fits the small drawer");
+        assert!(menu.rect.x > dr.x && menu.rect.x + menu.rect.width < dr.x + dr.width, "{menu:?} vs {dr:?}");
+        assert!(menu.rect.y > dr.y && menu.rect.y + menu.rect.height < dr.y + dr.height, "{menu:?} vs {dr:?}");
+        let after = render(&wm, area);
+        for yy in 0..area.height {
+            for xx in 0..area.width {
+                let inside = xx >= dr.x && xx < dr.x + dr.width && yy >= dr.y && yy < dr.y + dr.height;
+                if !inside {
+                    assert_eq!(before[(xx, yy)], after[(xx, yy)], "menu drew outside the drawer at ({xx},{yy})");
+                }
+            }
+        }
+        let text = buffer_lines(&after).join("\n");
+        assert!(!text.contains('\u{202E}') && !text.contains('\u{009B}'), "control characters reached the menu");
+    });
+}
+
+#[test]
+fn rclick_classic_unaffected() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        wm.toggle_drawer();
+        let dr = wm.drawer_rect(area).unwrap();
+        right_click_at(&mut wm, area, dr.x + 4, dr.y + 4);
+        assert!(navigator_menu_layout(&wm, area).is_none());
+        assert!(wm.navigator_menu().is_none());
+        assert!(navigator_plus_cells(&wm, area).is_empty(), "classic rows get no [+] cells");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
+    });
+}
+
+#[test]
+fn plus_session_row_button_adds_window_like_key_a() {
+    let by_key = with_temp_xdg(|| {
+        let (mut wm, _a) = two_sessions();
+        wm.drawer_mut().selected_index = row_of(&wm, &session("other"));
+        ch(&mut wm, 'a');
+        observe(&wm)
+    });
+    let by_mouse = with_temp_xdg(|| {
+        let (mut wm, area) = two_sessions();
+        let idx = row_of(&wm, &session("other"));
+        let cell = navigator_plus_cells(&wm, area).into_iter().find(|c| c.row_index == idx).expect("[+] on the session row");
+        let lines = buffer_lines(&render(&wm, area));
+        assert_eq!(&lines[usize::from(cell.y)].chars().skip(usize::from(cell.x)).take(3).collect::<String>(), "[+]");
+        click_at(&mut wm, area, cell.x + 1, cell.y);
+        assert_eq!(wm.config().history_session, "other");
+        observe(&wm)
+    });
+    assert_eq!(by_key, by_mouse);
+}
+
+#[test]
+fn plus_header_button_creates_session_like_key_n() {
+    let by_key = with_temp_xdg(|| {
+        let (mut wm, _a) = open_navigator(100, 30);
+        ch(&mut wm, 'N');
+        observe(&wm)
+    });
+    let by_mouse = with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        let r = navigator_header_plus(&wm, area).expect("header [+] fits a 28-column drawer");
+        let lines = buffer_lines(&render(&wm, area));
+        assert_eq!(&lines[usize::from(r.y)].chars().skip(usize::from(r.x)).take(3).collect::<String>(), "[+]");
+        click_at(&mut wm, area, r.x + 1, r.y);
+        observe(&wm)
+    });
+    assert_eq!(by_key, by_mouse);
+}
+
+#[test]
+fn plus_buttons_only_where_they_fit() {
+    with_temp_xdg(|| {
+        // Counts fill a narrow row: the button is dropped rather than overlapping them.
+        let (mut wm, area) = navigator_wm(24, 30);
+        wm.toggle_drawer();
+        with_states(&mut wm, &[(1, Some(AgentState::Blocked)), (2, Some(AgentState::Working))]);
+        let dr = wm.drawer_rect(area).unwrap();
+        for c in navigator_plus_cells(&wm, area) {
+            assert!(c.x + 3 < dr.x + dr.width, "[+] stays inside the drawer: {c:?}");
+        }
+        if let Some(r) = navigator_header_plus(&wm, area) {
+            assert!(r.x + r.width < dr.x + dr.width);
+        }
+    });
 }

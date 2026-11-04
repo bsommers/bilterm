@@ -637,7 +637,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
 }
 
 /// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
-/// new-pane|rename|close-pane`); `None` for every other verb. `:drawer close` stays the classic minimize.
+/// new-pane|rename|close-pane|menu`); `None` for every other verb. `:drawer close` stays the classic minimize.
 fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     use crate::wm::drawer::DrawerNavOp as Op;
     let num = |usage: &str| -> Result<i16, String> {
@@ -674,6 +674,19 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
             }
             (Some("pane"), Some("v" | "vertical"), 4) => Op::AddPane(crate::wm::SplitDirection::Vertical),
             _ => return Some(Err("Usage: :navigator add window [session] | add pane [h|v]".to_string())),
+        },
+        "menu" => match (parts.get(2).copied(), parts.get(3).copied(), parts.len()) {
+            (None, _, 2) => Op::MenuOpen(None),
+            (Some("close"), None, 3) => Op::MenuClose,
+            (Some("pick"), Some(n), 4) => match n.parse::<usize>().ok().filter(|&n| n >= 1) {
+                Some(n) => Op::MenuPick(n - 1),
+                None => return Some(Err("Usage: :drawer menu pick <n>".to_string())),
+            },
+            (Some(x), Some(y), 4) => match (x.parse::<u16>(), y.parse::<u16>()) {
+                (Ok(x), Ok(y)) => Op::MenuOpen(Some((x, y))),
+                _ => return Some(Err("Usage: :drawer menu [<x> <y> | close | pick <n>]".to_string())),
+            },
+            _ => return Some(Err("Usage: :drawer menu [<x> <y> | close | pick <n>]".to_string())),
         },
         "new-session" => Op::NewSession,
         "new-pane" | "new-window" => Op::NewPane,
