@@ -879,6 +879,12 @@ impl WindowManager {
         }
     }
 
+    /// `true` when the window owns the keyboard AND is actually drawn. A window hidden by a tiny
+    /// workspace (below the minimum size) must not swallow keys the user cannot see it handle (WR-01).
+    pub fn agents_window_captures_input(&self) -> bool {
+        self.agents_window.captures_input() && self.agents_window_rect(self.agents_workspace()).is_some()
+    }
+
     /// Rows available for conversation lines (0 when the window is not visible).
     fn snoop_view_rows(&self) -> usize {
         let ws = self.agents_workspace();

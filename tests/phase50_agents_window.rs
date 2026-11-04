@@ -2199,6 +2199,22 @@ fn geometry_setters_use_scaled_virtual_workspace() {
     assert!(r.x + r.width <= vws.width && r.y + r.height <= vws.height, "{r:?} within {vws:?}");
 }
 
+/// WR-01: a window hidden by a tiny workspace does not swallow the keyboard or pastes.
+#[test]
+fn invisible_window_does_not_capture_input() {
+    let (mut wm, _) = fixture(120, 40);
+    wm.open_agents_window(None);
+    assert!(wm.agents_window_captures_input());
+    wm.resize_all(Rect::new(0, 0, 20, 8)).unwrap();
+    assert!(wm.agents_window().active, "still open, just not drawn");
+    assert!(!wm.agents_window_captures_input(), "invisible window must not capture");
+    let before = prompts(&wm);
+    bilterm::input::handle_wm_paste_event(&mut wm, "hello").unwrap();
+    assert_ne!(prompts(&wm), before, "paste reaches the pane while the window is invisible");
+    wm.resize_all(Rect::new(0, 0, 120, 40)).unwrap();
+    assert!(wm.agents_window_captures_input());
+}
+
 /// CR-01: a paste while the window owns the keyboard never reaches the pane beneath.
 #[test]
 fn paste_while_window_captures_input_never_reaches_pane() {

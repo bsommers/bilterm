@@ -331,7 +331,7 @@ pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    if wm.agents_window().captures_input()
+    if wm.agents_window_captures_input()
         && !wm.is_leader_pending()
         && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
     {
