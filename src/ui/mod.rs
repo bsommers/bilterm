@@ -1,3 +1,4 @@
+pub mod agents_gui;
 pub mod agents_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;

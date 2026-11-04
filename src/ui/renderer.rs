@@ -539,6 +539,11 @@ impl GuiWorkspaceRenderer {
             .is_quick_terminal_visible()
             .then(|| wm.quick_terminal().overlay_rect(ws_area));
 
+        // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
+        // run before cells become quads and glyphs.
+        let gui_tick = wm.drawer().spinner_tick() as u64;
+        crate::ui::agents_gui::push_agents_gui_textures(wm, ws_area, viewport, eff_cw, eff_ch, &mut cell_buf, surface, gui_tick);
+
         let is_overlay_cell = |abs_c: u16, abs_r: u16| -> bool {
             !crate::wm::rect_contains(ws_area, abs_c, abs_r)
                 || drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
@@ -812,6 +817,8 @@ impl GuiWorkspaceRenderer {
                 });
             }
         }
+        // Agents textures stay above pane canvases (stable: relative order is kept).
+        surface.images.sort_by_key(|img| crate::ui::agents_gui::is_agents_texture(img.id));
     }
 }
 

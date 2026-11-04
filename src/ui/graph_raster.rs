@@ -189,8 +189,10 @@ pub fn label_cell(node: &SceneNode, rect: Rect) -> Option<(u16, u16, String)> {
     Some((x, cy, text))
 }
 
-/// Terminal sink: clears `rect`, writes node labels, then flushes the braille graph around them.
-pub fn render_graph_tui(scene: &GraphScene, rect: Rect, buf: &mut Buffer, palette: &ThemePalette) {
+/// Clears `rect` to spaces on the window background and writes the node labels, selected nodes
+/// reversed and bold. Shared by the terminal sink and the GUI texture pass, so both show the same
+/// text; the GUI then draws the graph itself underneath as pixels.
+pub fn render_graph_labels(scene: &GraphScene, rect: Rect, buf: &mut Buffer, palette: &ThemePalette) {
     let rect = rect.intersection(buf.area);
     if rect.width == 0 || rect.height == 0 {
         return;
@@ -220,10 +222,70 @@ pub fn render_graph_tui(scene: &GraphScene, rect: Rect, buf: &mut Buffer, palett
         }
         buf.set_stringn(rect.x + lx, rect.y + ly, &text, usize::from(rect.width - lx), style);
     }
+}
 
+/// Terminal sink: clears `rect`, writes node labels, then flushes the braille graph around them.
+pub fn render_graph_tui(scene: &GraphScene, rect: Rect, buf: &mut Buffer, palette: &ThemePalette) {
+    let rect = rect.intersection(buf.area);
+    if rect.width == 0 || rect.height == 0 {
+        return;
+    }
+    render_graph_labels(scene, rect, buf, palette);
+    let colours = GraphColours::from_palette(palette);
     let bg = [colours.bg.0, colours.bg.1, colours.bg.2, 0];
     let mut canvas =
         PixelCanvasBuffer::new(u32::from(rect.width) * 2, u32::from(rect.height) * 4, bg);
     draw_agent_graph(&mut canvas, scene, &colours, 0);
     canvas.flush_truecolor_subcells_to_ratatui(CanvasSubcellMode::Braille, rect, buf);
+}
+
+/// Node centre in canvas pixels for a graph pane of `cell` pixels per terminal cell.
+///
+/// Same layout as the braille path ([`node_px`] on a 2x4 sub-cell grid) scaled to the canvas, so a
+/// node sits directly above its [`label_cell`] in both renderers.
+pub fn node_px_hires(pos: (f32, f32), canvas_w: f32, canvas_h: f32, cell: (f32, f32)) -> (f32, f32) {
+    let cols = (canvas_w / cell.0.max(1.0)).round().max(1.0);
+    let rows = (canvas_h / cell.1.max(1.0)).round().max(1.0);
+    let (bx, by) = node_px(pos, cols * 2.0, rows * 4.0);
+    (bx * canvas_w / (cols * 2.0), by * canvas_h / (rows * 4.0))
+}
+
+/// Node radius in canvas pixels for a cell of `cell` pixels.
+fn node_radius_hires(cell: (f32, f32), selected: bool) -> f32 {
+    (cell.0 * 0.45).max(3.0) + if selected { 1.0 } else { 0.0 }
+}
+
+/// High-resolution GUI drawing of the graph onto an opaque canvas (D-10).
+///
+/// `cell` is the pixel size of one terminal cell (hi-DPI aware); `tick` is the animation tick, `0`
+/// being the deterministic static frame. Labels are not drawn: they stay crisp cell glyphs on top.
+pub fn draw_agent_graph_hires(
+    canvas: &mut PixelCanvasBuffer,
+    scene: &GraphScene,
+    colours: &GraphColours,
+    tick: u64,
+    cell: (f32, f32),
+) {
+    let _ = tick;
+    let (w, h) = (canvas.width as f32, canvas.height as f32);
+    let px_of = |key: &crate::wm::agents_window::NodeKey| {
+        scene
+            .nodes
+            .iter()
+            .find(|n| &n.key == key)
+            .map(|n| node_px_hires(n.pos, w, h, cell))
+    };
+    let mut ordered: Vec<&SceneEdge> = scene.edges.iter().collect();
+    ordered.sort_by_key(|e| e.selected);
+    for edge in ordered {
+        let (Some(a), Some(b)) = (px_of(&edge.from), px_of(&edge.to)) else {
+            continue;
+        };
+        canvas.draw_line_aa(a.0, a.1, b.0, b.1, edge_rgb(edge, colours), 1.0);
+    }
+    for node in &scene.nodes {
+        let (x, y) = node_px_hires(node.pos, w, h, cell);
+        let r = node_radius_hires(cell, node.selected);
+        canvas.draw_circle_aa(x, y, r, true, colours.state_rgb(node.state));
+    }
 }
