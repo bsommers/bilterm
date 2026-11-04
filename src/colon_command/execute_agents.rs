@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use crate::api::JsonValue;
 use crate::wm::WindowManager;
 use crate::wm::agents_cmd::{AgentsOp, SnoopFilterOp};
-use crate::wm::agents_window::{WindowPane, key_label};
+use crate::wm::agents_window::{ComposeGate, WindowPane, key_label};
 
 /// Window over which `:agents list` reports a pane's recent communication partners.
 const PARTNER_WINDOW: Duration = Duration::from_secs(60);
@@ -41,6 +41,10 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
         AgentsOp::Copy => match wm.copy_selected_snoop() {
             Some(_) => status(wm, "Copied the selected conversation line".to_string()),
             None => status(wm, "Nothing to copy".to_string()),
+        },
+        // No text, no pane write, no bus event: the gate is closed in Phase 50 (D-09).
+        AgentsOp::ComposeSubmit => match wm.compose_gate() {
+            ComposeGate::Unavailable(_) => status(wm, "Agent messaging is not enabled (Phase 51)".to_string()),
         },
         AgentsOp::SnoopScroll(n) => wm.scroll_snoop(n),
         AgentsOp::Follow(mode) => wm.set_snoop_follow(mode),
@@ -154,7 +158,8 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
         | AgentsOp::SnoopScroll(_)
         | AgentsOp::Follow(_)
         | AgentsOp::Filter(_)
-        | AgentsOp::KeywordEdit(_) => {}
+        | AgentsOp::KeywordEdit(_)
+        | AgentsOp::ComposeSubmit => {}
     }
 }
 

@@ -182,6 +182,15 @@ fn press(wm: &mut WindowManager, button: MouseButton, hit: AgentsHit, mouse: Mou
 fn snoop_press(wm: &mut WindowManager, rects: &AgentsPaneRects, mouse: MouseEvent) {
     let lay = snoop_layout(wm, rects);
     let at = |r: Rect| rect_contains(r, mouse.column, mouse.row);
+    if at(lay.compose) {
+        if wm.agents_window().pane_focus != WindowPane::Compose {
+            run(wm, AgentsOp::FocusPane(Some(WindowPane::Compose)));
+        }
+        if at(lay.send) {
+            run(wm, AgentsOp::ComposeSubmit);
+        }
+        return;
+    }
     if wm.agents_window().pane_focus != WindowPane::Snoop {
         run(wm, AgentsOp::FocusPane(Some(WindowPane::Snoop)));
     }

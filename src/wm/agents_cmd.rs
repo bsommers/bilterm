@@ -68,6 +68,10 @@ pub enum AgentsOp {
     /// Keyword entry (`/` then typing): text-field editing; the committed form is
     /// `:agents filter text <kw>`.
     KeywordEdit(KeywordEdit),
+    /// Enter on the compose line or the `[send]` badge. Carries no text and has no colon form:
+    /// Phase 50 has no outward write path (D-09), so the executor only reports that agent
+    /// messaging is not enabled.
+    ComposeSubmit,
 }
 
 /// Which conversation filter a chip removes.

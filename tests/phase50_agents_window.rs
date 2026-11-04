@@ -577,6 +577,9 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         // Documented exemption: keyword entry is text-field editing; its committed form is
         // `:agents filter text <kw>` (covered by `Filter(Text)`).
         AgentsOp::KeywordEdit(_) => return None,
+        // Documented exemption: Phase 51 decides the command surface of the outward write path
+        // behind its permission gate (D-09); Phase 50 offers no way to submit over RPC/MCP.
+        AgentsOp::ComposeSubmit => return None,
     })
 }
 
@@ -658,7 +661,10 @@ fn window_keys_match_colon_forms() {
     for (scope, mods, code, action) in AGENTS_WINDOW_BINDINGS {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
         let Some(form) = agents_op_colon_form(op) else {
-            assert!(matches!(op, AgentsOp::KeywordEdit(_)), "{op:?} has no colon form and no exemption");
+            assert!(
+                matches!(op, AgentsOp::KeywordEdit(_) | AgentsOp::ComposeSubmit),
+                "{op:?} has no colon form and no exemption"
+            );
             continue;
         };
         let in_grab = *scope == bilterm::input::keymap::AgentsKeyScope::Grab;
@@ -764,8 +770,8 @@ fn agents_ops_have_colon_completion_and_help() {
     }
     for (_, _, _, action) in AGENTS_WINDOW_BINDINGS {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
-        if matches!(op, AgentsOp::KeywordEdit(_)) {
-            continue; // exempt: text-field editing, committed as `:agents filter text <kw>`
+        if matches!(op, AgentsOp::KeywordEdit(_) | AgentsOp::ComposeSubmit) {
+            continue; // exempt: text-field editing / the closed Phase 51 write path
         }
         assert!(samples.contains(op), "table op {op:?} is not covered by the sampled ops");
     }
@@ -2117,4 +2123,208 @@ fn snoop_edge_open_helper_filters_pair() {
         assert_eq!(wm.agents_window().pane_focus, WindowPane::Snoop);
         assert_eq!(seqs(&wm), vec![3]);
     });
+}
+
+// ---- Plan 50-10 Task 3: disabled compose line and parity ----
+
+fn pane_bytes(wm: &WindowManager) -> Vec<(usize, usize)> {
+    wm.panes().iter().map(|(id, p)| (*id, p.vt().total_bytes_processed())).collect()
+}
+
+fn prompts(wm: &WindowManager) -> Vec<String> {
+    wm.panes().values().map(|p| p.prompt().text()).collect()
+}
+
+fn status_of(wm: &WindowManager) -> Option<String> {
+    wm.active_pane().status_message().map(str::to_string)
+}
+
+#[test]
+fn compose_line_rendered_disabled() {
+    let (wm, area) = snoop_fixture();
+    let buf = render(&wm, area);
+    let rows = lines(&buf);
+    let compose = snoop_lay(&wm, area).compose;
+    assert!(compose.width > 0);
+    let line = &rows[usize::from(compose.y)];
+    assert!(line.contains("send as me"), "{line}");
+    assert!(line.contains("disabled"), "{line}");
+    assert!(line.contains("[send]"), "{line}");
+    assert!(line.find("send as me") < line.find("[send]"));
+    let lay = snoop_lay(&wm, area);
+    assert!(lay.lines.iter().all(|(y, _)| *y < compose.y), "the compose line is the last row");
+    // Muted: the disabled line does not use the primary text colour of the conversation lines.
+    let tokens = DesignTokens::from_palette(&bilterm::ui::theme::ThemePalette::default());
+    let sym_x = compose.x + 4;
+    assert_ne!(buf[(sym_x, compose.y)].fg, tokens.text_primary, "disabled style is muted");
+}
+
+#[test]
+fn compose_typing_sends_nothing() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = snoop_fixture();
+        let (bytes, prompt, seq) = (pane_bytes(&wm), prompts(&wm), wm.traffic().latest_seq());
+        ctrl_o(&mut wm);
+        ctrl_o(&mut wm);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Compose);
+        type_text(&mut wm, "hello");
+        assert!(!wm.agents_window().maximized, "`m` is swallowed, not a window key");
+        assert!(!wm.agents_window().pinned);
+        assert_eq!(status_of(&wm), None, "typing alone reports nothing");
+        press(&mut wm, KeyCode::Enter);
+        let status = status_of(&wm).expect("Enter reports");
+        assert!(status.contains("not enabled"), "{status}");
+        assert_eq!(pane_bytes(&wm), bytes, "no byte reached any pane");
+        assert_eq!(prompts(&wm), prompt, "no prompt text changed");
+        assert_eq!(wm.traffic().latest_seq(), seq, "nothing recorded on the bus");
+        assert!(wm.agents_window().active);
+    });
+}
+
+#[test]
+fn compose_send_badge_matches_enter() {
+    with_temp_xdg(|| {
+        let (mut by_enter, _) = snoop_fixture();
+        run_colon(&mut by_enter, ":agents focus compose");
+        press(&mut by_enter, KeyCode::Enter);
+        let (mut by_click, area) = snoop_fixture();
+        let bytes = pane_bytes(&by_click);
+        let send = snoop_lay(&by_click, area).send;
+        assert!(send.width > 0, "[send] fits at 120 columns");
+        click(&mut by_click, area, send.x + 1, send.y);
+        assert_eq!(status_of(&by_click), status_of(&by_enter));
+        assert!(status_of(&by_click).unwrap().contains("not enabled"));
+        assert_eq!(observe(&by_click), observe(&by_enter));
+        assert_eq!(pane_bytes(&by_click), bytes);
+        assert_eq!(by_click.traffic().latest_seq(), by_enter.traffic().latest_seq());
+        // A click elsewhere on the compose line only focuses it.
+        let (mut wm, area) = snoop_fixture();
+        let c = snoop_lay(&wm, area).compose;
+        click(&mut wm, area, c.x + 2, c.y);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Compose);
+        assert_eq!(status_of(&wm), None);
+    });
+}
+
+#[test]
+fn compose_gate_is_unavailable_in_phase50() {
+    let (wm, _) = snoop_fixture();
+    assert!(matches!(wm.compose_gate(), bilterm::wm::agents_window::ComposeGate::Unavailable(_)));
+}
+
+#[test]
+fn compose_not_reachable_over_rpc() {
+    with_temp_xdg(|| {
+        for cmd in [":agents send hi", ":agents compose hi", ":agents submit", ":agents compose"] {
+            let err = parse_colon_command(cmd).expect("an :agents command").expect_err(cmd);
+            assert!(err.starts_with("Usage:"), "{cmd}: {err}");
+        }
+        assert!(agents_op_colon_form(&AgentsOp::ComposeSubmit).is_none(), "ComposeSubmit has no colon form");
+        // Nothing the parser can produce is a ComposeSubmit.
+        for op in sample_ops() {
+            assert_ne!(op, AgentsOp::ComposeSubmit);
+        }
+    });
+}
+
+/// Everything a parity scenario compares.
+fn parity_state(wm: &WindowManager) -> (Observed, Vec<(usize, usize)>, Option<String>) {
+    (observe(wm), pane_bytes(wm), status_of(wm))
+}
+
+#[test]
+fn parity_snoop_key_mouse_colon_match() {
+    type Act = Box<dyn Fn(&mut WindowManager, Rect)>;
+    struct Scenario {
+        name: &'static str,
+        long: bool,
+        prep: &'static [&'static str],
+        key: Act,
+        mouse: Option<Act>,
+        colon: Option<&'static str>,
+    }
+    let k = |code: KeyCode| -> Act { Box::new(move |wm, _| press(wm, code)) };
+    let ks = |code: KeyCode, mods: KeyModifiers| -> Act { Box::new(move |wm, _| press_mod(wm, code, mods)) };
+    let line_click = |seq: u64| -> Act {
+        Box::new(move |wm, area| {
+            let (x, y) = line_cell(wm, area, seq);
+            click(wm, area, x, y)
+        })
+    };
+    let button = |b: bilterm::ui::agents_ui::SnoopButton| -> Act { Box::new(move |wm, area| click_button(wm, area, b)) };
+    let chip = |kind: SnoopFilterKind| -> Act {
+        Box::new(move |wm, area| {
+            let lay = snoop_lay(wm, area);
+            let (r, _) = lay.chips.iter().find(|(_, k)| *k == kind).expect("chip");
+            click(wm, area, r.x + r.width - 1, r.y)
+        })
+    };
+    let at_rect = |pick: fn(&bilterm::ui::agents_ui::SnoopLayout) -> ratatui::layout::Rect| -> Act {
+        Box::new(move |wm, area| {
+            let r = pick(&snoop_lay(wm, area));
+            click(wm, area, r.x + 1, r.y)
+        })
+    };
+    let snoop = &[":agents focus snoop"];
+    let sel3 = &[":agents focus snoop", ":agents line 3"];
+    let scenarios = vec![
+        Scenario { name: "focus", long: false, prep: &[], key: ks(KeyCode::Char('o'), KeyModifiers::CONTROL),
+            mouse: Some(Box::new(|wm, area| {
+                let l = snoop_lay(wm, area).lines_area;
+                click(wm, area, l.x + 2, l.y + l.height - 1)
+            })), colon: Some(":agents focus snoop") },
+        Scenario { name: "step", long: false, prep: snoop, key: k(KeyCode::Char('k')), mouse: Some(line_click(3)), colon: Some(":agents line -1") },
+        Scenario { name: "select", long: false, prep: snoop, key: Box::new(|wm, _| { press(wm, KeyCode::Char('k')); press(wm, KeyCode::Char('k')) }),
+            mouse: Some(line_click(2)), colon: Some(":agents line 2") },
+        Scenario { name: "pageup", long: true, prep: snoop, key: k(KeyCode::PageUp), mouse: None, colon: Some(":agents scroll -10") },
+        Scenario { name: "home", long: true, prep: snoop, key: k(KeyCode::Home), mouse: None, colon: Some(":agents scroll top") },
+        Scenario { name: "wheel", long: true, prep: snoop,
+            key: Box::new(|wm, _| run_colon(wm, ":agents scroll -3")),
+            mouse: Some(Box::new(|wm, area| {
+                let l = snoop_lay(wm, area).lines_area;
+                mouse(wm, area, MouseEventKind::ScrollUp, l.x + 2, l.y + 1)
+            })), colon: Some(":agents scroll -3") },
+        Scenario { name: "follow-toggle", long: true, prep: snoop, key: k(KeyCode::Char('f')), mouse: Some(at_rect(|l| l.follow)), colon: Some(":agents follow") },
+        Scenario { name: "end", long: true, prep: &[":agents focus snoop", ":agents scroll top"], key: k(KeyCode::End), mouse: None, colon: Some(":agents follow on") },
+        Scenario { name: "agent", long: false, prep: sel3, key: k(KeyCode::Char('a')), mouse: Some(button(bilterm::ui::agents_ui::SnoopButton::Agent)), colon: Some(":agents filter agent") },
+        Scenario { name: "pair", long: false, prep: sel3, key: k(KeyCode::Char('p')), mouse: Some(button(bilterm::ui::agents_ui::SnoopButton::Pair)), colon: Some(":agents filter pair") },
+        Scenario { name: "clear", long: false, prep: &[":agents focus snoop", ":agents filter agent #1", ":agents filter text echo"],
+            key: k(KeyCode::Char('c')), mouse: Some(button(bilterm::ui::agents_ui::SnoopButton::Clear)), colon: Some(":agents filter clear") },
+        Scenario { name: "remove-agent", long: false, prep: &[":agents focus snoop", ":agents filter agent #1", ":agents filter text echo"],
+            key: ks(KeyCode::Char('A'), KeyModifiers::SHIFT), mouse: Some(chip(SnoopFilterKind::Agent)), colon: Some(":agents filter remove agent") },
+        Scenario { name: "remove-text", long: false, prep: &[":agents focus snoop", ":agents filter agent #1", ":agents filter text echo"],
+            key: ks(KeyCode::Char('T'), KeyModifiers::SHIFT), mouse: Some(chip(SnoopFilterKind::Text)), colon: Some(":agents filter remove text") },
+        Scenario { name: "copy", long: false, prep: sel3, key: k(KeyCode::Char('y')), mouse: Some(at_rect(|l| l.copy)), colon: Some(":agents copy") },
+        Scenario { name: "compose-submit", long: false, prep: &[":agents focus compose"], key: k(KeyCode::Enter), mouse: Some(at_rect(|l| l.send)), colon: None },
+    ];
+    for sc in &scenarios {
+        let build = || {
+            let (mut wm, area) = if sc.long { long_fixture() } else { snoop_fixture() };
+            for cmd in sc.prep {
+                run_colon(&mut wm, cmd);
+            }
+            (wm, area)
+        };
+        let by_key = with_temp_xdg(|| {
+            let (mut wm, area) = build();
+            (sc.key)(&mut wm, area);
+            parity_state(&wm)
+        });
+        if let Some(m) = &sc.mouse {
+            let by_mouse = with_temp_xdg(|| {
+                let (mut wm, area) = build();
+                m(&mut wm, area);
+                parity_state(&wm)
+            });
+            assert_eq!(by_key, by_mouse, "{}: key vs mouse", sc.name);
+        }
+        if let Some(cmd) = sc.colon {
+            let by_colon = with_temp_xdg(|| {
+                let (mut wm, _) = build();
+                run_colon(&mut wm, cmd);
+                parity_state(&wm)
+            });
+            assert_eq!(by_key, by_colon, "{}: key vs `{cmd}`", sc.name);
+        }
+    }
 }

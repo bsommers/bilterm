@@ -398,6 +398,16 @@ impl WindowPane {
     }
 }
 
+/// Whether the `send as me` compose line can write anywhere.
+///
+/// Phase 50 has no outward write path (D-09): the gate is always `Unavailable`. Phase 51 adds an
+/// open variant behind its permission gate, rate limits, loop guard and logging.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComposeGate {
+    /// Disabled; the text says why.
+    Unavailable(&'static str),
+}
+
 /// Maximum characters of a keyword filter.
 pub const KEYWORD_CAP: usize = 64;
 
@@ -886,6 +896,11 @@ impl WindowManager {
         crate::clipboard::set_system_clipboard(&text);
         self.agents_window.snoop.last_copy = Some(text.clone());
         Some(text)
+    }
+
+    /// State of the compose line. Always [`ComposeGate::Unavailable`] in Phase 50.
+    pub fn compose_gate(&self) -> ComposeGate {
+        ComposeGate::Unavailable("agent messaging requires Phase 51 ([api] allow_agent_messaging)")
     }
 
     /// Focuses `pane`, or the next one in the cycle (`None`). Leaves an open keyword entry.

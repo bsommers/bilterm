@@ -18,7 +18,7 @@ use crate::vt::sanitize_display;
 use crate::wm::WindowManager;
 use crate::wm::agents_geometry::AgentsPaneRects;
 use crate::wm::agents_cmd::SnoopFilterKind;
-use crate::wm::agents_window::{SnoopLine, WindowPane, key_label, snoop_view_range};
+use crate::wm::agents_window::{ComposeGate, SnoopLine, WindowPane, key_label, snoop_view_range};
 
 /// Window title.
 pub const AGENTS_WINDOW_TITLE: &str = "AGENT TRAFFIC";
@@ -26,6 +26,8 @@ pub const AGENTS_WINDOW_TITLE: &str = "AGENT TRAFFIC";
 const EVENT_LINE_CAP: usize = 160;
 /// The `[copy]` badge in the conversation header.
 pub const COPY_BADGE: &str = "[copy]";
+/// The `[send]` badge of the compose line.
+pub const SEND_BADGE: &str = "[send]";
 
 /// Column of the pin badge in the title row of a window with outer rect `outer`.
 ///
@@ -127,6 +129,10 @@ pub struct SnoopLayout {
     pub lines_area: Rect,
     /// Visible lines: `(row, bus sequence number)`, oldest first.
     pub lines: Vec<(u16, u64)>,
+    /// The `send as me` compose line (whole row).
+    pub compose: Rect,
+    /// `[send]` badge inside the compose line.
+    pub send: Rect,
 }
 
 /// Header rows of the conversation pane above the lines.
@@ -135,10 +141,12 @@ struct SnoopRows {
     buttons: bool,
     /// Chip row, or the keyword entry line while it is open.
     extra: bool,
+    /// Compose line at the bottom.
+    compose: bool,
 }
 
 impl SnoopRows {
-    fn count(&self) -> u16 {
+    fn header(&self) -> u16 {
         u16::from(self.title) + u16::from(self.buttons) + u16::from(self.extra)
     }
 }
@@ -153,13 +161,15 @@ fn snoop_rows(wm: &WindowManager, area: Rect) -> SnoopRows {
         title: area.height >= 3,
         buttons: area.height >= 5,
         extra: has_extra && area.height >= 7,
+        compose: area.height >= 4,
     }
 }
 
 /// Area of the conversation pane that holds lines.
 pub fn snoop_lines_area(wm: &WindowManager, area: Rect) -> Rect {
-    let head = snoop_rows(wm, area).count();
-    Rect::new(area.x, area.y + head, area.width, area.height - head)
+    let rows = snoop_rows(wm, area);
+    let (head, foot) = (rows.header(), u16::from(rows.compose));
+    Rect::new(area.x, area.y + head, area.width, area.height - head - foot)
 }
 
 /// Text of the chip for one active filter (without the `×`).
@@ -199,6 +209,13 @@ pub fn snoop_layout(wm: &WindowManager, rects: &AgentsPaneRects) -> SnoopLayout 
             if area.width >= badge_w + 14 + 1 + FOLLOW_W {
                 lay.follow = Rect::new(lay.copy.x - 1 - FOLLOW_W, area.y, FOLLOW_W, 1);
             }
+        }
+    }
+    if rows.compose {
+        lay.compose = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        let w = SEND_BADGE.len() as u16;
+        if area.width >= w + 12 {
+            lay.send = Rect::new(right - w, lay.compose.y, w, 1);
         }
     }
     let mut next_y = area.y + u16::from(rows.title);
@@ -368,6 +385,29 @@ fn render_snoop(wm: &WindowManager, rects: &AgentsPaneRects, palette: &ThemePale
         let close = if ascii { "x" } else { "×" };
         let text = format!("{} {close}", chip_text(*kind, wm, ascii).unwrap_or_default());
         buf.set_stringn(r.x, r.y, &text, usize::from(r.width), Style::default().fg(tokens.text_primary).bg(bg));
+    }
+    if lay.compose.width > 0 {
+        let c = lay.compose;
+        let focused = focus == WindowPane::Compose;
+        let (gate, note) = match wm.compose_gate() {
+            ComposeGate::Unavailable(why) => ("disabled", why),
+        };
+        let sep = if ascii { ">" } else { "▸" };
+        let lead = match (focused, ascii) {
+            (false, _) => "  ",
+            (true, true) => "> ",
+            (true, false) => "▸ ",
+        };
+        let text = format!("{lead}send as me {sep} {gate}: {note}");
+        let room = usize::from(c.width.saturating_sub(lay.send.width + u16::from(lay.send.width > 0)));
+        let mut style = Style::default().fg(tokens.text_muted).bg(bg);
+        if focused {
+            style = style.add_modifier(Modifier::UNDERLINED);
+        }
+        buf.set_stringn(c.x, c.y, fit_cols(&text, room), room, style);
+        if lay.send.width > 0 {
+            buf.set_stringn(lay.send.x, lay.send.y, SEND_BADGE, usize::from(lay.send.width), Style::default().fg(tokens.text_muted).bg(bg));
+        }
     }
     if let (Some(r), Some(entry)) = (lay.entry, state.snoop.keyword_entry.as_ref()) {
         let cursor = if ascii { "_" } else { "▏" };

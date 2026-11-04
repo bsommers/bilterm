@@ -401,6 +401,7 @@ pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Acti
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('A'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Agent)))),
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('P'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Pair)))),
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('T'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Text)))),
+    (AgentsKeyScope::Compose, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::ComposeSubmit)),
     (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Commit))),
     (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Cancel))),
     (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Backspace, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Pop))),
