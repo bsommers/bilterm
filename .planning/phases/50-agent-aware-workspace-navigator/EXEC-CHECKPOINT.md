@@ -1,6 +1,6 @@
 # Phase 50 execution checkpoint (2026-11-03)
 
-**Status:** IN PROGRESS - needs resume. 10/16 plans done (50-01..09, 50-15, 50-16; 50-15 includes right-click menu + [+] buttons), all SUMMARY committed.
+**Status:** EXECUTION COMPLETE - PR #5 open, awaiting user merge decision. 10/16 plans done (50-01..09, 50-15, 50-16; 50-15 includes right-click menu + [+] buttons), all SUMMARY committed.
 
 ## Goal (user words)
 `/gsd-execute-phase 50 - parallelize as much as possible`; then: "continue with the remaining waves"; "switch to a gsd/phase-50-* branch instead, cut a PR. check with updates on remote. see if it is safe to merge".
@@ -25,3 +25,14 @@ code review gate, verifier (gsd-verifier), update roadmap; then `git fetch origi
 
 ## Next command
 Spawn gsd-executor for plan 50-10 (or next unfinished in order above).
+
+
+## FINAL STATE (2026-11-04)
+- All 16 plans done; verifier PASSED 5/5 (5ac060a); code review caf8952, CR-01 + WR-01..07 fixed; FLT-01..03 and ROADMAP ticked (b7cc6d9). verify PASS 58/58, GOLDENS OK 11, DOCS OK 48.
+- User approved push + PR ("yes"). Pushed gsd/phase-50-navigator; PR #5 https://github.com/bsommers/bilterm/pull/5 (base main). origin/main 0 behind, branch 86 ahead (fast-forwardable). gh: MERGEABLE, CLEAN, reviewDecision none.
+- CI: only .github/workflows/release-binaries.yml exists, so NO PR checks ran; safety rests on local verify.
+- NOT merged. Do not merge without explicit user say-so.
+- Open items: manual GUI check (bilterm --gui, Navigator); Win/mac Ctrl+wheel gap; WR-06 double-close not in user docs; 9 Info review items left; docs/mcp-usecases/ untracked (leave).
+- Also made: ~/.claude/hooks/cheap-planning-model-guard.py (PreToolUse Agent hook; planning subagents need sonnet/haiku) + CLAUDE.md rule.
+## Next
+Report merge safety to user; wait for their merge decision.

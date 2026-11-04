@@ -129,3 +129,4 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 6/16 plans done on branch `gsd/phase-50-navigator` (unpushed). Full detail, decisions, remaining order and PR steps:
 `.planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md`. Next: execute plan 50-07.
 - Phase 50 exec checkpoint updated after 50-16 (10/16): .planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md
+- Phase 50 DONE, PR #5 open (see EXEC-CHECKPOINT.md FINAL STATE), 2026-11-04
