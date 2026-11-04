@@ -13,12 +13,15 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 
-use crate::ui::graph_raster::{GraphColours, draw_agent_graph_hires, render_graph_labels};
+use crate::ui::drawer::navigator::navigator_dot_cells;
+use crate::ui::graph_raster::{GraphColours, draw_agent_graph_hires, draw_state_icon, render_graph_labels};
 use crate::ui::pixel_canvas::PixelCanvasBuffer;
-use crate::ui::renderer::{GuiFrameSurface, GuiImageTexture};
+use crate::ui::renderer::{GuiFrameSurface, GuiImageTexture, ratatui_color_to_rgba};
 use crate::ui::typography::PanelTarget;
 use crate::wm::WindowManager;
+use crate::wm::drawer::DrawerStyle;
 
 /// Texture id of the agents graph.
 pub const GRAPH_TEXTURE_ID: u32 = 950_000;
@@ -103,9 +106,11 @@ fn pixel_rects_overlap(a: (u32, u32, u32, u32), b: (u32, u32, u32, u32)) -> bool
     a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3
 }
 
-/// Rectangles drawn above the agents window and the drawer (`:mcp` console, modal, menu dropdown,
-/// quick terminal), in real cells.
-fn overlay_rects(wm: &WindowManager, ws_area: Rect) -> Vec<Rect> {
+type PxRect = (u32, u32, u32, u32);
+
+/// Pixel rectangles drawn above the agents window and the drawer (`:mcp` console, modal, menu
+/// dropdown, quick terminal).
+fn overlay_rects(wm: &WindowManager, ws_area: Rect, base: &PanelFrame) -> Vec<PxRect> {
     [
         wm.mcp_console().panel_rect(ws_area),
         wm.active_modal_rect(ws_area),
@@ -114,7 +119,19 @@ fn overlay_rects(wm: &WindowManager, ws_area: Rect) -> Vec<Rect> {
     ]
     .into_iter()
     .flatten()
+    .map(|r| base.real_pixel_rect(r))
     .collect()
+}
+
+/// Pixel rectangle of the open agents window (any scale), `None` when it is closed.
+fn agents_window_pixels(wm: &WindowManager, ws_area: Rect, viewport: Rect, cell_w: u16, cell_h: u16) -> Option<PxRect> {
+    let scale = wm.scale_pct(PanelTarget::Agents);
+    let vws = wm.panel_virtual_area(ws_area, PanelTarget::Agents);
+    let outer = wm.agents_window_rect(vws)?;
+    let f = PanelFrame::scaled(ws_area, viewport, cell_w, cell_h, scale);
+    let (x0, y0) = f.px(outer.x, outer.y);
+    let (x1, y1) = f.px(outer.x + outer.width, outer.y + outer.height);
+    Some((x0 as u32, y0 as u32, (x1 - x0).max(0.0) as u32, (y1 - y0).max(0.0) as u32))
 }
 
 /// Replaces the agents window graph pane by one opaque 1:1 texture and keeps only the node labels as
@@ -125,7 +142,7 @@ fn push_graph(
     wm: &WindowManager,
     vws: Rect,
     frame: &PanelFrame,
-    overlays: &[Rect],
+    overlays: &[PxRect],
     buf: &mut Buffer,
     images: &mut Vec<GuiImageTexture>,
     tick: u64,
@@ -136,7 +153,7 @@ fn push_graph(
     let Some(rects) = wm.agents_pane_rects(vws) else { return };
     let graph = rects.graph.intersection(buf.area);
     let Some(area) = frame.pixel_rect(graph) else { return };
-    if overlays.iter().any(|o| pixel_rects_overlap(area, frame.real_pixel_rect(*o))) {
+    if overlays.iter().any(|o| pixel_rects_overlap(area, *o)) {
         return;
     }
     let (x, y, w, h) = area;
@@ -161,6 +178,55 @@ fn push_graph(
     });
 }
 
+/// Replaces the Navigator state dots by one smooth vector icon per dot (D-05): the cell is cleared to
+/// a space and an opaque one-cell texture `960_000 + row index` is pushed over it. Positions come
+/// from [`navigator_dot_cells`], the same helper the terminal renderer uses.
+fn push_icons(
+    wm: &WindowManager,
+    vws: Rect,
+    frame: &PanelFrame,
+    overlays: &[PxRect],
+    buf: &mut Buffer,
+    images: &mut Vec<GuiImageTexture>,
+    tick: u64,
+) {
+    if wm.config().drawer.style != DrawerStyle::Navigator {
+        return;
+    }
+    let palette = wm.config().palette();
+    let colours = GraphColours::from_palette(&palette);
+    let default_bg = ratatui_color_to_rgba(palette.window_frame_bg, [0, 0, 0x84, 255]);
+    for dot in navigator_dot_cells(wm, vws) {
+        if dot.row_index >= ICON_ROW_LIMIT {
+            continue;
+        }
+        let Some(area) = frame.pixel_rect(Rect::new(dot.x, dot.y, 1, 1)) else { continue };
+        if overlays.iter().any(|o| pixel_rects_overlap(area, *o)) {
+            continue;
+        }
+        let Some(cell) = buf.cell_mut((dot.x, dot.y)) else { continue };
+        let mut bg = ratatui_color_to_rgba(cell.bg, default_bg);
+        if cell.modifier.contains(Modifier::REVERSED) {
+            bg = ratatui_color_to_rgba(cell.fg, bg);
+        }
+        bg[3] = 255;
+        cell.set_symbol(" ");
+        let (x, y, w, h) = area;
+        let mut canvas = PixelCanvasBuffer::new(w, h, bg);
+        draw_state_icon(&mut canvas, dot.state, &colours, tick);
+        images.push(GuiImageTexture {
+            id: ICON_TEXTURE_BASE + dot.row_index as u32,
+            x_px: x,
+            y_px: y,
+            width_px: w,
+            height_px: h,
+            pixel_width: w as u16,
+            pixel_height: h as u16,
+            rgba_bytes: canvas.rgba,
+        });
+    }
+}
+
 /// Pushes the GUI textures of every panel drawn at 100 percent: the agents graph and, in the
 /// Navigator drawer style, the state icons. `cell_buf` is the fully rendered workspace cell buffer;
 /// covered cells are cleared in place. Panels with their own scale are handled from the
@@ -177,9 +243,13 @@ pub fn push_agents_gui_textures(
     tick: u64,
 ) {
     let frame = PanelFrame::unscaled(ws_area, viewport, cell_w, cell_h);
-    let overlays = overlay_rects(wm, ws_area);
+    let mut overlays = overlay_rects(wm, ws_area, &frame);
     if wm.scale_pct(PanelTarget::Agents) == 100 {
         push_graph(wm, ws_area, &frame, &overlays, cell_buf, &mut surface.images, tick);
+    }
+    if wm.scale_pct(PanelTarget::Drawer) == 100 {
+        overlays.extend(agents_window_pixels(wm, ws_area, viewport, cell_w, cell_h));
+        push_icons(wm, ws_area, &frame, &overlays, cell_buf, &mut surface.images, tick);
     }
 }
 
@@ -200,6 +270,26 @@ pub fn push_scaled_agents_graph(
     tick: u64,
 ) {
     let frame = PanelFrame::scaled(ws_area, viewport, cell_w, cell_h, scale_pct);
-    let overlays = overlay_rects(wm, ws_area);
+    let overlays = overlay_rects(wm, ws_area, &PanelFrame::unscaled(ws_area, viewport, cell_w, cell_h));
     push_graph(wm, vws, &frame, &overlays, scratch, images, tick);
+}
+
+/// Scaled-panel variant of the icon pass for the Navigator drawer rendered into `scratch`.
+#[allow(clippy::too_many_arguments)]
+pub fn push_scaled_navigator_icons(
+    wm: &WindowManager,
+    ws_area: Rect,
+    vws: Rect,
+    viewport: Rect,
+    cell_w: u16,
+    cell_h: u16,
+    scale_pct: u16,
+    scratch: &mut Buffer,
+    images: &mut Vec<GuiImageTexture>,
+    tick: u64,
+) {
+    let frame = PanelFrame::scaled(ws_area, viewport, cell_w, cell_h, scale_pct);
+    let mut overlays = overlay_rects(wm, ws_area, &PanelFrame::unscaled(ws_area, viewport, cell_w, cell_h));
+    overlays.extend(agents_window_pixels(wm, ws_area, viewport, cell_w, cell_h));
+    push_icons(wm, vws, &frame, &overlays, scratch, images, tick);
 }

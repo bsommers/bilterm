@@ -3,13 +3,15 @@
 
 use std::time::{Duration, Instant};
 
-use bilterm::ui::agents_gui::GRAPH_TEXTURE_ID;
+use bilterm::ui::agents_gui::{GRAPH_TEXTURE_ID, ICON_TEXTURE_BASE};
+use bilterm::ui::drawer::navigator::navigator_dot_cells;
 use bilterm::ui::graph_raster::{
     GraphColours, bezier_point, curve_controls, node_px_hires, node_radius_hires, stroke_width_hires,
 };
 use bilterm::ui::renderer::{GuiFrameSurface, GuiImageTexture, GuiWorkspaceRenderer};
 use bilterm::wm::agent_state::AgentState;
 use bilterm::wm::agents_window::NodeKey;
+use bilterm::wm::drawer::DrawerStyle;
 use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
 use bilterm::wm::{SplitDirection, WindowManager};
 use ratatui::layout::Rect;
@@ -315,4 +317,133 @@ fn render_gui_tick_redraws_while_edges_active() {
     assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(140)), "throttled again");
     assert!(wm.tick_agent_ui(t0 + Duration::from_millis(1900)), "still inside the 2 s flow window");
     assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(2300)), "idle edges stop requesting redraws");
+}
+
+const STATES: [AgentState; 5] =
+    [AgentState::Working, AgentState::Blocked, AgentState::Idle, AgentState::Done, AgentState::Errored];
+
+/// Five panes reporting one state each, Navigator drawer open (no agents window).
+fn navigator_wm() -> (WindowManager, Rect) {
+    let mut wm = WindowManager::new_headless(40, 120);
+    let area = Rect::new(0, 0, 120, 40);
+    for _ in 0..4 {
+        wm.split_focused(SplitDirection::Vertical).unwrap();
+    }
+    wm.resize_all(area).unwrap();
+    wm.config_mut().drawer.style = DrawerStyle::Navigator;
+    wm.toggle_drawer();
+    for (i, st) in STATES.iter().enumerate() {
+        wm.report_agent_state(i + 1, Some(*st));
+    }
+    wm.update_agent_states(Instant::now());
+    (wm, area)
+}
+
+fn workspace_of(wm: &WindowManager, area: Rect) -> Rect {
+    bilterm::ui::shell::ShellLayout::compute(area, wm.config(), wm.pane_count()).workspace
+}
+
+fn icon_images(surface: &GuiFrameSurface) -> Vec<&GuiImageTexture> {
+    surface.images.iter().filter(|i| (ICON_TEXTURE_BASE..ICON_TEXTURE_BASE + 10_000).contains(&i.id)).collect()
+}
+
+#[test]
+fn render_gui_navigator_icons_pushed() {
+    let (mut wm, area) = navigator_wm();
+    let ws = workspace_of(&wm, area);
+    let dots = navigator_dot_cells(&wm, ws);
+    assert_eq!(dots.len(), 5, "five reported states -> five dot cells");
+    let surface = gui_frame(&mut wm, area);
+    let icons = icon_images(&surface);
+    assert_eq!(icons.len(), 5);
+    for dot in &dots {
+        let img = icons.iter().find(|i| i.id == ICON_TEXTURE_BASE + dot.row_index as u32).expect("icon for row");
+        assert_eq!((img.x_px, img.y_px), (u32::from(dot.x) * 8, u32::from(dot.y) * 16));
+        assert_eq!((img.width_px, img.height_px), (8, 16));
+        assert_eq!((u32::from(img.pixel_width), u32::from(img.pixel_height)), (8, 16), "1:1");
+        assert!(img.rgba_bytes.chunks_exact(4).all(|p| p[3] == 255), "icon must be opaque");
+        assert!(
+            !surface.glyphs.iter().any(|g| g.x_px == img.x_px as f32 && g.y_px == img.y_px as f32),
+            "the dot cell must be cleared in the glyph list"
+        );
+    }
+}
+
+fn icon_by_state(wm: &WindowManager, area: Rect, surface: &GuiFrameSurface) -> Vec<(AgentState, Vec<u8>)> {
+    let dots = navigator_dot_cells(wm, workspace_of(wm, area));
+    icon_images(surface)
+        .iter()
+        .map(|img| {
+            let dot = dots.iter().find(|d| ICON_TEXTURE_BASE + d.row_index as u32 == img.id).unwrap();
+            (dot.state, img.rgba_bytes.clone())
+        })
+        .collect()
+}
+
+#[test]
+fn render_gui_navigator_icon_shapes_differ_by_state() {
+    let (mut wm, area) = navigator_wm();
+    let surface = gui_frame(&mut wm, area);
+    let icons = icon_by_state(&wm, area, &surface);
+    assert_eq!(icons.len(), 5);
+    for i in 0..icons.len() {
+        for j in i + 1..icons.len() {
+            assert_ne!(icons[i].1, icons[j].1, "{:?} and {:?} icons must differ", icons[i].0, icons[j].0);
+        }
+    }
+}
+
+#[test]
+fn render_gui_navigator_icons_animate_working_only() {
+    let (mut wm, area) = navigator_wm();
+    let f0 = gui_frame(&mut wm, area);
+    let a = icon_by_state(&wm, area, &f0);
+    advance_ticks(&mut wm, 6);
+    let f6 = gui_frame(&mut wm, area);
+    let b = icon_by_state(&wm, area, &f6);
+    for (state, bytes) in &a {
+        let after = &b.iter().find(|(s, _)| s == state).unwrap().1;
+        let animated = matches!(state, AgentState::Working | AgentState::Blocked);
+        assert_eq!(bytes != after, animated, "{state:?}: animated={animated}");
+    }
+}
+
+#[test]
+fn render_gui_classic_style_pushes_no_icons() {
+    let (mut wm, area) = navigator_wm();
+    wm.config_mut().drawer.style = DrawerStyle::Classic;
+    let surface = gui_frame(&mut wm, area);
+    assert!(icon_images(&surface).is_empty(), "classic drawer must not get icon textures");
+}
+
+#[test]
+fn render_tui_path_pushes_no_textures() {
+    use ratatui::buffer::Buffer;
+    use ratatui::widgets::Widget;
+    let (wm, area) = navigator_wm();
+    let mut buf = Buffer::empty(area);
+    bilterm::ui::WorkspaceWidget::new(&wm).render(area, &mut buf);
+    let dots = navigator_dot_cells(&wm, workspace_of(&wm, area));
+    assert_eq!(dots.len(), 5);
+    for dot in &dots {
+        let sym = buf[(dot.x, dot.y)].symbol();
+        assert_ne!(sym, " ", "TUI keeps the text dot for {:?}", dot.state);
+    }
+    let working = dots.iter().find(|d| d.state == AgentState::Working).unwrap();
+    assert!(is_braille(buf[(working.x, working.y)].symbol()), "Working keeps its braille spinner in the terminal");
+}
+
+#[test]
+fn render_gui_scaled_drawer_icons_follow_panel_scale() {
+    let (mut wm, area) = navigator_wm();
+    wm.set_gui_surface(true);
+    wm.set_panel_scale_pct(150);
+    let surface = gui_frame(&mut wm, area);
+    let icons = icon_images(&surface);
+    assert_eq!(icons.len(), 5, "scaled drawer still gets one icon per dot");
+    for img in icons {
+        assert_eq!((img.width_px, img.height_px), (12, 24), "icon cell is 150% of 8x16");
+        assert_eq!((u32::from(img.pixel_width), u32::from(img.pixel_height)), (12, 24));
+        assert!(img.rgba_bytes.chunks_exact(4).all(|p| p[3] == 255));
+    }
 }

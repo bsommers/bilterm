@@ -438,3 +438,117 @@ pub fn draw_agent_graph_hires(
         }
     }
 }
+
+/// Unit vectors every 30 degrees, clockwise from 3 o'clock on a y-down canvas (constant table, so
+/// the rotating icon arc needs no runtime trigonometry).
+const UNIT_12: [(f32, f32); 12] = [
+    (1.0, 0.0),
+    (0.866_025_4, 0.5),
+    (0.5, 0.866_025_4),
+    (0.0, 1.0),
+    (-0.5, 0.866_025_4),
+    (-0.866_025_4, 0.5),
+    (-1.0, 0.0),
+    (-0.866_025_4, -0.5),
+    (-0.5, -0.866_025_4),
+    (0.0, -1.0),
+    (0.5, -0.866_025_4),
+    (0.866_025_4, -0.5),
+];
+
+/// Glow opacity of the Blocked pulse, indexed by `tick % 12` (one smooth swell per revolution of
+/// the Working arc).
+const PULSE_12: [f32; 12] = [0.10, 0.20, 0.32, 0.45, 0.55, 0.60, 0.55, 0.45, 0.32, 0.20, 0.12, 0.08];
+
+/// Closed ring of 24 points around `(cx, cy)`: the 12 table vectors plus the normalised midpoint
+/// between each pair.
+fn ring_points(cx: f32, cy: f32, r: f32) -> Vec<(f32, f32)> {
+    let mut pts = Vec::with_capacity(25);
+    for i in 0..12 {
+        let (a, b) = (UNIT_12[i], UNIT_12[(i + 1) % 12]);
+        let (mx, my) = (a.0 + b.0, a.1 + b.1);
+        let n = (mx * mx + my * my).sqrt().max(1e-6);
+        pts.push((cx + a.0 * r, cy + a.1 * r));
+        pts.push((cx + mx / n * r, cy + my / n * r));
+    }
+    pts.push(pts[0]);
+    pts
+}
+
+/// Fills the convex polygon `pts` with an anti-aliased edge (coverage from the signed distance to
+/// the nearest edge line).
+fn fill_convex_aa(canvas: &mut PixelCanvasBuffer, pts: &[(f32, f32)], rgb: Rgb) {
+    let area2: f32 = (0..pts.len())
+        .map(|i| {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum();
+    let sign = if area2 < 0.0 { -1.0 } else { 1.0 };
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in pts {
+        x0 = x0.min(p.0);
+        y0 = y0.min(p.1);
+        x1 = x1.max(p.0);
+        y1 = y1.max(p.1);
+    }
+    let (bx0, by0) = ((x0 - 1.0).floor().max(0.0) as i32, (y0 - 1.0).floor().max(0.0) as i32);
+    let (bx1, by1) = (
+        (x1 + 1.0).ceil().min(canvas.width as f32 - 1.0) as i32,
+        (y1 + 1.0).ceil().min(canvas.height as f32 - 1.0) as i32,
+    );
+    for y in by0..=by1 {
+        for x in bx0..=bx1 {
+            let mut d = f32::MAX;
+            for i in 0..pts.len() {
+                let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+                let (ex, ey) = (b.0 - a.0, b.1 - a.1);
+                let len = (ex * ex + ey * ey).sqrt().max(1e-6);
+                // Positive on the interior side.
+                let dist = sign * (ex * (y as f32 - a.1) - ey * (x as f32 - a.0)) / len;
+                d = d.min(dist);
+            }
+            let cov = (d + 0.5).clamp(0.0, 1.0);
+            if cov > 0.0 {
+                canvas.blend_pixel(x, y, rgb, cov);
+            }
+        }
+    }
+}
+
+/// Draws the Navigator state icon for `state` onto a one-cell, already opaque canvas (D-05).
+///
+/// Working: ring with a rotating 90-degree arc; Blocked: triangle with a pulsing glow; Idle: hollow
+/// ring; Done: filled disc; Errored: cross. Only Working and Blocked depend on `tick`.
+pub fn draw_state_icon(canvas: &mut PixelCanvasBuffer, state: AgentState, colours: &GraphColours, tick: u64) {
+    let (w, h) = (canvas.width as f32, canvas.height as f32);
+    let (cx, cy) = (w * 0.5, h * 0.5);
+    let r = (w.min(h) * 0.36).max(2.0);
+    let stroke = (w / 8.0).max(1.3);
+    let rgb = colours.state_rgb(Some(state));
+    match state {
+        AgentState::Working => {
+            stroke_polyline(canvas, &ring_points(cx, cy, r), stroke, rgb, 0.35);
+            let start = (tick % 12) as usize;
+            let arc: Vec<(f32, f32)> = (0..4)
+                .map(|i| {
+                    let v = UNIT_12[(start + i) % 12];
+                    (cx + v.0 * r, cy + v.1 * r)
+                })
+                .collect();
+            stroke_polyline(canvas, &arc, stroke * 1.4, rgb, 1.0);
+        }
+        AgentState::Blocked => {
+            draw_glow(canvas, cx, cy, r * 1.9, rgb, PULSE_12[(tick % 12) as usize]);
+            let tri = [(cx, cy - r), (cx + r * 0.95, cy + r * 0.75), (cx - r * 0.95, cy + r * 0.75)];
+            fill_convex_aa(canvas, &tri, rgb);
+        }
+        AgentState::Idle => stroke_polyline(canvas, &ring_points(cx, cy, r), stroke, rgb, 1.0),
+        AgentState::Done => canvas.draw_circle_aa(cx, cy, r, true, rgb),
+        AgentState::Errored => {
+            let k = r * 0.8;
+            stroke_polyline(canvas, &[(cx - k, cy - k), (cx + k, cy + k)], stroke * 1.3, rgb, 1.0);
+            stroke_polyline(canvas, &[(cx + k, cy - k), (cx - k, cy + k)], stroke * 1.3, rgb, 1.0);
+        }
+    }
+}

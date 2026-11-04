@@ -728,6 +728,9 @@ impl GuiWorkspaceRenderer {
                 if let Some(vr) = wm.drawer_rect(vws) {
                     let mut scratch = Buffer::empty(vws);
                     crate::ui::render_workspace_drawer(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    crate::ui::agents_gui::push_scaled_navigator_icons(
+                        wm, ws_area, vws, viewport, eff_cw, eff_ch, drawer_scale, &mut scratch, &mut surface.images, gui_tick,
+                    );
                     draw_panel(&scratch, vr, drawer_scale);
                 }
             }
@@ -834,7 +837,7 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
     }
 }
 
-fn ratatui_color_to_rgba(color: Color, fallback: [u8; 4]) -> [u8; 4] {
+pub(crate) fn ratatui_color_to_rgba(color: Color, fallback: [u8; 4]) -> [u8; 4] {
     match color {
         Color::Reset => fallback,
         Color::Black => [0, 0, 0, 255],
