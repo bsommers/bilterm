@@ -4,11 +4,11 @@ milestone: v2.6.0
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-11-04T00:32:19.380Z"
+stopped_at: Completed 50-02-PLAN.md
+last_updated: "2026-11-04T00:42:52.721Z"
 last_activity: 2026-11-02
 last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
-state_head: f45dee258e2cd64aea40f2a8bf86d950d31f8bce
+state_head: f4d9eb025f29005a9dd043d33d33e58bbfe8c8db
 progress:
   total_phases: 48
   completed_phases: 44
@@ -64,6 +64,7 @@ Progress: [██████████] 100% (42/42 Phases)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 50 P01 | 40 min | 2 tasks | 13 files |
+| Phase 50 P02 | 5 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Recent decisions affecting current work:
 - [Init]: Three-signal input routing (`OSC 133` + `tcgetpgrp` + `termios !ECHO` + `DECSET 1049`) prevents `sudo` password echo leaks and interactive REPL lockouts.
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
 - [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
+- [Phase 50]: 50-02: herdr roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
 
 ### Pending Todos
 
@@ -96,8 +98,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-04T00:32:19.204Z
-Stopped at: Completed 50-01-PLAN.md
+Last session: 2026-11-04T00:42:52.551Z
+Stopped at: Completed 50-02-PLAN.md
 Resume file: None
 
 ## Quick Tasks Completed
