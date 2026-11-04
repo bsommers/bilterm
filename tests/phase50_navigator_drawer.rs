@@ -1278,3 +1278,216 @@ fn mouse_tracer_click_row_focuses_pane() {
         assert_eq!(navigator_row_at(&wm, area, 99, 29), None, "outside the drawer is no row");
     });
 }
+
+use bilterm::ui::drawer::navigator::{
+    NavigatorButtonKind, navigator_fold_marker_cells, navigator_footer_buttons,
+};
+use bilterm::wm::DrawerVisibilityMode;
+
+fn open_navigator(cols: u16, rows: u16) -> (WindowManager, Rect) {
+    let (mut wm, area) = navigator_wm(cols, rows);
+    wm.toggle_drawer();
+    wm.focus_and_raise(1);
+    (wm, area)
+}
+
+fn click_button(wm: &mut WindowManager, area: Rect, kind: NavigatorButtonKind) {
+    let b = navigator_footer_buttons(wm, area)
+        .into_iter()
+        .find(|b| b.kind == kind)
+        .unwrap_or_else(|| panic!("{kind:?} button not laid out"));
+    click_at(wm, area, b.x, b.y);
+}
+
+fn click_row(wm: &mut WindowManager, area: Rect, kind: &DrawerRowKind) {
+    let idx = row_of(wm, kind);
+    let (x, y) = (0..area.width)
+        .flat_map(|x| (0..area.height).map(move |y| (x, y)))
+        .find(|&(x, y)| navigator_row_at(wm, area, x, y) == Some(idx))
+        .expect("row has a cell");
+    click_at(wm, area, x + 2, y);
+}
+
+#[test]
+fn mouse_fold_marker_click_folds_and_expands() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        assert_eq!(pane_row_count(&wm), 2);
+        let cells = navigator_fold_marker_cells(&wm, area);
+        assert_eq!(cells.len(), 1, "only the workspace row has children: {cells:?}");
+        click_at(&mut wm, area, cells[0].x, cells[0].y);
+        assert_eq!(pane_row_count(&wm), 0, "marker click hides the pane rows");
+        click_at(&mut wm, area, cells[0].x, cells[0].y);
+        assert_eq!(pane_row_count(&wm), 2, "second click expands");
+
+        let (mut key_wm, _a) = open_navigator(100, 30);
+        key_wm.drawer_mut().focused = true;
+        key_wm.drawer_mut().selected_index = 0;
+        ch(&mut key_wm, 'e');
+        let (mut mouse_wm, area) = open_navigator(100, 30);
+        let c = navigator_fold_marker_cells(&mouse_wm, area)[0];
+        click_at(&mut mouse_wm, area, c.x, c.y);
+        assert_eq!(kinds(&key_wm), kinds(&mouse_wm), "marker click equals `e` on that row");
+    });
+}
+
+#[test]
+fn mouse_footer_buttons_render_in_both_glyph_packs() {
+    with_temp_xdg(|| {
+        for pack in ["unicode", "ascii"] {
+            let (mut wm, area) = navigator_wm(100, 30);
+            run_colon(&mut wm, &format!(":set glyphs {pack}"));
+            run_colon(&mut wm, ":drawer size 26");
+            wm.toggle_drawer();
+            let buttons = navigator_footer_buttons(&wm, area);
+            assert_eq!(buttons.len(), 7, "{pack}: all seven buttons fit 26 columns");
+            let buf = render(&wm, area);
+            let labels: String = buttons.iter().map(|b| buf[(b.x, b.y)].symbol().to_string()).collect();
+            assert_eq!(labels, "*!N+rx@", "{pack}");
+            let y = buttons[0].y;
+            assert!(buttons.iter().all(|b| b.y == y && b.width == 2));
+            let dr = wm.drawer_rect(area).unwrap();
+            assert_eq!(y, dr.y + dr.height - 2, "footer row is the last inner row");
+        }
+    });
+}
+
+#[test]
+fn mouse_footer_attention_button_jumps() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = three_pane_navigator(100, 30);
+        wm.toggle_drawer();
+        wm.focus_and_raise(1);
+        with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+        click_button(&mut wm, area, NavigatorButtonKind::Attention);
+        assert_eq!(wm.active_pane_id(), 3);
+    });
+}
+
+#[test]
+fn mouse_footer_new_session_and_new_pane_buttons_create() {
+    with_temp_xdg(|| {
+        let observe_with = |f: &dyn Fn(&mut WindowManager, Rect)| {
+            let (mut wm, area) = open_navigator(100, 30);
+            f(&mut wm, area);
+            (observe(&wm), wm.active_pane().status_message().map(str::to_string))
+        };
+        let by_key = observe_with(&|wm, _| {
+            wm.drawer_mut().focused = true;
+            ch(wm, 'N');
+        });
+        let by_mouse = observe_with(&|wm, a| click_button(wm, a, NavigatorButtonKind::NewSession));
+        assert_eq!(by_key.0.replace("focused=false", "focused=true"), by_mouse.0.replace("focused=false", "focused=true"));
+        assert_eq!(by_key.1, by_mouse.1);
+        assert!(by_mouse.1.is_some_and(|m| m.starts_with("Created new session")));
+
+        let (mut wm, area) = open_navigator(100, 30);
+        let before = wm.pane_count();
+        click_button(&mut wm, area, NavigatorButtonKind::NewPane);
+        assert_eq!(wm.pane_count(), before + 1);
+        assert!(wm.active_pane().status_message().is_some_and(|m| m.starts_with("Created new window")));
+    });
+}
+
+#[test]
+fn mouse_footer_rename_button_opens_prompt() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        wm.drawer_mut().focused = true;
+        click_button(&mut wm, area, NavigatorButtonKind::Rename);
+        assert_eq!(wm.active_pane().prompt().text(), ":drawer rename ");
+        assert!(!wm.drawer().focused, "the prompt takes the keyboard");
+    });
+}
+
+#[test]
+fn mouse_footer_close_button_closes_selected_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        click_row(&mut wm, area, &DrawerRowKind::Pane(2));
+        assert_eq!(wm.pane_count(), 2);
+        click_button(&mut wm, area, NavigatorButtonKind::Close);
+        assert_eq!(wm.pane_count(), 1);
+        assert!(wm.pane(2).is_none());
+    });
+}
+
+#[test]
+fn mouse_footer_pin_button_toggles_fixed() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        assert_ne!(wm.drawer_config().visibility, DrawerVisibilityMode::Fixed);
+        click_button(&mut wm, area, NavigatorButtonKind::Pin);
+        assert_eq!(wm.drawer_config().visibility, DrawerVisibilityMode::Fixed);
+        click_button(&mut wm, area, NavigatorButtonKind::Pin);
+        assert_eq!(wm.drawer_config().visibility, DrawerVisibilityMode::OnDemand);
+    });
+}
+
+#[test]
+fn mouse_footer_zoom_button_opens_agents_window_on_selected_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        click_row(&mut wm, area, &DrawerRowKind::Pane(2));
+        assert!(!wm.agents_window().active);
+        click_button(&mut wm, area, NavigatorButtonKind::Zoom);
+        assert!(wm.agents_window().active);
+        assert_eq!(wm.agents_window().selection.node.as_ref().map(|k| k.0.as_str()), Some("pane:2"));
+    });
+}
+
+#[test]
+fn mouse_footer_narrow_drops_buttons_from_the_right() {
+    with_temp_xdg(|| {
+        // A 24-column workspace caps the drawer at half the width (12 columns), an inner width of 10.
+        let (mut wm, area) = navigator_wm(24, 30);
+        wm.toggle_drawer();
+        let dr = wm.drawer_rect(area).unwrap();
+        assert_eq!(dr.width - 2, 10, "inner width 10");
+        let buttons = navigator_footer_buttons(&wm, area);
+        let kinds: Vec<_> = buttons.iter().map(|b| b.kind).collect();
+        assert_eq!(
+            kinds,
+            [NavigatorButtonKind::Pin, NavigatorButtonKind::Attention, NavigatorButtonKind::NewSession, NavigatorButtonKind::NewPane]
+        );
+        let buf = render(&wm, area);
+        let labels: String = buttons.iter().map(|b| buf[(b.x, b.y)].symbol().to_string()).collect();
+        assert_eq!(labels, "*!N+");
+        let footer = buttons[0].y;
+        let row: String = (dr.x + 1..dr.x + dr.width - 1).map(|x| buf[(x, footer)].symbol().to_string()).collect();
+        assert!(!row.contains('@') && !row.contains('x'), "dropped buttons are not rendered: {row:?}");
+    });
+}
+
+#[test]
+fn mouse_non_button_cells_create_nothing() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        wm.drawer_mut().focused = true;
+        let dr = wm.drawer_rect(area).unwrap();
+        let buttons = navigator_footer_buttons(&wm, area);
+        let footer = buttons[0].y;
+        let markers = navigator_fold_marker_cells(&wm, area);
+        let before = observe(&wm);
+        let vis = wm.drawer_config().visibility;
+        for x in dr.x + 1..dr.x + dr.width - 1 {
+            let on_button = buttons.iter().any(|b| x >= b.x && x < b.x + b.width);
+            if !on_button {
+                click_at(&mut wm, area, x, footer);
+            }
+            let on_marker = markers.iter().any(|m| m.x == x && m.y == dr.y + 1);
+            if !on_marker {
+                // Header-ish first inner row: only the row label itself selects; nothing is created.
+                let (panes, sessions) = (wm.pane_count(), wm.list_sessions().len());
+                click_at(&mut wm, area, x, dr.y + 1);
+                assert_eq!((wm.pane_count(), wm.list_sessions().len()), (panes, sessions));
+            }
+        }
+        assert_eq!(wm.pane_count(), 2);
+        assert_eq!(wm.drawer_config().visibility, vis);
+        assert_eq!(wm.active_pane().prompt().text(), "");
+        assert_eq!(pane_row_count(&wm), 2, "no fold happened");
+        assert_eq!(wm.drawer_config().navigator_width_cols, 28);
+        let _ = before;
+    });
+}

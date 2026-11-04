@@ -152,6 +152,8 @@ struct NavigatorLayout {
     list_y: u16,
     list_bottom: u16,
     row_step: usize,
+    /// Screen row of the footer button bar, `None` when the inner height is below 4.
+    footer_y: Option<u16>,
 }
 
 fn navigator_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<NavigatorLayout> {
@@ -174,6 +176,7 @@ fn navigator_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<NavigatorLa
         list_y: inner.y + header_h,
         list_bottom: inner.y + inner.height.saturating_sub(footer_h),
         row_step,
+        footer_y: (footer_h >= 1).then(|| inner.y + inner.height - 1),
     })
 }
 
@@ -210,6 +213,105 @@ pub fn navigator_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<Navi
         }
     }
     cells
+}
+
+/// Screen cell of one fold marker (workspace or session row that has children).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NavigatorCell {
+    pub x: u16,
+    pub y: u16,
+    /// Index into [`WindowManager::drawer_rows`].
+    pub row_index: usize,
+}
+
+/// Cells of every visible fold marker; the single source for the renderer's glyph column and the mouse
+/// hit-test. Empty when the drawer is not visible.
+pub fn navigator_fold_marker_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<NavigatorCell> {
+    let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
+        return Vec::new();
+    };
+    let Some(lay) = navigator_layout(wm, drawer_rect) else {
+        return Vec::new();
+    };
+    let mut cells = Vec::new();
+    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
+        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+        if y >= lay.list_bottom {
+            break;
+        }
+        let Some(meta) = row.navigator.as_ref() else { continue };
+        if !matches!(meta.level, NavigatorLevel::Workspace | NavigatorLevel::Session) || !meta.has_children {
+            continue;
+        }
+        let x = lay.inner.x + 1 + 2 * u16::from(meta.depth);
+        if x < lay.inner.x + lay.inner.width {
+            cells.push(NavigatorCell { x, y, row_index });
+        }
+    }
+    cells
+}
+
+/// Operation a footer button triggers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavigatorButtonKind {
+    Pin,
+    Attention,
+    NewSession,
+    NewPane,
+    Rename,
+    Close,
+    Zoom,
+}
+
+impl NavigatorButtonKind {
+    /// Buttons in left-to-right order; later ones are dropped first when the drawer is narrow.
+    pub const ALL: [Self; 7] =
+        [Self::Pin, Self::Attention, Self::NewSession, Self::NewPane, Self::Rename, Self::Close, Self::Zoom];
+
+    /// Label: the key character that triggers the same operation, in both glyph packs.
+    pub const fn label(self) -> char {
+        match self {
+            Self::Pin => '*',
+            Self::Attention => '!',
+            Self::NewSession => 'N',
+            Self::NewPane => '+',
+            Self::Rename => 'r',
+            Self::Close => 'x',
+            Self::Zoom => '@',
+        }
+    }
+}
+
+/// One rendered footer button: `width` cells starting at `(x, y)` (label cell plus one padding cell).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NavigatorButton {
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub kind: NavigatorButtonKind,
+}
+
+/// Footer buttons that fit the drawer, in order; the single source for the renderer and the hit-test.
+/// Empty when the drawer is not visible or has no footer row (inner height below 4).
+pub fn navigator_footer_buttons(wm: &WindowManager, workspace_area: Rect) -> Vec<NavigatorButton> {
+    let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
+        return Vec::new();
+    };
+    let Some(lay) = navigator_layout(wm, drawer_rect) else {
+        return Vec::new();
+    };
+    footer_buttons_in(&lay)
+}
+
+fn footer_buttons_in(lay: &NavigatorLayout) -> Vec<NavigatorButton> {
+    let Some(y) = lay.footer_y else { return Vec::new() };
+    let right = lay.inner.x + lay.inner.width;
+    NavigatorButtonKind::ALL
+        .iter()
+        .enumerate()
+        .map(|(i, &kind)| NavigatorButton { x: lay.inner.x + 1 + 2 * i as u16, y, width: 2, kind })
+        .take_while(|b| b.x + b.width <= right)
+        .collect()
 }
 
 /// Index into [`WindowManager::drawer_rows`] of the list row under screen cell `(col, row)`, `None` outside
@@ -317,7 +419,8 @@ pub fn render_navigator_drawer(
     let Some(lay) = navigator_layout(wm, drawer_rect) else {
         return;
     };
-    let NavigatorLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step } = lay;
+    let buttons = footer_buttons_in(&lay);
+    let NavigatorLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step, .. } = lay;
     let base_style = Style::default()
         .fg(palette.text_fg.unwrap_or(palette.inactive_border_fg))
         .bg(palette.window_frame_bg);
@@ -403,11 +506,13 @@ pub fn render_navigator_drawer(
 
     if footer_h >= 1 {
         let footer_y = inner.y + inner.height - 1;
-        let hint = if hg == NavigatorGlyphs::ASCII { "Enter focus  e fold" } else { "⏎ focus  e fold" };
         let footer_style = Style::default().fg(palette.inactive_border_fg).bg(palette.window_frame_bg);
         fill_rect(buf, Rect::new(inner.x, footer_y, inner.width, 1), footer_style);
-        let hint = fit_width(hint, usize::from(inner.width), hg.ellipsis);
-        write_clipped_line(buf, inner.x, footer_y, inner.width, &hint, footer_style);
+        let label_style = footer_style.fg(palette.title_fg).add_modifier(Modifier::BOLD);
+        for b in &buttons {
+            let mut tmp = [0u8; 4];
+            write_clipped_line(buf, b.x, b.y, 1, b.kind.label().encode_utf8(&mut tmp), label_style);
+        }
     }
 
     if cfg.is_glass() {
