@@ -176,3 +176,88 @@ pub(super) fn sanitize_binary_noise_chunk(bytes: &[u8]) -> Vec<u8> {
     }
     out
 }
+
+/// Sanitises untrusted display text (pane titles set by PTY children via OSC 0/2) before layout.
+///
+/// Tab/CR/LF become one space; other C0 controls, DEL, C1 controls (U+0080-U+009F), bidi
+/// embedding/override/isolate controls (U+202A-U+202E, U+2066-U+2069), LRM/RLM (U+200E/F), the
+/// BOM/zero-width no-break space (U+FEFF), zero-width and invisible format characters
+/// (U+200B-U+200D, U+2060-U+2064), the Arabic letter mark (U+061C), line/paragraph separators
+/// (U+2028/9) and the Unicode tag block (U+E0000-U+E007F) are dropped. The result has at most `max_chars` chars;
+/// when the text is cut, the last char is `…`.
+pub fn sanitize_display(raw: &str, max_chars: usize) -> String {
+    let cleaned: Vec<char> = raw
+        .chars()
+        .filter_map(|ch| match ch {
+            '\t' | '\r' | '\n' => Some(' '),
+            '\u{0000}'..='\u{001F}'
+            | '\u{007F}'..='\u{009F}'
+            | '\u{061C}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{E0000}'..='\u{E007F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{FEFF}' => None,
+            other => Some(other),
+        })
+        .collect();
+    if cleaned.len() <= max_chars {
+        return cleaned.into_iter().collect();
+    }
+    if max_chars == 0 {
+        return String::new();
+    }
+    let mut out: String = cleaned.into_iter().take(max_chars - 1).collect();
+    out.push('…');
+    out
+}
+
+#[cfg(test)]
+mod sanitize_display_tests {
+    use super::sanitize_display;
+
+    #[test]
+    fn sanitize_display_drops_c0_and_del() {
+        assert_eq!(sanitize_display("a\u{0}b\u{1b}c\u{7}d\u{7f}e", 64), "abcde");
+    }
+
+    #[test]
+    fn sanitize_display_maps_whitespace_controls_to_space() {
+        assert_eq!(sanitize_display("a\tb\r\nc", 64), "a b  c");
+    }
+
+    #[test]
+    fn sanitize_display_drops_c1_controls() {
+        assert_eq!(sanitize_display("x\u{80}y\u{9b}z\u{9f}", 64), "xyz");
+    }
+
+    #[test]
+    fn sanitize_display_drops_bidi_and_zero_width_controls() {
+        let raw = "a\u{202A}\u{202B}\u{202C}\u{202D}\u{202E}b\u{2066}\u{2067}\u{2068}\u{2069}c\u{200E}\u{200F}d\u{FEFF}e";
+        assert_eq!(sanitize_display(raw, 64), "abcde");
+    }
+
+    #[test]
+    fn sanitize_display_drops_invisible_format_characters() {
+        let raw = "a\u{200B}\u{200C}\u{200D}b\u{2060}\u{2061}\u{2064}c\u{061C}d\u{2028}\u{2029}e\u{E0041}\u{E007F}f";
+        assert_eq!(sanitize_display(raw, 64), "abcdef");
+    }
+
+    #[test]
+    fn sanitize_display_keeps_printable_unicode() {
+        assert_eq!(sanitize_display("héllo 世界 ✓", 64), "héllo 世界 ✓");
+    }
+
+    #[test]
+    fn sanitize_display_caps_length_with_ellipsis() {
+        let out = sanitize_display(&"x".repeat(500), 64);
+        assert_eq!(out.chars().count(), 64);
+        assert!(out.ends_with('…'));
+        assert_eq!(sanitize_display("abc", 3), "abc");
+        assert_eq!(sanitize_display("abcd", 3), "ab…");
+        assert_eq!(sanitize_display("abc", 0), "");
+    }
+}

@@ -1,4 +1,4 @@
-//! `herdr`-Style Slide-Out Sessions / Windows / Panes & Fleet Drawer (`DRW-01`, `DRW-02`).
+//! `navigator`-Style Slide-Out Sessions / Windows / Panes & Fleet Drawer (`DRW-01`, `DRW-02`).
 //!
 //! Provides a dockable (`Left`, `Right`, `Top`, `Bottom`), multi-policy (`OnDemand`, `Fixed`,
 //! `AutoHide`) workspace drawer that either floats over panes (`Overlay` with Borland drop shadow
@@ -15,6 +15,13 @@ use crate::pane::{CompositePane, PaneId};
 use crate::remote::FleetNodeKind;
 use crate::vt::Osc133Phase;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
+
+pub mod navigator;
+pub mod nav;
+pub mod menu;
+pub use navigator::{CommsIndicator, DrawerStyle, NavigatorLevel, NavigatorRowMeta};
+pub use nav::DrawerNavOp;
+pub use menu::{NavigatorMenu, NavigatorMenuEntry};
 
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
 pub const BRAILLE_SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -94,6 +101,10 @@ pub struct DrawerConfig {
     pub layout: DrawerLayoutMode,
     pub width_cols: u16,
     pub height_rows: u16,
+    pub style: DrawerStyle,
+    /// Legacy key `herdr_width_cols` is still accepted when loading configs.
+    #[serde(alias = "herdr_width_cols")]
+    pub navigator_width_cols: u16,
 }
 
 impl Default for DrawerConfig {
@@ -104,6 +115,8 @@ impl Default for DrawerConfig {
             layout: DrawerLayoutMode::Push,
             width_cols: 34,
             height_rows: 6,
+            style: DrawerStyle::Classic,
+            navigator_width_cols: 28,
         }
     }
 }
@@ -131,6 +144,7 @@ pub struct DrawerRow {
     pub transport_badges: Vec<String>,
     pub title: String,
     pub is_focused_pane: bool,
+    pub navigator: Option<NavigatorRowMeta>,
 }
 
 impl DrawerRow {
@@ -197,14 +211,38 @@ pub struct WorkspaceDrawer {
     /// Wheel-set viewport `(selected_index it was set for, first visible row)`; ignored once the selection moves.
     pub view_scroll: Option<(usize, usize)>,
     pub resizing_drag: bool,
+    /// Open navigator right-click menu (Phase 50-15); changed only through `DrawerNavOp::Menu*`.
+    nav_menu: Option<NavigatorMenu>,
+    pub navigator: navigator::NavigatorDrawerState,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
+    /// Saved-session names snapshot used by the Navigator row builder (WR-05). Refilled lazily
+    /// after [`Self::invalidate_saved_sessions`], so one frame or event sees one list and the
+    /// directory is not rescanned by every layout helper.
+    saved_sessions: std::cell::RefCell<Option<Vec<String>>>,
+    /// Pane and tick of a pending Navigator close of a Working pane (WR-06).
+    close_armed: Option<(PaneId, usize)>,
 }
 
 impl WorkspaceDrawer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Saved-session snapshot, filled by `fill` on first use after an invalidation.
+    pub(crate) fn cached_saved_sessions(&self, fill: impl FnOnce() -> Vec<String>) -> Vec<String> {
+        if let Some(list) = self.saved_sessions.borrow().as_ref() {
+            return list.clone();
+        }
+        let list = fill();
+        *self.saved_sessions.borrow_mut() = Some(list.clone());
+        list
+    }
+
+    /// Drops the saved-session snapshot (any action may create, rename or delete a session).
+    pub(crate) fn invalidate_saved_sessions(&self) {
+        *self.saved_sessions.borrow_mut() = None;
     }
 
     /// First visible row: a wheel-set viewport while the selection is unchanged, else pinned to keep `selected` visible.
@@ -328,7 +366,7 @@ impl WindowManager {
             let max_w = (workspace_area.width / 2).max(12);
             let max_h = (workspace_area.height / 2).max(3);
             (
-                cfg.width_cols.clamp(12, max_w).min(workspace_area.width),
+                cfg.effective_width_cols().clamp(12, max_w).min(workspace_area.width),
                 cfg.height_rows.clamp(3, max_h).min(workspace_area.height),
             )
         };
@@ -360,6 +398,10 @@ impl WindowManager {
     /// Updates rolling throughput sparklines and spinner ticks across all panes (`DRW-02`).
     pub fn update_drawer_telemetry(&mut self) {
         self.drawer.tick_counter = self.drawer.tick_counter.wrapping_add(1);
+        // Pick up sessions saved by other processes about twice a second (WR-05).
+        if self.drawer.tick_counter.is_multiple_of(32) {
+            self.drawer.invalidate_saved_sessions();
+        }
         let ids: Vec<(PaneId, usize)> = self
             .panes
             .iter()
@@ -399,7 +441,7 @@ impl WindowManager {
     }
 
     /// Builds the complete list of hierarchical [`DrawerRow`]s with live telemetry glyphs (`DRW-02`).
-    pub fn drawer_rows(&self) -> Vec<DrawerRow> {
+    fn classic_drawer_rows(&self) -> Vec<DrawerRow> {
         let mut rows = Vec::new();
         let mut sess_modes = Vec::new();
         if self.is_workspace_recording() {
@@ -431,6 +473,7 @@ impl WindowManager {
             transport_badges: sess_transports,
             title: self.config.history_session.clone(),
             is_focused_pane: false,
+            navigator: None,
         });
 
         let has_extra_groups = self.quick_terminal.visible || !self.fleet.nodes.is_empty();
@@ -448,6 +491,7 @@ impl WindowManager {
                 WorkspaceLayoutMode::Stacked => "Stacked Z-Deck".to_string(),
             },
             is_focused_pane: false,
+            navigator: None,
         });
 
         let top_id = self.z_stack.top();
@@ -505,6 +549,7 @@ impl WindowManager {
                 transport_badges,
                 title: pane.title().to_string(),
                 is_focused_pane: is_focused,
+                navigator: None,
             });
         }
 
@@ -521,6 +566,7 @@ impl WindowManager {
                 transport_badges: Vec::new(),
                 title: "QUAKE QUICK TERM".to_string(),
                 is_focused_pane: true,
+                navigator: None,
             });
         }
 
@@ -542,6 +588,7 @@ impl WindowManager {
                 transport_badges,
                 title: name.clone(),
                 is_focused_pane: false,
+                navigator: None,
             });
         }
         let mut extra_sessions = self.list_sessions();
@@ -575,6 +622,7 @@ impl WindowManager {
                     transport_badges: Vec::new(),
                     title: saved,
                     is_focused_pane: false,
+                    navigator: None,
                 });
             }
         }
@@ -590,6 +638,7 @@ impl WindowManager {
         if self.is_drawer_effectively_visible() && (self.drawer.open || self.drawer.focused) {
             self.drawer.open = false;
             self.drawer.focused = false;
+            self.drawer.nav_menu = None;
             self.drawer.hover_active = false;
             self.drawer.maximized = false;
             if self.config.drawer.visibility == DrawerVisibilityMode::Fixed {
@@ -612,6 +661,7 @@ impl WindowManager {
 
     pub fn close_drawer(&mut self) {
         self.drawer.focused = false;
+        self.drawer.nav_menu = None;
         self.drawer.maximized = false;
         if self.config.drawer.visibility != DrawerVisibilityMode::Fixed {
             self.drawer.open = false;
@@ -947,7 +997,7 @@ impl WindowManager {
     pub fn resize_drawer(&mut self, size: u16) {
         self.drawer.maximized = false;
         if self.config.drawer.edge.is_vertical() {
-            self.config.drawer.width_cols = size.clamp(16, 100);
+            self.config.drawer.set_width_cols_for_style(size.clamp(16, 100));
         } else {
             self.config.drawer.height_rows = size.clamp(3, 14);
         }

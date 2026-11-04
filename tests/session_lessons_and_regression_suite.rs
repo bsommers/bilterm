@@ -6,7 +6,7 @@
 //! 2. Powerline (`U+E0B0`, `U+E0A0`) & PUA glyph preservation and geometric rasterization
 //! 3. Dual-plane (`FloatingCommandPrompt` <-> `OutputCanvas`) selection, clipboard & focus switching
 //! 4. Toggleable version badge (`:version`) in 3270-OIA & `<F1>` Help without snapshot pollution
-//! 5. Persistent, scrollable `herdr`-style Sessions/Terminals drawer (`F7` / `Ctrl+X d`)
+//! 5. Persistent, scrollable Navigator-style Sessions/Terminals drawer (`F7` / `Ctrl+X d`)
 //! 6. 3-signal `!ECHO LOCK` password detection vs. normal Readline/ZLE `!ECHO`
 //! 7. Soft ~800-1000-line module target (1200 hard backstop) (`ARCH-R04`) and `<= 80`-line `handle_wm_key_event` (`ARCH-R01`)
 
@@ -83,7 +83,7 @@ fn lesson_1_macos_option_dead_keys_and_held_ctrl_leader_chords() {
     .unwrap();
     assert!(
         wm.drawer_is_open(),
-        "Ctrl+X followed by held Ctrl+D should normalize and open the herdr drawer"
+        "Ctrl+X followed by held Ctrl+D should normalize and open the navigator drawer"
     );
 }
 
@@ -256,7 +256,7 @@ fn lesson_4_toggleable_version_badge_in_oia_and_help_modal_without_snapshot_poll
 }
 
 #[test]
-fn lesson_5_persistent_scrollable_herdr_drawer_stays_open_on_enter_and_click() {
+fn lesson_5_persistent_scrollable_navigator_drawer_stays_open_on_enter_and_click() {
     let mut wm = WindowManager::new_headless(14, 90);
     let viewport = Rect::new(0, 0, 90, 14);
     for _ in 0..7 {
@@ -264,7 +264,7 @@ fn lesson_5_persistent_scrollable_herdr_drawer_stays_open_on_enter_and_click() {
     }
     wm.resize_all(viewport).unwrap();
 
-    // Open the herdr drawer via F7
+    // Open the navigator drawer via F7
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE)).unwrap();
     assert!(wm.drawer_is_open());
 
@@ -306,7 +306,7 @@ fn lesson_5_persistent_scrollable_herdr_drawer_stays_open_on_enter_and_click() {
     .unwrap();
     assert!(
         wm.drawer_is_open(),
-        "clicking a pane row in the herdr drawer must switch focus without auto-closing the drawer"
+        "clicking a pane row in the navigator drawer must switch focus without auto-closing the drawer"
     );
 
     // Pressing F7 again explicitly closes the drawer

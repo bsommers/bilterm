@@ -68,7 +68,9 @@
 | **`F5`** / `Alt+Z` | `<L> z` / `<L> F5` | `:zoom` | Toggle zoom/maximize on the focused composite pane |
 | **`F6`** / `Alt+Tab` | `<L> o` / `<L> n` / `<L> Tab` / `<L> F6` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (or focus next pane) |
 | `Alt+Shift+Tab` | `<L> p` / `<L> Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (or focus previous pane) |
-| **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle `herdr`-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
+| — | `<L> a` | `:agents zoom` | Open the Agent Traffic window (graph + conversation); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). `Ctrl+O` inside it cycles graph / conversation / compose; `F6` keeps its global `DeckNext` meaning |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
 | **`F10`** / `Alt+\`` / `Ctrl+\` / `Ctrl+Space` | `<L> q` / `<L> \`` / `<L> ~` / `<L> F10` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal |
 | **`F12`** / `Ctrl+G` | `<L> g` / `<L> F12` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` |
@@ -171,6 +173,20 @@
 | **`Alt + LeftClick + Drag` over `OutputCanvas`** | **2D Rectangular Block Selection**: Drag-select a rectangular region on the canvas (even inside `RawPtyPassthrough` apps); keeps highlight visible on release and yanks the block to the system/OSC 52 clipboard (or plain `LeftDrag` when `:rect mode on` is active) |
 | **`Ctrl + LeftClick` on `OutputCanvas` URL / `OSC 8` link** | Copy URL to clipboard via `OSC 52` (`:links`) |
 | **Click Bottom DOS Function-Key Bar (`F1 Help` .. `F12 Raw`)** | Execute the clicked function-key action immediately |
+| **Navigator drawer: click a row** | Select and focus that row's pane (`:drawer row <n>` then `:drawer enter`) |
+| **Navigator drawer: click a fold marker (`▾` / `▸`, ASCII `-` / `+`)** | Fold or unfold that workspace or session (`:drawer fold`) |
+| **Navigator drawer: click `[+]` after a session or workspace name** | Add a window to that session (key `a`); the `[+]` beside the `WORKSPACES` title creates a session (key `N`) |
+| **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
+| **Navigator drawer: footer buttons `* ! N + r x @`** | Pin, jump to attention, new session, new pane, rename, close the selected pane, open the agent traffic window on it; each is the key of the same character (buttons that do not fit are dropped from the right) |
+| **Navigator drawer: title badges, wheel, edge drag** | Minimize / maximize / close; wheel moves the selection by 3 rows; dragging the edge resizes `navigator_width_cols`; `Ctrl + wheel` scales the drawer on the GUI surface |
+| **Navigator drawer: click the comms glyph (`⇄you`, `⋔3`)** | Open the Agent Traffic window on that conversation (`:drawer comms`) |
+| **Agent Traffic window: drag title bar / edge / corner** | Move / resize the window (`:agents move`, `:agents resize`); the top edge is the title bar, its corners resize |
+| **Agent Traffic window: title badges `[□]` `[X]` and pin `◇`/`◆`** | Maximize / close / pin or unpin (`:agents max`, `close`, `pin`, `unpin`) |
+| **Agent Traffic window: drag the splitter** | Resize graph vs conversation, 20 to 80 percent (`:agents split`) |
+| **Agent Traffic window: click / drag / right-click a node** | Select (second click focuses the pane) / move and pin / unpin (`:agents select`, `enter`, `node-pin`, `node-unpin`) |
+| **Agent Traffic window: click an edge** | Select it; `Enter` or a second click filters the conversation to that pair (`:agents edge`, `:agents filter pair`) |
+| **Agent Traffic window: conversation line, wheel, `[copy]`, filter buttons, chips, follow marker** | Select / scroll / copy / filter / follow (`:agents line`, `scroll`, `copy`, `filter ...`, `follow`); `[send]` is disabled |
+| **`Ctrl` + wheel over the drawer, `:mcp` console or Agent Traffic window** | Scale that panel on the GUI surface (`:drawer scale`, `:agents scale`). Real GUI windows: Linux/X11 only; on Windows and macOS `Ctrl` + wheel over a panel still zooms the font (use `[` `]` or the scale commands) |
 
 ---
 
@@ -262,7 +278,32 @@
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:drawer` | `:sidebar`, `:panels` | `[toggle \| focus \| left \| right \| top \| bottom \| edge <edge> \| fixed \| autohide \| ondemand \| float \| push \| mode <float\|push> \| size <N>]` | Toggle, focus, dock (`Left`/`Right`/`Top`/`Bottom`), pin (`Fixed`/`AutoHide`/`OnDemand`), or set layout (`Overlay`/`Push`) of the `herdr`-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| `:drawer` | `:sidebar`, `:panels` | `[toggle \| focus \| left \| right \| top \| bottom \| edge <edge> \| fixed \| autohide \| ondemand \| float \| push \| mode <float\|push> \| size <N> \| style <classic\|navigator\|toggle>]` | Toggle, focus, dock (`Left`/`Right`/`Top`/`Bottom`), pin (`Fixed`/`AutoHide`/`OnDemand`), or set layout (`Overlay`/`Push`) of the Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer; `style navigator` selects the compact agent-aware Navigator tree (`herdr` is a deprecated alias; config key `navigator_width_cols`) |
+
+**Navigator drawer keys.** With `drawer.style = navigator` and the drawer focused, these keys are consulted first (declarative table `NAVIGATOR_DRAWER_BINDINGS` in `src/input/keymap.rs`); every other key keeps its classic drawer meaning (`q`, `*`, `[`, `]`, `d`, `m`, `p`, `J`/`K`, Shift/Alt+arrows, ...). Each key lowers to an `Action` and has a `:drawer` command twin.
+
+| Key | `:drawer` twin | Effect |
+|-----|----------------|--------|
+| `j` / `Down`, `k` / `Up` | `:drawer next`, `:drawer prev` | Move the selection |
+| `Enter` / `Space` | `:drawer enter` | Focus the selected row |
+| `!` | `:drawer attention` | Jump to the next pane needing attention |
+| `e` | `:drawer fold` | Fold or unfold the selected session (a pane row folds its session) |
+| `E` | `:drawer expand all`, `:navigator expand all` | Unfold every workspace and session |
+| `C` | `:drawer collapse all`, `:navigator collapse all` | Fold everything to workspace rows; pressing it again on a fully folded tree unfolds all |
+| `N` | `:drawer new-session` | Create a new session and switch to it |
+| `a` | `:drawer add window [session]`, `:navigator add window [session]` | Add a window to the selected (or named) session and focus it; a selected pane row is the split target. In navigator style this replaces the classic `a` (arrange grid), which stays available as `:arrange grid` |
+| `A` | `:drawer add pane [h\|v]`, `:navigator add pane [h\|v]` | Split the selected pane (horizontal by default) and focus the new pane. In navigator style this replaces the classic `A` (arrange stack-grid), available as `:arrange stack-grid` |
+| `n` / `c` / `+` / `w` | `:drawer new-pane` (`new-window`) | Split the focused pane into a new window |
+| `r` / `R` | `:drawer rename [name]` | Rename the selected session (without a name the prompt opens prefilled) |
+| `x` / `Delete` | `:drawer close-pane` | Close the selected pane (`:drawer close` still minimizes the drawer) |
+| `PageUp` / `PageDown` | `:drawer scroll -5`, `:drawer scroll 5` | Move the selection by five rows |
+| `{` / `}` | `:drawer widen -2`, `:drawer widen 2` | Narrow or widen the drawer (`navigator_width_cols`) |
+| (mouse click) | `:drawer row <n>` | Select row `n` (1-based) |
+| (mouse right-click) | `:drawer menu`, `:drawer menu close`, `:drawer menu pick <n>` | Open, dismiss, or run an entry of the row context menu (entries apply `N`, `a`, `A` (horizontal and vertical), `r` and `x`) |
+| `Right` / `o` / `Enter` on the glyph | `:drawer comms-focus on\|off`, `:drawer comms` | Focus the comms glyph of the selected row; open the Agent Traffic window on its conversation |
+| (none) | `:drawer style [classic\|navigator\|toggle]` | Switch drawer style; see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md) |
+
+`:navigator` is an alias of `:drawer` for the Navigator tree (`:navigator expand all`, `:navigator collapse all`, `:navigator style classic`). `:drawer expand` without `all` keeps its older meaning (maximize the drawer).
 
 ### 6.7 Remote SSH Domains, Remote `tmux -CC` & `herdr` Fleet Federation
 
@@ -289,6 +330,19 @@
 | `:inspector` | `:inspect` | `[on \| off]` | Toggle live `<F9>` 3270 Terminal Inspector modal |
 | `:palette` | `:commands`, `:cmd` | *(none)* | Toggle `<Ctrl+P>` Fuzzy Command Palette modal |
 | `:help` | `:h`, `:?` | *(none)* | Toggle `<F1>` Borland Turbo Vision Help modal |
+
+**`:agents` (Agent state and the Agent Traffic window, Phase 50).** Every verb lowers to an `Action` and has a key and/or mouse twin; the full table is in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#commands).
+
+| `:command` | Arguments | Description |
+|------------|-----------|-------------|
+| `:agents` | `[list]` | Agent state per pane (working / blocked / idle / done / errored) with counts; structured data over RPC |
+| `:agents` | `zoom [pane-id] \| close \| dismiss` | Open / close the Agent Traffic window; `dismiss` is `Esc` (releases the keyboard when pinned) |
+| `:agents` | `select <left\|right\|up\|down\|node-key> \| edge <next\|prev\|a b> \| enter` | Node and edge cursor |
+| `:agents` | `move <dx> <dy> \| resize <dw> <dh> \| rect <x> <y> <w> <h> \| size <cols>x<rows>\|auto \| max \| split <20..80\|+n\|-n>` | Window geometry and splitter |
+| `:agents` | `grab [on\|off] \| nudge <dir> \| node-pin <key> <x> <y> \| node-unpin [key]` | Node placement |
+| `:agents` | `pin [toggle] \| unpin \| scale <75..200\|+n\|-n>` | Pin the window open; own panel scale (GUI surface) |
+| `:agents` | `focus [graph\|snoop\|compose] \| line <+n\|-n\|seq> \| copy \| scroll <±n\|top> \| follow [on\|off]` | Conversation navigation |
+| `:agents` | `filter agent [label] \| pair [a b] \| text <kw> \| clear \| remove <agent\|pair\|text>` | Conversation filters (AND-combined, no regex) |
 
 ---
 

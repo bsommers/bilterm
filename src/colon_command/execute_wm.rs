@@ -684,6 +684,14 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_drawer_action(drawer_act);
             false
         }
+        ColonCommand::DrawerStyle(style) => {
+            wm.set_drawer_style(style);
+            false
+        }
+        ColonCommand::DrawerNav(op) => {
+            wm.apply_drawer_nav(op);
+            false
+        }
         ref font_act @ (ColonCommand::FontZoomIn
         | ColonCommand::FontZoomOut
         | ColonCommand::FontZoomReset
@@ -820,6 +828,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::ConfigSave
         | ColonCommand::AppearanceSave
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
+        ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         other => {
             let is_prompt_layout = matches!(
                 other,
@@ -849,5 +858,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
     match target {
         PanelTarget::Drawer => "Drawer",
         PanelTarget::Mcp => "MCP",
+        PanelTarget::Agents => "Agents",
     }
 }

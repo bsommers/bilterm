@@ -1,3 +1,5 @@
+pub mod agents_gui;
+pub mod agents_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
@@ -13,6 +15,7 @@ pub mod cursor_cmd;
 pub mod design;
 pub mod drawer;
 pub mod glyphs;
+pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod modals;
@@ -658,7 +661,7 @@ impl Widget for WorkspaceWidget<'_> {
             }
         }
 
-        // Render `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
+        // Render Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
         render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if qt_visible {
@@ -706,6 +709,10 @@ impl Widget for WorkspaceWidget<'_> {
         if let Some(fkey_rect) = shell.bottom_bar {
             render_dos_fkey_bar(fkey_rect, &palette, buf);
         }
+
+        // Drawn below every workspace modal so a modal raised while the window is open (for example
+        // the Exit Guard) is never hidden behind it (WR-07).
+        agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);

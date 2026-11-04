@@ -21,6 +21,7 @@ use crate::ui::theme_import::OpenColorScheme;
 use crate::wm::journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 use crate::wm::session_tree::{SessionNodeKind, SessionTree};
 use crate::wm::split_tree::SplitDirection;
+use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
 use crate::wm::{Modal, WindowManager, WorkspaceLayoutMode};
 
 impl WindowManager {
@@ -39,14 +40,32 @@ impl WindowManager {
 
     /// Submits `cmd` through [`CompositePane::submit_command`] across all writable workspace panes.
     pub fn broadcast_command(&mut self, cmd: &str) -> Result<usize> {
-        let mut count = 0;
-        for pane in self.panes.values_mut() {
+        let mut delivered = Vec::new();
+        let mut result = Ok(());
+        for (id, pane) in self.panes.iter_mut() {
             if !pane.is_read_only() && !pane.is_password_prompt() {
-                pane.submit_command(cmd)?;
-                count += 1;
+                if let Err(e) = pane.submit_command(cmd) {
+                    result = Err(e);
+                    break;
+                }
+                delivered.push(*id);
             }
         }
-        Ok(count)
+        let from = if self.is_api_origin() { TrafficEndpoint::Api } else { TrafficEndpoint::User };
+        let now = Instant::now();
+        for id in &delivered {
+            self.record_traffic(from.clone(), TrafficEndpoint::Pane(*id), TrafficKind::Broadcast, cmd, now);
+        }
+        result?;
+        Ok(delivered.len())
+    }
+
+    /// Runs one MCP console directive and records any `:mcp broadcast` deliveries on the traffic bus.
+    fn mcp_execute(&mut self, directive: &str) -> std::result::Result<String, String> {
+        let before = self.daemon_state.broadcast_log.len();
+        let out = self.mcp_console.execute(directive, &mut self.daemon_state);
+        self.record_new_mcp_broadcasts(before, Instant::now());
+        out
     }
 
     /// Allocates and registers a new headless pane mapped to a `tmux -CC` `%pane_id`.
@@ -374,7 +393,7 @@ impl WindowManager {
         let base_lines = self
             .daemon_state
             .session_tree
-            .render_herdr_tree_lines(&active_sess);
+            .render_navigator_tree_lines(&active_sess);
         let pane_ids: Vec<PaneId> = self.ordered_pane_ids();
 
         let mut out = Vec::new();
@@ -489,7 +508,7 @@ impl WindowManager {
                 true
             }
             McpRowAction::SessionNode(node) => {
-                let _ = self.mcp_console.execute(&format!("attach {node}"), &mut self.daemon_state);
+                let _ = self.mcp_execute(&format!("attach {node}"));
                 self.refresh_mcp_console_view();
                 self.active_pane_mut()
                     .set_status_message(Some(format!("MCP: Attached session node '{node}'")));
@@ -525,7 +544,7 @@ impl WindowManager {
         };
         let is_frozen = self.daemon_state.session_tree.node(&node).is_some_and(|n| n.frozen);
         let directive = if is_frozen { format!("thaw {node}") } else { format!("freeze {node}") };
-        let _ = self.mcp_console.execute(&directive, &mut self.daemon_state);
+        let _ = self.mcp_execute(&directive);
         self.refresh_mcp_console_view();
         self.active_pane_mut()
             .set_status_message(Some(format!("MCP: Executed '{directive}'")));
@@ -539,7 +558,7 @@ impl WindowManager {
             _ => self.config.history_session.clone(),
         };
         let child = format!("{parent}/sub-{}", self.daemon_state.session_tree.nodes.len() + 1);
-        let _ = self.mcp_console.execute(&format!("spawn {child}"), &mut self.daemon_state);
+        let _ = self.mcp_execute(&format!("spawn {child}"));
         self.refresh_mcp_console_view();
         self.active_pane_mut()
             .set_status_message(Some(format!("MCP: Spawned session branch '{child}'")));
@@ -798,7 +817,7 @@ impl WindowManager {
             || first_verb.eq_ignore_ascii_case("console")
             || first_verb.eq_ignore_ascii_case("status")
         {
-            let _ = self.mcp_console.execute("status", &mut self.daemon_state);
+            let _ = self.mcp_execute("status");
             let lines = self.build_mcp_status_lines();
             self.open_mcp_popup_window("MASTER CONTROL PROGRAM // SYSTEM & DAEMON STATUS", lines);
             let sess_len = self.daemon_state.session_tree.nodes.len();
@@ -896,7 +915,7 @@ impl WindowManager {
             return false;
         }
         if first_verb.eq_ignore_ascii_case("tree") {
-            let _ = self.mcp_console.execute("tree", &mut self.daemon_state);
+            let _ = self.mcp_execute("tree");
             let lines = self.build_full_tree_lines();
             self.open_mcp_popup_window("MASTER CONTROL PROGRAM // SESSION & PANE TREE", lines);
             let sess_len = self.daemon_state.session_tree.nodes.len();
@@ -907,7 +926,7 @@ impl WindowManager {
             )));
             return false;
         }
-        match self.mcp_console.execute(trimmed, &mut self.daemon_state) {
+        match self.mcp_execute(trimmed) {
             Ok(msg) => {
                 let should_quit = !self.daemon_state.running;
                 let lines: Vec<String> = msg.lines().map(str::to_string).collect();

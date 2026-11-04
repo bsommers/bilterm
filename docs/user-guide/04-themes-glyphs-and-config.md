@@ -209,6 +209,48 @@ default_prompt_anchor = "split-top"
 default_prompt_height = 3
 ```
 
+### Slide-Out Drawer and Navigator (`[drawer]`)
+
+```toml
+[drawer]
+style = "navigator"          # "classic" (default) or "navigator" (agent-aware workspace > session > pane tree)
+navigator_width_cols = 28    # Navigator drawer width, 16-100, default 28 (legacy key: herdr_width_cols)
+```
+
+`drawer.style` and `drawer.navigator_width_cols` are also settable at runtime with `:set drawer.style navigator`, `:drawer style navigator|classic|toggle` and `:drawer widen <+-n>`. With the default `classic` style the drawer is unchanged. The Navigator, its state dots, keys and mouse gestures are documented in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). Dock edge, pinning and push/float modes remain as described in [Chapter 3](03-window-manager-and-z-stack.md).
+
+### Agent Recognition Profiles (`[agents.<name>]`)
+
+No agent profiles ship built in. Without a profile Bilterm derives each pane's Navigator state dot only from signals it already tracks (running command, output activity, OSC 133 phases, password prompts, notifications, exit status). A profile adds screen phrases for one agent program:
+
+| Key | Meaning |
+| :--- | :--- |
+| `matches` | Substrings of the pane's running command or title that select this profile (default: the profile name) |
+| `working` | Case-insensitive substrings in the last 8 visible rows that mean the agent is working |
+| `blocked` | Case-insensitive substrings in the last 8 visible rows that mean the agent is waiting for you |
+
+Patterns are plain case-insensitive substrings (no regex), trimmed, and capped at 16 patterns of 80 characters per list; they only change the advisory state dot and counts. The examples below are **unverified example patterns - confirm against the version you run**; the wording of these tools changes between releases.
+
+```toml
+# unverified example patterns - confirm against the version you run
+[agents.claude]
+matches = ["claude"]
+working = ["esc to interrupt"]
+blocked = ["do you want to proceed", "(y/n)"]
+
+# unverified example patterns - confirm against the version you run
+[agents.codex]
+matches = ["codex"]
+working = ["working", "thinking"]
+blocked = ["allow command", "approve"]
+
+# unverified example patterns - confirm against the version you run
+[agents.gemini]
+matches = ["gemini"]
+working = ["esc to cancel"]
+blocked = ["allow once", "waiting for user confirmation"]
+```
+
 ### Scrollback Memory (`[scrollback]`)
 
 Scrollback is sized from the host's RAM instead of a fixed line count. Every pane starts at

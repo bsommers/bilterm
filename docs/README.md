@@ -27,7 +27,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.1`)** — 
 | **[`docs/running.md`](running.md)** | Prerequisites, installation, CLI & Automation, shell resolution (`$SHELL` / `%COMSPEC%`), `<Tab>` completion internals, `config.toml`, and exit codes |
 | **[`docs/how-to.md`](how-to.md)** | Step-by-step task recipes and troubleshooting matrix |
 | **[`docs/diagrams/README.md`](diagrams/README.md)** | Multi-format visual diagram catalog (**ASCII** `.txt`, **Mermaid** `.mmd`, and **native draw.io** `.drawio` XML) |
-| **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-007`) |
+| **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-008`) |
 | **[`docs/TEST_COVERAGE.md`](TEST_COVERAGE.md)** | Test coverage report (**`83.45%` line coverage**, 250+ passing tests) and battle/stress/performance benchmarks |
 | **[`docs/launch-presentation-and-pitch-script.md`](launch-presentation-and-pitch-script.md)** | 12-slide technical deck specification and 5-minute product launch video script |
 | **[`CHANGELOG.md`](../CHANGELOG.md)** | Semantic versioning release history (`v0.1.0` through `v2.0.0`) |

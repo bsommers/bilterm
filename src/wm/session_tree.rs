@@ -3,7 +3,7 @@
 //! Supports independent root sessions (`SessionNodeKind::Independent`), MCP daemon-rooted
 //! sessions (`SessionNodeKind::Rooted`), and arbitrarily nested child subtrees
 //! (`SessionNodeKind::Subtree`) with cycle-free `branch`, `graft`, and `detach_subtree`
-//! operations, subtree freeze/thaw, fold/unfold, and `herdr` drawer tree rendering.
+//! operations, subtree freeze/thaw, fold/unfold, and Navigator drawer tree rendering.
 
 use std::collections::BTreeSet;
 
@@ -351,8 +351,8 @@ impl SessionTree {
         (panes, active)
     }
 
-    /// Renders `herdr`-style hierarchical session tree lines with connectors, fold badges, and rollup counts (`TREE-02`).
-    pub fn render_herdr_tree_lines(&self, active_session: &str) -> Vec<String> {
+    /// Renders Navigator-style hierarchical session tree lines with connectors, fold badges, and rollup counts (`TREE-02`).
+    pub fn render_navigator_tree_lines(&self, active_session: &str) -> Vec<String> {
         let mut lines = vec!["◈ ROOT [MCP — MASTER CONTROL PROGRAM]".to_string()];
         let roots: Vec<&SessionTreeNode> = self
             .nodes
@@ -490,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn session_tree_freeze_fold_and_render_herdr_lines() {
+    fn session_tree_freeze_fold_and_render_navigator_lines() {
         let mut tree = SessionTree::new();
         tree.branch("main", "sub-a").unwrap();
         tree.branch("sub-a", "leaf-1").unwrap();
@@ -499,14 +499,14 @@ mod tests {
         assert_eq!(frozen, vec!["sub-a", "leaf-1"]);
         assert!(tree.node("leaf-1").unwrap().frozen);
 
-        let lines = tree.render_herdr_tree_lines("main");
+        let lines = tree.render_navigator_tree_lines("main");
         assert!(lines[0].contains("MASTER CONTROL PROGRAM"));
         assert!(lines.iter().any(|l| l.contains("sub-a") && l.contains("❄ FROZEN")));
         assert!(lines.iter().any(|l| l.contains("leaf-1")));
 
         // Fold sub-a so leaf-1 is hidden from rendered output
         assert!(tree.toggle_fold("sub-a"));
-        let folded_lines = tree.render_herdr_tree_lines("main");
+        let folded_lines = tree.render_navigator_tree_lines("main");
         assert!(!folded_lines.iter().any(|l| l.contains("leaf-1")));
     }
 

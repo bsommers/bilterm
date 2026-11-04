@@ -1,19 +1,20 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v2.6.0
-milestone_name: UI Modernization (Phases 43-48): design system, display modes, new looks; Legacy looks unchanged
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: 46-08 and 46-09 done; Phase 46 code complete, live-GUI pass pending
-last_updated: "2026-11-02"
+stopped_at: Completed 50-14-PLAN.md
+last_updated: "2026-11-04T03:08:28.341Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45
+last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
+state_head: 350be15411826da6720faa2e51b7098fd5220cbc
 progress:
   total_phases: 48
   completed_phases: 44
   total_plans: 101
   completed_plans: 100
+milestone_name: "UI Modernization (Phases 43-48): design system, display modes, new looks; Legacy looks unchanged"
 ---
 
 # Project State
@@ -58,6 +59,25 @@ Progress: [██████████] 100% (42/42 Phases)
 - Trend: Stable
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 50 P01 | 40 min | 2 tasks | 13 files |
+| Phase 50 P02 | 5 min | 2 tasks | 6 files |
+| Phase 50 P03 | 15 min | 3 tasks | 14 files |
+| Phase 50 P04 | 10 min | 2 tasks | 12 files |
+| Phase 50 P05 | 25 min | 2 tasks | 9 files |
+| Phase 50 P06 | ~1h | 5 tasks | 13 files |
+| Phase 50 P07 | 25min | 2 tasks | 7 files |
+| Phase 50 P09 | 40m | 3 tasks | 15 files |
+| Phase 50 P15 | 60min | 4 tasks | 11 files |
+| Phase 50 P16 | 25min | 2 tasks | 15 files |
+| Phase 50 P10 | 60min | 3 tasks | 12 files |
+| Phase 50 P11 | 35min | 3 tasks | 8 files |
+| Phase 50 P13 | 20min | 3 tasks | 6 files |
+| Phase 50 P12 | 25min | 2 tasks | 12 files |
+| Phase 50 P14 | 20min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -70,6 +90,14 @@ Recent decisions affecting current work:
 - [Init]: Child PTY dimensions stay fixed to full `OutputCanvas` rect so moving/resizing/hiding `FloatingPrompt` never triggers `SIGWINCH` reflow storms.
 - [Init]: Three-signal input routing (`OSC 133` + `tcgetpgrp` + `termios !ECHO` + `DECSET 1049`) prevents `sudo` password echo leaks and interactive REPL lockouts.
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
+- [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
+- [Phase 50]: 50-02: navigator roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
+- [Phase 50]: 50-03: first observation of a pane applies its agent state without dwell; later Working/Idle flips need 500 ms; finish detected from OSC 133 D transition or (last_exit_code,last_duration_ms) change
+- [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
+- [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'
+- [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 51-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
+- [Phase 50]: 50-07: agents graph layout is Mutex-cached FR with 0.06 drift limit; active edge = success colour, selected = accent
+- [Phase 50]: 50-13: fix-linux chosen - X11 fully wired (modifiers, Ctrl+wheel panel scale); Win32/macOS only set_gui_surface(true); Ctrl+wheel over panels still font-zooms there (known gap)
 
 ### Pending Todos
 
@@ -89,9 +117,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-10-28 20:01
-Stopped at: Released v2.1.0 (Phases 35-36), pulled macOS/Claude Code/agy hardening (7817cd2), synced docs, ready for items 3 & 4 after restart
-Resume file: .planning/CHECKPOINT.md
+Last session: 2026-11-04T03:08:28.151Z
+Stopped at: Completed 50-14-PLAN.md
+Resume file: None
 
 ## Quick Tasks Completed
 

@@ -288,7 +288,7 @@ impl DaemonServerState {
             },
             DaemonRequest::ListSessions => DaemonResponse::SessionList {
                 sessions: self.session_summaries(),
-                tree_lines: self.session_tree.render_herdr_tree_lines("main"),
+                tree_lines: self.session_tree.render_navigator_tree_lines("main"),
             },
             DaemonRequest::Attach {
                 client_id,

@@ -58,7 +58,7 @@ Need to run a quick "by-the-way" command without disrupting your tiled or stacke
 
 ## 5. Slide-Out Sessions/Windows/Panes & Fleet Drawer (`F7` / `:drawer`)
 
-- Press **`F7`**, **`Alt+Shift+D`**, **`<Leader> d`**, or run **`:drawer`** to toggle the **`herdr`-style Slide-Out Drawer** displaying all active sessions, windows, composite panes (with live process status and geometry), and registered remote SSH fleet nodes.
+- Press **`F7`**, **`Alt+Shift+D`**, **`<Leader> d`**, or run **`:drawer`** to toggle the **Navigator-style Slide-Out Drawer** displaying all active sessions, windows, composite panes (with live process status and geometry), and registered remote SSH fleet nodes.
 - Dock the drawer to any screen edge (`:drawer left | right | top | bottom`), switch between `Overlay` (floating with DOS drop shadow) and `Push` (shrinking tiled workspace so zero cells are occluded via `:drawer push | float`), or set visibility (`:drawer fixed | autohide | ondemand`).
 - **Interactive Session Creation & Reordering in the Drawer**:
   - Press **`N`** inside the focused `<F7>` Drawer to create and switch to a new session immediately.

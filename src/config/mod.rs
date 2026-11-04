@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod dotted;
 pub use dotted::ApiConfig;
 
@@ -121,6 +122,9 @@ pub struct BiltermConfig {
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
     pub remotes: BTreeMap<String, RemoteHostProfile>,
+    /// Optional agent recognition profiles (`[agents.<name>]`, Phase 50-03); empty by default and then not serialised.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub agents: BTreeMap<String, agents::AgentProfile>,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -129,7 +133,7 @@ pub struct BiltermConfig {
     pub exit_protection: ExitProtectionPolicy,
     /// Marks this workspace session as a protected Root Session (`SAFE-02`).
     pub is_root_session: bool,
-    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
+    /// Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
     /// Primary GUI / terminal font family or preset (`"Cascadia Mono"`, `"Consolas"`, `"JetBrains Mono"`, `"IBM 3270"`, etc., `FONT-01`).
     pub font_family: String,
@@ -148,7 +152,7 @@ pub struct BiltermConfig {
     /// Controls whether `F1..F12` in `RawPtyPassthrough` trigger Bilterm actions (`bilterm`, default),
     /// forward to the child application (`app`), or auto-switch on `DECSET ?1049` (`auto`).
     pub raw_fkeys: RawFkeyMode,
-    /// Enables `herdr`-style rich glyphs, icons, Braille spinners, and sparkline telemetry (`:snazzy`).
+    /// Enables Navigator-style rich glyphs, icons, Braille spinners, and sparkline telemetry (`:snazzy`).
     pub snazzy_mode: bool,
     /// Enables frosted translucent glass visual style for overlaid panels and `--gui` mode (`:glass`).
     pub glass_mode: bool,
@@ -225,6 +229,7 @@ impl Default for BiltermConfig {
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
+            agents: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,

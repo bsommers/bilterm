@@ -1,3 +1,7 @@
+pub mod agent_state;
+pub mod agents_window;
+pub mod agents_cmd;
+pub mod agents_geometry;
 pub mod chrome_style;
 pub mod drawer;
 pub mod journal;
@@ -7,6 +11,7 @@ pub mod session;
 pub mod session_manager;
 pub mod session_tree;
 pub mod split_tree;
+pub mod traffic;
 pub mod v2_runtime;
 pub mod window_style;
 pub mod z_stack;
@@ -120,8 +125,14 @@ pub struct WindowManager {
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
-    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
+    /// Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
     pub(crate) drawer: WorkspaceDrawer,
+    /// Per-pane agent state tracker (`FLT-01`, Phase 50-03).
+    pub(crate) agents: agent_state::AgentTracker,
+    /// In-memory agent traffic bus read by the zoom graph and snoop view (`FLT-02`, Phase 50-05).
+    pub(crate) traffic: traffic::TrafficBus,
+    /// Floating AGENT TRAFFIC zoom window state (`FLT-02`, Phase 50-07).
+    pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
@@ -130,6 +141,8 @@ pub struct WindowManager {
     pub(crate) drawer_scale_pct: u16,
     /// Same for the `:mcp` console; independent of the drawer's.
     pub(crate) mcp_scale_pct: u16,
+    /// Same for the AGENT TRAFFIC window; independent of the drawer's and the console's (50-16).
+    pub(crate) agents_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -197,10 +210,14 @@ impl WindowManager {
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
+            agents: agent_state::AgentTracker::new(),
+            traffic: traffic::TrafficBus::new(),
+            agents_window: agents_window::AgentsWindowState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
             mcp_scale_pct: 100,
+            agents_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
@@ -215,7 +232,12 @@ impl WindowManager {
 
     /// Executes a unified [`Action`] against the workspace and active pane (`ARCH-R01.1`).
     pub fn apply(&mut self, action: Action) -> Result<AppAction> {
-        if execute_wm_colon_command(self, action) {
+        // Any action may create, rename or delete a saved session: drop the Navigator's snapshot
+        // before and after so rows rebuilt during or right after it are fresh (WR-05).
+        self.drawer.invalidate_saved_sessions();
+        let quit = execute_wm_colon_command(self, action);
+        self.drawer.invalidate_saved_sessions();
+        if quit {
             Ok(AppAction::Quit)
         } else {
             Ok(AppAction::Handled)
@@ -698,6 +720,9 @@ impl WindowManager {
             changed = true;
         }
         self.update_drawer_telemetry();
+        if self.tick_agent_ui(Instant::now()) {
+            changed = true;
+        }
         self.maybe_rebalance_scrollback(Instant::now());
         changed
     }

@@ -79,6 +79,8 @@ pub fn render_double_width_row(
 pub enum PanelTarget {
     Drawer,
     Mcp,
+    /// The AGENT TRAFFIC window (Phase 50-16).
+    Agents,
 }
 
 impl WindowManager {
@@ -204,6 +206,7 @@ impl WindowManager {
         match target {
             PanelTarget::Drawer => self.drawer_scale_pct,
             PanelTarget::Mcp => self.mcp_scale_pct,
+            PanelTarget::Agents => self.agents_scale_pct,
         }
         .clamp(75, 200)
     }
@@ -214,13 +217,15 @@ impl WindowManager {
         match target {
             PanelTarget::Drawer => self.drawer_scale_pct = pct,
             PanelTarget::Mcp => self.mcp_scale_pct = pct,
+            PanelTarget::Agents => self.agents_scale_pct = pct,
         }
     }
 
-    /// Sets both panels to the same scale (`:panel scale`).
+    /// Sets every panel to the same scale (`:panel scale`).
     pub fn set_panel_scale_pct(&mut self, pct: u16) {
         self.set_scale(PanelTarget::Drawer, pct);
         self.set_scale(PanelTarget::Mcp, pct);
+        self.set_scale(PanelTarget::Agents, pct);
     }
 
     /// Steps one panel's scale by `delta` percent (clamped to `75..=200`); returns the new setting.

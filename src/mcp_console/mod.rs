@@ -595,7 +595,7 @@ impl McpConsoleState {
                 other => format!("{other:?} END OF LINE."),
             },
             McpCommand::Tree => {
-                let lines = daemon.session_tree.render_herdr_tree_lines("main");
+                let lines = daemon.session_tree.render_navigator_tree_lines("main");
                 format!("{}\nEND OF LINE.", lines.join("\n"))
             }
             McpCommand::Attach { node } => {

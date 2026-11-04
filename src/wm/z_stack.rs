@@ -397,7 +397,7 @@ impl WindowManager {
         self.wm_mouse_drag = drag;
     }
 
-    fn current_workspace_area(&self) -> (Rect, Rect) {
+    pub(super) fn current_workspace_area(&self) -> (Rect, Rect) {
         let (rows, cols) = self.default_size;
         let full = Rect::new(0, 0, cols.max(1), rows.max(1));
         let top_off = u16::from(self.config.show_top_menubar && full.height >= 4);

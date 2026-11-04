@@ -331,6 +331,16 @@ pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
+    // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
+    // first: the agents window must not answer a modal it cannot even show on top of (WR-07).
+    if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.agents_window_captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
+
     if wm.drawer().focused {
         if wm.is_leader_pending() {
             return Ok(None);
@@ -338,6 +348,11 @@ pub(super) fn handle_wm_modal_key(
         let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
         if super::keymap::is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
             return Ok(None);
+        }
+        if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator
+            && let Some(action) = super::drawer_navigator::handle_navigator_drawer_key(wm, key)
+        {
+            return Ok(Some(action));
         }
         match key.code {
             KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),

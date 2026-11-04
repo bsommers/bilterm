@@ -1,4 +1,7 @@
+mod agents_window;
+mod drawer_navigator;
 pub mod encode;
+pub mod gui_route;
 pub mod keymap;
 pub mod modal;
 pub mod mouse;
@@ -505,6 +508,15 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
         }
         _ => Ok(AppAction::Continue),
     }
+}
+
+/// Routes a `Event::Paste` payload for the whole workspace: the AGENT TRAFFIC window gets first
+/// refusal (CR-01), otherwise the text is pasted into the active pane via [`handle_paste_event`].
+pub fn handle_wm_paste_event(wm: &mut WindowManager, pasted_text: &str) -> Result<AppAction> {
+    if let Some(action) = agents_window::handle_agents_window_paste(wm, pasted_text) {
+        return Ok(action);
+    }
+    handle_paste_event(wm.active_pane_mut(), pasted_text)
 }
 
 /// Reads the OS clipboard via [`crate::clipboard::get_system_clipboard`] (falling back to the

@@ -321,7 +321,7 @@ pub(super) fn parse_visual_colon_command(
             };
             Some(Ok(ColonCommand::CrtToggle(arg)))
         }
-        "drawer" | "sidebar" | "panels" => parse_drawer_command(parts),
+        "drawer" | "sidebar" | "panels" | "navigator" => parse_drawer_command(parts),
         "fkeys" | "fkey" | "function-keys" => parse_fkeys_command(parts),
         "snazzy" | "herdr-style" => match parts.get(1).copied() {
             None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
@@ -636,7 +636,81 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
     }))
 }
 
+/// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
+/// new-pane|rename|close-pane|menu|comms|comms-focus`); `None` for every other verb. `:drawer close` stays the classic minimize.
+fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
+    use crate::wm::drawer::DrawerNavOp as Op;
+    let num = |usage: &str| -> Result<i16, String> {
+        parts.get(2).and_then(|v| v.parse::<i16>().ok()).ok_or_else(|| usage.to_string())
+    };
+    let op = match parts.get(1).copied()? {
+        "fold" => Op::Fold,
+        "enter" | "activate" => Op::Activate,
+        "next" | "down" => Op::Next,
+        "prev" | "up" => Op::Prev,
+        "row" => match parts.get(2).and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {
+            Some(n) => Op::Row(n - 1),
+            None => return Some(Err("Usage: :drawer row <n>".to_string())),
+        },
+        "scroll" => match num("Usage: :drawer scroll <+-n>") {
+            Ok(n) => Op::Scroll(n),
+            Err(e) => return Some(Err(e)),
+        },
+        "widen" => match num("Usage: :drawer widen <+-n>") {
+            Ok(n) => Op::Widen(n),
+            Err(e) => return Some(Err(e)),
+        },
+        // `:drawer expand` without `all` keeps its older meaning (maximize) in the caller.
+        "expand" if parts.get(2) == Some(&"all") => Op::ExpandAll,
+        "collapse" => match parts.get(2) {
+            Some(&"all") => Op::CollapseAll,
+            _ => return Some(Err("Usage: :drawer expand all | collapse all".to_string())),
+        },
+        "add" => match (parts.get(2).copied(), parts.get(3).copied(), parts.len()) {
+            (Some("window"), None, 3) => Op::AddWindow(None),
+            (Some("window"), Some(name), 4) => Op::AddWindow(Some(name.to_string())),
+            (Some("pane"), None, 3) | (Some("pane"), Some("h" | "horizontal"), 4) => {
+                Op::AddPane(crate::wm::SplitDirection::Horizontal)
+            }
+            (Some("pane"), Some("v" | "vertical"), 4) => Op::AddPane(crate::wm::SplitDirection::Vertical),
+            _ => return Some(Err("Usage: :navigator add window [session] | add pane [h|v]".to_string())),
+        },
+        "menu" => match (parts.get(2).copied(), parts.get(3).copied(), parts.len()) {
+            (None, _, 2) => Op::MenuOpen(None),
+            (Some("close"), None, 3) => Op::MenuClose,
+            (Some("pick"), Some(n), 4) => match n.parse::<usize>().ok().filter(|&n| n >= 1) {
+                Some(n) => Op::MenuPick(n - 1),
+                None => return Some(Err("Usage: :drawer menu pick <n>".to_string())),
+            },
+            (Some(x), Some(y), 4) => match (x.parse::<u16>(), y.parse::<u16>()) {
+                (Ok(x), Ok(y)) => Op::MenuOpen(Some((x, y))),
+                _ => return Some(Err("Usage: :drawer menu [<x> <y> | close | pick <n>]".to_string())),
+            },
+            _ => return Some(Err("Usage: :drawer menu [<x> <y> | close | pick <n>]".to_string())),
+        },
+        "new-session" => Op::NewSession,
+        "new-pane" | "new-window" => Op::NewPane,
+        "rename" => match parts.len() {
+            2 => Op::RenamePrompt,
+            3 => Op::Rename(parts[2].to_string()),
+            _ => return Some(Err("Usage: :drawer rename [name]".to_string())),
+        },
+        "close-pane" => Op::Close,
+        "comms" if parts.len() == 2 => Op::OpenComms,
+        "comms-focus" => match (parts.get(2).copied(), parts.len()) {
+            (Some("on"), 3) => Op::CommsFocus(true),
+            (Some("off"), 3) => Op::CommsFocus(false),
+            _ => return Some(Err("Usage: :drawer comms-focus on|off".to_string())),
+        },
+        _ => return None,
+    };
+    Some(Ok(ColonCommand::DrawerNav(op)))
+}
+
 fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
+    if let Some(nav) = parse_drawer_nav(parts) {
+        return Some(nav);
+    }
     match parts.get(1).copied() {
         None | Some("toggle") => Some(Ok(ColonCommand::DrawerToggle)),
         Some("focus" | "open" | "show") => Some(Ok(ColonCommand::DrawerFocus)),
@@ -689,6 +763,21 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             None => Some(Ok(ColonCommand::DrawerLayout(None))),
             _ => Some(Err("Usage: :drawer mode [float|push]".to_string())),
         },
+        Some("style") => {
+            use crate::wm::drawer::DrawerStyle;
+            match parts.get(2).copied() {
+                None | Some("toggle") => Some(Ok(ColonCommand::DrawerStyle(None))),
+                Some("classic") => Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Classic)))),
+                Some("navigator" | "herdr") => {
+                    // `herdr` is the deprecated hidden alias of `navigator`.
+                    Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Navigator))))
+                }
+                _ => Some(Err("Usage: :drawer style [classic|navigator|toggle]".to_string())),
+            }
+        }
+        Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
+            crate::wm::drawer::DrawerNavOp::NextAttention,
+        ))),
         Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
         Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
@@ -699,7 +788,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

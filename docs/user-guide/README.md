@@ -16,7 +16,7 @@ Welcome to the official User Guide for **Bilterm (`v2.5.1`)** — the Rust + Rat
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Two-Minute First Run (TUI & Native `--gui`)](#two-minute-first-run-tui--native---gui)
-- [10-Chapter User Guide Index](#10-chapter-user-guide-index)
+- [11-Chapter User Guide Index](#11-chapter-user-guide-index)
 - [Screen Renders & Visual Gallery](#screen-renders--visual-gallery)
 - [Starter Packs (`starter-packs/`)](#starter-packs-starter-packs)
 - [Interactive Examples](#interactive-examples)
@@ -78,7 +78,7 @@ Press **`Enter`** — the command is sent to the underlying shell, the `OutputCa
 
 ---
 
-## 10-Chapter User Guide Index
+## 11-Chapter User Guide Index
 
 For deep dives into each subsystem, browse the dedicated chapters in [`docs/user-guide/`](.):
 
@@ -102,6 +102,8 @@ For deep dives into each subsystem, browse the dedicated chapters in [`docs/user
    - 9 comprehensive architectures & workflows: Multi-Agent AI Coding Swarms, Remote Agents over SSH, Remote Development (`:ssh-tmux`), Robot Scripting & Deterministic QA, CI/CD Verification Harnesses, Daily Power-User Operations, Polyglot Developer Layouts, Live Escape-Sequence Debugging (`F9`), and Custom Per-Pane Font Layouts (`nmon`).
 10. **[Chapter 10: Security Architecture & Operational Best Practices](10-security-and-best-practices.md)**
     - Defense-in-depth engineering reference covering 3-Signal `!ECHO LOCK`, `/dev/random` flood & escape-trap sanitization, clipboard paste-injection guards, private `0700`/`0600` filesystem confinement, Unix socket `SO_PEERCRED` + bearer-token RPC security, and SSH argument-injection prevention.
+11. **[Chapter 11: The Navigator Sidebar & Agent Traffic Window](11-navigator-sidebar-and-agent-traffic.md)**
+    - Optional agent-aware drawer style (`[drawer] style = "navigator"`): workspace > session > pane tree with agent state dots, attention jump, comms glyphs, key and mouse tables, the AGENT TRAFFIC window (`<Leader> a` / `:agents`), GUI vector rendering, and known limits.
 
 ---
 

@@ -1,8 +1,10 @@
-//! `herdr`-Style & ZenTerm/REX Liquid Glass Slide-Out Sessions / Windows / Panes & Fleet Drawer Renderer (`DRW-01`, `DRW-02`).
+//! `navigator`-Style & ZenTerm/REX Liquid Glass Slide-Out Sessions / Windows / Panes & Fleet Drawer Renderer (`DRW-01`, `DRW-02`).
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
+
+pub mod navigator;
 
 use crate::config::BiltermConfig;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
@@ -143,7 +145,7 @@ fn format_liquid_drawer_card(row: &DrawerRow, is_sel: bool, pane_count: usize) -
     }
 }
 
-/// Renders the `herdr`-style or ZenTerm/REX Liquid Glass slide-out drawer when visible (`DRW-01`, `DRW-02`).
+/// Renders the Navigator-style or ZenTerm/REX Liquid Glass slide-out drawer when visible (`DRW-01`, `DRW-02`).
 pub fn render_workspace_drawer(
     wm: &WindowManager,
     workspace_area: Rect,
@@ -155,6 +157,10 @@ pub fn render_workspace_drawer(
     let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
         return;
     };
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+        navigator::render_navigator_drawer(wm, workspace_area, drawer_rect, cfg, palette, glyphs, buf);
+        return;
+    }
     let dcfg = wm.drawer_config();
     let drawer = wm.drawer();
     let is_modern = cfg.is_modern();

@@ -93,7 +93,7 @@ pub(super) fn apply_rect_edge_resize(
 }
 
 /// Ctrl + wheel over a drawer/MCP panel steps its GUI text scale by 10% (`None` for any other event).
-fn ctrl_wheel_scale_delta(mouse: &MouseEvent) -> Option<i16> {
+pub(super) fn ctrl_wheel_scale_delta(mouse: &MouseEvent) -> Option<i16> {
     if !mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
         return None;
     }
@@ -702,6 +702,9 @@ pub(super) fn handle_drawer_mouse_event(
                     .saturating_add(workspace_area.height)
                     .saturating_sub(mouse.row),
             };
+            if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+                return super::drawer_navigator::navigator_drag_resize(wm, new_size);
+            }
             wm.resize_drawer(new_size);
             let _ = wm.resize_all(workspace_area);
             return Some(AppAction::Handled);
@@ -714,11 +717,15 @@ pub(super) fn handle_drawer_mouse_event(
     }
 
     let dr = wm.drawer_rect(workspace_area)?;
+    super::drawer_navigator::navigator_menu_click_away(wm, &mouse, dr);
     if !rect_contains(dr, mouse.column, mouse.row) {
         if matches!(mouse.kind, MouseEventKind::Down(_)) && wm.drawer().focused {
             wm.drawer_mut().focused = false;
         }
         return None;
+    }
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+        return super::drawer_navigator::handle_navigator_drawer_mouse(wm, mouse, dr, workspace_area);
     }
 
     match mouse.kind {

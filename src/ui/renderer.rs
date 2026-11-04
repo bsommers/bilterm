@@ -539,6 +539,11 @@ impl GuiWorkspaceRenderer {
             .is_quick_terminal_visible()
             .then(|| wm.quick_terminal().overlay_rect(ws_area));
 
+        // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
+        // run before cells become quads and glyphs.
+        let gui_tick = wm.drawer().spinner_tick() as u64;
+        crate::ui::agents_gui::push_agents_gui_textures(wm, ws_area, viewport, eff_cw, eff_ch, &mut cell_buf, surface, gui_tick);
+
         let is_overlay_cell = |abs_c: u16, abs_r: u16| -> bool {
             !crate::wm::rect_contains(ws_area, abs_c, abs_r)
                 || drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
@@ -569,9 +574,12 @@ impl GuiWorkspaceRenderer {
         // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
         let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
         let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
+        let agents_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
+        let agents_rect = (agents_scale != 100).then(|| wm.agents_window_rect(ws_area)).flatten();
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
             (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
-                || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+                || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || agents_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
                 && !(modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
@@ -698,7 +706,7 @@ impl GuiWorkspaceRenderer {
             }
         }
 
-        if drawer_scale != 100 || mcp_scale != 100 {
+        if drawer_scale != 100 || mcp_scale != 100 || agents_scale != 100 {
             let cfg = wm.config();
             let (pal, glyphs) = (cfg.palette(), cfg.glyph_set());
             let mut draw_panel = |scratch: &Buffer, vr: Rect, scale: u16| {
@@ -720,6 +728,9 @@ impl GuiWorkspaceRenderer {
                 if let Some(vr) = wm.drawer_rect(vws) {
                     let mut scratch = Buffer::empty(vws);
                     crate::ui::render_workspace_drawer(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    crate::ui::agents_gui::push_scaled_navigator_icons(
+                        wm, ws_area, vws, viewport, eff_cw, eff_ch, drawer_scale, &mut scratch, &mut surface.images, gui_tick,
+                    );
                     draw_panel(&scratch, vr, drawer_scale);
                 }
             }
@@ -729,6 +740,17 @@ impl GuiWorkspaceRenderer {
                     let mut scratch = Buffer::empty(vws);
                     crate::ui::mcp_ui::render_mcp_console_overlay(wm, vws, cfg, &pal, &mut scratch);
                     draw_panel(&scratch, vr, mcp_scale);
+                }
+            }
+            if agents_scale != 100 {
+                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::Agents);
+                if let Some(vr) = wm.agents_window_rect(vws) {
+                    let mut scratch = Buffer::empty(vws);
+                    crate::ui::agents_ui::render_agents_window(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    crate::ui::agents_gui::push_scaled_agents_graph(
+                        wm, ws_area, vws, viewport, eff_cw, eff_ch, agents_scale, &mut scratch, &mut surface.images, gui_tick,
+                    );
+                    draw_panel(&scratch, vr, agents_scale);
                 }
             }
             // Modals, menus and the quick terminal stay above the scaled panels.
@@ -801,6 +823,8 @@ impl GuiWorkspaceRenderer {
                 });
             }
         }
+        // Agents textures stay above pane canvases (stable: relative order is kept).
+        surface.images.sort_by_key(|img| crate::ui::agents_gui::is_agents_texture(img.id));
     }
 }
 
@@ -813,7 +837,7 @@ impl WorkspaceFrameRenderer for GuiWorkspaceRenderer {
     }
 }
 
-fn ratatui_color_to_rgba(color: Color, fallback: [u8; 4]) -> [u8; 4] {
+pub(crate) fn ratatui_color_to_rgba(color: Color, fallback: [u8; 4]) -> [u8; 4] {
     match color {
         Color::Reset => fallback,
         Color::Black => [0, 0, 0, 255],

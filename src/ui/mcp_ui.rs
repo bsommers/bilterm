@@ -451,7 +451,7 @@ pub fn render_mcp_console(
         row += 1;
     }
 
-    for tree_line in daemon.session_tree.render_herdr_tree_lines("main") {
+    for tree_line in daemon.session_tree.render_navigator_tree_lines("main") {
         if row >= max_row {
             break;
         }

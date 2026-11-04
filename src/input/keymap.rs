@@ -6,6 +6,10 @@ use crate::error::Result;
 use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
+use crate::wm::SplitDirection;
+use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
+use crate::wm::agents_window::GraphDir;
+use crate::wm::drawer::DrawerNavOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -21,6 +25,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('|'), Action::SplitVertical),
     (KeyCode::Char('\\'), Action::SplitVertical),
     (KeyCode::Char('V'), Action::SplitVertical),
+    (KeyCode::Char('!'), Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention)),
+    (KeyCode::Char('a'), Action::Agents(AgentsOp::Zoom(None))),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
     (KeyCode::F(5), Action::ZoomToggle),
@@ -258,6 +264,180 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::PageUp, Action::BlockPrev),
     (KeyModifiers::ALT, KeyCode::PageDown, Action::BlockNext),
 ];
+
+/// Which part of the focused navigator drawer a key row applies to (Phase 50-06).
+///
+/// Scopes are tried in the order given to [`navigator_drawer_action`] (most specific first).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawerKeyScope {
+    /// The workspace > session > pane tree.
+    Navigator,
+    /// The comms glyph of the selected pane row has keyboard focus (most specific).
+    NavigatorComms,
+}
+
+/// Declarative key table of the focused navigator drawer (`FLT-01`, `ARCH-R01.2`).
+///
+/// Consulted only while the navigator drawer holds keyboard focus; keys it does not claim fall through
+/// to the unchanged classic drawer handler. Every row lowers to [`Action::DrawerNav`] and runs through
+/// `WindowManager::apply`; each operation has a `:drawer` colon twin.
+pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, Action)] = &[
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('j'), Action::DrawerNav(DrawerNavOp::Next)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Down, Action::DrawerNav(DrawerNavOp::Next)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('k'), Action::DrawerNav(DrawerNavOp::Prev)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Up, Action::DrawerNav(DrawerNavOp::Prev)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Enter, Action::DrawerNav(DrawerNavOp::Activate)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char(' '), Action::DrawerNav(DrawerNavOp::Activate)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('!'), Action::DrawerNav(DrawerNavOp::NextAttention)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('e'), Action::DrawerNav(DrawerNavOp::Fold)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('E'), Action::DrawerNav(DrawerNavOp::ExpandAll)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('C'), Action::DrawerNav(DrawerNavOp::CollapseAll)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('N'), Action::DrawerNav(DrawerNavOp::NewSession)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('a'), Action::DrawerNav(DrawerNavOp::AddWindow(None))),
+    (
+        DrawerKeyScope::Navigator,
+        KeyModifiers::NONE,
+        KeyCode::Char('A'),
+        Action::DrawerNav(DrawerNavOp::AddPane(SplitDirection::Horizontal)),
+    ),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('n'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('c'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('+'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('w'), Action::DrawerNav(DrawerNavOp::NewPane)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('r'), Action::DrawerNav(DrawerNavOp::RenamePrompt)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('R'), Action::DrawerNav(DrawerNavOp::RenamePrompt)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('x'), Action::DrawerNav(DrawerNavOp::Close)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Delete, Action::DrawerNav(DrawerNavOp::Close)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::PageUp, Action::DrawerNav(DrawerNavOp::Scroll(-5))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::PageDown, Action::DrawerNav(DrawerNavOp::Scroll(5))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('{'), Action::DrawerNav(DrawerNavOp::Widen(-2))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('}'), Action::DrawerNav(DrawerNavOp::Widen(2))),
+    // Comms glyph (Phase 50-12). Right is claimed only on a row that shows one (guard in the handler).
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Right, Action::DrawerNav(DrawerNavOp::CommsFocus(true))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('o'), Action::DrawerNav(DrawerNavOp::OpenComms)),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Enter, Action::DrawerNav(DrawerNavOp::OpenComms)),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Left, Action::DrawerNav(DrawerNavOp::CommsFocus(false))),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Esc, Action::DrawerNav(DrawerNavOp::CommsFocus(false))),
+];
+
+/// Looks up `key` in [`NAVIGATOR_DRAWER_BINDINGS`] for the active `scopes` (first scope wins).
+///
+/// Modifiers are compared with SHIFT removed for `KeyCode::Char` (like [`default_pane_action`]) and
+/// exactly for every other code, so Shift/Alt+Up/Down never match the plain arrow rows.
+pub fn navigator_drawer_action(scopes: &[DrawerKeyScope], key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    scopes.iter().find_map(|scope| {
+        NAVIGATOR_DRAWER_BINDINGS
+            .iter()
+            .find(|(s, mods, code, _)| s == scope && *mods == lookup_mods && *code == key.code)
+            .map(|(_, _, _, action)| action.clone())
+    })
+}
+
+/// Which part of the AGENT TRAFFIC window a key row applies to (Phase 50-08).
+///
+/// Scopes are tried in the order given to [`agents_window_action`] (most specific first); `Window`
+/// rows apply in every window pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentsKeyScope {
+    /// Applies whatever part of the window is active.
+    Window,
+    /// The node/edge graph cursor.
+    Graph,
+    /// Node grab mode (most specific): arrows nudge the selected node; `g`, Enter and Esc drop it.
+    /// Its Esc row is the one allowed override of the `Window` Esc row.
+    Grab,
+    /// The conversation (snoop) pane has the keyboard.
+    Snoop,
+    /// The keyword entry line is open; printable characters edit it (`Push`). Its Esc row is the
+    /// second allowed override of the `Window` Esc row.
+    KeywordEntry,
+    /// The `send as me` compose line has the keyboard.
+    Compose,
+}
+
+/// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
+///
+/// Consulted only while the agents window captures input (open and unpinned, or pinned and focused).
+/// Every row lowers to [`Action::Agents`] and runs through `WindowManager::apply`; each operation has
+/// an `:agents` colon twin. Keys the table does not claim are swallowed while the window has the
+/// keyboard; the leader key is never consumed.
+pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Action)] = &[
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Dismiss)),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::Select(GraphDir::Left))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::Select(GraphDir::Right))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::Select(GraphDir::Up))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::Select(GraphDir::Down))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Tab, Action::Agents(AgentsOp::CycleEdge(true))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::BackTab, Action::Agents(AgentsOp::CycleEdge(false))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::Activate)),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Char('g'), Action::Agents(AgentsOp::Grab(None))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Char('u'), Action::Agents(AgentsOp::UnpinNode(None))),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Left, Action::Agents(AgentsOp::Move { dx: -1, dy: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Right, Action::Agents(AgentsOp::Move { dx: 1, dy: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Up, Action::Agents(AgentsOp::Move { dx: 0, dy: -1 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Down, Action::Agents(AgentsOp::Move { dx: 0, dy: 1 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Left, Action::Agents(AgentsOp::Resize { dw: -1, dh: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Right, Action::Agents(AgentsOp::Resize { dw: 1, dh: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Up, Action::Agents(AgentsOp::Resize { dw: 0, dh: -1 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Down, Action::Agents(AgentsOp::Resize { dw: 0, dh: 1 })),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('*'), Action::Agents(AgentsOp::Pin(None))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('['), Action::Agents(AgentsOp::ScaleStep(-10))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char(']'), Action::Agents(AgentsOp::ScaleStep(10))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('m'), Action::Agents(AgentsOp::Maximize)),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('<'), Action::Agents(AgentsOp::SplitStep(-5))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('>'), Action::Agents(AgentsOp::SplitStep(5))),
+    // Ctrl+O cycles graph -> conversation -> compose; F6 stays the global `DeckNext`.
+    (AgentsKeyScope::Window, KeyModifiers::CONTROL, KeyCode::Char('o'), Action::Agents(AgentsOp::FocusPane(None))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('j'), Action::Agents(AgentsOp::SnoopStep(1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::SnoopStep(1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('k'), Action::Agents(AgentsOp::SnoopStep(-1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::SnoopStep(-1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('y'), Action::Agents(AgentsOp::Copy)),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::PageUp, Action::Agents(AgentsOp::SnoopScroll(-10))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::PageDown, Action::Agents(AgentsOp::SnoopScroll(10))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Home, Action::Agents(AgentsOp::SnoopScroll(i16::MIN))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::End, Action::Agents(AgentsOp::Follow(Some(true)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('f'), Action::Agents(AgentsOp::Follow(None))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('/'), Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Begin))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('a'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::AgentFromSelection))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('p'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::PairFromSelection))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('c'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Clear))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('A'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Agent)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('P'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Pair)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('T'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Text)))),
+    (AgentsKeyScope::Compose, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::ComposeSubmit)),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Commit))),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Cancel))),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Backspace, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Pop))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::NudgeNode(GraphDir::Left))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::NudgeNode(GraphDir::Right))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::NudgeNode(GraphDir::Up))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::NudgeNode(GraphDir::Down))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Char('g'), Action::Agents(AgentsOp::Grab(Some(false)))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::Grab(Some(false)))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Grab(Some(false)))),
+];
+
+/// Looks up `key` in [`AGENTS_WINDOW_BINDINGS`] for the active `scopes` (first scope wins).
+///
+/// SHIFT is removed from the modifiers for `KeyCode::Char` and `KeyCode::BackTab` (crossterm reports
+/// Shift+Tab as `BackTab` with SHIFT); every other code is compared with exact modifiers.
+pub fn agents_window_action(scopes: &[AgentsKeyScope], key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) | KeyCode::BackTab => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    scopes.iter().find_map(|scope| {
+        AGENTS_WINDOW_BINDINGS
+            .iter()
+            .find(|(s, mods, code, _)| s == scope && *mods == lookup_mods && *code == key.code)
+            .map(|(_, _, _, action)| action.clone())
+    })
+}
 
 /// Looks up `key` in [`DEFAULT_LEADER_BINDINGS`].
 pub fn default_leader_action(key: KeyEvent) -> Option<Action> {

@@ -601,6 +601,12 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Handled);
     }
 
+    // The agents window floats above panes and drawer: it sees the event first and swallows
+    // everything inside it (including the active pane's frame badges beneath it).
+    if let Some(action) = super::agents_window::handle_agents_window_mouse(wm, mouse, workspace_area) {
+        return Ok(action);
+    }
+
     if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && wm.is_framed() {
         let active = wm.active_pane_id();
         let hit = wm
