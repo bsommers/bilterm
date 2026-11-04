@@ -2242,6 +2242,27 @@ fn geometry_setters_use_scaled_virtual_workspace() {
     assert!(r.x + r.width <= vws.width && r.y + r.height <= vws.height, "{r:?} within {vws:?}");
 }
 
+/// WR-07: a workspace modal raised while the window is open is drawn above it and gets the keys.
+#[test]
+fn exit_guard_wins_over_open_agents_window() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = snoop_fixture();
+        ctrl_o(&mut wm);
+        ctrl_o(&mut wm);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Compose);
+        wm.open_exit_guard("test trigger");
+        let text = lines(&render(&wm, area)).join("\n");
+        assert!(text.contains("EXIT GUARD"), "guard is not hidden behind the window");
+        // Enter must answer the guard, not trigger the window's compose submit.
+        press(&mut wm, KeyCode::Enter);
+        assert_eq!(status_of(&wm).filter(|s| s.contains("not enabled")), None, "Enter did not reach compose");
+        wm.open_exit_guard("again");
+        press(&mut wm, KeyCode::Esc);
+        assert!(wm.exit_guard_state().is_none(), "Esc cancelled the guard");
+        assert!(wm.agents_window().active, "the window stayed open");
+    });
+}
+
 /// WR-01: a window hidden by a tiny workspace does not swallow the keyboard or pastes.
 #[test]
 fn invisible_window_does_not_capture_input() {

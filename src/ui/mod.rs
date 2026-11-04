@@ -710,6 +710,10 @@ impl Widget for WorkspaceWidget<'_> {
             render_dos_fkey_bar(fkey_rect, &palette, buf);
         }
 
+        // Drawn below every workspace modal so a modal raised while the window is open (for example
+        // the Exit Guard) is never hidden behind it (WR-07).
+        agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
@@ -726,8 +730,6 @@ impl Widget for WorkspaceWidget<'_> {
         if let Some(exit_state) = self.wm.exit_guard_state() {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
         }
-
-        agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
 

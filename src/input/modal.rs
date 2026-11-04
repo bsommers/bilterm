@@ -331,7 +331,10 @@ pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    if wm.agents_window_captures_input()
+    // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
+    // first: the agents window must not answer a modal it cannot even show on top of (WR-07).
+    if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.agents_window_captures_input()
         && !wm.is_leader_pending()
         && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
     {
