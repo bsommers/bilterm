@@ -1288,6 +1288,7 @@ fn open_navigator(cols: u16, rows: u16) -> (WindowManager, Rect) {
     let (mut wm, area) = navigator_wm(cols, rows);
     wm.toggle_drawer();
     wm.focus_and_raise(1);
+    wm.drawer_mut().selected_index = 1;
     (wm, area)
 }
 
@@ -1490,4 +1491,176 @@ fn mouse_non_button_cells_create_nothing() {
         assert_eq!(wm.drawer_config().navigator_width_cols, 28);
         let _ = before;
     });
+}
+
+fn wheel(wm: &mut WindowManager, area: Rect, down: bool, mods: KeyModifiers, col: u16, row: u16) {
+    let kind = if down { MouseEventKind::ScrollDown } else { MouseEventKind::ScrollUp };
+    handle_wm_mouse_event(wm, mouse_ev(kind, col, row, mods), area).unwrap();
+}
+
+/// Title-bar badge columns `[minimize, zoom, close]` of a drawer rect (same formula as the hit-test).
+fn badge_cols(wm: &WindowManager, dr: Rect) -> [u16; 3] {
+    let g = wm.config().glyph_set();
+    let (m, z, c) =
+        (g.minimize_badge.chars().count() as u16, g.zoom_badge.chars().count() as u16, g.close_badge.chars().count() as u16);
+    let start = (dr.x + dr.width).saturating_sub(m + z + c + 2);
+    [start, start + m, start + m + z]
+}
+
+#[test]
+fn mouse_title_badges_work_in_navigator() {
+    with_temp_xdg(|| {
+        for (badge, colon) in [(0usize, ":drawer close"), (1, ":drawer max")] {
+            let (mut by_mouse, area) = open_navigator(100, 30);
+            let dr = by_mouse.drawer_rect(area).unwrap();
+            let x = badge_cols(&by_mouse, dr)[badge];
+            click_at(&mut by_mouse, area, x, dr.y);
+            let (mut by_colon, _a) = open_navigator(100, 30);
+            run_colon(&mut by_colon, colon);
+            assert_eq!(observe(&by_mouse), observe(&by_colon), "badge {badge} vs `{colon}`");
+            assert_eq!(by_mouse.drawer().maximized, by_colon.drawer().maximized);
+            assert_eq!(by_mouse.drawer().open, by_colon.drawer().open);
+        }
+        let (mut wm, area) = open_navigator(100, 30);
+        run_colon(&mut wm, ":drawer fixed");
+        let dr = wm.drawer_rect(area).unwrap();
+        let close_x = badge_cols(&wm, dr)[2];
+        click_at(&mut wm, area, close_x, dr.y);
+        assert!(wm.drawer_rect(area).is_none(), "close badge hides the drawer");
+        assert_eq!(wm.drawer_config().visibility, DrawerVisibilityMode::OnDemand);
+    });
+}
+
+#[test]
+fn mouse_wheel_scrolls_navigator_selection() {
+    with_temp_xdg(|| {
+        let by_wheel = |down: bool, mods: KeyModifiers| {
+            let (mut wm, area) = n_pane_navigator(8, 100, 30);
+            wm.toggle_drawer();
+            wm.drawer_mut().selected_index = 4;
+            wheel(&mut wm, area, down, mods, 3, 5);
+            observe(&wm)
+        };
+        let by_colon = |cmd: &str| {
+            let (mut wm, _a) = n_pane_navigator(8, 100, 30);
+            wm.toggle_drawer();
+            wm.drawer_mut().selected_index = 4;
+            run_colon(&mut wm, cmd);
+            observe(&wm)
+        };
+        assert_eq!(by_wheel(true, KeyModifiers::NONE), by_colon(":drawer scroll 3"));
+        assert_eq!(by_wheel(false, KeyModifiers::NONE), by_colon(":drawer scroll -3"));
+        assert_eq!(by_wheel(true, KeyModifiers::SHIFT), by_colon(":drawer scroll 3"), "shift scrolls rows too");
+        assert!(by_wheel(true, KeyModifiers::NONE).starts_with("sel=7 "), "{}", by_wheel(true, KeyModifiers::NONE));
+    });
+}
+
+#[test]
+fn mouse_edge_drag_resizes_navigator_width() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        let w0 = wm.drawer_config().width_cols;
+        let dr = wm.drawer_rect(area).unwrap();
+        assert_eq!(dr.width, 28);
+        let border = dr.x + dr.width - 1;
+        handle_wm_mouse_event(&mut wm, mouse_ev(MouseEventKind::Down(MouseButton::Left), border, 10, KeyModifiers::NONE), area)
+            .unwrap();
+        assert!(wm.drawer().resizing_drag);
+        handle_wm_mouse_event(&mut wm, mouse_ev(MouseEventKind::Drag(MouseButton::Left), 31, 10, KeyModifiers::NONE), area)
+            .unwrap();
+        handle_wm_mouse_event(&mut wm, mouse_ev(MouseEventKind::Up(MouseButton::Left), 31, 10, KeyModifiers::NONE), area)
+            .unwrap();
+        assert!(!wm.drawer().resizing_drag, "release ends the drag");
+        assert_eq!(wm.drawer_config().navigator_width_cols, 32);
+        assert_eq!(wm.drawer_config().width_cols, w0, "classic width untouched");
+        let (mut colon, _a) = open_navigator(100, 30);
+        run_colon(&mut colon, ":drawer size 32");
+        assert_eq!(wm.drawer_config().navigator_width_cols, colon.drawer_config().navigator_width_cols);
+        assert_eq!(wm.drawer_rect(area), colon.drawer_rect(area));
+    });
+}
+
+#[test]
+fn mouse_ctrl_wheel_scales_drawer_on_gui_surface() {
+    use bilterm::ui::typography::PanelTarget;
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        wm.set_gui_surface(true);
+        let before = wm.scale_pct(PanelTarget::Drawer);
+        wheel(&mut wm, area, false, KeyModifiers::CONTROL, 3, 5);
+        assert_ne!(wm.scale_pct(PanelTarget::Drawer), before, "Ctrl+wheel steps the drawer scale");
+    });
+}
+
+/// Runs `key` on one fresh fixture and `mouse` on another; the observable state must match.
+fn parity(name: &str, setup: &dyn Fn(&mut WindowManager), key: &dyn Fn(&mut WindowManager), mouse: &dyn Fn(&mut WindowManager, Rect)) {
+    let by_key = with_temp_xdg(|| {
+        let (mut wm, _a) = open_navigator(100, 30);
+        setup(&mut wm);
+        key(&mut wm);
+        (observe(&wm), wm.drawer_config().visibility)
+    });
+    let by_mouse = with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        setup(&mut wm);
+        mouse(&mut wm, area);
+        (observe(&wm), wm.drawer_config().visibility)
+    });
+    assert_eq!(by_key, by_mouse, "parity `{name}`");
+}
+
+#[test]
+fn parity_navigator_key_and_mouse_paths_match() {
+    let nothing = |_: &mut WindowManager| {};
+    // Row / Next + Activate: `j j` + Enter versus a click on the pane #2 row.
+    parity(
+        "row+activate",
+        &nothing,
+        &|wm| {
+            ch(wm, 'j');
+            press(wm, KeyCode::Enter);
+        },
+        &|wm, a| click_row(wm, a, &DrawerRowKind::Pane(2)),
+    );
+    // Fold: `k` to the workspace row then `e` versus a fold-marker click.
+    parity(
+        "fold",
+        &nothing,
+        &|wm| {
+            ch(wm, 'k');
+            ch(wm, 'e');
+        },
+        &|wm, a| {
+            let c = navigator_fold_marker_cells(wm, a)[0];
+            click_at(wm, a, c.x, c.y);
+        },
+    );
+    // NextAttention.
+    let blocked = |wm: &mut WindowManager| with_states(wm, &[(2, Some(AgentState::Blocked))]);
+    parity("attention", &blocked, &|wm| ch(wm, '!'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Attention));
+    // Scroll: wheel versus the colon twin (PageUp/PageDown use the same op with another step).
+    parity("scroll", &nothing, &|wm| run_colon(wm, ":drawer scroll 3"), &|wm, a| wheel(wm, a, true, KeyModifiers::NONE, 3, 5));
+    // Widen: `}` (+2) versus dragging the edge two columns.
+    parity(
+        "widen",
+        &nothing,
+        &|wm| ch(wm, '}'),
+        &|wm, a| {
+            let dr = wm.drawer_rect(a).unwrap();
+            let border = dr.x + dr.width - 1;
+            for (kind, col) in [
+                (MouseEventKind::Down(MouseButton::Left), border),
+                (MouseEventKind::Drag(MouseButton::Left), border + 2),
+                (MouseEventKind::Up(MouseButton::Left), border + 2),
+            ] {
+                handle_wm_mouse_event(wm, mouse_ev(kind, col, 10, KeyModifiers::NONE), a).unwrap();
+            }
+        },
+    );
+    parity("new-session", &nothing, &|wm| ch(wm, 'N'), &|wm, a| click_button(wm, a, NavigatorButtonKind::NewSession));
+    parity("new-pane", &nothing, &|wm| ch(wm, 'n'), &|wm, a| click_button(wm, a, NavigatorButtonKind::NewPane));
+    parity("rename", &nothing, &|wm| ch(wm, 'r'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Rename));
+    parity("close", &nothing, &|wm| ch(wm, 'x'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Close));
+    parity("pin", &nothing, &|wm| ch(wm, '*'), &|wm, a| click_button(wm, a, NavigatorButtonKind::Pin));
+    // Key-only ops with no mouse requirement: E / C (expand / collapse all) have key and colon twins only.
 }

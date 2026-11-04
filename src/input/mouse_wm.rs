@@ -702,6 +702,9 @@ pub(super) fn handle_drawer_mouse_event(
                     .saturating_add(workspace_area.height)
                     .saturating_sub(mouse.row),
             };
+            if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+                return super::drawer_navigator::navigator_drag_resize(wm, new_size);
+            }
             wm.resize_drawer(new_size);
             let _ = wm.resize_all(workspace_area);
             return Some(AppAction::Handled);

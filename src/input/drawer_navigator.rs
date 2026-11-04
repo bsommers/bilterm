@@ -9,6 +9,7 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use super::AppAction;
+use super::mouse_wm::detect_title_bar_badge_click;
 use super::keymap::{DrawerKeyScope, navigator_drawer_action};
 use crate::action::Action;
 use crate::ui::drawer::navigator::{
@@ -16,7 +17,7 @@ use crate::ui::drawer::navigator::{
 };
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::drawer::DrawerNavOp;
-use crate::wm::{DrawerRowKind, DrawerVisibilityMode, WindowManager};
+use crate::wm::{DrawerEdge, DrawerRowKind, DrawerVisibilityMode, WindowManager};
 
 /// Looks `key` up in the navigator key table; `None` lets the classic drawer handler run.
 pub(super) fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
@@ -60,11 +61,45 @@ pub(super) fn navigator_button_action(wm: &WindowManager, kind: NavigatorButtonK
 pub(super) fn handle_navigator_drawer_mouse(
     wm: &mut WindowManager,
     mouse: MouseEvent,
-    _dr: Rect,
+    dr: Rect,
     workspace_area: Rect,
 ) -> Option<AppAction> {
+    if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+        // Navigator rows truncate instead of scrolling sideways, so Shift scrolls like the plain wheel.
+        let step = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
+        let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Scroll(step)));
+        return Some(AppAction::Handled);
+    }
     if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
         let (col, row) = (mouse.column, mouse.row);
+        if row == dr.y
+            && let Some(badge) = detect_title_bar_badge_click(wm, dr, col)
+        {
+            match badge {
+                0 => {
+                    let _ = wm.apply(Action::DrawerSize(0));
+                }
+                1 => {
+                    let _ = wm.apply(Action::DrawerSize(u16::MAX));
+                }
+                _ => {
+                    let _ = wm.apply(Action::DrawerVisibility(Some(DrawerVisibilityMode::OnDemand)));
+                    let _ = wm.apply(Action::DrawerToggle);
+                }
+            }
+            return Some(AppAction::Handled);
+        }
+        let on_resize_border = match wm.drawer_config().edge {
+            DrawerEdge::Left => col == dr.x + dr.width.saturating_sub(1),
+            DrawerEdge::Right => col == dr.x,
+            DrawerEdge::Top => row == dr.y + dr.height.saturating_sub(1),
+            DrawerEdge::Bottom => row == dr.y,
+        };
+        if on_resize_border {
+            // Pointer-gesture bookkeeping, not an operation: the resize itself lowers to `DrawerSize`.
+            wm.drawer_mut().resizing_drag = true;
+            return Some(AppAction::Handled);
+        }
         let button = navigator_footer_buttons(wm, workspace_area)
             .into_iter()
             .find(|b| b.y == row && col >= b.x && col < b.x + b.width);
@@ -85,5 +120,12 @@ pub(super) fn handle_navigator_drawer_mouse(
             let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Activate));
         }
     }
+    Some(AppAction::Handled)
+}
+
+/// Edge-drag motion in navigator style: lowers to `Action::DrawerSize`. The clamp keeps a drag away from
+/// `0` and `u16::MAX`, the minimize and maximize values; `resize_drawer` applies the real per-edge range.
+pub(super) fn navigator_drag_resize(wm: &mut WindowManager, new_size: u16) -> Option<AppAction> {
+    let _ = wm.apply(Action::DrawerSize(new_size.clamp(1, u16::MAX - 1)));
     Some(AppAction::Handled)
 }
