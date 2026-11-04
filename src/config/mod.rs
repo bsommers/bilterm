@@ -133,7 +133,7 @@ pub struct BiltermConfig {
     pub exit_protection: ExitProtectionPolicy,
     /// Marks this workspace session as a protected Root Session (`SAFE-02`).
     pub is_root_session: bool,
-    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
+    /// Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer configuration (`[drawer]`, `DRW-01`).
     pub drawer: DrawerConfig,
     /// Primary GUI / terminal font family or preset (`"Cascadia Mono"`, `"Consolas"`, `"JetBrains Mono"`, `"IBM 3270"`, etc., `FONT-01`).
     pub font_family: String,
@@ -152,7 +152,7 @@ pub struct BiltermConfig {
     /// Controls whether `F1..F12` in `RawPtyPassthrough` trigger Bilterm actions (`bilterm`, default),
     /// forward to the child application (`app`), or auto-switch on `DECSET ?1049` (`auto`).
     pub raw_fkeys: RawFkeyMode,
-    /// Enables `herdr`-style rich glyphs, icons, Braille spinners, and sparkline telemetry (`:snazzy`).
+    /// Enables Navigator-style rich glyphs, icons, Braille spinners, and sparkline telemetry (`:snazzy`).
     pub snazzy_mode: bool,
     /// Enables frosted translucent glass visual style for overlaid panels and `--gui` mode (`:glass`).
     pub glass_mode: bool,

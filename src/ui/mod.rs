@@ -658,7 +658,7 @@ impl Widget for WorkspaceWidget<'_> {
             }
         }
 
-        // Render `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
+        // Render Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
         render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if qt_visible {

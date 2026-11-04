@@ -122,7 +122,7 @@ pub struct WindowManager {
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
-    /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
+    /// Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
     pub(crate) drawer: WorkspaceDrawer,
     /// Per-pane agent state tracker (`FLT-01`, Phase 50-03).
     pub(crate) agents: agent_state::AgentTracker,

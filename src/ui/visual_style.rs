@@ -1,4 +1,4 @@
-//! Visual Style Modes (`Snazzy` `herdr`-Rich Glyphs & `--gui` `Glass` Frosted Translucent Style)
+//! Visual Style Modes (`Snazzy` Navigator-Rich Glyphs & `--gui` `Glass` Frosted Translucent Style)
 //! and `RawFkeyMode` Function-Key Routing (`F1..F12` in `RawPtyPassthrough`).
 
 use ratatui::buffer::Buffer;
@@ -91,8 +91,8 @@ pub fn parse_fkey_number(token: &str) -> Option<u8> {
     (1..=12).contains(&n).then_some(n)
 }
 
-/// Returns a rich `herdr`-inspired glyph icon for a shell or foreground command name.
-pub fn herdr_process_icon(cmd_or_title: &str) -> &'static str {
+/// Returns a rich Navigator-inspired glyph icon for a shell or foreground command name.
+pub fn navigator_process_icon(cmd_or_title: &str) -> &'static str {
     let lower = cmd_or_title.trim().to_ascii_lowercase();
     let head = lower
         .split_whitespace()
@@ -410,7 +410,7 @@ pub fn format_modern_window_title(
             .as_deref()
             .or_else(|| pane.vt().command_blocks().last().map(|b| b.command.as_str()))
             .unwrap_or_else(|| pane.title());
-        let icon = herdr_process_icon(active_cmd);
+        let icon = navigator_process_icon(active_cmd);
         let spark = wm
             .drawer()
             .sparkline_for(id, pane.vt().total_bytes_processed());
@@ -420,7 +420,7 @@ pub fn format_modern_window_title(
     }
 }
 
-/// Formats a rich `herdr`-inspired window title bar string when `cfg.snazzy_mode` is active.
+/// Formats a rich Navigator-inspired window title bar string when `cfg.snazzy_mode` is active.
 pub fn format_snazzy_window_title(
     wm: &WindowManager,
     pane: &CompositePane,
@@ -434,7 +434,7 @@ pub fn format_snazzy_window_title(
         .as_deref()
         .or_else(|| pane.vt().command_blocks().last().map(|b| b.command.as_str()))
         .unwrap_or_else(|| pane.title());
-    let icon = herdr_process_icon(active_cmd);
+    let icon = navigator_process_icon(active_cmd);
     let spark = wm
         .drawer()
         .sparkline_for(id, pane.vt().total_bytes_processed());

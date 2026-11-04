@@ -144,7 +144,7 @@ pub(super) fn render_floating_prompt(
             let cmd_lbl = pane
                 .resolve_running_command()
                 .unwrap_or_else(|| pane.shell_program().to_string());
-            let icon = crate::ui::visual_style::herdr_process_icon(&cmd_lbl);
+            let icon = crate::ui::visual_style::navigator_process_icon(&cmd_lbl);
             format!(" {liq}{icon} ❯ Command · {anchor_badge} ")
         } else {
             format!(" {liq}❯ Command · {anchor_badge} ")
@@ -153,7 +153,7 @@ pub(super) fn render_floating_prompt(
         let cmd_lbl = pane
             .resolve_running_command()
             .unwrap_or_else(|| pane.shell_program().to_string());
-        let icon = crate::ui::visual_style::herdr_process_icon(&cmd_lbl);
+        let icon = crate::ui::visual_style::navigator_process_icon(&cmd_lbl);
         format!("╣ {icon} BILTERM 3270 // CMD [{anchor_badge}] ╠")
     } else {
         format!("╣ BILTERM 3270 // CMD [{anchor_badge}] ╠")

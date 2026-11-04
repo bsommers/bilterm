@@ -1,4 +1,4 @@
-//! Phase 50-02: herdr-style drawer tree (FLT-01, D-02). `style_` = config seam, `tree_` = row model + renderer.
+//! Phase 50-02: navigator-style drawer tree (FLT-01, D-02). `style_` = config seam, `tree_` = row model + renderer.
 
 use std::sync::Mutex;
 
@@ -16,7 +16,7 @@ static ENV_LOCK: Mutex<()> = Mutex::new(());
 fn with_temp_xdg<T>(f: impl FnOnce() -> T) -> T {
     let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = std::env::temp_dir().join(format!(
-        "bilterm-herdr-drawer-{}-{:?}",
+        "bilterm-navigator-drawer-{}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ));
@@ -72,18 +72,18 @@ fn buffer_lines(buf: &Buffer) -> Vec<String> {
 fn style_default_is_classic() {
     let d = DrawerConfig::default();
     assert_eq!(d.style, DrawerStyle::Classic);
-    assert_eq!(d.herdr_width_cols, 28);
+    assert_eq!(d.navigator_width_cols, 28);
 }
 
 #[test]
 fn style_set_via_colon_set_switches_rows() {
     with_temp_xdg(|| {
         let (mut wm, _area) = fixture(100, 30);
-        run_colon(&mut wm, ":set drawer.style herdr");
-        assert_eq!(wm.drawer_config().style, DrawerStyle::Herdr);
+        run_colon(&mut wm, ":set drawer.style navigator");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Navigator);
         let rows = wm.drawer_rows();
         assert!(matches!(rows[0].kind, DrawerRowKind::SessionHeader(_)));
-        assert!(rows[0].herdr.is_some());
+        assert!(rows[0].navigator.is_some());
         assert_eq!(rows[1].kind, DrawerRowKind::Pane(1));
         assert_eq!(rows[2].kind, DrawerRowKind::Pane(2));
     });
@@ -93,7 +93,7 @@ fn style_set_via_colon_set_switches_rows() {
 fn tree_tracer_renders_one_line_per_pane() {
     with_temp_xdg(|| {
         let (mut wm, area) = fixture(100, 30);
-        run_colon(&mut wm, ":set drawer.style herdr");
+        run_colon(&mut wm, ":set drawer.style navigator");
         open_drawer(&mut wm);
         let lines = buffer_lines(&render(&wm, area));
         assert!(lines.iter().any(|l| l.contains("WORKSPACES")), "title missing:\n{}", lines.join("\n"));
@@ -107,16 +107,16 @@ fn tree_tracer_renders_one_line_per_pane() {
 
 // ---- Task 2: full tree semantics ----
 
-fn herdr_wm(cols: u16, rows: u16) -> (WindowManager, Rect) {
+fn navigator_wm(cols: u16, rows: u16) -> (WindowManager, Rect) {
     let (mut wm, area) = fixture(cols, rows);
-    run_colon(&mut wm, ":set drawer.style herdr");
+    run_colon(&mut wm, ":set drawer.style navigator");
     (wm, area)
 }
 
 fn kinds_depths(wm: &WindowManager) -> Vec<(DrawerRowKind, u8)> {
     wm.drawer_rows()
         .into_iter()
-        .map(|r| (r.kind.clone(), r.herdr.as_ref().expect("herdr meta").depth))
+        .map(|r| (r.kind.clone(), r.navigator.as_ref().expect("navigator meta").depth))
         .collect()
 }
 
@@ -143,7 +143,7 @@ fn drawer_interior(wm: &WindowManager, area: Rect) -> Vec<String> {
 #[test]
 fn tree_nested_sessions_indent_by_depth() {
     with_temp_xdg(|| {
-        let (mut wm, _a) = herdr_wm(100, 30);
+        let (mut wm, _a) = navigator_wm(100, 30);
         nested_tree(&mut wm);
         let got = kinds_depths(&wm);
         assert_eq!(
@@ -157,17 +157,17 @@ fn tree_nested_sessions_indent_by_depth() {
             ]
         );
         let rows = wm.drawer_rows();
-        assert_eq!(rows[0].herdr.as_ref().unwrap().level, bilterm::wm::drawer::HerdrLevel::Workspace);
-        assert_eq!(rows[1].herdr.as_ref().unwrap().level, bilterm::wm::drawer::HerdrLevel::Session);
-        assert!(rows[2].herdr.as_ref().unwrap().live);
-        assert!(!rows[0].herdr.as_ref().unwrap().live);
+        assert_eq!(rows[0].navigator.as_ref().unwrap().level, bilterm::wm::drawer::NavigatorLevel::Workspace);
+        assert_eq!(rows[1].navigator.as_ref().unwrap().level, bilterm::wm::drawer::NavigatorLevel::Session);
+        assert!(rows[2].navigator.as_ref().unwrap().live);
+        assert!(!rows[0].navigator.as_ref().unwrap().live);
     });
 }
 
 #[test]
 fn tree_root_without_children_lists_panes_at_depth_1() {
     with_temp_xdg(|| {
-        let (wm, _a) = herdr_wm(100, 30);
+        let (wm, _a) = navigator_wm(100, 30);
         assert_eq!(
             kinds_depths(&wm),
             vec![(session("default"), 0), (DrawerRowKind::Pane(1), 1), (DrawerRowKind::Pane(2), 1)]
@@ -178,12 +178,12 @@ fn tree_root_without_children_lists_panes_at_depth_1() {
 #[test]
 fn tree_fold_hides_descendants() {
     with_temp_xdg(|| {
-        let (mut wm, _a) = herdr_wm(100, 30);
+        let (mut wm, _a) = navigator_wm(100, 30);
         nested_tree(&mut wm);
         assert!(wm.session_tree_mut().toggle_fold("main"));
         let rows = wm.drawer_rows();
         assert_eq!(rows.len(), 1, "only the collapsed workspace remains: {:?}", rows.iter().map(|r| &r.kind).collect::<Vec<_>>());
-        let meta = rows[0].herdr.as_ref().unwrap();
+        let meta = rows[0].navigator.as_ref().unwrap();
         assert!(meta.collapsed && meta.has_children);
     });
 }
@@ -191,12 +191,12 @@ fn tree_fold_hides_descendants() {
 #[test]
 fn tree_saved_session_rollup() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         wm.session_tree_mut().upsert_session("archive", bilterm::wm::SessionNodeKind::Independent, None);
         wm.session_tree_mut().node_mut("archive").unwrap().pane_count = 3;
         let rows = wm.drawer_rows();
         let saved = rows.iter().find(|r| r.kind == session("archive")).expect("saved root row");
-        let meta = saved.herdr.as_ref().unwrap();
+        let meta = saved.navigator.as_ref().unwrap();
         assert!(!meta.live);
         assert_eq!(meta.pane_count, 3);
         open_drawer(&mut wm);
@@ -208,7 +208,7 @@ fn tree_saved_session_rollup() {
 #[test]
 fn tree_marks_current_pane() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         open_drawer(&mut wm);
         let rows = wm.drawer_rows();
         let focused = rows.iter().find(|r| r.is_focused_pane).expect("a focused pane row");
@@ -225,7 +225,7 @@ fn tree_marks_current_pane() {
 #[test]
 fn tree_one_line_per_pane_in_liquid_glass() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":liquid on");
         open_drawer(&mut wm);
         let lines = buffer_lines(&render(&wm, area));
@@ -238,7 +238,7 @@ fn tree_one_line_per_pane_in_liquid_glass() {
 #[test]
 fn tree_sanitizes_titles() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         wm.pane_mut(1).unwrap().set_title("ev\u{202E}il\u{009B}title");
         wm.pane_mut(2).unwrap().set_title("L".repeat(500));
         open_drawer(&mut wm);
@@ -258,7 +258,7 @@ fn tree_sanitizes_titles() {
 #[test]
 fn tree_ascii_glyph_pack() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":set glyphs ascii");
         open_drawer(&mut wm);
         let inner = drawer_interior(&wm, area);
@@ -271,12 +271,12 @@ fn tree_ascii_glyph_pack() {
 }
 
 #[test]
-fn tree_width_resize_writes_herdr_width() {
+fn tree_width_resize_writes_navigator_width() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":drawer size 30");
         open_drawer(&mut wm);
-        assert_eq!(wm.drawer_config().herdr_width_cols, 30);
+        assert_eq!(wm.drawer_config().navigator_width_cols, 30);
         assert_eq!(wm.drawer_config().width_cols, 34);
         assert_eq!(wm.drawer_rect(area).unwrap().width, 30);
     });
@@ -285,7 +285,7 @@ fn tree_width_resize_writes_herdr_width() {
 #[test]
 fn tree_top_edge_renders_vertical_list() {
     with_temp_xdg(|| {
-        let (mut wm, area) = herdr_wm(100, 30);
+        let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":drawer top");
         open_drawer(&mut wm);
         let r = wm.drawer_rect(area).unwrap();
@@ -300,9 +300,9 @@ fn tree_top_edge_renders_vertical_list() {
 
 // ---- Phase 50-04: state dots, counts, attention navigation (FLT-01, D-04/D-05) ----
 
-/// Three-pane herdr fixture (ids 1..=3), titles alpha/beta/gamma.
-fn three_pane_herdr(cols: u16, rows: u16) -> (WindowManager, Rect) {
-    let (mut wm, area) = herdr_wm(cols, rows);
+/// Three-pane navigator fixture (ids 1..=3), titles alpha/beta/gamma.
+fn three_pane_navigator(cols: u16, rows: u16) -> (WindowManager, Rect) {
+    let (mut wm, area) = navigator_wm(cols, rows);
     let p3 = wm.split_focused(SplitDirection::Vertical).unwrap();
     wm.pane_mut(p3).unwrap().process_pty_output(b"\x1b]2;gamma\x07GAMMA_OUT\r\n");
     wm.resize_all(area).unwrap();
@@ -312,7 +312,7 @@ fn three_pane_herdr(cols: u16, rows: u16) -> (WindowManager, Rect) {
 #[test]
 fn attention_tracer_blocked_dot_and_jump() {
     with_temp_xdg(|| {
-        let (mut wm, area) = three_pane_herdr(100, 30);
+        let (mut wm, area) = three_pane_navigator(100, 30);
         wm.focus_and_raise(1);
         wm.report_agent_state(3, Some(AgentState::Blocked));
         wm.update_agent_states(std::time::Instant::now());
@@ -338,8 +338,8 @@ fn with_states(wm: &mut WindowManager, states: &[(u32, Option<AgentState>)]) {
 }
 
 /// Splits until `n` panes exist and focuses pane 1.
-fn n_pane_herdr(n: u32, cols: u16, rows: u16) -> (WindowManager, Rect) {
-    let (mut wm, area) = herdr_wm(cols, rows);
+fn n_pane_navigator(n: u32, cols: u16, rows: u16) -> (WindowManager, Rect) {
+    let (mut wm, area) = navigator_wm(cols, rows);
     while (wm.pane_count() as u32) < n {
         wm.split_focused(SplitDirection::Vertical).unwrap();
     }
@@ -355,7 +355,7 @@ fn line_of<'a>(lines: &'a [String], needle: &str) -> &'a str {
 #[test]
 fn dots_render_all_five_states() {
     with_temp_xdg(|| {
-        let (mut wm, area) = n_pane_herdr(5, 100, 30);
+        let (mut wm, area) = n_pane_navigator(5, 100, 30);
         with_states(
             &mut wm,
             &[
@@ -386,7 +386,7 @@ fn dots_render_all_five_states() {
 #[test]
 fn dots_real_signal_errored() {
     with_temp_xdg(|| {
-        let (mut wm, area) = n_pane_herdr(2, 100, 30);
+        let (mut wm, area) = n_pane_navigator(2, 100, 30);
         wm.pane_mut(2).unwrap().process_pty_output(b"boom\r\n\x1b]133;D;42\x07");
         wm.update_agent_states(now());
         open_drawer(&mut wm);
@@ -399,7 +399,7 @@ fn dots_real_signal_errored() {
 #[test]
 fn dots_workspace_counts_summary() {
     with_temp_xdg(|| {
-        let (mut wm, area) = n_pane_herdr(3, 100, 30);
+        let (mut wm, area) = n_pane_navigator(3, 100, 30);
         with_states(
             &mut wm,
             &[(1, Some(AgentState::Blocked)), (2, Some(AgentState::Errored)), (3, Some(AgentState::Working))],
@@ -421,7 +421,7 @@ fn dots_workspace_counts_summary() {
 #[test]
 fn dots_saved_workspace_shows_count_and_dash() {
     with_temp_xdg(|| {
-        let (mut wm, area) = n_pane_herdr(2, 100, 30);
+        let (mut wm, area) = n_pane_navigator(2, 100, 30);
         wm.session_tree_mut().upsert_session("archive", bilterm::wm::SessionNodeKind::Independent, None);
         wm.session_tree_mut().node_mut("archive").unwrap().pane_count = 3;
         with_states(&mut wm, &[(1, Some(AgentState::Blocked))]);
@@ -443,7 +443,7 @@ fn jump(wm: &mut WindowManager) -> u32 {
 #[test]
 fn attention_prefers_blocked_then_errored_then_done() {
     with_temp_xdg(|| {
-        let (mut wm, _a) = n_pane_herdr(4, 100, 30);
+        let (mut wm, _a) = n_pane_navigator(4, 100, 30);
         with_states(
             &mut wm,
             &[(1, Some(AgentState::Blocked)), (2, Some(AgentState::Errored)), (3, Some(AgentState::Done))],
@@ -461,7 +461,7 @@ fn attention_prefers_blocked_then_errored_then_done() {
 #[test]
 fn attention_cycles_and_wraps() {
     with_temp_xdg(|| {
-        let (mut wm, _a) = n_pane_herdr(4, 100, 30);
+        let (mut wm, _a) = n_pane_navigator(4, 100, 30);
         with_states(&mut wm, &[(2, Some(AgentState::Blocked)), (4, Some(AgentState::Blocked))]);
         assert_eq!(wm.active_pane_id(), 1);
         assert_eq!(jump(&mut wm), 2, "starts after the active pane");
@@ -473,7 +473,7 @@ fn attention_cycles_and_wraps() {
 #[test]
 fn attention_noop_when_none_sets_status() {
     with_temp_xdg(|| {
-        let (mut wm, _a) = n_pane_herdr(3, 100, 30);
+        let (mut wm, _a) = n_pane_navigator(3, 100, 30);
         wm.focus_and_raise(2);
         with_states(&mut wm, &[(1, Some(AgentState::Working))]);
         run_colon(&mut wm, ":drawer attention");
@@ -487,7 +487,7 @@ fn attention_leader_bang_with_drawer_closed() {
     use bilterm::input::handle_wm_key_event;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     with_temp_xdg(|| {
-        let (mut wm, area) = n_pane_herdr(3, 100, 30);
+        let (mut wm, area) = n_pane_navigator(3, 100, 30);
         with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
         assert!(wm.drawer_rect(area).is_none(), "drawer starts closed");
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
@@ -501,15 +501,15 @@ fn attention_leader_bang_with_drawer_closed() {
 fn style_colon_drawer_style_sets_and_toggles() {
     with_temp_xdg(|| {
         let (mut wm, area) = fixture(100, 30);
-        run_colon(&mut wm, ":drawer style herdr");
-        assert_eq!(wm.drawer_config().style, DrawerStyle::Herdr);
+        run_colon(&mut wm, ":drawer style navigator");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Navigator);
         open_drawer(&mut wm);
         assert_eq!(wm.drawer_rect(area).unwrap().width, 28);
         run_colon(&mut wm, ":drawer style classic");
         assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
         assert_eq!(wm.drawer_rect(area).unwrap().width, 34);
         run_colon(&mut wm, ":drawer style");
-        assert_eq!(wm.drawer_config().style, DrawerStyle::Herdr, "bare form toggles");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Navigator, "bare form toggles");
         run_colon(&mut wm, ":drawer style toggle");
         assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
         assert!(parse_colon_command(":drawer style nope").unwrap().is_err());
@@ -522,4 +522,18 @@ fn keymap_leader_bindings_have_unique_keys() {
     for (key, _) in bilterm::input::keymap::DEFAULT_LEADER_BINDINGS {
         assert!(seen.insert(*key), "duplicate leader key {key:?}");
     }
+}
+
+#[test]
+fn style_legacy_herdr_alias_maps_to_navigator() {
+    with_temp_xdg(|| {
+        let (mut wm, _area) = fixture(100, 30);
+        run_colon(&mut wm, ":drawer style herdr");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Navigator);
+        let cfg: DrawerConfig = toml::from_str("style = \"herdr\"\nherdr_width_cols = 31\n").unwrap();
+        assert_eq!(cfg.style, DrawerStyle::Navigator);
+        assert_eq!(cfg.navigator_width_cols, 31);
+        let cfg: DrawerConfig = toml::from_str("style = \"navigator\"\nnavigator_width_cols = 29\n").unwrap();
+        assert_eq!((cfg.style, cfg.navigator_width_cols), (DrawerStyle::Navigator, 29));
+    });
 }

@@ -694,8 +694,11 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             match parts.get(2).copied() {
                 None | Some("toggle") => Some(Ok(ColonCommand::DrawerStyle(None))),
                 Some("classic") => Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Classic)))),
-                Some("herdr") => Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Herdr)))),
-                _ => Some(Err("Usage: :drawer style [classic|herdr|toggle]".to_string())),
+                Some("navigator" | "herdr") => {
+                    // `herdr` is the deprecated hidden alias of `navigator`.
+                    Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Navigator))))
+                }
+                _ => Some(Err("Usage: :drawer style [classic|navigator|toggle]".to_string())),
             }
         }
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(

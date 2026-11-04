@@ -1,4 +1,4 @@
-//! `herdr`-style drawer renderer: one buffer line per workspace > session > pane row (`FLT-01`).
+//! Navigator-style drawer renderer: one buffer line per workspace > session > pane row (`FLT-01`).
 //!
 //! Called from [`super::render_workspace_drawer`] via a single early-return branch, so the classic
 //! renderer is never touched when `drawer.style = classic`.
@@ -20,18 +20,18 @@ use crate::ui::visual_style::{
     apply_frosted_glass_surface, polish_glass_panel_rect, render_liquid_ambient_halo,
 };
 use crate::wm::agent_state::{AgentCounts, AgentState};
-use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, HerdrLevel};
+use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, NavigatorLevel};
 use crate::wm::{DrawerLayoutMode, DrawerRow, DrawerRowKind, WindowManager, inset_window_frame};
 
-/// Computes `(header_rows, footer_rows, rows_per_item)` for the herdr layout: no header, an optional
+/// Computes `(header_rows, footer_rows, rows_per_item)` for the navigator layout: no header, an optional
 /// one-line footer and exactly one line per item.
-pub fn herdr_layout_metrics(inner_height: u16) -> (u16, u16, usize) {
+pub fn navigator_layout_metrics(inner_height: u16) -> (u16, u16, usize) {
     (0, u16::from(inner_height >= 4), 1)
 }
 
-/// Single-width BMP symbols used by the herdr tree (no emoji; RESEARCH anti-pattern).
+/// Single-width BMP symbols used by the navigator tree (no emoji; RESEARCH anti-pattern).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HerdrGlyphs {
+pub struct NavigatorGlyphs {
     pub current: &'static str,
     pub fold_open: &'static str,
     pub fold_closed: &'static str,
@@ -46,7 +46,7 @@ pub struct HerdrGlyphs {
     pub errored: &'static str,
 }
 
-impl HerdrGlyphs {
+impl NavigatorGlyphs {
     pub const UNICODE: Self = Self {
         current: "›",
         fold_open: "▾",
@@ -110,7 +110,7 @@ pub fn dot_color(state: AgentState, t: &DesignTokens) -> Color {
 }
 
 /// Non-zero states of `counts` as `<glyph><n>` segments in Blocked, Errored, Working, Done, Idle order.
-pub fn counts_segments(counts: &AgentCounts, g: &HerdrGlyphs, tick: usize) -> Vec<(AgentState, String)> {
+pub fn counts_segments(counts: &AgentCounts, g: &NavigatorGlyphs, tick: usize) -> Vec<(AgentState, String)> {
     [
         (AgentState::Blocked, counts.blocked),
         (AgentState::Errored, counts.errored),
@@ -142,8 +142,8 @@ fn fit_segments(segments: Vec<(AgentState, String)>, space: usize) -> Vec<(Agent
 /// Display columns reserved before a pane label for the state dot (`dot` + space).
 const DOT_COLS: usize = 2;
 
-/// Geometry shared by the renderer and [`herdr_dot_cells`].
-struct HerdrLayout {
+/// Geometry shared by the renderer and [`navigator_dot_cells`].
+struct NavigatorLayout {
     inner: Rect,
     rows: Vec<DrawerRow>,
     selected: usize,
@@ -154,18 +154,18 @@ struct HerdrLayout {
     row_step: usize,
 }
 
-fn herdr_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<HerdrLayout> {
+fn navigator_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<NavigatorLayout> {
     let inner = inset_window_frame(drawer_rect);
     if inner.width == 0 || inner.height == 0 {
         return None;
     }
     let rows = wm.drawer_rows();
     let selected = wm.drawer().selected_index.min(rows.len().saturating_sub(1));
-    let (header_h, footer_h, row_step) = herdr_layout_metrics(inner.height);
+    let (header_h, footer_h, row_step) = navigator_layout_metrics(inner.height);
     let list_h = usize::from(inner.height.saturating_sub(header_h + footer_h)).max(1);
     let cap = (list_h / row_step).max(1);
     let scroll = wm.drawer().effective_scroll(selected, cap, rows.len());
-    Some(HerdrLayout {
+    Some(NavigatorLayout {
         inner,
         rows,
         selected,
@@ -179,7 +179,7 @@ fn herdr_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<HerdrLayout> {
 
 /// Screen cell of one pane state dot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HerdrDotCell {
+pub struct NavigatorDotCell {
     pub x: u16,
     pub y: u16,
     pub state: AgentState,
@@ -189,11 +189,11 @@ pub struct HerdrDotCell {
 
 /// Cells of every visible pane state dot; the single source of dot positions (TUI renderer here,
 /// GUI icon pass in a later plan). Empty when the drawer is not visible.
-pub fn herdr_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<HerdrDotCell> {
+pub fn navigator_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<NavigatorDotCell> {
     let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
         return Vec::new();
     };
-    let Some(lay) = herdr_layout(wm, drawer_rect) else {
+    let Some(lay) = navigator_layout(wm, drawer_rect) else {
         return Vec::new();
     };
     let mut cells = Vec::new();
@@ -202,11 +202,11 @@ pub fn herdr_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<HerdrDot
         if y >= lay.list_bottom {
             break;
         }
-        let Some(meta) = row.herdr.as_ref() else { continue };
+        let Some(meta) = row.navigator.as_ref() else { continue };
         let Some(state) = meta.agent else { continue };
         let x = lay.inner.x + 1 + 2 * u16::from(meta.depth);
         if x < lay.inner.x + lay.inner.width {
-            cells.push(HerdrDotCell { x, y, state, row_index });
+            cells.push(NavigatorDotCell { x, y, state, row_index });
         }
     }
     cells
@@ -234,16 +234,16 @@ fn fit_width(text: &str, max_w: usize, ellipsis: &str) -> String {
     out
 }
 
-/// Left text (after the marker column) and optional right-aligned rollup of one herdr row.
-fn row_parts(row: &DrawerRow, g: &HerdrGlyphs) -> (String, Option<String>) {
-    let meta = row.herdr.as_ref();
+/// Left text (after the marker column) and optional right-aligned rollup of one navigator row.
+fn row_parts(row: &DrawerRow, g: &NavigatorGlyphs) -> (String, Option<String>) {
+    let meta = row.navigator.as_ref();
     let indent = "  ".repeat(meta.map_or(0, |m| usize::from(m.depth)));
     let label = match &row.kind {
         DrawerRowKind::Pane(id) => format!("{}#{id} {}", " ".repeat(DOT_COLS), row.title),
         _ => row.title.clone(),
     };
     let fold = match meta {
-        Some(m) if matches!(m.level, HerdrLevel::Workspace | HerdrLevel::Session) => {
+        Some(m) if matches!(m.level, NavigatorLevel::Workspace | NavigatorLevel::Session) => {
             let glyph = if !m.has_children {
                 g.leaf
             } else if m.collapsed {
@@ -256,13 +256,13 @@ fn row_parts(row: &DrawerRow, g: &HerdrGlyphs) -> (String, Option<String>) {
         _ => String::new(),
     };
     let rollup = meta
-        .filter(|m| matches!(m.level, HerdrLevel::Workspace | HerdrLevel::Session) && (m.live || m.pane_count > 0))
+        .filter(|m| matches!(m.level, NavigatorLevel::Workspace | NavigatorLevel::Session) && (m.live || m.pane_count > 0))
         .map(|m| if m.live { format!("{}p", m.pane_count) } else { format!("{}p -", m.pane_count) });
     (format!("{indent}{fold}{label}"), rollup)
 }
 
-/// Renders the herdr-style drawer into `drawer_rect` (`FLT-01`).
-pub fn render_herdr_drawer(
+/// Renders the navigator-style drawer into `drawer_rect` (`FLT-01`).
+pub fn render_navigator_drawer(
     wm: &WindowManager,
     workspace_area: Rect,
     drawer_rect: Rect,
@@ -298,10 +298,10 @@ pub fn render_herdr_drawer(
         buf,
     );
 
-    let Some(lay) = herdr_layout(wm, drawer_rect) else {
+    let Some(lay) = navigator_layout(wm, drawer_rect) else {
         return;
     };
-    let HerdrLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step } = lay;
+    let NavigatorLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step } = lay;
     let base_style = Style::default()
         .fg(palette.text_fg.unwrap_or(palette.inactive_border_fg))
         .bg(palette.window_frame_bg);
@@ -309,10 +309,10 @@ pub fn render_herdr_drawer(
         fill_rect(buf, inner, base_style);
     }
 
-    let hg = HerdrGlyphs::for_pack(cfg.glyphs);
+    let hg = NavigatorGlyphs::for_pack(cfg.glyphs);
     let tokens = DesignTokens::from_palette(palette);
     let tick = drawer.spinner_tick();
-    let footer_h = herdr_layout_metrics(inner.height).1;
+    let footer_h = navigator_layout_metrics(inner.height).1;
 
     for (vis_idx, (row_idx, row)) in rows.iter().enumerate().skip(scroll).take(cap).enumerate() {
         let y = list_y + (vis_idx * row_step) as u16;
@@ -340,7 +340,7 @@ pub fn render_herdr_drawer(
         let width = usize::from(inner.width);
         let avail = width.saturating_sub(1);
         let segments = row
-            .herdr
+            .navigator
             .as_ref()
             .and_then(|m| m.counts.as_ref())
             .map(|c| counts_segments(c, &hg, tick))
@@ -372,7 +372,7 @@ pub fn render_herdr_drawer(
         }
     }
 
-    for cell in herdr_dot_cells(wm, workspace_area) {
+    for cell in navigator_dot_cells(wm, workspace_area) {
         let on_selected = cell.row_index == selected;
         let mut st = Style::default().fg(dot_color(cell.state, &tokens));
         if on_selected && !is_modern {
@@ -387,7 +387,7 @@ pub fn render_herdr_drawer(
 
     if footer_h >= 1 {
         let footer_y = inner.y + inner.height - 1;
-        let hint = if hg == HerdrGlyphs::ASCII { "Enter focus  e fold" } else { "⏎ focus  e fold" };
+        let hint = if hg == NavigatorGlyphs::ASCII { "Enter focus  e fold" } else { "⏎ focus  e fold" };
         let footer_style = Style::default().fg(palette.inactive_border_fg).bg(palette.window_frame_bg);
         fill_rect(buf, Rect::new(inner.x, footer_y, inner.width, 1), footer_style);
         let hint = fit_width(hint, usize::from(inner.width), hg.ellipsis);

@@ -810,10 +810,10 @@ fn fold_freeze_and_rollup() {
 }
 
 #[test]
-fn herdr_tree_rendering_exact_lines() {
+fn navigator_tree_rendering_exact_lines() {
     let mut t = SessionTree::new();
     assert_eq!(
-        t.render_herdr_tree_lines("main"),
+        t.render_navigator_tree_lines("main"),
         vec!["◈ ROOT [MCP — MASTER CONTROL PROGRAM]", "╰─ • main* [MCP] (1p/0r)"]
     );
     t.branch("main", "a").unwrap();
@@ -821,7 +821,7 @@ fn herdr_tree_rendering_exact_lines() {
     t.upsert_session("solo", SessionNodeKind::Independent, None);
     t.node_mut("b").unwrap().frozen = true;
     t.node_mut("a").unwrap().active_commands = 2;
-    let lines = t.render_herdr_tree_lines("a");
+    let lines = t.render_navigator_tree_lines("a");
     assert_eq!(
         lines,
         vec![
@@ -834,20 +834,20 @@ fn herdr_tree_rendering_exact_lines() {
     );
     // collapsed parent hides children and shows the folded glyph
     t.toggle_fold("main");
-    let lines = t.render_herdr_tree_lines("nobody");
+    let lines = t.render_navigator_tree_lines("nobody");
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[1], "├─ ▸ main [MCP] (subtree: 3p/2r)");
 }
 
 #[test]
-fn herdr_render_skips_dangling_children_and_handles_empty_tree() {
+fn navigator_render_skips_dangling_children_and_handles_empty_tree() {
     let mut t = SessionTree::new();
     t.node_mut("main").unwrap().children.push("dangling".into());
-    let lines = t.render_herdr_tree_lines("x");
+    let lines = t.render_navigator_tree_lines("x");
     assert_eq!(lines.len(), 2, "dangling child produces no line");
     assert!(lines[1].contains("▾ main"));
     t.nodes.clear();
-    assert_eq!(t.render_herdr_tree_lines("x"), vec!["◈ ROOT [MCP — MASTER CONTROL PROGRAM]"]);
+    assert_eq!(t.render_navigator_tree_lines("x"), vec!["◈ ROOT [MCP — MASTER CONTROL PROGRAM]"]);
 }
 
 #[test]
@@ -863,7 +863,7 @@ fn session_tree_serializes_and_round_trips_through_toml() {
     assert!(s.contains("kind = \"Subtree\"") && s.contains("kind = \"Independent\""), "{s}");
     let back: SessionTree = toml::from_str(&s).unwrap();
     assert_eq!(back, t);
-    assert_eq!(back.render_herdr_tree_lines("main"), t.render_herdr_tree_lines("main"));
+    assert_eq!(back.render_navigator_tree_lines("main"), t.render_navigator_tree_lines("main"));
 
     // empty tree round trips too
     let empty = SessionTree { nodes: vec![] };
@@ -889,7 +889,7 @@ fn deep_nesting_round_trip_and_rollup() {
     assert_eq!(t.subtree_rollup("main"), (26, 0));
     let back: SessionTree = toml::from_str(&toml::to_string(&t).unwrap()).unwrap();
     assert_eq!(back, t);
-    let lines = t.render_herdr_tree_lines("n24");
+    let lines = t.render_navigator_tree_lines("n24");
     assert_eq!(lines.len(), 27);
     assert!(lines.last().unwrap().contains("n24* [SUB] (1p/0r)"));
     // grafting the root under its deepest descendant is a cycle

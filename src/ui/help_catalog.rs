@@ -63,7 +63,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":drawer [left|right|top|bottom|size <n>]", "Dock Slide-Out Drawer on any screen edge or set size"),
     (":drawer [fixed|autohide|ondemand]", "Set Slide-Out Drawer visibility behavior"),
     (":drawer attention", "Focus the next pane needing attention (blocked, then errored, then done)"),
-    (":drawer style [classic|herdr]", "Switch the drawer between the classic telemetry rows and the compact herdr tree"),
+    (":drawer style [classic|navigator]", "Switch the drawer between the classic telemetry rows and the compact navigator tree"),
     (":agents [list]", "Agent state per pane: working / blocked / idle / done / errored (data over RPC)"),
     (":session new [name] / :new-session", "Create and switch to a new named workspace session"),
     (":session blank [name]", "Start a clean, blank single-pane workspace session"),

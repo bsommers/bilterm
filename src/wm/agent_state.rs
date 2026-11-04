@@ -443,12 +443,12 @@ impl WindowManager {
         }
     }
 
-    /// Poll-loop hook. Returns `true` only when a state changed AND the herdr drawer is visible, so
+    /// Poll-loop hook. Returns `true` only when a state changed AND the navigator drawer is visible, so
     /// the classic redraw cadence is unchanged (RESEARCH Pitfall 8).
     pub(crate) fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
         changed
-            && self.config.drawer.style == crate::wm::drawer::DrawerStyle::Herdr
+            && self.config.drawer.style == crate::wm::drawer::DrawerStyle::Navigator
             && self.is_drawer_effectively_visible()
     }
 }
@@ -459,16 +459,16 @@ mod tests {
     use crate::wm::drawer::DrawerStyle;
 
     #[test]
-    fn dots_tick_agent_ui_redraws_only_for_visible_herdr() {
+    fn dots_tick_agent_ui_redraws_only_for_visible_navigator() {
         let mut wm = WindowManager::new_headless(30, 100);
-        wm.config_mut().drawer.style = DrawerStyle::Herdr;
+        wm.config_mut().drawer.style = DrawerStyle::Navigator;
         let t0 = Instant::now();
         let _ = wm.tick_agent_ui(t0); // first look registers the pane
         wm.toggle_drawer();
         assert!(wm.is_drawer_effectively_visible());
 
         wm.report_agent_state(1, Some(AgentState::Blocked));
-        assert!(wm.tick_agent_ui(t0), "visible herdr drawer + state change -> redraw");
+        assert!(wm.tick_agent_ui(t0), "visible navigator drawer + state change -> redraw");
         assert!(!wm.tick_agent_ui(t0), "no change -> no redraw");
 
         wm.report_agent_state(1, Some(AgentState::Errored));
@@ -476,7 +476,7 @@ mod tests {
         assert!(!wm.tick_agent_ui(t0), "classic style keeps its redraw cadence");
 
         wm.report_agent_state(1, Some(AgentState::Done));
-        wm.config_mut().drawer.style = DrawerStyle::Herdr;
+        wm.config_mut().drawer.style = DrawerStyle::Navigator;
         wm.toggle_drawer();
         assert!(!wm.is_drawer_effectively_visible());
         assert!(!wm.tick_agent_ui(t0), "hidden drawer -> no redraw");

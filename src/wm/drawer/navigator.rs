@@ -1,7 +1,7 @@
-//! `herdr` drawer style: compact workspace > session > pane tree (`FLT-01`, Phase 50 D-02).
+//! Navigator drawer style: compact workspace > session > pane tree (`FLT-01`, Phase 50 D-02).
 //!
 //! The classic drawer (`classic_drawer_rows` in the parent module) is untouched. This module owns the
-//! style dispatcher [`WindowManager::drawer_rows`], the herdr row builder and the per-style width
+//! style dispatcher [`WindowManager::drawer_rows`], the navigator row builder and the per-style width
 //! helpers on [`DrawerConfig`].
 
 use std::collections::BTreeSet;
@@ -21,28 +21,29 @@ pub enum DrawerStyle {
     /// Telemetry-rich classic rows (default, byte-identical to pre-Phase-50 output).
     #[default]
     Classic,
-    /// Compact one-line-per-item workspace > session > pane tree.
-    Herdr,
+    /// Compact one-line-per-item workspace > session > pane tree. `herdr` is a deprecated hidden alias.
+    #[serde(alias = "herdr")]
+    Navigator,
 }
 
 impl DrawerStyle {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Classic => "classic",
-            Self::Herdr => "herdr",
+            Self::Navigator => "navigator",
         }
     }
     pub const fn toggle(self) -> Self {
         match self {
-            Self::Classic => Self::Herdr,
-            Self::Herdr => Self::Classic,
+            Self::Classic => Self::Navigator,
+            Self::Navigator => Self::Classic,
         }
     }
 }
 
-/// Tree level of a herdr drawer row.
+/// Tree level of a navigator drawer row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HerdrLevel {
+pub enum NavigatorLevel {
     Workspace,
     Session,
     Pane,
@@ -50,11 +51,11 @@ pub enum HerdrLevel {
     Other,
 }
 
-/// Herdr-only metadata attached to a [`DrawerRow`] (`None` for every classic row).
+/// Navigator-only metadata attached to a [`DrawerRow`] (`None` for every classic row).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HerdrRowMeta {
+pub struct NavigatorRowMeta {
     pub depth: u8,
-    pub level: HerdrLevel,
+    pub level: NavigatorLevel,
     pub collapsed: bool,
     pub has_children: bool,
     /// `true` for the active session and its live panes; `false` for saved sessions.
@@ -75,10 +76,10 @@ impl WorkspaceDrawer {
 }
 
 impl DrawerConfig {
-    /// Drawer width in columns for the active style (herdr keeps its own width).
+    /// Drawer width in columns for the active style (navigator keeps its own width).
     pub fn effective_width_cols(&self) -> u16 {
         match self.style {
-            DrawerStyle::Herdr => self.herdr_width_cols,
+            DrawerStyle::Navigator => self.navigator_width_cols,
             DrawerStyle::Classic => self.width_cols,
         }
     }
@@ -86,7 +87,7 @@ impl DrawerConfig {
     /// Writes `cols` to the width field owned by the active style (never crosses styles).
     pub fn set_width_cols_for_style(&mut self, cols: u16) {
         match self.style {
-            DrawerStyle::Herdr => self.herdr_width_cols = cols,
+            DrawerStyle::Navigator => self.navigator_width_cols = cols,
             DrawerStyle::Classic => self.width_cols = cols,
         }
     }
@@ -98,15 +99,15 @@ impl WindowManager {
     pub fn drawer_rows(&self) -> Vec<DrawerRow> {
         match self.config.drawer.style {
             DrawerStyle::Classic => self.classic_drawer_rows(),
-            DrawerStyle::Herdr => self.herdr_drawer_rows(),
+            DrawerStyle::Navigator => self.navigator_drawer_rows(),
         }
     }
 
-    /// Herdr rows (`FLT-01`): workspaces (session-tree roots) > sessions (descendants) > live panes.
+    /// Navigator rows (`FLT-01`): workspaces (session-tree roots) > sessions (descendants) > live panes.
     ///
     /// Live panes appear only under the active session (`config.history_session`); saved sessions show
     /// a `pane_count` rollup. Quick terminal and fleet nodes follow at depth 0 as `Other`.
-    pub(crate) fn herdr_drawer_rows(&self) -> Vec<DrawerRow> {
+    pub(crate) fn navigator_drawer_rows(&self) -> Vec<DrawerRow> {
         let tree = &self.daemon_state.session_tree;
         let active = self.config.history_session.as_str();
         let saved = self.list_sessions();
@@ -134,7 +135,7 @@ impl WindowManager {
         }
 
         if self.quick_terminal.visible {
-            rows.push(herdr_row(
+            rows.push(navigator_row(
                 DrawerRowKind::QuickTerminal,
                 "Quick Terminal".to_string(),
                 true,
@@ -142,7 +143,7 @@ impl WindowManager {
             ));
         }
         for name in self.fleet.nodes.keys() {
-            rows.push(herdr_row(
+            rows.push(navigator_row(
                 DrawerRowKind::FleetNode(name.clone()),
                 sanitize_display(name, TITLE_MAX_CHARS),
                 false,
@@ -158,10 +159,10 @@ const TITLE_MAX_CHARS: usize = 64;
 /// Maximum tree depth emitted (T-50-04).
 const MAX_DEPTH: usize = 8;
 
-fn other_meta() -> HerdrRowMeta {
-    HerdrRowMeta {
+fn other_meta() -> NavigatorRowMeta {
+    NavigatorRowMeta {
         depth: 0,
-        level: HerdrLevel::Other,
+        level: NavigatorLevel::Other,
         collapsed: false,
         has_children: false,
         live: true,
@@ -188,13 +189,13 @@ impl WalkCtx<'_> {
         let children: Vec<&SessionTreeNode> = node.children.iter().filter_map(|c| tree.node(c)).collect();
         let has_children = !children.is_empty() || (live && !self.pane_ids.is_empty());
         let collapsed = node.collapsed && has_children;
-        rows.push(herdr_row(
+        rows.push(navigator_row(
             DrawerRowKind::SessionHeader(node.name.clone()),
             sanitize_display(&node.name, TITLE_MAX_CHARS),
             false,
-            HerdrRowMeta {
+            NavigatorRowMeta {
                 depth: depth as u8,
-                level: if depth == 0 { HerdrLevel::Workspace } else { HerdrLevel::Session },
+                level: if depth == 0 { NavigatorLevel::Workspace } else { NavigatorLevel::Session },
                 collapsed,
                 has_children,
                 live,
@@ -219,13 +220,13 @@ impl WalkCtx<'_> {
         let qt_visible = self.wm.quick_terminal.visible;
         for &id in &self.pane_ids {
             let Some(pane) = self.wm.panes.get(&id) else { continue };
-            rows.push(herdr_row(
+            rows.push(navigator_row(
                 DrawerRowKind::Pane(id),
                 sanitize_display(pane.title(), TITLE_MAX_CHARS),
                 !qt_visible && top_id == Some(id),
-                HerdrRowMeta {
+                NavigatorRowMeta {
                     depth: depth.min(usize::from(u8::MAX)) as u8,
-                    level: HerdrLevel::Pane,
+                    level: NavigatorLevel::Pane,
                     collapsed: false,
                     has_children: false,
                     live: true,
@@ -238,8 +239,8 @@ impl WalkCtx<'_> {
     }
 }
 
-/// Builds a herdr row with every classic-only field neutral.
-fn herdr_row(kind: DrawerRowKind, title: String, is_focused_pane: bool, meta: HerdrRowMeta) -> DrawerRow {
+/// Builds a navigator row with every classic-only field neutral.
+fn navigator_row(kind: DrawerRowKind, title: String, is_focused_pane: bool, meta: NavigatorRowMeta) -> DrawerRow {
     DrawerRow {
         kind,
         connector: "",
@@ -251,6 +252,6 @@ fn herdr_row(kind: DrawerRowKind, title: String, is_focused_pane: bool, meta: He
         transport_badges: Vec::new(),
         title,
         is_focused_pane,
-        herdr: Some(meta),
+        navigator: Some(meta),
     }
 }

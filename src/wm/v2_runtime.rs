@@ -374,7 +374,7 @@ impl WindowManager {
         let base_lines = self
             .daemon_state
             .session_tree
-            .render_herdr_tree_lines(&active_sess);
+            .render_navigator_tree_lines(&active_sess);
         let pane_ids: Vec<PaneId> = self.ordered_pane_ids();
 
         let mut out = Vec::new();

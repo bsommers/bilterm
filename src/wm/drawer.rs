@@ -1,4 +1,4 @@
-//! `herdr`-Style Slide-Out Sessions / Windows / Panes & Fleet Drawer (`DRW-01`, `DRW-02`).
+//! `navigator`-Style Slide-Out Sessions / Windows / Panes & Fleet Drawer (`DRW-01`, `DRW-02`).
 //!
 //! Provides a dockable (`Left`, `Right`, `Top`, `Bottom`), multi-policy (`OnDemand`, `Fixed`,
 //! `AutoHide`) workspace drawer that either floats over panes (`Overlay` with Borland drop shadow
@@ -16,9 +16,9 @@ use crate::remote::FleetNodeKind;
 use crate::vt::Osc133Phase;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
-pub mod herdr;
+pub mod navigator;
 pub mod nav;
-pub use herdr::{DrawerStyle, HerdrLevel, HerdrRowMeta};
+pub use navigator::{DrawerStyle, NavigatorLevel, NavigatorRowMeta};
 pub use nav::DrawerNavOp;
 
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
@@ -100,7 +100,9 @@ pub struct DrawerConfig {
     pub width_cols: u16,
     pub height_rows: u16,
     pub style: DrawerStyle,
-    pub herdr_width_cols: u16,
+    /// Legacy key `herdr_width_cols` is still accepted when loading configs.
+    #[serde(alias = "herdr_width_cols")]
+    pub navigator_width_cols: u16,
 }
 
 impl Default for DrawerConfig {
@@ -112,7 +114,7 @@ impl Default for DrawerConfig {
             width_cols: 34,
             height_rows: 6,
             style: DrawerStyle::Classic,
-            herdr_width_cols: 28,
+            navigator_width_cols: 28,
         }
     }
 }
@@ -140,7 +142,7 @@ pub struct DrawerRow {
     pub transport_badges: Vec<String>,
     pub title: String,
     pub is_focused_pane: bool,
-    pub herdr: Option<HerdrRowMeta>,
+    pub navigator: Option<NavigatorRowMeta>,
 }
 
 impl DrawerRow {
@@ -441,7 +443,7 @@ impl WindowManager {
             transport_badges: sess_transports,
             title: self.config.history_session.clone(),
             is_focused_pane: false,
-            herdr: None,
+            navigator: None,
         });
 
         let has_extra_groups = self.quick_terminal.visible || !self.fleet.nodes.is_empty();
@@ -459,7 +461,7 @@ impl WindowManager {
                 WorkspaceLayoutMode::Stacked => "Stacked Z-Deck".to_string(),
             },
             is_focused_pane: false,
-            herdr: None,
+            navigator: None,
         });
 
         let top_id = self.z_stack.top();
@@ -517,7 +519,7 @@ impl WindowManager {
                 transport_badges,
                 title: pane.title().to_string(),
                 is_focused_pane: is_focused,
-                herdr: None,
+                navigator: None,
             });
         }
 
@@ -534,7 +536,7 @@ impl WindowManager {
                 transport_badges: Vec::new(),
                 title: "QUAKE QUICK TERM".to_string(),
                 is_focused_pane: true,
-                herdr: None,
+                navigator: None,
             });
         }
 
@@ -556,7 +558,7 @@ impl WindowManager {
                 transport_badges,
                 title: name.clone(),
                 is_focused_pane: false,
-                herdr: None,
+                navigator: None,
             });
         }
         let mut extra_sessions = self.list_sessions();
@@ -590,7 +592,7 @@ impl WindowManager {
                     transport_badges: Vec::new(),
                     title: saved,
                     is_focused_pane: false,
-                    herdr: None,
+                    navigator: None,
                 });
             }
         }
