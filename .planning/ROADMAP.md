@@ -48,7 +48,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
-- [ ] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
+- [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 
 ## Phase Details
@@ -762,7 +762,7 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
   4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI. *The GUI part is conditional on the 50-13 checkpoint decision:* `fix-all` = also in real GUI windows on Linux, Windows and macOS; `fix-linux` = also in the real X11 GUI, while on Windows/macOS Ctrl+wheel over a panel still zooms the font (`[` / `]` and `:... scale` do scale panels there); `scope-out` = proven only on the headless GUI surface, real GUI windows keep font zoom and panel scale stays a no-op there (documented known gap). 50-14 records which option holds.
   5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
 
-**Plans**: 16/16 plans executed (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
+**Plans**: 16/16 plans complete — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
 
 Plans:
 - [x] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
