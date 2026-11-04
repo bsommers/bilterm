@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 use bilterm::api::{AutomationControlPlane, JsonValue};
 use bilterm::colon_command::parse_colon_command;
 use bilterm::wm::WindowManager;
+use bilterm::config::BiltermConfig;
+use bilterm::config::agents::AgentProfile;
 use bilterm::wm::SplitDirection;
 use bilterm::wm::agent_state::{AgentSignals, AgentState, FinishKind, classify};
 
@@ -236,4 +238,112 @@ fn state_classify_table() {
     assert_eq!(AgentState::Working.as_str(), "working");
     assert!(AgentState::Blocked.is_attention() && AgentState::Errored.is_attention() && AgentState::Done.is_attention());
     assert!(!AgentState::Working.is_attention() && !AgentState::Idle.is_attention());
+}
+
+fn profile_wm(name: &str, p: AgentProfile) -> WindowManager {
+    let mut wm = WindowManager::new_headless(24, 80);
+    wm.config_mut().agents.insert(name.to_string(), p);
+    wm
+}
+
+fn tool_profile(working: &[&str], blocked: &[&str]) -> AgentProfile {
+    AgentProfile {
+        matches: vec![],
+        working: working.iter().map(|s| s.to_string()).collect(),
+        blocked: blocked.iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+#[test]
+fn state_profile_blocked_pattern_marks_blocked() {
+    let mut wm = profile_wm("tool", tool_profile(&[], &["proceed?"]));
+    wm.pane_mut(1).unwrap().submit_command("tool --go").unwrap();
+    feed(&mut wm, 1, b"Do you want to PROCEED?\r\n");
+    wm.update_agent_states(Instant::now());
+    assert_eq!(wm.agent_state(1), Some(AgentState::Blocked));
+}
+
+#[test]
+fn state_profile_working_pattern_keeps_working_while_silent() {
+    let mut wm = profile_wm("tool", tool_profile(&["esc to interrupt"], &[]));
+    let t0 = Instant::now();
+    wm.pane_mut(1).unwrap().submit_command("tool").unwrap();
+    feed(&mut wm, 1, b"thinking (Esc to interrupt)\r\n");
+    wm.update_agent_states(t0);
+    wm.update_agent_states(ms(t0, 5000));
+    wm.update_agent_states(ms(t0, 9000));
+    assert_eq!(wm.agent_state(1), Some(AgentState::Working));
+    // Without the profile the same silence goes idle.
+    let mut plain = WindowManager::new_headless(24, 80);
+    plain.pane_mut(1).unwrap().submit_command("tool").unwrap();
+    feed(&mut plain, 1, b"thinking (Esc to interrupt)\r\n");
+    plain.update_agent_states(t0);
+    plain.update_agent_states(ms(t0, 5000));
+    plain.update_agent_states(ms(t0, 9000));
+    assert_eq!(plain.agent_state(1), Some(AgentState::Idle));
+}
+
+#[test]
+fn state_profile_matches_defaults_to_name() {
+    let mut wm = profile_wm("claude", tool_profile(&[], &["allow?"]));
+    wm.pane_mut(1).unwrap().submit_command("/usr/local/bin/claude --resume").unwrap();
+    feed(&mut wm, 1, b"Allow? (y/n)\r\n");
+    wm.update_agent_states(Instant::now());
+    assert_eq!(wm.agent_state(1), Some(AgentState::Blocked));
+    // A different program does not pick the profile up.
+    let mut other = profile_wm("claude", tool_profile(&[], &["allow?"]));
+    other.pane_mut(1).unwrap().submit_command("vim notes.txt").unwrap();
+    feed(&mut other, 1, b"Allow? (y/n)\r\n");
+    other.update_agent_states(Instant::now());
+    assert_ne!(other.agent_state(1), Some(AgentState::Blocked));
+    // Explicit `matches` wins over the profile name.
+    let mut custom = profile_wm("x", AgentProfile { matches: vec!["cod".into()], ..tool_profile(&[], &["allow?"]) });
+    custom.pane_mut(1).unwrap().submit_command("codex").unwrap();
+    feed(&mut custom, 1, b"allow?\r\n");
+    custom.update_agent_states(Instant::now());
+    assert_eq!(custom.agent_state(1), Some(AgentState::Blocked));
+}
+
+#[test]
+fn state_profile_patterns_are_capped() {
+    let many: Vec<String> = (0..40).map(|i| format!("zz{i:02}x")).collect();
+    let long = "x".repeat(500);
+    let p = AgentProfile { matches: vec![], working: many.clone(), blocked: vec![long, "  ".into(), " Ok ".into()] }.sanitized();
+    assert_eq!(p.working.len(), 16);
+    assert_eq!(p.blocked.len(), 2, "empty entries dropped");
+    assert_eq!(p.blocked[0].chars().count(), 80);
+    assert_eq!(p.blocked[1], "ok", "trimmed and lower-cased");
+    // The tracker applies the same caps: a 40th pattern never matches.
+    let mut wm = profile_wm("tool", AgentProfile { matches: vec![], working: vec![], blocked: many });
+    wm.pane_mut(1).unwrap().submit_command("tool").unwrap();
+    feed(&mut wm, 1, b"zz39x\r\n");
+    wm.update_agent_states(Instant::now());
+    assert_ne!(wm.agent_state(1), Some(AgentState::Blocked));
+}
+
+#[test]
+fn state_empty_agents_table_not_serialized() {
+    let text = toml::to_string(&BiltermConfig::default()).unwrap();
+    assert!(!text.contains("[agents"), "{text}");
+    let cfg: BiltermConfig = toml::from_str("[agents.tool]\nblocked = [\"ok?\"]\n").unwrap();
+    assert_eq!(cfg.agents["tool"].blocked, ["ok?"]);
+    assert!(toml::to_string(&cfg).unwrap().contains("[agents.tool]"));
+}
+
+#[test]
+fn state_list_reports_profile_name() {
+    let mut wm = profile_wm("tool", tool_profile(&[], &["proceed?"]));
+    wm.pane_mut(1).unwrap().submit_command("tool run").unwrap();
+    feed(&mut wm, 1, b"working\r\n");
+    run(&mut wm, ":agents list");
+    let d = data(&mut wm);
+    let JsonValue::Array(items) = d.get("agents").unwrap() else { panic!() };
+    assert_eq!(items[0].get("profile").and_then(JsonValue::as_str), Some("tool"));
+    assert_eq!(items[0].get("name").and_then(JsonValue::as_str), Some("tool"));
+    // Panes without a matching profile report null.
+    let mut bare = WindowManager::new_headless(24, 80);
+    run(&mut bare, ":agents list");
+    let d = data(&mut bare);
+    let JsonValue::Array(items) = d.get("agents").unwrap() else { panic!() };
+    assert!(matches!(items[0].get("profile"), Some(JsonValue::Null)));
 }

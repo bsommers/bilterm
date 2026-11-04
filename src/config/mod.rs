@@ -122,6 +122,9 @@ pub struct BiltermConfig {
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
     pub remotes: BTreeMap<String, RemoteHostProfile>,
+    /// Optional agent recognition profiles (`[agents.<name>]`, Phase 50-03); empty by default and then not serialised.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub agents: BTreeMap<String, agents::AgentProfile>,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -226,6 +229,7 @@ impl Default for BiltermConfig {
             keybindings: BTreeMap::new(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
+            agents: BTreeMap::new(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,

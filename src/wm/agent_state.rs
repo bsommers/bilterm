@@ -167,7 +167,8 @@ struct PaneHistory {
     reported: Option<AgentState>,
     name: String,
     last_scan: Option<Instant>,
-    profile: Option<String>,
+    /// Matched profile (name, sanitised copy), resolved once per tail scan.
+    profile: Option<(String, AgentProfile)>,
     /// `false` until the first observation, which applies its state without dwell.
     observed: bool,
     last_phase: Option<Osc133Phase>,
@@ -274,6 +275,25 @@ fn track_finish(h: &mut PaneHistory, pane: &CompositePane, focused: bool) {
     h.last_finish_sig = sig;
 }
 
+/// First profile (map order) whose sanitised `matches` (else its own name) occurs in the pane identity.
+fn resolve_profile(
+    profiles: &BTreeMap<String, AgentProfile>,
+    command: Option<&str>,
+    title: &str,
+) -> Option<(String, AgentProfile)> {
+    let identity = format!("{} {}", command.unwrap_or(""), title).to_lowercase();
+    profiles.iter().find_map(|(name, raw)| {
+        let p = raw.sanitized();
+        let hit = if p.matches.is_empty() {
+            let own = name.trim().to_lowercase();
+            !own.is_empty() && identity.contains(&own)
+        } else {
+            p.matches.iter().any(|m| identity.contains(m.as_str()))
+        };
+        hit.then(|| (name.clone(), p))
+    })
+}
+
 fn collect_signals(h: &PaneHistory, pane: &CompositePane, focused: bool, now: Instant) -> AgentSignals {
     let phase = pane.vt().osc133_phase();
     let finished = matches!(phase, Some(Osc133Phase::CommandFinished(_) | Osc133Phase::PromptStart));
@@ -297,7 +317,14 @@ fn collect_signals(h: &PaneHistory, pane: &CompositePane, focused: bool, now: In
 }
 
 /// Updates one pane's history; returns `true` when its displayed state changed.
-fn observe(h: &mut PaneHistory, id: PaneId, pane: &CompositePane, focused: bool, now: Instant) -> bool {
+fn observe(
+    h: &mut PaneHistory,
+    id: PaneId,
+    pane: &CompositePane,
+    focused: bool,
+    now: Instant,
+    profiles: &BTreeMap<String, AgentProfile>,
+) -> bool {
     let bytes = pane.vt().total_bytes_processed();
     let bytes_changed = bytes != h.last_bytes;
     if bytes_changed {
@@ -308,11 +335,17 @@ fn observe(h: &mut PaneHistory, id: PaneId, pane: &CompositePane, focused: bool,
     if scan_due {
         h.last_scan = Some(now);
         h.name = identity_token(id, pane.prompt().running_command.as_deref(), pane.title());
-        h.tail = scan_tail(pane);
+        if profiles.is_empty() {
+            h.profile = None;
+            h.tail.clear();
+        } else {
+            h.profile = resolve_profile(profiles, pane.prompt().running_command.as_deref(), pane.title());
+            h.tail = scan_tail(pane);
+        }
     }
     track_finish(h, pane, focused);
     let signals = collect_signals(h, pane, focused, now);
-    let raw = h.reported.unwrap_or_else(|| classify(&signals, None));
+    let raw = h.reported.unwrap_or_else(|| classify(&signals, h.profile.as_ref().map(|(_, p)| p)));
     let first_look = !h.observed;
     h.observed = true;
     if raw == h.state {
@@ -356,7 +389,7 @@ impl WindowManager {
                 name: h.name.clone(),
                 state: h.state,
                 since_ms: now.map_or(0, |n| n.saturating_duration_since(h.since).as_millis() as u64),
-                profile: h.profile.clone(),
+                profile: h.profile.as_ref().map(|(n, _)| n.clone()),
                 reported: h.reported.is_some(),
             })
             .collect()
@@ -382,13 +415,14 @@ impl WindowManager {
         let active = if self.quick_terminal.visible { None } else { Some(self.active_pane_id()) };
         let mut changed = false;
         let panes = &self.panes;
+        let profiles = &self.config.agents;
         self.agents.histories.retain(|id, _| panes.contains_key(id));
         for (&id, pane) in &self.panes {
             let h = self.agents.histories.entry(id).or_insert_with(|| {
                 changed = true;
                 PaneHistory::new(id, now)
             });
-            if observe(h, id, pane, active == Some(id), now) {
+            if observe(h, id, pane, active == Some(id), now, profiles) {
                 changed = true;
             }
         }
