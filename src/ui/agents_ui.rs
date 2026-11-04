@@ -3,7 +3,7 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthChar;
 
 use crate::config::BiltermConfig;
@@ -22,6 +22,31 @@ use crate::wm::traffic::TrafficEvent;
 pub const AGENTS_WINDOW_TITLE: &str = "AGENT TRAFFIC";
 /// Maximum characters of one rendered event line before display-width truncation.
 const EVENT_LINE_CAP: usize = 160;
+
+/// Column of the pin badge in the title row of a window with outer rect `outer`.
+///
+/// It sits two cells left of the leftmost title badge (`[_][□][X]`, 9 cells wide in every glyph
+/// pack, right edge inset by 2). `None` when the title is too narrow to hold the badge next to the
+/// `AGENT TRAFFIC` title; the renderer and the mouse hit-test both use this one function.
+pub fn agents_pin_badge_x(outer: Rect) -> Option<u16> {
+    const BADGES_W: u16 = 9;
+    if outer.width < 24 {
+        return None;
+    }
+    let x = (outer.x + outer.width).saturating_sub(BADGES_W + 2 + 2);
+    let title_end = outer.x + 1 + AGENTS_WINDOW_TITLE.len() as u16 + 2;
+    (x > title_end).then_some(x)
+}
+
+/// Pin badge glyph: `◆` pinned / `◇` unpinned, `*` / `o` in the ASCII pack.
+pub fn pin_badge_glyph(glyphs: &GlyphSet, pinned: bool) -> &'static str {
+    match (glyphs.pin_top_bottom.is_ascii(), pinned) {
+        (true, true) => "*",
+        (true, false) => "o",
+        (false, true) => "◆",
+        (false, false) => "◇",
+    }
+}
 
 /// Splits the inner rect into `(graph, divider, events)` at `splitter_pct`.
 pub fn split_panes(inner: Rect, splitter_pct: u16) -> (Rect, u16, Rect) {
@@ -114,6 +139,13 @@ pub fn render_agents_window(
     let Some(rects) = wm.agents_pane_rects(workspace_area) else {
         return;
     };
+    if let Some(x) = agents_pin_badge_x(rects.outer)
+        && let Some(cell) = buf.cell_mut((x, rects.outer.y))
+    {
+        let fg = if state.pinned { palette.title_fg } else { palette.controls_fg.unwrap_or(palette.title_fg) };
+        cell.set_symbol(pin_badge_glyph(glyphs, state.pinned));
+        cell.set_style(Style::default().fg(fg).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
+    }
     let (inner, graph, div_x, events) = (rects.inner, rects.graph, rects.splitter_col, rects.snoop);
     let divider = Style::default()
         .fg(palette.inactive_border_fg)

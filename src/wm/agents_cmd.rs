@@ -46,4 +46,6 @@ pub enum AgentsOp {
     PinNode { key: crate::wm::agents_window::NodeKey, x_pm: u16, y_pm: u16 },
     /// `:agents node-unpin [key]` (`u`, right-click) - release a pinned node (none = selected).
     UnpinNode(Option<crate::wm::agents_window::NodeKey>),
+    /// `:agents pin` / `unpin` / `pin toggle` (`*`, title pin badge) - pin the window open (`None` toggles).
+    Pin(Option<bool>),
 }

@@ -542,6 +542,9 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::PinNode { key, x_pm, y_pm } => format!(":agents node-pin {} {x_pm} {y_pm}", key.as_str()),
         AgentsOp::UnpinNode(None) => ":agents node-unpin".to_string(),
         AgentsOp::UnpinNode(Some(k)) => format!(":agents node-unpin {}", k.as_str()),
+        AgentsOp::Pin(None) => ":agents pin toggle".to_string(),
+        AgentsOp::Pin(Some(true)) => ":agents pin".to_string(),
+        AgentsOp::Pin(Some(false)) => ":agents unpin".to_string(),
     })
 }
 
@@ -586,6 +589,9 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::PinNode { key: NodeKey::pane(1), x_pm: 300, y_pm: 700 },
         AgentsOp::UnpinNode(None),
         AgentsOp::UnpinNode(Some(NodeKey::pane(1))),
+        AgentsOp::Pin(None),
+        AgentsOp::Pin(Some(true)),
+        AgentsOp::Pin(Some(false)),
     ]
 }
 
@@ -1339,5 +1345,88 @@ fn window_swallows_pointer_events_and_ignores_stale_drags() {
         // ... a drag release without a press is a no-op.
         mouse(&mut wm, area, MouseEventKind::Up(MouseButton::Left), r.x + 3, r.y + 3);
         assert!(wm.agents_window().drag.is_none());
+    });
+}
+
+// ---- Plan 50-16: pin badge and independent panel scale ----
+
+fn title_text(wm: &WindowManager, area: Rect) -> String {
+    let r = win_rect(wm, area);
+    let buf = render(wm, area);
+    lines(&buf)[usize::from(r.y)].clone()
+}
+
+#[test]
+fn window_tracer_pin_badge_click_pins() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        assert!(title_text(&wm, area).contains('◇'), "unpinned title shows the hollow pin");
+        let r = win_rect(&wm, area);
+        let x = bilterm::ui::agents_ui::agents_pin_badge_x(r).expect("pin badge fits at 120 cols");
+        click(&mut wm, area, x, r.y);
+        assert!(wm.agents_window().pinned, "badge click pins");
+        assert!(wm.agents_window().drag.is_none(), "a badge click does not start a drag");
+        let title = title_text(&wm, area);
+        assert!(title.contains('◆') && !title.contains('◇'), "pinned title shows the filled pin: {title}");
+
+        press(&mut wm, KeyCode::Esc);
+        assert!(wm.agents_window().active, "Esc keeps a pinned window open");
+        assert!(!wm.agents_window().captures_input(), "Esc releases the keyboard");
+
+        let r = win_rect(&wm, area);
+        click(&mut wm, area, r.x + 3, r.y + 3);
+        assert!(wm.agents_window().captures_input(), "a click inside takes the keyboard back");
+
+        press(&mut wm, KeyCode::Char('*'));
+        assert!(!wm.agents_window().pinned, "`*` unpins");
+        assert!(title_text(&wm, area).contains('◇'));
+    });
+}
+
+#[test]
+fn window_star_and_colon_pin_match_badge() {
+    with_temp_xdg(|| {
+        let by_badge = {
+            let (mut wm, area) = traffic_fixture();
+            let r = win_rect(&wm, area);
+            click(&mut wm, area, bilterm::ui::agents_ui::agents_pin_badge_x(r).unwrap(), r.y);
+            observe(&wm)
+        };
+        let by_key = {
+            let (mut wm, _) = traffic_fixture();
+            press(&mut wm, KeyCode::Char('*'));
+            observe(&wm)
+        };
+        let by_colon = {
+            let (mut wm, area) = traffic_fixture();
+            run_colon(&mut wm, ":agents pin toggle");
+            let _ = area;
+            observe(&wm)
+        };
+        assert_eq!(by_badge, by_key);
+        assert_eq!(by_key, by_colon);
+        assert!(wm_pinned(":agents pin") && !wm_pinned(":agents unpin"));
+    });
+}
+
+fn wm_pinned(cmd: &str) -> bool {
+    let (mut wm, _) = traffic_fixture();
+    run_colon(&mut wm, ":agents pin");
+    run_colon(&mut wm, cmd);
+    wm.agents_window().pinned
+}
+
+#[test]
+fn window_pin_esc_releases_keyboard() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = traffic_fixture();
+        run_colon(&mut wm, ":agents pin");
+        press(&mut wm, KeyCode::Esc);
+        assert!(wm.agents_window().active);
+        assert!(!wm.agents_window().captures_input());
+        run_colon(&mut wm, ":agents unpin");
+        assert!(!wm.agents_window().pinned);
+        run_colon(&mut wm, ":agents zoom");
+        assert!(wm.agents_window().captures_input());
     });
 }

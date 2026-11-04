@@ -77,6 +77,16 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
                 status(wm, format!("{} is not pinned", key.as_str()));
             }
         }
+        AgentsOp::Pin(v) => {
+            let pin = v.unwrap_or(!wm.agents_window().pinned);
+            wm.agents_window_mut().pinned = pin;
+            let msg = if pin {
+                "Agents window pinned (Esc returns focus to panes; :agents unpin unpins)"
+            } else {
+                "Agents window unpinned"
+            };
+            status(wm, msg.to_string());
+        }
         // Handled by the caller.
         AgentsOp::List
         | AgentsOp::Zoom(_)

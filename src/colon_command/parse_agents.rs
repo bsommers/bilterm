@@ -4,7 +4,7 @@ use super::ColonCommand;
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::agents_window::{GraphDir, NodeKey};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin]";
 
 fn graph_dir(raw: &str) -> Option<GraphDir> {
     match raw {
@@ -93,12 +93,15 @@ fn parse_window_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, Strin
                 _ => usage("node-pin <node-key> <x 0..1000> <y 0..1000>"),
             }
         }
+        ("pin", 0) => Some(Ok(AgentsOp::Pin(Some(true)))),
+        ("pin", 1) if args[0] == "toggle" => Some(Ok(AgentsOp::Pin(None))),
+        ("unpin", 0) => Some(Ok(AgentsOp::Pin(Some(false)))),
         ("node-unpin", 0) => Some(Ok(AgentsOp::UnpinNode(None))),
         ("node-unpin", 1) => match node_key(args[0]) {
             Some(key) => Some(Ok(AgentsOp::UnpinNode(Some(key)))),
             None => usage("node-unpin [node-key]"),
         },
-        ("move" | "resize" | "rect" | "size" | "max" | "split" | "grab" | "nudge" | "node-pin" | "node-unpin", _) => {
+        ("move" | "resize" | "rect" | "size" | "max" | "split" | "grab" | "nudge" | "node-pin" | "node-unpin" | "pin" | "unpin", _) => {
             usage(&format!("{verb} ... (see :agents)"))
         }
         _ => None,

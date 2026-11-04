@@ -14,6 +14,7 @@ use super::keymap::{AgentsKeyScope, agents_window_action, is_leader_key_with_tmu
 use super::mouse_wm::{apply_rect_edge_resize, detect_title_bar_badge_click};
 use crate::action::Action;
 use crate::wm::agents_cmd::AgentsOp;
+use crate::ui::agents_ui::agents_pin_badge_x;
 use crate::wm::agents_geometry::{AgentsHit, graph_cell_permille};
 use crate::wm::agents_window::AgentsDrag;
 use crate::wm::{WindowManager, rect_contains};
@@ -82,6 +83,11 @@ pub(super) fn handle_agents_window_mouse(
         return rect_contains(workspace_area, mouse.column, mouse.row).then_some(AppAction::Handled);
     }
     if let MouseEventKind::Down(button) = mouse.kind {
+        // A click inside a pinned window whose keyboard was released takes the keyboard back.
+        let state = wm.agents_window();
+        if state.pinned && !state.focused {
+            run(wm, AgentsOp::Zoom(None));
+        }
         press(wm, button, hit, mouse, workspace_area);
     }
     Some(AppAction::Handled)
@@ -96,6 +102,9 @@ fn press(wm: &mut WindowManager, button: MouseButton, hit: AgentsHit, mouse: Mou
         return;
     };
     match (button, hit) {
+        (MouseButton::Left, AgentsHit::Title) if agents_pin_badge_x(rects.outer) == Some(mouse.column) => {
+            run(wm, AgentsOp::Pin(None))
+        }
         (MouseButton::Left, AgentsHit::Title) => match detect_title_bar_badge_click(wm, rects.outer, mouse.column) {
             Some(1) => run(wm, AgentsOp::Maximize),
             Some(_) => run(wm, AgentsOp::Close),
