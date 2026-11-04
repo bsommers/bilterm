@@ -86,6 +86,8 @@ ring eviction.
 
 ### CR-01: Paste bypasses the agents window input capture and writes to the pane beneath (outward write path from compose)
 
+**Status:** fixed (8e7673d): `handle_wm_paste_event` routes Event::Paste through the agents window capture; only keyword entry accepts text.
+
 **File:** `src/app.rs:142-144` (consumer), `src/input/agents_window.rs:23-61` (capture contract)
 **Issue:** `handle_agents_window_key` promises that "keys never leak into the pane below". `Event::Paste` is routed
 unconditionally to `handle_paste_event(self.wm.active_pane_mut(), ..)` and never consults
@@ -120,6 +122,8 @@ Add a regression test in `tests/phase50_agents_window.rs` that opens the window,
 
 ### WR-01: Invisible agents window still captures the whole keyboard (input trap)
 
+**Status:** fixed (f9eed86): `WindowManager::agents_window_captures_input()` requires the window to be drawn.
+
 **File:** `src/wm/agents_window.rs:497-499`, `src/input/modal.rs:334-339`
 **Issue:** `captures_input()` only checks `active && (!pinned || focused)`. `agents_window_rect()` returns `None`
 (window not drawn) when the workspace is smaller than 30x10, and `agents_pane_rects()` returns `None` for tiny
@@ -134,6 +138,8 @@ if wm.agents_window().captures_input()
 or add `WindowManager::agents_window_captures_input()` that includes the rect check, and use it in `modal.rs`.
 
 ### WR-02: Window geometry operations use the unscaled workspace while the window renders and hit-tests in the scaled (virtual) space
+
+**Status:** fixed (c217d05): `agents_workspace()` uses the scaled virtual area; `snoop_view_rows` uses it too.
 
 **File:** `src/wm/agents_geometry.rs:228-230,238-250,253-290,325-341`, `src/wm/agents_window.rs:883-887`
 **Issue:** The renderer (`renderer.rs`), the mouse handler (`panel_space`) and `agents_gui` all work in
@@ -163,6 +169,8 @@ and use `agents_workspace()` in `snoop_view_rows` too.
 
 ### WR-03: Non-follow conversation view drifts when the traffic ring evicts old events
 
+**Status:** fixed (1322c65): `SnoopState.scroll_seq` anchors the scrolled view on a bus sequence number.
+
 **File:** `src/wm/agents_window.rs:418-425,467-474`, `src/wm/traffic.rs:153-156`
 **Issue:** `SnoopState.scroll` is an index counted from the oldest filtered line, and `SnoopState` documents
 "new traffic never moves the view". Once the bus holds `TRAFFIC_CAP` (512) events, every new event evicts index 0,
@@ -173,6 +181,8 @@ visible line) and resolve it to an index in `snoop_view_range` callers. Fall bac
 seq has been evicted.
 
 ### WR-04: Untrusted names collapse into one graph node, and sanitisation misses invisible/format characters
+
+**Status:** fixed (6a7de68): injective node keys (hash suffix for altered names) and `sanitize_display` drops invisible/format characters.
 
 **File:** `src/wm/agents_window.rs:42-51`, `src/vt/codec.rs:187-199`
 **Issue:**
@@ -192,6 +202,8 @@ and keep the sanitised, truncated form for the label only.
 
 ### WR-05: Navigator row builder performs filesystem I/O on every call, and rows are rebuilt many times per frame and per event
 
+**Status:** fixed (20536d8): saved-session list snapshotted in `WorkspaceDrawer`, invalidated by every `apply` and every 32 ticks.
+
 **File:** `src/wm/drawer/navigator.rs:170-174` (`list_sessions`), called via `drawer_rows()` from
 `src/ui/drawer/navigator.rs:171-193` and `src/input/drawer_navigator.rs:45-75`
 **Issue:** `navigator_drawer_rows()` calls `self.list_sessions()`, which calls `resolve_session_dir()` and
@@ -208,6 +220,8 @@ per frame or event instead of recomputing it.
 
 ### WR-06: One-key and one-click destructive pane close with no confirmation, next to adjacent single-cell targets
 
+**Status:** fixed (45eb5eb): closing a Working pane from the Navigator needs a second close within ~5 s (no generic confirm modal exists; the review offered this alternative).
+
 **File:** `src/input/keymap.rs` (`x`/`Delete` bindings), `src/wm/drawer/menu.rs:42,69`, `src/ui/drawer/navigator.rs:359-402`
 **Issue:** `DrawerNavOp::Close` runs `remove_pane` on the selected pane, which kills the process. It is reachable by
 `x`/`Delete`, the footer `x` button and the right-click menu `Close` entry. The footer buttons are single-cell
@@ -218,6 +232,8 @@ get a confirmation elsewhere.
 a running command. Alternatively require a second press (`x` twice, or a menu confirm) for non-idle panes.
 
 ### WR-07: Agents window keyboard handler runs before all modal handling
+
+**Status:** fixed (045ac33): modals get keys before the agents window and the window is drawn below modals (TUI path).
 
 **File:** `src/input/modal.rs:334-339`, `src/ui/mod.rs:730`
 **Issue:** `handle_agents_window_key` is the first thing in `handle_wm_modal_key`, ahead of Help, Inspector,
