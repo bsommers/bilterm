@@ -1,3 +1,4 @@
+pub mod agents_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
@@ -13,6 +14,7 @@ pub mod cursor_cmd;
 pub mod design;
 pub mod drawer;
 pub mod glyphs;
+pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod modals;
@@ -723,6 +725,8 @@ impl Widget for WorkspaceWidget<'_> {
         if let Some(exit_state) = self.wm.exit_guard_state() {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
         }
+
+        agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
 

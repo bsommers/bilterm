@@ -1,4 +1,5 @@
 pub mod agent_state;
+pub mod agents_window;
 pub mod agents_cmd;
 pub mod chrome_style;
 pub mod drawer;
@@ -129,6 +130,8 @@ pub struct WindowManager {
     pub(crate) agents: agent_state::AgentTracker,
     /// In-memory agent traffic bus read by the zoom graph and snoop view (`FLT-02`, Phase 50-05).
     pub(crate) traffic: traffic::TrafficBus,
+    /// Floating AGENT TRAFFIC zoom window state (`FLT-02`, Phase 50-07).
+    pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
@@ -206,6 +209,7 @@ impl WindowManager {
             drawer: WorkspaceDrawer::new(),
             agents: agent_state::AgentTracker::new(),
             traffic: traffic::TrafficBus::new(),
+            agents_window: agents_window::AgentsWindowState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
