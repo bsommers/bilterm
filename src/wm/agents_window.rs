@@ -6,6 +6,7 @@
 //! keys) are bound in later plans; everything here is reachable through [`WindowManager`].
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
 
 use ratatui::layout::Rect;
 
@@ -114,31 +115,227 @@ pub struct GraphSelection {
     pub edge: Option<(NodeKey, NodeKey)>,
 }
 
-/// Node placement state: positions pinned by the user (node drag, 50-09).
+/// Cold-start iteration count of the force-directed layout.
+const COLD_ITERATIONS: usize = 60;
+/// Warm-start iteration count (positions of known nodes are kept as the starting point).
+const WARM_ITERATIONS: usize = 20;
+const COLD_TEMPERATURE: f32 = 0.1;
+const WARM_TEMPERATURE: f32 = 0.05;
+/// Positions are kept inside `[POS_MIN, POS_MAX]` on both axes.
+const POS_MIN: f32 = 0.05;
+const POS_MAX: f32 = 0.95;
+/// A node known from the previous layout never drifts further than this in one re-layout.
+const MAX_WARM_DRIFT: f32 = 0.06;
+
+type Pos = (f32, f32);
+
+/// Memory of the last layout: positions by key and the topology they were computed for.
 #[derive(Clone, Debug, Default)]
+struct LayoutCache {
+    prev: BTreeMap<NodeKey, Pos>,
+    sig_keys: Vec<NodeKey>,
+    sig_edges: Vec<(usize, usize)>,
+    sig_pinned: BTreeMap<NodeKey, Pos>,
+    result: Vec<Pos>,
+}
+
+/// Deterministic, stable node placement (Fruchterman-Reingold, `+ - * / sqrt` only).
+///
+/// The layout remembers the previous positions, so adding a node starts from the old picture
+/// (warm start) and moves existing nodes by at most [`MAX_WARM_DRIFT`]. Asking again for an
+/// unchanged topology returns the cached positions, so repeated frames never wobble. `pinned`
+/// holds positions fixed by the user (node drag, 50-09).
+#[derive(Debug, Default)]
 pub struct GraphLayout {
     pub pinned: BTreeMap<NodeKey, (f32, f32)>,
+    cache: Mutex<LayoutCache>,
+}
+
+impl Clone for GraphLayout {
+    fn clone(&self) -> Self {
+        Self { pinned: self.pinned.clone(), cache: Mutex::new(self.lock().clone()) }
+    }
+}
+
+fn fnv1a(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// Hash-derived unit-interval pair for `key`.
+fn hash_unit(key: &NodeKey) -> (f32, f32, u64) {
+    let h = fnv1a(key.as_str());
+    let fx = ((h >> 8) & 0xffff) as f32 / 65535.0;
+    let fy = ((h >> 24) & 0xffff) as f32 / 65535.0;
+    (fx, fy, h)
+}
+
+fn clamp_pos(p: Pos) -> Pos {
+    (p.0.clamp(POS_MIN, POS_MAX), p.1.clamp(POS_MIN, POS_MAX))
+}
+
+/// Row-major grid placement; used above [`NODE_CAP`] nodes where the O(n^2) layout is skipped.
+fn grid_positions(n: usize) -> Vec<Pos> {
+    let cols = ((n.max(1) as f32).sqrt().ceil() as usize).max(1);
+    let rows = n.max(1).div_ceil(cols);
+    (0..n)
+        .map(|i| {
+            let (c, r) = (i % cols, i / cols);
+            let x = (c as f32 + 0.5) / cols as f32;
+            let y = (r as f32 + 0.5) / rows as f32;
+            (POS_MIN + x * (POS_MAX - POS_MIN), POS_MIN + y * (POS_MAX - POS_MIN))
+        })
+        .collect()
 }
 
 impl GraphLayout {
-    /// Places `keys` (sorted) on a deterministic row-major grid; pinned nodes keep their spot.
-    pub fn place(&self, keys: &[NodeKey], _edges: &[(usize, usize)]) -> Vec<(f32, f32)> {
-        let n = keys.len().max(1);
-        let cols = (n as f32).sqrt().ceil() as usize;
-        let cols = cols.max(1);
-        let rows = n.div_ceil(cols);
-        keys.iter()
-            .enumerate()
-            .map(|(i, k)| {
+    fn lock(&self) -> std::sync::MutexGuard<'_, LayoutCache> {
+        self.cache.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Positions for `keys` (sorted, unique) connected by `edges` (index pairs into `keys`).
+    pub fn place(&self, keys: &[NodeKey], edges: &[(usize, usize)]) -> Vec<(f32, f32)> {
+        let mut cache = self.lock();
+        if cache.sig_keys == keys && cache.sig_edges == edges && cache.sig_pinned == self.pinned {
+            return cache.result.clone();
+        }
+        let result = if keys.len() > NODE_CAP {
+            let mut grid = grid_positions(keys.len());
+            for (i, k) in keys.iter().enumerate() {
                 if let Some(p) = self.pinned.get(k) {
-                    return *p;
+                    grid[i] = *p;
                 }
-                let (c, r) = (i % cols, i / cols);
-                let x = (c as f32 + 0.5) / cols as f32;
-                let y = (r as f32 + 0.5) / rows as f32;
-                (0.05 + x * 0.9, 0.05 + y * 0.9)
-            })
-            .collect()
+            }
+            grid
+        } else {
+            self.force_layout(&cache.prev, keys, edges)
+        };
+        cache.prev = keys.iter().cloned().zip(result.iter().copied()).collect();
+        cache.sig_keys = keys.to_vec();
+        cache.sig_edges = edges.to_vec();
+        cache.sig_pinned = self.pinned.clone();
+        cache.result = result.clone();
+        result
+    }
+
+    fn force_layout(
+        &self,
+        prev: &BTreeMap<NodeKey, Pos>,
+        keys: &[NodeKey],
+        edges: &[(usize, usize)],
+    ) -> Vec<Pos> {
+        let n = keys.len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let mut pos: Vec<Pos> = vec![(0.5, 0.5); n];
+        let mut placed = vec![false; n];
+        let mut warm = vec![false; n];
+        let mut fixed = vec![false; n];
+        for (i, k) in keys.iter().enumerate() {
+            if let Some(p) = self.pinned.get(k) {
+                pos[i] = (p.0.clamp(0.0, 1.0), p.1.clamp(0.0, 1.0));
+                placed[i] = true;
+                fixed[i] = true;
+            } else if let Some(p) = prev.get(k) {
+                pos[i] = clamp_pos(*p);
+                placed[i] = true;
+                warm[i] = true;
+            }
+        }
+        let is_warm = warm.iter().any(|w| *w);
+        for i in 0..n {
+            if placed[i] {
+                continue;
+            }
+            let (fx, fy, h) = hash_unit(&keys[i]);
+            let neighbour = edges.iter().find_map(|&(a, b)| {
+                if a == i && placed[b] {
+                    Some(b)
+                } else if b == i && placed[a] {
+                    Some(a)
+                } else {
+                    None
+                }
+            });
+            pos[i] = match neighbour {
+                Some(j) => {
+                    let dx = (0.04 + fx * 0.06) * if h & 1 == 1 { 1.0 } else { -1.0 };
+                    let dy = (0.04 + fy * 0.06) * if h & 2 == 2 { 1.0 } else { -1.0 };
+                    clamp_pos((pos[j].0 + dx, pos[j].1 + dy))
+                }
+                None => (0.1 + fx * 0.8, 0.1 + fy * 0.8),
+            };
+            placed[i] = true;
+        }
+        let start = pos.clone();
+
+        let (iterations, t0) = if is_warm {
+            (WARM_ITERATIONS, WARM_TEMPERATURE)
+        } else {
+            (COLD_ITERATIONS, COLD_TEMPERATURE)
+        };
+        let k = ((POS_MAX - POS_MIN) * (POS_MAX - POS_MIN) / n as f32).sqrt();
+        for it in 0..iterations {
+            let temp = t0 * (1.0 - it as f32 / iterations as f32);
+            let mut disp: Vec<Pos> = vec![(0.0, 0.0); n];
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let (dx, dy) = (pos[i].0 - pos[j].0, pos[i].1 - pos[j].1);
+                    let d = (dx * dx + dy * dy).sqrt();
+                    // Coincident nodes are pushed apart along +x / -x (deterministic).
+                    let (ux, uy, d) = if d < 1e-3 { (1.0, 0.0, 1e-3) } else { (dx / d, dy / d, d) };
+                    let f = k * k / d;
+                    disp[i].0 += ux * f;
+                    disp[i].1 += uy * f;
+                    disp[j].0 -= ux * f;
+                    disp[j].1 -= uy * f;
+                }
+            }
+            for &(a, b) in edges {
+                if a == b {
+                    continue;
+                }
+                let (dx, dy) = (pos[a].0 - pos[b].0, pos[a].1 - pos[b].1);
+                let d = (dx * dx + dy * dy).sqrt().max(1e-3);
+                let f = d * d / k;
+                let (ux, uy) = (dx / d, dy / d);
+                disp[a].0 -= ux * f;
+                disp[a].1 -= uy * f;
+                disp[b].0 += ux * f;
+                disp[b].1 += uy * f;
+            }
+            for i in 0..n {
+                if fixed[i] {
+                    continue;
+                }
+                let len = (disp[i].0 * disp[i].0 + disp[i].1 * disp[i].1).sqrt();
+                if len > 1e-9 {
+                    let step = len.min(temp);
+                    pos[i] = clamp_pos((
+                        pos[i].0 + disp[i].0 / len * step,
+                        pos[i].1 + disp[i].1 / len * step,
+                    ));
+                }
+            }
+        }
+        // Stability: nodes known from the previous picture stay close to where they were.
+        for i in 0..n {
+            if !warm[i] {
+                continue;
+            }
+            let (dx, dy) = (pos[i].0 - start[i].0, pos[i].1 - start[i].1);
+            let d = (dx * dx + dy * dy).sqrt();
+            if d > MAX_WARM_DRIFT {
+                let s = MAX_WARM_DRIFT / d;
+                pos[i] = (start[i].0 + dx * s, start[i].1 + dy * s);
+            }
+        }
+        pos
     }
 }
 
@@ -322,6 +519,110 @@ impl WindowManager {
             })
             .collect();
         GraphScene { nodes, edges }
+    }
+}
+
+impl WindowManager {
+    /// Selects the node with `key`; clears the edge selection. `false` when it is not in the scene.
+    pub fn agents_select_node(&mut self, key: &NodeKey) -> bool {
+        let scene = self.agents_graph_scene();
+        if !scene.nodes.iter().any(|n| &n.key == key) {
+            return false;
+        }
+        self.agents_window.selection = GraphSelection { node: Some(key.clone()), edge: None };
+        true
+    }
+
+    /// Moves the selection to the nearest node in direction `dir` (dot-product filter, then
+    /// Euclidean distance, ties by key). With nothing selected the leftmost node is selected.
+    /// `false` (selection unchanged) when no node lies in that direction.
+    pub fn agents_select_direction(&mut self, dir: GraphDir) -> bool {
+        let scene = self.agents_graph_scene();
+        let current = self
+            .agents_window
+            .selection
+            .node
+            .as_ref()
+            .and_then(|k| scene.nodes.iter().find(|n| &n.key == k));
+        let target = match current {
+            None => scene.nodes.iter().min_by(|a, b| {
+                a.pos
+                    .0
+                    .total_cmp(&b.pos.0)
+                    .then_with(|| a.pos.1.total_cmp(&b.pos.1))
+                    .then_with(|| a.key.cmp(&b.key))
+            }),
+            Some(cur) => {
+                let (ux, uy): (f32, f32) = match dir {
+                    GraphDir::Left => (-1.0, 0.0),
+                    GraphDir::Right => (1.0, 0.0),
+                    GraphDir::Up => (0.0, -1.0),
+                    GraphDir::Down => (0.0, 1.0),
+                };
+                let dist2 = |n: &SceneNode| {
+                    let (dx, dy) = (n.pos.0 - cur.pos.0, n.pos.1 - cur.pos.1);
+                    dx * dx + dy * dy
+                };
+                scene
+                    .nodes
+                    .iter()
+                    .filter(|n| {
+                        n.key != cur.key
+                            && (n.pos.0 - cur.pos.0) * ux + (n.pos.1 - cur.pos.1) * uy > 0.0
+                    })
+                    .min_by(|a, b| {
+                        dist2(a).total_cmp(&dist2(b)).then_with(|| a.key.cmp(&b.key))
+                    })
+            }
+        };
+        let Some(target) = target else {
+            return false;
+        };
+        let key = target.key.clone();
+        self.agents_window.selection = GraphSelection { node: Some(key), edge: None };
+        true
+    }
+
+    /// Cycles through the selected node's incident edges (sorted by the other endpoint's key),
+    /// wrapping at both ends. `false` when no node is selected or it has no edges.
+    pub fn agents_cycle_edge(&mut self, forward: bool) -> bool {
+        let Some(node) = self.agents_window.selection.node.clone() else {
+            return false;
+        };
+        let scene = self.agents_graph_scene();
+        let mut incident: Vec<(NodeKey, (NodeKey, NodeKey))> = scene
+            .edges
+            .iter()
+            .filter_map(|e| {
+                let other = if e.from == node {
+                    &e.to
+                } else if e.to == node {
+                    &e.from
+                } else {
+                    return None;
+                };
+                Some((other.clone(), (e.from.clone(), e.to.clone())))
+            })
+            .collect();
+        if incident.is_empty() {
+            return false;
+        }
+        incident.sort_by(|a, b| a.0.cmp(&b.0));
+        let n = incident.len();
+        let at = self
+            .agents_window
+            .selection
+            .edge
+            .as_ref()
+            .and_then(|sel| incident.iter().position(|(_, pair)| pair == sel));
+        let next = match (at, forward) {
+            (None, true) => 0,
+            (None, false) => n - 1,
+            (Some(i), true) => (i + 1) % n,
+            (Some(i), false) => (i + n - 1) % n,
+        };
+        self.agents_window.selection.edge = Some(incident[next].1.clone());
+        true
     }
 }
 

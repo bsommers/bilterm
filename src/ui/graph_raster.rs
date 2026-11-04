@@ -22,6 +22,8 @@ use crate::wm::agents_window::{GraphScene, SceneEdge, SceneNode};
 const PAD: f32 = 4.0;
 /// Bottom padding of the node area (leaves one terminal row for labels), canvas pixels.
 const PAD_BOTTOM: f32 = 8.0;
+/// Sideways bend of an edge curve as a fraction of its length.
+const CURVE_BEND: f32 = 0.18;
 const NODE_RADIUS: f32 = 3.0;
 const NODE_RADIUS_SELECTED: f32 = 4.0;
 
@@ -50,7 +52,8 @@ impl GraphColours {
         Self {
             bg: c(palette.window_frame_bg),
             edge: c(t.border_idle),
-            edge_active: c(t.border_focus),
+            // Traffic colour; distinct from `accent`, which marks the selection.
+            edge_active: c(t.success),
             accent: c(t.accent),
             node: c(t.text_primary),
             working: c(t.success),
@@ -91,6 +94,22 @@ fn edge_rgb(edge: &SceneEdge, colours: &GraphColours) -> Rgb {
     }
 }
 
+/// Control points of the edge curve: the chord's thirds pushed sideways by a share of its length
+/// (perpendicular via a 90 degree rotation, no trigonometry).
+pub fn curve_controls(a: (f32, f32), b: (f32, f32)) -> ((f32, f32), (f32, f32)) {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-3 {
+        return (a, b);
+    }
+    let off = CURVE_BEND * len;
+    let (nx, ny) = (-dy / len * off, dx / len * off);
+    (
+        (a.0 + dx / 3.0 + nx, a.1 + dy / 3.0 + ny),
+        (a.0 + 2.0 * dx / 3.0 + nx, a.1 + 2.0 * dy / 3.0 + ny),
+    )
+}
+
 /// Draws edges (selected edge last, so it stays on top) and nodes onto `canvas`.
 ///
 /// `tick` animates active edges with a growing halo around their endpoints; `0` is the static frame.
@@ -114,7 +133,19 @@ pub fn draw_agent_graph(
         let (Some(a), Some(b)) = (px_of(&edge.from), px_of(&edge.to)) else {
             continue;
         };
-        canvas.draw_line_aa(a.0, a.1, b.0, b.1, edge_rgb(edge, colours), 1.0);
+        let (c1, c2) = curve_controls(a, b);
+        let rgb = edge_rgb(edge, colours);
+        canvas.draw_bezier_aa(a, c1, c2, b, rgb);
+        if edge.selected {
+            // Selected edges are drawn two pixels thick so they stand out from plain traffic.
+            canvas.draw_bezier_aa(
+                (a.0, a.1 + 1.0),
+                (c1.0, c1.1 + 1.0),
+                (c2.0, c2.1 + 1.0),
+                (b.0, b.1 + 1.0),
+                rgb,
+            );
+        }
     }
     for node in &scene.nodes {
         let (x, y) = node_px(node.pos, w, h);
