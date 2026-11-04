@@ -194,7 +194,7 @@ pub fn snoop_layout(wm: &WindowManager, rects: &AgentsPaneRects) -> SnoopLayout 
     let lines_area = snoop_lines_area(wm, area);
     let st = &wm.agents_window().snoop;
     let all = wm.snoop_lines();
-    let (start, end) = snoop_view_range(all.len(), usize::from(lines_area.height), st.follow, st.scroll);
+    let (start, end) = snoop_view_range(all.len(), usize::from(lines_area.height), st.follow, st.effective_scroll(&all));
     let lines = (start..end)
         .enumerate()
         .map(|(i, idx)| (lines_area.y + i as u16, all[idx].seq))

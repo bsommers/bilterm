@@ -423,6 +423,10 @@ pub struct SnoopState {
     /// Index (in the filtered lines, from the oldest) of the bottom visible line; used only while
     /// `follow` is off, so new traffic never moves the view.
     pub scroll: usize,
+    /// Bus sequence number of the line `scroll` points at. The view is anchored on this so ring
+    /// eviction (which shifts every index down) never makes a scrolled-back view creep forward
+    /// (WR-03). Read through [`SnoopState::effective_scroll`].
+    pub scroll_seq: Option<u64>,
     /// Selected line (bus sequence number); `None` = the newest line.
     pub selected_seq: Option<u64>,
     /// Keyword being typed (`Some` while the entry line is open).
@@ -439,10 +443,29 @@ impl Default for SnoopState {
             filter_text: None,
             follow: true,
             scroll: 0,
+            scroll_seq: None,
             selected_seq: None,
             keyword_entry: None,
             last_copy: None,
         }
+    }
+}
+
+impl SnoopState {
+    /// Bottom visible line index (while follow is off) resolved against the current `lines`: the
+    /// anchored sequence number when it is still present, the oldest line when it was evicted,
+    /// else the raw `scroll` index.
+    pub fn effective_scroll(&self, lines: &[SnoopLine]) -> usize {
+        match self.scroll_seq {
+            Some(seq) if !self.follow => lines.iter().position(|l| l.seq == seq).unwrap_or(0),
+            _ => self.scroll,
+        }
+    }
+
+    /// Points the view at line `idx` of `lines`, remembering its sequence number.
+    fn anchor_scroll(&mut self, lines: &[SnoopLine], idx: usize) {
+        self.scroll = idx;
+        self.scroll_seq = lines.get(idx).map(|l| l.seq);
     }
 }
 
@@ -843,7 +866,7 @@ impl WindowManager {
             return false;
         };
         self.agents_window.snoop.selected_seq = Some(seq);
-        self.keep_snoop_selection_visible(idx, lines.len());
+        self.keep_snoop_selection_visible(idx, &lines);
         true
     }
 
@@ -856,26 +879,24 @@ impl WindowManager {
         let at = lines.iter().position(|l| l.seq == cur).unwrap_or(lines.len() - 1);
         let to = (at as i64 + i64::from(delta)).clamp(0, lines.len() as i64 - 1) as usize;
         self.agents_window.snoop.selected_seq = Some(lines[to].seq);
-        self.keep_snoop_selection_visible(to, lines.len());
+        self.keep_snoop_selection_visible(to, &lines);
         true
     }
 
     /// Scrolls so line `idx` is inside the viewport; leaving the newest lines turns follow off.
-    fn keep_snoop_selection_visible(&mut self, idx: usize, len: usize) {
+    fn keep_snoop_selection_visible(&mut self, idx: usize, lines: &[SnoopLine]) {
         let rows = self.snoop_view_rows();
         if rows == 0 {
             return;
         }
-        let s = &self.agents_window.snoop;
-        let (start, end) = snoop_view_range(len, rows, s.follow, s.scroll);
+        let s = &mut self.agents_window.snoop;
+        let (start, end) = snoop_view_range(lines.len(), rows, s.follow, s.effective_scroll(lines));
         if idx < start {
-            let s = &mut self.agents_window.snoop;
             s.follow = false;
-            s.scroll = idx + rows - 1;
+            s.anchor_scroll(lines, idx + rows - 1);
         } else if idx >= end {
-            let s = &mut self.agents_window.snoop;
             s.follow = false;
-            s.scroll = idx;
+            s.anchor_scroll(lines, idx);
         }
     }
 
@@ -942,6 +963,7 @@ impl WindowManager {
         let s = &mut self.agents_window.snoop;
         s.follow = true;
         s.scroll = 0;
+        s.scroll_seq = None;
         if s.selected_seq.is_some() && s.selected_seq != visible {
             s.selected_seq = None;
         }
@@ -1006,15 +1028,16 @@ impl WindowManager {
 
     /// Turns follow on (jumping to the newest line), off (keeping the view) or toggles it (`None`).
     pub fn set_snoop_follow(&mut self, mode: Option<bool>) {
-        let len = self.snoop_lines().len();
+        let lines = self.snoop_lines();
         let s = &mut self.agents_window.snoop;
         let on = mode.unwrap_or(!s.follow);
         if on {
             s.follow = true;
             s.scroll = 0;
+            s.scroll_seq = None;
         } else {
             if s.follow {
-                s.scroll = len.saturating_sub(1);
+                s.anchor_scroll(&lines, lines.len().saturating_sub(1));
             }
             s.follow = false;
         }
@@ -1023,27 +1046,31 @@ impl WindowManager {
     /// Scrolls the history: negative = towards older lines (turns follow off), positive = newer,
     /// `i16::MIN` = the oldest line. Scrolling down while following does nothing.
     pub fn scroll_snoop(&mut self, n: i16) {
-        let len = self.snoop_lines().len();
+        let lines = self.snoop_lines();
+        let len = lines.len();
         if len == 0 {
             return;
         }
         let rows = self.snoop_view_rows();
         let s = &mut self.agents_window.snoop;
         if n == i16::MIN {
-            (s.follow, s.scroll) = (false, 0);
+            s.follow = false;
+            s.anchor_scroll(&lines, 0);
             return;
         }
         if n > 0 && s.follow {
             return;
         }
         // The bottom visible line as drawn (the view never shows less than the oldest lines).
-        let bottom = match snoop_view_range(len, rows, s.follow, s.scroll) {
+        let cur = s.effective_scroll(&lines);
+        let bottom = match snoop_view_range(len, rows, s.follow, cur) {
             (_, end) if rows > 0 => end - 1,
             _ if s.follow => len - 1,
-            _ => s.scroll.min(len - 1),
+            _ => cur.min(len - 1),
         };
         let step = usize::from(n.unsigned_abs());
-        s.scroll = if n < 0 { bottom.saturating_sub(step) } else { (bottom + step).min(len - 1) };
+        let to = if n < 0 { bottom.saturating_sub(step) } else { (bottom + step).min(len - 1) };
+        s.anchor_scroll(&lines, to);
         s.follow = false;
     }
 

@@ -1957,6 +1957,29 @@ fn visible_seqs(wm: &WindowManager, area: Rect) -> Vec<u64> {
     snoop_lay(wm, area).lines.iter().map(|(_, s)| *s).collect()
 }
 
+/// WR-03: a scrolled-back view stays on the same lines while the ring evicts old events.
+#[test]
+fn snoop_scrolled_view_is_stable_under_ring_eviction() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = long_fixture();
+        for i in 0..600 {
+            wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(1), TrafficKind::Exec, &format!("fill {i}"), Instant::now());
+        }
+        focus_snoop(&mut wm);
+        press(&mut wm, KeyCode::PageUp);
+        press(&mut wm, KeyCode::PageUp);
+        assert!(!wm.agents_window().snoop.follow);
+        let before = visible_seqs(&wm, area);
+        assert!(!before.is_empty());
+        let oldest_before = wm.snoop_lines().first().unwrap().seq;
+        for i in 0..20 {
+            wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(2), TrafficKind::Exec, &format!("more {i}"), Instant::now());
+        }
+        assert!(wm.snoop_lines().first().unwrap().seq > oldest_before, "the ring evicted old events");
+        assert_eq!(visible_seqs(&wm, area), before, "eviction does not move the scrolled view");
+    });
+}
+
 #[test]
 fn snoop_follow_and_scroll() {
     with_temp_xdg(|| {
