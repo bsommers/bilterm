@@ -106,7 +106,7 @@ src/
 │   ├── session.rs              # Workspace session save/restore/list (SplitTree + ZStack + prompts + lines), SSH/fleet helpers
 │   ├── split_tree.rs           # Recursive H/V binary space partitioning (SplitTree, SplitDirection)
 │   ├── z_stack.rs              # Overlapping Borland Turbo Vision z-order window deck (ZStack)
-│   ├── drawer.rs               # herdr-style slide-out Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
+│   ├── drawer.rs               # slide-out (classic + Navigator styles; `src/wm/drawer/navigator.rs`, `src/ui/drawer/navigator.rs`) Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
 │   ├── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal) & frame helpers
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── daemon/

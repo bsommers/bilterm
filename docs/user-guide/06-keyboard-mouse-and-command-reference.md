@@ -68,7 +68,7 @@
 | **`F5`** / `Alt+Z` | `<L> z` / `<L> F5` | `:zoom` | Toggle zoom/maximize on the focused composite pane |
 | **`F6`** / `Alt+Tab` | `<L> o` / `<L> n` / `<L> Tab` / `<L> F6` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (or focus next pane) |
 | `Alt+Shift+Tab` | `<L> p` / `<L> Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (or focus previous pane) |
-| **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle `herdr`-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
 | **`F10`** / `Alt+\`` / `Ctrl+\` / `Ctrl+Space` | `<L> q` / `<L> \`` / `<L> ~` / `<L> F10` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal |
 | **`F12`** / `Ctrl+G` | `<L> g` / `<L> F12` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` |
@@ -262,7 +262,7 @@
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:drawer` | `:sidebar`, `:panels` | `[toggle \| focus \| left \| right \| top \| bottom \| edge <edge> \| fixed \| autohide \| ondemand \| float \| push \| mode <float\|push> \| size <N>]` | Toggle, focus, dock (`Left`/`Right`/`Top`/`Bottom`), pin (`Fixed`/`AutoHide`/`OnDemand`), or set layout (`Overlay`/`Push`) of the `herdr`-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| `:drawer` | `:sidebar`, `:panels` | `[toggle \| focus \| left \| right \| top \| bottom \| edge <edge> \| fixed \| autohide \| ondemand \| float \| push \| mode <float\|push> \| size <N> \| style <classic\|navigator\|toggle>]` | Toggle, focus, dock (`Left`/`Right`/`Top`/`Bottom`), pin (`Fixed`/`AutoHide`/`OnDemand`), or set layout (`Overlay`/`Push`) of the Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer; `style navigator` selects the compact agent-aware Navigator tree (`herdr` is a deprecated alias; config key `navigator_width_cols`) |
 
 ### 6.7 Remote SSH Domains, Remote `tmux -CC` & `herdr` Fleet Federation
 
