@@ -10,7 +10,7 @@ Welcome to the official User Guide for **Bilterm (`v1.12.0`)** — the Rust + Ra
 
 ---
 
-## 10-Chapter User Guide Index
+## 11-Chapter User Guide Index
 
 1. **[Chapter 1: Getting Started & Core Concepts](01-getting-started.md)**
    - Building & launching (TUI and `--gui`), Composite Window Pane architecture (`OutputCanvas` + `FloatingCommandPrompt` + `OIA Status Bar`), per-pane independent font scaling (`v1.12.0`), all-border mouse resizing, Alternate Screen (`DECSET 1049`) auto-hide, and `!ECHO LOCK` password protection.
@@ -32,6 +32,8 @@ Welcome to the official User Guide for **Bilterm (`v1.12.0`)** — the Rust + Ra
    - 9 comprehensive architectures & workflows: Multi-Agent AI Coding Swarms, Remote Agents over SSH, Remote Development (`:ssh-tmux`), Robot Scripting & Deterministic QA, CI/CD Verification Harnesses, Daily Power-User Operations, Polyglot Developer Layouts, Live Escape-Sequence Debugging (`F9`), and Custom Per-Pane Font Layouts (`nmon`).
 10. **[Chapter 10: Security Architecture & Operational Best Practices](10-security-and-best-practices.md)**
     - Defense-in-depth engineering reference covering 3-Signal `!ECHO LOCK`, `/dev/random` flood & escape-trap sanitization, clipboard paste-injection guards, private `0700`/`0600` filesystem confinement, Unix socket `SO_PEERCRED` + bearer-token RPC security, and SSH argument-injection prevention.
+11. **[Chapter 11: The Navigator Sidebar & Agent Traffic Window](11-navigator-sidebar-and-agent-traffic.md)**
+    - Optional agent-aware drawer style (`[drawer] style = "navigator"`): workspace > session > pane tree with working/blocked/idle/done/errored state dots, attention jump (`<Leader> !`), pairing/fan-out comms glyphs, full key and mouse operation tables, the AGENT TRAFFIC window (`<Leader> a` / `:agents`) with node graph and conversation snoop view, GUI vector rendering, and honest known limits.
 
 ---
 
