@@ -339,6 +339,11 @@ pub(super) fn handle_wm_modal_key(
         if super::keymap::is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
             return Ok(None);
         }
+        if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator
+            && let Some(action) = super::drawer_navigator::handle_navigator_drawer_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
         match key.code {
             KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),
             KeyCode::F(11) => {

@@ -537,3 +537,49 @@ fn style_legacy_herdr_alias_maps_to_navigator() {
         assert_eq!((cfg.style, cfg.navigator_width_cols), (DrawerStyle::Navigator, 29));
     });
 }
+
+// ---- Phase 50-06: keyboard-first navigator drawer (FLT-01, success criteria 1 and 3) ----
+
+use bilterm::input::handle_wm_key_event;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+fn press(wm: &mut WindowManager, code: KeyCode) {
+    handle_wm_key_event(wm, KeyEvent::new(code, KeyModifiers::NONE)).unwrap();
+}
+
+fn press_mod(wm: &mut WindowManager, code: KeyCode, mods: KeyModifiers) {
+    handle_wm_key_event(wm, KeyEvent::new(code, mods)).unwrap();
+}
+
+fn ch(wm: &mut WindowManager, c: char) {
+    press(wm, KeyCode::Char(c));
+}
+
+fn pane_row_count(wm: &WindowManager) -> usize {
+    wm.drawer_rows().iter().filter(|r| matches!(r.kind, DrawerRowKind::Pane(_))).count()
+}
+
+#[test]
+fn keys_tracer_fold_by_key_and_command() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = navigator_wm(100, 30);
+        open_drawer(&mut wm);
+        wm.drawer_mut().selected_index = 0;
+        assert_eq!(pane_row_count(&wm), 2);
+
+        ch(&mut wm, 'e');
+        assert_eq!(pane_row_count(&wm), 0, "e folds the workspace row");
+        let lines = buffer_lines(&render(&wm, area));
+        assert!(!lines.iter().any(|l| l.contains("#1 alpha")), "pane rows gone from the render");
+
+        run_colon(&mut wm, ":drawer fold");
+        assert_eq!(pane_row_count(&wm), 2, ":drawer fold unfolds again");
+
+        wm.drawer_mut().selected_index = 2; // pane #2
+        run_colon(&mut wm, ":drawer enter");
+        assert_eq!(wm.active_pane_id(), 2);
+        wm.drawer_mut().selected_index = 1;
+        run_colon(&mut wm, ":drawer enter");
+        assert_eq!(wm.active_pane_id(), 1);
+    });
+}

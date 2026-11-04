@@ -704,6 +704,8 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
             crate::wm::drawer::DrawerNavOp::NextAttention,
         ))),
+        Some("fold") => Some(Ok(ColonCommand::DrawerNav(crate::wm::drawer::DrawerNavOp::Fold))),
+        Some("enter" | "activate") => Some(Ok(ColonCommand::DrawerNav(crate::wm::drawer::DrawerNavOp::Activate))),
         Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
         Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
@@ -714,7 +716,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

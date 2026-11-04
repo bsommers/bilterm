@@ -260,6 +260,46 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::PageDown, Action::BlockNext),
 ];
 
+/// Which part of the focused navigator drawer a key row applies to (Phase 50-06).
+///
+/// Scopes are tried in the order given to [`navigator_drawer_action`] (most specific first).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawerKeyScope {
+    /// The workspace > session > pane tree.
+    Navigator,
+}
+
+/// Declarative key table of the focused navigator drawer (`FLT-01`, `ARCH-R01.2`).
+///
+/// Consulted only while the navigator drawer holds keyboard focus; keys it does not claim fall through
+/// to the unchanged classic drawer handler. Every row lowers to [`Action::DrawerNav`] and runs through
+/// `WindowManager::apply`; each operation has a `:drawer` colon twin.
+pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, Action)] = &[
+    (
+        DrawerKeyScope::Navigator,
+        KeyModifiers::NONE,
+        KeyCode::Char('e'),
+        Action::DrawerNav(crate::wm::drawer::DrawerNavOp::Fold),
+    ),
+];
+
+/// Looks up `key` in [`NAVIGATOR_DRAWER_BINDINGS`] for the active `scopes` (first scope wins).
+///
+/// Modifiers are compared with SHIFT removed for `KeyCode::Char` (like [`default_pane_action`]) and
+/// exactly for every other code, so Shift/Alt+Up/Down never match the plain arrow rows.
+pub fn navigator_drawer_action(scopes: &[DrawerKeyScope], key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    scopes.iter().find_map(|scope| {
+        NAVIGATOR_DRAWER_BINDINGS
+            .iter()
+            .find(|(s, mods, code, _)| s == scope && *mods == lookup_mods && *code == key.code)
+            .map(|(_, _, _, action)| action.clone())
+    })
+}
+
 /// Looks up `key` in [`DEFAULT_LEADER_BINDINGS`].
 pub fn default_leader_action(key: KeyEvent) -> Option<Action> {
     DEFAULT_LEADER_BINDINGS

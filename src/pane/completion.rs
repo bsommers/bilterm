@@ -481,7 +481,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":attach", &["default"]),
     (":exit-guard", &["guard", "respawn", "detach", "off"]),
     (":respawn-pane", &[]),
-    (":drawer", &["toggle", "focus", "left", "right", "top", "bottom", "fixed", "autohide", "ondemand", "float", "push", "attention", "style ", "size "]),
+    (":drawer", &["toggle", "focus", "left", "right", "top", "bottom", "fixed", "autohide", "ondemand", "float", "push", "attention", "fold", "enter", "style ", "size "]),
     (":fontsize", &["+", "-", "reset", "14pt", "125%", "150%"]),
     (
         ":font",

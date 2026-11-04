@@ -1,3 +1,4 @@
+mod drawer_navigator;
 pub mod encode;
 pub mod keymap;
 pub mod modal;
