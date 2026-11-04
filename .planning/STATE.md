@@ -4,11 +4,11 @@ milestone: v2.6.0
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: Phase 50 context gathered
-last_updated: "2026-11-03T05:01:38.313Z"
+stopped_at: Completed 50-01-PLAN.md
+last_updated: "2026-11-04T00:32:19.380Z"
 last_activity: 2026-11-02
 last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
-state_head: 6300778b893b0f759eb25a6d2710857c38d82a80
+state_head: f45dee258e2cd64aea40f2a8bf86d950d31f8bce
 progress:
   total_phases: 48
   completed_phases: 44
@@ -59,6 +59,11 @@ Progress: [██████████] 100% (42/42 Phases)
 - Trend: Stable
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 50 P01 | 40 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -71,6 +76,7 @@ Recent decisions affecting current work:
 - [Init]: Child PTY dimensions stay fixed to full `OutputCanvas` rect so moving/resizing/hiding `FloatingPrompt` never triggers `SIGWINCH` reflow storms.
 - [Init]: Three-signal input routing (`OSC 133` + `tcgetpgrp` + `termios !ECHO` + `DECSET 1049`) prevents `sudo` password echo leaks and interactive REPL lockouts.
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
+- [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
 
 ### Pending Todos
 
@@ -90,9 +96,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-03T05:01:38.120Z
-Stopped at: Phase 50 context gathered
-Resume file: .planning/phases/50-herdr-style-left-sidebar-agent-aware-workspace-navigator/50-CONTEXT.md
+Last session: 2026-11-04T00:32:19.204Z
+Stopped at: Completed 50-01-PLAN.md
+Resume file: None
 
 ## Quick Tasks Completed
 
