@@ -3,11 +3,14 @@
 //! Data carries pane id, sanitised identity token, state, timing and profile name only; never
 //! screen text or command arguments (T-50-06).
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::api::JsonValue;
 use crate::wm::WindowManager;
 use crate::wm::agents_cmd::AgentsOp;
+
+/// Window over which `:agents list` reports a pane's recent communication partners.
+const PARTNER_WINDOW: Duration = Duration::from_secs(60);
 
 /// Executes one `:agents` operation; always returns `false` (never quits).
 pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bool {
@@ -21,10 +24,21 @@ fn list(wm: &mut WindowManager) {
     if !wm.agents.has_updated() {
         wm.update_agent_states(Instant::now());
     }
-    let agents: Vec<JsonValue> = wm
-        .agent_statuses()
+    let now = Instant::now();
+    let statuses = wm.agent_statuses();
+    let agents: Vec<JsonValue> = statuses
         .into_iter()
         .map(|s| {
+            let partners: Vec<JsonValue> = wm
+                .partners_of(s.pane_id, PARTNER_WINDOW, now)
+                .into_iter()
+                .map(|p| {
+                    JsonValue::obj([
+                        ("label", JsonValue::String(p.endpoint.label())),
+                        ("count", JsonValue::Number(p.count as i64)),
+                    ])
+                })
+                .collect();
             JsonValue::obj([
                 ("pane_id", JsonValue::Number(s.pane_id as i64)),
                 ("name", JsonValue::String(s.name)),
@@ -32,6 +46,7 @@ fn list(wm: &mut WindowManager) {
                 ("since_ms", JsonValue::Number(s.since_ms as i64)),
                 ("profile", s.profile.map_or(JsonValue::Null, JsonValue::String)),
                 ("reported", JsonValue::Bool(s.reported)),
+                ("partners", JsonValue::Array(partners)),
             ])
         })
         .collect();
@@ -43,7 +58,17 @@ fn list(wm: &mut WindowManager) {
         ("done", JsonValue::Number(c.done as i64)),
         ("errored", JsonValue::Number(c.errored as i64)),
     ]);
-    let data = JsonValue::obj([("agents", JsonValue::Array(agents)), ("counts", counts)]);
+    let bus = wm.traffic();
+    let traffic = JsonValue::obj([
+        ("latest_seq", JsonValue::Number(bus.latest_seq() as i64)),
+        ("len", JsonValue::Number(bus.len() as i64)),
+        ("dropped", JsonValue::Number(bus.dropped() as i64)),
+    ]);
+    let data = JsonValue::obj([
+        ("agents", JsonValue::Array(agents)),
+        ("counts", counts),
+        ("traffic", traffic),
+    ]);
     wm.set_command_data(data.to_json_string());
     let msg = format!(
         "Agents: {} working · {} blocked · {} idle · {} done · {} errored",

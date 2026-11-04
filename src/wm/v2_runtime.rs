@@ -21,6 +21,7 @@ use crate::ui::theme_import::OpenColorScheme;
 use crate::wm::journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 use crate::wm::session_tree::{SessionNodeKind, SessionTree};
 use crate::wm::split_tree::SplitDirection;
+use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
 use crate::wm::{Modal, WindowManager, WorkspaceLayoutMode};
 
 impl WindowManager {
@@ -39,14 +40,24 @@ impl WindowManager {
 
     /// Submits `cmd` through [`CompositePane::submit_command`] across all writable workspace panes.
     pub fn broadcast_command(&mut self, cmd: &str) -> Result<usize> {
-        let mut count = 0;
-        for pane in self.panes.values_mut() {
+        let mut delivered = Vec::new();
+        let mut result = Ok(());
+        for (id, pane) in self.panes.iter_mut() {
             if !pane.is_read_only() && !pane.is_password_prompt() {
-                pane.submit_command(cmd)?;
-                count += 1;
+                if let Err(e) = pane.submit_command(cmd) {
+                    result = Err(e);
+                    break;
+                }
+                delivered.push(*id);
             }
         }
-        Ok(count)
+        let from = if self.is_api_origin() { TrafficEndpoint::Api } else { TrafficEndpoint::User };
+        let now = Instant::now();
+        for id in &delivered {
+            self.record_traffic(from.clone(), TrafficEndpoint::Pane(*id), TrafficKind::Broadcast, cmd, now);
+        }
+        result?;
+        Ok(delivered.len())
     }
 
     /// Allocates and registers a new headless pane mapped to a `tmux -CC` `%pane_id`.

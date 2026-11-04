@@ -9,6 +9,7 @@ pub mod session;
 pub mod session_manager;
 pub mod session_tree;
 pub mod split_tree;
+pub mod traffic;
 pub mod v2_runtime;
 pub mod window_style;
 pub mod z_stack;
@@ -126,6 +127,8 @@ pub struct WindowManager {
     pub(crate) drawer: WorkspaceDrawer,
     /// Per-pane agent state tracker (`FLT-01`, Phase 50-03).
     pub(crate) agents: agent_state::AgentTracker,
+    /// In-memory agent traffic bus read by the zoom graph and snoop view (`FLT-02`, Phase 50-05).
+    pub(crate) traffic: traffic::TrafficBus,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
@@ -202,6 +205,7 @@ impl WindowManager {
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
             agents: agent_state::AgentTracker::new(),
+            traffic: traffic::TrafficBus::new(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
