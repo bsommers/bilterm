@@ -762,7 +762,7 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
   4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI. *The GUI part is conditional on the 50-13 checkpoint decision:* `fix-all` = also in real GUI windows on Linux, Windows and macOS; `fix-linux` = also in the real X11 GUI, while on Windows/macOS Ctrl+wheel over a panel still zooms the font (`[` / `]` and `:... scale` do scale panels there); `scope-out` = proven only on the headless GUI surface, real GUI windows keep font zoom and panel scale stays a no-op there (documented known gap). 50-14 records which option holds.
   5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
 
-**Plans**: 10/16 plans executed (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
+**Plans**: 11/16 plans executed (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
 
 Plans:
 - [x] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
@@ -780,7 +780,7 @@ Plans:
 - [ ] 50-13-PLAN.md — GUI runtime scope decision (checkpoint) + panel-scale/modifier wiring in GUI runners (wave 8)
 - [ ] 50-14-PLAN.md — User guide chapter 11 + doc coverage script, config/reference/API docs, SC4 outcome, final phase gate (wave 10)
 - [x] 50-15-PLAN.md — Navigator sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
-- [ ] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
+- [x] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
 
 ### Phase 51: Agent-to-Agent Messaging & Coordination
 
@@ -875,5 +875,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
-| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 10/16 | In Progress | - |
+| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 11/16 | In Progress | - |
 | 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
