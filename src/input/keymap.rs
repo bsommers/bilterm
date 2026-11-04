@@ -272,6 +272,8 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
 pub enum DrawerKeyScope {
     /// The workspace > session > pane tree.
     Navigator,
+    /// The comms glyph of the selected pane row has keyboard focus (most specific).
+    NavigatorComms,
 }
 
 /// Declarative key table of the focused navigator drawer (`FLT-01`, `ARCH-R01.2`).
@@ -310,6 +312,12 @@ pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, A
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::PageDown, Action::DrawerNav(DrawerNavOp::Scroll(5))),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('{'), Action::DrawerNav(DrawerNavOp::Widen(-2))),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('}'), Action::DrawerNav(DrawerNavOp::Widen(2))),
+    // Comms glyph (Phase 50-12). Right is claimed only on a row that shows one (guard in the handler).
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Right, Action::DrawerNav(DrawerNavOp::CommsFocus(true))),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('o'), Action::DrawerNav(DrawerNavOp::OpenComms)),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Enter, Action::DrawerNav(DrawerNavOp::OpenComms)),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Left, Action::DrawerNav(DrawerNavOp::CommsFocus(false))),
+    (DrawerKeyScope::NavigatorComms, KeyModifiers::NONE, KeyCode::Esc, Action::DrawerNav(DrawerNavOp::CommsFocus(false))),
 ];
 
 /// Looks up `key` in [`NAVIGATOR_DRAWER_BINDINGS`] for the active `scopes` (first scope wins).

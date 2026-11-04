@@ -458,7 +458,7 @@ impl WindowManager {
     }
 
     /// Poll-loop hook. Returns `true` only while the navigator drawer is visible, and then when a state
-    /// changed or a pane is Working and [`ANIM_INTERVAL`] passed since the last animation redraw, so the
+    /// changed or a pane is Working (or a row's comms glyph is flowing) and [`ANIM_INTERVAL`] passed since the last animation redraw, so the
     /// classic redraw cadence is unchanged (RESEARCH Pitfall 8).
     pub fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
@@ -468,10 +468,12 @@ impl WindowManager {
         {
             return traffic;
         }
-        let working = self.agents.histories.values().any(|h| h.state == AgentState::Working);
-        let animate = working
+        // Animated content: a Working pane spinner, or a navigator row whose comms glyph is flowing.
+        let animating = self.agents.histories.values().any(|h| h.state == AgentState::Working)
+            || self.navigator_comms_active();
+        let animate = animating
             && self.agents.last_anim.is_none_or(|t| now.saturating_duration_since(t) >= ANIM_INTERVAL);
-        if working && (changed || animate) {
+        if animating && (changed || animate) {
             self.agents.last_anim = Some(now);
         }
         changed || animate || traffic

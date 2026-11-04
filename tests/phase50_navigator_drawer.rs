@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use bilterm::colon_command::parse_colon_command;
 use bilterm::ui::WorkspaceWidget;
 use bilterm::wm::agent_state::AgentState;
+use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
 use bilterm::wm::drawer::{DrawerConfig, DrawerStyle};
 use bilterm::wm::{DrawerRowKind, SplitDirection, WindowManager};
 use ratatui::buffer::Buffer;
@@ -775,11 +776,12 @@ fn observe(wm: &WindowManager) -> String {
         })
         .collect();
     format!(
-        "sel={} active={} panes={} focused={} nav_w={} w={} prompt={:?} rows={rows:?}",
+        "sel={} active={} panes={} focused={} comms={:?} nav_w={} w={} prompt={:?} rows={rows:?}",
         wm.drawer().selected_index,
         wm.active_pane_id(),
         wm.pane_count(),
         wm.drawer().focused,
+        (wm.agents_window().active, wm.drawer().navigator.comms_focus),
         wm.drawer_config().navigator_width_cols,
         wm.drawer_config().width_cols,
         wm.active_pane().prompt().text(),
@@ -828,6 +830,9 @@ fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
         DrawerNavOp::MenuOpen(Some((x, y))) => format!(":drawer menu {x} {y}"),
         DrawerNavOp::MenuClose => ":drawer menu close".into(),
         DrawerNavOp::MenuPick(i) => format!(":drawer menu pick {}", i + 1),
+        DrawerNavOp::OpenComms => ":drawer comms".into(),
+        DrawerNavOp::CommsFocus(true) => ":drawer comms-focus on".into(),
+        DrawerNavOp::CommsFocus(false) => ":drawer comms-focus off".into(),
     }
 }
 
@@ -859,6 +864,9 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
         DrawerNavOp::MenuOpen(Some((4, 7))),
         DrawerNavOp::MenuClose,
         DrawerNavOp::MenuPick(1),
+        DrawerNavOp::OpenComms,
+        DrawerNavOp::CommsFocus(true),
+        DrawerNavOp::CommsFocus(false),
     ]
 }
 
@@ -866,17 +874,26 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
 fn keys_colon_equivalents_match_keys() {
     for (scope, mods, code, action) in NAVIGATOR_DRAWER_BINDINGS {
         let Action::DrawerNav(op) = action else { panic!("navigator row {code:?} must lower to DrawerNav") };
-        let (mods, code, form) = (*mods, *code, drawer_nav_colon_form(op));
-        let _ = scope;
+        let (mods, code, form, scope) = (*mods, *code, drawer_nav_colon_form(op), *scope);
+        // Rows of the comms scope only apply while the selected row's glyph has focus.
+        let setup = |wm: &mut WindowManager| {
+            with_states(wm, &[(3, Some(AgentState::Blocked))]);
+            if scope == bilterm::input::keymap::DrawerKeyScope::NavigatorComms {
+                wm.record_traffic(TrafficEndpoint::User, TrafficEndpoint::Pane(1), TrafficKind::Broadcast, "x", now());
+                wm.update_agent_states(now());
+                run_colon(wm, ":drawer comms-focus on");
+                assert!(wm.drawer().navigator.comms_focus.is_some(), "setup must focus the glyph");
+            }
+        };
         let by_key = with_temp_xdg(|| {
             let (mut wm, _a) = focused_navigator(4);
-            with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+            setup(&mut wm);
             press_mod(&mut wm, code, mods);
             observe(&wm)
         });
         let by_colon = with_temp_xdg(|| {
             let (mut wm, _a) = focused_navigator(4);
-            with_states(&mut wm, &[(3, Some(AgentState::Blocked))]);
+            setup(&mut wm);
             run_colon(&mut wm, &form);
             observe(&wm)
         });
@@ -1926,5 +1943,250 @@ fn plus_buttons_only_where_they_fit() {
         if let Some(r) = navigator_header_plus(&wm, area) {
             assert!(r.x + r.width < dr.x + dr.width);
         }
+    });
+}
+
+// ---- Phase 50-12: comms indicator on navigator pane rows (D-06) ----
+
+use std::time::{Duration, Instant};
+
+use bilterm::ui::drawer::navigator::navigator_comms_cells;
+use bilterm::wm::agents_window::NodeKey;
+use bilterm::wm::drawer::CommsIndicator;
+use ratatui::style::Modifier;
+
+/// Drawer-interior line of pane `id` (`#<id> ` row).
+fn comms_line(wm: &WindowManager, area: Rect, id: u32) -> String {
+    let tag = format!("#{id} ");
+    drawer_interior(wm, area)
+        .into_iter()
+        .find(|l| l.contains(&tag))
+        .unwrap_or_else(|| panic!("no row for pane #{id}"))
+        .trim_end()
+        .to_string()
+}
+
+/// Records `from -> Pane(to)` at `at`.
+fn talk(wm: &mut WindowManager, from: TrafficEndpoint, to: u32, at: Instant) {
+    wm.record_traffic(from, TrafficEndpoint::Pane(to as _), TrafficKind::Message, "ping", at);
+}
+
+fn pane1_comms(wm: &WindowManager) -> Option<CommsIndicator> {
+    wm.drawer_rows().into_iter().find(|r| r.kind == DrawerRowKind::Pane(1))?.navigator?.comms
+}
+
+fn pair_key() -> (NodeKey, NodeKey) {
+    (NodeKey("pane:1".to_string()), NodeKey("user".to_string()))
+}
+
+#[test]
+fn comms_tracer_pair_glyph_click_opens_edge() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        wm.broadcast_command("echo hi").unwrap();
+        wm.update_agent_states(now());
+        let l1 = comms_line(&wm, area, 1);
+        assert!(l1.ends_with("⇄you"), "pane #1 row must end with the pairing glyph: {l1:?}");
+        assert!(comms_line(&wm, area, 2).ends_with("⇄you"));
+
+        let cell = navigator_comms_cells(&wm, area).into_iter().find(|c| c.row_index == 1).expect("comms cell for #1");
+        assert_eq!(cell.width, 4);
+        click_at(&mut wm, area, cell.x, cell.y);
+        assert!(wm.agents_window().active, "clicking the glyph opens the zoom window");
+        assert_eq!(wm.agents_window().selection.edge, Some(pair_key()), "the user-pane:1 edge is selected");
+        assert_eq!(wm.agents_window().snoop.filter_pair, Some(pair_key()), "conversation filtered to the pair");
+    });
+}
+
+#[test]
+fn comms_fanout_shows_count() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_navigator(3, 100, 30);
+        wm.toggle_drawer();
+        let t = now();
+        talk(&mut wm, TrafficEndpoint::User, 1, t);
+        talk(&mut wm, TrafficEndpoint::Api, 1, t);
+        talk(&mut wm, TrafficEndpoint::Pane(3), 1, t);
+        wm.update_agent_states(t + Duration::from_millis(10));
+        assert_eq!(pane1_comms(&wm), Some(CommsIndicator::FanOut { count: 3 }));
+        let l1 = comms_line(&wm, area, 1);
+        assert!(l1.ends_with("⋔3"), "{l1:?}");
+        // Pane 3 talks to exactly one partner (#1): a pair labelled `#1`.
+        assert!(comms_line(&wm, area, 3).ends_with("⇄#1"));
+        // Fan-out click: pane selected on the graph, conversation filtered to that pane.
+        let cell = navigator_comms_cells(&wm, area).into_iter().find(|c| c.row_index == 1).unwrap();
+        click_at(&mut wm, area, cell.x, cell.y);
+        assert_eq!(wm.agents_window().snoop.filter_agent, Some(NodeKey::pane(1)));
+        assert_eq!(wm.agents_window().selection.node, Some(NodeKey::pane(1)));
+    });
+}
+
+/// Focused navigator over `n` panes with `user -> #1` traffic recorded and applied.
+fn focused_with_comms(n: u32) -> (WindowManager, Rect) {
+    let (mut wm, area) = focused_navigator(n);
+    let t = now();
+    talk(&mut wm, TrafficEndpoint::User, 1, t);
+    wm.update_agent_states(t + Duration::from_millis(10));
+    (wm, area)
+}
+
+#[test]
+fn comms_right_then_enter_opens_window() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = focused_with_comms(3);
+        press(&mut wm, KeyCode::Right);
+        assert_eq!(wm.drawer().navigator.comms_focus, Some(1));
+        let cell = navigator_comms_cells(&wm, area).into_iter().find(|c| c.row_index == 1).unwrap();
+        let buf = render(&wm, area);
+        assert!(buf[(cell.x, cell.y)].modifier.contains(Modifier::UNDERLINED), "focused glyph is highlighted");
+
+        // Moving the selection makes the comms focus inert: Enter now activates the other row.
+        ch(&mut wm, 'j');
+        assert_ne!(wm.drawer().navigator.comms_focus, Some(wm.drawer().selected_index));
+        press(&mut wm, KeyCode::Enter);
+        assert!(!wm.agents_window().active);
+        assert_eq!(wm.active_pane_id(), 2);
+
+        wm.drawer_mut().focused = true;
+        wm.drawer_mut().selected_index = 1;
+        press(&mut wm, KeyCode::Right);
+        press(&mut wm, KeyCode::Left);
+        assert_eq!(wm.drawer().navigator.comms_focus, None, "Left releases the glyph");
+        press(&mut wm, KeyCode::Right);
+        press(&mut wm, KeyCode::Esc);
+        assert_eq!(wm.drawer().navigator.comms_focus, None, "Esc releases the glyph first");
+        assert!(wm.drawer().focused, "Esc does not leave the drawer while comms focus is on");
+
+        press(&mut wm, KeyCode::Right);
+        press(&mut wm, KeyCode::Enter);
+        assert!(wm.agents_window().active);
+        assert_eq!(wm.agents_window().selection.edge, Some(pair_key()));
+        assert_eq!(wm.agents_window().snoop.filter_pair, Some(pair_key()));
+    });
+}
+
+#[test]
+fn comms_right_without_comms_falls_through() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = focused_navigator(2);
+        press(&mut wm, KeyCode::Right);
+        assert_eq!(wm.drawer().navigator.comms_focus, None);
+        assert!(!wm.agents_window().active);
+        assert!(!wm.drawer().focused || wm.drawer().h_scroll > 0, "classic Right behaviour (hscroll / leave drawer)");
+    });
+}
+
+#[test]
+fn comms_o_key_and_colon_comms_open_window() {
+    let by_key = with_temp_xdg(|| {
+        let (mut wm, _a) = focused_with_comms(2);
+        ch(&mut wm, 'o');
+        assert!(wm.agents_window().active);
+        assert_eq!(wm.agents_window().selection.edge, Some(pair_key()));
+        observe(&wm)
+    });
+    let by_colon = with_temp_xdg(|| {
+        let (mut wm, _a) = focused_with_comms(2);
+        run_colon(&mut wm, ":drawer comms");
+        assert_eq!(wm.agents_window().snoop.filter_pair, Some(pair_key()));
+        observe(&wm)
+    });
+    assert_eq!(by_key, by_colon);
+}
+
+#[test]
+fn comms_colon_comms_focus_matches_keys() {
+    let state = |wm: &WindowManager| (wm.drawer().navigator.comms_focus, wm.drawer().focused);
+    let (by_key, by_colon) = with_temp_xdg(|| {
+        let (mut a, _x) = focused_with_comms(2);
+        let (mut b, _y) = focused_with_comms(2);
+        let mut seen = Vec::new();
+        press(&mut a, KeyCode::Right);
+        run_colon(&mut b, ":drawer comms-focus on");
+        seen.push((state(&a), state(&b)));
+        press(&mut a, KeyCode::Left);
+        run_colon(&mut b, ":drawer comms-focus off");
+        seen.push((state(&a), state(&b)));
+        (seen.iter().map(|p| p.0).collect::<Vec<_>>(), seen.iter().map(|p| p.1).collect::<Vec<_>>())
+    });
+    assert_eq!(by_key, by_colon);
+    assert_eq!(by_key[0].0, Some(1));
+    assert_eq!(by_key[1].0, None);
+}
+
+#[test]
+fn comms_animates_only_while_active() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        let t = now();
+        talk(&mut wm, TrafficEndpoint::User, 1, t);
+        wm.update_agent_states(t + Duration::from_millis(100));
+        let frame = |wm: &WindowManager| comms_line(wm, area, 1).chars().rev().nth(3).unwrap();
+        let first = frame(&wm);
+        wm.update_drawer_telemetry();
+        let second = frame(&wm);
+        assert_ne!(first, second, "frame alternates between ticks while traffic flows");
+        assert!(["⇄", "⇆"].contains(&first.to_string().as_str()) && ["⇄", "⇆"].contains(&second.to_string().as_str()));
+        // Past the 1.5 s window the glyph is still, whatever the tick parity.
+        wm.update_agent_states(t + Duration::from_secs(3));
+        let still = frame(&wm);
+        wm.update_drawer_telemetry();
+        assert_eq!(still, frame(&wm));
+        assert_eq!(still, '⇄');
+        assert!(!wm.drawer_rows()[1].navigator.as_ref().unwrap().comms_active);
+    });
+}
+
+#[test]
+fn comms_tick_redraws_while_active() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = open_navigator(100, 30);
+        let t = now();
+        talk(&mut wm, TrafficEndpoint::User, 1, t);
+        assert!(wm.tick_agent_ui(t), "first tick records the states");
+        assert!(!wm.tick_agent_ui(t + Duration::from_millis(50)), "inside the 120 ms cadence");
+        assert!(wm.tick_agent_ui(t + Duration::from_millis(130)), "flowing traffic redraws at the cadence");
+        assert!(!wm.tick_agent_ui(t + Duration::from_secs(3)), "no redraw once the traffic is stale");
+        assert!(!wm.tick_agent_ui(t + Duration::from_secs(4)));
+    });
+}
+
+#[test]
+fn comms_ascii_glyphs() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = n_pane_navigator(3, 100, 30);
+        run_colon(&mut wm, ":set glyphs ascii");
+        wm.toggle_drawer();
+        let t = now();
+        talk(&mut wm, TrafficEndpoint::User, 2, t);
+        talk(&mut wm, TrafficEndpoint::User, 1, t);
+        talk(&mut wm, TrafficEndpoint::Api, 1, t);
+        wm.update_agent_states(t + Duration::from_secs(5));
+        assert!(comms_line(&wm, area, 2).ends_with("<>you"), "{:?}", comms_line(&wm, area, 2));
+        assert!(comms_line(&wm, area, 1).ends_with(">>2"), "{:?}", comms_line(&wm, area, 1));
+    });
+}
+
+#[test]
+fn comms_narrow_width_keeps_glyph() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = navigator_wm(100, 30);
+        run_colon(&mut wm, ":drawer size 24");
+        wm.toggle_drawer();
+        wm.pane_mut(1).unwrap().process_pty_output(b"\x1b]2;averyverylongpanetitleindeed\x07");
+        let t = now();
+        talk(&mut wm, TrafficEndpoint::Agent("ab\u{202e}cdefghij".to_string()), 1, t);
+        wm.update_agent_states(t + Duration::from_secs(5));
+        let line = comms_line(&wm, area, 1);
+        assert!(line.ends_with("⇄abcde…"), "title truncates, label capped at 6 and sanitised: {line:?}");
+        assert!(line.contains('…') && !line.contains('\u{202e}'));
+        assert!(line.chars().count() <= 22, "row fits the 24-column drawer: {line:?}");
+        assert!(line.contains("#1 "), "the pane prefix survives: {line:?}");
+
+        // Narrower still: the partner label is cut before the glyph is dropped.
+        run_colon(&mut wm, ":drawer size 16");
+        let tight = comms_line(&wm, area, 1);
+        assert!(tight.contains('⇄'), "glyph is never dropped: {tight:?}");
+        assert!(tight.contains("#1"), "{tight:?}");
     });
 }

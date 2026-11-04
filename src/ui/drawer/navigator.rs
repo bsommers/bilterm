@@ -21,7 +21,7 @@ use crate::ui::visual_style::{
 };
 use crate::wm::agent_state::{AgentCounts, AgentState};
 use crate::vt::sanitize_display;
-use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, NavigatorLevel, NavigatorMenuEntry};
+use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, CommsIndicator, NavigatorLevel, NavigatorMenuEntry};
 use crate::wm::{DrawerLayoutMode, DrawerRow, DrawerRowKind, WindowManager, inset_window_frame};
 
 /// Computes `(header_rows, footer_rows, rows_per_item)` for the navigator layout: no header, an optional
@@ -45,6 +45,11 @@ pub struct NavigatorGlyphs {
     pub idle: &'static str,
     pub done: &'static str,
     pub errored: &'static str,
+    /// Pairing comms glyph, and its alternate frame shown on odd ticks while traffic flows.
+    pub pair: &'static str,
+    pub pair_alt: &'static str,
+    /// Fan-out comms glyph (followed by the partner count).
+    pub fan: &'static str,
 }
 
 impl NavigatorGlyphs {
@@ -60,6 +65,9 @@ impl NavigatorGlyphs {
         idle: "○",
         done: "●",
         errored: "✗",
+        pair: "⇄",
+        pair_alt: "⇆",
+        fan: "⋔",
     };
     pub const ASCII: Self = Self {
         current: ">",
@@ -73,6 +81,9 @@ impl NavigatorGlyphs {
         idle: "-",
         done: "+",
         errored: "x",
+        pair: "<>",
+        pair_alt: "><",
+        fan: ">>",
     };
 
     /// State dot glyph; `Working` animates with `tick` in the Unicode pack.
@@ -211,6 +222,85 @@ pub fn navigator_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<Navi
         let x = lay.inner.x + 1 + 2 * u16::from(meta.depth);
         if x < lay.inner.x + lay.inner.width {
             cells.push(NavigatorDotCell { x, y, state, row_index });
+        }
+    }
+    cells
+}
+
+/// Placement of one row's comms indicator (glyph plus partner label or count), right-aligned in the row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CommsFit {
+    text: String,
+    /// Display columns of `text` (the indicator occupies the last `width` columns of the row).
+    width: usize,
+    /// Left-text budget (columns after the marker column) that leaves one blank column before the indicator.
+    left_width: usize,
+}
+
+/// Fits the comms indicator of a pane row into `width` columns. The title truncates first (down to its
+/// `indent + dot + #id` prefix plus one column), then the partner label; the glyph is never dropped unless
+/// the row cannot even hold it. `None` for rows without an indicator.
+fn comms_fit(row: &DrawerRow, g: &NavigatorGlyphs, tick: usize, width: usize) -> Option<CommsFit> {
+    let meta = row.navigator.as_ref()?;
+    let (DrawerRowKind::Pane(id), Some(comms)) = (&row.kind, meta.comms.as_ref()) else { return None };
+    let (glyph, label) = match comms {
+        CommsIndicator::Pair { partner_label, .. } => {
+            (if meta.comms_active && tick % 2 == 1 { g.pair_alt } else { g.pair }, partner_label.clone())
+        }
+        CommsIndicator::FanOut { count } => (g.fan, count.to_string()),
+    };
+    let avail = width.saturating_sub(1);
+    let prefix = 2 * usize::from(meta.depth) + DOT_COLS + format!("#{id} ").width();
+    let glyph_w = glyph.width();
+    if avail < glyph_w {
+        return None;
+    }
+    let label_w = label.width();
+    let label = (0..=label_w)
+        .rev()
+        .map(|n| fit_width(&label, n, g.ellipsis))
+        .find(|l| avail > glyph_w + l.width() + 1 + prefix)
+        .unwrap_or_default();
+    let text = format!("{glyph}{label}");
+    let w = text.width();
+    Some(CommsFit { text, width: w, left_width: avail.saturating_sub(w + 1) })
+}
+
+/// Screen cell span of one row's comms indicator (the whole indicator is the click target).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NavigatorCommsCell {
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    /// Index into [`WindowManager::drawer_rows`].
+    pub row_index: usize,
+}
+
+/// Cells of every visible comms indicator; the single source for the renderer and the mouse hit-test.
+/// Empty when the drawer is not visible.
+pub fn navigator_comms_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<NavigatorCommsCell> {
+    let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
+        return Vec::new();
+    };
+    let Some(lay) = navigator_layout(wm, drawer_rect) else {
+        return Vec::new();
+    };
+    let g = NavigatorGlyphs::for_pack(wm.config().glyphs);
+    let tick = wm.drawer().spinner_tick();
+    let width = usize::from(lay.inner.width);
+    let mut cells = Vec::new();
+    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
+        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+        if y >= lay.list_bottom {
+            break;
+        }
+        if let Some(fit) = comms_fit(row, &g, tick, width) {
+            cells.push(NavigatorCommsCell {
+                x: lay.inner.x + (width - fit.width) as u16,
+                y,
+                width: fit.width as u16,
+                row_index,
+            });
         }
     }
     cells
@@ -610,9 +700,39 @@ pub fn render_navigator_drawer(
             let rollup_w = rollup.as_ref().map_or(0, |r| r.width() + 1);
             // Keep the rollup only when it leaves room for the marker plus a few label columns.
             let rollup = rollup.filter(|_| width >= rollup_w + 6);
-            let left_w = avail.saturating_sub(if rollup.is_some() { rollup_w } else { 0 });
+            let comms = comms_fit(row, &hg, tick, width);
+            let left_w = match &comms {
+                Some(c) => c.left_width,
+                None => avail.saturating_sub(if rollup.is_some() { rollup_w } else { 0 }),
+            };
             let line = format!("{marker}{}", fit_width(&left, left_w, hg.ellipsis));
             write_clipped_line(buf, inner.x, y, inner.width, &line, style);
+            if let Some(c) = comms {
+                let active = row.navigator.as_ref().is_some_and(|m| m.comms_active);
+                let focused = row_idx == selected && wm.navigator_comms_focused();
+                let mut cs = style;
+                if active {
+                    cs = cs.fg(tokens.accent);
+                    if matches!(row.navigator.as_ref().and_then(|m| m.comms.as_ref()), Some(CommsIndicator::FanOut { .. }))
+                        && tick.is_multiple_of(2)
+                    {
+                        cs = cs.add_modifier(Modifier::BOLD);
+                    }
+                    if row_idx == selected && !is_modern {
+                        // Keep the reversed selection bar continuous behind the accent glyph.
+                        cs = cs.bg(palette.text_fg.unwrap_or(palette.inactive_border_fg)).remove_modifier(Modifier::REVERSED);
+                    }
+                }
+                if focused {
+                    cs = if cs.add_modifier.contains(Modifier::REVERSED) {
+                        cs.remove_modifier(Modifier::REVERSED)
+                    } else {
+                        cs.add_modifier(Modifier::REVERSED)
+                    }
+                    .add_modifier(Modifier::UNDERLINED);
+                }
+                write_clipped_line(buf, inner.x + (width - c.width) as u16, y, c.width as u16, &c.text, cs);
+            }
             if let Some(r) = rollup {
                 let rx = inner.x + inner.width - r.width() as u16;
                 write_clipped_line(buf, rx, y, r.width() as u16, &r, style);

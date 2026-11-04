@@ -24,6 +24,13 @@ impl NavigatorMenu {
     }
 }
 
+impl super::WorkspaceDrawer {
+    /// `true` while the navigator right-click menu is open (raw state; see `WindowManager::navigator_menu`).
+    pub fn navigator_menu_open(&self) -> bool {
+        self.nav_menu.is_some()
+    }
+}
+
 /// One menu entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavigatorMenuEntry {

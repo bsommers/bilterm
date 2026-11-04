@@ -4,11 +4,12 @@
 //! [`DrawerNavOp`] inside [`crate::action::Action::DrawerNav`] and runs through
 //! [`WindowManager::apply_drawer_nav`]. Later Phase 50 plans extend the enum.
 
-use super::{DrawerRow, DrawerRowKind, DrawerStyle};
+use super::{CommsIndicator, DrawerRow, DrawerRowKind, DrawerStyle};
 use crate::action::Action;
 use crate::pane::PaneId;
 use crate::wm::{SessionNodeKind, SplitDirection, WindowManager};
 use crate::wm::agent_state::AgentState;
+use crate::wm::agents_window::NodeKey;
 
 /// One drawer navigation operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,6 +57,10 @@ pub enum DrawerNavOp {
     /// Run entry `n` (0-based, see [`super::menu::NavigatorMenuEntry::ALL`]) on the selected row and
     /// close the menu.
     MenuPick(usize),
+    /// Open the agent traffic window on the selected pane row's conversation (its comms glyph).
+    OpenComms,
+    /// Give (`true`) or take away (`false`) keyboard focus of the selected row's comms glyph.
+    CommsFocus(bool),
 }
 
 /// Attention tiers in priority order.
@@ -64,6 +69,15 @@ const ATTENTION_TIERS: [AgentState; 3] = [AgentState::Blocked, AgentState::Error
 impl WindowManager {
     /// Applies one drawer navigation op; returns `true` when it changed focus or state.
     pub fn apply_drawer_nav(&mut self, op: DrawerNavOp) -> bool {
+        let changed = self.apply_drawer_nav_op(op);
+        // Comms focus follows the selection: once the selection leaves its row the focus is dropped.
+        if !self.navigator_comms_focused() {
+            self.drawer.navigator.comms_focus = None;
+        }
+        changed
+    }
+
+    fn apply_drawer_nav_op(&mut self, op: DrawerNavOp) -> bool {
         match op {
             DrawerNavOp::NextAttention => self.jump_next_attention().is_some(),
             DrawerNavOp::Fold => self.fold_selected_navigator_row(),
@@ -113,7 +127,39 @@ impl WindowManager {
             op @ (DrawerNavOp::MenuOpen(_) | DrawerNavOp::MenuClose | DrawerNavOp::MenuPick(_)) => {
                 self.apply_navigator_menu(op)
             }
+            DrawerNavOp::OpenComms => self.drawer_open_comms(),
+            DrawerNavOp::CommsFocus(on) => self.drawer_comms_focus(on),
         }
+    }
+
+    /// Opens the traffic window on the selected pane row: a pairing focuses the edge and filters the
+    /// conversation to the pair, a fan-out selects the pane and filters to it, a quiet pane just selects it.
+    fn drawer_open_comms(&mut self) -> bool {
+        let rows = self.drawer_rows();
+        let Some(row) = rows.get(self.drawer.selected_index) else { return false };
+        let DrawerRowKind::Pane(id) = row.kind else { return false };
+        let pane_key = NodeKey::pane(id);
+        match row.navigator.as_ref().and_then(|m| m.comms.clone()) {
+            Some(CommsIndicator::Pair { partner_key, .. }) => self.open_agents_window_on_edge(&partner_key, &pane_key),
+            Some(CommsIndicator::FanOut { .. }) => {
+                self.open_agents_window(Some(id));
+                self.apply_agent_filter(&pane_key);
+            }
+            None => self.open_agents_window(Some(id)),
+        }
+        self.drawer.navigator.comms_focus = None;
+        true
+    }
+
+    /// Sets comms focus on the selected row when it shows a comms glyph, or clears it.
+    fn drawer_comms_focus(&mut self, on: bool) -> bool {
+        if !on {
+            return self.drawer.navigator.comms_focus.take().is_some();
+        }
+        let sel = self.drawer.selected_index;
+        let has = self.drawer_rows().get(sel).and_then(|r| r.navigator.as_ref()).is_some_and(|m| m.comms.is_some());
+        self.drawer.navigator.comms_focus = has.then_some(sel);
+        has
     }
 
     /// Splits the selected pane (or, on a session row, the top pane of that session) in `dir`.

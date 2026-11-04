@@ -637,7 +637,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
 }
 
 /// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
-/// new-pane|rename|close-pane|menu`); `None` for every other verb. `:drawer close` stays the classic minimize.
+/// new-pane|rename|close-pane|menu|comms|comms-focus`); `None` for every other verb. `:drawer close` stays the classic minimize.
 fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     use crate::wm::drawer::DrawerNavOp as Op;
     let num = |usage: &str| -> Result<i16, String> {
@@ -696,6 +696,12 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
             _ => return Some(Err("Usage: :drawer rename [name]".to_string())),
         },
         "close-pane" => Op::Close,
+        "comms" if parts.len() == 2 => Op::OpenComms,
+        "comms-focus" => match (parts.get(2).copied(), parts.len()) {
+            (Some("on"), 3) => Op::CommsFocus(true),
+            (Some("off"), 3) => Op::CommsFocus(false),
+            _ => return Some(Err("Usage: :drawer comms-focus on|off".to_string())),
+        },
         _ => return None,
     };
     Some(Ok(ColonCommand::DrawerNav(op)))
@@ -782,7 +788,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

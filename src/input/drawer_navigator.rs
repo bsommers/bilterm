@@ -14,7 +14,7 @@ use super::keymap::{DrawerKeyScope, navigator_drawer_action};
 use crate::action::Action;
 use crate::ui::drawer::navigator::{
     NavigatorButtonKind, navigator_fold_marker_cells, navigator_footer_buttons, navigator_header_plus,
-    navigator_menu_entry_at, navigator_plus_cells, navigator_row_at,
+    navigator_comms_cells, navigator_menu_entry_at, navigator_plus_cells, navigator_row_at,
 };
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::drawer::DrawerNavOp;
@@ -29,10 +29,24 @@ pub(super) fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent)
             return Some(AppAction::Handled);
         }
     }
-    let scopes = [DrawerKeyScope::Navigator];
-    let action = navigator_drawer_action(&scopes, key)?;
+    let comms = wm.navigator_comms_focused();
+    let scopes = [DrawerKeyScope::NavigatorComms, DrawerKeyScope::Navigator];
+    let action = navigator_drawer_action(if comms { &scopes } else { &scopes[1..] }, key)?;
+    // Claim guard: Right belongs to the comms glyph only on a row that shows one; elsewhere the classic
+    // block keeps its Right behaviour. Reads state only.
+    if action == Action::DrawerNav(DrawerNavOp::CommsFocus(true)) && !selected_row_has_comms(wm) {
+        return None;
+    }
     let _ = wm.apply(action);
     Some(AppAction::Handled)
+}
+
+/// `true` when the selected drawer row shows a comms glyph.
+fn selected_row_has_comms(wm: &WindowManager) -> bool {
+    wm.drawer_rows()
+        .get(wm.drawer().selected_index)
+        .and_then(|r| r.navigator.as_ref())
+        .is_some_and(|m| m.comms.is_some())
 }
 
 /// Action a footer button applies, the same one its key twin lowers to. Reads state only to choose the
@@ -155,6 +169,15 @@ pub(super) fn handle_navigator_drawer_mouse(
             let _ = wm.apply(Action::DrawerFocus);
             let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Row(cell.row_index)));
             let _ = wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(None)));
+            return Some(AppAction::Handled);
+        }
+        let comms = navigator_comms_cells(wm, workspace_area)
+            .into_iter()
+            .find(|c| c.y == row && col >= c.x && col < c.x + c.width);
+        if let Some(cell) = comms {
+            let _ = wm.apply(Action::DrawerFocus);
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Row(cell.row_index)));
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::OpenComms));
             return Some(AppAction::Handled);
         }
         let marker = navigator_fold_marker_cells(wm, workspace_area).into_iter().find(|c| c.x == col && c.y == row);

@@ -5,6 +5,7 @@
 //! helpers on [`DrawerConfig`].
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,7 @@ use super::{DrawerConfig, DrawerRow, DrawerRowKind, WorkspaceDrawer};
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::agent_state::{AgentCounts, AgentState};
+use crate::wm::agents_window::NodeKey;
 use crate::wm::{SessionNodeKind, SessionTreeNode, WindowManager};
 
 /// Visual style of the slide-out drawer (`drawer.style`).
@@ -66,6 +68,64 @@ pub struct NavigatorRowMeta {
     pub agent: Option<AgentState>,
     /// Per-state pane counts on the live session/workspace row (`None` for every other row).
     pub counts: Option<AgentCounts>,
+    /// Who a live pane row is talking to within [`COMMS_WINDOW`] (`None` for quiet panes and other rows).
+    pub comms: Option<CommsIndicator>,
+    /// `true` while the newest event of that traffic is younger than [`COMMS_ACTIVE`] (the glyph animates).
+    pub comms_active: bool,
+}
+
+/// Partners considered for the comms indicator: events newer than this.
+pub const COMMS_WINDOW: Duration = Duration::from_secs(60);
+/// The comms glyph animates while the last event is younger than this.
+pub const COMMS_ACTIVE: Duration = Duration::from_millis(1500);
+/// Maximum chars of a partner short name on a row (T-50-28).
+pub const PARTNER_LABEL_CHARS: usize = 6;
+
+/// Pairing / fan-out communication shown at the right edge of a pane row (D-06).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CommsIndicator {
+    /// Exactly one partner: its sanitised short name and graph node.
+    Pair { partner_label: String, partner_key: NodeKey },
+    /// Two or more partners.
+    FanOut { count: usize },
+}
+
+/// Keyboard sub-focus state of the navigator drawer (Phase 50-12).
+#[derive(Clone, Debug, Default)]
+pub struct NavigatorDrawerState {
+    /// `Some(row)`: the comms glyph of drawer row `row` has keyboard focus. It counts only while
+    /// `drawer().selected_index == row`, so moving the selection makes it inert.
+    pub comms_focus: Option<usize>,
+}
+
+impl WindowManager {
+    /// `true` while the comms glyph of the selected navigator row has keyboard focus.
+    pub(crate) fn navigator_comms_focused(&self) -> bool {
+        self.drawer.navigator.comms_focus == Some(self.drawer.selected_index)
+    }
+
+    /// Comms indicator of live pane `id` and whether it is flowing, measured against the tracker's last
+    /// update instant (so rendering stays deterministic). `None` before the first tracker update.
+    fn pane_comms(&self, id: PaneId) -> Option<(CommsIndicator, bool)> {
+        let now = self.agents.last_update()?;
+        let partners = self.partners_of(id, COMMS_WINDOW, now);
+        let active = partners.iter().any(|p| now.saturating_duration_since(p.last) < COMMS_ACTIVE);
+        let indicator = match partners.as_slice() {
+            [] => return None,
+            [one] => CommsIndicator::Pair {
+                partner_label: sanitize_display(&one.endpoint.label(), PARTNER_LABEL_CHARS),
+                partner_key: NodeKey::from_endpoint(&one.endpoint),
+            },
+            many => CommsIndicator::FanOut { count: many.len() },
+        };
+        Some((indicator, active))
+    }
+
+    /// `true` when any navigator pane row currently shows flowing traffic (drives the redraw cadence).
+    pub(crate) fn navigator_comms_active(&self) -> bool {
+        self.config.drawer.style == DrawerStyle::Navigator
+            && self.ordered_pane_ids().into_iter().any(|id| self.pane_comms(id).is_some_and(|(_, a)| a))
+    }
 }
 
 impl WorkspaceDrawer {
@@ -169,6 +229,8 @@ fn other_meta() -> NavigatorRowMeta {
         pane_count: 0,
         agent: None,
         counts: None,
+        comms: None,
+        comms_active: false,
     }
 }
 
@@ -202,6 +264,8 @@ impl WalkCtx<'_> {
                 pane_count: if live { self.pane_ids.len() } else { node.pane_count },
                 agent: None,
                 counts: live.then(|| self.wm.agent_counts()),
+                comms: None,
+                comms_active: false,
             },
         ));
         if collapsed {
@@ -220,6 +284,10 @@ impl WalkCtx<'_> {
         let qt_visible = self.wm.quick_terminal.visible;
         for &id in &self.pane_ids {
             let Some(pane) = self.wm.panes.get(&id) else { continue };
+            let (comms, comms_active) = match self.wm.pane_comms(id) {
+                Some((c, a)) => (Some(c), a),
+                None => (None, false),
+            };
             rows.push(navigator_row(
                 DrawerRowKind::Pane(id),
                 sanitize_display(pane.title(), TITLE_MAX_CHARS),
@@ -233,6 +301,8 @@ impl WalkCtx<'_> {
                     pane_count: 0,
                     agent: self.wm.agent_state(id),
                     counts: None,
+                    comms,
+                    comms_active,
                 },
             ));
         }

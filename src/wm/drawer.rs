@@ -19,7 +19,7 @@ use crate::wm::{WindowManager, WorkspaceLayoutMode};
 pub mod navigator;
 pub mod nav;
 pub mod menu;
-pub use navigator::{DrawerStyle, NavigatorLevel, NavigatorRowMeta};
+pub use navigator::{CommsIndicator, DrawerStyle, NavigatorLevel, NavigatorRowMeta};
 pub use nav::DrawerNavOp;
 pub use menu::{NavigatorMenu, NavigatorMenuEntry};
 
@@ -213,6 +213,7 @@ pub struct WorkspaceDrawer {
     pub resizing_drag: bool,
     /// Open navigator right-click menu (Phase 50-15); changed only through `DrawerNavOp::Menu*`.
     nav_menu: Option<NavigatorMenu>,
+    pub navigator: navigator::NavigatorDrawerState,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
@@ -221,11 +222,6 @@ pub struct WorkspaceDrawer {
 impl WorkspaceDrawer {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// `true` while the navigator right-click menu is open (raw state; see `WindowManager::navigator_menu`).
-    pub fn navigator_menu_open(&self) -> bool {
-        self.nav_menu.is_some()
     }
 
     /// First visible row: a wheel-set viewport while the selection is unchanged, else pinned to keep `selected` visible.
