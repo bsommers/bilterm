@@ -21,6 +21,8 @@ pub const MIN_DWELL: Duration = Duration::from_millis(500);
 pub const TAIL_RESCAN: Duration = Duration::from_millis(250);
 /// Number of trailing visible rows scanned for profile patterns.
 pub const TAIL_ROWS: u16 = 8;
+/// Minimum gap between animation-only redraws while a pane is Working and the navigator drawer is visible.
+pub const ANIM_INTERVAL: Duration = Duration::from_millis(120);
 
 /// Live state of the agent / program running in a pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -208,6 +210,8 @@ impl PaneHistory {
 pub struct AgentTracker {
     histories: BTreeMap<PaneId, PaneHistory>,
     last_now: Option<Instant>,
+    /// Time of the last redraw requested for the working animation.
+    last_anim: Option<Instant>,
 }
 
 impl AgentTracker {
@@ -443,13 +447,23 @@ impl WindowManager {
         }
     }
 
-    /// Poll-loop hook. Returns `true` only when a state changed AND the navigator drawer is visible, so
-    /// the classic redraw cadence is unchanged (RESEARCH Pitfall 8).
+    /// Poll-loop hook. Returns `true` only while the navigator drawer is visible, and then when a state
+    /// changed or a pane is Working and [`ANIM_INTERVAL`] passed since the last animation redraw, so the
+    /// classic redraw cadence is unchanged (RESEARCH Pitfall 8).
     pub(crate) fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
-        changed
-            && self.config.drawer.style == crate::wm::drawer::DrawerStyle::Navigator
-            && self.is_drawer_effectively_visible()
+        if self.config.drawer.style != crate::wm::drawer::DrawerStyle::Navigator
+            || !self.is_drawer_effectively_visible()
+        {
+            return false;
+        }
+        let working = self.agents.histories.values().any(|h| h.state == AgentState::Working);
+        let animate = working
+            && self.agents.last_anim.is_none_or(|t| now.saturating_duration_since(t) >= ANIM_INTERVAL);
+        if working && (changed || animate) {
+            self.agents.last_anim = Some(now);
+        }
+        changed || animate
     }
 }
 
@@ -480,5 +494,28 @@ mod tests {
         wm.toggle_drawer();
         assert!(!wm.is_drawer_effectively_visible());
         assert!(!wm.tick_agent_ui(t0), "hidden drawer -> no redraw");
+    }
+
+    #[test]
+    fn anim_working_requests_throttled_redraw() {
+        use std::time::Duration;
+        let mut wm = WindowManager::new_headless(30, 100);
+        wm.config_mut().drawer.style = DrawerStyle::Navigator;
+        wm.toggle_drawer();
+        assert!(wm.is_drawer_effectively_visible());
+        let t0 = Instant::now();
+        wm.report_agent_state(1, Some(AgentState::Working));
+        assert!(wm.tick_agent_ui(t0), "first look at a Working pane redraws");
+        assert_eq!(wm.agent_state(1), Some(AgentState::Working));
+        assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(50)), "inside the throttle window");
+        assert!(wm.tick_agent_ui(t0 + Duration::from_millis(130)), "interval elapsed -> animation frame");
+        assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(140)), "throttled again");
+
+        wm.config_mut().drawer.style = DrawerStyle::Classic;
+        assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(500)), "classic never animates");
+        wm.config_mut().drawer.style = DrawerStyle::Navigator;
+        wm.report_agent_state(1, Some(AgentState::Idle));
+        let _ = wm.tick_agent_ui(t0 + Duration::from_millis(700));
+        assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(900)), "no Working pane -> no animation");
     }
 }

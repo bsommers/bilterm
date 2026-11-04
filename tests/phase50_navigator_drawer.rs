@@ -917,3 +917,54 @@ fn drawer_nav_ops_have_colon_completion_and_help() {
         assert!(sampled.contains(op), "table op {op:?} is not covered by the sampled ops");
     }
 }
+
+// ---- Task 3: pin/scale with the navigator ----
+
+fn gui_frame(wm: &mut WindowManager, area: Rect) -> bilterm::ui::renderer::GuiFrameSurface {
+    use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
+    wm.set_gui_surface(true);
+    let mut renderer = GuiWorkspaceRenderer::new(8, 16);
+    let mut surface = GuiFrameSurface::new(8, 16);
+    renderer.render_workspace_with_cell_size(wm, area, 8, 16, &mut surface);
+    surface
+}
+
+#[test]
+fn pin_scale_fixed_keeps_navigator_visible_and_reflows() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = navigator_wm(100, 30);
+        open_drawer(&mut wm);
+        run_colon(&mut wm, ":drawer pin");
+        press(&mut wm, KeyCode::Esc);
+        assert!(!wm.drawer().focused, "Esc hands the keyboard back");
+        assert!(wm.is_drawer_effectively_visible(), "a pinned navigator drawer stays open");
+        assert_eq!(wm.drawer_rect(area).unwrap().width, 28);
+        assert_eq!(wm.effective_workspace_area(area), Rect::new(28, 0, 72, 30), "Push layout reflows the panes");
+        let lines = buffer_lines(&render(&wm, area));
+        let title = line_of(&lines, "[1] alpha");
+        let col = title.char_indices().position(|(i, _)| title[i..].starts_with("[1] alpha")).unwrap();
+        assert!(col > 28, "pane windows start right of the 28-col drawer, title at column {col}");
+    });
+}
+
+#[test]
+fn pin_scale_gui_scale_enlarges_navigator_glyphs() {
+    with_temp_xdg(|| {
+        let max_width = |s: &bilterm::ui::renderer::GuiFrameSurface| s.glyphs.iter().map(|g| g.cell_width_px).max().unwrap();
+        let (mut wm, area) = navigator_wm(100, 30);
+        wm.toggle_drawer();
+        let base = max_width(&gui_frame(&mut wm, area));
+
+        run_colon(&mut wm, ":drawer scale 150");
+        let by_command = max_width(&gui_frame(&mut wm, area));
+        assert!(by_command > base, ":drawer scale 150 widens the navigator glyphs");
+
+        run_colon(&mut wm, ":drawer scale 100");
+        wm.drawer_mut().focused = true;
+        for _ in 0..5 {
+            ch(&mut wm, ']'); // unclaimed by the navigator table: falls through to the classic handler
+        }
+        assert_eq!(wm.scale_setting(bilterm::ui::typography::PanelTarget::Drawer), 150);
+        assert!(max_width(&gui_frame(&mut wm, area)) > base, "] steps the scale in navigator style too");
+    });
+}
