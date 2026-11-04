@@ -122,3 +122,9 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Panel pin (MCP `:mcp pin`, `*`; drawer `:drawer pin|unpin`, `*`) and independent drawer/MCP scale (Ctrl+wheel, `[` `]`, `:drawer scale`, `:mcp scale`, `:panel scale` both) shipped in 2.8.0.
 - Milestone v2.9 Agent Fleet added to ROADMAP/REQUIREMENTS (8c92254): Phase 50 herdr-style left sidebar (FLT-01), Phase 51 agent-to-agent messaging (AGT-01..03). Next: 50-01 research/design (needs user input on what herdr's left side does), then sign-off before code.
 - Ask before: push, release, install.
+
+---
+
+## Phase 50 execution - IN PROGRESS (2026-11-03)
+6/16 plans done on branch `gsd/phase-50-navigator` (unpushed). Full detail, decisions, remaining order and PR steps:
+`.planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md`. Next: execute plan 50-07.
