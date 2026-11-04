@@ -12,6 +12,7 @@ use super::geometric::{draw_geometric_cell_bgra, is_geometric_glyph, resolve_can
 use crate::action::Action;
 use crate::app::App;
 use crate::error::Result;
+use crate::input::gui_route::{GuiWheelRoute, modifiers_from_x11_state, route_gui_wheel};
 use crate::pane::typography::{
     FontFamilyPreset, default_custom_fonts_dir, register_custom_font_file,
     registered_custom_fonts, scan_and_register_fonts_dir,
@@ -674,6 +675,7 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
     }
     app.needs_redraw = true;
     let mut left_down = false;
+    app.wm.set_gui_surface(true);
 
     loop {
         while unsafe { (api.x_pending)(dpy) } > 0 {
@@ -692,27 +694,29 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
                     let (cw_px, ch_px) = (x11_canvas.cell_width_px, x11_canvas.cell_height_px);
                     app.wm.set_mouse_pixel_hint(Some((bev.x.max(0) as u32, bev.y.max(0) as u32, cw_px, ch_px)));
                     let (col, row) = pixel_to_cell_coords(bev.x, bev.y, cw_px, ch_px, app.last_viewport);
-                    let ctrl = (bev.state & CONTROL_MASK) != 0;
+                    let mods = modifiers_from_x11_state(bev.state);
                     match bev.button {
                         1 => {
                             left_down = true;
-                            app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: col, row, modifiers: KeyModifiers::empty() }))?;
+                            app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: col, row, modifiers: mods }))?;
                             app.needs_redraw = true;
                         }
                         3 => {
-                            app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Right), column: col, row, modifiers: KeyModifiers::empty() }))?;
+                            app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Right), column: col, row, modifiers: mods }))?;
                             app.needs_redraw = true;
                         }
                         4 | 5 => {
                             let up = bev.button == 4;
-                            if ctrl {
-                                if let Some((crate::wm::Focus::Pane(id), _, _)) = app.wm.hit_test_pane(col, row, app.last_viewport) {
-                                    app.wm.focus_and_raise(id);
+                            match route_gui_wheel(&app.wm, col, row, up, mods, app.last_viewport) {
+                                GuiWheelRoute::Forward(ev) => {
+                                    app.handle_crossterm_event(Event::Mouse(ev))?;
                                 }
-                                let _ = app.wm.apply(if up { Action::FontZoomIn } else { Action::FontZoomOut });
-                            } else {
-                                let kind = if up { MouseEventKind::ScrollUp } else { MouseEventKind::ScrollDown };
-                                app.handle_crossterm_event(Event::Mouse(MouseEvent { kind, column: col, row, modifiers: KeyModifiers::empty() }))?;
+                                GuiWheelRoute::FontZoom { up } => {
+                                    if let Some((crate::wm::Focus::Pane(id), _, _)) = app.wm.hit_test_pane(col, row, app.last_viewport) {
+                                        app.wm.focus_and_raise(id);
+                                    }
+                                    let _ = app.wm.apply(if up { Action::FontZoomIn } else { Action::FontZoomOut });
+                                }
                             }
                             app.needs_redraw = true;
                         }
@@ -726,7 +730,7 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
                         let (cw_px, ch_px) = (x11_canvas.cell_width_px, x11_canvas.cell_height_px);
                         app.wm.set_mouse_pixel_hint(Some((bev.x.max(0) as u32, bev.y.max(0) as u32, cw_px, ch_px)));
                         let (col, row) = pixel_to_cell_coords(bev.x, bev.y, cw_px, ch_px, app.last_viewport);
-                        app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Up(MouseButton::Left), column: col, row, modifiers: KeyModifiers::empty() }))?;
+                        app.handle_crossterm_event(Event::Mouse(MouseEvent { kind: MouseEventKind::Up(MouseButton::Left), column: col, row, modifiers: modifiers_from_x11_state(bev.state) }))?;
                         app.needs_redraw = true;
                     }
                 }
@@ -736,7 +740,7 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
                     app.wm.set_mouse_pixel_hint(Some((mev.x.max(0) as u32, mev.y.max(0) as u32, cw_px, ch_px)));
                     let (col, row) = pixel_to_cell_coords(mev.x, mev.y, cw_px, ch_px, app.last_viewport);
                     let kind = if left_down { MouseEventKind::Drag(MouseButton::Left) } else { MouseEventKind::Moved };
-                    app.handle_crossterm_event(Event::Mouse(MouseEvent { kind, column: col, row, modifiers: KeyModifiers::empty() }))?;
+                    app.handle_crossterm_event(Event::Mouse(MouseEvent { kind, column: col, row, modifiers: modifiers_from_x11_state(mev.state) }))?;
                     app.needs_redraw = true;
                 }
                 CONFIGURE_NOTIFY => {

@@ -1,6 +1,7 @@
 mod agents_window;
 mod drawer_navigator;
 pub mod encode;
+pub mod gui_route;
 pub mod keymap;
 pub mod modal;
 pub mod mouse;
