@@ -762,7 +762,7 @@ Goal: make Bilterm a place where several AI agents run side by side, are visible
   4. Mouse parity: click to focus, wheel scroll, Ctrl+wheel scale, resize by dragging the edge; works in TUI and GUI. *The GUI part is conditional on the 50-13 checkpoint decision:* `fix-all` = also in real GUI windows on Linux, Windows and macOS; `fix-linux` = also in the real X11 GUI, while on Windows/macOS Ctrl+wheel over a panel still zooms the font (`[` / `]` and `:... scale` do scale panels there); `scope-out` = proven only on the headless GUI surface, real GUI windows keep font zoom and panel scale stays a no-op there (documented known gap). 50-14 records which option holds.
   5. Legacy parity: with `style = "classic"` output is byte-identical to today; snapshot tests prove it.
 
-**Plans**: 6/16 plans executed (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
+**Plans**: 7/16 plans executed (0/16 complete) — scope expanded by 50-CONTEXT.md decisions D-01..D-10: FLT-01 (sidebar), FLT-02 (traffic bus, zoom window, snoop), FLT-03 (GUI vector rendering); every key and mouse gesture lowers to `Action` via `WindowManager::apply`, key tables in `src/input/keymap.rs`; SC4's GUI part is conditional on the 50-13 checkpoint (see criterion 4)
 
 Plans:
 - [x] 50-01-PLAN.md — Classic-drawer golden snapshots (cells + style digest + GUI digest) and immutability gate, before any src edit (wave 1)
@@ -771,7 +771,7 @@ Plans:
 - [x] 50-04-PLAN.md — State dots, per-workspace counts, jump-to-attention (`:drawer attention`, leader `!`), `:drawer style` (wave 3)
 - [x] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 51 (wave 3)
 - [x] 50-06-PLAN.md — Navigator keyboard: `NAVIGATOR_DRAWER_BINDINGS` in keymap.rs, full `DrawerNavOp` set with `:drawer` verbs (incl. `close-pane`), drift/no-shadow tests, pin/scale, throttled animation (wave 4)
-- [ ] 50-07-PLAN.md — Agent traffic zoom window skeleton: state, braille graph, stable layout, selection model, render (wave 4)
+- [x] 50-07-PLAN.md — Agent traffic zoom window skeleton: state, braille graph, stable layout, selection model, render (wave 4)
 - [ ] 50-08-PLAN.md — Zoom window keys: `AGENTS_WINDOW_BINDINGS` in keymap.rs, `:agents zoom/close/dismiss/select/edge/enter`, leader `a`, Esc, node/edge cursor, Enter-to-focus, op drift tests, redraw cadence (wave 5)
 - [ ] 50-09-PLAN.md — Zoom window chrome: title-drag/Shift+arrows move, edge-drag/Alt+arrows resize, maximize/close badges, splitter, node/edge clicks, node drag + grab mode, parity test (wave 6)
 - [ ] 50-10-PLAN.md — Snoop view: Ctrl+O pane focus, follow/filter/scroll/copy by key, mouse and command, disabled `send as me` compose line (wave 8)
@@ -875,5 +875,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
-| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 6/16 | In Progress | - |
+| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 7/16 | In Progress | - |
 | 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |

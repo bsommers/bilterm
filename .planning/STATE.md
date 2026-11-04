@@ -4,11 +4,11 @@ milestone: v2.6.0
 current_phase: 46
 current_phase_name: shell-display-modes
 status: in_progress
-stopped_at: Completed 50-06-PLAN.md
-last_updated: "2026-11-04T01:15:08.482Z"
+stopped_at: Completed 50-07-PLAN.md
+last_updated: "2026-11-04T01:50:08.801Z"
 last_activity: 2026-11-02
 last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
-state_head: afcec5917d27c85f05bac9748a96d8b1b9509834
+state_head: d380428f76a4f28c3d19bd96f3b076a9dca4d53e
 progress:
   total_phases: 48
   completed_phases: 44
@@ -69,6 +69,7 @@ Progress: [██████████] 100% (42/42 Phases)
 | Phase 50 P04 | 10 min | 2 tasks | 12 files |
 | Phase 50 P05 | 25 min | 2 tasks | 9 files |
 | Phase 50 P06 | ~1h | 5 tasks | 13 files |
+| Phase 50 P07 | 25min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
 - [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'
 - [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 51-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
+- [Phase 50]: 50-07: agents graph layout is Mutex-cached FR with 0.06 drift limit; active edge = success colour, selected = accent
 
 ### Pending Todos
 
@@ -106,8 +108,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-04T01:15:08.306Z
-Stopped at: Completed 50-06-PLAN.md
+Last session: 2026-11-04T01:50:08.622Z
+Stopped at: Completed 50-07-PLAN.md
 Resume file: None
 
 ## Quick Tasks Completed
