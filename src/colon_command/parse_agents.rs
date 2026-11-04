@@ -2,9 +2,9 @@
 
 use super::ColonCommand;
 use crate::wm::agents_cmd::AgentsOp;
-use crate::wm::agents_window::{GraphDir, NodeKey};
+use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy]";
 
 const SCALE_USAGE: &str = "Usage: :agents scale <75..200> | +n | -n (GUI only)";
 
@@ -115,6 +115,33 @@ fn parse_window_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, Strin
     }
 }
 
+/// Conversation (snoop) pane verbs (Phase 50-10).
+fn parse_snoop_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, String>> {
+    let usage = |u: &str| Some(Err(format!("Usage: :agents {u}")));
+    match (verb, args.len()) {
+        ("focus", 0) => Some(Ok(AgentsOp::FocusPane(None))),
+        ("focus", 1) => match args[0] {
+            "graph" => Some(Ok(AgentsOp::FocusPane(Some(WindowPane::Graph)))),
+            "snoop" => Some(Ok(AgentsOp::FocusPane(Some(WindowPane::Snoop)))),
+            "compose" => Some(Ok(AgentsOp::FocusPane(Some(WindowPane::Compose)))),
+            _ => usage("focus [graph|snoop|compose]"),
+        },
+        ("line", 1) if args[0].starts_with(['+', '-']) => match args[0].parse::<i16>() {
+            Ok(n) => Some(Ok(AgentsOp::SnoopStep(n))),
+            Err(_) => usage("line <+n|-n|seq>"),
+        },
+        ("line", 1) => match args[0].parse::<u64>() {
+            Ok(seq) => Some(Ok(AgentsOp::SnoopSelect(seq))),
+            Err(_) => usage("line <+n|-n|seq>"),
+        },
+        ("copy", 0) => Some(Ok(AgentsOp::Copy)),
+        ("focus", _) => usage("focus [graph|snoop|compose]"),
+        ("line", _) => usage("line <+n|-n|seq>"),
+        ("copy", _) => usage("copy"),
+        _ => None,
+    }
+}
+
 /// Returns `Some` only for head `agents`; everything else falls through unchanged.
 pub(super) fn parse_agents_colon_command(
     head: &str,
@@ -158,7 +185,7 @@ pub(super) fn parse_agents_colon_command(
                 _ => Err(SCALE_USAGE.to_string()),
             }
         }
-        Some(verb) => match parse_window_verb(verb, &parts[2..]) {
+        Some(verb) => match parse_snoop_verb(verb, &parts[2..]).or_else(|| parse_window_verb(verb, &parts[2..])) {
             Some(res) => res.map(ColonCommand::Agents),
             None => Err(USAGE.to_string()),
         },

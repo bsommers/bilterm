@@ -3,9 +3,9 @@ source: tests/phase50_agents_window.rs
 expression: "text.join(\"\\n\")"
 ---
 ╔ AGENT TRAFFIC ═══════════════════════════════════════════════════════════════════◇═[_][□][X]═╗
-║                                                   │#1 you → #1 broadcast: echo hi            ║
-║   ⣠⣰⣐                                             │#2 you → #2 broadcast: echo hi            ║
-║   ⢿⣿⡿⠅                                            │                                          ║
+║                                                   ◂  conversation                      [copy]║
+║   ⣠⣰⣐                                             │ -- you→#1 broadcast: echo hi             ║
+║   ⢿⣿⡿⠅                                            │ -- you→#2 broadcast: echo hi             ║
 ║   #2⢯⡐                                            │                                          ║
 ║      ⠯⣐                                           │                                          ║
 ║       ⠋⣴                                          │                                          ║

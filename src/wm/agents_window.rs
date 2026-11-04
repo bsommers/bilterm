@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use ratatui::layout::Rect;
 
@@ -14,7 +15,7 @@ use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::agent_state::AgentState;
 use crate::wm::{WindowManager, WindowResizeEdge};
-use crate::wm::traffic::TrafficEndpoint;
+use crate::wm::traffic::{TrafficEndpoint, TrafficEvent, TrafficKind};
 
 /// Maximum number of graph nodes (live panes are always kept; oldest other endpoints drop first).
 pub const NODE_CAP: usize = 64;
@@ -371,6 +372,94 @@ pub struct AgentsWindowState {
     pub drag: Option<AgentsDrag>,
     /// While on, the arrow keys nudge the selected node instead of moving the cursor.
     pub grab_mode: bool,
+    /// Which part of the window owns the keyboard.
+    pub pane_focus: WindowPane,
+    /// Conversation (snoop) view state.
+    pub snoop: SnoopState,
+}
+
+/// Part of the AGENT TRAFFIC window that owns the keyboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowPane {
+    Graph,
+    Snoop,
+    Compose,
+}
+
+impl WindowPane {
+    /// Next pane in the Ctrl+O cycle: graph, conversation, compose, graph.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Graph => Self::Snoop,
+            Self::Snoop => Self::Compose,
+            Self::Compose => Self::Graph,
+        }
+    }
+}
+
+/// Maximum characters of a keyword filter.
+pub const KEYWORD_CAP: usize = 64;
+
+/// State of the conversation (snoop) pane: read-only follow, filters, history scroll, copy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SnoopState {
+    pub filter_agent: Option<NodeKey>,
+    /// Unordered pair, stored `(smaller, larger)` by key.
+    pub filter_pair: Option<(NodeKey, NodeKey)>,
+    pub filter_text: Option<String>,
+    /// Keep the newest line visible.
+    pub follow: bool,
+    /// Index (in the filtered lines, from the oldest) of the bottom visible line; used only while
+    /// `follow` is off, so new traffic never moves the view.
+    pub scroll: usize,
+    /// Selected line (bus sequence number); `None` = the newest line.
+    pub selected_seq: Option<u64>,
+    /// Keyword being typed (`Some` while the entry line is open).
+    pub keyword_entry: Option<String>,
+    /// Text of the last copied line.
+    pub last_copy: Option<String>,
+}
+
+impl Default for SnoopState {
+    fn default() -> Self {
+        Self {
+            filter_agent: None,
+            filter_pair: None,
+            filter_text: None,
+            follow: true,
+            scroll: 0,
+            selected_seq: None,
+            keyword_entry: None,
+            last_copy: None,
+        }
+    }
+}
+
+/// One conversation line, derived from a bus event.
+#[derive(Clone, Debug)]
+pub struct SnoopLine {
+    pub seq: u64,
+    /// Time since the event, measured against the agent tracker's last update (`None` before it ran).
+    pub age: Option<Duration>,
+    pub from_label: String,
+    pub to_label: String,
+    pub kind: TrafficKind,
+    /// Sanitised preview (`[redacted]` when withheld).
+    pub preview: String,
+    pub redacted: bool,
+}
+
+/// Half-open range `[start, end)` of filtered-line indexes visible in `rows` rows.
+///
+/// Following shows the newest lines; otherwise `scroll` is the bottom visible index (clamped so the
+/// oldest line is never pushed below the top edge).
+pub fn snoop_view_range(len: usize, rows: usize, follow: bool, scroll: usize) -> (usize, usize) {
+    if len == 0 || rows == 0 {
+        return (0, 0);
+    }
+    let shown = rows.min(len);
+    let bottom = if follow { len - 1 } else { scroll.min(len - 1).max(shown - 1) };
+    (bottom + 1 - shown, bottom + 1)
 }
 
 impl Default for AgentsWindowState {
@@ -386,6 +475,8 @@ impl Default for AgentsWindowState {
             layout: GraphLayout::default(),
             drag: None,
             grab_mode: false,
+            pane_focus: WindowPane::Graph,
+            snoop: SnoopState::default(),
         }
     }
 }
@@ -434,6 +525,8 @@ impl WindowManager {
         self.agents_window.pinned = false;
         self.agents_window.drag = None;
         self.agents_window.grab_mode = false;
+        self.agents_window.pane_focus = WindowPane::Graph;
+        self.agents_window.snoop.keyword_entry = None;
     }
 
     /// Stores (or clears) the pointer-gesture bookkeeping of the window.
@@ -674,4 +767,133 @@ fn cap_nodes(acc: &BTreeMap<NodeKey, NodeAcc>) -> BTreeSet<NodeKey> {
     let room = NODE_CAP.saturating_sub(kept.len());
     kept.extend(others.into_iter().take(room).map(|(k, _)| k.clone()));
     kept
+}
+
+// ---- Conversation (snoop) view: lines, selection, copy (Phase 50-10, D-09) ----
+
+/// Characters of a copied line.
+const COPY_CAP: usize = 400;
+
+impl WindowManager {
+    fn snoop_matches(&self, e: &TrafficEvent) -> bool {
+        let s = &self.agents_window.snoop;
+        let (from, to) = (NodeKey::from_endpoint(&e.from), NodeKey::from_endpoint(&e.to));
+        if let Some(a) = &s.filter_agent
+            && from != *a
+            && to != *a
+        {
+            return false;
+        }
+        if let Some((a, b)) = &s.filter_pair
+            && !((from == *a && to == *b) || (from == *b && to == *a))
+        {
+            return false;
+        }
+        if let Some(t) = &s.filter_text
+            && !e.preview.to_lowercase().contains(&t.to_lowercase())
+        {
+            return false;
+        }
+        true
+    }
+
+    /// Bus events that pass the active filters, oldest first (newest last).
+    pub fn snoop_lines(&self) -> Vec<SnoopLine> {
+        let now = self.agents.last_update();
+        self.traffic
+            .iter()
+            .filter(|e| self.snoop_matches(e))
+            .map(|e| SnoopLine {
+                seq: e.seq,
+                age: now.map(|n| n.saturating_duration_since(e.at)),
+                from_label: e.from.label(),
+                to_label: e.to.label(),
+                kind: e.kind,
+                preview: e.preview.clone(),
+                redacted: e.redacted,
+            })
+            .collect()
+    }
+
+    /// Sequence number of the effective selection: the selected line while it is visible, else
+    /// the newest line.
+    pub fn snoop_selected_seq(&self) -> Option<u64> {
+        let lines = self.snoop_lines();
+        let wanted = self.agents_window.snoop.selected_seq;
+        wanted
+            .filter(|w| lines.iter().any(|l| l.seq == *w))
+            .or_else(|| lines.last().map(|l| l.seq))
+    }
+
+    /// Selects the line `seq`. `false` when it is not in the filtered view.
+    pub fn select_snoop_seq(&mut self, seq: u64) -> bool {
+        let lines = self.snoop_lines();
+        let Some(idx) = lines.iter().position(|l| l.seq == seq) else {
+            return false;
+        };
+        self.agents_window.snoop.selected_seq = Some(seq);
+        self.keep_snoop_selection_visible(idx, lines.len());
+        true
+    }
+
+    /// Moves the selection by `delta` lines (clamped). `false` when there are no lines.
+    pub fn step_snoop_selection(&mut self, delta: i16) -> bool {
+        let lines = self.snoop_lines();
+        let Some(cur) = self.snoop_selected_seq() else {
+            return false;
+        };
+        let at = lines.iter().position(|l| l.seq == cur).unwrap_or(lines.len() - 1);
+        let to = (at as i64 + i64::from(delta)).clamp(0, lines.len() as i64 - 1) as usize;
+        self.agents_window.snoop.selected_seq = Some(lines[to].seq);
+        self.keep_snoop_selection_visible(to, lines.len());
+        true
+    }
+
+    /// Scrolls so line `idx` is inside the viewport; leaving the newest lines turns follow off.
+    fn keep_snoop_selection_visible(&mut self, idx: usize, len: usize) {
+        let rows = self.snoop_view_rows();
+        if rows == 0 {
+            return;
+        }
+        let s = &self.agents_window.snoop;
+        let (start, end) = snoop_view_range(len, rows, s.follow, s.scroll);
+        if idx < start {
+            let s = &mut self.agents_window.snoop;
+            s.follow = false;
+            s.scroll = idx + rows - 1;
+        } else if idx >= end {
+            let s = &mut self.agents_window.snoop;
+            s.follow = false;
+            s.scroll = idx;
+        }
+    }
+
+    /// Rows available for conversation lines (0 when the window is not visible).
+    fn snoop_view_rows(&self) -> usize {
+        let ws = self.current_workspace_area().1;
+        self.agents_pane_rects(ws)
+            .map_or(0, |r| usize::from(crate::ui::agents_ui::snoop_lines_area(self, r.snoop).height))
+    }
+
+    /// Copies the selected line (`<from> -> <to> [<kind>] <preview>`) to the clipboard and keeps
+    /// it in `last_copy`. Redacted previews stay `[redacted]`. `None` when there is nothing to copy.
+    pub fn copy_selected_snoop(&mut self) -> Option<String> {
+        let seq = self.snoop_selected_seq()?;
+        let line = self.snoop_lines().into_iter().find(|l| l.seq == seq)?;
+        let raw = format!("{} -> {} [{}] {}", line.from_label, line.to_label, line.kind.as_str(), line.preview);
+        let text = sanitize_display(&raw, COPY_CAP);
+        crate::clipboard::set_system_clipboard(&text);
+        self.agents_window.snoop.last_copy = Some(text.clone());
+        Some(text)
+    }
+
+    /// Focuses `pane`, or the next one in the cycle (`None`). Leaves an open keyword entry.
+    pub fn focus_agents_pane(&mut self, pane: Option<WindowPane>) {
+        let w = &mut self.agents_window;
+        w.pane_focus = pane.unwrap_or_else(|| w.pane_focus.next());
+        w.snoop.keyword_entry = None;
+        if w.pane_focus != WindowPane::Graph {
+            w.grab_mode = false;
+        }
+    }
 }

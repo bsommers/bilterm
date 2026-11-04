@@ -1,5 +1,5 @@
 //! AGENT TRAFFIC floating window renderer (Phase 50-07, D-07): the node graph on the left and the
-//! newest bus events (one line each, newest at the bottom) on the right.
+//! conversation (snoop) pane on the right: bus events, one line each, newest at the bottom.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -16,12 +16,15 @@ use crate::ui::theme::ThemePalette;
 use crate::ui::visual_style::{apply_frosted_glass_surface, render_liquid_ambient_halo};
 use crate::vt::sanitize_display;
 use crate::wm::WindowManager;
-use crate::wm::traffic::TrafficEvent;
+use crate::wm::agents_geometry::AgentsPaneRects;
+use crate::wm::agents_window::{SnoopLine, WindowPane, snoop_view_range};
 
 /// Window title.
 pub const AGENTS_WINDOW_TITLE: &str = "AGENT TRAFFIC";
-/// Maximum characters of one rendered event line before display-width truncation.
+/// Maximum characters of one rendered conversation line before display-width truncation.
 const EVENT_LINE_CAP: usize = 160;
+/// The `[copy]` badge in the conversation header.
+pub const COPY_BADGE: &str = "[copy]";
 
 /// Column of the pin badge in the title row of a window with outer rect `outer`.
 ///
@@ -60,17 +63,71 @@ pub fn split_panes(inner: Rect, splitter_pct: u16) -> (Rect, u16, Rect) {
     (graph, div_x, Rect::new(events_x, inner.y, events_w, inner.height))
 }
 
-/// One-line rendering of a bus event: `#<seq> <from> → <to> <kind>: <preview>`.
-pub fn event_line(e: &TrafficEvent) -> String {
+/// Compact age: `--` (unknown), `7s`, `3m`, `2h`.
+fn age_text(age: Option<std::time::Duration>) -> String {
+    match age.map(|d| d.as_secs()) {
+        None => "--".to_string(),
+        Some(s) if s < 60 => format!("{s}s"),
+        Some(s) if s < 3600 => format!("{}m", s / 60),
+        Some(s) => format!("{}h", s / 3600),
+    }
+}
+
+/// One-line rendering of a conversation line: `<age> <from>→<to> <kind>: <preview>`.
+pub fn snoop_line_text(l: &SnoopLine, ascii: bool) -> String {
+    let arrow = if ascii { "->" } else { "→" };
     let line = format!(
-        "#{} {} → {} {}: {}",
-        e.seq,
-        e.from.label(),
-        e.to.label(),
-        e.kind.as_str(),
-        e.preview
+        "{:>3} {}{arrow}{} {}: {}",
+        age_text(l.age),
+        l.from_label,
+        l.to_label,
+        l.kind.as_str(),
+        l.preview
     );
     sanitize_display(&line, EVENT_LINE_CAP)
+}
+
+/// Where the parts of the conversation pane sit. The renderer draws from it and the mouse handler
+/// hit-tests against it, so the two can never disagree.
+#[derive(Clone, Debug, Default)]
+pub struct SnoopLayout {
+    /// `[copy]` badge (zero-sized when the pane is too small for a header).
+    pub copy: Rect,
+    /// Area holding the conversation lines.
+    pub lines_area: Rect,
+    /// Visible lines: `(row, bus sequence number)`, oldest first.
+    pub lines: Vec<(u16, u64)>,
+}
+
+/// Rows of the conversation pane: header row, then lines.
+fn snoop_header_rows(area: Rect) -> u16 {
+    u16::from(area.height >= 3)
+}
+
+/// Area of the conversation pane that holds lines.
+pub fn snoop_lines_area(_wm: &WindowManager, area: Rect) -> Rect {
+    let head = snoop_header_rows(area);
+    Rect::new(area.x, area.y + head, area.width, area.height - head)
+}
+
+/// Layout of the conversation pane `rects.snoop`.
+pub fn snoop_layout(wm: &WindowManager, rects: &AgentsPaneRects) -> SnoopLayout {
+    let area = rects.snoop;
+    let lines_area = snoop_lines_area(wm, area);
+    let st = &wm.agents_window().snoop;
+    let all = wm.snoop_lines();
+    let (start, end) = snoop_view_range(all.len(), usize::from(lines_area.height), st.follow, st.scroll);
+    let lines = (start..end)
+        .enumerate()
+        .map(|(i, idx)| (lines_area.y + i as u16, all[idx].seq))
+        .collect();
+    let badge_w = COPY_BADGE.len() as u16;
+    let copy = if snoop_header_rows(area) == 1 && area.width >= badge_w + 14 {
+        Rect::new(area.x + area.width - badge_w, area.y, badge_w, 1)
+    } else {
+        Rect::default()
+    };
+    SnoopLayout { copy, lines_area, lines }
 }
 
 /// Truncates `s` to at most `max_cols` terminal columns.
@@ -146,7 +203,7 @@ pub fn render_agents_window(
         cell.set_symbol(pin_badge_glyph(glyphs, state.pinned));
         cell.set_style(Style::default().fg(fg).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
     }
-    let (inner, graph, div_x, events) = (rects.inner, rects.graph, rects.splitter_col, rects.snoop);
+    let (inner, graph, div_x) = (rects.inner, rects.graph, rects.splitter_col);
     let divider = Style::default()
         .fg(palette.inactive_border_fg)
         .bg(palette.window_frame_bg);
@@ -158,26 +215,57 @@ pub fn render_agents_window(
     }
 
     render_graph_tui(&wm.agents_graph_scene(), graph, buf, palette);
-    render_events(wm, events, palette, buf);
+    render_snoop(wm, &rects, palette, glyphs, buf);
 }
 
-fn render_events(wm: &WindowManager, area: Rect, palette: &ThemePalette, buf: &mut Buffer) {
+fn render_snoop(wm: &WindowManager, rects: &AgentsPaneRects, palette: &ThemePalette, glyphs: &GlyphSet, buf: &mut Buffer) {
+    let area = rects.snoop;
     if area.width == 0 || area.height == 0 {
         return;
     }
     let tokens = DesignTokens::from_palette(palette);
-    let rows = usize::from(area.height);
-    let all: Vec<&TrafficEvent> = wm.traffic().iter().collect();
-    let shown = &all[all.len().saturating_sub(rows)..];
-    for (i, e) in shown.iter().enumerate() {
-        let line = fit_cols(&event_line(e), usize::from(area.width));
-        let fg: Color = if e.redacted { tokens.text_muted } else { tokens.text_primary };
-        buf.set_stringn(
-            area.x,
-            area.y + i as u16,
-            &line,
-            usize::from(area.width),
-            Style::default().fg(fg).bg(palette.window_frame_bg),
-        );
+    let ascii = glyphs.pin_top_bottom.is_ascii();
+    let bg = palette.window_frame_bg;
+    let width = usize::from(area.width);
+    let state = wm.agents_window();
+    let lay = snoop_layout(wm, rects);
+
+    // Focus markers: the conversation header and the top of the divider column.
+    let marker = |on: bool, glyph: &'static str, plain: &'static str| if on { if ascii { plain } else { glyph } } else { " " };
+    let focus = state.pane_focus;
+    if focus == WindowPane::Graph
+        && let Some(cell) = buf.cell_mut((rects.splitter_col, rects.inner.y))
+    {
+        cell.set_symbol(marker(true, "◂", "<"));
+    }
+    if snoop_header_rows(area) == 1 {
+        let head = format!("{} conversation", marker(focus == WindowPane::Snoop, "▸", ">"));
+        let style = Style::default().fg(tokens.accent).bg(bg).add_modifier(Modifier::BOLD);
+        buf.set_stringn(area.x, area.y, &head, width, style);
+        if lay.copy.width > 0 {
+            buf.set_stringn(lay.copy.x, lay.copy.y, COPY_BADGE, usize::from(lay.copy.width), Style::default().fg(tokens.accent).bg(bg));
+        }
+    }
+
+    let all = wm.snoop_lines();
+    let selected = wm.snoop_selected_seq();
+    for (y, seq) in &lay.lines {
+        let Some(l) = all.iter().find(|l| l.seq == *seq) else { continue };
+        let text = fit_cols(&snoop_line_text(l, ascii), usize::from(lay.lines_area.width));
+        let is_sel = selected == Some(*seq) && focus == WindowPane::Snoop;
+        let style = if is_sel {
+            Style::default().fg(tokens.accent_on).bg(tokens.accent)
+        } else {
+            let fg: Color = if l.redacted { tokens.text_muted } else { tokens.text_primary };
+            Style::default().fg(fg).bg(bg)
+        };
+        if is_sel {
+            for x in lay.lines_area.x..lay.lines_area.x + lay.lines_area.width {
+                if let Some(cell) = buf.cell_mut((x, *y)) {
+                    cell.set_style(style);
+                }
+            }
+        }
+        buf.set_stringn(lay.lines_area.x, *y, &text, usize::from(lay.lines_area.width), style);
     }
 }

@@ -14,10 +14,10 @@ use super::keymap::{AgentsKeyScope, agents_window_action, is_leader_key_with_tmu
 use super::mouse_wm::{apply_rect_edge_resize, ctrl_wheel_scale_delta, detect_title_bar_badge_click};
 use crate::action::Action;
 use crate::wm::agents_cmd::AgentsOp;
-use crate::ui::agents_ui::agents_pin_badge_x;
+use crate::ui::agents_ui::{agents_pin_badge_x, snoop_layout};
 use crate::ui::typography::PanelTarget;
-use crate::wm::agents_geometry::{AgentsHit, graph_cell_permille};
-use crate::wm::agents_window::AgentsDrag;
+use crate::wm::agents_geometry::{AgentsHit, AgentsPaneRects, graph_cell_permille};
+use crate::wm::agents_window::{AgentsDrag, WindowPane};
 use crate::wm::{WindowManager, rect_contains};
 
 /// Handles `key` while the agents window captures input.
@@ -30,10 +30,14 @@ pub(super) fn handle_agents_window_key(wm: &mut WindowManager, key: KeyEvent) ->
     if is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
         return None;
     }
-    let scopes: &[AgentsKeyScope] = if wm.agents_window().grab_mode {
-        &[AgentsKeyScope::Grab, AgentsKeyScope::Graph, AgentsKeyScope::Window]
-    } else {
-        &[AgentsKeyScope::Graph, AgentsKeyScope::Window]
+    let state = wm.agents_window();
+    let scopes: &[AgentsKeyScope] = match state.pane_focus {
+        WindowPane::Snoop => &[AgentsKeyScope::Snoop, AgentsKeyScope::Window],
+        WindowPane::Compose => &[AgentsKeyScope::Window],
+        WindowPane::Graph if state.grab_mode => {
+            &[AgentsKeyScope::Grab, AgentsKeyScope::Graph, AgentsKeyScope::Window]
+        }
+        WindowPane::Graph => &[AgentsKeyScope::Graph, AgentsKeyScope::Window],
     };
     if let Some(action) = agents_window_action(scopes, key) {
         let _ = wm.apply(action);
@@ -108,6 +112,12 @@ fn press(wm: &mut WindowManager, button: MouseButton, hit: AgentsHit, mouse: Mou
     let Some(rects) = wm.agents_pane_rects(ws) else {
         return;
     };
+    if button == MouseButton::Left
+        && matches!(hit, AgentsHit::Node(_) | AgentsHit::Edge(..) | AgentsHit::Graph)
+        && wm.agents_window().pane_focus != WindowPane::Graph
+    {
+        run(wm, AgentsOp::FocusPane(Some(WindowPane::Graph)));
+    }
     match (button, hit) {
         (MouseButton::Left, AgentsHit::Title) if agents_pin_badge_x(rects.outer) == Some(mouse.column) => {
             run(wm, AgentsOp::Pin(None))
@@ -139,8 +149,26 @@ fn press(wm: &mut WindowManager, button: MouseButton, hit: AgentsHit, mouse: Mou
                 run(wm, AgentsOp::SelectEdge(a, b));
             }
         }
+        (MouseButton::Left, AgentsHit::Snoop) => snoop_press(wm, &rects, mouse),
         (MouseButton::Right, AgentsHit::Node(key)) => run(wm, AgentsOp::UnpinNode(Some(key))),
         _ => {}
+    }
+}
+
+/// Left press inside the conversation pane: focus it, then apply what sits under the pointer
+/// according to [`snoop_layout`] (the layout the renderer draws).
+fn snoop_press(wm: &mut WindowManager, rects: &AgentsPaneRects, mouse: MouseEvent) {
+    let lay = snoop_layout(wm, rects);
+    let at = |r: Rect| rect_contains(r, mouse.column, mouse.row);
+    if wm.agents_window().pane_focus != WindowPane::Snoop {
+        run(wm, AgentsOp::FocusPane(Some(WindowPane::Snoop)));
+    }
+    if at(lay.copy) {
+        run(wm, AgentsOp::Copy);
+    } else if at(lay.lines_area)
+        && let Some((_, seq)) = lay.lines.iter().find(|(y, _)| *y == mouse.row)
+    {
+        run(wm, AgentsOp::SnoopSelect(*seq));
     }
 }
 

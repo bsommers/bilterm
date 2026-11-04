@@ -225,6 +225,12 @@ impl AgentTracker {
     pub fn has_updated(&self) -> bool {
         self.last_now.is_some()
     }
+
+    /// Instant of the last [`WindowManager::update_agent_states`] run (the clock message ages are
+    /// measured against, so rendering stays deterministic under synthetic time).
+    pub fn last_update(&self) -> Option<Instant> {
+        self.last_now
+    }
 }
 
 /// Identity token of a pane: first whitespace token of the running command (else of the title),

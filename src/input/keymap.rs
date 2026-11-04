@@ -342,6 +342,8 @@ pub enum AgentsKeyScope {
     /// Node grab mode (most specific): arrows nudge the selected node; `g`, Enter and Esc drop it.
     /// Its Esc row is the one allowed override of the `Window` Esc row.
     Grab,
+    /// The conversation (snoop) pane has the keyboard.
+    Snoop,
 }
 
 /// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
@@ -375,6 +377,13 @@ pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Acti
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('m'), Action::Agents(AgentsOp::Maximize)),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('<'), Action::Agents(AgentsOp::SplitStep(-5))),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('>'), Action::Agents(AgentsOp::SplitStep(5))),
+    // Ctrl+O cycles graph -> conversation -> compose; F6 stays the global `DeckNext`.
+    (AgentsKeyScope::Window, KeyModifiers::CONTROL, KeyCode::Char('o'), Action::Agents(AgentsOp::FocusPane(None))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('j'), Action::Agents(AgentsOp::SnoopStep(1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::SnoopStep(1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('k'), Action::Agents(AgentsOp::SnoopStep(-1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::SnoopStep(-1))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('y'), Action::Agents(AgentsOp::Copy)),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::NudgeNode(GraphDir::Left))),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::NudgeNode(GraphDir::Right))),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::NudgeNode(GraphDir::Up))),

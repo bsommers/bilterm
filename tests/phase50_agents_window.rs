@@ -11,7 +11,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use bilterm::ui::WorkspaceWidget;
 use bilterm::ui::design::DesignTokens;
 use bilterm::ui::typography::PanelTarget;
-use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey};
+use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey, SnoopState, WindowPane};
 use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
 use bilterm::wm::agent_state::AgentState;
 use bilterm::wm::agents_cmd::AgentsOp;
@@ -362,6 +362,8 @@ struct Observed {
     splitter_pct: u16,
     grab: bool,
     pinned: Vec<(NodeKey, u32, u32)>,
+    pane_focus: WindowPane,
+    snoop: SnoopState,
 }
 
 fn observe(wm: &WindowManager) -> Observed {
@@ -382,6 +384,8 @@ fn observe(wm: &WindowManager) -> Observed {
             .iter()
             .map(|(k, p)| (k.clone(), p.0.to_bits(), p.1.to_bits()))
             .collect(),
+        pane_focus: w.pane_focus,
+        snoop: w.snoop.clone(),
     }
 }
 
@@ -548,6 +552,14 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::Pin(Some(false)) => ":agents unpin".to_string(),
         AgentsOp::ScaleStep(n) if *n >= 0 => format!(":agents scale +{n}"),
         AgentsOp::ScaleStep(n) => format!(":agents scale {n}"),
+        AgentsOp::FocusPane(None) => ":agents focus".to_string(),
+        AgentsOp::FocusPane(Some(WindowPane::Graph)) => ":agents focus graph".to_string(),
+        AgentsOp::FocusPane(Some(WindowPane::Snoop)) => ":agents focus snoop".to_string(),
+        AgentsOp::FocusPane(Some(WindowPane::Compose)) => ":agents focus compose".to_string(),
+        AgentsOp::SnoopStep(n) if *n >= 0 => format!(":agents line +{n}"),
+        AgentsOp::SnoopStep(n) => format!(":agents line {n}"),
+        AgentsOp::SnoopSelect(seq) => format!(":agents line {seq}"),
+        AgentsOp::Copy => ":agents copy".to_string(),
     })
 }
 
@@ -597,6 +609,14 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::Pin(Some(false)),
         AgentsOp::ScaleStep(-10),
         AgentsOp::ScaleStep(10),
+        AgentsOp::FocusPane(None),
+        AgentsOp::FocusPane(Some(WindowPane::Graph)),
+        AgentsOp::FocusPane(Some(WindowPane::Snoop)),
+        AgentsOp::FocusPane(Some(WindowPane::Compose)),
+        AgentsOp::SnoopStep(1),
+        AgentsOp::SnoopStep(-1),
+        AgentsOp::SnoopSelect(2),
+        AgentsOp::Copy,
     ]
 }
 
@@ -607,12 +627,16 @@ fn window_keys_match_colon_forms() {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
         let form = agents_op_colon_form(op).expect("every table op has a colon form");
         let in_grab = *scope == bilterm::input::keymap::AgentsKeyScope::Grab;
+        let in_snoop = *scope == bilterm::input::keymap::AgentsKeyScope::Snoop;
         let setup = |wm: &mut WindowManager| {
             assert!(wm.agents_select_node(&NodeKey("user".to_string())));
             wm.agents_cycle_edge(true);
             wm.focus_and_raise(1);
             if in_grab {
                 run_colon(wm, ":agents grab on");
+            }
+            if in_snoop {
+                run_colon(wm, ":agents focus snoop");
             }
         };
         let by_key = with_temp_xdg(|| {
@@ -1571,5 +1595,70 @@ fn parity_pin_scale_key_mouse_colon_match() {
         assert_eq!(by_key.0, 110);
         assert_eq!(by_key, by_mouse);
         assert_eq!(by_key, by_colon);
+    });
+}
+
+// ---- Plan 50-10: conversation (snoop) pane ----
+
+fn snoop_rects(wm: &WindowManager, area: Rect) -> bilterm::wm::agents_geometry::AgentsPaneRects {
+    wm.agents_pane_rects(ws_of(wm, area)).expect("pane rects")
+}
+
+fn snoop_lay(wm: &WindowManager, area: Rect) -> bilterm::ui::agents_ui::SnoopLayout {
+    bilterm::ui::agents_ui::snoop_layout(wm, &snoop_rects(wm, area))
+}
+
+fn ctrl_o(wm: &mut WindowManager) {
+    press_mod(wm, KeyCode::Char('o'), KeyModifiers::CONTROL);
+}
+
+fn last_copy(wm: &WindowManager) -> Option<String> {
+    wm.agents_window().snoop.last_copy.clone()
+}
+
+fn line_cell(wm: &WindowManager, area: Rect, seq: u64) -> (u16, u16) {
+    let lay = snoop_lay(wm, area);
+    let y = lay.lines.iter().find(|(_, s)| *s == seq).unwrap_or_else(|| panic!("line {seq} not visible")).0;
+    (lay.lines_area.x + 2, y)
+}
+
+#[test]
+fn window_tracer_snoop_line_select_and_copy() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        assert_eq!(wm.traffic().latest_seq(), 2, "one event per broadcast target");
+        ctrl_o(&mut wm);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Snoop);
+        let text = lines(&render(&wm, area));
+        assert!(
+            text.iter().any(|l| l.contains("you→#1") && l.contains("echo hi")),
+            "missing conversation line for the first broadcast target"
+        );
+        assert!(text.iter().any(|l| l.contains("you→#2") && l.contains("echo hi")));
+
+        // The newest line is selected by default; `k` moves to the previous one.
+        press(&mut wm, KeyCode::Char('k'));
+        assert_eq!(wm.agents_window().snoop.selected_seq, Some(1));
+        press(&mut wm, KeyCode::Char('y'));
+        let copied = last_copy(&wm).expect("y copies the selected line");
+        assert!(copied.contains("you -> #1") && copied.contains("echo hi"), "{copied}");
+
+        // Mouse: click the other line, then the [copy] badge.
+        let (cx, cy) = line_cell(&wm, area, 2);
+        click(&mut wm, area, cx, cy);
+        assert_eq!(wm.agents_window().snoop.selected_seq, Some(2));
+        let badge = snoop_lay(&wm, area).copy;
+        assert!(badge.width > 0, "the [copy] badge fits at 120 columns");
+        click(&mut wm, area, badge.x + 1, badge.y);
+        let by_mouse = last_copy(&wm).expect("badge copies");
+        assert!(by_mouse.contains("you -> #2") && by_mouse.contains("echo hi"), "{by_mouse}");
+
+        // Colon: same result as `y` on the same selection.
+        let (mut other, _) = traffic_fixture();
+        run_colon(&mut other, ":agents focus snoop");
+        run_colon(&mut other, ":agents line 2");
+        run_colon(&mut other, ":agents copy");
+        assert_eq!(last_copy(&other), Some(by_mouse));
+        assert_eq!(observe(&wm).snoop, observe(&other).snoop);
     });
 }

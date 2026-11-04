@@ -50,4 +50,12 @@ pub enum AgentsOp {
     Pin(Option<bool>),
     /// `:agents scale +10` / `-10` (`]` / `[`, Ctrl+wheel) - step the window's own panel scale (GUI only).
     ScaleStep(i16),
+    /// `:agents focus [graph|snoop|compose]` (Ctrl+O, click) - focus a window pane; `None` cycles.
+    FocusPane(Option<crate::wm::agents_window::WindowPane>),
+    /// `:agents line +n` / `-n` (`j` / `k`) - move the conversation line selection.
+    SnoopStep(i16),
+    /// `:agents line <seq>` (click) - select a conversation line by bus sequence number.
+    SnoopSelect(u64),
+    /// `:agents copy` (`y`, `[copy]` badge) - copy the selected conversation line.
+    Copy,
 }

@@ -26,6 +26,21 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
             wm.agents_cycle_edge(forward);
         }
         AgentsOp::Activate => activate(wm),
+        AgentsOp::FocusPane(pane) => wm.focus_agents_pane(pane),
+        AgentsOp::SnoopStep(n) => {
+            if !wm.step_snoop_selection(n) {
+                status(wm, "No conversation lines".to_string());
+            }
+        }
+        AgentsOp::SnoopSelect(seq) => {
+            if !wm.select_snoop_seq(seq) {
+                status(wm, format!("No conversation line {seq}"));
+            }
+        }
+        AgentsOp::Copy => match wm.copy_selected_snoop() {
+            Some(_) => status(wm, "Copied the selected conversation line".to_string()),
+            None => status(wm, "Nothing to copy".to_string()),
+        },
         other => execute_window_op(wm, other),
     }
     false
@@ -99,7 +114,11 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
         | AgentsOp::Dismiss
         | AgentsOp::Select(_)
         | AgentsOp::CycleEdge(_)
-        | AgentsOp::Activate => {}
+        | AgentsOp::Activate
+        | AgentsOp::FocusPane(_)
+        | AgentsOp::SnoopStep(_)
+        | AgentsOp::SnoopSelect(_)
+        | AgentsOp::Copy => {}
     }
 }
 
