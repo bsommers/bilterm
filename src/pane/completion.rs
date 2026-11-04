@@ -476,7 +476,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "shutdown --confirm",
         ],
     ),
-    (":agents", &["list", "zoom", "close", "dismiss"]),
+    (":agents", &["list", "zoom", "close", "dismiss", "select ", "edge ", "enter"]),
     (":detach", &[]),
     (":attach", &["default"]),
     (":exit-guard", &["guard", "respawn", "detach", "off"]),

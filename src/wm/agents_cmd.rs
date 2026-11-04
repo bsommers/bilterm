@@ -14,4 +14,10 @@ pub enum AgentsOp {
     Close,
     /// `:agents dismiss` (Esc) - close an unpinned window, or only release the keyboard of a pinned one.
     Dismiss,
+    /// `:agents select left|right|up|down` (arrow keys) - move the node cursor.
+    Select(crate::wm::agents_window::GraphDir),
+    /// `:agents edge next|prev` (Tab / Shift+Tab) - cycle the selected node's incident edges.
+    CycleEdge(bool),
+    /// `:agents enter` (Enter) - focus the selected pane node.
+    Activate,
 }

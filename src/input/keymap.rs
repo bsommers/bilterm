@@ -8,6 +8,7 @@ use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
 use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::AgentsOp;
+use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
@@ -25,6 +26,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('\\'), Action::SplitVertical),
     (KeyCode::Char('V'), Action::SplitVertical),
     (KeyCode::Char('!'), Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention)),
+    (KeyCode::Char('a'), Action::Agents(AgentsOp::Zoom(None))),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
     (KeyCode::F(5), Action::ZoomToggle),
@@ -347,6 +349,13 @@ pub enum AgentsKeyScope {
 /// keyboard; the leader key is never consumed.
 pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Action)] = &[
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Dismiss)),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::Select(GraphDir::Left))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::Select(GraphDir::Right))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::Select(GraphDir::Up))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::Select(GraphDir::Down))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Tab, Action::Agents(AgentsOp::CycleEdge(true))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::BackTab, Action::Agents(AgentsOp::CycleEdge(false))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::Activate)),
 ];
 
 /// Looks up `key` in [`AGENTS_WINDOW_BINDINGS`] for the active `scopes` (first scope wins).

@@ -212,6 +212,8 @@ pub struct AgentTracker {
     last_now: Option<Instant>,
     /// Time of the last redraw requested for the working animation.
     last_anim: Option<Instant>,
+    /// Traffic bus sequence at the last redraw requested for the open agents window.
+    last_traffic_seq: u64,
 }
 
 impl AgentTracker {
@@ -452,10 +454,11 @@ impl WindowManager {
     /// classic redraw cadence is unchanged (RESEARCH Pitfall 8).
     pub(crate) fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
+        let traffic = self.tick_agents_window_traffic(now);
         if self.config.drawer.style != crate::wm::drawer::DrawerStyle::Navigator
             || !self.is_drawer_effectively_visible()
         {
-            return false;
+            return traffic;
         }
         let working = self.agents.histories.values().any(|h| h.state == AgentState::Working);
         let animate = working
@@ -463,7 +466,25 @@ impl WindowManager {
         if working && (changed || animate) {
             self.agents.last_anim = Some(now);
         }
-        changed || animate
+        changed || animate || traffic
+    }
+
+    /// `true` when the agents window is open and new bus events arrived since the last redraw it
+    /// requested; shares the [`ANIM_INTERVAL`] throttle with the working animation.
+    fn tick_agents_window_traffic(&mut self, now: Instant) -> bool {
+        if !self.agents_window.active {
+            return false;
+        }
+        let seq = self.traffic().latest_seq();
+        if seq == self.agents.last_traffic_seq {
+            return false;
+        }
+        let due = self.agents.last_anim.is_none_or(|t| now.saturating_duration_since(t) >= ANIM_INTERVAL);
+        if due {
+            self.agents.last_traffic_seq = seq;
+            self.agents.last_anim = Some(now);
+        }
+        due
     }
 }
 
@@ -517,5 +538,29 @@ mod tests {
         wm.report_agent_state(1, Some(AgentState::Idle));
         let _ = wm.tick_agent_ui(t0 + Duration::from_millis(700));
         assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(900)), "no Working pane -> no animation");
+    }
+
+    #[test]
+    fn window_tick_redraws_on_new_traffic() {
+        use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
+        use std::time::Duration;
+
+        let mut wm = WindowManager::new_headless(30, 100);
+        let t0 = Instant::now();
+        let _ = wm.tick_agent_ui(t0);
+        let send = |wm: &mut WindowManager, at: Instant| {
+            wm.record_traffic(TrafficEndpoint::User, TrafficEndpoint::Pane(1), TrafficKind::Broadcast, "x", at);
+        };
+
+        send(&mut wm, t0);
+        assert!(!wm.tick_agent_ui(t0), "window closed: traffic does not request a redraw");
+
+        wm.open_agents_window(None);
+        assert!(wm.tick_agent_ui(t0), "open window + unseen traffic -> redraw");
+        assert!(!wm.tick_agent_ui(t0), "no new traffic -> no redraw");
+
+        send(&mut wm, t0);
+        assert!(!wm.tick_agent_ui(t0 + Duration::from_millis(50)), "throttled inside 120 ms");
+        assert!(wm.tick_agent_ui(t0 + Duration::from_millis(130)), "due after 120 ms");
     }
 }

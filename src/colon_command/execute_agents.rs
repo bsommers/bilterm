@@ -19,6 +19,13 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
         AgentsOp::Zoom(focus) => zoom(wm, focus),
         AgentsOp::Close => wm.close_agents_window(),
         AgentsOp::Dismiss => dismiss(wm),
+        AgentsOp::Select(dir) => {
+            wm.agents_select_direction(dir);
+        }
+        AgentsOp::CycleEdge(forward) => {
+            wm.agents_cycle_edge(forward);
+        }
+        AgentsOp::Activate => activate(wm),
     }
     false
 }
@@ -39,6 +46,26 @@ fn dismiss(wm: &mut WindowManager) {
     } else {
         wm.close_agents_window();
     }
+}
+
+/// Enter: focus the selected live pane node, then close (unpinned) or release the keyboard (pinned).
+fn activate(wm: &mut WindowManager) {
+    let sel = wm.agents_window().selection.clone();
+    let pane = match (&sel.edge, &sel.node) {
+        (None, Some(node)) => node.pane_id().filter(|id| wm.pane(*id).is_some()),
+        _ => None,
+    };
+    let Some(id) = pane else {
+        let what = match (&sel.edge, &sel.node) {
+            (Some((a, b)), _) => format!("{} - {}", a.as_str(), b.as_str()),
+            (None, Some(node)) => node.as_str().to_string(),
+            (None, None) => "nothing selected".to_string(),
+        };
+        wm.active_pane_mut().set_status_message(Some(format!("Nothing to activate for {what}")));
+        return;
+    };
+    wm.focus_and_raise(id);
+    dismiss(wm);
 }
 
 fn list(wm: &mut WindowManager) {

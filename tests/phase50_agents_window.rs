@@ -12,7 +12,10 @@ use bilterm::ui::WorkspaceWidget;
 use bilterm::ui::design::DesignTokens;
 use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey};
 use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
+use bilterm::wm::agent_state::AgentState;
+use bilterm::wm::agents_cmd::AgentsOp;
 use bilterm::wm::{SplitDirection, WindowManager};
+use std::sync::Mutex;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
@@ -322,4 +325,287 @@ fn window_tracer_zoom_command_and_esc() {
         parse_colon_command(":agents zoom 2").unwrap().unwrap(),
         Action::Agents(bilterm::wm::agents_cmd::AgentsOp::Zoom(Some(2)))
     );
+}
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// Isolates config/state directories for tests that drive real key dispatch.
+fn with_temp_xdg<T>(f: impl FnOnce() -> T) -> T {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = std::env::temp_dir().join(format!(
+        "bilterm-agents-window-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // SAFETY-equivalent: serialized by ENV_LOCK; every test using key dispatch goes through here.
+    unsafe {
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        std::env::set_var("XDG_STATE_HOME", &dir);
+    }
+    let out = f();
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
+type Observed = (bool, bool, Option<NodeKey>, Option<(NodeKey, NodeKey)>, usize);
+
+fn observe(wm: &WindowManager) -> Observed {
+    let w = wm.agents_window();
+    (w.active, w.focused, w.selection.node.clone(), w.selection.edge.clone(), wm.active_pane_id())
+}
+
+fn leftmost(wm: &WindowManager) -> NodeKey {
+    wm.agents_graph_scene()
+        .nodes
+        .iter()
+        .min_by(|a, b| a.pos.0.total_cmp(&b.pos.0).then_with(|| a.key.cmp(&b.key)))
+        .unwrap()
+        .key
+        .clone()
+}
+
+#[test]
+fn window_arrows_move_to_nearest_node() {
+    with_temp_xdg(|| {
+        let by_key = {
+            let (mut wm, _) = traffic_fixture();
+            let l = leftmost(&wm);
+            assert!(wm.agents_select_node(&l));
+            press(&mut wm, KeyCode::Right);
+            wm.agents_window().selection.node.clone()
+        };
+        let by_colon = {
+            let (mut wm, _) = traffic_fixture();
+            let l = leftmost(&wm);
+            assert!(wm.agents_select_node(&l));
+            run_colon(&mut wm, ":agents select right");
+            wm.agents_window().selection.node.clone()
+        };
+        assert!(by_key.is_some());
+        assert_eq!(by_key, by_colon);
+    });
+}
+
+#[test]
+fn window_tab_cycles_incident_edges() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        assert!(wm.agents_select_node(&NodeKey("user".to_string())));
+        press(&mut wm, KeyCode::Tab);
+        let first = wm.agents_window().selection.edge.clone().expect("Tab selects an edge");
+        press(&mut wm, KeyCode::Tab);
+        let second = wm.agents_window().selection.edge.clone().unwrap();
+        assert_ne!(first, second);
+        press_mod(&mut wm, KeyCode::BackTab, KeyModifiers::SHIFT);
+        assert_eq!(wm.agents_window().selection.edge, Some(first.clone()), "Shift+Tab goes back");
+        press(&mut wm, KeyCode::BackTab);
+        assert_eq!(wm.agents_window().selection.edge, Some(second), "BackTab without SHIFT also goes back");
+        // The selected edge is drawn in the accent colour (see render_selection_highlight).
+        assert!(lines(&render(&wm, area)).join("\n").contains("AGENT TRAFFIC"));
+    });
+}
+
+#[test]
+fn window_enter_on_pane_node_focuses_pane() {
+    with_temp_xdg(|| {
+        for pinned in [false, true] {
+            let (mut wm, _) = traffic_fixture();
+            wm.focus_and_raise(1);
+            wm.agents_window_mut().pinned = pinned;
+            assert!(wm.agents_select_node(&NodeKey::pane(2)));
+            press(&mut wm, KeyCode::Enter);
+            assert_eq!(wm.active_pane_id(), 2);
+            if pinned {
+                assert!(wm.agents_window().active && !wm.agents_window().focused, "pinned stays open, unfocused");
+            } else {
+                assert!(!wm.agents_window().active, "unpinned window closes");
+            }
+        }
+        // Not a pane node: stays open, status explains.
+        let (mut wm, _) = traffic_fixture();
+        assert!(wm.agents_select_node(&NodeKey("user".to_string())));
+        press(&mut wm, KeyCode::Enter);
+        assert!(wm.agents_window().active);
+    });
+}
+
+#[test]
+fn window_leader_a_opens_window() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = fixture(120, 40);
+        press_mod(&mut wm, KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert!(wm.is_leader_pending());
+        press(&mut wm, KeyCode::Char('a'));
+        assert!(wm.agents_window().active);
+    });
+}
+
+#[test]
+fn window_zoom_with_pane_selects_node() {
+    let (mut wm, _) = fixture(120, 40);
+    run_colon(&mut wm, ":agents zoom 2");
+    assert_eq!(wm.agents_window().selection.node, Some(NodeKey::pane(2)));
+    let (mut wm, _) = fixture(120, 40);
+    run_colon(&mut wm, ":agents zoom 99");
+    assert!(wm.agents_window().active);
+    assert!(wm.agents_window().selection.node.is_none(), "unknown pane: no selection");
+}
+
+#[test]
+fn window_leader_passes_through_while_focused() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = fixture(120, 40);
+        wm.focus_and_raise(1);
+        wm.report_agent_state(2, Some(AgentState::Blocked));
+        wm.update_agent_states(Instant::now());
+        wm.open_agents_window(None);
+        assert!(wm.agents_window().captures_input());
+        press_mod(&mut wm, KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert!(wm.is_leader_pending(), "the leader key is not consumed by the window");
+        press(&mut wm, KeyCode::Char('!'));
+        assert_eq!(wm.active_pane_id(), 2, "attention jump ran");
+    });
+}
+
+fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
+    Some(match op {
+        AgentsOp::List => ":agents list".to_string(),
+        AgentsOp::Zoom(None) => ":agents zoom".to_string(),
+        AgentsOp::Zoom(Some(id)) => format!(":agents zoom {id}"),
+        AgentsOp::Close => ":agents close".to_string(),
+        AgentsOp::Dismiss => ":agents dismiss".to_string(),
+        AgentsOp::Select(dir) => format!(
+            ":agents select {}",
+            match dir {
+                GraphDir::Left => "left",
+                GraphDir::Right => "right",
+                GraphDir::Up => "up",
+                GraphDir::Down => "down",
+            }
+        ),
+        AgentsOp::CycleEdge(true) => ":agents edge next".to_string(),
+        AgentsOp::CycleEdge(false) => ":agents edge prev".to_string(),
+        AgentsOp::Activate => ":agents enter".to_string(),
+    })
+}
+
+fn sample_ops() -> Vec<AgentsOp> {
+    vec![
+        AgentsOp::List,
+        AgentsOp::Zoom(None),
+        AgentsOp::Zoom(Some(2)),
+        AgentsOp::Close,
+        AgentsOp::Dismiss,
+        AgentsOp::Select(GraphDir::Left),
+        AgentsOp::Select(GraphDir::Right),
+        AgentsOp::Select(GraphDir::Up),
+        AgentsOp::Select(GraphDir::Down),
+        AgentsOp::CycleEdge(true),
+        AgentsOp::CycleEdge(false),
+        AgentsOp::Activate,
+    ]
+}
+
+#[test]
+fn window_keys_match_colon_forms() {
+    use bilterm::input::keymap::AGENTS_WINDOW_BINDINGS;
+    for (_, mods, code, action) in AGENTS_WINDOW_BINDINGS {
+        let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
+        let form = agents_op_colon_form(op).expect("every table op has a colon form");
+        let setup = |wm: &mut WindowManager| {
+            assert!(wm.agents_select_node(&NodeKey("user".to_string())));
+            wm.agents_cycle_edge(true);
+            wm.focus_and_raise(1);
+        };
+        let by_key = with_temp_xdg(|| {
+            let (mut wm, _) = traffic_fixture();
+            setup(&mut wm);
+            press_mod(&mut wm, *code, *mods);
+            observe(&wm)
+        });
+        let by_colon = with_temp_xdg(|| {
+            let (mut wm, _) = traffic_fixture();
+            setup(&mut wm);
+            run_colon(&mut wm, &form);
+            observe(&wm)
+        });
+        assert_eq!(by_key, by_colon, "key {code:?} vs `{form}`");
+    }
+}
+
+#[test]
+fn keymap_agents_window_keys_unique() {
+    use bilterm::input::keymap::{AGENTS_WINDOW_BINDINGS, AgentsKeyScope};
+    let mut seen = Vec::new();
+    for (scope, mods, code, _) in AGENTS_WINDOW_BINDINGS {
+        let triple = (*scope, *mods, *code);
+        assert!(!seen.contains(&triple), "duplicate agents window chord {triple:?}");
+        seen.push(triple);
+    }
+    for (scope, mods, code, _) in AGENTS_WINDOW_BINDINGS {
+        if *scope == AgentsKeyScope::Window {
+            assert!(
+                !AGENTS_WINDOW_BINDINGS.iter().any(|(s, m, c, _)| s != scope && m == mods && c == code),
+                "Window-scope chord {code:?}+{mods:?} is also bound in another scope"
+            );
+        }
+    }
+}
+
+#[test]
+fn keymap_agents_window_keys_do_not_shadow_globals() {
+    use bilterm::input::keymap::{AGENTS_WINDOW_BINDINGS, DEFAULT_GLOBAL_BINDINGS, default_global_action};
+    for (_, mods, code, _) in AGENTS_WINDOW_BINDINGS {
+        let norm = match code {
+            KeyCode::Char(_) | KeyCode::BackTab => *mods - KeyModifiers::SHIFT,
+            _ => *mods,
+        };
+        assert!(
+            default_global_action(KeyEvent::new(*code, *mods), false).is_none(),
+            "agents row {code:?}+{mods:?} shadows a global chord"
+        );
+        assert!(
+            !DEFAULT_GLOBAL_BINDINGS.iter().any(|(m, c, _)| c == code && (*m == *mods || *m == norm)),
+            "agents row {code:?}+{mods:?} is bound in DEFAULT_GLOBAL_BINDINGS"
+        );
+    }
+}
+
+#[test]
+fn agents_ops_have_colon_completion_and_help() {
+    use bilterm::input::keymap::{AGENTS_WINDOW_BINDINGS, DEFAULT_LEADER_BINDINGS};
+    let row = bilterm::pane::completion::colon_command_table()
+        .iter()
+        .find(|(c, _)| *c == ":agents")
+        .expect(":agents completion row")
+        .1;
+    let samples = sample_ops();
+    for op in &samples {
+        let form = agents_op_colon_form(op).expect("colon form");
+        let parsed = parse_colon_command(&form).unwrap().unwrap_or_else(|e| panic!("`{form}`: {e}"));
+        assert_eq!(parsed, Action::Agents(op.clone()), "`{form}` must parse to its op");
+        let verb = form.split_whitespace().nth(1).unwrap();
+        assert!(
+            row.iter().any(|s| s.split_whitespace().next() == Some(verb)),
+            "verb `{verb}` missing from the :agents completion row"
+        );
+        let prefix = format!(":agents {verb}");
+        assert!(
+            bilterm::ui::modals::HELP_LINES
+                .iter()
+                .any(|(c, _)| c.starts_with(&prefix) || (verb == "list" && c.starts_with(":agents [list]"))),
+            "no HELP_LINES row for `{prefix}`"
+        );
+    }
+    for (_, _, _, action) in AGENTS_WINDOW_BINDINGS {
+        let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
+        assert!(samples.contains(op), "table op {op:?} is not covered by the sampled ops");
+    }
+    let leader = DEFAULT_LEADER_BINDINGS
+        .iter()
+        .find(|(k, _)| *k == KeyCode::Char('a'))
+        .expect("leader a row");
+    assert!(matches!(&leader.1, Action::Agents(op) if samples.contains(op)));
 }

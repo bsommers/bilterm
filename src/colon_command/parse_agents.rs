@@ -2,6 +2,10 @@
 
 use super::ColonCommand;
 use crate::wm::agents_cmd::AgentsOp;
+use crate::wm::agents_window::GraphDir;
+
+const USAGE: &str =
+    "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down>|edge <next|prev>|enter]";
 
 /// Returns `Some` only for head `agents`; everything else falls through unchanged.
 pub(super) fn parse_agents_colon_command(
@@ -24,6 +28,20 @@ pub(super) fn parse_agents_colon_command(
         },
         Some("close") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Close)),
         Some("dismiss") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Dismiss)),
-        _ => Err("Usage: :agents [list|zoom [pane-id]|close|dismiss]".to_string()),
+        Some("select") if parts.len() == 3 => {
+            let dir = match parts[2] {
+                "left" => GraphDir::Left,
+                "right" => GraphDir::Right,
+                "up" => GraphDir::Up,
+                "down" => GraphDir::Down,
+                _ => return Some(Err(USAGE.to_string())),
+            };
+            Ok(ColonCommand::Agents(AgentsOp::Select(dir)))
+        }
+        Some("edge") if parts.len() == 3 && matches!(parts[2], "next" | "prev") => {
+            Ok(ColonCommand::Agents(AgentsOp::CycleEdge(parts[2] == "next")))
+        }
+        Some("enter") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Activate)),
+        _ => Err(USAGE.to_string()),
     })
 }
