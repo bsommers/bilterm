@@ -3,10 +3,10 @@ source: tests/phase50_agents_window.rs
 expression: "text.join(\"\\n\")"
 ---
 ╔ AGENT TRAFFIC ═══════════════════════════════════════════════════════════════════◇═[_][□][X]═╗
-║                                                   ◂  conversation                      [copy]║
-║   ⣠⣰⣐                                             │ -- you→#1 broadcast: echo hi             ║
-║   ⢿⣿⡿⠅                                            │ -- you→#2 broadcast: echo hi             ║
-║   #2⢯⡐                                            │                                          ║
+║                                                   ◂  conversation             ▼ follow [copy]║
+║   ⣠⣰⣐                                             │[agent] [pair] [/] [clear]                ║
+║   ⢿⣿⡿⠅                                            │ -- you→#1 broadcast: echo hi             ║
+║   #2⢯⡐                                            │ -- you→#2 broadcast: echo hi             ║
 ║      ⠯⣐                                           │                                          ║
 ║       ⠋⣴                                          │                                          ║
 ║        ⠂⠭⣐                                        │                                          ║

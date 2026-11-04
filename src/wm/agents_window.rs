@@ -14,6 +14,7 @@ use ratatui::layout::Rect;
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::agent_state::AgentState;
+use crate::wm::agents_cmd::{KeywordEdit, SnoopFilterKind};
 use crate::wm::{WindowManager, WindowResizeEdge};
 use crate::wm::traffic::{TrafficEndpoint, TrafficEvent, TrafficKind};
 
@@ -895,5 +896,171 @@ impl WindowManager {
         if w.pane_focus != WindowPane::Graph {
             w.grab_mode = false;
         }
+    }
+}
+
+// ---- Conversation filters, follow and history scroll (Phase 50-10) ----
+
+/// Human label of a node key: `you`, `#<id>`, `@<session>`, agent name.
+pub fn key_label(key: &NodeKey) -> String {
+    match key.as_str() {
+        "user" => "you".to_string(),
+        k => match k.split_once(':') {
+            Some(("pane", id)) => format!("#{id}"),
+            Some(("session", n)) => format!("@{n}"),
+            Some(("agent", n)) => n.to_string(),
+            _ => k.to_string(),
+        },
+    }
+}
+
+impl WindowManager {
+    /// Back to the newest lines after a filter change; drops a selection that is filtered out.
+    fn reset_snoop_view(&mut self) {
+        let visible = self.snoop_selected_seq();
+        let s = &mut self.agents_window.snoop;
+        s.follow = true;
+        s.scroll = 0;
+        if s.selected_seq.is_some() && s.selected_seq != visible {
+            s.selected_seq = None;
+        }
+    }
+
+    /// The node whose key or label is `raw` (`you`, `#2`, `pane:2`, `@session`, agent name).
+    pub fn resolve_snoop_node(&self, raw: &str) -> Option<NodeKey> {
+        self.agents_graph_scene()
+            .nodes
+            .into_iter()
+            .find(|n| n.key.as_str() == raw || n.label == raw)
+            .map(|n| n.key)
+    }
+
+    /// Endpoints `(from, to)` of the selected line.
+    pub fn snoop_selected_endpoints(&self) -> Option<(NodeKey, NodeKey)> {
+        let seq = self.snoop_selected_seq()?;
+        self.traffic
+            .iter()
+            .find(|e| e.seq == seq)
+            .map(|e| (NodeKey::from_endpoint(&e.from), NodeKey::from_endpoint(&e.to)))
+    }
+
+    /// Keeps only events sent or received by `key`.
+    pub fn apply_agent_filter(&mut self, key: &NodeKey) {
+        self.agents_window.snoop.filter_agent = Some(key.clone());
+        self.reset_snoop_view();
+    }
+
+    /// Keeps only events between `a` and `b` (either direction).
+    pub fn apply_pair_filter(&mut self, a: &NodeKey, b: &NodeKey) {
+        let pair = if a < b { (a.clone(), b.clone()) } else { (b.clone(), a.clone()) };
+        self.agents_window.snoop.filter_pair = Some(pair);
+        self.reset_snoop_view();
+    }
+
+    /// Keeps only events whose preview contains `text` (case-insensitive substring, at most
+    /// [`KEYWORD_CAP`] characters). Empty text removes the filter.
+    pub fn apply_text_filter(&mut self, text: &str) {
+        let t: String = text.trim().chars().filter(|c| !c.is_control()).take(KEYWORD_CAP).collect();
+        self.agents_window.snoop.filter_text = (!t.is_empty()).then_some(t);
+        self.reset_snoop_view();
+    }
+
+    /// Removes every filter.
+    pub fn clear_snoop_filters(&mut self) {
+        let s = &mut self.agents_window.snoop;
+        (s.filter_agent, s.filter_pair, s.filter_text) = (None, None, None);
+        self.reset_snoop_view();
+    }
+
+    /// Removes one filter.
+    pub fn remove_snoop_filter(&mut self, kind: SnoopFilterKind) {
+        let s = &mut self.agents_window.snoop;
+        match kind {
+            SnoopFilterKind::Agent => s.filter_agent = None,
+            SnoopFilterKind::Pair => s.filter_pair = None,
+            SnoopFilterKind::Text => s.filter_text = None,
+        }
+        self.reset_snoop_view();
+    }
+
+    /// Turns follow on (jumping to the newest line), off (keeping the view) or toggles it (`None`).
+    pub fn set_snoop_follow(&mut self, mode: Option<bool>) {
+        let len = self.snoop_lines().len();
+        let s = &mut self.agents_window.snoop;
+        let on = mode.unwrap_or(!s.follow);
+        if on {
+            s.follow = true;
+            s.scroll = 0;
+        } else {
+            if s.follow {
+                s.scroll = len.saturating_sub(1);
+            }
+            s.follow = false;
+        }
+    }
+
+    /// Scrolls the history: negative = towards older lines (turns follow off), positive = newer,
+    /// `i16::MIN` = the oldest line. Scrolling down while following does nothing.
+    pub fn scroll_snoop(&mut self, n: i16) {
+        let len = self.snoop_lines().len();
+        if len == 0 {
+            return;
+        }
+        let rows = self.snoop_view_rows();
+        let s = &mut self.agents_window.snoop;
+        if n == i16::MIN {
+            (s.follow, s.scroll) = (false, 0);
+            return;
+        }
+        if n > 0 && s.follow {
+            return;
+        }
+        // The bottom visible line as drawn (the view never shows less than the oldest lines).
+        let bottom = match snoop_view_range(len, rows, s.follow, s.scroll) {
+            (_, end) if rows > 0 => end - 1,
+            _ if s.follow => len - 1,
+            _ => s.scroll.min(len - 1),
+        };
+        let step = usize::from(n.unsigned_abs());
+        s.scroll = if n < 0 { bottom.saturating_sub(step) } else { (bottom + step).min(len - 1) };
+        s.follow = false;
+    }
+
+    /// One edit of the keyword entry line.
+    pub fn edit_snoop_keyword(&mut self, edit: KeywordEdit) {
+        match edit {
+            KeywordEdit::Begin => {
+                self.agents_window.pane_focus = WindowPane::Snoop;
+                self.agents_window.snoop.keyword_entry = Some(String::new());
+            }
+            KeywordEdit::Push(c) => {
+                if let Some(buf) = self.agents_window.snoop.keyword_entry.as_mut()
+                    && !c.is_control()
+                    && buf.chars().count() < KEYWORD_CAP
+                {
+                    buf.push(c);
+                }
+            }
+            KeywordEdit::Pop => {
+                if let Some(buf) = self.agents_window.snoop.keyword_entry.as_mut() {
+                    buf.pop();
+                }
+            }
+            KeywordEdit::Commit => {
+                if let Some(buf) = self.agents_window.snoop.keyword_entry.take() {
+                    self.apply_text_filter(&buf);
+                }
+            }
+            KeywordEdit::Cancel => self.agents_window.snoop.keyword_entry = None,
+        }
+    }
+
+    /// Opens the window on the conversation between `from` and `to`: selects the edge, filters to
+    /// the pair and moves the keyboard to the conversation pane.
+    pub fn open_agents_window_on_edge(&mut self, from: &NodeKey, to: &NodeKey) {
+        self.open_agents_window(None);
+        self.agents_select_edge(from, to);
+        self.apply_pair_filter(from, to);
+        self.focus_agents_pane(Some(WindowPane::Snoop));
     }
 }

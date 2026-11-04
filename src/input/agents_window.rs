@@ -6,15 +6,15 @@
 //! selection state itself (`ARCH-R01`); the mouse handler below only keeps pointer-gesture
 //! bookkeeping ([`AgentsDrag`]) and lowers every drag step to an `Action::Agents(..)`.
 
-use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use super::AppAction;
 use super::keymap::{AgentsKeyScope, agents_window_action, is_leader_key_with_tmux};
 use super::mouse_wm::{apply_rect_edge_resize, ctrl_wheel_scale_delta, detect_title_bar_badge_click};
 use crate::action::Action;
-use crate::wm::agents_cmd::AgentsOp;
-use crate::ui::agents_ui::{agents_pin_badge_x, snoop_layout};
+use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterOp};
+use crate::ui::agents_ui::{SnoopButton, agents_pin_badge_x, snoop_layout};
 use crate::ui::typography::PanelTarget;
 use crate::wm::agents_geometry::{AgentsHit, AgentsPaneRects, graph_cell_permille};
 use crate::wm::agents_window::{AgentsDrag, WindowPane};
@@ -31,15 +31,30 @@ pub(super) fn handle_agents_window_key(wm: &mut WindowManager, key: KeyEvent) ->
         return None;
     }
     let state = wm.agents_window();
-    let scopes: &[AgentsKeyScope] = match state.pane_focus {
-        WindowPane::Snoop => &[AgentsKeyScope::Snoop, AgentsKeyScope::Window],
-        WindowPane::Compose => &[AgentsKeyScope::Window],
-        WindowPane::Graph if state.grab_mode => {
-            &[AgentsKeyScope::Grab, AgentsKeyScope::Graph, AgentsKeyScope::Window]
-        }
-        WindowPane::Graph => &[AgentsKeyScope::Graph, AgentsKeyScope::Window],
+    let entry = state.snoop.keyword_entry.is_some();
+    let focus = state.pane_focus;
+    // Most specific scope first. Keyword entry and compose see their own rows first; printable
+    // characters then edit the keyword (or are swallowed in compose) before any `Window` row.
+    let own: &[AgentsKeyScope] = match (entry, focus) {
+        (true, _) => &[AgentsKeyScope::KeywordEntry],
+        (false, WindowPane::Compose) => &[AgentsKeyScope::Compose],
+        (false, WindowPane::Snoop) => &[AgentsKeyScope::Snoop],
+        (false, WindowPane::Graph) if state.grab_mode => &[AgentsKeyScope::Grab, AgentsKeyScope::Graph],
+        (false, WindowPane::Graph) => &[AgentsKeyScope::Graph],
     };
-    if let Some(action) = agents_window_action(scopes, key) {
+    let mut action = agents_window_action(own, key);
+    if action.is_none() {
+        let printable = match key.code {
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => Some(c),
+            _ => None,
+        };
+        match (printable, entry, focus) {
+            (Some(c), true, _) => action = Some(Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Push(c)))),
+            (Some(_), false, WindowPane::Compose) => return Some(AppAction::Handled),
+            _ => action = agents_window_action(&[AgentsKeyScope::Window], key),
+        }
+    }
+    if let Some(action) = action {
         let _ = wm.apply(action);
     }
     Some(AppAction::Handled)
@@ -92,6 +107,13 @@ pub(super) fn handle_agents_window_mouse(
     if let Some(delta) = ctrl_wheel_scale_delta(&mouse) {
         run(wm, AgentsOp::ScaleStep(delta));
         return Some(AppAction::Handled);
+    }
+    if hit == AgentsHit::Snoop {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => run(wm, AgentsOp::SnoopScroll(-3)),
+            MouseEventKind::ScrollDown => run(wm, AgentsOp::SnoopScroll(3)),
+            _ => {}
+        }
     }
     if let MouseEventKind::Down(button) = mouse.kind {
         // A click inside a pinned window whose keyboard was released takes the keyboard back.
@@ -163,7 +185,24 @@ fn snoop_press(wm: &mut WindowManager, rects: &AgentsPaneRects, mouse: MouseEven
     if wm.agents_window().pane_focus != WindowPane::Snoop {
         run(wm, AgentsOp::FocusPane(Some(WindowPane::Snoop)));
     }
-    if at(lay.copy) {
+    if let Some((_, button)) = lay.header_buttons.iter().find(|(r, _)| at(*r)) {
+        run(
+            wm,
+            match button {
+                SnoopButton::Agent => AgentsOp::Filter(SnoopFilterOp::AgentFromSelection),
+                SnoopButton::Pair => AgentsOp::Filter(SnoopFilterOp::PairFromSelection),
+                SnoopButton::Keyword => AgentsOp::KeywordEdit(KeywordEdit::Begin),
+                SnoopButton::Clear => AgentsOp::Filter(SnoopFilterOp::Clear),
+            },
+        );
+    } else if let Some((r, kind)) = lay.chips.iter().find(|(r, _)| at(*r)) {
+        // Only the chip's trailing `×` removes the filter.
+        if mouse.column + 1 == r.x + r.width {
+            run(wm, AgentsOp::Filter(SnoopFilterOp::Remove(*kind)));
+        }
+    } else if at(lay.follow) {
+        run(wm, AgentsOp::Follow(None));
+    } else if at(lay.copy) {
         run(wm, AgentsOp::Copy);
     } else if at(lay.lines_area)
         && let Some((_, seq)) = lay.lines.iter().find(|(y, _)| *y == mouse.row)

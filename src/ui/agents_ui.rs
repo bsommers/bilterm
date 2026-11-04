@@ -4,7 +4,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::BiltermConfig;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
@@ -17,7 +17,8 @@ use crate::ui::visual_style::{apply_frosted_glass_surface, render_liquid_ambient
 use crate::vt::sanitize_display;
 use crate::wm::WindowManager;
 use crate::wm::agents_geometry::AgentsPaneRects;
-use crate::wm::agents_window::{SnoopLine, WindowPane, snoop_view_range};
+use crate::wm::agents_cmd::SnoopFilterKind;
+use crate::wm::agents_window::{SnoopLine, WindowPane, key_label, snoop_view_range};
 
 /// Window title.
 pub const AGENTS_WINDOW_TITLE: &str = "AGENT TRAFFIC";
@@ -87,32 +88,99 @@ pub fn snoop_line_text(l: &SnoopLine, ascii: bool) -> String {
     sanitize_display(&line, EVENT_LINE_CAP)
 }
 
+/// Header buttons of the conversation pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnoopButton {
+    Agent,
+    Pair,
+    Keyword,
+    Clear,
+}
+
+impl SnoopButton {
+    /// Button text.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Agent => "[agent]",
+            Self::Pair => "[pair]",
+            Self::Keyword => "[/]",
+            Self::Clear => "[clear]",
+        }
+    }
+}
+
 /// Where the parts of the conversation pane sit. The renderer draws from it and the mouse handler
-/// hit-tests against it, so the two can never disagree.
+/// hit-tests against it, so the two can never disagree. Absent parts have a zero-sized rect.
 #[derive(Clone, Debug, Default)]
 pub struct SnoopLayout {
-    /// `[copy]` badge (zero-sized when the pane is too small for a header).
+    /// Filter and clear buttons.
+    pub header_buttons: Vec<(Rect, SnoopButton)>,
+    /// Active filter chips; the last cell of each rect is its `×`.
+    pub chips: Vec<(Rect, SnoopFilterKind)>,
+    /// Follow marker (click toggles follow).
+    pub follow: Rect,
+    /// `[copy]` badge.
     pub copy: Rect,
+    /// Keyword entry line (while open).
+    pub entry: Option<Rect>,
     /// Area holding the conversation lines.
     pub lines_area: Rect,
     /// Visible lines: `(row, bus sequence number)`, oldest first.
     pub lines: Vec<(u16, u64)>,
 }
 
-/// Rows of the conversation pane: header row, then lines.
-fn snoop_header_rows(area: Rect) -> u16 {
-    u16::from(area.height >= 3)
+/// Header rows of the conversation pane above the lines.
+struct SnoopRows {
+    title: bool,
+    buttons: bool,
+    /// Chip row, or the keyword entry line while it is open.
+    extra: bool,
+}
+
+impl SnoopRows {
+    fn count(&self) -> u16 {
+        u16::from(self.title) + u16::from(self.buttons) + u16::from(self.extra)
+    }
+}
+
+fn snoop_rows(wm: &WindowManager, area: Rect) -> SnoopRows {
+    let st = &wm.agents_window().snoop;
+    let has_extra = st.keyword_entry.is_some()
+        || st.filter_agent.is_some()
+        || st.filter_pair.is_some()
+        || st.filter_text.is_some();
+    SnoopRows {
+        title: area.height >= 3,
+        buttons: area.height >= 5,
+        extra: has_extra && area.height >= 7,
+    }
 }
 
 /// Area of the conversation pane that holds lines.
-pub fn snoop_lines_area(_wm: &WindowManager, area: Rect) -> Rect {
-    let head = snoop_header_rows(area);
+pub fn snoop_lines_area(wm: &WindowManager, area: Rect) -> Rect {
+    let head = snoop_rows(wm, area).count();
     Rect::new(area.x, area.y + head, area.width, area.height - head)
 }
 
-/// Layout of the conversation pane `rects.snoop`.
+/// Text of the chip for one active filter (without the `×`).
+fn chip_text(kind: SnoopFilterKind, wm: &WindowManager, ascii: bool) -> Option<String> {
+    let st = &wm.agents_window().snoop;
+    let cap = |s: &str| sanitize_display(s, 14);
+    Some(match kind {
+        SnoopFilterKind::Agent => format!("agent:{}", cap(&key_label(st.filter_agent.as_ref()?))),
+        SnoopFilterKind::Pair => {
+            let (a, b) = st.filter_pair.as_ref()?;
+            format!("pair:{}{}{}", cap(&key_label(a)), if ascii { "-" } else { "↔" }, cap(&key_label(b)))
+        }
+        SnoopFilterKind::Text => format!("text:{}", cap(st.filter_text.as_ref()?)),
+    })
+}
+
+/// Layout of the conversation pane `rects.snoop`. Chip and follow glyphs differ between glyph
+/// packs but are one cell wide in each, so the layout does not depend on the pack.
 pub fn snoop_layout(wm: &WindowManager, rects: &AgentsPaneRects) -> SnoopLayout {
     let area = rects.snoop;
+    let rows = snoop_rows(wm, area);
     let lines_area = snoop_lines_area(wm, area);
     let st = &wm.agents_window().snoop;
     let all = wm.snoop_lines();
@@ -121,14 +189,52 @@ pub fn snoop_layout(wm: &WindowManager, rects: &AgentsPaneRects) -> SnoopLayout 
         .enumerate()
         .map(|(i, idx)| (lines_area.y + i as u16, all[idx].seq))
         .collect();
-    let badge_w = COPY_BADGE.len() as u16;
-    let copy = if snoop_header_rows(area) == 1 && area.width >= badge_w + 14 {
-        Rect::new(area.x + area.width - badge_w, area.y, badge_w, 1)
-    } else {
-        Rect::default()
-    };
-    SnoopLayout { copy, lines_area, lines }
+    let mut lay = SnoopLayout { lines_area, lines, ..SnoopLayout::default() };
+    let right = area.x + area.width;
+
+    if rows.title {
+        let badge_w = COPY_BADGE.len() as u16;
+        if area.width >= badge_w + 14 {
+            lay.copy = Rect::new(right - badge_w, area.y, badge_w, 1);
+            if area.width >= badge_w + 14 + 1 + FOLLOW_W {
+                lay.follow = Rect::new(lay.copy.x - 1 - FOLLOW_W, area.y, FOLLOW_W, 1);
+            }
+        }
+    }
+    let mut next_y = area.y + u16::from(rows.title);
+    if rows.buttons {
+        let mut x = area.x;
+        for b in [SnoopButton::Agent, SnoopButton::Pair, SnoopButton::Keyword, SnoopButton::Clear] {
+            let w = b.label().len() as u16;
+            if x + w > right {
+                break;
+            }
+            lay.header_buttons.push((Rect::new(x, next_y, w, 1), b));
+            x += w + 1;
+        }
+        next_y += 1;
+    }
+    if rows.extra {
+        if st.keyword_entry.is_some() {
+            lay.entry = Some(Rect::new(area.x, next_y, area.width, 1));
+        } else {
+            let mut x = area.x;
+            for kind in [SnoopFilterKind::Agent, SnoopFilterKind::Pair, SnoopFilterKind::Text] {
+                let Some(text) = chip_text(kind, wm, false) else { continue };
+                let w = (UnicodeWidthStr::width(text.as_str()) + 2) as u16;
+                if x + w > right {
+                    break;
+                }
+                lay.chips.push((Rect::new(x, next_y, w, 1), kind));
+                x += w + 1;
+            }
+        }
+    }
+    lay
 }
+
+/// Cells of the follow marker (`▼ follow`).
+const FOLLOW_W: u16 = 8;
 
 /// Truncates `s` to at most `max_cols` terminal columns.
 fn fit_cols(s: &str, max_cols: usize) -> String {
@@ -238,13 +344,35 @@ fn render_snoop(wm: &WindowManager, rects: &AgentsPaneRects, palette: &ThemePale
     {
         cell.set_symbol(marker(true, "◂", "<"));
     }
-    if snoop_header_rows(area) == 1 {
+    let accent = Style::default().fg(tokens.accent).bg(bg);
+    if snoop_rows(wm, area).title {
         let head = format!("{} conversation", marker(focus == WindowPane::Snoop, "▸", ">"));
-        let style = Style::default().fg(tokens.accent).bg(bg).add_modifier(Modifier::BOLD);
-        buf.set_stringn(area.x, area.y, &head, width, style);
+        buf.set_stringn(area.x, area.y, &head, width, accent.add_modifier(Modifier::BOLD));
         if lay.copy.width > 0 {
-            buf.set_stringn(lay.copy.x, lay.copy.y, COPY_BADGE, usize::from(lay.copy.width), Style::default().fg(tokens.accent).bg(bg));
+            buf.set_stringn(lay.copy.x, lay.copy.y, COPY_BADGE, usize::from(lay.copy.width), accent);
         }
+        if lay.follow.width > 0 {
+            let (on, off) = if ascii { ("v follow", "- follow") } else { ("▼ follow", "▽ follow") };
+            let (text, style) = if state.snoop.follow {
+                (on, accent.add_modifier(Modifier::BOLD))
+            } else {
+                (off, Style::default().fg(tokens.text_muted).bg(bg))
+            };
+            buf.set_stringn(lay.follow.x, lay.follow.y, text, usize::from(lay.follow.width), style);
+        }
+    }
+    for (r, b) in &lay.header_buttons {
+        buf.set_stringn(r.x, r.y, b.label(), usize::from(r.width), accent);
+    }
+    for (r, kind) in &lay.chips {
+        let close = if ascii { "x" } else { "×" };
+        let text = format!("{} {close}", chip_text(*kind, wm, ascii).unwrap_or_default());
+        buf.set_stringn(r.x, r.y, &text, usize::from(r.width), Style::default().fg(tokens.text_primary).bg(bg));
+    }
+    if let (Some(r), Some(entry)) = (lay.entry, state.snoop.keyword_entry.as_ref()) {
+        let cursor = if ascii { "_" } else { "▏" };
+        let text = format!("/ {entry}{cursor}");
+        buf.set_stringn(r.x, r.y, fit_cols(&text, usize::from(r.width)), usize::from(r.width), Style::default().fg(tokens.text_primary).bg(bg));
     }
 
     let all = wm.snoop_lines();

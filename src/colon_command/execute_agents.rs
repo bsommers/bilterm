@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use crate::api::JsonValue;
 use crate::wm::WindowManager;
-use crate::wm::agents_cmd::AgentsOp;
+use crate::wm::agents_cmd::{AgentsOp, SnoopFilterOp};
+use crate::wm::agents_window::{WindowPane, key_label};
 
 /// Window over which `:agents list` reports a pane's recent communication partners.
 const PARTNER_WINDOW: Duration = Duration::from_secs(60);
@@ -41,9 +42,40 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
             Some(_) => status(wm, "Copied the selected conversation line".to_string()),
             None => status(wm, "Nothing to copy".to_string()),
         },
+        AgentsOp::SnoopScroll(n) => wm.scroll_snoop(n),
+        AgentsOp::Follow(mode) => wm.set_snoop_follow(mode),
+        AgentsOp::KeywordEdit(edit) => wm.edit_snoop_keyword(edit),
+        AgentsOp::Filter(f) => filter(wm, f),
         other => execute_window_op(wm, other),
     }
     false
+}
+
+/// Conversation filter operations.
+fn filter(wm: &mut WindowManager, op: SnoopFilterOp) {
+    match op {
+        SnoopFilterOp::Clear => wm.clear_snoop_filters(),
+        SnoopFilterOp::Remove(kind) => wm.remove_snoop_filter(kind),
+        SnoopFilterOp::Text(t) => wm.apply_text_filter(&t),
+        SnoopFilterOp::AgentFromSelection => match wm.snoop_selected_endpoints() {
+            Some((from, _)) => wm.apply_agent_filter(&from),
+            None => status(wm, "No conversation line selected".to_string()),
+        },
+        SnoopFilterOp::PairFromSelection => match wm.snoop_selected_endpoints() {
+            Some((from, to)) if from != to => wm.apply_pair_filter(&from, &to),
+            _ => status(wm, "No conversation line selected".to_string()),
+        },
+        SnoopFilterOp::Agent(raw) => match wm.resolve_snoop_node(&raw) {
+            Some(key) => wm.apply_agent_filter(&key),
+            None => status(wm, format!("No node {raw}")),
+        },
+        SnoopFilterOp::Pair(a, b) => match (wm.resolve_snoop_node(&a), wm.resolve_snoop_node(&b)) {
+            (Some(a), Some(b)) if a != b => wm.apply_pair_filter(&a, &b),
+            (Some(_), Some(_)) => status(wm, "A pair needs two different nodes".to_string()),
+            (None, _) => status(wm, format!("No node {a}")),
+            (_, None) => status(wm, format!("No node {b}")),
+        },
+    }
 }
 
 /// Window geometry, splitter and node operations (Phase 50-09).
@@ -118,7 +150,11 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
         | AgentsOp::FocusPane(_)
         | AgentsOp::SnoopStep(_)
         | AgentsOp::SnoopSelect(_)
-        | AgentsOp::Copy => {}
+        | AgentsOp::Copy
+        | AgentsOp::SnoopScroll(_)
+        | AgentsOp::Follow(_)
+        | AgentsOp::Filter(_)
+        | AgentsOp::KeywordEdit(_) => {}
     }
 }
 
@@ -150,6 +186,13 @@ fn dismiss(wm: &mut WindowManager) {
 /// Enter: focus the selected live pane node, then close (unpinned) or release the keyboard (pinned).
 fn activate(wm: &mut WindowManager) {
     let sel = wm.agents_window().selection.clone();
+    // A selected edge opens its conversation: filter to the pair and move to the conversation pane.
+    if let Some((a, b)) = &sel.edge {
+        wm.apply_pair_filter(a, b);
+        wm.focus_agents_pane(Some(WindowPane::Snoop));
+        status(wm, format!("Conversation filtered to {} - {}", key_label(a), key_label(b)));
+        return;
+    }
     let pane = match (&sel.edge, &sel.node) {
         (None, Some(node)) => node.pane_id().filter(|id| wm.pane(*id).is_some()),
         _ => None,

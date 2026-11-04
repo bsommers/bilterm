@@ -58,4 +58,54 @@ pub enum AgentsOp {
     SnoopSelect(u64),
     /// `:agents copy` (`y`, `[copy]` badge) - copy the selected conversation line.
     Copy,
+    /// `:agents scroll <±n>` / `top` (PageUp / PageDown / Home, wheel) - scroll the conversation
+    /// history (`i16::MIN` = oldest); scrolling up turns follow off.
+    SnoopScroll(i16),
+    /// `:agents follow [on|off]` (`f`, End, follow marker) - follow new traffic (`None` toggles).
+    Follow(Option<bool>),
+    /// `:agents filter ...` (`a` `p` `c` `A` `P` `T`, header buttons, chips) - conversation filters.
+    Filter(SnoopFilterOp),
+    /// Keyword entry (`/` then typing): text-field editing; the committed form is
+    /// `:agents filter text <kw>`.
+    KeywordEdit(KeywordEdit),
+}
+
+/// Which conversation filter a chip removes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnoopFilterKind {
+    Agent,
+    Pair,
+    Text,
+}
+
+/// One conversation filter operation (filters combine with AND).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SnoopFilterOp {
+    /// Keep events sent or received by this node (label or node key).
+    Agent(String),
+    /// Keep events between two nodes (either direction).
+    Pair(String, String),
+    /// Keep events whose preview contains this text (case-insensitive, no regex).
+    Text(String),
+    /// Remove every filter.
+    Clear,
+    /// Remove one filter.
+    Remove(SnoopFilterKind),
+    /// Agent filter from the sender of the selected line.
+    AgentFromSelection,
+    /// Pair filter from the endpoints of the selected line.
+    PairFromSelection,
+}
+
+/// One edit of the keyword entry line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeywordEdit {
+    /// Open an empty entry.
+    Begin,
+    Push(char),
+    Pop,
+    /// Apply the entry as the text filter and close it.
+    Commit,
+    /// Close the entry, filters unchanged.
+    Cancel,
 }

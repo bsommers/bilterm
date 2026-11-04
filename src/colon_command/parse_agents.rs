@@ -1,10 +1,10 @@
 //! Parser for the `:agents` view command (Phase 50-03).
 
 use super::ColonCommand;
-use crate::wm::agents_cmd::AgentsOp;
+use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
 
 const SCALE_USAGE: &str = "Usage: :agents scale <75..200> | +n | -n (GUI only)";
 
@@ -135,10 +135,43 @@ fn parse_snoop_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, String
             Err(_) => usage("line <+n|-n|seq>"),
         },
         ("copy", 0) => Some(Ok(AgentsOp::Copy)),
+        ("scroll", 1) if args[0] == "top" => Some(Ok(AgentsOp::SnoopScroll(i16::MIN))),
+        ("scroll", 1) => match args[0].parse::<i16>() {
+            Ok(n) if n != i16::MIN => Some(Ok(AgentsOp::SnoopScroll(n))),
+            _ => usage("scroll <±n|top>"),
+        },
+        ("follow", 0) => Some(Ok(AgentsOp::Follow(None))),
+        ("follow", 1) if matches!(args[0], "on" | "off") => Some(Ok(AgentsOp::Follow(Some(args[0] == "on")))),
+        ("filter", _) => Some(parse_filter(args).map(AgentsOp::Filter)),
         ("focus", _) => usage("focus [graph|snoop|compose]"),
         ("line", _) => usage("line <+n|-n|seq>"),
         ("copy", _) => usage("copy"),
+        ("scroll", _) => usage("scroll <±n|top>"),
+        ("follow", _) => usage("follow [on|off]"),
         _ => None,
+    }
+}
+
+const FILTER_USAGE: &str =
+    "Usage: :agents filter agent [label] | pair [a b] | text <keyword> | clear | remove <agent|pair|text>";
+
+/// `:agents filter ...` arguments.
+fn parse_filter(args: &[&str]) -> Result<SnoopFilterOp, String> {
+    let usage = || Err(FILTER_USAGE.to_string());
+    match (args.first().copied(), args.len()) {
+        (Some("agent"), 1) => Ok(SnoopFilterOp::AgentFromSelection),
+        (Some("agent"), _) => Ok(SnoopFilterOp::Agent(args[1..].join(" "))),
+        (Some("pair"), 1) => Ok(SnoopFilterOp::PairFromSelection),
+        (Some("pair"), 3) => Ok(SnoopFilterOp::Pair(args[1].to_string(), args[2].to_string())),
+        (Some("text"), n) if n >= 2 => Ok(SnoopFilterOp::Text(args[1..].join(" "))),
+        (Some("clear"), 1) => Ok(SnoopFilterOp::Clear),
+        (Some("remove"), 2) => match args[1] {
+            "agent" => Ok(SnoopFilterOp::Remove(SnoopFilterKind::Agent)),
+            "pair" => Ok(SnoopFilterOp::Remove(SnoopFilterKind::Pair)),
+            "text" => Ok(SnoopFilterOp::Remove(SnoopFilterKind::Text)),
+            _ => usage(),
+        },
+        _ => usage(),
     }
 }
 

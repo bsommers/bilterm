@@ -14,7 +14,7 @@ use bilterm::ui::typography::PanelTarget;
 use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey, SnoopState, WindowPane};
 use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
 use bilterm::wm::agent_state::AgentState;
-use bilterm::wm::agents_cmd::AgentsOp;
+use bilterm::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp};
 use bilterm::wm::{SplitDirection, WindowManager};
 use std::sync::Mutex;
 use ratatui::buffer::Buffer;
@@ -560,6 +560,23 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::SnoopStep(n) => format!(":agents line {n}"),
         AgentsOp::SnoopSelect(seq) => format!(":agents line {seq}"),
         AgentsOp::Copy => ":agents copy".to_string(),
+        AgentsOp::SnoopScroll(i16::MIN) => ":agents scroll top".to_string(),
+        AgentsOp::SnoopScroll(n) => format!(":agents scroll {n}"),
+        AgentsOp::Follow(None) => ":agents follow".to_string(),
+        AgentsOp::Follow(Some(true)) => ":agents follow on".to_string(),
+        AgentsOp::Follow(Some(false)) => ":agents follow off".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::Agent(l)) => format!(":agents filter agent {l}"),
+        AgentsOp::Filter(SnoopFilterOp::Pair(a, b)) => format!(":agents filter pair {a} {b}"),
+        AgentsOp::Filter(SnoopFilterOp::Text(t)) => format!(":agents filter text {t}"),
+        AgentsOp::Filter(SnoopFilterOp::Clear) => ":agents filter clear".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Agent)) => ":agents filter remove agent".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Pair)) => ":agents filter remove pair".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Text)) => ":agents filter remove text".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::AgentFromSelection) => ":agents filter agent".to_string(),
+        AgentsOp::Filter(SnoopFilterOp::PairFromSelection) => ":agents filter pair".to_string(),
+        // Documented exemption: keyword entry is text-field editing; its committed form is
+        // `:agents filter text <kw>` (covered by `Filter(Text)`).
+        AgentsOp::KeywordEdit(_) => return None,
     })
 }
 
@@ -617,6 +634,21 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::SnoopStep(-1),
         AgentsOp::SnoopSelect(2),
         AgentsOp::Copy,
+        AgentsOp::SnoopScroll(-10),
+        AgentsOp::SnoopScroll(10),
+        AgentsOp::SnoopScroll(i16::MIN),
+        AgentsOp::Follow(None),
+        AgentsOp::Follow(Some(true)),
+        AgentsOp::Follow(Some(false)),
+        AgentsOp::Filter(SnoopFilterOp::Agent("you".to_string())),
+        AgentsOp::Filter(SnoopFilterOp::Pair("you".to_string(), "#2".to_string())),
+        AgentsOp::Filter(SnoopFilterOp::Text("echo".to_string())),
+        AgentsOp::Filter(SnoopFilterOp::Clear),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Agent)),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Pair)),
+        AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Text)),
+        AgentsOp::Filter(SnoopFilterOp::AgentFromSelection),
+        AgentsOp::Filter(SnoopFilterOp::PairFromSelection),
     ]
 }
 
@@ -625,7 +657,10 @@ fn window_keys_match_colon_forms() {
     use bilterm::input::keymap::AGENTS_WINDOW_BINDINGS;
     for (scope, mods, code, action) in AGENTS_WINDOW_BINDINGS {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
-        let form = agents_op_colon_form(op).expect("every table op has a colon form");
+        let Some(form) = agents_op_colon_form(op) else {
+            assert!(matches!(op, AgentsOp::KeywordEdit(_)), "{op:?} has no colon form and no exemption");
+            continue;
+        };
         let in_grab = *scope == bilterm::input::keymap::AgentsKeyScope::Grab;
         let in_snoop = *scope == bilterm::input::keymap::AgentsKeyScope::Snoop;
         let setup = |wm: &mut WindowManager| {
@@ -668,11 +703,13 @@ fn keymap_agents_window_keys_unique() {
         if *scope == AgentsKeyScope::Window {
             assert!(
                 !AGENTS_WINDOW_BINDINGS.iter().any(|(s, m, c, _)| {
-                    // Documented override: Esc in grab mode drops the grab instead of dismissing.
+                    // Documented overrides: Esc in grab mode drops the grab, and Esc in keyword
+                    // entry cancels the entry, instead of dismissing the window.
                     s != scope
                         && m == mods
                         && c == code
-                        && !(*s == AgentsKeyScope::Grab && *c == KeyCode::Esc)
+                        && !(matches!(*s, AgentsKeyScope::Grab | AgentsKeyScope::KeywordEntry)
+                            && *c == KeyCode::Esc)
                 }),
                 "Window-scope chord {code:?}+{mods:?} is also bound in another scope"
             );
@@ -727,6 +764,9 @@ fn agents_ops_have_colon_completion_and_help() {
     }
     for (_, _, _, action) in AGENTS_WINDOW_BINDINGS {
         let Action::Agents(op) = action else { panic!("{action:?} is not an Agents action") };
+        if matches!(op, AgentsOp::KeywordEdit(_)) {
+            continue; // exempt: text-field editing, committed as `:agents filter text <kw>`
+        }
         assert!(samples.contains(op), "table op {op:?} is not covered by the sampled ops");
     }
     let leader = DEFAULT_LEADER_BINDINGS
@@ -1660,5 +1700,421 @@ fn window_tracer_snoop_line_select_and_copy() {
         run_colon(&mut other, ":agents copy");
         assert_eq!(last_copy(&other), Some(by_mouse));
         assert_eq!(observe(&wm).snoop, observe(&other).snoop);
+    });
+}
+
+// ---- Plan 50-10 Task 2: filters, follow, scroll ----
+
+/// Broadcast `echo hi` (seq 1: you->#1, seq 2: you->#2) plus an agent chatter pair and an API exec.
+fn snoop_fixture() -> (WindowManager, Rect) {
+    let (mut wm, area) = traffic_fixture();
+    let now = Instant::now();
+    wm.record_traffic(TrafficEndpoint::Pane(1), TrafficEndpoint::Pane(2), TrafficKind::Message, "pong ECHO back", now);
+    wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(2), TrafficKind::Exec, "ls -la", now);
+    (wm, area)
+}
+
+fn seqs(wm: &WindowManager) -> Vec<u64> {
+    wm.snoop_lines().iter().map(|l| l.seq).collect()
+}
+
+fn focus_snoop(wm: &mut WindowManager) {
+    run_colon(wm, ":agents focus snoop");
+}
+
+fn type_text(wm: &mut WindowManager, text: &str) {
+    for c in text.chars() {
+        let mods = if c.is_uppercase() { KeyModifiers::SHIFT } else { KeyModifiers::NONE };
+        press_mod(wm, KeyCode::Char(c), mods);
+    }
+}
+
+fn click_button(wm: &mut WindowManager, area: Rect, which: bilterm::ui::agents_ui::SnoopButton) {
+    let lay = snoop_lay(wm, area);
+    let (r, _) = lay.header_buttons.iter().find(|(_, b)| *b == which).expect("header button fits");
+    click(wm, area, r.x + 1, r.y);
+}
+
+#[test]
+fn snoop_agent_filter() {
+    with_temp_xdg(|| {
+        let prep = || {
+            let (mut wm, area) = snoop_fixture();
+            focus_snoop(&mut wm);
+            run_colon(&mut wm, ":agents line 3");
+            (wm, area)
+        };
+        let (mut by_key, _) = prep();
+        press(&mut by_key, KeyCode::Char('a'));
+        assert_eq!(by_key.agents_window().snoop.filter_agent, Some(NodeKey::pane(1)));
+        assert_eq!(seqs(&by_key), vec![1, 3], "only events to or from #1");
+
+        let (mut by_button, area) = prep();
+        click_button(&mut by_button, area, bilterm::ui::agents_ui::SnoopButton::Agent);
+        let (mut by_colon, _) = prep();
+        run_colon(&mut by_colon, ":agents filter agent");
+        assert_eq!(observe(&by_key), observe(&by_button));
+        assert_eq!(observe(&by_key), observe(&by_colon));
+
+        let (mut by_label, _) = prep();
+        run_colon(&mut by_label, ":agents filter agent #1");
+        assert_eq!(by_label.agents_window().snoop.filter_agent, by_key.agents_window().snoop.filter_agent);
+        assert_eq!(seqs(&by_label), seqs(&by_key));
+    });
+}
+
+fn edge_click_cell(wm: &WindowManager, area: Rect, a: &str, b: &str) -> (u16, u16) {
+    let rects = snoop_rects(wm, area);
+    let scene = wm.agents_graph_scene();
+    let find = |k: &str| scene.nodes.iter().find(|n| n.key.as_str() == k).unwrap().clone();
+    let (na, nb) = (find(a), find(b));
+    let pair = if na.key < nb.key { (na.key.clone(), nb.key.clone()) } else { (nb.key.clone(), na.key.clone()) };
+    bilterm::wm::agents_geometry::edge_curve_cells(&na, &nb, rects.graph)
+        .iter()
+        .map(|&(x, y)| (rects.graph.x + x as u16, rects.graph.y + y as u16))
+        .find(|&(x, y)| {
+            wm.agents_hit(ws_of(wm, area), x, y)
+                == bilterm::wm::agents_geometry::AgentsHit::Edge(pair.0.clone(), pair.1.clone())
+        })
+        .expect("a cell of the edge that is not a node")
+}
+
+#[test]
+fn snoop_pair_filter_from_edge_enter_and_click() {
+    with_temp_xdg(|| {
+        let want = Some((NodeKey::pane(2), NodeKey("user".to_string())));
+        // Enter on a selected edge.
+        let (mut by_enter, _) = snoop_fixture();
+        run_colon(&mut by_enter, ":agents edge user pane:2");
+        press(&mut by_enter, KeyCode::Enter);
+        assert_eq!(by_enter.agents_window().snoop.filter_pair, want);
+        assert_eq!(by_enter.agents_window().pane_focus, WindowPane::Snoop, "Enter focuses the conversation");
+        assert_eq!(seqs(&by_enter), vec![2]);
+        assert!(by_enter.agents_window().active, "the window stays open");
+
+        // A second click on the already selected edge.
+        let (mut by_click, area) = snoop_fixture();
+        let (x, y) = edge_click_cell(&by_click, area, "user", "pane:2");
+        click(&mut by_click, area, x, y);
+        assert!(by_click.agents_window().snoop.filter_pair.is_none(), "the first click only selects");
+        click(&mut by_click, area, x, y);
+        assert_eq!(by_click.agents_window().snoop.filter_pair, want);
+        assert_eq!(by_click.agents_window().pane_focus, WindowPane::Snoop);
+
+        // `p` on a line of the pair, the header button and the colon forms.
+        let prep = || {
+            let (mut wm, area) = snoop_fixture();
+            focus_snoop(&mut wm);
+            run_colon(&mut wm, ":agents line 2");
+            (wm, area)
+        };
+        let (mut by_p, _) = prep();
+        press(&mut by_p, KeyCode::Char('p'));
+        let (mut by_button, area) = prep();
+        click_button(&mut by_button, area, bilterm::ui::agents_ui::SnoopButton::Pair);
+        let (mut by_colon, _) = prep();
+        run_colon(&mut by_colon, ":agents filter pair");
+        let (mut by_labels, _) = prep();
+        run_colon(&mut by_labels, ":agents filter pair you #2");
+        for wm in [&by_p, &by_button, &by_colon, &by_labels] {
+            assert_eq!(wm.agents_window().snoop.filter_pair, want);
+            assert_eq!(seqs(wm), vec![2]);
+        }
+        assert_eq!(observe(&by_p), observe(&by_button));
+        assert_eq!(observe(&by_p), observe(&by_colon));
+    });
+}
+
+#[test]
+fn snoop_keyword_filter_case_insensitive() {
+    with_temp_xdg(|| {
+        let (mut by_key, _) = snoop_fixture();
+        focus_snoop(&mut by_key);
+        press(&mut by_key, KeyCode::Char('/'));
+        assert_eq!(by_key.agents_window().snoop.keyword_entry.as_deref(), Some(""));
+        type_text(&mut by_key, "ECHO");
+        assert_eq!(by_key.agents_window().snoop.keyword_entry.as_deref(), Some("ECHO"));
+        press(&mut by_key, KeyCode::Enter);
+        assert!(by_key.agents_window().snoop.keyword_entry.is_none());
+        assert_eq!(by_key.agents_window().snoop.filter_text.as_deref(), Some("ECHO"));
+        assert_eq!(seqs(&by_key), vec![1, 2, 3], "matches `echo hi` and `ECHO back`");
+
+        let (mut by_button, area) = snoop_fixture();
+        click_button(&mut by_button, area, bilterm::ui::agents_ui::SnoopButton::Keyword);
+        assert_eq!(by_button.agents_window().snoop.keyword_entry.as_deref(), Some(""));
+        assert_eq!(by_button.agents_window().pane_focus, WindowPane::Snoop);
+        type_text(&mut by_button, "ECHO");
+        press(&mut by_button, KeyCode::Enter);
+        assert_eq!(observe(&by_key).snoop, observe(&by_button).snoop);
+
+        let (mut by_colon, _) = snoop_fixture();
+        run_colon(&mut by_colon, ":agents filter text echo");
+        assert_eq!(seqs(&by_colon), vec![1, 2, 3]);
+        // Backspace edits the entry.
+        let (mut wm, _) = snoop_fixture();
+        focus_snoop(&mut wm);
+        press(&mut wm, KeyCode::Char('/'));
+        type_text(&mut wm, "lsx");
+        press(&mut wm, KeyCode::Backspace);
+        press(&mut wm, KeyCode::Enter);
+        assert_eq!(seqs(&wm), vec![4]);
+    });
+}
+
+#[test]
+fn snoop_keyword_entry_esc_cancels_only_entry() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = snoop_fixture();
+        focus_snoop(&mut wm);
+        run_colon(&mut wm, ":agents filter text hi");
+        press(&mut wm, KeyCode::Char('/'));
+        type_text(&mut wm, "xm*[");
+        assert_eq!(wm.agents_window().snoop.keyword_entry.as_deref(), Some("xm*["));
+        assert!(!wm.agents_window().maximized, "`m` types into the keyword");
+        assert!(!wm.agents_window().pinned, "`*` types into the keyword");
+        let rect = win_rect(&wm, area);
+        press(&mut wm, KeyCode::Esc);
+        assert!(wm.agents_window().snoop.keyword_entry.is_none());
+        assert_eq!(wm.agents_window().snoop.filter_text.as_deref(), Some("hi"), "filters are unchanged");
+        assert!(wm.agents_window().active, "Esc only cancelled the entry");
+        assert_eq!(win_rect(&wm, area), rect);
+        press(&mut wm, KeyCode::Esc);
+        assert!(!wm.agents_window().active, "the next Esc closes the window");
+    });
+}
+
+#[test]
+fn snoop_clear_and_remove_filters() {
+    with_temp_xdg(|| {
+        let setup = || {
+            let (mut wm, area) = snoop_fixture();
+            focus_snoop(&mut wm);
+            run_colon(&mut wm, ":agents filter agent #2");
+            run_colon(&mut wm, ":agents filter pair you #2");
+            run_colon(&mut wm, ":agents filter text echo");
+            (wm, area)
+        };
+        let (wm, _) = setup();
+        assert_eq!(seqs(&wm), vec![2], "filters combine with AND");
+
+        let (mut by_key, _) = setup();
+        press(&mut by_key, KeyCode::Char('c'));
+        assert_eq!(seqs(&by_key), vec![1, 2, 3, 4]);
+        let (mut by_button, area) = setup();
+        click_button(&mut by_button, area, bilterm::ui::agents_ui::SnoopButton::Clear);
+        let (mut by_colon, _) = setup();
+        run_colon(&mut by_colon, ":agents filter clear");
+        assert_eq!(observe(&by_key), observe(&by_button));
+        assert_eq!(observe(&by_key), observe(&by_colon));
+
+        // Remove one filter at a time: key, chip `×` and colon agree.
+        for (key, kind, word) in [
+            ('A', SnoopFilterKind::Agent, "agent"),
+            ('P', SnoopFilterKind::Pair, "pair"),
+            ('T', SnoopFilterKind::Text, "text"),
+        ] {
+            let (mut by_key, _) = setup();
+            press_mod(&mut by_key, KeyCode::Char(key), KeyModifiers::SHIFT);
+            let (mut by_chip, area) = setup();
+            let lay = snoop_lay(&by_chip, area);
+            let (r, _) = lay.chips.iter().find(|(_, k)| *k == kind).expect("chip fits");
+            click(&mut by_chip, area, r.x + r.width - 1, r.y);
+            let (mut by_colon, _) = setup();
+            run_colon(&mut by_colon, &format!(":agents filter remove {word}"));
+            assert_eq!(observe(&by_key), observe(&by_chip), "{word}");
+            assert_eq!(observe(&by_key), observe(&by_colon), "{word}");
+            let st = &by_key.agents_window().snoop;
+            let left = [st.filter_agent.is_some(), st.filter_pair.is_some(), st.filter_text.is_some()];
+            assert_eq!(left.iter().filter(|b| **b).count(), 2, "exactly one filter removed ({word})");
+        }
+        // Clicking a chip's label (not its ×) removes nothing.
+        let (mut wm, area) = setup();
+        let lay = snoop_lay(&wm, area);
+        let (r, _) = lay.chips[0];
+        click(&mut wm, area, r.x, r.y);
+        assert!(wm.agents_window().snoop.filter_agent.is_some());
+        let text = lines(&render(&wm, area)).join("\n");
+        assert!(text.contains("agent:#2") && text.contains("pair:") && text.contains("text:echo"), "chips are drawn");
+    });
+}
+
+/// Fixture with enough lines to need scrolling.
+fn long_fixture() -> (WindowManager, Rect) {
+    let (mut wm, area) = snoop_fixture();
+    for i in 0..60 {
+        wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(1), TrafficKind::Exec, &format!("job {i}"), Instant::now());
+    }
+    (wm, area)
+}
+
+fn visible_seqs(wm: &WindowManager, area: Rect) -> Vec<u64> {
+    snoop_lay(wm, area).lines.iter().map(|(_, s)| *s).collect()
+}
+
+#[test]
+fn snoop_follow_and_scroll() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = long_fixture();
+        focus_snoop(&mut wm);
+        let latest = wm.traffic().latest_seq();
+        assert!(wm.agents_window().snoop.follow);
+        assert_eq!(visible_seqs(&wm, area).last(), Some(&latest));
+        wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(2), TrafficKind::Exec, "newer", Instant::now());
+        assert_eq!(visible_seqs(&wm, area).last(), Some(&(latest + 1)), "following keeps the newest line visible");
+
+        press(&mut wm, KeyCode::PageUp);
+        assert!(!wm.agents_window().snoop.follow, "PageUp turns follow off");
+        let before = visible_seqs(&wm, area);
+        assert!(before.last().unwrap() < &(latest + 1));
+        wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(2), TrafficKind::Exec, "newest", Instant::now());
+        assert_eq!(visible_seqs(&wm, area), before, "new traffic does not move the view");
+
+        press(&mut wm, KeyCode::End);
+        assert!(wm.agents_window().snoop.follow);
+        assert_eq!(visible_seqs(&wm, area).last(), Some(&wm.traffic().latest_seq()));
+
+        press(&mut wm, KeyCode::Home);
+        assert!(!wm.agents_window().snoop.follow);
+        assert_eq!(visible_seqs(&wm, area).first(), Some(&1), "Home shows the oldest line");
+        let (mut other, oarea) = long_fixture();
+        focus_snoop(&mut other);
+        run_colon(&mut other, ":agents scroll top");
+        assert_eq!(observe(&wm).snoop, observe(&other).snoop);
+        assert_eq!(visible_seqs(&other, oarea).first(), Some(&1));
+
+        // PageDown after PageUp returns toward the newest line without re-enabling follow.
+        press(&mut wm, KeyCode::PageDown);
+        assert!(!wm.agents_window().snoop.follow);
+        assert!(visible_seqs(&wm, area).first() > Some(&1));
+    });
+}
+
+#[test]
+fn snoop_mouse_wheel_scrolls_and_follow_marker() {
+    with_temp_xdg(|| {
+        let (mut by_wheel, area) = long_fixture();
+        let lay = snoop_lay(&by_wheel, area);
+        mouse(&mut by_wheel, area, MouseEventKind::ScrollUp, lay.lines_area.x + 3, lay.lines_area.y + 2);
+        assert!(!by_wheel.agents_window().snoop.follow, "wheel up disables follow");
+        let (mut by_colon, _) = long_fixture();
+        run_colon(&mut by_colon, ":agents scroll -3");
+        assert_eq!(observe(&by_wheel).snoop, observe(&by_colon).snoop);
+        mouse(&mut by_wheel, area, MouseEventKind::ScrollDown, lay.lines_area.x + 3, lay.lines_area.y + 2);
+        run_colon(&mut by_colon, ":agents scroll 3");
+        assert_eq!(observe(&by_wheel).snoop, observe(&by_colon).snoop);
+
+        // The follow marker toggles follow, like `f` and `:agents follow`.
+        let (mut by_click, area) = long_fixture();
+        let marker = snoop_lay(&by_click, area).follow;
+        assert!(marker.width > 0, "follow marker fits at 120 columns");
+        click(&mut by_click, area, marker.x + 1, marker.y);
+        assert!(!by_click.agents_window().snoop.follow);
+        let (mut by_f, _) = long_fixture();
+        focus_snoop(&mut by_f);
+        press(&mut by_f, KeyCode::Char('f'));
+        let (mut by_cmd, _) = long_fixture();
+        run_colon(&mut by_cmd, ":agents focus snoop");
+        run_colon(&mut by_cmd, ":agents follow");
+        assert_eq!(observe(&by_click), observe(&by_f));
+        assert_eq!(observe(&by_click), observe(&by_cmd));
+        click(&mut by_click, area, marker.x + 1, marker.y);
+        assert!(by_click.agents_window().snoop.follow, "a second click follows again");
+    });
+}
+
+#[test]
+fn snoop_colon_forms_and_errors() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = long_fixture();
+        run_colon(&mut wm, ":agents follow off");
+        assert!(!wm.agents_window().snoop.follow);
+        run_colon(&mut wm, ":agents follow on");
+        assert!(wm.agents_window().snoop.follow);
+        run_colon(&mut wm, ":agents scroll 5");
+        assert!(wm.agents_window().snoop.follow, "scrolling down while following does nothing");
+        run_colon(&mut wm, ":agents scroll -5");
+        let up = wm.agents_window().snoop.scroll;
+        run_colon(&mut wm, ":agents scroll 5");
+        assert_eq!(wm.agents_window().snoop.scroll, up + 5);
+        for bad in [
+            ":agents filter",
+            ":agents filter remove x",
+            ":agents filter nope",
+            ":agents filter text",
+            ":agents scroll abc",
+            ":agents follow maybe",
+            ":agents line x",
+            ":agents focus sideways",
+        ] {
+            let parsed = parse_colon_command(bad).expect("an :agents command");
+            let err = parsed.expect_err(bad);
+            assert!(err.starts_with("Usage:"), "{bad}: {err}");
+        }
+        run_colon(&mut wm, ":agents filter agent nosuchnode");
+        assert!(wm.agents_window().snoop.filter_agent.is_none(), "an unknown node changes nothing");
+    });
+}
+
+#[test]
+fn snoop_keyword_is_substring_not_regex() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = snoop_fixture();
+        wm.record_traffic(TrafficEndpoint::Api, TrafficEndpoint::Pane(1), TrafficKind::Exec, "grep .*( x", Instant::now());
+        run_colon(&mut wm, ":agents filter text .*(");
+        assert_eq!(seqs(&wm), vec![5], "matched literally");
+        run_colon(&mut wm, ":agents filter text [a-z]+");
+        assert!(seqs(&wm).is_empty(), "no regex semantics");
+        let long = "x".repeat(200);
+        run_colon(&mut wm, &format!(":agents filter text {long}"));
+        assert_eq!(wm.agents_window().snoop.filter_text.as_ref().map(|t| t.chars().count()), Some(64));
+    });
+}
+
+#[test]
+fn snoop_ctrl_o_cycles_and_clicks_focus() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = snoop_fixture();
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Graph);
+        for want in [WindowPane::Snoop, WindowPane::Compose, WindowPane::Graph] {
+            ctrl_o(&mut wm);
+            assert_eq!(wm.agents_window().pane_focus, want);
+        }
+        let (mut by_cmd, _) = snoop_fixture();
+        run_colon(&mut by_cmd, ":agents focus");
+        assert_eq!(by_cmd.agents_window().pane_focus, WindowPane::Snoop);
+
+        // Clicking inside a pane focuses it.
+        let lay = snoop_lay(&wm, area);
+        click(&mut wm, area, lay.lines_area.x + 2, lay.lines_area.y + 1);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Snoop);
+        let g = snoop_rects(&wm, area).graph;
+        click(&mut wm, area, g.x + g.width - 1, g.y + g.height - 1);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Graph);
+
+        // F6 keeps its global meaning: DeckNext after the leader while the window has the keyboard,
+        // and plainly once the window is gone.
+        ctrl_o(&mut wm);
+        wm.focus_and_raise(1);
+        press_mod(&mut wm, KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert!(wm.is_leader_pending());
+        press(&mut wm, KeyCode::F(6));
+        let after_leader = wm.active_pane_id();
+        assert_ne!(after_leader, 1, "leader then F6 ran DeckNext");
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Snoop, "F6 did not touch the window focus");
+        wm.close_agents_window();
+        press(&mut wm, KeyCode::F(6));
+        assert_ne!(wm.active_pane_id(), after_leader, "plain F6 ran DeckNext");
+    });
+}
+
+#[test]
+fn snoop_edge_open_helper_filters_pair() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = snoop_fixture();
+        wm.close_agents_window();
+        wm.open_agents_window_on_edge(&NodeKey::pane(1), &NodeKey::pane(2));
+        assert!(wm.agents_window().active);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Snoop);
+        assert_eq!(seqs(&wm), vec![3]);
     });
 }

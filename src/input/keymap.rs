@@ -7,7 +7,7 @@ use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
 use crate::wm::SplitDirection;
-use crate::wm::agents_cmd::AgentsOp;
+use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
 
@@ -344,6 +344,11 @@ pub enum AgentsKeyScope {
     Grab,
     /// The conversation (snoop) pane has the keyboard.
     Snoop,
+    /// The keyword entry line is open; printable characters edit it (`Push`). Its Esc row is the
+    /// second allowed override of the `Window` Esc row.
+    KeywordEntry,
+    /// The `send as me` compose line has the keyboard.
+    Compose,
 }
 
 /// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
@@ -384,6 +389,21 @@ pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Acti
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('k'), Action::Agents(AgentsOp::SnoopStep(-1))),
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::SnoopStep(-1))),
     (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('y'), Action::Agents(AgentsOp::Copy)),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::PageUp, Action::Agents(AgentsOp::SnoopScroll(-10))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::PageDown, Action::Agents(AgentsOp::SnoopScroll(10))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Home, Action::Agents(AgentsOp::SnoopScroll(i16::MIN))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::End, Action::Agents(AgentsOp::Follow(Some(true)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('f'), Action::Agents(AgentsOp::Follow(None))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('/'), Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Begin))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('a'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::AgentFromSelection))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('p'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::PairFromSelection))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('c'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Clear))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('A'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Agent)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('P'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Pair)))),
+    (AgentsKeyScope::Snoop, KeyModifiers::NONE, KeyCode::Char('T'), Action::Agents(AgentsOp::Filter(SnoopFilterOp::Remove(SnoopFilterKind::Text)))),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Commit))),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Cancel))),
+    (AgentsKeyScope::KeywordEntry, KeyModifiers::NONE, KeyCode::Backspace, Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Pop))),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::NudgeNode(GraphDir::Left))),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::NudgeNode(GraphDir::Right))),
     (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::NudgeNode(GraphDir::Up))),

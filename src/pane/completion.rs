@@ -476,7 +476,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "shutdown --confirm",
         ],
     ),
-    (":agents", &["list", "zoom", "close", "dismiss", "select ", "edge ", "enter", "move ", "resize ", "rect ", "size ", "max", "split ", "grab", "nudge ", "node-pin ", "node-unpin", "pin", "unpin", "scale ", "focus ", "line ", "copy"]),
+    (":agents", &["list", "zoom", "close", "dismiss", "select ", "edge ", "enter", "move ", "resize ", "rect ", "size ", "max", "split ", "grab", "nudge ", "node-pin ", "node-unpin", "pin", "unpin", "scale ", "focus ", "line ", "copy", "scroll ", "follow", "filter "]),
     (":detach", &[]),
     (":attach", &["default"]),
     (":exit-guard", &["guard", "respawn", "detach", "off"]),
