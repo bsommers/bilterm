@@ -182,3 +182,24 @@ pub fn push_agents_gui_textures(
         push_graph(wm, ws_area, &frame, &overlays, cell_buf, &mut surface.images, tick);
     }
 }
+
+/// Scaled-panel variant of the graph pass: `scratch` is the agents window rendered in the virtual
+/// grid `vws` (see `WindowManager::panel_virtual_area`), `scale_pct` the window's own scale. The
+/// texture lands where the renderer's panel pass draws the scaled cells.
+#[allow(clippy::too_many_arguments)]
+pub fn push_scaled_agents_graph(
+    wm: &WindowManager,
+    ws_area: Rect,
+    vws: Rect,
+    viewport: Rect,
+    cell_w: u16,
+    cell_h: u16,
+    scale_pct: u16,
+    scratch: &mut Buffer,
+    images: &mut Vec<GuiImageTexture>,
+    tick: u64,
+) {
+    let frame = PanelFrame::scaled(ws_area, viewport, cell_w, cell_h, scale_pct);
+    let overlays = overlay_rects(wm, ws_area);
+    push_graph(wm, vws, &frame, &overlays, scratch, images, tick);
+}

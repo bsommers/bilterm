@@ -744,6 +744,9 @@ impl GuiWorkspaceRenderer {
                 if let Some(vr) = wm.agents_window_rect(vws) {
                     let mut scratch = Buffer::empty(vws);
                     crate::ui::agents_ui::render_agents_window(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    crate::ui::agents_gui::push_scaled_agents_graph(
+                        wm, ws_area, vws, viewport, eff_cw, eff_ch, agents_scale, &mut scratch, &mut surface.images, gui_tick,
+                    );
                     draw_panel(&scratch, vr, agents_scale);
                 }
             }

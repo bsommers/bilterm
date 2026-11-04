@@ -23,6 +23,8 @@ pub const TAIL_RESCAN: Duration = Duration::from_millis(250);
 pub const TAIL_ROWS: u16 = 8;
 /// Minimum gap between animation-only redraws while a pane is Working and the navigator drawer is visible.
 pub const ANIM_INTERVAL: Duration = Duration::from_millis(120);
+/// An edge keeps animating (flow particles in the GUI) for this long after its last bus event.
+pub const FLOW_WINDOW: Duration = Duration::from_secs(2);
 
 /// Live state of the agent / program running in a pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -458,7 +460,7 @@ impl WindowManager {
     /// Poll-loop hook. Returns `true` only while the navigator drawer is visible, and then when a state
     /// changed or a pane is Working and [`ANIM_INTERVAL`] passed since the last animation redraw, so the
     /// classic redraw cadence is unchanged (RESEARCH Pitfall 8).
-    pub(crate) fn tick_agent_ui(&mut self, now: Instant) -> bool {
+    pub fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
         let traffic = self.tick_agents_window_traffic(now);
         if self.config.drawer.style != crate::wm::drawer::DrawerStyle::Navigator
@@ -475,22 +477,30 @@ impl WindowManager {
         changed || animate || traffic
     }
 
-    /// `true` when the agents window is open and new bus events arrived since the last redraw it
-    /// requested; shares the [`ANIM_INTERVAL`] throttle with the working animation.
+    /// `true` when the agents window is open and either new bus events arrived since the last redraw it
+    /// requested, or an edge is still flowing (last event within [`FLOW_WINDOW`], so the GUI particles
+    /// move); both share the [`ANIM_INTERVAL`] throttle with the working animation.
     fn tick_agents_window_traffic(&mut self, now: Instant) -> bool {
         if !self.agents_window.active {
             return false;
         }
         let seq = self.traffic().latest_seq();
-        if seq == self.agents.last_traffic_seq {
-            return false;
-        }
         let due = self.agents.last_anim.is_none_or(|t| now.saturating_duration_since(t) >= ANIM_INTERVAL);
-        if due {
-            self.agents.last_traffic_seq = seq;
+        if seq != self.agents.last_traffic_seq {
+            if due {
+                self.agents.last_traffic_seq = seq;
+                self.agents.last_anim = Some(now);
+            }
+            return due;
+        }
+        let flowing = self
+            .traffic()
+            .latest_at()
+            .is_some_and(|at| now.saturating_duration_since(at) < FLOW_WINDOW);
+        if flowing && due {
             self.agents.last_anim = Some(now);
         }
-        due
+        flowing && due
     }
 }
 

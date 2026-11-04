@@ -167,6 +167,11 @@ impl TrafficBus {
         self.next_seq.saturating_sub(1)
     }
 
+    /// Time of the newest event, `None` when nothing is held.
+    pub fn latest_at(&self) -> Option<Instant> {
+        self.events.back().map(|e| e.at)
+    }
+
     /// Number of events currently held.
     pub fn len(&self) -> usize {
         self.events.len()

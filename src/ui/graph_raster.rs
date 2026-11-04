@@ -251,14 +251,128 @@ pub fn node_px_hires(pos: (f32, f32), canvas_w: f32, canvas_h: f32, cell: (f32, 
 }
 
 /// Node radius in canvas pixels for a cell of `cell` pixels.
-fn node_radius_hires(cell: (f32, f32), selected: bool) -> f32 {
+pub fn node_radius_hires(cell: (f32, f32), selected: bool) -> f32 {
     (cell.0 * 0.45).max(3.0) + if selected { 1.0 } else { 0.0 }
 }
 
-/// High-resolution GUI drawing of the graph onto an opaque canvas (D-10).
+/// Point of the cubic Bezier `a, c1, c2, b` at parameter `t` (polynomial form, no trigonometry).
+pub fn bezier_point(a: (f32, f32), c1: (f32, f32), c2: (f32, f32), b: (f32, f32), t: f32) -> (f32, f32) {
+    let u = 1.0 - t;
+    let (w0, w1, w2, w3) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+    (
+        w0 * a.0 + w1 * c1.0 + w2 * c2.0 + w3 * b.0,
+        w0 * a.1 + w1 * c1.1 + w2 * c2.1 + w3 * b.1,
+    )
+}
+
+/// Stroke width in canvas pixels for a cell of `cell` pixels.
+pub fn stroke_width_hires(cell: (f32, f32)) -> f32 {
+    (cell.0 / 6.0).max(1.5)
+}
+
+/// Number of flow particles on an active edge.
+const PARTICLES: u32 = 3;
+/// Animation ticks per full particle revolution (`fract(tick * 0.04)`).
+const PARTICLE_PERIOD: u64 = 25;
+/// Glow radius as a multiple of the node radius.
+const GLOW_RADIUS_FACTOR: f32 = 2.2;
+/// Peak glow opacity.
+const GLOW_PEAK: f32 = 0.6;
+/// Opacity of an edge that carried no recent traffic.
+const IDLE_EDGE_ALPHA: f32 = 0.55;
+
+/// Strokes the polyline `pts` with a round-capped line of `width` pixels in `rgb` at opacity `alpha`.
+///
+/// Coverage is the per-pixel maximum over all segments (distance to the nearest segment), so joints
+/// and self-overlaps never double-blend and the edge stays uniform.
+pub fn stroke_polyline(canvas: &mut PixelCanvasBuffer, pts: &[(f32, f32)], width: f32, rgb: Rgb, alpha: f32) {
+    if pts.len() < 2 {
+        return;
+    }
+    let half = width * 0.5;
+    let pad = half + 1.5;
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in pts {
+        min_x = min_x.min(p.0);
+        min_y = min_y.min(p.1);
+        max_x = max_x.max(p.0);
+        max_y = max_y.max(p.1);
+    }
+    let bx0 = (min_x - pad).floor().max(0.0) as i32;
+    let by0 = (min_y - pad).floor().max(0.0) as i32;
+    let bx1 = (max_x + pad).ceil().min(canvas.width as f32 - 1.0) as i32;
+    let by1 = (max_y + pad).ceil().min(canvas.height as f32 - 1.0) as i32;
+    if bx1 < bx0 || by1 < by0 {
+        return;
+    }
+    let (bw, bh) = ((bx1 - bx0 + 1) as usize, (by1 - by0 + 1) as usize);
+    let mut cov = vec![0.0f32; bw * bh];
+    for seg in pts.windows(2) {
+        let (a, b) = (seg[0], seg[1]);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len2 = dx * dx + dy * dy;
+        let sx0 = (a.0.min(b.0) - pad).floor().max(bx0 as f32) as i32;
+        let sy0 = (a.1.min(b.1) - pad).floor().max(by0 as f32) as i32;
+        let sx1 = (a.0.max(b.0) + pad).ceil().min(bx1 as f32) as i32;
+        let sy1 = (a.1.max(b.1) + pad).ceil().min(by1 as f32) as i32;
+        for y in sy0..=sy1 {
+            for x in sx0..=sx1 {
+                let (px, py) = (x as f32 - a.0, y as f32 - a.1);
+                let t = if len2 < 1e-6 { 0.0 } else { ((px * dx + py * dy) / len2).clamp(0.0, 1.0) };
+                let (qx, qy) = (px - t * dx, py - t * dy);
+                let d = (qx * qx + qy * qy).sqrt();
+                let c = (half + 0.5 - d).clamp(0.0, 1.0);
+                let slot = &mut cov[(y - by0) as usize * bw + (x - bx0) as usize];
+                if c > *slot {
+                    *slot = c;
+                }
+            }
+        }
+    }
+    for y in by0..=by1 {
+        for x in bx0..=bx1 {
+            let c = cov[(y - by0) as usize * bw + (x - bx0) as usize];
+            if c > 0.0 {
+                canvas.blend_pixel(x, y, rgb, c * alpha);
+            }
+        }
+    }
+}
+
+/// Soft radial glow around `(cx, cy)`: opacity `(1 - d / radius)^2 * peak`.
+fn draw_glow(canvas: &mut PixelCanvasBuffer, cx: f32, cy: f32, radius: f32, rgb: Rgb, peak: f32) {
+    let x0 = (cx - radius).floor().max(0.0) as i32;
+    let x1 = (cx + radius).ceil().min(canvas.width as f32 - 1.0) as i32;
+    let y0 = (cy - radius).floor().max(0.0) as i32;
+    let y1 = (cy + radius).ceil().min(canvas.height as f32 - 1.0) as i32;
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            let (dx, dy) = (x as f32 - cx, y as f32 - cy);
+            let f = 1.0 - (dx * dx + dy * dy).sqrt() / radius;
+            if f > 0.0 {
+                canvas.blend_pixel(x, y, rgb, f * f * peak);
+            }
+        }
+    }
+}
+
+/// Glow colour of a node state; `None` for Idle and plain nodes (no glow).
+fn glow_rgb(state: Option<AgentState>, colours: &GraphColours) -> Option<Rgb> {
+    match state {
+        Some(AgentState::Working) => Some(colours.working),
+        Some(AgentState::Blocked) => Some(colours.blocked),
+        Some(AgentState::Done) => Some(colours.done),
+        Some(AgentState::Errored) => Some(colours.errored),
+        Some(AgentState::Idle) | None => None,
+    }
+}
+
+/// High-resolution GUI drawing of the graph onto an opaque canvas (D-10): anti-aliased curved
+/// stroked edges, flow particles on active edges and a state-coloured glow per node.
 ///
 /// `cell` is the pixel size of one terminal cell (hi-DPI aware); `tick` is the animation tick, `0`
-/// being the deterministic static frame. Labels are not drawn: they stay crisp cell glyphs on top.
+/// being the deterministic static frame. Only `+ - * / sqrt` and polynomial Bezier evaluation are
+/// used. Labels are not drawn: they stay crisp cell glyphs on top.
 pub fn draw_agent_graph_hires(
     canvas: &mut PixelCanvasBuffer,
     scene: &GraphScene,
@@ -266,7 +380,6 @@ pub fn draw_agent_graph_hires(
     tick: u64,
     cell: (f32, f32),
 ) {
-    let _ = tick;
     let (w, h) = (canvas.width as f32, canvas.height as f32);
     let px_of = |key: &crate::wm::agents_window::NodeKey| {
         scene
@@ -275,17 +388,53 @@ pub fn draw_agent_graph_hires(
             .find(|n| &n.key == key)
             .map(|n| node_px_hires(n.pos, w, h, cell))
     };
+    let sw = stroke_width_hires(cell);
+    let phase = (tick % PARTICLE_PERIOD) as f32 / PARTICLE_PERIOD as f32;
     let mut ordered: Vec<&SceneEdge> = scene.edges.iter().collect();
     ordered.sort_by_key(|e| e.selected);
+    let mut curves = Vec::with_capacity(ordered.len());
     for edge in ordered {
         let (Some(a), Some(b)) = (px_of(&edge.from), px_of(&edge.to)) else {
             continue;
         };
-        canvas.draw_line_aa(a.0, a.1, b.0, b.1, edge_rgb(edge, colours), 1.0);
+        let (c1, c2) = curve_controls(a, b);
+        let chord = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+        let steps = ((chord / 3.0) as usize).clamp(12, 96);
+        let pts: Vec<(f32, f32)> =
+            (0..=steps).map(|i| bezier_point(a, c1, c2, b, i as f32 / steps as f32)).collect();
+        let (width, alpha) = if edge.selected {
+            (sw * 1.6, 1.0)
+        } else if edge.active {
+            (sw, 1.0)
+        } else {
+            (sw, IDLE_EDGE_ALPHA)
+        };
+        stroke_polyline(canvas, &pts, width, edge_rgb(edge, colours), alpha);
+        curves.push((edge.active, a, c1, c2, b));
+    }
+    for &(active, a, c1, c2, b) in &curves {
+        if !active {
+            continue;
+        }
+        for k in 0..PARTICLES {
+            let t = (phase + k as f32 / PARTICLES as f32).fract();
+            let (x, y) = bezier_point(a, c1, c2, b, t);
+            canvas.draw_circle_aa(x, y, sw * 1.2 + 0.5, true, colours.node);
+        }
+    }
+    for node in &scene.nodes {
+        let (x, y) = node_px_hires(node.pos, w, h, cell);
+        let r = node_radius_hires(cell, node.selected);
+        if let Some(rgb) = glow_rgb(node.state, colours) {
+            draw_glow(canvas, x, y, r * GLOW_RADIUS_FACTOR, rgb, GLOW_PEAK);
+        }
     }
     for node in &scene.nodes {
         let (x, y) = node_px_hires(node.pos, w, h, cell);
         let r = node_radius_hires(cell, node.selected);
         canvas.draw_circle_aa(x, y, r, true, colours.state_rgb(node.state));
+        if node.selected {
+            canvas.draw_circle_aa(x, y, r + 2.0, false, colours.accent);
+        }
     }
 }
