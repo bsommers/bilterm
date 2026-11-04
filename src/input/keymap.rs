@@ -7,6 +7,7 @@ use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
 use crate::wm::SplitDirection;
+use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::drawer::DrawerNavOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
@@ -320,6 +321,45 @@ pub fn navigator_drawer_action(scopes: &[DrawerKeyScope], key: KeyEvent) -> Opti
     };
     scopes.iter().find_map(|scope| {
         NAVIGATOR_DRAWER_BINDINGS
+            .iter()
+            .find(|(s, mods, code, _)| s == scope && *mods == lookup_mods && *code == key.code)
+            .map(|(_, _, _, action)| action.clone())
+    })
+}
+
+/// Which part of the AGENT TRAFFIC window a key row applies to (Phase 50-08).
+///
+/// Scopes are tried in the order given to [`agents_window_action`] (most specific first); `Window`
+/// rows apply in every window pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentsKeyScope {
+    /// Applies whatever part of the window is active.
+    Window,
+    /// The node/edge graph cursor.
+    Graph,
+}
+
+/// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
+///
+/// Consulted only while the agents window captures input (open and unpinned, or pinned and focused).
+/// Every row lowers to [`Action::Agents`] and runs through `WindowManager::apply`; each operation has
+/// an `:agents` colon twin. Keys the table does not claim are swallowed while the window has the
+/// keyboard; the leader key is never consumed.
+pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Action)] = &[
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Dismiss)),
+];
+
+/// Looks up `key` in [`AGENTS_WINDOW_BINDINGS`] for the active `scopes` (first scope wins).
+///
+/// SHIFT is removed from the modifiers for `KeyCode::Char` and `KeyCode::BackTab` (crossterm reports
+/// Shift+Tab as `BackTab` with SHIFT); every other code is compared with exact modifiers.
+pub fn agents_window_action(scopes: &[AgentsKeyScope], key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) | KeyCode::BackTab => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    scopes.iter().find_map(|scope| {
+        AGENTS_WINDOW_BINDINGS
             .iter()
             .find(|(s, mods, code, _)| s == scope && *mods == lookup_mods && *code == key.code)
             .map(|(_, _, _, action)| action.clone())

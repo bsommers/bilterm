@@ -8,4 +8,10 @@
 pub enum AgentsOp {
     /// `:agents [list]` - per-pane agent state plus a count summary (data over RPC).
     List,
+    /// `:agents zoom [pane-id]` - open the AGENT TRAFFIC window, optionally selecting a pane node.
+    Zoom(Option<crate::pane::PaneId>),
+    /// `:agents close` - close the window unconditionally.
+    Close,
+    /// `:agents dismiss` (Esc) - close an unpinned window, or only release the keyboard of a pinned one.
+    Dismiss,
 }

@@ -4,6 +4,10 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
+use bilterm::action::Action;
+use bilterm::colon_command::parse_colon_command;
+use bilterm::input::handle_wm_key_event;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use bilterm::ui::WorkspaceWidget;
 use bilterm::ui::design::DesignTokens;
 use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey};
@@ -265,4 +269,57 @@ fn render_tui_graph_snapshot_static() {
         })
         .collect();
     insta::assert_snapshot!("render_tui_graph_snapshot_static", text.join("\n"));
+}
+
+// ---- Plan 50-08: keyboard and command entry points ----
+
+fn run_colon(wm: &mut WindowManager, cmd: &str) {
+    let parsed = parse_colon_command(cmd)
+        .unwrap_or_else(|| panic!("not a colon command: {cmd}"))
+        .unwrap_or_else(|e| panic!("parse error for {cmd}: {e}"));
+    wm.apply(parsed).unwrap();
+}
+
+fn press_mod(wm: &mut WindowManager, code: KeyCode, mods: KeyModifiers) {
+    handle_wm_key_event(wm, KeyEvent::new(code, mods)).unwrap();
+}
+
+fn press(wm: &mut WindowManager, code: KeyCode) {
+    press_mod(wm, code, KeyModifiers::NONE);
+}
+
+#[test]
+fn window_tracer_zoom_command_and_esc() {
+    let (mut wm, area) = fixture(120, 40);
+    wm.broadcast_command("echo hi").unwrap();
+    assert!(!wm.agents_window().active);
+
+    run_colon(&mut wm, ":agents zoom");
+    assert!(wm.agents_window().active);
+    let text = lines(&render(&wm, area)).join("\n");
+    assert!(text.contains("AGENT TRAFFIC"), "zoom renders the window");
+
+    press(&mut wm, KeyCode::Esc);
+    assert!(!wm.agents_window().active, "Esc closes the unpinned window");
+
+    run_colon(&mut wm, ":agents zoom");
+    run_colon(&mut wm, ":agents dismiss");
+    assert!(!wm.agents_window().active);
+
+    run_colon(&mut wm, ":agents zoom");
+    run_colon(&mut wm, ":agents close");
+    assert!(!wm.agents_window().active);
+
+    // Pinned: Esc / dismiss only release the keyboard.
+    run_colon(&mut wm, ":agents zoom");
+    wm.agents_window_mut().pinned = true;
+    press(&mut wm, KeyCode::Esc);
+    assert!(wm.agents_window().active && !wm.agents_window().focused);
+
+    let err = parse_colon_command(":agents zoom x").unwrap().unwrap_err();
+    assert_eq!(err, "Usage: :agents zoom [pane-id]");
+    assert_eq!(
+        parse_colon_command(":agents zoom 2").unwrap().unwrap(),
+        Action::Agents(bilterm::wm::agents_cmd::AgentsOp::Zoom(Some(2)))
+    );
 }

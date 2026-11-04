@@ -16,8 +16,29 @@ const PARTNER_WINDOW: Duration = Duration::from_secs(60);
 pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bool {
     match op {
         AgentsOp::List => list(wm),
+        AgentsOp::Zoom(focus) => zoom(wm, focus),
+        AgentsOp::Close => wm.close_agents_window(),
+        AgentsOp::Dismiss => dismiss(wm),
     }
     false
+}
+
+fn zoom(wm: &mut WindowManager, focus: Option<crate::pane::PaneId>) {
+    wm.open_agents_window(focus);
+    if let Some(id) = focus
+        && wm.pane(id).is_none()
+    {
+        wm.active_pane_mut().set_status_message(Some(format!("No pane #{id}")));
+    }
+}
+
+/// Esc: close an unpinned window; a pinned window only releases the keyboard.
+fn dismiss(wm: &mut WindowManager) {
+    if wm.agents_window().pinned {
+        wm.agents_window_mut().focused = false;
+    } else {
+        wm.close_agents_window();
+    }
 }
 
 fn list(wm: &mut WindowManager) {

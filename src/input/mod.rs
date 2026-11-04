@@ -1,3 +1,4 @@
+mod agents_window;
 mod drawer_navigator;
 pub mod encode;
 pub mod keymap;
