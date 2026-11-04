@@ -275,6 +275,8 @@
 | `E` | `:drawer expand all`, `:navigator expand all` | Unfold every workspace and session |
 | `C` | `:drawer collapse all`, `:navigator collapse all` | Fold everything to workspace rows; pressing it again on a fully folded tree unfolds all |
 | `N` | `:drawer new-session` | Create a new session and switch to it |
+| `a` | `:drawer add window [session]`, `:navigator add window [session]` | Add a window to the selected (or named) session and focus it; a selected pane row is the split target. In navigator style this replaces the classic `a` (arrange grid), which stays available as `:arrange grid` |
+| `A` | `:drawer add pane [h\|v]`, `:navigator add pane [h\|v]` | Split the selected pane (horizontal by default) and focus the new pane. In navigator style this replaces the classic `A` (arrange stack-grid), available as `:arrange stack-grid` |
 | `n` / `c` / `+` / `w` | `:drawer new-pane` (`new-window`) | Split the focused pane into a new window |
 | `r` / `R` | `:drawer rename [name]` | Rename the selected session (without a name the prompt opens prefilled) |
 | `x` / `Delete` | `:drawer close-pane` | Close the selected pane (`:drawer close` still minimizes the drawer) |

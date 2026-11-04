@@ -820,6 +820,10 @@ fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
         DrawerNavOp::Close => ":drawer close-pane".into(),
         DrawerNavOp::ExpandAll => ":drawer expand all".into(),
         DrawerNavOp::CollapseAll => ":drawer collapse all".into(),
+        DrawerNavOp::AddWindow(None) => ":drawer add window".into(),
+        DrawerNavOp::AddWindow(Some(session)) => format!(":drawer add window {session}"),
+        DrawerNavOp::AddPane(SplitDirection::Horizontal) => ":drawer add pane h".into(),
+        DrawerNavOp::AddPane(SplitDirection::Vertical) => ":drawer add pane v".into(),
     }
 }
 
@@ -843,6 +847,10 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
         DrawerNavOp::Close,
         DrawerNavOp::ExpandAll,
         DrawerNavOp::CollapseAll,
+        DrawerNavOp::AddWindow(None),
+        DrawerNavOp::AddWindow(Some("other".into())),
+        DrawerNavOp::AddPane(SplitDirection::Horizontal),
+        DrawerNavOp::AddPane(SplitDirection::Vertical),
     ]
 }
 
@@ -1102,5 +1110,122 @@ fn classic_unaffected_by_expand_collapse_all() {
         ch(&mut wm, 'E');
         ch(&mut wm, 'C');
         assert_eq!(observe(&wm), before);
+    });
+}
+
+// ---- Task 5: add a window/pane to the selected session ----
+
+/// Active session "default" (panes 1 and 2) plus a saved second session "other" (1 pane).
+fn two_sessions() -> (WindowManager, Rect) {
+    let (mut wm, area) = navigator_wm(100, 30);
+    wm.create_new_session(Some("other"), false).unwrap();
+    wm.switch_or_create_session("default").unwrap();
+    wm.resize_all(area).unwrap();
+    wm.focus_and_raise(1);
+    open_drawer(&mut wm);
+    (wm, area)
+}
+
+fn row_of(wm: &WindowManager, kind: &DrawerRowKind) -> usize {
+    kinds(wm).iter().position(|k| k == kind).unwrap_or_else(|| panic!("{kind:?} not listed: {:?}", kinds(wm)))
+}
+
+#[test]
+fn add_window_targets_selected_session() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = two_sessions();
+        assert_eq!(wm.config().history_session, "default");
+        assert_eq!(wm.pane_count(), 2);
+
+        // Session row of another session: the window lands in that session, not the focused one.
+        wm.drawer_mut().selected_index = row_of(&wm, &session("other"));
+        wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(None))).unwrap();
+        assert_eq!(wm.config().history_session, "other");
+        assert_eq!(wm.pane_count(), 2, "other had one pane, now two");
+        assert_eq!(wm.selected_drawer_pane_id(), Some(wm.active_pane_id()), "new window focused and selected");
+
+        // Named session, given explicitly while the selection is elsewhere.
+        wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(Some("default".into())))).unwrap();
+        assert_eq!(wm.config().history_session, "default");
+        assert_eq!(wm.pane_count(), 3);
+
+        // Unknown session: refused with a status message, nothing created.
+        wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(Some("nope".into())))).unwrap();
+        assert_eq!((wm.config().history_session.as_str(), wm.pane_count()), ("default", 3));
+        assert!(wm.active_pane().status_message().is_some_and(|m| m.contains("No such session")));
+
+        // Pane row selected: that pane is split even though pane 1 holds the focus.
+        wm.focus_and_raise(1);
+        wm.drawer_mut().selected_index = row_of(&wm, &DrawerRowKind::Pane(2));
+        let before = wm.ordered_pane_ids();
+        wm.apply(Action::DrawerNav(DrawerNavOp::AddWindow(None))).unwrap();
+        let after = wm.ordered_pane_ids();
+        assert_eq!(after.len(), before.len() + 1);
+        let new = wm.active_pane_id();
+        let pos2 = after.iter().position(|&i| i == 2).unwrap();
+        assert_eq!(after[pos2 + 1], new, "the new window sits next to the selected pane #2: {after:?}");
+    });
+}
+
+#[test]
+fn add_pane_splits_selected_row() {
+    with_temp_xdg(|| {
+        for dir in [SplitDirection::Horizontal, SplitDirection::Vertical] {
+            let (mut wm, _a) = focused_navigator(2);
+            wm.focus_and_raise(2);
+            wm.drawer_mut().selected_index = row_of(&wm, &DrawerRowKind::Pane(1));
+            wm.apply(Action::DrawerNav(DrawerNavOp::AddPane(dir))).unwrap();
+            let ids = wm.ordered_pane_ids();
+            assert_eq!(ids.len(), 3);
+            let new = wm.active_pane_id();
+            let p1 = ids.iter().position(|&i| i == 1).unwrap();
+            assert_eq!(ids[p1 + 1], new, "split of pane #1 ({dir:?}): {ids:?}");
+        }
+    });
+}
+
+#[test]
+fn key_a_and_colon_twins_match() {
+    let observe_with = |f: &dyn Fn(&mut WindowManager)| {
+        with_temp_xdg(|| {
+            let (mut wm, _a) = two_sessions();
+            wm.drawer_mut().selected_index = row_of(&wm, &session("other"));
+            f(&mut wm);
+            observe(&wm)
+        })
+    };
+    let window_by_key = observe_with(&|wm| ch(wm, 'a'));
+    assert_eq!(window_by_key, observe_with(&|wm| run_colon(wm, ":drawer add window")));
+    assert_eq!(window_by_key, observe_with(&|wm| run_colon(wm, ":navigator add window")));
+    assert_eq!(window_by_key, observe_with(&|wm| run_colon(wm, ":navigator add window other")));
+
+    let pane_by_key = observe_with(&|wm| press_mod(wm, KeyCode::Char('A'), KeyModifiers::SHIFT));
+    assert_eq!(pane_by_key, observe_with(&|wm| run_colon(wm, ":drawer add pane")));
+    assert_eq!(pane_by_key, observe_with(&|wm| run_colon(wm, ":navigator add pane h")));
+
+    for bad in [":drawer add", ":navigator add tab", ":drawer add pane x", ":drawer add window a b"] {
+        assert!(parse_colon_command(bad).unwrap().is_err(), "{bad} must be a usage error");
+    }
+    let table = bilterm::pane::completion::colon_command_table();
+    for head in [":drawer", ":navigator"] {
+        let row = table.iter().find(|(c, _)| *c == head).unwrap().1;
+        assert!(row.contains(&"add window") && row.contains(&"add pane"), "{head}: {row:?}");
+    }
+    for cmd in [":drawer add window", ":drawer add pane", ":navigator add window", ":navigator add pane"] {
+        assert!(bilterm::ui::modals::HELP_LINES.iter().any(|(c, _)| c.starts_with(cmd)), "help row for {cmd}");
+        assert!(bilterm::ui::modals::PALETTE_CATALOG.iter().any(|e| e.0.starts_with(cmd)), "palette row for {cmd}");
+    }
+}
+
+#[test]
+fn add_classic_unaffected() {
+    with_temp_xdg(|| {
+        let (mut wm, _a) = fixture(100, 30);
+        open_drawer(&mut wm);
+        let panes = wm.pane_count();
+        ch(&mut wm, 'a');
+        press_mod(&mut wm, KeyCode::Char('A'), KeyModifiers::SHIFT);
+        assert_eq!(wm.pane_count(), panes, "classic a / A keep arranging windows and add none");
+        assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
     });
 }

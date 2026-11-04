@@ -666,6 +666,15 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
             Some(&"all") => Op::CollapseAll,
             _ => return Some(Err("Usage: :drawer expand all | collapse all".to_string())),
         },
+        "add" => match (parts.get(2).copied(), parts.get(3).copied(), parts.len()) {
+            (Some("window"), None, 3) => Op::AddWindow(None),
+            (Some("window"), Some(name), 4) => Op::AddWindow(Some(name.to_string())),
+            (Some("pane"), None, 3) | (Some("pane"), Some("h" | "horizontal"), 4) => {
+                Op::AddPane(crate::wm::SplitDirection::Horizontal)
+            }
+            (Some("pane"), Some("v" | "vertical"), 4) => Op::AddPane(crate::wm::SplitDirection::Vertical),
+            _ => return Some(Err("Usage: :navigator add window [session] | add pane [h|v]".to_string())),
+        },
         "new-session" => Op::NewSession,
         "new-pane" | "new-window" => Op::NewPane,
         "rename" => match parts.len() {
@@ -760,7 +769,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

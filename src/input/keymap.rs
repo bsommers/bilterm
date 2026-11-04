@@ -6,6 +6,7 @@ use crate::error::Result;
 use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
+use crate::wm::SplitDirection;
 use crate::wm::drawer::DrawerNavOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
@@ -287,6 +288,13 @@ pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, A
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('E'), Action::DrawerNav(DrawerNavOp::ExpandAll)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('C'), Action::DrawerNav(DrawerNavOp::CollapseAll)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('N'), Action::DrawerNav(DrawerNavOp::NewSession)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('a'), Action::DrawerNav(DrawerNavOp::AddWindow(None))),
+    (
+        DrawerKeyScope::Navigator,
+        KeyModifiers::NONE,
+        KeyCode::Char('A'),
+        Action::DrawerNav(DrawerNavOp::AddPane(SplitDirection::Horizontal)),
+    ),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('n'), Action::DrawerNav(DrawerNavOp::NewPane)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('c'), Action::DrawerNav(DrawerNavOp::NewPane)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('+'), Action::DrawerNav(DrawerNavOp::NewPane)),

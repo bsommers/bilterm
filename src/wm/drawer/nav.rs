@@ -44,6 +44,11 @@ pub enum DrawerNavOp {
     /// Fold every workspace and session down to workspace rows (on an already fully folded tree it
     /// unfolds everything again, so the key toggles); the selection moves to its workspace row.
     CollapseAll,
+    /// Add a window to the selected session (or the named one) and focus it. With a pane row selected
+    /// that pane is the split target.
+    AddWindow(Option<String>),
+    /// Split the selected pane in the given direction and focus the new pane.
+    AddPane(SplitDirection),
 }
 
 /// Attention tiers in priority order.
@@ -96,7 +101,29 @@ impl WindowManager {
             DrawerNavOp::Close => self.drawer_close_selected_pane(),
             DrawerNavOp::ExpandAll => self.expand_all_navigator_rows(),
             DrawerNavOp::CollapseAll => self.collapse_all_navigator_rows(),
+            DrawerNavOp::AddWindow(session) => self.drawer_add_in_selected(SplitDirection::Horizontal, session),
+            DrawerNavOp::AddPane(dir) => self.drawer_add_in_selected(dir, None),
         }
+    }
+
+    /// Splits the selected pane (or, on a session row, the top pane of that session) in `dir`.
+    ///
+    /// A pane row makes that pane the split target; a session other than the active one is switched to
+    /// first, so the new window never lands in the session that merely holds the keyboard focus.
+    fn drawer_add_in_selected(&mut self, dir: SplitDirection, session: Option<String>) -> bool {
+        let pane = if session.is_none() { self.selected_drawer_pane_id() } else { None };
+        let target = session.unwrap_or_else(|| self.selected_drawer_session_name());
+        if target != self.config.history_session {
+            let known = self.daemon_state.session_tree.node(&target).is_some() || self.list_sessions().contains(&target);
+            if !known || self.switch_or_create_session(&target).is_err() {
+                self.active_pane_mut().set_status_message(Some(format!("No such session '{target}'")));
+                return false;
+            }
+        }
+        if let Some(id) = pane {
+            self.focus_and_raise(id);
+        }
+        self.drawer_new_pane(dir)
     }
 
     /// Session name the selected row belongs to (its own name, or the enclosing session of a pane row).
