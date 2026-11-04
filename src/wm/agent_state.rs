@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use crate::config::agents::AgentProfile;
 use crate::pane::{CompositePane, PaneId};
+use crate::vt::Osc133Phase;
 use crate::wm::WindowManager;
 
 /// A silent running command stays `Working` for this long after the last output byte.
@@ -18,6 +19,8 @@ pub const WORKING_HOLD: Duration = Duration::from_millis(1500);
 pub const MIN_DWELL: Duration = Duration::from_millis(500);
 /// Minimum spacing between screen-tail rescans when no new output arrived.
 pub const TAIL_RESCAN: Duration = Duration::from_millis(250);
+/// Number of trailing visible rows scanned for profile patterns.
+pub const TAIL_ROWS: u16 = 8;
 
 /// Live state of the agent / program running in a pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -92,12 +95,37 @@ impl Default for AgentSignals {
     }
 }
 
-/// Pure first-match rule table (RESEARCH Pattern 2, thresholds are the recorded A2 assumption).
+fn contains_any(tail: &str, patterns: &[String]) -> bool {
+    patterns.iter().any(|p| !p.is_empty() && tail.contains(p.as_str()))
+}
+
+/// Pure first-match rule table (RESEARCH Pattern 2, thresholds are the recorded A2 assumption):
+/// 1. Blocked: password prompt, or a profile `blocked` pattern in the tail.
+/// 2. Errored: exited with non-zero code, or an unseen finished command with non-zero exit.
+/// 3. Done: exited with code 0 (or unknown), or an unseen finished command with exit code 0.
+/// 4. Blocked: unread notification while the pane is not focused.
+/// 5. Working: command running and (recent output, or a profile `working` pattern in the tail).
+/// 6. Idle: everything else.
+///
+/// Profile patterns must already be sanitised (lower-case); `tail` is lower-case.
 pub fn classify(s: &AgentSignals, profile: Option<&AgentProfile>) -> AgentState {
-    if s.running && s.quiet_for <= WORKING_HOLD {
+    if s.echo_locked || profile.is_some_and(|p| contains_any(&s.tail, &p.blocked)) {
+        return AgentState::Blocked;
+    }
+    let exit_failed = s.exited && s.exit_code.is_some_and(|c| c != 0);
+    if exit_failed || s.unseen_finish == Some(FinishKind::Failure) {
+        return AgentState::Errored;
+    }
+    if s.exited || s.unseen_finish == Some(FinishKind::Success) {
+        return AgentState::Done;
+    }
+    if s.unread_notification && !s.focused {
+        return AgentState::Blocked;
+    }
+    let pattern_working = profile.is_some_and(|p| contains_any(&s.tail, &p.working));
+    if s.running && (s.quiet_for <= WORKING_HOLD || pattern_working) {
         return AgentState::Working;
     }
-    let _ = profile;
     AgentState::Idle
 }
 
@@ -142,6 +170,14 @@ struct PaneHistory {
     profile: Option<String>,
     /// `false` until the first observation, which applies its state without dwell.
     observed: bool,
+    last_phase: Option<Osc133Phase>,
+    last_blocks: usize,
+    /// `(last_exit_code, last_duration_ms)` at the previous look; a change means a command finished.
+    last_finish_sig: (Option<i32>, Option<u64>),
+    /// A command finished while the pane was unfocused and has not been seen.
+    unseen_finish: Option<FinishKind>,
+    /// Lower-cased text of the last visible rows (rescanned at most every `TAIL_RESCAN`).
+    tail: String,
 }
 
 impl PaneHistory {
@@ -157,6 +193,11 @@ impl PaneHistory {
             last_scan: None,
             profile: None,
             observed: false,
+            last_phase: None,
+            last_blocks: 0,
+            last_finish_sig: (None, None),
+            unseen_finish: None,
+            tail: String::new(),
         }
     }
 }
@@ -196,13 +237,62 @@ fn identity_token(id: PaneId, command: Option<&str>, title: &str) -> String {
     if token.is_empty() { format!("#{id}") } else { token }
 }
 
+/// Lower-cased text of up to `TAIL_ROWS` rows ending at the last non-empty visible row.
+fn scan_tail(pane: &CompositePane) -> String {
+    let (rows, _) = pane.vt().size();
+    let lines: Vec<String> = (0..rows).map(|r| pane.vt().row_text(r)).collect();
+    let end = lines.iter().rposition(|l| !l.trim().is_empty()).map_or(0, |i| i + 1);
+    let start = end.saturating_sub(usize::from(TAIL_ROWS));
+    lines[start..end].join("\n").to_lowercase()
+}
+
+/// Detects command start / finish since the previous look and maintains `unseen_finish`.
+fn track_finish(h: &mut PaneHistory, pane: &CompositePane, focused: bool) {
+    let vt = pane.vt();
+    let phase = vt.osc133_phase();
+    let blocks = vt.command_blocks().len();
+    let sig = (vt.last_exit_code(), vt.last_duration_ms());
+    let started = (phase == Some(Osc133Phase::CommandExecuted) && h.last_phase != phase) || blocks > h.last_blocks;
+    if started && !matches!(phase, Some(Osc133Phase::CommandFinished(_))) {
+        h.unseen_finish = None;
+    }
+    let phase_finish = match phase {
+        Some(Osc133Phase::CommandFinished(code)) if h.last_phase != phase => Some(code),
+        _ => None,
+    };
+    let sig_finish = (sig != h.last_finish_sig && sig.0.is_some()).then_some(sig.0);
+    if let Some(code) = sig_finish.or(phase_finish)
+        && !focused
+    {
+        h.unseen_finish = Some(if code.is_none_or(|c| c == 0) { FinishKind::Success } else { FinishKind::Failure });
+    }
+    if focused {
+        h.unseen_finish = None;
+    }
+    h.last_phase = phase;
+    h.last_blocks = blocks;
+    h.last_finish_sig = sig;
+}
+
 fn collect_signals(h: &PaneHistory, pane: &CompositePane, focused: bool, now: Instant) -> AgentSignals {
-    let running = pane.prompt().running_command.is_some();
+    let phase = pane.vt().osc133_phase();
+    let finished = matches!(phase, Some(Osc133Phase::CommandFinished(_) | Osc133Phase::PromptStart));
+    let running = phase == Some(Osc133Phase::CommandExecuted)
+        || (pane.prompt().running_command.is_some() && !finished);
+    let (exited, exit_code) = match pane.held_exited_shell() {
+        Some(held) => (true, held.exit_code),
+        None => (pane.has_exited(), None),
+    };
     AgentSignals {
+        echo_locked: pane.is_password_prompt(),
+        exited,
+        exit_code,
+        unseen_finish: h.unseen_finish,
+        unread_notification: !pane.vt().notifications().is_empty(),
         focused,
         running,
         quiet_for: h.last_activity.map_or(Duration::MAX, |t| now.saturating_duration_since(t)),
-        ..AgentSignals::default()
+        tail: h.tail.clone(),
     }
 }
 
@@ -218,7 +308,9 @@ fn observe(h: &mut PaneHistory, id: PaneId, pane: &CompositePane, focused: bool,
     if scan_due {
         h.last_scan = Some(now);
         h.name = identity_token(id, pane.prompt().running_command.as_deref(), pane.title());
+        h.tail = scan_tail(pane);
     }
+    track_finish(h, pane, focused);
     let signals = collect_signals(h, pane, focused, now);
     let raw = h.reported.unwrap_or_else(|| classify(&signals, None));
     let first_look = !h.observed;

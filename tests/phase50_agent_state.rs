@@ -156,9 +156,9 @@ fn state_working_idle_flip_respects_dwell() {
     feed(&mut wm, 1, b"cc a.c\r\n");
     wm.update_agent_states(ms(t0, 100));
     assert_eq!(wm.agent_state(1), Some(AgentState::Idle), "candidate Working, dwell pending");
-    wm.pane_mut(1).unwrap().prompt_mut().running_command = None;
+    feed(&mut wm, 1, b"\x1b]133;D;0\x07");
     wm.update_agent_states(ms(t0, 300));
-    wm.pane_mut(1).unwrap().prompt_mut().running_command = Some("make".to_string());
+    wm.pane_mut(1).unwrap().submit_command("make").unwrap();
     feed(&mut wm, 1, b"cc b.c\r\n");
     wm.update_agent_states(ms(t0, 400));
     wm.update_agent_states(ms(t0, 800));
