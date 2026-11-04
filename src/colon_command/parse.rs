@@ -14,6 +14,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_config::parse_config_colon_command(head, &parts, rest) {
         return Some(res);
     }
+    if let Some(res) = super::parse_agents::parse_agents_colon_command(head, &parts) {
+        return Some(res);
+    }
     if let Some(res) = parse_visual_colon_command(head, &parts) {
         return Some(res);
     }

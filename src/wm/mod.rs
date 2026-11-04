@@ -1,3 +1,5 @@
+pub mod agent_state;
+pub mod agents_cmd;
 pub mod chrome_style;
 pub mod drawer;
 pub mod journal;
@@ -122,6 +124,8 @@ pub struct WindowManager {
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
     /// `herdr`-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
     pub(crate) drawer: WorkspaceDrawer,
+    /// Per-pane agent state tracker (`FLT-01`, Phase 50-03).
+    pub(crate) agents: agent_state::AgentTracker,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
@@ -197,6 +201,7 @@ impl WindowManager {
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
             drawer: WorkspaceDrawer::new(),
+            agents: agent_state::AgentTracker::new(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
@@ -698,6 +703,9 @@ impl WindowManager {
             changed = true;
         }
         self.update_drawer_telemetry();
+        if self.tick_agent_ui(Instant::now()) {
+            changed = true;
+        }
         self.maybe_rebalance_scrollback(Instant::now());
         changed
     }

@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod dotted;
 pub use dotted::ApiConfig;
 

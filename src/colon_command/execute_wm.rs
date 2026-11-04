@@ -820,6 +820,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::ConfigSave
         | ColonCommand::AppearanceSave
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
+        ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         other => {
             let is_prompt_layout = matches!(
                 other,
