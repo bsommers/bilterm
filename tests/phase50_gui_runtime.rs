@@ -135,3 +135,20 @@ fn gui_runtime_scaled_panel_is_hit_in_panel_space() {
         GuiWheelRoute::Forward(_)
     ));
 }
+
+#[test]
+fn gui_runtime_route_is_platform_neutral() {
+    // Pure function of (wm, cell, modifiers, viewport): identical inputs give identical routes,
+    // with no dependence on cfg(windows)/cfg(macos) or any global state.
+    let mut wm = gui_wm();
+    wm.toggle_drawer();
+    let (c, r) = centre(wm.drawer_rect(workspace(&wm)).unwrap());
+    for mods in [KeyModifiers::empty(), KeyModifiers::CONTROL, KeyModifiers::CONTROL | KeyModifiers::ALT] {
+        for up in [true, false] {
+            let a = route_gui_wheel(&wm, c, r, up, mods, AREA);
+            let b = route_gui_wheel(&wm, c, r, up, mods, AREA);
+            assert_eq!(a, b);
+        }
+    }
+    assert_eq!(wm.scale_pct(PanelTarget::Drawer), 100, "routing must not mutate the manager");
+}

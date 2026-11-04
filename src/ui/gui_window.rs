@@ -118,6 +118,7 @@ pub fn translate_vk_to_key_event(
 /// Runs Bilterm inside a standalone native GUI window (`--gui` / `-G`).
 #[cfg(windows)]
 pub fn run_native_gui_window(mut app: App) -> Result<()> {
+    app.wm.set_gui_surface(true);
     use std::cell::RefCell;
     use std::collections::VecDeque;
     use std::ptr::{null, null_mut};

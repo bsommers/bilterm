@@ -330,6 +330,7 @@ fn read_macos_pasteboard() -> Option<String> {
 
 /// Runs Bilterm inside a standalone native macOS Cocoa / CoreText GUI window (`--gui` / `Bilterm.app`).
 pub fn run_macos_gui_window(mut app: App) -> Result<()> {
+    app.wm.set_gui_surface(true);
     let ns_app = unsafe { msg_send_id_0(class(c"NSApplication"), sel(c"sharedApplication")) };
     if ns_app.is_null() {
         return Ok(());
