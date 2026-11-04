@@ -166,8 +166,8 @@ pub fn draw_agent_graph(
     }
 }
 
-/// Cell (relative to the graph rect) holding the label of `node`, with the label text.
-fn label_cell(node: &SceneNode, rect: Rect) -> Option<(u16, u16, String)> {
+/// Cell (relative to the graph rect) holding the label of `node`, with the label text (also the node hit area).
+pub fn label_cell(node: &SceneNode, rect: Rect) -> Option<(u16, u16, String)> {
     if rect.width == 0 || rect.height == 0 {
         return None;
     }

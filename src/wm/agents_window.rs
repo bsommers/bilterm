@@ -12,8 +12,8 @@ use ratatui::layout::Rect;
 
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
-use crate::wm::WindowManager;
 use crate::wm::agent_state::AgentState;
+use crate::wm::{WindowManager, WindowResizeEdge};
 use crate::wm::traffic::TrafficEndpoint;
 
 /// Maximum number of graph nodes (live panes are always kept; oldest other endpoints drop first).
@@ -22,8 +22,8 @@ pub const NODE_CAP: usize = 64;
 pub const LABEL_CAP: usize = 12;
 /// Smallest workspace in which the window renders at all.
 pub const MIN_WORKSPACE: (u16, u16) = (30, 10);
-/// Smallest default window size.
-const MIN_WINDOW: (u16, u16) = (40, 12);
+/// Smallest default window size (also the resize floor, 50-09).
+pub const MIN_WINDOW: (u16, u16) = (40, 12);
 /// Default share of the inner width given to the graph pane, in percent.
 pub const DEFAULT_SPLITTER_PCT: u16 = 55;
 /// An edge is "active" while it carried one of the newest [`ACTIVE_EVENTS`] bus events.
@@ -339,6 +339,20 @@ impl GraphLayout {
     }
 }
 
+/// Pointer gesture in progress on the window (bookkeeping only, 50-09). Which drag is running is
+/// not an operation: the motion that follows lowers to `SetRect`, `Split` or `PinNode`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AgentsDrag {
+    /// Title-bar drag; the pointer keeps its offset inside the window.
+    Move { grab_dx: u16, grab_dy: u16 },
+    /// Edge or corner drag, relative to the rect at press time.
+    Resize { edge: WindowResizeEdge, initial: Rect },
+    /// Graph/conversation splitter drag.
+    Splitter,
+    /// Press on a node; `moved` tells a click (activate) from a drag (pin).
+    Node { key: NodeKey, was_selected: bool, moved: bool },
+}
+
 /// Runtime state of the AGENT TRAFFIC window.
 #[derive(Clone, Debug)]
 pub struct AgentsWindowState {
@@ -353,6 +367,10 @@ pub struct AgentsWindowState {
     pub splitter_pct: u16,
     pub selection: GraphSelection,
     pub layout: GraphLayout,
+    /// Pointer gesture in progress (bookkeeping only).
+    pub drag: Option<AgentsDrag>,
+    /// While on, the arrow keys nudge the selected node instead of moving the cursor.
+    pub grab_mode: bool,
 }
 
 impl Default for AgentsWindowState {
@@ -366,6 +384,8 @@ impl Default for AgentsWindowState {
             splitter_pct: DEFAULT_SPLITTER_PCT,
             selection: GraphSelection::default(),
             layout: GraphLayout::default(),
+            drag: None,
+            grab_mode: false,
         }
     }
 }
@@ -412,6 +432,13 @@ impl WindowManager {
         self.agents_window.active = false;
         self.agents_window.focused = false;
         self.agents_window.pinned = false;
+        self.agents_window.drag = None;
+        self.agents_window.grab_mode = false;
+    }
+
+    /// Stores (or clears) the pointer-gesture bookkeeping of the window.
+    pub fn set_agents_drag(&mut self, drag: Option<AgentsDrag>) {
+        self.agents_window.drag = drag;
     }
 
     /// Window rect inside `workspace_area`, or `None` when inactive or the workspace is too small.

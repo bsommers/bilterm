@@ -26,8 +26,70 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
             wm.agents_cycle_edge(forward);
         }
         AgentsOp::Activate => activate(wm),
+        other => execute_window_op(wm, other),
     }
     false
+}
+
+/// Window geometry, splitter and node operations (Phase 50-09).
+fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
+    use ratatui::layout::Rect;
+    match op {
+        AgentsOp::Move { dx, dy } => wm.move_agents_window(dx, dy),
+        AgentsOp::Resize { dw, dh } => wm.resize_agents_window(dw, dh),
+        AgentsOp::SetRect { x, y, w, h } => {
+            wm.set_agents_rect(Rect::new(x, y, w, h));
+        }
+        AgentsOp::Size(size) => wm.set_agents_size(size),
+        AgentsOp::Maximize => wm.toggle_agents_maximize(),
+        AgentsOp::Split(pct) => wm.set_agents_splitter_pct(pct),
+        AgentsOp::SplitStep(n) => {
+            let pct = (i32::from(wm.agents_window().splitter_pct) + i32::from(n))
+                .clamp(0, i32::from(u16::MAX)) as u16;
+            wm.set_agents_splitter_pct(pct);
+        }
+        AgentsOp::SelectNode(key) => {
+            if !wm.agents_select_node(&key) {
+                status(wm, format!("No node {}", key.as_str()));
+            }
+        }
+        AgentsOp::SelectEdge(a, b) => {
+            if !wm.agents_select_edge(&a, &b) {
+                status(wm, format!("No edge {} - {}", a.as_str(), b.as_str()));
+            }
+        }
+        AgentsOp::Grab(mode) => wm.set_agents_grab(mode),
+        AgentsOp::NudgeNode(dir) => {
+            if !wm.nudge_agents_node(dir) {
+                status(wm, "No node selected".to_string());
+            }
+        }
+        AgentsOp::PinNode { key, x_pm, y_pm } => {
+            if !wm.pin_agents_node(&key, x_pm, y_pm) {
+                status(wm, format!("No node {}", key.as_str()));
+            }
+        }
+        AgentsOp::UnpinNode(key) => {
+            let Some(key) = key.or_else(|| wm.agents_window().selection.node.clone()) else {
+                return status(wm, "No node selected".to_string());
+            };
+            if !wm.unpin_agents_node(&key) {
+                status(wm, format!("{} is not pinned", key.as_str()));
+            }
+        }
+        // Handled by the caller.
+        AgentsOp::List
+        | AgentsOp::Zoom(_)
+        | AgentsOp::Close
+        | AgentsOp::Dismiss
+        | AgentsOp::Select(_)
+        | AgentsOp::CycleEdge(_)
+        | AgentsOp::Activate => {}
+    }
+}
+
+fn status(wm: &mut WindowManager, msg: String) {
+    wm.active_pane_mut().set_status_message(Some(msg));
 }
 
 fn zoom(wm: &mut WindowManager, focus: Option<crate::pane::PaneId>) {
@@ -42,7 +104,10 @@ fn zoom(wm: &mut WindowManager, focus: Option<crate::pane::PaneId>) {
 /// Esc: close an unpinned window; a pinned window only releases the keyboard.
 fn dismiss(wm: &mut WindowManager) {
     if wm.agents_window().pinned {
-        wm.agents_window_mut().focused = false;
+        let state = wm.agents_window_mut();
+        state.focused = false;
+        state.grab_mode = false;
+        state.drag = None;
     } else {
         wm.close_agents_window();
     }

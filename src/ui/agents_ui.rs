@@ -110,11 +110,11 @@ pub fn render_agents_window(
         buf,
     );
 
-    let inner = Rect::new(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
-    if inner.width < 6 || inner.height < 1 {
+    // Window geometry comes from the same helper the mouse hit-tests use.
+    let Some(rects) = wm.agents_pane_rects(workspace_area) else {
         return;
-    }
-    let (graph, div_x, events) = split_panes(inner, state.splitter_pct);
+    };
+    let (inner, graph, div_x, events) = (rects.inner, rects.graph, rects.splitter_col, rects.snoop);
     let divider = Style::default()
         .fg(palette.inactive_border_fg)
         .bg(palette.window_frame_bg);

@@ -1,6 +1,7 @@
 pub mod agent_state;
 pub mod agents_window;
 pub mod agents_cmd;
+pub mod agents_geometry;
 pub mod chrome_style;
 pub mod drawer;
 pub mod journal;
