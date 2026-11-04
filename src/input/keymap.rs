@@ -339,6 +339,9 @@ pub enum AgentsKeyScope {
     Window,
     /// The node/edge graph cursor.
     Graph,
+    /// Node grab mode (most specific): arrows nudge the selected node; `g`, Enter and Esc drop it.
+    /// Its Esc row is the one allowed override of the `Window` Esc row.
+    Grab,
 }
 
 /// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
@@ -356,6 +359,26 @@ pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Acti
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Tab, Action::Agents(AgentsOp::CycleEdge(true))),
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::BackTab, Action::Agents(AgentsOp::CycleEdge(false))),
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::Activate)),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Char('g'), Action::Agents(AgentsOp::Grab(None))),
+    (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Char('u'), Action::Agents(AgentsOp::UnpinNode(None))),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Left, Action::Agents(AgentsOp::Move { dx: -1, dy: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Right, Action::Agents(AgentsOp::Move { dx: 1, dy: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Up, Action::Agents(AgentsOp::Move { dx: 0, dy: -1 })),
+    (AgentsKeyScope::Window, KeyModifiers::SHIFT, KeyCode::Down, Action::Agents(AgentsOp::Move { dx: 0, dy: 1 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Left, Action::Agents(AgentsOp::Resize { dw: -1, dh: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Right, Action::Agents(AgentsOp::Resize { dw: 1, dh: 0 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Up, Action::Agents(AgentsOp::Resize { dw: 0, dh: -1 })),
+    (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Down, Action::Agents(AgentsOp::Resize { dw: 0, dh: 1 })),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('m'), Action::Agents(AgentsOp::Maximize)),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('<'), Action::Agents(AgentsOp::SplitStep(-5))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('>'), Action::Agents(AgentsOp::SplitStep(5))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::NudgeNode(GraphDir::Left))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::NudgeNode(GraphDir::Right))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::NudgeNode(GraphDir::Up))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Down, Action::Agents(AgentsOp::NudgeNode(GraphDir::Down))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Char('g'), Action::Agents(AgentsOp::Grab(Some(false)))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Enter, Action::Agents(AgentsOp::Grab(Some(false)))),
+    (AgentsKeyScope::Grab, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Grab(Some(false)))),
 ];
 
 /// Looks up `key` in [`AGENTS_WINDOW_BINDINGS`] for the active `scopes` (first scope wins).
