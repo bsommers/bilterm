@@ -1229,3 +1229,52 @@ fn add_classic_unaffected() {
         assert_eq!(wm.drawer_config().style, DrawerStyle::Classic);
     });
 }
+
+// ---- Phase 50-15: navigator mouse parity (FLT-01, success criteria 3 and 4) ----
+
+use bilterm::input::handle_wm_mouse_event;
+use bilterm::ui::drawer::navigator::navigator_row_at;
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+fn mouse_ev(kind: MouseEventKind, col: u16, row: u16, mods: KeyModifiers) -> MouseEvent {
+    MouseEvent { kind, column: col, row, modifiers: mods }
+}
+
+fn click_at(wm: &mut WindowManager, area: Rect, col: u16, row: u16) {
+    for kind in [MouseEventKind::Down(MouseButton::Left), MouseEventKind::Up(MouseButton::Left)] {
+        handle_wm_mouse_event(wm, mouse_ev(kind, col, row, KeyModifiers::NONE), area).unwrap();
+    }
+}
+
+/// Screen cell `(x, y)` of the first buffer line containing `needle`.
+fn find_cell(wm: &WindowManager, area: Rect, needle: &str) -> (u16, u16) {
+    let lines = buffer_lines(&render(wm, area));
+    for (y, l) in lines.iter().enumerate() {
+        if let Some(byte) = l.find(needle) {
+            return (l[..byte].chars().count() as u16, y as u16);
+        }
+    }
+    panic!("`{needle}` not rendered:\n{}", lines.join("\n"));
+}
+
+#[test]
+fn mouse_tracer_click_row_focuses_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = navigator_wm(100, 30);
+        wm.toggle_drawer();
+        wm.focus_and_raise(1);
+        let (x, y) = find_cell(&wm, area, "#2 beta");
+        click_at(&mut wm, area, x, y);
+        assert_eq!(wm.active_pane_id(), 2);
+        let idx = navigator_row_at(&wm, area, x, y).expect("row under the click");
+        assert_eq!(wm.drawer_rows()[idx].kind, DrawerRowKind::Pane(2));
+        assert_eq!(wm.drawer().selected_index, idx);
+        let buf = render(&wm, area);
+        assert!(
+            buf[(x, y)].modifier.contains(ratatui::style::Modifier::REVERSED)
+                || buf[(x, y)].bg == ratatui::style::Color::Rgb(30, 41, 59),
+            "the #2 row carries the selection style"
+        );
+        assert_eq!(navigator_row_at(&wm, area, 99, 29), None, "outside the drawer is no row");
+    });
+}

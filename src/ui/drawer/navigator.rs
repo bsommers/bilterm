@@ -212,6 +212,22 @@ pub fn navigator_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<Navi
     cells
 }
 
+/// Index into [`WindowManager::drawer_rows`] of the list row under screen cell `(col, row)`, `None` outside
+/// the rendered list rows. Uses the same layout as [`render_navigator_drawer`].
+pub fn navigator_row_at(wm: &WindowManager, workspace_area: Rect, col: u16, row: u16) -> Option<usize> {
+    let drawer_rect = wm.drawer_rect(workspace_area)?;
+    let lay = navigator_layout(wm, drawer_rect)?;
+    if col < lay.inner.x || col >= lay.inner.x + lay.inner.width || row < lay.list_y || row >= lay.list_bottom {
+        return None;
+    }
+    let vis_idx = usize::from(row - lay.list_y) / lay.row_step;
+    if vis_idx >= lay.cap {
+        return None;
+    }
+    let idx = lay.scroll + vis_idx;
+    (idx < lay.rows.len()).then_some(idx)
+}
+
 /// Truncates `text` to at most `max_w` display columns, ending with `ellipsis` when cut.
 fn fit_width(text: &str, max_w: usize, ellipsis: &str) -> String {
     if text.width() <= max_w {

@@ -720,6 +720,9 @@ pub(super) fn handle_drawer_mouse_event(
         }
         return None;
     }
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+        return super::drawer_navigator::handle_navigator_drawer_mouse(wm, mouse, dr, workspace_area);
+    }
 
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
