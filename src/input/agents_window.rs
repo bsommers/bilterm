@@ -60,6 +60,24 @@ pub(super) fn handle_agents_window_key(wm: &mut WindowManager, key: KeyEvent) ->
     Some(AppAction::Handled)
 }
 
+/// Routes a bracketed-paste payload (CR-01).
+///
+/// While the AGENT TRAFFIC window owns the keyboard the paste must never reach the active pane's
+/// PTY or hidden prompt. Only keyword entry accepts the text (control characters dropped); every
+/// other window pane (compose, graph, conversation) swallows it. Returns `None` when the window
+/// does not capture input so the caller pastes into the pane as usual.
+pub(super) fn handle_agents_window_paste(wm: &mut WindowManager, text: &str) -> Option<AppAction> {
+    if !wm.agents_window().captures_input() {
+        return None;
+    }
+    if wm.agents_window().snoop.keyword_entry.is_some() {
+        for c in text.chars().filter(|c| !c.is_control()) {
+            let _ = wm.apply(Action::Agents(AgentsOp::KeywordEdit(KeywordEdit::Push(c))));
+        }
+    }
+    Some(AppAction::Handled)
+}
+
 /// Handles a mouse event over the AGENT TRAFFIC window (`FLT-01`, Phase 50-09).
 ///
 /// Every visible effect lowers to an `Action::Agents(..)` run through `WindowManager::apply`; the

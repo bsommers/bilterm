@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 use crate::error::Result;
-use crate::input::{handle_paste_event, handle_wm_key_event, handle_wm_mouse_event, AppAction};
+use crate::input::{handle_wm_key_event, handle_wm_paste_event, handle_wm_mouse_event, AppAction};
 use crate::pane::CompositePane;
 use crate::ui::WorkspaceWidget;
 use crate::wm::WindowManager;
@@ -140,7 +140,7 @@ impl App {
                 let _ = handle_wm_mouse_event(&mut self.wm, mouse, self.last_viewport)?;
             }
             Event::Paste(text) => {
-                let _ = handle_paste_event(self.wm.active_pane_mut(), &text)?;
+                let _ = handle_wm_paste_event(&mut self.wm, &text)?;
             }
             Event::Resize(cols, rows) => {
                 crate::ui::hires_subcell::refresh_terminal_pixel_size();

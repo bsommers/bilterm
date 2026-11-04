@@ -2181,6 +2181,51 @@ fn compose_typing_sends_nothing() {
     });
 }
 
+/// CR-01: a paste while the window owns the keyboard never reaches the pane beneath.
+#[test]
+fn paste_while_window_captures_input_never_reaches_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = snoop_fixture();
+        let (bytes, prompt, seq) = (pane_bytes(&wm), prompts(&wm), wm.traffic().latest_seq());
+        let wrote = wm.active_pane().last_pty_write().to_vec();
+        ctrl_o(&mut wm);
+        ctrl_o(&mut wm);
+        assert_eq!(wm.agents_window().pane_focus, WindowPane::Compose);
+        let r = bilterm::input::handle_wm_paste_event(&mut wm, "rm -rf /\nsecret");
+        assert!(r.is_ok());
+        assert_eq!(pane_bytes(&wm), bytes, "no byte reached any pane");
+        assert_eq!(prompts(&wm), prompt, "no prompt text changed");
+        assert_eq!(wm.active_pane().last_pty_write(), wrote.as_slice(), "no PTY write");
+        assert_eq!(wm.traffic().latest_seq(), seq);
+        assert!(wm.agents_window().snoop.keyword_entry.is_none());
+    });
+}
+
+/// CR-01: keyword entry (and only keyword entry) accepts pasted text, control characters dropped.
+#[test]
+fn paste_into_keyword_entry_filters_controls_and_skips_pane() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = snoop_fixture();
+        let prompt = prompts(&wm);
+        let wrote = wm.active_pane().last_pty_write().to_vec();
+        run_colon(&mut wm, ":agents focus snoop");
+        press(&mut wm, KeyCode::Char('/'));
+        assert_eq!(wm.agents_window().snoop.keyword_entry.as_deref(), Some(""));
+        bilterm::input::handle_wm_paste_event(&mut wm, "ec\nho\x1b[31m").unwrap();
+        assert_eq!(wm.agents_window().snoop.keyword_entry.as_deref(), Some("echo[31m"));
+        assert_eq!(prompts(&wm), prompt);
+        assert_eq!(wm.active_pane().last_pty_write(), wrote.as_slice());
+    });
+}
+
+/// CR-01: with the window closed a paste still goes to the active pane.
+#[test]
+fn paste_with_window_closed_reaches_active_pane() {
+    let (mut wm, _) = fixture(120, 40);
+    bilterm::input::handle_wm_paste_event(&mut wm, "echo pasted").unwrap();
+    assert!(wm.active_pane().prompt().text().contains("echo pasted"));
+}
+
 #[test]
 fn compose_send_badge_matches_enter() {
     with_temp_xdg(|| {
