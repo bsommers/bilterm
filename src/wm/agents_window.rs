@@ -881,7 +881,7 @@ impl WindowManager {
 
     /// Rows available for conversation lines (0 when the window is not visible).
     fn snoop_view_rows(&self) -> usize {
-        let ws = self.current_workspace_area().1;
+        let ws = self.agents_workspace();
         self.agents_pane_rects(ws)
             .map_or(0, |r| usize::from(crate::ui::agents_ui::snoop_lines_area(self, r.snoop).height))
     }

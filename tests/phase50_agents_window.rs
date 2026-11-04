@@ -2181,6 +2181,24 @@ fn compose_typing_sends_nothing() {
     });
 }
 
+/// WR-02: geometry setters clamp against the scaled (virtual) workspace the window renders in.
+#[test]
+fn geometry_setters_use_scaled_virtual_workspace() {
+    let (mut wm, area) = fixture(120, 40);
+    wm.set_gui_surface(true);
+    wm.set_scale(PanelTarget::Agents, 200);
+    wm.open_agents_window(None);
+    let vws = wm.panel_virtual_area(area, PanelTarget::Agents);
+    assert_eq!((vws.width, vws.height), (60, 20));
+    let stored = wm.set_agents_rect(Rect::new(0, 0, 200, 100));
+    assert_eq!((stored.width, stored.height), (vws.width, vws.height), "clamped to the virtual area");
+    // Nudging from the default rect stays inside the virtual area.
+    wm.set_agents_rect(Rect::new(50, 15, 40, 12));
+    wm.move_agents_window(30, 30);
+    let r = wm.agents_window_rect(vws).expect("rect");
+    assert!(r.x + r.width <= vws.width && r.y + r.height <= vws.height, "{r:?} within {vws:?}");
+}
+
 /// CR-01: a paste while the window owns the keyboard never reaches the pane beneath.
 #[test]
 fn paste_while_window_captures_input_never_reaches_pane() {
