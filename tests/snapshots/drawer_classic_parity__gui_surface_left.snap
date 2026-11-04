@@ -1,0 +1,8 @@
+---
+source: tests/drawer_classic_parity.rs
+expression: text
+---
+quads: 3000
+glyphs: 666
+images: 0
+rgba-digest: e0f33e7da0c3b5f2

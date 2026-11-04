@@ -7,7 +7,9 @@
 
 use std::sync::Mutex;
 
-use bilterm::colon_command::parse_colon_command;
+use bilterm::colon_command::{Action, parse_colon_command};
+use bilterm::remote::RemoteHostProfile;
+use bilterm::wm::SessionNodeKind;
 use bilterm::ui::{WorkspaceWidget, buffer_to_snapshot_string};
 use bilterm::wm::{SplitDirection, WindowManager};
 use ratatui::buffer::Buffer;
@@ -93,7 +95,6 @@ fn assert_no_host_paths(text: &str) {
     }
 }
 
-#[allow(dead_code)]
 fn run_colon(wm: &mut WindowManager, cmd: &str) {
     let parsed = parse_colon_command(cmd)
         .unwrap_or_else(|| panic!("not a colon command: {cmd}"))
@@ -119,5 +120,131 @@ fn legacy_left() {
         let (mut wm, area) = fixture(100, 30);
         open_drawer(&mut wm);
         finish("legacy_left", &wm, area);
+    });
+}
+
+fn edge_case(name: &str, cmd: &str) {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        run_colon(&mut wm, cmd);
+        open_drawer(&mut wm);
+        finish(name, &wm, area);
+    });
+}
+
+#[test]
+fn legacy_right() {
+    edge_case("legacy_right", ":drawer right");
+}
+
+#[test]
+fn legacy_top() {
+    edge_case("legacy_top", ":drawer top");
+}
+
+#[test]
+fn legacy_bottom() {
+    edge_case("legacy_bottom", ":drawer bottom");
+}
+
+#[test]
+fn modern_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        run_colon(&mut wm, ":modern on");
+        open_drawer(&mut wm);
+        finish("modern_left", &wm, area);
+    });
+}
+
+#[test]
+fn liquid_glass_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        run_colon(&mut wm, ":liquid on");
+        open_drawer(&mut wm);
+        finish("liquid_glass_left", &wm, area);
+    });
+}
+
+#[test]
+fn maximized_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        open_drawer(&mut wm);
+        wm.apply(Action::DrawerSize(u16::MAX)).unwrap();
+        finish("maximized_left", &wm, area);
+    });
+}
+
+#[test]
+fn overlay_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        run_colon(&mut wm, ":drawer float");
+        open_drawer(&mut wm);
+        finish("overlay_left", &wm, area);
+    });
+}
+
+#[test]
+fn session_tree_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        wm.session_tree_mut()
+            .upsert_session("child", SessionNodeKind::Independent, Some("default"));
+        wm.session_tree_mut()
+            .upsert_session("ops", SessionNodeKind::Independent, None);
+        open_drawer(&mut wm);
+        finish("session_tree_left", &wm, area);
+    });
+}
+
+#[test]
+fn quick_terminal_fleet_left() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        // The visible quake overlay occludes the whole left drawer (top 40% of the screen), so the
+        // quick-terminal row cannot be pinned in a full-frame golden; toggle it on and off to
+        // exercise the Action path and pin the fleet group with the overlay hidden.
+        wm.apply(Action::QuakeToggle).unwrap();
+        assert!(wm.is_quick_terminal_visible());
+        wm.apply(Action::QuakeToggle).unwrap();
+        assert!(!wm.is_quick_terminal_visible());
+        wm.fleet_mut().register_profile(RemoteHostProfile {
+            name: "prod-db".to_string(),
+            destination: "ops@prod-db.example".to_string(),
+            port: None,
+            identity_file: None,
+            control_master: false,
+            remote_osc133_bootstrap: false,
+            tags: vec!["db".to_string()],
+            rpc_endpoint: None,
+        });
+        open_drawer(&mut wm);
+        finish("quick_terminal_fleet_left", &wm, area);
+    });
+}
+
+#[test]
+fn gui_surface_left() {
+    use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
+    with_temp_xdg(|| {
+        let (mut wm, area) = fixture(100, 30);
+        open_drawer(&mut wm);
+        wm.set_gui_surface(true);
+        let mut renderer = GuiWorkspaceRenderer::new(8, 16);
+        let mut surface = GuiFrameSurface::new(8, 16);
+        renderer.render_workspace_with_cell_size(&mut wm, area, 8, 16, &mut surface);
+        let (_, _, rgba) = surface.rasterize_rgba();
+        let text = format!(
+            "quads: {}\nglyphs: {}\nimages: {}\nrgba-digest: {:016x}\n",
+            surface.quads.len(),
+            surface.glyphs.len(),
+            surface.images.len(),
+            fnv1a64(rgba)
+        );
+        assert_no_host_paths(&text);
+        insta::assert_snapshot!("gui_surface_left", text);
     });
 }
