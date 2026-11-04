@@ -10,6 +10,7 @@ use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use bilterm::ui::WorkspaceWidget;
 use bilterm::ui::design::DesignTokens;
+use bilterm::ui::typography::PanelTarget;
 use bilterm::wm::agents_window::{GraphDir, GraphLayout, NodeKey};
 use bilterm::wm::traffic::{TrafficEndpoint, TrafficKind};
 use bilterm::wm::agent_state::AgentState;
@@ -545,6 +546,8 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::Pin(None) => ":agents pin toggle".to_string(),
         AgentsOp::Pin(Some(true)) => ":agents pin".to_string(),
         AgentsOp::Pin(Some(false)) => ":agents unpin".to_string(),
+        AgentsOp::ScaleStep(n) if *n >= 0 => format!(":agents scale +{n}"),
+        AgentsOp::ScaleStep(n) => format!(":agents scale {n}"),
     })
 }
 
@@ -592,6 +595,8 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::Pin(None),
         AgentsOp::Pin(Some(true)),
         AgentsOp::Pin(Some(false)),
+        AgentsOp::ScaleStep(-10),
+        AgentsOp::ScaleStep(10),
     ]
 }
 
@@ -1428,5 +1433,143 @@ fn window_pin_esc_releases_keyboard() {
         assert!(!wm.agents_window().pinned);
         run_colon(&mut wm, ":agents zoom");
         assert!(wm.agents_window().captures_input());
+    });
+}
+
+fn scale_of(wm: &WindowManager) -> u16 {
+    wm.scale_pct(PanelTarget::Agents)
+}
+
+fn ctrl_wheel(wm: &mut WindowManager, area: Rect, up: bool, col: u16, row: u16) {
+    let kind = if up { MouseEventKind::ScrollUp } else { MouseEventKind::ScrollDown };
+    let ev = MouseEvent { kind, column: col, row, modifiers: KeyModifiers::CONTROL };
+    handle_wm_mouse_event(wm, ev, area).unwrap();
+}
+
+#[test]
+fn window_ctrl_wheel_scales_agents_panel_on_gui_surface() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        wm.set_gui_surface(true);
+        let r = win_rect(&wm, area);
+        ctrl_wheel(&mut wm, area, true, r.x + 3, r.y + 3);
+        assert_eq!(scale_of(&wm), 110);
+        ctrl_wheel(&mut wm, area, false, r.x + 3, r.y + 3);
+        ctrl_wheel(&mut wm, area, false, r.x + 3, r.y + 3);
+        assert_eq!(scale_of(&wm), 100 - 10);
+        assert_eq!(wm.scale_pct(PanelTarget::Drawer), 100, "drawer scale untouched");
+        assert_eq!(wm.scale_pct(PanelTarget::Mcp), 100, "MCP scale untouched");
+        assert!(wm.agents_window().active);
+    });
+}
+
+#[test]
+fn window_bracket_keys_step_scale() {
+    with_temp_xdg(|| {
+        let (mut wm, _) = traffic_fixture();
+        press(&mut wm, KeyCode::Char(']'));
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 110);
+        let msg = wm.active_pane().status_message().unwrap_or_default().to_string();
+        assert!(msg.contains("110%") && msg.contains("(applies in the GUI only)"), "{msg}");
+        press(&mut wm, KeyCode::Char('['));
+        press(&mut wm, KeyCode::Char('['));
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 90);
+        for _ in 0..5 {
+            press(&mut wm, KeyCode::Char('['));
+        }
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 75, "clamped at 75");
+        for _ in 0..20 {
+            press(&mut wm, KeyCode::Char(']'));
+        }
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 200, "clamped at 200");
+        wm.set_gui_surface(true);
+        press(&mut wm, KeyCode::Char('['));
+        let msg = wm.active_pane().status_message().unwrap_or_default().to_string();
+        assert!(msg.contains("190%") && !msg.contains("GUI only"), "{msg}");
+    });
+}
+
+#[test]
+fn window_colon_scale_absolute_and_relative() {
+    let parsed = |s: &str| parse_colon_command(s).unwrap();
+    assert_eq!(parsed(":agents scale 150"), Ok(Action::PanelScaleOf(PanelTarget::Agents, 150)));
+    assert_eq!(parsed(":agents scale +10"), Ok(Action::Agents(AgentsOp::ScaleStep(10))));
+    assert_eq!(parsed(":agents scale -10"), Ok(Action::Agents(AgentsOp::ScaleStep(-10))));
+    for bad in [":agents scale 300", ":agents scale 74", ":agents scale x", ":agents scale +x", ":agents scale", ":agents scale 1 2"] {
+        assert!(parsed(bad).is_err(), "`{bad}` must be a usage error");
+    }
+    with_temp_xdg(|| {
+        let (mut wm, _) = traffic_fixture();
+        run_colon(&mut wm, ":agents scale 150");
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 150);
+        assert_eq!(wm.scale_setting(PanelTarget::Drawer), 100);
+        run_colon(&mut wm, ":agents scale -10");
+        assert_eq!(wm.scale_setting(PanelTarget::Agents), 140);
+    });
+}
+
+#[test]
+fn window_panel_scale_sets_all_panels() {
+    let mut wm = WindowManager::new_headless(30, 100);
+    run_colon(&mut wm, ":panel scale 125");
+    for t in [PanelTarget::Drawer, PanelTarget::Mcp, PanelTarget::Agents] {
+        assert_eq!(wm.scale_setting(t), 125, "{t:?}");
+    }
+}
+
+fn gui_max_cell_width(wm: &mut WindowManager, area: Rect) -> u16 {
+    use bilterm::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer};
+    wm.set_gui_surface(true);
+    let mut renderer = GuiWorkspaceRenderer::new(8, 16);
+    let mut surface = GuiFrameSurface::new(8, 16);
+    renderer.render_workspace_with_cell_size(wm, area, 8, 16, &mut surface);
+    let r = wm.agents_window_rect(ws_of(wm, area)).expect("window rect");
+    let (cw, ch) = (8.0f32, 16.0f32);
+    // Glyphs whose cell origin lies inside the (unscaled) window rect.
+    surface
+        .glyphs
+        .iter()
+        .filter(|g| g.x_px >= f32::from(r.x) * cw && g.x_px < f32::from(r.x + r.width) * cw && g.y_px >= f32::from(r.y) * ch && g.y_px < f32::from(r.y + r.height) * ch)
+        .map(|g| g.cell_width_px)
+        .max()
+        .unwrap_or(0)
+}
+
+#[test]
+fn window_gui_scaled_agents_glyphs_wider() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = traffic_fixture();
+        let base = gui_max_cell_width(&mut wm, area);
+        run_colon(&mut wm, ":agents scale 150");
+        let big = gui_max_cell_width(&mut wm, area);
+        assert!(base > 0 && big > base, "agents glyph cells should be wider at 150% ({big} vs {base})");
+    });
+}
+
+#[test]
+fn parity_pin_scale_key_mouse_colon_match() {
+    with_temp_xdg(|| {
+        let by_key = {
+            let (mut wm, _) = traffic_fixture();
+            wm.set_gui_surface(true);
+            press(&mut wm, KeyCode::Char(']'));
+            (scale_of(&wm), observe(&wm))
+        };
+        let by_mouse = {
+            let (mut wm, area) = traffic_fixture();
+            wm.set_gui_surface(true);
+            let r = win_rect(&wm, area);
+            ctrl_wheel(&mut wm, area, true, r.x + 3, r.y + 3);
+            (scale_of(&wm), observe(&wm))
+        };
+        let by_colon = {
+            let (mut wm, _) = traffic_fixture();
+            wm.set_gui_surface(true);
+            run_colon(&mut wm, ":agents scale +10");
+            (scale_of(&wm), observe(&wm))
+        };
+        assert_eq!(by_key.0, 110);
+        assert_eq!(by_key, by_mouse);
+        assert_eq!(by_key, by_colon);
     });
 }

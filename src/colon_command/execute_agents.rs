@@ -87,6 +87,11 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
             };
             status(wm, msg.to_string());
         }
+        AgentsOp::ScaleStep(delta) => {
+            let n = wm.step_scale(crate::ui::typography::PanelTarget::Agents, delta);
+            let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+            status(wm, format!("Panel scale: {n}%{note}"));
+        }
         // Handled by the caller.
         AgentsOp::List
         | AgentsOp::Zoom(_)

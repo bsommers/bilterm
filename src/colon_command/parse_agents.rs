@@ -4,7 +4,9 @@ use super::ColonCommand;
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::agents_window::{GraphDir, NodeKey};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>]";
+
+const SCALE_USAGE: &str = "Usage: :agents scale <75..200> | +n | -n (GUI only)";
 
 fn graph_dir(raw: &str) -> Option<GraphDir> {
     match raw {
@@ -93,6 +95,10 @@ fn parse_window_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, Strin
                 _ => usage("node-pin <node-key> <x 0..1000> <y 0..1000>"),
             }
         }
+        ("scale", 1) if args[0].starts_with(['+', '-']) => match args[0].parse::<i16>() {
+            Ok(n) => Some(Ok(AgentsOp::ScaleStep(n))),
+            Err(_) => Some(Err(SCALE_USAGE.to_string())),
+        },
         ("pin", 0) => Some(Ok(AgentsOp::Pin(Some(true)))),
         ("pin", 1) if args[0] == "toggle" => Some(Ok(AgentsOp::Pin(None))),
         ("unpin", 0) => Some(Ok(AgentsOp::Pin(Some(false)))),
@@ -101,6 +107,7 @@ fn parse_window_verb(verb: &str, args: &[&str]) -> Option<Result<AgentsOp, Strin
             Some(key) => Some(Ok(AgentsOp::UnpinNode(Some(key)))),
             None => usage("node-unpin [node-key]"),
         },
+        ("scale", _) => Some(Err(SCALE_USAGE.to_string())),
         ("move" | "resize" | "rect" | "size" | "max" | "split" | "grab" | "nudge" | "node-pin" | "node-unpin" | "pin" | "unpin", _) => {
             usage(&format!("{verb} ... (see :agents)"))
         }
@@ -142,6 +149,15 @@ pub(super) fn parse_agents_colon_command(
             _ => Err("Usage: :agents edge <next|prev|node-key node-key>".to_string()),
         },
         Some("enter") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Activate)),
+        // Absolute scale reuses the shared `PanelScaleOf` Action (`+n` / `-n` are `ScaleStep`).
+        Some("scale") if parts.len() == 3 && !parts[2].starts_with(['+', '-']) => {
+            match parts[2].trim_end_matches('%').parse::<u16>() {
+                Ok(n) if (75..=200).contains(&n) => {
+                    Ok(ColonCommand::PanelScaleOf(crate::ui::typography::PanelTarget::Agents, n))
+                }
+                _ => Err(SCALE_USAGE.to_string()),
+            }
+        }
         Some(verb) => match parse_window_verb(verb, &parts[2..]) {
             Some(res) => res.map(ColonCommand::Agents),
             None => Err(USAGE.to_string()),

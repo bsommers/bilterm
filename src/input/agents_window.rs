@@ -11,10 +11,11 @@ use ratatui::layout::Rect;
 
 use super::AppAction;
 use super::keymap::{AgentsKeyScope, agents_window_action, is_leader_key_with_tmux};
-use super::mouse_wm::{apply_rect_edge_resize, detect_title_bar_badge_click};
+use super::mouse_wm::{apply_rect_edge_resize, ctrl_wheel_scale_delta, detect_title_bar_badge_click};
 use crate::action::Action;
 use crate::wm::agents_cmd::AgentsOp;
 use crate::ui::agents_ui::agents_pin_badge_x;
+use crate::ui::typography::PanelTarget;
 use crate::wm::agents_geometry::{AgentsHit, graph_cell_permille};
 use crate::wm::agents_window::AgentsDrag;
 use crate::wm::{WindowManager, rect_contains};
@@ -51,6 +52,8 @@ pub(super) fn handle_agents_window_mouse(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
+    // The window may be drawn at its own GUI scale: work in its virtual (scaled) cell space.
+    let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area, PanelTarget::Agents);
     if !wm.agents_window().active || wm.agents_window_rect(workspace_area).is_none() {
         return None;
     }
@@ -81,6 +84,10 @@ pub(super) fn handle_agents_window_mouse(
             return None;
         }
         return rect_contains(workspace_area, mouse.column, mouse.row).then_some(AppAction::Handled);
+    }
+    if let Some(delta) = ctrl_wheel_scale_delta(&mouse) {
+        run(wm, AgentsOp::ScaleStep(delta));
+        return Some(AppAction::Handled);
     }
     if let MouseEventKind::Down(button) = mouse.kind {
         // A click inside a pinned window whose keyboard was released takes the keyboard back.

@@ -858,5 +858,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
     match target {
         PanelTarget::Drawer => "Drawer",
         PanelTarget::Mcp => "MCP",
+        PanelTarget::Agents => "Agents",
     }
 }

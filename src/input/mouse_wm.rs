@@ -93,7 +93,7 @@ pub(super) fn apply_rect_edge_resize(
 }
 
 /// Ctrl + wheel over a drawer/MCP panel steps its GUI text scale by 10% (`None` for any other event).
-fn ctrl_wheel_scale_delta(mouse: &MouseEvent) -> Option<i16> {
+pub(super) fn ctrl_wheel_scale_delta(mouse: &MouseEvent) -> Option<i16> {
     if !mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
         return None;
     }

@@ -370,6 +370,8 @@ pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Acti
     (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Up, Action::Agents(AgentsOp::Resize { dw: 0, dh: -1 })),
     (AgentsKeyScope::Window, KeyModifiers::ALT, KeyCode::Down, Action::Agents(AgentsOp::Resize { dw: 0, dh: 1 })),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('*'), Action::Agents(AgentsOp::Pin(None))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('['), Action::Agents(AgentsOp::ScaleStep(-10))),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char(']'), Action::Agents(AgentsOp::ScaleStep(10))),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('m'), Action::Agents(AgentsOp::Maximize)),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('<'), Action::Agents(AgentsOp::SplitStep(-5))),
     (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Char('>'), Action::Agents(AgentsOp::SplitStep(5))),

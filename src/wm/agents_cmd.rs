@@ -48,4 +48,6 @@ pub enum AgentsOp {
     UnpinNode(Option<crate::wm::agents_window::NodeKey>),
     /// `:agents pin` / `unpin` / `pin toggle` (`*`, title pin badge) - pin the window open (`None` toggles).
     Pin(Option<bool>),
+    /// `:agents scale +10` / `-10` (`]` / `[`, Ctrl+wheel) - step the window's own panel scale (GUI only).
+    ScaleStep(i16),
 }

@@ -141,6 +141,8 @@ pub struct WindowManager {
     pub(crate) drawer_scale_pct: u16,
     /// Same for the `:mcp` console; independent of the drawer's.
     pub(crate) mcp_scale_pct: u16,
+    /// Same for the AGENT TRAFFIC window; independent of the drawer's and the console's (50-16).
+    pub(crate) agents_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -215,6 +217,7 @@ impl WindowManager {
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
             mcp_scale_pct: 100,
+            agents_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
