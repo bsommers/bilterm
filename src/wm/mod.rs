@@ -232,7 +232,12 @@ impl WindowManager {
 
     /// Executes a unified [`Action`] against the workspace and active pane (`ARCH-R01.1`).
     pub fn apply(&mut self, action: Action) -> Result<AppAction> {
-        if execute_wm_colon_command(self, action) {
+        // Any action may create, rename or delete a saved session: drop the Navigator's snapshot
+        // before and after so rows rebuilt during or right after it are fresh (WR-05).
+        self.drawer.invalidate_saved_sessions();
+        let quit = execute_wm_colon_command(self, action);
+        self.drawer.invalidate_saved_sessions();
+        if quit {
             Ok(AppAction::Quit)
         } else {
             Ok(AppAction::Handled)

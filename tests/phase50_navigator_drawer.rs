@@ -76,6 +76,38 @@ fn style_default_is_classic() {
     assert_eq!(d.navigator_width_cols, 28);
 }
 
+/// WR-05: the saved-session list is snapshotted, so one frame/event sees one consistent row list
+/// and the session directory is not rescanned by every layout helper.
+#[test]
+fn navigator_rows_snapshot_saved_sessions_until_invalidated() {
+    with_temp_xdg(|| {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut wm, _area) = fixture(100, 30);
+        run_colon(&mut wm, ":set drawer.style navigator");
+        wm.config_mut().session_dir = Some(dir.path().to_str().unwrap().to_string());
+        std::fs::write(dir.path().join("alpha_saved.toml"), "").unwrap();
+        let names = |wm: &WindowManager| -> Vec<String> {
+            wm.drawer_rows()
+                .into_iter()
+                .filter_map(|r| match r.kind {
+                    DrawerRowKind::SessionHeader(n) => Some(n),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(names(&wm).contains(&"alpha_saved".to_string()));
+        std::fs::write(dir.path().join("beta_saved.toml"), "").unwrap();
+        assert!(!names(&wm).contains(&"beta_saved".to_string()), "same snapshot until invalidated");
+        run_colon(&mut wm, ":drawer"); // any action invalidates
+        assert!(names(&wm).contains(&"beta_saved".to_string()), "action refreshed the snapshot");
+        std::fs::write(dir.path().join("gamma_saved.toml"), "").unwrap();
+        for _ in 0..32 {
+            wm.update_drawer_telemetry();
+        }
+        assert!(names(&wm).contains(&"gamma_saved".to_string()), "ticks pick up external changes");
+    });
+}
+
 #[test]
 fn style_set_via_colon_set_switches_rows() {
     with_temp_xdg(|| {

@@ -217,11 +217,30 @@ pub struct WorkspaceDrawer {
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
+    /// Saved-session names snapshot used by the Navigator row builder (WR-05). Refilled lazily
+    /// after [`Self::invalidate_saved_sessions`], so one frame or event sees one list and the
+    /// directory is not rescanned by every layout helper.
+    saved_sessions: std::cell::RefCell<Option<Vec<String>>>,
 }
 
 impl WorkspaceDrawer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Saved-session snapshot, filled by `fill` on first use after an invalidation.
+    pub(crate) fn cached_saved_sessions(&self, fill: impl FnOnce() -> Vec<String>) -> Vec<String> {
+        if let Some(list) = self.saved_sessions.borrow().as_ref() {
+            return list.clone();
+        }
+        let list = fill();
+        *self.saved_sessions.borrow_mut() = Some(list.clone());
+        list
+    }
+
+    /// Drops the saved-session snapshot (any action may create, rename or delete a session).
+    pub(crate) fn invalidate_saved_sessions(&self) {
+        *self.saved_sessions.borrow_mut() = None;
     }
 
     /// First visible row: a wheel-set viewport while the selection is unchanged, else pinned to keep `selected` visible.
@@ -377,6 +396,10 @@ impl WindowManager {
     /// Updates rolling throughput sparklines and spinner ticks across all panes (`DRW-02`).
     pub fn update_drawer_telemetry(&mut self) {
         self.drawer.tick_counter = self.drawer.tick_counter.wrapping_add(1);
+        // Pick up sessions saved by other processes about twice a second (WR-05).
+        if self.drawer.tick_counter.is_multiple_of(32) {
+            self.drawer.invalidate_saved_sessions();
+        }
         let ids: Vec<(PaneId, usize)> = self
             .panes
             .iter()

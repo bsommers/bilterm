@@ -170,7 +170,7 @@ impl WindowManager {
     pub(crate) fn navigator_drawer_rows(&self) -> Vec<DrawerRow> {
         let tree = &self.daemon_state.session_tree;
         let active = self.config.history_session.as_str();
-        let saved = self.list_sessions();
+        let saved = self.drawer.cached_saved_sessions(|| self.list_sessions());
         let ctx = WalkCtx { wm: self, active, pane_ids: self.ordered_pane_ids() };
         let mut rows = Vec::new();
         let mut visited = BTreeSet::new();
