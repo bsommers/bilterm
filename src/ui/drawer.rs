@@ -4,6 +4,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
+pub mod herdr;
+
 use crate::config::BiltermConfig;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
 use crate::ui::glyphs::GlyphSet;
@@ -155,6 +157,10 @@ pub fn render_workspace_drawer(
     let Some(drawer_rect) = wm.drawer_rect(workspace_area) else {
         return;
     };
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Herdr {
+        herdr::render_herdr_drawer(wm, workspace_area, drawer_rect, cfg, palette, glyphs, buf);
+        return;
+    }
     let dcfg = wm.drawer_config();
     let drawer = wm.drawer();
     let is_modern = cfg.is_modern();

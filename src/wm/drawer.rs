@@ -16,6 +16,9 @@ use crate::remote::FleetNodeKind;
 use crate::vt::Osc133Phase;
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
+pub mod herdr;
+pub use herdr::{DrawerStyle, HerdrLevel, HerdrRowMeta};
+
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
 pub const BRAILLE_SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -94,6 +97,8 @@ pub struct DrawerConfig {
     pub layout: DrawerLayoutMode,
     pub width_cols: u16,
     pub height_rows: u16,
+    pub style: DrawerStyle,
+    pub herdr_width_cols: u16,
 }
 
 impl Default for DrawerConfig {
@@ -104,6 +109,8 @@ impl Default for DrawerConfig {
             layout: DrawerLayoutMode::Push,
             width_cols: 34,
             height_rows: 6,
+            style: DrawerStyle::Classic,
+            herdr_width_cols: 28,
         }
     }
 }
@@ -131,6 +138,7 @@ pub struct DrawerRow {
     pub transport_badges: Vec<String>,
     pub title: String,
     pub is_focused_pane: bool,
+    pub herdr: Option<HerdrRowMeta>,
 }
 
 impl DrawerRow {
@@ -328,7 +336,7 @@ impl WindowManager {
             let max_w = (workspace_area.width / 2).max(12);
             let max_h = (workspace_area.height / 2).max(3);
             (
-                cfg.width_cols.clamp(12, max_w).min(workspace_area.width),
+                cfg.effective_width_cols().clamp(12, max_w).min(workspace_area.width),
                 cfg.height_rows.clamp(3, max_h).min(workspace_area.height),
             )
         };
@@ -399,7 +407,7 @@ impl WindowManager {
     }
 
     /// Builds the complete list of hierarchical [`DrawerRow`]s with live telemetry glyphs (`DRW-02`).
-    pub fn drawer_rows(&self) -> Vec<DrawerRow> {
+    fn classic_drawer_rows(&self) -> Vec<DrawerRow> {
         let mut rows = Vec::new();
         let mut sess_modes = Vec::new();
         if self.is_workspace_recording() {
@@ -431,6 +439,7 @@ impl WindowManager {
             transport_badges: sess_transports,
             title: self.config.history_session.clone(),
             is_focused_pane: false,
+            herdr: None,
         });
 
         let has_extra_groups = self.quick_terminal.visible || !self.fleet.nodes.is_empty();
@@ -448,6 +457,7 @@ impl WindowManager {
                 WorkspaceLayoutMode::Stacked => "Stacked Z-Deck".to_string(),
             },
             is_focused_pane: false,
+            herdr: None,
         });
 
         let top_id = self.z_stack.top();
@@ -505,6 +515,7 @@ impl WindowManager {
                 transport_badges,
                 title: pane.title().to_string(),
                 is_focused_pane: is_focused,
+                herdr: None,
             });
         }
 
@@ -521,6 +532,7 @@ impl WindowManager {
                 transport_badges: Vec::new(),
                 title: "QUAKE QUICK TERM".to_string(),
                 is_focused_pane: true,
+                herdr: None,
             });
         }
 
@@ -542,6 +554,7 @@ impl WindowManager {
                 transport_badges,
                 title: name.clone(),
                 is_focused_pane: false,
+                herdr: None,
             });
         }
         let mut extra_sessions = self.list_sessions();
@@ -575,6 +588,7 @@ impl WindowManager {
                     transport_badges: Vec::new(),
                     title: saved,
                     is_focused_pane: false,
+                    herdr: None,
                 });
             }
         }
@@ -947,7 +961,7 @@ impl WindowManager {
     pub fn resize_drawer(&mut self, size: u16) {
         self.drawer.maximized = false;
         if self.config.drawer.edge.is_vertical() {
-            self.config.drawer.width_cols = size.clamp(16, 100);
+            self.config.drawer.set_width_cols_for_style(size.clamp(16, 100));
         } else {
             self.config.drawer.height_rows = size.clamp(3, 14);
         }
