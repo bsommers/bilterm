@@ -21,6 +21,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('|'), Action::SplitVertical),
     (KeyCode::Char('\\'), Action::SplitVertical),
     (KeyCode::Char('V'), Action::SplitVertical),
+    (KeyCode::Char('!'), Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention)),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
     (KeyCode::F(5), Action::ZoomToggle),

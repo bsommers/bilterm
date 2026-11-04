@@ -689,6 +689,15 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             None => Some(Ok(ColonCommand::DrawerLayout(None))),
             _ => Some(Err("Usage: :drawer mode [float|push]".to_string())),
         },
+        Some("style") => {
+            use crate::wm::drawer::DrawerStyle;
+            match parts.get(2).copied() {
+                None | Some("toggle") => Some(Ok(ColonCommand::DrawerStyle(None))),
+                Some("classic") => Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Classic)))),
+                Some("herdr") => Some(Ok(ColonCommand::DrawerStyle(Some(DrawerStyle::Herdr)))),
+                _ => Some(Err("Usage: :drawer style [classic|herdr|toggle]".to_string())),
+            }
+        }
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
             crate::wm::drawer::DrawerNavOp::NextAttention,
         ))),
@@ -702,7 +711,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|style|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

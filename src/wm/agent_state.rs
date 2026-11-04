@@ -443,11 +443,13 @@ impl WindowManager {
         }
     }
 
-    /// Poll-loop hook. Returns `false` in 50-03 so the classic redraw cadence is unchanged (RESEARCH
-    /// Pitfall 8); 50-04 makes it return `true` for visible herdr changes.
+    /// Poll-loop hook. Returns `true` only when a state changed AND the herdr drawer is visible, so
+    /// the classic redraw cadence is unchanged (RESEARCH Pitfall 8).
     pub(crate) fn tick_agent_ui(&mut self, now: Instant) -> bool {
-        let _ = self.update_agent_states(now);
-        false
+        let changed = self.update_agent_states(now);
+        changed
+            && self.config.drawer.style == crate::wm::drawer::DrawerStyle::Herdr
+            && self.is_drawer_effectively_visible()
     }
 }
 

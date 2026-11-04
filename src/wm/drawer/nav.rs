@@ -4,6 +4,7 @@
 //! [`DrawerNavOp`] inside [`crate::action::Action::DrawerNav`] and runs through
 //! [`WindowManager::apply_drawer_nav`]. Later Phase 50 plans extend the enum.
 
+use super::DrawerStyle;
 use crate::pane::PaneId;
 use crate::wm::WindowManager;
 use crate::wm::agent_state::AgentState;
@@ -49,5 +50,18 @@ impl WindowManager {
         self.sync_drawer_selection_to_active_pane();
         self.active_pane_mut().set_status_message(Some(format!("Attention: #{id} {}", tier.as_str())));
         Some(id)
+    }
+
+    /// Sets (`Some`) or toggles (`None`) the drawer style, reflows the workspace and returns the new style.
+    pub fn set_drawer_style(&mut self, style: Option<DrawerStyle>) -> DrawerStyle {
+        let new = style.unwrap_or_else(|| self.config.drawer.style.toggle());
+        self.config.drawer.style = new;
+        let len = self.drawer_rows().len();
+        if self.drawer.selected_index >= len {
+            self.drawer.selected_index = len.saturating_sub(1);
+        }
+        self.reflow_default_viewport();
+        self.active_pane_mut().set_status_message(Some(format!("Drawer style: {}", new.label())));
+        new
     }
 }

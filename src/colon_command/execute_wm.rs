@@ -684,6 +684,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.execute_drawer_action(drawer_act);
             false
         }
+        ColonCommand::DrawerStyle(style) => {
+            wm.set_drawer_style(style);
+            false
+        }
         ColonCommand::DrawerNav(op) => {
             wm.apply_drawer_nav(op);
             false
