@@ -69,6 +69,8 @@
 | **`F6`** / `Alt+Tab` | `<L> o` / `<L> n` / `<L> Tab` / `<L> F6` | `:deck next` | Shuffle Z-order pane deck top-to-bottom (or focus next pane) |
 | `Alt+Shift+Tab` | `<L> p` / `<L> Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (or focus previous pane) |
 | **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
+| — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
+| — | `<L> a` | `:agents zoom` | Open the Agent Traffic window (graph + conversation); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). `Ctrl+O` inside it cycles graph / conversation / compose; `F6` keeps its global `DeckNext` meaning |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
 | **`F10`** / `Alt+\`` / `Ctrl+\` / `Ctrl+Space` | `<L> q` / `<L> \`` / `<L> ~` / `<L> F10` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal |
 | **`F12`** / `Ctrl+G` | `<L> g` / `<L> F12` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` |
@@ -177,6 +179,14 @@
 | **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
 | **Navigator drawer: footer buttons `* ! N + r x @`** | Pin, jump to attention, new session, new pane, rename, close the selected pane, open the agent traffic window on it; each is the key of the same character (buttons that do not fit are dropped from the right) |
 | **Navigator drawer: title badges, wheel, edge drag** | Minimize / maximize / close; wheel moves the selection by 3 rows; dragging the edge resizes `navigator_width_cols`; `Ctrl + wheel` scales the drawer on the GUI surface |
+| **Navigator drawer: click the comms glyph (`⇄you`, `⋔3`)** | Open the Agent Traffic window on that conversation (`:drawer comms`) |
+| **Agent Traffic window: drag title bar / edge / corner** | Move / resize the window (`:agents move`, `:agents resize`); the top edge is the title bar, its corners resize |
+| **Agent Traffic window: title badges `[□]` `[X]` and pin `◇`/`◆`** | Maximize / close / pin or unpin (`:agents max`, `close`, `pin`, `unpin`) |
+| **Agent Traffic window: drag the splitter** | Resize graph vs conversation, 20 to 80 percent (`:agents split`) |
+| **Agent Traffic window: click / drag / right-click a node** | Select (second click focuses the pane) / move and pin / unpin (`:agents select`, `enter`, `node-pin`, `node-unpin`) |
+| **Agent Traffic window: click an edge** | Select it; `Enter` or a second click filters the conversation to that pair (`:agents edge`, `:agents filter pair`) |
+| **Agent Traffic window: conversation line, wheel, `[copy]`, filter buttons, chips, follow marker** | Select / scroll / copy / filter / follow (`:agents line`, `scroll`, `copy`, `filter ...`, `follow`); `[send]` is disabled |
+| **`Ctrl` + wheel over the drawer, `:mcp` console or Agent Traffic window** | Scale that panel on the GUI surface (`:drawer scale`, `:agents scale`). Real GUI windows: Linux/X11 only; on Windows and macOS `Ctrl` + wheel over a panel still zooms the font (use `[` `]` or the scale commands) |
 
 ---
 
@@ -290,6 +300,8 @@
 | `{` / `}` | `:drawer widen -2`, `:drawer widen 2` | Narrow or widen the drawer (`navigator_width_cols`) |
 | (mouse click) | `:drawer row <n>` | Select row `n` (1-based) |
 | (mouse right-click) | `:drawer menu`, `:drawer menu close`, `:drawer menu pick <n>` | Open, dismiss, or run an entry of the row context menu (entries apply `N`, `a`, `A` (horizontal and vertical), `r` and `x`) |
+| `Right` / `o` / `Enter` on the glyph | `:drawer comms-focus on\|off`, `:drawer comms` | Focus the comms glyph of the selected row; open the Agent Traffic window on its conversation |
+| (none) | `:drawer style [classic\|navigator\|toggle]` | Switch drawer style; see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md) |
 
 `:navigator` is an alias of `:drawer` for the Navigator tree (`:navigator expand all`, `:navigator collapse all`, `:navigator style classic`). `:drawer expand` without `all` keeps its older meaning (maximize the drawer).
 
@@ -318,6 +330,19 @@
 | `:inspector` | `:inspect` | `[on \| off]` | Toggle live `<F9>` 3270 Terminal Inspector modal |
 | `:palette` | `:commands`, `:cmd` | *(none)* | Toggle `<Ctrl+P>` Fuzzy Command Palette modal |
 | `:help` | `:h`, `:?` | *(none)* | Toggle `<F1>` Borland Turbo Vision Help modal |
+
+**`:agents` (Agent state and the Agent Traffic window, Phase 50).** Every verb lowers to an `Action` and has a key and/or mouse twin; the full table is in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#commands).
+
+| `:command` | Arguments | Description |
+|------------|-----------|-------------|
+| `:agents` | `[list]` | Agent state per pane (working / blocked / idle / done / errored) with counts; structured data over RPC |
+| `:agents` | `zoom [pane-id] \| close \| dismiss` | Open / close the Agent Traffic window; `dismiss` is `Esc` (releases the keyboard when pinned) |
+| `:agents` | `select <left\|right\|up\|down\|node-key> \| edge <next\|prev\|a b> \| enter` | Node and edge cursor |
+| `:agents` | `move <dx> <dy> \| resize <dw> <dh> \| rect <x> <y> <w> <h> \| size <cols>x<rows>\|auto \| max \| split <20..80\|+n\|-n>` | Window geometry and splitter |
+| `:agents` | `grab [on\|off] \| nudge <dir> \| node-pin <key> <x> <y> \| node-unpin [key]` | Node placement |
+| `:agents` | `pin [toggle] \| unpin \| scale <75..200\|+n\|-n>` | Pin the window open; own panel scale (GUI surface) |
+| `:agents` | `focus [graph\|snoop\|compose] \| line <+n\|-n\|seq> \| copy \| scroll <±n\|top> \| follow [on\|off]` | Conversation navigation |
+| `:agents` | `filter agent [label] \| pair [a b] \| text <kw> \| clear \| remove <agent\|pair\|text>` | Conversation filters (AND-combined, no regex) |
 
 ---
 

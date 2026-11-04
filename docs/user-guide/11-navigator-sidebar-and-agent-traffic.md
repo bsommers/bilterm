@@ -74,7 +74,7 @@ A footer button bar at the bottom of the drawer (when it is at least 4 rows tall
 
 ## Keyboard
 
-Leader chords (default leader `Ctrl+X`, `Ctrl+B` inside tmux):
+Leader chords (`<L>` is `Ctrl+B` or `Ctrl+X`; inside an outer `$TMUX` only `Ctrl+X`):
 
 | Chord | Command | Effect |
 | :--- | :--- | :--- |

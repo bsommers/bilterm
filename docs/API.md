@@ -880,6 +880,34 @@ Bilterm exposes generic dotted-path access to all configuration fields in `Bilte
 | `:appearance save`| None | `{"path": str, "written": [str]}` | Persists only `appearance.*` keys to `config.toml`. |
 | `:state` | None | `{"appearance": str, "display_mode": str, "layout_mode": str, "active_pane_id": int, ...}` | Returns structured summary of workspace and UI profile state. |
 
+### Agent State: `:agents list` (Phase 50)
+
+`:agents list` (also `:agents` and `:agents status`) reports the per-pane agent state shown by the Navigator drawer. Run it through `wm.command` (RPC), `bilterm_colon_command` (MCP) or `bilterm ctl`; it is read-only, so it is not subject to `[api] allow_config_write`.
+
+```json
+{"agents": [
+   {"pane_id": 3, "name": "cargo watch", "state": "working", "since_ms": 4210,
+    "profile": null, "reported": false,
+    "partners": [{"label": "you", "count": 2}]}
+ ],
+ "counts": {"working": 1, "blocked": 0, "idle": 2, "done": 0, "errored": 0},
+ "traffic": {"latest_seq": 17, "len": 17, "dropped": 0}}
+```
+
+| Field | Type | Meaning |
+| :--- | :--- | :--- |
+| `agents[].pane_id` | int | Pane id |
+| `agents[].name` | str | Sanitised pane name |
+| `agents[].state` | str | `working`, `blocked`, `idle`, `done` or `errored` |
+| `agents[].since_ms` | int | Milliseconds since the state last changed |
+| `agents[].profile` | str or null | Name of the matching `[agents.<name>]` profile |
+| `agents[].reported` | bool | `true` when the state was set explicitly rather than derived (reserved for Phase 51) |
+| `agents[].partners[]` | `{label, count}` | Recent traffic partners in the last 60 s (`you`, `api`, `mcp`, `#<id>`, `@<session>`) |
+| `counts` | object | Number of panes per state |
+| `traffic` | object | Traffic bus counters: `latest_seq`, `len` (at most 512), `dropped` |
+
+`:state` is unchanged by Phase 50. **Phase 50 does not publish traffic events on `/events` or `events.poll`**: the traffic bus is in-memory only, previews are sanitised, capped at 160 characters and replaced by `[redacted]` for password prompts, and nothing is persisted. See [ADR-008](architecture/adr/ADR-008-agent-traffic-bus.md); Phase 51 defines the external `agent.*` events. The Navigator and the Agent Traffic window are described in the [user guide, chapter 11](user-guide/11-navigator-sidebar-and-agent-traffic.md).
+
 ### API Security Switch: `[api] allow_config_write`
 
 All API-originated operations (invoked via RPC `wm.command` or MCP `bilterm_colon_command`) are subject to strict policy enforcement:
