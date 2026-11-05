@@ -49,6 +49,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
+- [ ] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
 - [ ] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
 - [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
@@ -785,6 +786,22 @@ Plans:
 - [x] 50-15-PLAN.md — Navigator sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
 - [x] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
 
+### Phase 50.1: Unified Registry & Find (INSERTED)
+
+**Goal**: One searchable registry of agents, terminal sessions/panes and their command history (including connected SSH and tmux sessions), with `:find` commands to search each.
+**Depends on**: Phase 50 (agent state, `agent_statuses()`), Phase 18 (SSH domains), Phase 11 (tmux -CC), Phase 41 (per-pane command persistence).
+**Requirements**: FND-R01, FND-R02, FND-R03, FND-R04
+**Harmony rule**: Add new paths; existing `:search` (scrollback) and history behaviour unchanged. Every key, mouse, colon and RPC path lowers to `Action` via `WindowManager::apply`. History capture is bounded, redacted (no password/`!ECHO` input), and stored via `secure_fs`.
+**Execution model**: maximally autonomous: research, then GSD plan, then parallel subagents with disjoint file ownership (explicit `model` per subagent).
+**Success Criteria** (what must be TRUE):
+
+  1. `FND-R01`: a registry (in `wm`) exposes agents, panes/sessions (local, SSH, tmux) and per-session command history with stable ids, source kind and recency; read-only query API.
+  2. `FND-R02`: `:find agent|session|history <text>` return ranked results (fuzzy, as the palette does) in a selectable result list; Enter jumps to the pane/session.
+  3. `FND-R03`: SSH and tmux sessions register and are searchable (host, session name, window/pane, and the commands run there where capturable); gaps documented.
+  4. `FND-R04`: RPC/MCP `find.*` methods, palette entries, completion, help and docs; bounded memory and redaction tested.
+
+**Plans**: 0/0 plans complete (research + planning pending)
+
 ### Phase 51: UI Tweaks & Command Parity
 
 **Goal**: Close the gaps found in GUI testing of Phase 50: a way to undo `:agents demo`, a command-palette entry for every colon verb, and `:agents list` as a real floating window that tiles like the other panels.
@@ -892,7 +909,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 52 → 53 → 54
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
