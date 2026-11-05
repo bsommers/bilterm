@@ -125,6 +125,40 @@ impl CopyModeState {
         }
     }
 
+    /// Appends the text of the selected cell `(r, c)` to `line`.
+    ///
+    /// A wide glyph (CJK, emoji) occupies a lead cell plus an empty continuation tail
+    /// (`width == 0`); the tail carries no text and must never become a stray space, otherwise
+    /// `世界` is copied as `世 界`. When a selection edge lands on the tail while the lead cell is
+    /// outside it (rectangular block starting mid-glyph), the whole glyph is emitted once so no
+    /// character is lost.
+    fn push_selected_cell(
+        line: &mut String,
+        grid: &GridSnapshot,
+        r: u16,
+        c: u16,
+        is_selected: &impl Fn(u16) -> bool,
+    ) {
+        let Some(cell) = grid.cell(r, c) else {
+            line.push(' ');
+            return;
+        };
+        if cell.is_wide_continuation() {
+            if c > 0
+                && !is_selected(c - 1)
+                && let Some(lead) = grid.cell(r, c - 1)
+            {
+                line.push_str(&lead.grapheme);
+            }
+            return;
+        }
+        if cell.grapheme.is_empty() {
+            line.push(' ');
+        } else {
+            line.push_str(&cell.grapheme);
+        }
+    }
+
     /// Extracts the selected text from `grid` according to `selection_kind` (`VAL-04`, `ARCH-R03`).
     pub fn extract_selected_text(&self, grid: &GridSnapshot) -> String {
         let (rows, cols) = (grid.rows, grid.cols);
@@ -136,26 +170,20 @@ impl CopyModeState {
         let min_r = ar.min(cr).min(rows.saturating_sub(1));
         let max_r = ar.max(cr).min(rows.saturating_sub(1));
 
+        let has_selection = self.anchor.is_some() && self.selection_kind != CopySelectionKind::None;
         let mut lines_out = Vec::new();
         for r in min_r..=max_r {
+            let is_selected = |col: u16| {
+                if has_selection {
+                    self.is_cell_selected(r, col)
+                } else {
+                    r == self.cursor_row
+                }
+            };
             let mut line = String::new();
             for c in 0..cols {
-                let include =
-                    if self.anchor.is_some() && self.selection_kind != CopySelectionKind::None {
-                        self.is_cell_selected(r, c)
-                    } else {
-                        r == self.cursor_row
-                    };
-                if include {
-                    let ch = grid
-                        .cell(r, c)
-                        .map(|cell| cell.grapheme.as_str())
-                        .unwrap_or_default();
-                    if ch.is_empty() {
-                        line.push(' ');
-                    } else {
-                        line.push_str(ch);
-                    }
+                if is_selected(c) {
+                    Self::push_selected_cell(&mut line, grid, r, c, &is_selected);
                 }
             }
             lines_out.push(line.trim_end().to_string());
@@ -556,10 +584,10 @@ impl CompositePane {
         if was_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
-                text.len()
+                text.chars().count()
             ));
         } else {
-            self.status_message = Some(format!("Yanked {} chars to clipboard", text.len()));
+            self.status_message = Some(format!("Yanked {} chars to clipboard", text.chars().count()));
         }
         Some(text)
     }
@@ -580,12 +608,12 @@ impl CompositePane {
         if is_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "RECT SELECT [{h}×{w}]: Selected {} chars (Enter/y/Ctrl+C copy | x to prompt | Esc clear)",
-                text.len()
+                text.chars().count()
             ));
         } else {
             self.status_message = Some(format!(
                 "Selected {} chars (Enter/y/Ctrl+C copy | x to prompt | Esc clear)",
-                text.len()
+                text.chars().count()
             ));
         }
         Some(text)
@@ -608,12 +636,12 @@ impl CompositePane {
         if is_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
-                text.len()
+                text.chars().count()
             ));
         } else {
             self.status_message = Some(format!(
                 "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
-                text.len()
+                text.chars().count()
             ));
         }
         Some(text)
@@ -629,12 +657,12 @@ impl CompositePane {
                 let _ = crate::input::handle_paste_event(self, &text);
                 self.status_message = Some(format!(
                     "Transferred {} chars from canvas to terminal",
-                    text.len()
+                    text.chars().count()
                 ));
             } else {
                 self.status_message = Some(format!(
                     "Transferred {} chars from canvas to command prompt",
-                    text.len()
+                    text.chars().count()
                 ));
             }
         }
