@@ -213,6 +213,11 @@ pub(super) fn handle_modal_mouse_event(
     if !rect_contains(modal_outer, mouse.column, mouse.row) {
         return None;
     }
+    if matches!(wm.modal(), crate::wm::Modal::Find { .. })
+        && let Some(a) = crate::input::find_modal::handle_find_modal_mouse(wm, mouse, modal_outer, workspace_area)
+    {
+        return Some(a);
+    }
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             if mouse.row == modal_outer.y {

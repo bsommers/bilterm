@@ -270,3 +270,141 @@ fn open_with_empty_providers_reports_zero_results() {
     run_colon(&mut wm, ":finder close");
     assert!(!wm.is_find_visible());
 }
+
+// ---- Task 3: key table, entry chord, hooks ----------------------------------------------------
+
+use bilterm::input::handle_wm_key_event;
+use bilterm::input::keymap::{
+    DEFAULT_GLOBAL_BINDINGS, DEFAULT_LEADER_BINDINGS, DEFAULT_PANE_BINDINGS, FIND_MODAL_BINDINGS,
+    default_global_action, default_leader_action, find_modal_key_action,
+};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+fn press(wm: &mut WindowManager, code: KeyCode, mods: KeyModifiers) {
+    handle_wm_key_event(wm, KeyEvent::new(code, mods)).unwrap();
+}
+
+fn ch(wm: &mut WindowManager, c: char) {
+    press(wm, KeyCode::Char(c), KeyModifiers::NONE);
+}
+
+const CTRL_ALT: KeyModifiers = KeyModifiers::CONTROL.union(KeyModifiers::ALT);
+
+#[test]
+fn find_key_table_rows_are_unique_and_unshadowed() {
+    for (i, (m, c, _)) in FIND_MODAL_BINDINGS.iter().enumerate() {
+        for (m2, c2, _) in &FIND_MODAL_BINDINGS[i + 1..] {
+            assert!(!(m == m2 && c == c2), "duplicate find row {m:?} {c:?}");
+        }
+        assert!(
+            !DEFAULT_GLOBAL_BINDINGS.iter().any(|(gm, gc, _)| gm == m && gc == c),
+            "find row {m:?} {c:?} shadows a global binding"
+        );
+        assert!(
+            !DEFAULT_PANE_BINDINGS.iter().any(|(pm, pc, _)| pm == m && pc == c),
+            "find row {m:?} {c:?} shadows a pane binding"
+        );
+        // Leader rows are post-prefix chords; the modal swallows the prefix while open, so a leader
+        // chord and a modal row can never be live at once. Only plain navigation keys may coincide.
+        if *m == KeyModifiers::NONE && DEFAULT_LEADER_BINDINGS.iter().any(|(lc, _)| lc == c) {
+            assert!(
+                matches!(
+                    c,
+                    KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Tab | KeyCode::BackTab
+                ),
+                "unexpected leader overlap {c:?}"
+            );
+        }
+    }
+    // The entry chord is read from the live global table, never hard-coded here.
+    let entry: Vec<_> = DEFAULT_GLOBAL_BINDINGS
+        .iter()
+        .filter(|(_, _, a)| matches!(a, Action::Find(FindOp::Open { .. })))
+        .collect();
+    assert!(!entry.is_empty(), "no global Find entry chord");
+    for (m, c, _) in &entry {
+        assert!(!FIND_MODAL_BINDINGS.iter().any(|(fm, fc, _)| fm == m && fc == c));
+    }
+    // Every row lowers to Action::Find.
+    assert!(FIND_MODAL_BINDINGS.iter().all(|(_, _, a)| matches!(a, Action::Find(_))));
+}
+
+#[test]
+fn find_entry_chord_opens_modal_over_raw_passthrough() {
+    let mut wm = fixture(120, 40);
+    wm.active_pane_mut().toggle_manual_raw_override();
+    assert_eq!(
+        wm.active_pane().effective_routing_mode(),
+        bilterm::pty::line_discipline::InputRoutingMode::RawPtyPassthrough,
+        "fixture must be in raw passthrough"
+    );
+    press(&mut wm, KeyCode::Char('f'), CTRL_ALT);
+    assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "", 0)), "Ctrl+Alt+F opens over a raw pane");
+    press(&mut wm, KeyCode::Char('f'), CTRL_ALT);
+    assert!(!wm.is_find_visible(), "and closes again");
+    press(&mut wm, KeyCode::Char('F'), CTRL_ALT | KeyModifiers::SHIFT);
+    assert!(wm.is_find_visible(), "shifted form also opens");
+    let key = KeyEvent::new(KeyCode::Char('f'), CTRL_ALT);
+    assert!(matches!(default_global_action(key, false), Some(Action::Find(FindOp::Open { kind: FindKind::Agent, .. }))));
+}
+
+#[test]
+fn find_leader_question_mark_still_toggles_help() {
+    let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
+    assert_eq!(default_leader_action(key), Some(Action::HelpToggle));
+    assert!(
+        !DEFAULT_LEADER_BINDINGS.iter().any(|(_, a)| matches!(a, Action::Find(_))),
+        "Find has no leader chord (P-06)"
+    );
+}
+
+#[test]
+fn find_modal_keys_edit_state() {
+    let mut wm = fixture(100, 30);
+    press(&mut wm, KeyCode::Char('f'), CTRL_ALT);
+    ch(&mut wm, 'a');
+    ch(&mut wm, 'b');
+    assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "ab", 0)));
+    press(&mut wm, KeyCode::Backspace, KeyModifiers::NONE);
+    assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "a", 0)));
+    press(&mut wm, KeyCode::Char('B'), KeyModifiers::SHIFT);
+    assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "aB", 0)));
+    press(&mut wm, KeyCode::Down, KeyModifiers::NONE); // zero rows: selection stays 0
+    assert_eq!(wm.find_modal_state().unwrap().2, 0);
+    press(&mut wm, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(wm.find_modal_state().unwrap().0, FindKind::Session);
+    press(&mut wm, KeyCode::BackTab, KeyModifiers::SHIFT);
+    assert_eq!(wm.find_modal_state().unwrap().0, FindKind::Agent);
+    press(&mut wm, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "", 0)));
+    // Keys with no mapping are swallowed, not leaked to the pane or the global table.
+    press(&mut wm, KeyCode::F(5), KeyModifiers::NONE);
+    press(&mut wm, KeyCode::Char('q'), KeyModifiers::ALT);
+    assert!(wm.is_find_visible());
+    assert!(find_modal_key_action(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT)).is_none());
+    press(&mut wm, KeyCode::Char('y'), KeyModifiers::CONTROL);
+    assert!(wm.is_find_visible(), "Ctrl+Y with no rows only reports");
+    press(&mut wm, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(!wm.is_find_visible());
+}
+
+#[test]
+fn find_mouse_hook_is_installed_and_inert_in_the_skeleton() {
+    use bilterm::ui::find_ui::{FindLayout, find_layout};
+    let mut wm = fixture(100, 30);
+    run_colon(&mut wm, ":find agent");
+    let area = Rect::new(0, 0, 100, 30);
+    let outer = wm.active_modal_rect(area).expect("find modal has geometry");
+    let inner = bilterm::wm::inset_window_frame(outer);
+    let layout: FindLayout = find_layout(inner, wm.config());
+    assert!(layout.list.height > 0 && layout.footer.height == 1);
+    let mouse = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Moved,
+        column: layout.list.x,
+        row: layout.list.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    assert!(bilterm::input::find_modal::handle_find_modal_mouse(&mut wm, mouse, outer, area).is_none());
+    assert!(bilterm::input::find_modal::lower_find_mouse(mouse, &layout, 0, 0, FindKind::Agent).is_none());
+    assert!(wm.is_find_visible());
+}

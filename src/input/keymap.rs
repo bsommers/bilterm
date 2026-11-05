@@ -10,6 +10,7 @@ use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
+use crate::wm::find_cmd::{FindKind, FindOp};
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -180,6 +181,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
+    // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::NONE, KeyCode::F(7), Action::DrawerToggle),
     (KeyModifiers::NONE, KeyCode::F(11), Action::VisualStyleCommand(None)),
     (KeyModifiers::ALT, KeyCode::F(12), Action::FkeyModeCommand(None)),
@@ -442,6 +446,51 @@ pub fn agents_window_action(scopes: &[AgentsKeyScope], key: KeyEvent) -> Option<
     })
 }
 
+/// Declarative key table of the Find window, consulted while `Modal::Find` is open (Phase 50.1).
+///
+/// Printable characters without CONTROL/ALT are not listed: [`find_modal_key_action`] maps them to
+/// `FindOp::Push`. Every row lowers to [`Action::Find`] and runs through `WindowManager::apply`
+/// (`ARCH-R01`); each operation has a `:finder` colon twin. The global entry chord (`Ctrl+Alt+F`)
+/// lives in [`DEFAULT_GLOBAL_BINDINGS`] and closes the window while it is open.
+pub const FIND_MODAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
+    (KeyModifiers::NONE, KeyCode::Esc, Action::Find(FindOp::Close)),
+    (KeyModifiers::NONE, KeyCode::Enter, Action::Find(FindOp::Activate)),
+    (KeyModifiers::NONE, KeyCode::Up, Action::Find(FindOp::Move(-1))),
+    (KeyModifiers::NONE, KeyCode::Down, Action::Find(FindOp::Move(1))),
+    (KeyModifiers::NONE, KeyCode::PageUp, Action::Find(FindOp::Move(-10))),
+    (KeyModifiers::NONE, KeyCode::PageDown, Action::Find(FindOp::Move(10))),
+    (KeyModifiers::NONE, KeyCode::Home, Action::Find(FindOp::Move(i16::MIN))),
+    (KeyModifiers::NONE, KeyCode::End, Action::Find(FindOp::Move(i16::MAX))),
+    (KeyModifiers::NONE, KeyCode::Tab, Action::Find(FindOp::CycleKind(true))),
+    (KeyModifiers::NONE, KeyCode::BackTab, Action::Find(FindOp::CycleKind(false))),
+    (KeyModifiers::NONE, KeyCode::Backspace, Action::Find(FindOp::Pop)),
+    (KeyModifiers::CONTROL, KeyCode::Char('u'), Action::Find(FindOp::ClearQuery)),
+    (KeyModifiers::CONTROL, KeyCode::Char('y'), Action::Find(FindOp::Prefill)),
+];
+
+/// Looks up `key` in [`FIND_MODAL_BINDINGS`]; a printable character without CONTROL/ALT becomes
+/// `FindOp::Push`. SHIFT is dropped from the lookup for `Char` and `BackTab` (as for the agents window).
+pub fn find_modal_key_action(key: KeyEvent) -> Option<Action> {
+    let lookup_mods = match key.code {
+        KeyCode::Char(_) | KeyCode::BackTab => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
+    if let Some((_, _, action)) = FIND_MODAL_BINDINGS
+        .iter()
+        .find(|(mods, code, _)| *mods == lookup_mods && *code == key.code)
+    {
+        return Some(action.clone());
+    }
+    match key.code {
+        KeyCode::Char(c)
+            if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) && !c.is_control() =>
+        {
+            Some(Action::Find(FindOp::Push(c)))
+        }
+        _ => None,
+    }
+}
+
 /// Looks up `key` in [`DEFAULT_LEADER_BINDINGS`].
 pub fn default_leader_action(key: KeyEvent) -> Option<Action> {
     DEFAULT_LEADER_BINDINGS
@@ -478,11 +527,11 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 
 /// The global chords that must reach the window manager even while the active pane is in raw PTY
 /// passthrough (an alternate-screen app such as an agent TUI, `vim` or `less`), where every other
-/// global shortcut is forwarded to the child. Today that is only the agent-traffic toggle
-/// (`Ctrl+Alt+A`): it is the one launcher the user needs while an agent owns the pane.
+/// global shortcut is forwarded to the child. Today that is the agent-traffic toggle (`Ctrl+Alt+A`)
+/// and the Find window (`Ctrl+Alt+F`): the launchers the user needs while an agent owns the pane.
 pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
     match default_global_action(key, false) {
-        Some(action @ Action::Agents(AgentsOp::Toggle(_))) => Some(action),
+        Some(action @ (Action::Agents(AgentsOp::Toggle(_)) | Action::Find(FindOp::Open { .. }))) => Some(action),
         _ => None,
     }
 }
