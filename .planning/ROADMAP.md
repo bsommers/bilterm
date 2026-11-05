@@ -791,6 +791,7 @@ Plans:
 **Goal**: One searchable registry of agents, terminal sessions/panes and their command history (including connected SSH and tmux sessions), with `:find` commands to search each.
 **Depends on**: Phase 50 (agent state, `agent_statuses()`), Phase 18 (SSH domains), Phase 11 (tmux -CC), Phase 41 (per-pane command persistence).
 **Requirements**: FND-R01, FND-R02, FND-R03, FND-R04
+**Uniformity (`UNI-R01`)**: every capability ships a mouse path, a GUI+TUI key sequence and colon/palette/RPC/MCP commands, with parity tests.
 **Harmony rule**: Add new paths; existing `:search` (scrollback) and history behaviour unchanged. Every key, mouse, colon and RPC path lowers to `Action` via `WindowManager::apply`. History capture is bounded, redacted (no password/`!ECHO` input), and stored via `secure_fs`.
 **Execution model**: maximally autonomous: research, then GSD plan, then parallel subagents with disjoint file ownership (explicit `model` per subagent).
 **Success Criteria** (what must be TRUE):
@@ -807,6 +808,7 @@ Plans:
 **Goal**: Close the gaps found in GUI testing of Phase 50: a way to undo `:agents demo`, a command-palette entry for every colon verb, and `:agents list` as a real floating window that tiles like the other panels.
 **Depends on**: Phase 50 (agents window, `AgentsOp`, traffic bus, panel pin/scale), Phase 47 (command palette).
 **Requirements**: UIT-01, UIT-02, UIT-03, UIT-04
+**Uniformity (`UNI-R01`)**: every capability ships a mouse path, a GUI+TUI key sequence and colon/palette/RPC/MCP commands, with parity tests.
 **Harmony rule**: Add new paths; do not remove or rewire existing ones. Legacy output stays byte-identical (11 goldens). Every key, mouse and colon path lowers to `Action` and runs via `WindowManager::apply`; new paths get parity tests in the style of `tests/phase50_*`.
 **Execution model**: maximally autonomous. Research and GSD planning come first (`/gsd-plan-phase 51`), then execution by dispatched subagents with maximum parallelism (disjoint file ownership per plan, orchestrator-only `Action`/`apply` wiring). Subagents get an explicit `model` (sonnet/haiku for planning and mechanical work).
 **Success Criteria** (what must be TRUE):
