@@ -824,7 +824,7 @@ Plans:
 ### Phase 51: UI Tweaks & Command Parity
 
 **Goal**: Close the gaps found in GUI testing of Phase 50: a way to undo `:agents demo`, a command-palette entry for every colon verb, and `:agents list` as a real floating window that tiles like the other panels.
-**Depends on**: Phase 50 (agents window, `AgentsOp`, traffic bus, panel pin/scale), Phase 47 (command palette).
+**Depends on**: Phase 50.1 (registry and `:find`, which runs first), Phase 50 (agents window, `AgentsOp`, traffic bus, panel pin/scale), Phase 47 (command palette).
 **Requirements**: UIT-01, UIT-02, UIT-03, UIT-04
 **Uniformity (`UNI-R01`)**: every capability ships a mouse path, a GUI+TUI key sequence and colon/palette/RPC/MCP commands, with parity tests.
 **Harmony rule**: Add new paths; do not remove or rewire existing ones. Legacy output stays byte-identical (11 goldens). Every key, mouse and colon path lowers to `Action` and runs via `WindowManager::apply`; new paths get parity tests in the style of `tests/phase50_*`.
