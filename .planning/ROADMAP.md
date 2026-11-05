@@ -803,10 +803,10 @@ Plans:
   3. `FND-R03`: SSH and tmux sessions register and are searchable (host, session name, window/pane, and the commands run there where capturable); gaps documented.
   4. `FND-R04`: RPC/MCP `find.*` methods, palette entries, completion, help and docs; bounded memory and redaction tested.
 
-**Plans**: 0/15 plans complete — locked decisions D-U1 (reserved first words), D-U2 (secrets dropped/masked, only a count shown), D-U3 (live first; every result carries its `source`) in 50.1-CONTEXT.md; shared interface in 50.1-CONTRACT.md; waves 0-4 with disjoint file ownership per wave
+**Plans**: 1/15 plans executed — locked decisions D-U1 (reserved first words), D-U2 (secrets dropped/masked, only a count shown), D-U3 (live first; every result carries its `source`) in 50.1-CONTEXT.md; shared interface in 50.1-CONTRACT.md; waves 0-4 with disjoint file ownership per wave
 
 Plans:
-- [ ] 50.1-01-PLAN.md — Wave 0 seam (orchestrator-only): `Action::Find`/`FindOp`/`Modal::Find`, `:find`/`:finder` grammar, registry contract types and provider skeletons, key table + `Ctrl+Alt+F`/leader `?`, mouse/key hooks (wave 0)
+- [x] 50.1-01-PLAN.md — Wave 0 seam (orchestrator-only): `Action::Find`/`FindOp`/`Modal::Find`, `:find`/`:finder` grammar, registry contract types and provider skeletons, key table + `Ctrl+Alt+F`/leader `?`, mouse/key hooks (wave 0)
 - [ ] 50.1-02-PLAN.md — Secret-looking command classifier `pane::redact::classify` (D-U2) (wave 1)
 - [ ] 50.1-03-PLAN.md — Live registry rows: agents, workspace session, terminal sessions with stable ids and `source` live (wave 1)
 - [ ] 50.1-04-PLAN.md — Fuzzy ranking with live-first group order (D-U3), palette parity (wave 1)
@@ -1046,7 +1046,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
-| 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 0/0 | Planning | - |
+| 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 1/15 | Planning | - |
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 0/0 | Planning | - |
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 0/16 | Planning | - |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
