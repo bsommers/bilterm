@@ -538,6 +538,9 @@ impl GuiWorkspaceRenderer {
         let qt_rect = wm
             .is_quick_terminal_visible()
             .then(|| wm.quick_terminal().overlay_rect(ws_area));
+        // The traffic window floats above panes: a pane drawn at its own font scale must not paint
+        // over its cells (they would show through as a frameless, see-through window).
+        let agents_overlay_rect = wm.agents_window_rect(ws_area);
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -551,6 +554,7 @@ impl GuiWorkspaceRenderer {
                 || modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
