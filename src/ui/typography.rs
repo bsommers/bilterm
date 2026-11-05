@@ -83,6 +83,33 @@ pub enum PanelTarget {
     Agents,
 }
 
+/// Real workspace cells covered by a scaled panel whose rect `virtual_rect` lives in the panel's
+/// virtual grid (see [`WindowManager::panel_virtual_area`]): virtual cell `v` is drawn `scale_pct / 100`
+/// cells wide, anchored at `ws`'s origin. Identity at 100. Rounded to the nearest cell and clamped to
+/// `ws`: a mask built from it hides the cells under the pixels the scaled panel paints over.
+pub fn scaled_panel_real_rect(
+    ws: ratatui::layout::Rect,
+    virtual_rect: ratatui::layout::Rect,
+    scale_pct: u16,
+) -> ratatui::layout::Rect {
+    let s = u32::from(scale_pct);
+    if s == 100 {
+        return virtual_rect;
+    }
+    let near = |v: u16, o: u16| (u32::from(v.saturating_sub(o)) * s + 50) / 100;
+    let x0 = u32::from(ws.x) + near(virtual_rect.x, ws.x);
+    let y0 = u32::from(ws.y) + near(virtual_rect.y, ws.y);
+    let x1 = u32::from(ws.x) + near(virtual_rect.x.saturating_add(virtual_rect.width), ws.x);
+    let y1 = u32::from(ws.y) + near(virtual_rect.y.saturating_add(virtual_rect.height), ws.y);
+    let r = ratatui::layout::Rect::new(
+        x0.min(u32::from(u16::MAX)) as u16,
+        y0.min(u32::from(u16::MAX)) as u16,
+        x1.saturating_sub(x0).min(u32::from(u16::MAX)) as u16,
+        y1.saturating_sub(y0).min(u32::from(u16::MAX)) as u16,
+    );
+    r.intersection(ws)
+}
+
 impl WindowManager {
     /// Enables or disables 1:1 host-terminal character cell grid mode (disabling per-pane pixel scaling in TUI mode).
     pub fn set_tui_cell_grid_mode(&mut self, enabled: bool) {
@@ -561,6 +588,20 @@ impl crate::pane::CompositePane {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scaled_panel_real_rect_matches_painted_pixels() {
+        use ratatui::layout::Rect;
+        let ws = Rect::new(0, 1, 100, 40);
+        let v = Rect::new(10, 5, 50, 20);
+        assert_eq!(super::scaled_panel_real_rect(ws, v, 100), v);
+        // 150%: virtual cells are 1.5 real cells wide, anchored at ws origin.
+        assert_eq!(super::scaled_panel_real_rect(ws, v, 150), Rect::new(15, 7, 75, 30));
+        // 75%: never outside ws.
+        let r = super::scaled_panel_real_rect(ws, Rect::new(0, 1, 130, 50), 75);
+        assert_eq!(r.x, 0);
+        assert!(r.right() <= ws.right() && r.bottom() <= ws.bottom());
+    }
+
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
     use ratatui::layout::Rect;
 

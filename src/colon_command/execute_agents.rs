@@ -227,6 +227,11 @@ fn list(wm: &mut WindowManager) {
     }
     let now = Instant::now();
     let statuses = wm.agent_statuses();
+    // One visible line per pane for the status bar; the full structure goes over RPC below.
+    let per_pane: Vec<String> = statuses
+        .iter()
+        .map(|s| format!("#{} {} {}", s.pane_id, s.name, s.state.as_str()))
+        .collect();
     let agents: Vec<JsonValue> = statuses
         .into_iter()
         .map(|s| {
@@ -271,9 +276,13 @@ fn list(wm: &mut WindowManager) {
         ("traffic", traffic),
     ]);
     wm.set_command_data(data.to_json_string());
-    let msg = format!(
+    let mut msg = format!(
         "Agents: {} working · {} blocked · {} idle · {} done · {} errored",
         c.working, c.blocked, c.idle, c.done, c.errored
     );
+    if !per_pane.is_empty() {
+        msg.push_str(" | ");
+        msg.push_str(&per_pane.join(" · "));
+    }
     wm.active_pane_mut().set_status_message(Some(msg));
 }

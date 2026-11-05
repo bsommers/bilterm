@@ -662,7 +662,10 @@ impl Widget for WorkspaceWidget<'_> {
         }
 
         // Render Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer (DRW-01, DRW-02)
-        render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        // Scaled panels (GUI only) are drawn by the GUI renderer in their own grid.
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Drawer) == 100 {
+            render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
 
         if qt_visible {
             let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);
@@ -712,7 +715,11 @@ impl Widget for WorkspaceWidget<'_> {
 
         // Drawn below every workspace modal so a modal raised while the window is open (for example
         // the Exit Guard) is never hidden behind it (WR-07).
-        agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        // At a non-100 panel scale (GUI only) the GUI renderer draws the window itself in its own
+        // grid; an unscaled copy here would be a second, offset window.
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Agents) == 100 {
+            agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
@@ -731,7 +738,9 @@ impl Widget for WorkspaceWidget<'_> {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
         }
 
-        mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Mcp) == 100 {
+            mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
+        }
 
         // Capture full composited workspace frame if Whole-Workspace Asciicast v2 recording is active (REC-02)
         self.wm.record_workspace_frame(buf);

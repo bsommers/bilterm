@@ -529,8 +529,21 @@ impl GuiWorkspaceRenderer {
         let pane_rects = wm.compute_workspace_rects(ws_area);
         let vp_scale = wm.viewport_scale_pct();
         let framed = wm.is_framed();
-        let drawer_rect = wm.drawer_rect(ws_area);
-        let mcp_rect = wm.mcp_console().panel_rect(ws_area);
+        // Panel scales first: a scaled panel owns the real cells under the pixels it paints (its rect
+        // lives in a virtual grid), and its unscaled copy is not rendered into the cell buffer.
+        let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
+        let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
+        let agents_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
+        let real_rect = |target: crate::ui::typography::PanelTarget, scale: u16, at: &dyn Fn(Rect) -> Option<Rect>| {
+            if scale == 100 {
+                at(ws_area)
+            } else {
+                let vws = wm.panel_virtual_area(ws_area, target);
+                at(vws).map(|vr| crate::ui::typography::scaled_panel_real_rect(ws_area, vr, scale))
+            }
+        };
+        let drawer_rect = real_rect(crate::ui::typography::PanelTarget::Drawer, drawer_scale, &|a| wm.drawer_rect(a));
+        let mcp_rect = real_rect(crate::ui::typography::PanelTarget::Mcp, mcp_scale, &|a| wm.mcp_console().panel_rect(a));
         let modal_rect = wm.active_modal_rect(ws_area);
         let dropdown_rect = wm
             .menubar_state()
@@ -538,6 +551,9 @@ impl GuiWorkspaceRenderer {
         let qt_rect = wm
             .is_quick_terminal_visible()
             .then(|| wm.quick_terminal().overlay_rect(ws_area));
+        // The traffic window floats above panes: a pane drawn at its own font scale must not paint
+        // over its cells (they would show through as a frameless, see-through window).
+        let agents_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Agents, agents_scale, &|a| wm.agents_window_rect(a));
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -551,6 +567,7 @@ impl GuiWorkspaceRenderer {
                 || modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
@@ -572,10 +589,7 @@ impl GuiWorkspaceRenderer {
         };
 
         // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
-        let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
-        let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
-        let agents_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
-        let agents_rect = (agents_scale != 100).then(|| wm.agents_window_rect(ws_area)).flatten();
+        let agents_rect = (agents_scale != 100).then_some(agents_overlay_rect).flatten();
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
             (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
@@ -719,6 +733,18 @@ impl GuiWorkspaceRenderer {
                         let Some(cell) = scratch.cell((vr_col, vr_row)) else { continue };
                         let x_px = f32::from(ws_area.x.saturating_sub(viewport.x)) * cw + f32::from(vr_col - ws_area.x) * pcw;
                         let y_px = f32::from(ws_area.y.saturating_sub(viewport.y)) * ch + f32::from(vr_row - ws_area.y) * pch;
+                        // Glyphs draw above every quad, so cells under a modal, menu or the quick terminal
+                        // must not be pushed at all (they would show through as transparency).
+                        let (abs_c, abs_r) = (
+                            viewport.x + ((x_px + pcw * 0.5) / cw) as u16,
+                            viewport.y + ((y_px + pch * 0.5) / ch) as u16,
+                        );
+                        if modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                            || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                            || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                        {
+                            continue;
+                        }
                         push_cell(cell, vr_row.saturating_sub(viewport.y), vr_col.saturating_sub(viewport.x), x_px, y_px, pcw, pch, pcw_u, pch_u, ppt);
                     }
                 }
