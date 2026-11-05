@@ -84,13 +84,22 @@ pub fn node_px(pos: (f32, f32), width: f32, height: f32) -> (f32, f32) {
     (x, y)
 }
 
-fn edge_rgb(edge: &SceneEdge, colours: &GraphColours) -> Rgb {
+/// Linear mix of two colours; `t` is clamped to `0..=1`.
+fn mix_rgb(from: Rgb, to: Rgb, t: f32) -> Rgb {
+    let t = t.clamp(0.0, 1.0);
+    let ch = |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * t).round() as u8;
+    (ch(from.0, to.0), ch(from.1, to.1), ch(from.2, to.2))
+}
+
+/// Colour an edge is drawn in, by both renderers: the selection colour for the selected edge,
+/// otherwise the traffic colour mixed over the window background by the edge's brightness
+/// ([`SceneEdge::brightness`]: the more recent and frequent the traffic, the brighter; a floor
+/// keeps a pair that has spoken visible).
+pub fn edge_rgb(edge: &SceneEdge, colours: &GraphColours) -> Rgb {
     if edge.selected {
         colours.accent
-    } else if edge.active {
-        colours.edge_active
     } else {
-        colours.edge
+        mix_rgb(colours.bg, colours.edge_active, edge.brightness)
     }
 }
 
@@ -278,8 +287,6 @@ const PARTICLE_PERIOD: u64 = 25;
 const GLOW_RADIUS_FACTOR: f32 = 2.2;
 /// Peak glow opacity.
 const GLOW_PEAK: f32 = 0.6;
-/// Opacity of an edge that carried no recent traffic.
-const IDLE_EDGE_ALPHA: f32 = 0.55;
 
 /// Strokes the polyline `pts` with a round-capped line of `width` pixels in `rgb` at opacity `alpha`.
 ///
@@ -402,14 +409,9 @@ pub fn draw_agent_graph_hires(
         let steps = ((chord / 3.0) as usize).clamp(12, 96);
         let pts: Vec<(f32, f32)> =
             (0..=steps).map(|i| bezier_point(a, c1, c2, b, i as f32 / steps as f32)).collect();
-        let (width, alpha) = if edge.selected {
-            (sw * 1.6, 1.0)
-        } else if edge.active {
-            (sw, 1.0)
-        } else {
-            (sw, IDLE_EDGE_ALPHA)
-        };
-        stroke_polyline(canvas, &pts, width, edge_rgb(edge, colours), alpha);
+        // Brightness lives in the colour ([`edge_rgb`]), so the stroke itself stays opaque.
+        let width = if edge.selected { sw * 1.6 } else { sw };
+        stroke_polyline(canvas, &pts, width, edge_rgb(edge, colours), 1.0);
         curves.push((edge.active, a, c1, c2, b));
     }
     for &(active, a, c1, c2, b) in &curves {

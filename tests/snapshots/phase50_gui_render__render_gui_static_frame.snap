@@ -2,4 +2,4 @@
 source: tests/phase50_gui_render.rs
 expression: "format!(\"{}x{} rgba-digest={:016x}\", ia.width_px, ia.height_px,\nfnv1a(&ia.rgba_bytes))"
 ---
-408x416 rgba-digest=3a0f0eec68759ec0
+408x416 rgba-digest=c64616741d5d4bfc

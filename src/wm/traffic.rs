@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::WindowManager;
+use crate::wm::agents_topology::Topology;
 
 /// Maximum number of events kept on the bus; the oldest is evicted first.
 pub const TRAFFIC_CAP: usize = 512;
@@ -112,12 +113,14 @@ pub struct TrafficBus {
     events: VecDeque<TrafficEvent>,
     next_seq: u64,
     dropped: u64,
+    /// Which pairs ever communicated; outlives ring eviction (see [`Topology`]).
+    topology: Topology,
 }
 
 impl TrafficBus {
     /// Creates an empty bus.
     pub fn new() -> Self {
-        Self { events: VecDeque::new(), next_seq: 1, dropped: 0 }
+        Self { events: VecDeque::new(), next_seq: 1, dropped: 0, topology: Topology::default() }
     }
 
     /// Records an event and returns its sequence number. `redact` withholds the preview.
@@ -140,6 +143,7 @@ impl TrafficBus {
         } else {
             sanitize_display(raw, PREVIEW_CAP)
         };
+        self.topology.record(&from, &to, seq, now);
         self.events.push_back(TrafficEvent {
             seq,
             at: now,
@@ -180,6 +184,11 @@ impl TrafficBus {
     /// `true` when no events are held.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
+    }
+
+    /// Session-long communication topology (counts, first / last event per pair).
+    pub fn topology(&self) -> &Topology {
+        &self.topology
     }
 
     /// Number of events evicted by the ring cap since creation.

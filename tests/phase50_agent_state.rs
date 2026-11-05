@@ -324,7 +324,8 @@ fn state_profile_patterns_are_capped() {
 #[test]
 fn state_empty_agents_table_not_serialized() {
     let text = toml::to_string(&BiltermConfig::default()).unwrap();
-    assert!(!text.contains("[agents"), "{text}");
+    // `[agents_window]` (window settings) is a different table from the `[agents.<name>]` profiles.
+    assert!(!text.contains("[agents]") && !text.contains("[agents."), "{text}");
     let cfg: BiltermConfig = toml::from_str("[agents.tool]\nblocked = [\"ok?\"]\n").unwrap();
     assert_eq!(cfg.agents["tool"].blocked, ["ok?"]);
     assert!(toml::to_string(&cfg).unwrap().contains("[agents.tool]"));

@@ -164,7 +164,8 @@ fn render_gui_curved_edges_antialiased() {
     assert!(off > 2.0, "edge midpoint must be offset from the chord, got {off}");
 
     // Along the curve there are anti-aliased pixels strictly between background and edge colour.
-    let (bg, fg) = (cols.bg, cols.edge_active);
+    // Edge colour follows the edge's brightness (recent traffic), so compare against its drawn colour.
+    let (bg, fg) = (cols.bg, bilterm::ui::graph_raster::edge_rgb(edge, &cols));
     let between = |p: [u8; 3]| {
         (0..3).all(|c| {
             let (lo, hi) = ([bg.0, bg.1, bg.2][c].min([fg.0, fg.1, fg.2][c]), [bg.0, bg.1, bg.2][c].max([fg.0, fg.1, fg.2][c]));

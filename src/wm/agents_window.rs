@@ -15,6 +15,7 @@ use ratatui::layout::Rect;
 use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::agent_state::AgentState;
+use crate::wm::agents_topology::edge_brightness;
 use crate::wm::agents_cmd::{KeywordEdit, SnoopFilterKind};
 use crate::wm::{WindowManager, WindowResizeEdge};
 use crate::wm::traffic::{TrafficEndpoint, TrafficEvent, TrafficKind};
@@ -112,10 +113,14 @@ pub struct SceneNode {
 pub struct SceneEdge {
     pub from: NodeKey,
     pub to: NodeKey,
-    /// Number of bus events between the two endpoints (either direction).
+    /// Number of events between the two endpoints (either direction) since the session began.
     pub count: usize,
     /// Sequence number of the newest such event.
     pub last_seq: u64,
+    /// Recent-communication heat in `[0, 1)` ([`edge_heat`]); `0` once the fade window passed.
+    pub heat: f32,
+    /// Draw brightness in `[MIN_EDGE_BRIGHTNESS, 1)` ([`edge_brightness`]); never below the floor.
+    pub brightness: f32,
     /// `true` while the edge carried one of the newest bus events.
     pub active: bool,
     pub selected: bool,
@@ -552,6 +557,9 @@ impl AgentsWindowState {
     }
 }
 
+/// Aggregation record for one candidate edge: event count, newest sequence number, heat.
+type EdgeAcc = (usize, u64, f32);
+
 /// Aggregation record for one candidate node.
 struct NodeAcc {
     label: String,
@@ -629,8 +637,19 @@ impl WindowManager {
 
     /// Builds the graph scene from the traffic bus plus one node per live pane.
     pub fn agents_graph_scene(&self) -> GraphScene {
+        self.agents_graph_scene_at(std::time::Instant::now())
+    }
+
+    /// Like [`agents_graph_scene`](Self::agents_graph_scene) with an explicit `now`, so edge heat is a
+    /// pure function of the recorded event times and `now` (deterministic in tests).
+    ///
+    /// Edges come from the session-long [`Topology`](crate::wm::agents_topology::Topology), not the
+    /// 512-event ring: a pair that has spoken keeps its edge (at the brightness floor) after the ring
+    /// evicted its events.
+    pub fn agents_graph_scene_at(&self, now: std::time::Instant) -> GraphScene {
         let mut acc: BTreeMap<NodeKey, NodeAcc> = BTreeMap::new();
-        let mut edge_acc: BTreeMap<(NodeKey, NodeKey), (usize, u64)> = BTreeMap::new();
+        let mut edge_acc: BTreeMap<(NodeKey, NodeKey), EdgeAcc> = BTreeMap::new();
+        let fade = self.config.agents_window.edge_fade();
 
         let mut touch = |ep: &TrafficEndpoint, seq: u64, panes: &BTreeSet<PaneId>| -> NodeKey {
             let key = NodeKey::from_endpoint(ep);
@@ -648,15 +667,17 @@ impl WindowManager {
 
         let live: BTreeSet<PaneId> = self.panes.keys().copied().collect();
         for e in self.traffic.iter() {
-            let a = touch(&e.from, e.seq, &live);
-            let b = touch(&e.to, e.seq, &live);
-            if a == b {
-                continue;
-            }
-            let pair = if a < b { (a, b) } else { (b, a) };
-            let slot = edge_acc.entry(pair).or_insert((0, 0));
-            slot.0 += 1;
-            slot.1 = slot.1.max(e.seq);
+            touch(&e.from, e.seq, &live);
+            touch(&e.to, e.seq, &live);
+        }
+        for rec in self.traffic.topology().iter() {
+            let (ea, eb) = rec.endpoints();
+            let a = touch(ea, rec.last_seq(), &live);
+            let b = touch(eb, rec.last_seq(), &live);
+            edge_acc.insert(
+                (a, b),
+                (usize::try_from(rec.count()).unwrap_or(usize::MAX), rec.last_seq(), rec.heat(now, fade)),
+            );
         }
         for &id in &live {
             touch(&TrafficEndpoint::Pane(id), 0, &live);
@@ -667,7 +688,7 @@ impl WindowManager {
         let index: BTreeMap<&NodeKey, usize> =
             keys.iter().enumerate().map(|(i, k)| (k, i)).collect();
 
-        let edges_raw: Vec<((NodeKey, NodeKey), (usize, u64))> = edge_acc
+        let edges_raw: Vec<((NodeKey, NodeKey), EdgeAcc)> = edge_acc
             .into_iter()
             .filter(|((a, b), _)| index.contains_key(a) && index.contains_key(b))
             .collect();
@@ -693,13 +714,15 @@ impl WindowManager {
             .collect();
         let edges = edges_raw
             .into_iter()
-            .map(|((from, to), (count, last_seq))| SceneEdge {
+            .map(|((from, to), (count, last_seq, heat))| SceneEdge {
                 selected: sel.edge.as_ref() == Some(&(from.clone(), to.clone())),
                 active: last_seq + ACTIVE_EVENTS > latest && last_seq > 0,
                 from,
                 to,
                 count,
                 last_seq,
+                heat,
+                brightness: edge_brightness(heat),
             })
             .collect();
         GraphScene { nodes, edges }

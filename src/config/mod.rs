@@ -125,6 +125,8 @@ pub struct BiltermConfig {
     /// Optional agent recognition profiles (`[agents.<name>]`, Phase 50-03); empty by default and then not serialised.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub agents: BTreeMap<String, agents::AgentProfile>,
+    /// Agent traffic window settings (`[agents_window]`, e.g. `edge_fade_secs`).
+    pub agents_window: agents::AgentsWindowConfig,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -230,6 +232,7 @@ impl Default for BiltermConfig {
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
             agents: BTreeMap::new(),
+            agents_window: agents::AgentsWindowConfig::default(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,

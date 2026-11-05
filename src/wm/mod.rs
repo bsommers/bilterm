@@ -1,4 +1,5 @@
 pub mod agent_state;
+pub mod agents_topology;
 pub mod agents_window;
 pub mod agents_cmd;
 pub mod agents_geometry;
