@@ -982,5 +982,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
-| 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
+| 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 0/0 | Planning | - |
+| 51. UI Tweaks & Command Parity (`UIT-01..04`) | 0/0 | Planning | - |
+| 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
+| 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |
+| 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/0 | Planned | - |
 | 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 0/0 | Not planned | - |
