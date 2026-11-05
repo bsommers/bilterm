@@ -130,3 +130,4 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 `.planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md`. Next: execute plan 50-07.
 - Phase 50 exec checkpoint updated after 50-16 (10/16): .planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md
 - Phase 50 DONE, PR #5 open (see EXEC-CHECKPOINT.md FINAL STATE), 2026-11-04
+- 2026-11-04: PR #5-#7 merged. PR #8 (fix/agents-graph-heat: non-modal agents window, edge heat, :agents topology) OPEN, clean, awaiting user manual GUI check + merge go-ahead; its worktree .claude/worktrees/agent-a7a79733d4331d20b stays until merged. Branch examples/agent-traffic-demo (this): examples/cookbook/agent-traffic-demo.sh tested with AGY=0 and AGY=1; not yet pushed/PR'd. Other agent worktrees (a4d75..., ad5223..., aea5db...) are not mine: leave. Installed ~/.local/bin/bilterm = Phase 50 build (bilterm.prev = rollback).
