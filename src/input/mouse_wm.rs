@@ -131,7 +131,11 @@ pub(super) fn handle_modal_mouse_event(
             MouseEventKind::Down(MouseButton::Left) => {
                 let rel_col = pm.column.saturating_sub(mcp_rect.x);
                 if pm.row == mcp_rect.y {
-                    if rel_col >= mcp_rect.width.saturating_sub(6) {
+                    let (_, pin_start, pin_end) = crate::ui::mcp_ui::mcp_modern_title(wm.config(), wm.mcp_console());
+                    if wm.config().is_modern() && (pin_start..pin_end).contains(&rel_col) {
+                        let pin = !wm.mcp_console().pinned;
+                        wm.mcp_console_mut().set_pinned(pin);
+                    } else if rel_col >= mcp_rect.width.saturating_sub(6) {
                         wm.mcp_console_mut().close_root_terminal();
                     } else if rel_col >= mcp_rect.width / 2 {
                         wm.mcp_console_mut().toggle_layout_mode();

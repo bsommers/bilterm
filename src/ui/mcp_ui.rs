@@ -61,6 +61,22 @@ pub fn render_mcp_console_overlay(
     }
 }
 
+/// The modern MCP title row text plus the `[start, end)` columns (relative to the panel's left edge)
+/// of its clickable pin badge. Drawing and mouse hit-testing both use this, so they cannot disagree.
+pub fn mcp_modern_title(cfg: &BiltermConfig, state: &McpConsoleState) -> (String, u16, u16) {
+    use ratatui::text::Span;
+    let mode_tag = match state.layout_mode {
+        DrawerLayoutMode::Overlay => "Floating",
+        DrawerLayoutMode::Push => state.edge.label(),
+    };
+    let badge = if cfg.liquid_glass { "💧" } else { "◢" };
+    let base = format!(" ● ● ●  {badge} Control Deck · {mode_tag} ");
+    let pin = if state.pinned { "· 📌 Pinned (*) " } else { "· ○ Pin (*) " };
+    let start = 2 + Span::raw(base.as_str()).width() as u16;
+    let end = start + Span::raw(pin).width() as u16;
+    (format!("{base}{pin}"), start, end)
+}
+
 fn render_mcp_console_modern(
     buf: &mut Buffer,
     area: Rect,
@@ -148,12 +164,7 @@ fn render_mcp_console_modern(
         c.set_symbol("╯");
     }
 
-    let mode_tag = match state.layout_mode {
-        DrawerLayoutMode::Overlay => "Floating",
-        DrawerLayoutMode::Push => state.edge.label(),
-    };
-    let badge = if cfg.liquid_glass { "💧" } else { "◢" };
-    let title = format!(" ● ● ●  {badge} Control Deck · {mode_tag} ");
+    let (title, _, _) = mcp_modern_title(cfg, state);
     write_clipped(
         buf,
         bounds.x + 2,

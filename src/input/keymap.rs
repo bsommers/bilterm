@@ -476,6 +476,17 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
         .map(|(_, _, action)| action.clone())
 }
 
+/// The global chords that must reach the window manager even while the active pane is in raw PTY
+/// passthrough (an alternate-screen app such as an agent TUI, `vim` or `less`), where every other
+/// global shortcut is forwarded to the child. Today that is only the agent-traffic toggle
+/// (`Ctrl+Alt+A`): it is the one launcher the user needs while an agent owns the pane.
+pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
+    match default_global_action(key, false) {
+        Some(action @ Action::Agents(AgentsOp::Toggle(_))) => Some(action),
+        _ => None,
+    }
+}
+
 /// Looks up `key` in [`DEFAULT_PANE_BINDINGS`].
 pub fn default_pane_action(key: KeyEvent) -> Option<Action> {
     let lookup_mods = match key.code {

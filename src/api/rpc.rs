@@ -294,6 +294,13 @@ impl AutomationControlPlane {
                     .and_then(JsonValue::as_bool)
                     .unwrap_or(false);
 
+                // `from_pane` attributes the call to a pane (attribution only; the API can already
+                // type into any pane), so a script can draw pane-to-pane edges in the traffic graph.
+                let source = match params.get("from_pane").and_then(JsonValue::as_usize) {
+                    Some(from) if self.wm.pane_mut(from).is_some() => TrafficEndpoint::Pane(from),
+                    Some(from) => return Err(format!("from_pane #{from} not found")),
+                    None => TrafficEndpoint::Api,
+                };
                 let pane = self
                     .wm
                     .pane_mut(target_id)
@@ -309,7 +316,7 @@ impl AutomationControlPlane {
                 let redact = pane.is_password_prompt();
                 pane.submit_command(cmd).map_err(|e| e.to_string())?;
                 self.wm.record_traffic_with(
-                    TrafficEndpoint::Api,
+                    source,
                     TrafficEndpoint::Pane(target_id),
                     TrafficKind::Exec,
                     cmd,

@@ -249,6 +249,7 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:agents scroll <±n\|top>` | `PageUp`, `PageDown`, `Home` | wheel | Scroll the history |
 | `:agents follow [on\|off]` | `f`, `End` | follow marker | Follow new lines |
 | `:agents fade [secs]` | | | Seconds (1..3600, default 60) for an edge to fade to its floor; no argument shows it. Same as `agents_window.edge_fade_secs` |
+| `:agents demo` | | | Fill the window with synthetic `[demo]` pane-to-pane events (splits to three panes if needed; memory only, nothing is sent to any pane) to try the graph and conversation |
 | `:agents topology` | | | Which pairs communicated this session (data over RPC / MCP) |
 | `:agents topology export <name>` | | | Write the topology to `<name>.json` in the private runtime directory (local only) |
 | `:agents filter agent [label]` | `a` | header button | Filter to a node (no label: the selected line's sender) |

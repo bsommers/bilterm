@@ -129,3 +129,16 @@ fn clicking_outside_a_pinned_mcp_window_drops_its_keyboard_focus() {
     let _ = handle_wm_mouse_event(&mut wm, click, ws);
     assert!(wm.mcp_console().active && !wm.mcp_console().captures_input());
 }
+
+#[test]
+fn modern_mcp_title_exposes_a_pin_badge_that_follows_state() {
+    use bilterm::mcp_console::McpConsoleState;
+    use bilterm::ui::mcp_ui::mcp_modern_title;
+    let cfg = bilterm::config::BiltermConfig::default();
+    let mut state = McpConsoleState::default();
+    let (off, s0, e0) = mcp_modern_title(&cfg, &state);
+    assert!(off.contains("Pin (*)") && !off.contains("Pinned") && e0 > s0);
+    state.set_pinned(true);
+    let (on, s1, _) = mcp_modern_title(&cfg, &state);
+    assert!(on.contains("Pinned (*)") && s1 == s0, "badge keeps its start column");
+}

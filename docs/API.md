@@ -134,7 +134,7 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `workspace.status` | None (`{}`) | Workspace layout, flags, and array of panes | Returns full topology, active pane ID, layout mode, and 3270 telemetry. |
 | `workspace.snapshot` | `ppm_path` (string, optional) | Status object identical to `workspace.status` | Confined PPM pixel dump of workspace into snapshot directory. |
 | `workspace.fontsize` | `action` (string), `size` (int), `scale_pct` (int), `command` (string) | Font dimensions, pt size, scale percentage | Query or adjust workspace and active pane typography. |
-| `pane.exec` | `command` (string, req), `pane_id` (int), `allow_echo_lock` (bool) | `{"status": "submitted", "pane_id": int, "command": str}` | Submit shell command into pane command box or raw PTY. |
+| `pane.exec` | `command` (string, req), `pane_id` (int), `allow_echo_lock` (bool), `from_pane` (int, optional: attribute the call to that pane in the agent traffic graph) | `{"status": "submitted", "pane_id": int, "command": str}` | Submit shell command into pane command box or raw PTY. |
 | `pane.read` | `pane_id` (int) | Lines, cursor, hints, blocks, notifications | Extract visible screen text, cursor position, OSC 133 blocks, and field hints. |
 | `pane.feed_output` | `data` (string, req), `pane_id` (int) | `{"status": "processed", "pane_id": int, "bytes": int}` | Feed raw VT100/ANSI bytes into pane parser for headless testing. |
 | `pane.send_keys` | `keys` (string or string array, req) | `{"status": "dispatched", "count": int}` | Inject synthetic key chords into active pane. |

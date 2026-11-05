@@ -398,6 +398,15 @@ pub fn render_oia_status_bar_themed(
     ));
 
     if let Some(msg) = pane.status_message() {
+        // The message is feedback for the command just run (`:agents list`, ...). Appended last it is
+        // pushed off the row on a normal-width window, so when the detail segments leave no room for
+        // it, keep only the brand + state head and let the message have the rest of the row.
+        let used: usize = spans.iter().map(Span::width).sum();
+        let needed = Span::raw(format!(" {sep} {msg}")).width();
+        // Legacy keeps its historical layout byte-for-byte (Classic parity goldens).
+        if !is_legacy && used + needed > usize::from(status_rect.width) {
+            spans.truncate(3);
+        }
         spans.push(Span::styled(
             format!(" {sep} "),
             Style::default().fg(Color::White).bg(oia_bg),

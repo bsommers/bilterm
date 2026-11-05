@@ -78,6 +78,9 @@ pub enum AgentsOp {
     Fade(Option<u32>),
     /// `:agents topology [export <name>]` - the session's communication topology.
     Topology(TopologyOp),
+    /// `:agents demo` - fill the traffic bus with clearly labelled synthetic pane-to-pane events
+    /// (and open the window) so the graph and conversation have something to show.
+    Demo,
     /// Enter on the compose line or the `[send]` badge. Carries no text and has no colon form:
     /// Phase 50 has no outward write path (D-09), so the executor only reports that agent
     /// messaging is not enabled.

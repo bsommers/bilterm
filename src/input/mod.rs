@@ -607,6 +607,11 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(action);
     }
 
+    // Reserved chords (Ctrl+Alt+A) win even over raw PTY passthrough (agent TUIs, vim, less).
+    if let Some(action) = keymap::reserved_global_action(key) {
+        return wm.apply(action);
+    }
+
     // Refresh active pane line discipline before deciding whether F1..F10 / Alt+<key> should pass through to Raw PTY
     wm.active_pane_mut().refresh_line_discipline();
     let in_raw_passthrough = wm.active_pane().effective_routing_mode()

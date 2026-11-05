@@ -91,3 +91,34 @@ fn toggle_menu_entry_is_listed_and_toggles() {
         assert_eq!(wm.agents_window().active, expect_open);
     }
 }
+
+/// Regression: a pane in raw PTY passthrough (alt-screen agent TUI, vim, less) used to swallow
+/// `Ctrl+Alt+A`, so the launcher was dead exactly where it is needed.
+#[test]
+fn toggle_chord_wins_over_raw_pty_passthrough() {
+    let mut wm = fixture(120, 40);
+    wm.active_pane_mut().toggle_manual_raw_override();
+    assert_eq!(
+        wm.active_pane().effective_routing_mode(),
+        bilterm::pty::line_discipline::InputRoutingMode::RawPtyPassthrough,
+        "fixture must be in raw passthrough"
+    );
+    let chord = KeyModifiers::CONTROL | KeyModifiers::ALT;
+    press_mod(&mut wm, KeyCode::Char('a'), chord);
+    assert!(wm.agents_window().active, "Ctrl+Alt+A opens over a raw pane");
+    press_mod(&mut wm, KeyCode::Char('a'), chord);
+    assert!(!wm.agents_window().active, "and closes again");
+}
+
+#[test]
+fn demo_fills_the_bus_with_pane_to_pane_events_and_opens_the_window() {
+    let mut wm = fixture(120, 40);
+    run_colon(&mut wm, ":agents demo");
+    assert!(wm.agents_window().active);
+    assert!(wm.pane_count() >= 3, "splits up to three panes");
+    let evs: Vec<_> = wm.traffic().events_since(0).collect();
+    assert!(evs.len() >= 10, "got {}", evs.len());
+    assert!(evs.iter().all(|e| e.preview.starts_with("[demo]")));
+    let pane_to_pane = evs.iter().filter(|e| matches!((&e.from, &e.to), (bilterm::wm::traffic::TrafficEndpoint::Pane(_), bilterm::wm::traffic::TrafficEndpoint::Pane(_)))).count();
+    assert_eq!(pane_to_pane, evs.len(), "all demo events are pane to pane");
+}

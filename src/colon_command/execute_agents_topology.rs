@@ -145,3 +145,54 @@ fn export(name: &str, data: &JsonValue) -> Result<PathBuf, String> {
     crate::secure_fs::write_private_file(&path, data.to_json_string().as_bytes()).map_err(|e| e.to_string())?;
     Ok(path)
 }
+
+/// Synthetic conversation for `:agents demo`: `(from index, to index, seconds ago, text)` over three
+/// panes, skewed so edge brightness and width differ (A<->B busy, B->C occasional, A->C rare).
+const DEMO_SCRIPT: &[(usize, usize, u64, &str)] = &[
+    (0, 1, 19, "[demo] plan: split the refactor in two"),
+    (1, 0, 18, "[demo] ack, taking the parser half"),
+    (0, 1, 16, "[demo] ping 1"),
+    (1, 0, 15, "[demo] pong 1"),
+    (1, 2, 14, "[demo] relay: parser done, please review"),
+    (0, 1, 12, "[demo] ping 2"),
+    (1, 0, 11, "[demo] pong 2"),
+    (2, 1, 9, "[demo] review: two nits, see line 40"),
+    (0, 1, 7, "[demo] ping 3"),
+    (1, 0, 6, "[demo] pong 3"),
+    (0, 2, 4, "[demo] rare: heads-up, merging at the top of the hour"),
+    (0, 1, 2, "[demo] ping 4"),
+    (1, 0, 1, "[demo] pong 4"),
+];
+
+/// `:agents demo` - local, in-memory synthetic traffic between the first three panes (splitting the
+/// focused pane until there are three) and the window opened on it. Every line is prefixed `[demo]`.
+pub(super) fn demo(wm: &mut WindowManager) {
+    use crate::wm::SplitDirection;
+    use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
+    use std::time::{Duration, Instant};
+
+    let mut guard = 0;
+    while wm.pane_count() < 3 && guard < 2 {
+        let dir = if guard == 0 { SplitDirection::Vertical } else { SplitDirection::Horizontal };
+        if wm.split_focused(dir).is_err() {
+            break;
+        }
+        guard += 1;
+    }
+    let ids: Vec<crate::pane::PaneId> = wm.panes().keys().copied().take(3).collect();
+    if ids.len() < 2 {
+        status(wm, "Demo needs at least two panes".to_string());
+        return;
+    }
+    let now = Instant::now();
+    for &(from, to, ago, text) in DEMO_SCRIPT {
+        let (Some(&f), Some(&t)) = (ids.get(from), ids.get(to)) else { continue };
+        let at = now.checked_sub(Duration::from_secs(ago)).unwrap_or(now);
+        wm.record_traffic(TrafficEndpoint::Pane(f), TrafficEndpoint::Pane(t), TrafficKind::Message, text, at);
+    }
+    wm.open_agents_window(ids.first().copied());
+    status(
+        wm,
+        format!("Demo: {} synthetic [demo] events between panes {:?} (memory only; :agents topology shows them)", DEMO_SCRIPT.len(), ids),
+    );
+}

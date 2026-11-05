@@ -26,6 +26,7 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
                 zoom(wm, focus);
             }
         }
+        AgentsOp::Demo => super::execute_agents_topology::demo(wm),
         AgentsOp::Dismiss => dismiss(wm),
         AgentsOp::Blur => wm.agents_window_mut().blur(),
         AgentsOp::Fade(secs) => super::execute_agents_topology::fade(wm, secs),
@@ -157,6 +158,7 @@ fn execute_window_op(wm: &mut WindowManager, op: AgentsOp) {
         AgentsOp::List
         | AgentsOp::Zoom(_)
         | AgentsOp::Toggle(_)
+        | AgentsOp::Demo
         | AgentsOp::Close
         | AgentsOp::Dismiss
         | AgentsOp::Blur

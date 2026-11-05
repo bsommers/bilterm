@@ -511,6 +511,7 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::Zoom(Some(id)) => format!(":agents zoom {id}"),
         AgentsOp::Toggle(None) => ":agents toggle".to_string(),
         AgentsOp::Toggle(Some(id)) => format!(":agents toggle {id}"),
+        AgentsOp::Demo => ":agents demo".to_string(),
         AgentsOp::Close => ":agents close".to_string(),
         AgentsOp::Dismiss => ":agents dismiss".to_string(),
         AgentsOp::Blur => ":agents blur".to_string(),

@@ -92,6 +92,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":agents [list]", "Agent state per pane: working / blocked / idle / done / errored (data over RPC)"),
     (":agents zoom [pane-id]", "Open the agent traffic window (graph + conversation)"),
     (":agents toggle [pane-id]", "Open the agent traffic window, or close it when open (Ctrl+Alt+A; menu View > Agent Traffic; the @ agents button in the Navigator drawer footer)"),
+    (":agents demo", "Fill the traffic graph with synthetic [demo] events between three panes (splits to three if needed; memory only) to try the window"),
     (":agents close", "Close the agent traffic window"),
     (":agents dismiss", "Esc: close the window, or release the keyboard when pinned"),
     (":agents fade [secs]", "Seconds for a graph edge to fade from recent-traffic brightness to its floor (1..3600; show when omitted); also agents_window.edge_fade_secs"),
