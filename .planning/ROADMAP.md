@@ -54,6 +54,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [ ] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
+- [ ] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
 
 ## Phase Details
 
@@ -893,6 +894,22 @@ Plans:
 - [ ] 54-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
 - [ ] 54-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
 
+### Phase 55: Daemon Supervisor & Multi-Daemon Awareness
+
+**Goal**: Bilterm starts its background daemon automatically when needed. Normally exactly one daemon runs (singleton, enforced by a lock); several named daemons can run when the user asks, and every daemon knows about the others.
+**Depends on**: Phase 32/35 (`bilterm --daemon --session`, per-session sockets), Phase 49 (API/MCP), Phase 50 (agent state).
+**Requirements**: DAEM-05, DAEM-06, DAEM-07, DAEM-08
+**Today (baseline)**: one daemon process per session name (`daemon-<session>.sock`, `bilterm ls` scans the directory). A daemon is spawned only when the client detaches (`main.rs`, after the TUI exits) and there is no singleton lock, no supervisor and no daemon-to-daemon discovery. Research must first confirm whether live PTYs actually move to the daemon on detach.
+**Uniformity (`UNI-R01`)**: every capability ships a mouse path, a GUI+TUI key sequence and colon/palette/RPC/MCP commands, with parity tests.
+**Success Criteria** (what must be TRUE):
+
+  1. `DAEM-05`: default singleton daemon, auto-dispatched on first need (start, `:detach`, `bilterm ctl` with no daemon) under an exclusive lock with stale-lock recovery; double start is a clean no-op.
+  2. `DAEM-06`: opt-in multi-daemon (`--daemon --name <n>` or `[daemon] mode`), each with its own socket, lock and runtime dir via `secure_fs`.
+  3. `DAEM-07`: peer awareness: a registry of live daemons (id, name, pid, uptime, panes, sessions, agents) that every daemon and client can read; `daemon.list` RPC/MCP, `:daemon list|status|stop|start`, drawer/palette entries, and `:find` can search across daemons.
+  4. `DAEM-08`: lifecycle safety: graceful stop, crash cleanup, version-mismatch handling, no cross-daemon PTY/input leakage unless explicitly allowed.
+
+**Plans**: 0/0 plans complete (research + planning pending)
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -911,7 +928,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 52 → 53 → 54
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 52 → 53 → 54 → 55
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -966,3 +983,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
 | 51. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
+| 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 0/0 | Not planned | - |

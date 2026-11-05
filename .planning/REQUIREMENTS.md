@@ -208,6 +208,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
 
 
+## Daemon (Phase 55)
+
+- [ ] **DAEM-05**: Singleton daemon auto-dispatched under an exclusive lock.
+- [ ] **DAEM-06**: Opt-in named multi-daemon mode with isolated sockets and locks.
+- [ ] **DAEM-07**: Daemons discover each other; `daemon.list` RPC/MCP and `:daemon` verbs.
+- [ ] **DAEM-08**: Safe lifecycle: graceful stop, crash cleanup, version mismatch, no cross-daemon leakage.
+
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
 - [ ] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
@@ -256,3 +263,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 *Requirements defined: 2026-10-19*
 *Last updated: 2026-10-27 for Milestone v2.0 Phases 29–34 (Smooth/Block-Page Scrolling, Exit Guard, iTerm2 Color Schemes, Herdr Background Daemon, Session Trees & Crash Recovery, and TRON Master Control Program Root Console)*
+| DAEM-05 | Phase 55 | Planned |
+| DAEM-06 | Phase 55 | Planned |
+| DAEM-07 | Phase 55 | Planned |
+| DAEM-08 | Phase 55 | Planned |
