@@ -82,8 +82,9 @@ pub(super) fn handle_agents_window_paste(wm: &mut WindowManager, text: &str) -> 
 ///
 /// Every visible effect lowers to an `Action::Agents(..)` run through `WindowManager::apply`; the
 /// only state kept here is which pointer drag is in progress (`set_agents_drag`, bookkeeping). The
-/// window swallows events inside it so the drawer and panes beneath never see them. Returns `None`
-/// when the window is closed or the event is not for it.
+/// window swallows events inside it so the drawer and panes beneath never see them; events outside
+/// it (the window is not modal) are left for the panes. Returns `None` when the window is closed or
+/// the event is not for it.
 pub(super) fn handle_agents_window_mouse(
     wm: &mut WindowManager,
     mouse: MouseEvent,
@@ -112,15 +113,12 @@ pub(super) fn handle_agents_window_mouse(
     }
     let hit = wm.agents_hit(workspace_area, mouse.column, mouse.row);
     if hit == AgentsHit::Outside {
-        let pinned = wm.agents_window().pinned;
-        if pinned {
-            // A click elsewhere gives the keyboard back to the panes; the click itself goes on.
-            if matches!(mouse.kind, MouseEventKind::Down(_)) {
-                run(wm, AgentsOp::Dismiss);
-            }
-            return None;
+        // The window is not modal: a press elsewhere gives the keyboard back to the panes and the
+        // press itself goes on to whatever lies under the pointer; every other event passes through.
+        if matches!(mouse.kind, MouseEventKind::Down(_)) && wm.agents_window().focused {
+            run(wm, AgentsOp::Blur);
         }
-        return rect_contains(workspace_area, mouse.column, mouse.row).then_some(AppAction::Handled);
+        return None;
     }
     if let Some(delta) = ctrl_wheel_scale_delta(&mouse) {
         run(wm, AgentsOp::ScaleStep(delta));
@@ -134,9 +132,8 @@ pub(super) fn handle_agents_window_mouse(
         }
     }
     if let MouseEventKind::Down(button) = mouse.kind {
-        // A click inside a pinned window whose keyboard was released takes the keyboard back.
-        let state = wm.agents_window();
-        if state.pinned && !state.focused {
+        // A click inside a window whose keyboard was released takes the keyboard back.
+        if !wm.agents_window().focused {
             run(wm, AgentsOp::Zoom(None));
         }
         press(wm, button, hit, mouse, workspace_area);

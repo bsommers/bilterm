@@ -446,6 +446,7 @@ fn window_enter_on_pane_node_focuses_pane() {
         for pinned in [false, true] {
             let (mut wm, _) = traffic_fixture();
             wm.focus_and_raise(1);
+            wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
             wm.agents_window_mut().pinned = pinned;
             assert!(wm.agents_select_node(&NodeKey::pane(2)));
             press(&mut wm, KeyCode::Enter);
@@ -491,6 +492,7 @@ fn window_leader_passes_through_while_focused() {
     with_temp_xdg(|| {
         let (mut wm, _) = fixture(120, 40);
         wm.focus_and_raise(1);
+        wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         wm.report_agent_state(2, Some(AgentState::Blocked));
         wm.update_agent_states(Instant::now());
         wm.open_agents_window(None);
@@ -509,6 +511,7 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::Zoom(Some(id)) => format!(":agents zoom {id}"),
         AgentsOp::Close => ":agents close".to_string(),
         AgentsOp::Dismiss => ":agents dismiss".to_string(),
+        AgentsOp::Blur => ":agents blur".to_string(),
         AgentsOp::Select(dir) => format!(
             ":agents select {}",
             match dir {
@@ -590,6 +593,7 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::Zoom(Some(2)),
         AgentsOp::Close,
         AgentsOp::Dismiss,
+        AgentsOp::Blur,
         AgentsOp::Select(GraphDir::Left),
         AgentsOp::Select(GraphDir::Right),
         AgentsOp::Select(GraphDir::Up),
@@ -673,6 +677,7 @@ fn window_keys_match_colon_forms() {
             assert!(wm.agents_select_node(&NodeKey("user".to_string())));
             wm.agents_cycle_edge(true);
             wm.focus_and_raise(1);
+            wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
             if in_grab {
                 run_colon(wm, ":agents grab on");
             }
@@ -1049,11 +1054,13 @@ fn window_click_node_selects_and_second_click_activates() {
     with_temp_xdg(|| {
         let (mut wm, area) = traffic_fixture();
         wm.focus_and_raise(1);
+        wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         let (c, r) = node_cell(&wm, area, "pane:2");
         click(&mut wm, area, c, r);
         assert_eq!(wm.agents_window().selection.node, Some(NodeKey::pane(2)));
         let (mut other, _) = traffic_fixture();
         other.focus_and_raise(1);
+        other.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         run_colon(&mut other, ":agents select pane:2");
         assert_eq!(observe(&wm), observe(&other));
         assert_eq!(wm.active_pane_id(), 1, "the first click only selects");
@@ -1230,6 +1237,7 @@ fn parity_window_geometry_key_mouse_colon_match() {
     }
     fn select_pane2_focus1(wm: &mut WindowManager) {
         wm.focus_and_raise(1);
+        wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         assert!(wm.agents_select_node(&NodeKey::pane(2)));
     }
     fn select_pane1(wm: &mut WindowManager) {
@@ -1404,6 +1412,7 @@ fn window_swallows_pointer_events_and_ignores_stale_drags() {
     with_temp_xdg(|| {
         let (mut wm, area) = traffic_fixture();
         wm.focus_and_raise(1);
+        wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         let r = win_rect(&wm, area);
         let ws = ws_of(&wm, area);
         // Wheel and right-click inside the window are swallowed, whatever lies beneath.
@@ -1411,12 +1420,14 @@ fn window_swallows_pointer_events_and_ignores_stale_drags() {
             mouse(&mut wm, area, kind, r.x + 3, r.y + 3);
         }
         assert_eq!(wm.active_pane_id(), 1);
-        // An unpinned window also swallows clicks elsewhere in the workspace (modal-like) ...
-        let outside = (ws.x, ws.y + ws.height - 1);
+        // The window is not modal: a click elsewhere reaches the pane under it, blurs the window and
+        // does not close it.
+        let outside = (ws.x + ws.width - 1, ws.y + ws.height - 1);
         assert!(!bilterm::wm::rect_contains(r, outside.0, outside.1));
         click(&mut wm, area, outside.0, outside.1);
-        assert_eq!(wm.active_pane_id(), 1, "the click did not reach a pane");
-        assert!(wm.agents_window().active, "an unpinned window is not closed by a click");
+        assert_eq!(wm.active_pane_id(), 2, "the click reached the pane under the pointer");
+        assert!(wm.agents_window().active, "a click elsewhere does not close the window");
+        assert!(!wm.agents_window().focused, "the click released the keyboard");
         // ... a drag release without a press is a no-op.
         mouse(&mut wm, area, MouseEventKind::Up(MouseButton::Left), r.x + 3, r.y + 3);
         assert!(wm.agents_window().drag.is_none());
@@ -2124,6 +2135,7 @@ fn snoop_ctrl_o_cycles_and_clicks_focus() {
         // and plainly once the window is gone.
         ctrl_o(&mut wm);
         wm.focus_and_raise(1);
+        wm.agents_window_mut().focused = true; // pane focus blurs the window; this test wants it back
         press_mod(&mut wm, KeyCode::Char('x'), KeyModifiers::CONTROL);
         assert!(wm.is_leader_pending());
         press(&mut wm, KeyCode::F(6));

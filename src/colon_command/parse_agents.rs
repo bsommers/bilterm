@@ -4,7 +4,7 @@ use super::ColonCommand;
 use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
 
 const SCALE_USAGE: &str = "Usage: :agents scale <75..200> | +n | -n (GUI only)";
 
@@ -196,6 +196,7 @@ pub(super) fn parse_agents_colon_command(
         },
         Some("close") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Close)),
         Some("dismiss") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Dismiss)),
+        Some("blur") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Blur)),
         Some("select") if parts.len() == 3 => match (graph_dir(parts[2]), node_key(parts[2])) {
             (Some(dir), _) => Ok(ColonCommand::Agents(AgentsOp::Select(dir))),
             (None, Some(key)) => Ok(ColonCommand::Agents(AgentsOp::SelectNode(key))),

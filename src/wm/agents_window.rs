@@ -1,8 +1,9 @@
 //! Agent traffic zoom window (Phase 50-07, D-07/D-08): window state, graph scene aggregated from
 //! the traffic bus, node layout and the selection model.
 //!
-//! The window is NOT a `Modal` variant: like the pinned `:mcp` console it can stay open without
-//! owning the keyboard ([`AgentsWindowState::captures_input`]). Entry points (`:agents zoom`,
+//! The window is NOT a `Modal` variant and is not modal in behaviour either: it floats above the
+//! panes, owns the keyboard only while focused ([`AgentsWindowState::captures_input`]), and pointer
+//! events outside it reach the panes (a press there releases the keyboard). Entry points (`:agents zoom`,
 //! keys) are bound in later plans; everything here is reachable through [`WindowManager`].
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -377,8 +378,9 @@ pub enum AgentsDrag {
 #[derive(Clone, Debug)]
 pub struct AgentsWindowState {
     pub active: bool,
-    /// Pinned windows stay open and only take the keyboard while `focused`.
+    /// Pinned windows stay open when dismissed (Esc / Enter release the keyboard instead of closing).
     pub pinned: bool,
+    /// The window owns the keyboard (set on open and on a click inside, cleared by a click elsewhere).
     pub focused: bool,
     /// User-chosen rect; `None` = default centred rect.
     pub rect: Option<Rect>,
@@ -534,9 +536,19 @@ impl Default for AgentsWindowState {
 }
 
 impl AgentsWindowState {
-    /// `true` when key events belong to the window: open and either unpinned or focused.
+    /// `true` when key events belong to the window: open and focused. The window is not modal:
+    /// clicking a pane, focusing another pane or `:agents blur` releases the keyboard while the
+    /// window stays open, and a click inside it (or `:agents zoom`) takes it back.
     pub fn captures_input(&self) -> bool {
-        self.active && (!self.pinned || self.focused)
+        self.active && self.focused
+    }
+
+    /// Releases the keyboard (and the transient grab / drag gestures) without closing the window.
+    pub fn blur(&mut self) {
+        self.focused = false;
+        self.grab_mode = false;
+        self.drag = None;
+        self.snoop.keyword_entry = None;
     }
 }
 

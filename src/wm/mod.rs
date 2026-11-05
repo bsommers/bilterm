@@ -736,6 +736,7 @@ impl WindowManager {
     pub fn focus_and_raise(&mut self, pane_id: PaneId) -> bool {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
+            self.agents_window.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -748,6 +749,7 @@ impl WindowManager {
     /// Shuffles the pane deck top-to-bottom (`Alt+Tab` / `F6` / `:deck next`, `WM-02`).
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
+        self.agents_window.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -757,6 +759,7 @@ impl WindowManager {
     /// Shuffles the pane deck bottom-to-top (`Alt+Shift+Tab` / `:deck prev`, `WM-02`).
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
+        self.agents_window.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

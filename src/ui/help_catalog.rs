@@ -92,6 +92,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":agents zoom [pane-id]", "Open the agent traffic window (graph + conversation)"),
     (":agents close", "Close the agent traffic window"),
     (":agents dismiss", "Esc: close the window, or release the keyboard when pinned"),
+    (":agents blur", "Release the keyboard without closing (a click on a pane does the same; a click inside the window takes it back)"),
     (":agents select <left|right|up|down|node-key>", "Move the node cursor (arrow keys), or select a node by key such as pane:2 (click)"),
     (":agents edge <next|prev|a b>", "Cycle the selected node's edges (Tab / Shift+Tab), or select the edge between two nodes (click)"),
     (":agents enter", "Focus the selected pane node and leave the traffic window (Enter)"),
