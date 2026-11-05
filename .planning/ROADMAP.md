@@ -51,6 +51,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [ ] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
 - [ ] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
+- [ ] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
 - [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [ ] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
@@ -853,6 +854,22 @@ Plans:
 - [ ] 51-12-PLAN.md — Uniformity parity matrix (UNI-R01) across colon, key, mouse, palette, menu, RPC, MCP; Phase 50 parity test extended (wave 4, sonnet)
 - [ ] 51-13-PLAN.md — Final gate: `scripts/verify.sh`, `check_classic_goldens.sh` (11), `check_phase50_doc_coverage.sh` count update, bookkeeping (wave 5, sonnet)
 
+### Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)
+
+**Goal**: A tmux session on a remote host (e.g. the user's Mac) stays alive across SSH drops, and Bilterm reconnects to it correctly, instead of today's local-shell facade.
+**Depends on**: Phase 11 (tmux -CC bridge), Phase 18 (SSH domains), Phase 50.1 (registry rows for SSH/tmux).
+**Requirements**: PST-01, PST-02, PST-03, PST-04
+**Source**: `.planning/debug/ssh-tmux-early-quit.md` (diagnosis; fix plan steps 1-7). Today `:ssh-tmux` starts no ssh or tmux, the bridge is test-only, plain ssh has no keepalive, exited panes vanish silently, restore fakes a remote badge.
+**Uniformity (`UNI-R01`)**: every capability ships a mouse path, a GUI+TUI key sequence and colon/palette/RPC/MCP commands, with parity tests.
+**Success Criteria** (what must be TRUE):
+
+  1. `PST-01`: `:ssh-tmux` runs a real `ssh -tt` with ServerAlive options and a login-shell wrapper around `tmux -CC new-session -A -s`; status text is honest until connected.
+  2. `PST-02`: bridge hardening: exit reason stored, `%0` seed dropped, ids reconciled on reattach, `WindowClose`, outbound commands pumped, `capture-pane` hydrate; reconnect state machine with backoff (fake-clock tests).
+  3. `PST-03`: exited remote panes are held with a banner (exit code, reason) instead of vanishing; restore never shows a remote badge on a local shell.
+  4. `PST-04`: shorter ControlPersist plus keepalive on `:ssh`; tracing of connect/exit/`%exit`; headless tests via `TmuxControlSubprocess::from_channels`; macOS PATH handling documented/tested.
+
+**Plans**: 0/0 plans complete (research done; planning pending)
+
 ### Phase 52: Agent-to-Agent Messaging & Coordination
 
 **Goal**: AI agents running in different panes or sessions can address each other, pass structured messages, wait for replies, and be coordinated, without the sender needing to know terminal internals.
@@ -957,7 +974,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 52 → 53 → 54 → 55
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1013,6 +1030,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
 | 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 0/0 | Planning | - |
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 0/0 | Planning | - |
+| 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 0/0 | Not planned | - |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
 | 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/0 | Planned | - |

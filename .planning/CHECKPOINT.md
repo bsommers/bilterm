@@ -143,3 +143,12 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Not done / user asks: type messages in agents window (compose gated until Phase 51 `[api] allow_agent_messaging`), activity icons on nodes/edges, window always on top (by design). Suggest `/gsd-spec-phase 51`.
 - Authorizations: push/PR/remote-branch deletion need fresh explicit go-ahead. Optional: delete merged remote branches fix/agents-graph-heat, fix/agents-window-layering, examples/agent-traffic-demo.
 - Next: user GUI re-test; then ask before push + PR.
+
+## Checkpoint 2026-11-05 (planning session: phases 50.1 / 51 / 51.1 / 55)
+- Branch feat/navigator-rows-and-launch (integ worktree .claude/worktrees/integ), pushed to origin; swe-skills-2 branch feat/uniform-surfaces-skill pushed (designing-uniform-surfaces skill, 98eed34). Never commit to main; docs/mcp-usecases untracked, do not stage.
+- Planned & checker-reviewed: Phase 50.1 Unified Registry & Find (15 plans, contract), Phase 51 UI Tweaks & Command Parity (13 plans). Leader `?` is HelpToggle: Find uses Ctrl+Alt+F only. Phase 50.1 runs BEFORE 51.
+- Inserted (ROADMAP/REQUIREMENTS): 51.1 Persistent SSH+tmux (PST-01..04, research done, plans NOT written), 55 Daemon Supervisor (DAEM-05..08, no research). Renumbered messaging/session/viewer to 52/53/54.
+- User decisions: UNI-R01 surface uniformity (AGENTS.md conv. 6); max parallel autonomous subagents; :find reserved words agent|session|history; secrets never stored/indexed, masked on read; :find session live-first + disk, every result shows source.
+- Still unverified on user's real desktop: Ctrl+Alt+A fix, status messages, MCP pin badge, :agents demo, two-line rows (need `:drawer style navigator`).
+- Authorizations: user said commit+push of this work (done). PR creation / merge / remote branch deletion still need explicit go-ahead.
+- Next: commit this; then /gsd-plan-phase 51.1 (sonnet, parallel), then /gsd-execute-phase 50.1 (user to confirm start).

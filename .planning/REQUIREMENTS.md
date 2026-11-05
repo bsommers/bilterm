@@ -203,6 +203,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **UIT-02**: Every colon-command verb is reachable from the command palette (or listed as deliberately excluded), enforced by a test.
 - [ ] **UIT-03**: `:agents list` opens a floating, pinnable, key/mouse/verb-driven window listing only agents.
 - [ ] **UIT-04**: The window-tiling function includes the agents-list window.
+- [ ] **PST-01**: `:ssh-tmux` runs real ssh -tt + tmux -CC new -A with keepalive and honest status.
+- [ ] **PST-02**: tmux bridge hardened with reconnect/backoff and hydrate.
+- [ ] **PST-03**: exited remote panes held with banner; no fake remote badge on restore.
+- [ ] **PST-04**: keepalive/ControlPersist, tracing, headless tests.
 - [ ] **AGT-01**: Agents running in panes/sessions can be addressed by stable names and exchange structured messages through a per-recipient mailbox (`agent.send`, `agent.inbox`, `agent.ack`, `agent.list`) over RPC, HTTP, MCP and `bilterm ctl`.
 - [ ] **AGT-02**: Messages can be delivered as mailbox entries, as a one-line "nudge" typed only into an idle/waiting pane, or as a `0600` file whose path is nudged; senders can wait for a reply with a timeout.
 - [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
@@ -241,6 +245,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UIT-02 | Phase 51 | Planned |
 | UIT-03 | Phase 51 | Planned |
 | UIT-04 | Phase 51 | Planned |
+| PST-01 | Phase 51.1 | Planned |
+| PST-02 | Phase 51.1 | Planned |
+| PST-03 | Phase 51.1 | Planned |
+| PST-04 | Phase 51.1 | Planned |
 | AGT-01 | Phase 52 | Planned |
 | AGT-02 | Phase 52 | Planned |
 | AGT-03 | Phase 52 | Planned |
