@@ -10,7 +10,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use super::AppAction;
-use super::keymap::{AgentsKeyScope, agents_window_action, is_leader_key_with_tmux};
+use super::keymap::{AgentsKeyScope, agents_window_action, default_global_action, is_leader_key_with_tmux};
 use super::mouse_wm::{apply_rect_edge_resize, ctrl_wheel_scale_delta, detect_title_bar_badge_click};
 use crate::action::Action;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterOp};
@@ -29,6 +29,11 @@ pub(super) fn handle_agents_window_key(wm: &mut WindowManager, key: KeyEvent) ->
     let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
     if is_leader_key_with_tmux(key, &wm.config().leader_key, inside_tmux) {
         return None;
+    }
+    // The global toggle chord closes the focused window again (it would otherwise be swallowed here).
+    if let Some(toggle @ Action::Agents(AgentsOp::Toggle(_))) = default_global_action(key, false) {
+        let _ = wm.apply(toggle);
+        return Some(AppAction::Handled);
     }
     let state = wm.agents_window();
     let entry = state.snoop.keyword_entry.is_some();

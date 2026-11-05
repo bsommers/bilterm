@@ -12,6 +12,9 @@ pub enum AgentsOp {
     Zoom(Option<crate::pane::PaneId>),
     /// `:agents close` - close the window unconditionally.
     Close,
+    /// `:agents toggle [pane-id]` (menu, footer button, `Ctrl+Alt+A`) - close the window when it is open,
+    /// else open it exactly like `:agents zoom [pane-id]`.
+    Toggle(Option<crate::pane::PaneId>),
     /// `:agents dismiss` (Esc) - close an unpinned window, or only release the keyboard of a pinned one.
     Dismiss,
     /// `:agents blur` - release the keyboard without closing (a click on a pane does the same).

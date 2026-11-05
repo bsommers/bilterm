@@ -1432,7 +1432,12 @@ fn mouse_footer_buttons_render_in_both_glyph_packs() {
             let labels: String = buttons.iter().map(|b| buf[(b.x, b.y)].symbol().to_string()).collect();
             assert_eq!(labels, "*!N+rx@", "{pack}");
             let y = buttons[0].y;
-            assert!(buttons.iter().all(|b| b.y == y && b.width == 2));
+            assert!(buttons.iter().all(|b| b.y == y));
+            assert!(buttons.iter().filter(|b| b.kind != NavigatorButtonKind::Zoom).all(|b| b.width == 2));
+            let zoom = buttons.last().unwrap();
+            assert_eq!(zoom.kind, NavigatorButtonKind::Zoom);
+            let text: String = (zoom.x..zoom.x + zoom.width - 1).map(|x| buf[(x, y)].symbol().to_string()).collect();
+            assert_eq!(text, "@ agents", "{pack}: the last button says it is the agents window");
             let dr = wm.drawer_rect(area).unwrap();
             assert_eq!(y, dr.y + dr.height - 2, "footer row is the last inner row");
         }
@@ -1520,6 +1525,33 @@ fn mouse_footer_zoom_button_opens_agents_window_on_selected_pane() {
         click_button(&mut wm, area, NavigatorButtonKind::Zoom);
         assert!(wm.agents_window().active);
         assert_eq!(wm.agents_window().selection.node.as_ref().map(|k| k.0.as_str()), Some("pane:2"));
+    });
+}
+
+#[test]
+fn mouse_footer_agents_button_toggles_the_window() {
+    with_temp_xdg(|| {
+        let (mut wm, area) = open_navigator(100, 30);
+        click_row(&mut wm, area, &DrawerRowKind::Pane(2));
+        click_button(&mut wm, area, NavigatorButtonKind::Zoom);
+        assert!(wm.agents_window().active, "first click opens");
+        // Clicking the wide label's trailing cells hits the same button.
+        let b = navigator_footer_buttons(&wm, area).into_iter().find(|b| b.kind == NavigatorButtonKind::Zoom).unwrap();
+        click_at(&mut wm, area, b.x + b.width - 2, b.y);
+        assert!(!wm.agents_window().active, "second click closes");
+    });
+}
+
+#[test]
+fn mouse_footer_agents_button_falls_back_to_one_cell_when_narrow() {
+    with_temp_xdg(|| {
+        // Inner width 21 fits all seven buttons but not the 9-cell wide `@ agents` text (needs 22).
+        let (mut wm, area) = navigator_wm(100, 30);
+        run_colon(&mut wm, ":drawer size 23");
+        wm.toggle_drawer();
+        let buttons = navigator_footer_buttons(&wm, area);
+        let zoom = buttons.iter().find(|b| b.kind == NavigatorButtonKind::Zoom).expect("still laid out");
+        assert_eq!(zoom.width, 2, "single `@` cell");
     });
 }
 

@@ -177,6 +177,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('m'), Action::LayoutCycle),
     (KeyModifiers::ALT, KeyCode::Char('M'), Action::LayoutCycle),
     (KeyModifiers::ALT, KeyCode::Char('D'), Action::DrawerToggle),
+    // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::NONE, KeyCode::F(7), Action::DrawerToggle),
     (KeyModifiers::NONE, KeyCode::F(11), Action::VisualStyleCommand(None)),
     (KeyModifiers::ALT, KeyCode::F(12), Action::FkeyModeCommand(None)),

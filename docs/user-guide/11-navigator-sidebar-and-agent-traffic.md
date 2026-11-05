@@ -70,7 +70,7 @@ State dot per pane (derived only from signals Bilterm already tracks; no agent n
 
 Blocked, errored and done are the **attention** states. `!` (key, footer button, or leader `!`) jumps to the next pane needing attention: blocked first, then errored, then done.
 
-A footer button bar at the bottom of the drawer (when it is at least 4 rows tall) shows `* ! N + r x @`. The label is the key of the same character; buttons that do not fit are dropped from the right. See [Mouse](#mouse).
+A footer button bar at the bottom of the drawer (when it is at least 4 rows tall) shows `* ! N + r x @ agents`. Each label is the key of the same character, and the last button is labelled `@ agents` so the Agent Traffic window is easy to find: it **toggles** the window (open on the selected pane row, close when open). Buttons that do not fit are dropped from the right (the `@ agents` text needs a 24-column inner width). See [Mouse](#mouse).
 
 ## Keyboard
 
@@ -80,6 +80,7 @@ Leader chords (`<L>` is `Ctrl+B` or `Ctrl+X`; inside an outer `$TMUX` only `Ctrl
 | :--- | :--- | :--- |
 | `<L> !` | `:drawer attention` | Focus the next pane needing attention |
 | `<L> a` | `:agents zoom` | Open the AGENT TRAFFIC window |
+| `Ctrl+Alt+A` | `:agents toggle` | Open the AGENT TRAFFIC window, or close it when open (all of `F1`..`F12` are already bound, so this is a global chord) |
 
 ### Navigator drawer (drawer focused, `drawer.style = navigator`)
 
@@ -216,6 +217,7 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | :--- | :--- | :--- | :--- |
 | `:agents list` | | | Agent state per pane (data over RPC, see [API](../API.md)) |
 | `:agents zoom [pane-id]` | `<L> a` | footer `@`, comms glyph | Open the traffic window (optionally on a pane) |
+| `:agents toggle [pane-id]` | `Ctrl+Alt+A` | menu View > Agent Traffic, footer `@ agents` | Open the window (optionally on a pane), or close it when it is open |
 | `:agents close` | | title `[X]` | Close the window |
 | `:agents dismiss` | `Esc` | | Close, or release the keyboard when pinned |
 | `:agents blur` | | click a pane | Release the keyboard without closing (the window is not modal) |
@@ -266,7 +268,7 @@ Click the glyph, press `o`, press `Right` then `Enter`, or run `:drawer comms` t
 
 ## Agent traffic window
 
-Open it with `<L> a`, `:agents zoom`, the footer `@` button, or a comms glyph. It is an ordinary, non-modal window: it floats above the panes and drawer and below the `:mcp` console, other panes and keys keep working while it is open, and it only receives keys while it has focus (see above), default 80% x 70% of the workspace (minimum 40x12, nothing is drawn below 30x10).
+Open it with `<L> a`, `Ctrl+Alt+A`, `:agents zoom`, `:agents toggle`, the top menu (View > Agent Traffic), the footer `@ agents` button, or a comms glyph; `Ctrl+Alt+A`, `:agents toggle`, the menu entry and the footer button close it again when it is open. It is an ordinary, non-modal window: it floats above the panes and drawer and below the `:mcp` console, other panes and keys keep working while it is open, and it only receives keys while it has focus (see above), default 80% x 70% of the workspace (minimum 40x12, nothing is drawn below 30x10).
 
 **Graph (left).** One node per live pane plus the endpoints seen on the bus (`you`, `api`, `mcp`, `session:<name>`); labels are `you`, `#<id>`, `@<session>`. Edges are drawn as curves between nodes that exchanged traffic; nodes are coloured by agent state. An edge traces the real conversation: **the more often and the more recently a pair talked, the brighter its edge.** Each event adds a weight that falls linearly from 1 (now) to 0 (one fade window ago), and the brightness is that sum `s` mapped through `s / (s + 1.5)`, so a chatty pair glows and a one-off message is dim. After the fade window (`:agents fade`, default 60 s) the edge decays to a fixed floor but **never disappears once the pair has spoken**. The terminal (braille) and GUI (vector) renderers use the same value; the selected edge keeps the accent colour and edges that carried one of the newest events also get flow particles in the GUI. The layout is deterministic and stable: a topology that has not changed does not wobble between frames, and nodes you pin (drag, nudge, `:agents node-pin`) stay where you put them. Above 64 nodes the layout falls back to a grid and keeps live panes.
 

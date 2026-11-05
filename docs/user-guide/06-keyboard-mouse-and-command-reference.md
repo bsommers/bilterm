@@ -70,6 +70,7 @@
 | `Alt+Shift+Tab` | `<L> p` / `<L> Shift+Tab` | `:deck prev` | Shuffle Z-order pane deck bottom-to-top (or focus previous pane) |
 | **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
 | — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
+| `Ctrl+Alt+A` | — | `:agents toggle` | Open the Agent Traffic window, or close it when open (also menu View > Agent Traffic and the Navigator footer `@ agents` button; every `F` key is already taken) |
 | — | `<L> a` | `:agents zoom` | Open the Agent Traffic window (graph + conversation); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). `Ctrl+O` inside it cycles graph / conversation / compose; `F6` keeps its global `DeckNext` meaning |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
 | **`F10`** / `Alt+\`` / `Ctrl+\` / `Ctrl+Space` | `<L> q` / `<L> \`` / `<L> ~` / `<L> F10` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal |
@@ -177,7 +178,7 @@
 | **Navigator drawer: click a fold marker (`▾` / `▸`, ASCII `-` / `+`)** | Fold or unfold that workspace or session (`:drawer fold`) |
 | **Navigator drawer: click `[+]` after a session or workspace name** | Add a window to that session (key `a`); the `[+]` beside the `WORKSPACES` title creates a session (key `N`) |
 | **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
-| **Navigator drawer: footer buttons `* ! N + r x @`** | Pin, jump to attention, new session, new pane, rename, close the selected pane, open the agent traffic window on it; each is the key of the same character (buttons that do not fit are dropped from the right) |
+| **Navigator drawer: footer buttons `* ! N + r x @ agents`** | Pin, jump to attention, new session, new pane, rename, close the selected pane, toggle the agent traffic window (opens on the selected pane); each is the key of the same character (buttons that do not fit are dropped from the right) |
 | **Navigator drawer: title badges, wheel, edge drag** | Minimize / maximize / close; wheel moves the selection by 3 rows; dragging the edge resizes `navigator_width_cols`; `Ctrl + wheel` scales the drawer on the GUI surface |
 | **Navigator drawer: click the comms glyph (`⇄you`, `⋔3`)** | Open the Agent Traffic window on that conversation (`:drawer comms`) |
 | **Agent Traffic window: drag title bar / edge / corner** | Move / resize the window (`:agents move`, `:agents resize`); the top edge is the title bar, its corners resize |
@@ -336,7 +337,7 @@
 | `:command` | Arguments | Description |
 |------------|-----------|-------------|
 | `:agents` | `[list]` | Agent state per pane (working / blocked / idle / done / errored) with counts; structured data over RPC |
-| `:agents` | `zoom [pane-id] \| close \| dismiss` | Open / close the Agent Traffic window; `dismiss` is `Esc` (releases the keyboard when pinned) |
+| `:agents` | `zoom [pane-id] \| toggle [pane-id] \| close \| dismiss` | Open / toggle / close the Agent Traffic window; `dismiss` is `Esc` (releases the keyboard when pinned) |
 | `:agents` | `select <left\|right\|up\|down\|node-key> \| edge <next\|prev\|a b> \| enter` | Node and edge cursor |
 | `:agents` | `move <dx> <dy> \| resize <dw> <dh> \| rect <x> <y> <w> <h> \| size <cols>x<rows>\|auto \| max \| split <20..80\|+n\|-n>` | Window geometry and splitter |
 | `:agents` | `grab [on\|off] \| nudge <dir> \| node-pin <key> <x> <y> \| node-unpin [key]` | Node placement |

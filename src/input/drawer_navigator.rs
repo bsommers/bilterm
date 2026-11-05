@@ -70,7 +70,7 @@ pub(super) fn navigator_button_action(wm: &WindowManager, kind: NavigatorButtonK
                 DrawerRowKind::Pane(id) => Some(id),
                 _ => None,
             });
-            Action::Agents(AgentsOp::Zoom(pane))
+            Action::Agents(AgentsOp::Toggle(pane))
         }
     })
 }

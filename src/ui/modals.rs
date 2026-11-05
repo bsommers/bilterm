@@ -402,6 +402,7 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("3270 Field Hints (Alt+F)", ":hints"), ("Vi Copy Mode (Alt+C)", ":copy"),
         ("Rectangular Select (Alt+R)", ":rect"), ("Toggle Rect Mouse Mode", ":rect mode"),
         ("Cross-Hair Ruler (Alt+X)", ":crosshair"), ("DOS F-Key Bar", ":fkeybar"),
+        ("Agent Traffic (Ctrl+Alt+A)", ":agents toggle"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),

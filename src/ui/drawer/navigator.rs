@@ -371,6 +371,15 @@ impl NavigatorButtonKind {
             Self::Zoom => '@',
         }
     }
+
+    /// Wider text shown when there is room (the last button toggles the agent traffic window and says
+    /// so); the button falls back to the single-cell `label` otherwise.
+    pub const fn wide_text(self) -> Option<&'static str> {
+        match self {
+            Self::Zoom => Some("@ agents"),
+            _ => None,
+        }
+    }
 }
 
 /// One rendered footer button: `width` cells starting at `(x, y)` (label cell plus one padding cell).
@@ -400,7 +409,11 @@ fn footer_buttons_in(lay: &NavigatorLayout) -> Vec<NavigatorButton> {
     NavigatorButtonKind::ALL
         .iter()
         .enumerate()
-        .map(|(i, &kind)| NavigatorButton { x: lay.inner.x + 1 + 2 * i as u16, y, width: 2, kind })
+        .map(|(i, &kind)| {
+            let x = lay.inner.x + 1 + 2 * i as u16;
+            let wide = kind.wide_text().map_or(2, |t| t.len() as u16 + 1);
+            NavigatorButton { x, y, width: if x + wide <= right { wide } else { 2 }, kind }
+        })
         .take_while(|b| b.x + b.width <= right)
         .collect()
 }
@@ -776,7 +789,10 @@ pub fn render_navigator_drawer(
         let label_style = footer_style.fg(palette.title_fg).add_modifier(Modifier::BOLD);
         for b in &buttons {
             let mut tmp = [0u8; 4];
-            write_clipped_line(buf, b.x, b.y, 1, b.kind.label().encode_utf8(&mut tmp), label_style);
+            match b.kind.wide_text().filter(|_| b.width > 2) {
+                Some(text) => write_clipped_line(buf, b.x, b.y, b.width, text, label_style),
+                None => write_clipped_line(buf, b.x, b.y, 1, b.kind.label().encode_utf8(&mut tmp), label_style),
+            }
         }
     }
 
