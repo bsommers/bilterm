@@ -152,3 +152,10 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Still unverified on user's real desktop: Ctrl+Alt+A fix, status messages, MCP pin badge, :agents demo, two-line rows (need `:drawer style navigator`).
 - Authorizations: user said commit+push of this work (done). PR creation / merge / remote branch deletion still need explicit go-ahead.
 - Next: commit this; then /gsd-plan-phase 51.1 (sonnet, parallel), then /gsd-execute-phase 50.1 (user to confirm start).
+
+## Checkpoint 2026-11-05 late (executing Phase 50.1)
+- All of 50.1 (15 plans), 51 (13), 51.1 (16) are planned, checker-passed, committed and pushed (branch feat/navigator-rows-and-launch @ 1b90ab5 before this commit).
+- User said "yes start /gsd-execute-phase 50.1". Authorizations in force: commit + push of this work to the feature branch; NOT PR/merge/main/remote deletion.
+- Execution plan: wave 0 = plan 50.1-01 (orchestrator seam, one sonnet executor sequentially in the integ worktree), then wave 1 plans 02-09 in parallel (own git worktree + own CARGO_TARGET_DIR each, commit only own files by path, merge back), wave 2 plans 10-13, wave 3 plan 14, wave 4 plan 15 (verify.sh, goldens 11, doc scripts). Model: sonnet default, haiku for 09 and 14.
+- Gates: scripts/verify.sh, scripts/check_classic_goldens.sh (GOLDENS OK 11), scripts/check_phase50_doc_coverage.sh.
+- Resume: read .planning/phases/50.1-unified-registry-and-find/50.1-CONTRACT.md and any 50.1-NN-SUMMARY.md to see which plans are done (git log --oneline for 50.1 commits).
