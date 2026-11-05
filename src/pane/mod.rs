@@ -1,4 +1,5 @@
 pub mod canvas_scene;
+pub mod capture;
 pub mod completion;
 pub mod exit_guard;
 pub mod fuzzy_history;
@@ -7,6 +8,7 @@ pub mod history_store;
 pub mod modes;
 pub mod prompt_editor;
 pub mod prompt_selection;
+pub mod redact;
 pub mod scroll;
 pub mod typography;
 
@@ -87,6 +89,10 @@ pub struct CompositePane {
     exited: bool,
     /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
     pub(crate) held_exited_shell: Option<HeldExitedShellState>,
+    /// Commands submitted since the last registry tick (bounded by `PANE_OUTBOX_CAP`, Phase 50.1).
+    captured: Vec<capture::CapturedCommand>,
+    /// Secret-looking commands withheld from `captured` since the last drain (count only, D-U2).
+    captured_masked: u32,
 }
 
 impl CompositePane {
@@ -128,6 +134,8 @@ impl CompositePane {
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
             held_exited_shell: None,
+            captured: Vec::new(),
+            captured_masked: 0,
         }
     }
 
@@ -145,6 +153,17 @@ impl CompositePane {
             HistoryStore::new_headless(id),
         )
     }
+
+    /// Takes the commands captured since the last drain plus the count of secret-looking commands
+    /// withheld meanwhile (Phase 50.1, D-U2). Filled by 50.1-10; empty until then.
+    #[allow(dead_code)] // consumed by registry::capture::tick (50.1-10)
+    pub(crate) fn drain_captured(&mut self) -> (Vec<capture::CapturedCommand>, u32) {
+        (std::mem::take(&mut self.captured), std::mem::take(&mut self.captured_masked))
+    }
+
+    /// Records the exit code of a finished `command` for the history log (50.1-05 / 50.1-10; no-op for now).
+    #[allow(dead_code)] // wired by 50.1-05 and 50.1-10
+    pub(crate) fn record_history_exit(&mut self, _command: &str, _exit_code: i32) {}
 
     /// Spawns a live `CompositePane` backed by a `portable-pty` shell process.
     pub fn spawn(id: PaneId, mut pty_config: PtyConfig) -> Result<Self> {

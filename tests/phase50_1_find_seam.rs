@@ -123,3 +123,150 @@ fn finder_edit_ops_change_modal_state_and_cap_the_query() {
     run_colon(&mut wm, ":finder select 9");
     assert_eq!(wm.find_modal_state().unwrap().2, 0);
 }
+
+// ---- Task 2: registry contract, JSON shape ----------------------------------------------------
+
+use bilterm::api::JsonValue;
+use bilterm::colon_command::execute_find::find_results_json;
+use bilterm::wm::agent_state::AgentState;
+use bilterm::wm::registry::{
+    AgentRow, FindResults, FindRow, HistoryRow, Origin, PaneRow, Recency, ResultSource, RowData,
+    SessionRow, Transport, *,
+};
+
+fn source(origin: Origin) -> ResultSource {
+    ResultSource {
+        origin,
+        name: "dev".to_string(),
+        path: (origin != Origin::Live).then(|| "/tmp/x/dev.toml".to_string()),
+    }
+}
+
+fn row(kind: FindKind, data: RowData, origin: Origin) -> FindRow {
+    let mut r = FindRow::empty(kind);
+    r.id = format!("row:{}", data.row_name());
+    r.label = "label".to_string();
+    r.source = source(origin);
+    r.session = "dev".to_string();
+    r.data = data;
+    r
+}
+
+#[test]
+fn find_results_json_has_source_and_masked() {
+    let rows = vec![
+        row(
+            FindKind::Agent,
+            RowData::Agent(AgentRow {
+                pane: 2,
+                name: "claude".into(),
+                state: AgentState::Working,
+                since_ms: 5,
+                profile: Some("claude".into()),
+                title: "t".into(),
+            }),
+            Origin::Live,
+        ),
+        row(
+            FindKind::Session,
+            RowData::Session(SessionRow { name: "dev".into(), active: true, parent: None, pane_count: 3 }),
+            Origin::SavedSession,
+        ),
+        row(
+            FindKind::Session,
+            RowData::Pane(PaneRow { pane: 1, title: "sh".into(), cwd: None, cwd_trusted: false, running_command: None }),
+            Origin::Live,
+        ),
+        row(
+            FindKind::History,
+            RowData::History(HistoryRow {
+                seq: 9,
+                pane: Some(1),
+                cwd: Some("/w".into()),
+                command: "ls".into(),
+                exit_code: Some(0),
+                duration_ms: Some(12),
+                at: Recency::Logged("2026-11-05T00:00:00Z".into()),
+            }),
+            Origin::HistoryLog,
+        ),
+    ];
+    let mut with_also = rows[1].clone();
+    with_also.also_in = vec![source(Origin::HistoryLog)];
+    let mut all = rows;
+    all.push(with_also);
+    let results = FindResults {
+        kind: FindKind::Session,
+        query: "q".into(),
+        total: 12,
+        truncated: true,
+        masked: 3,
+        rows: all,
+    };
+    let text = find_results_json(&results).to_json_string();
+    let json = JsonValue::parse(&text).expect("valid json");
+    assert_eq!(json.get("masked").and_then(JsonValue::as_i64), Some(3));
+    assert_eq!(json.get("total").and_then(JsonValue::as_i64), Some(12));
+    assert_eq!(json.get("returned").and_then(JsonValue::as_i64), Some(5));
+    assert_eq!(json.get("truncated").and_then(JsonValue::as_bool), Some(true));
+    let rows = json.get("rows").and_then(JsonValue::as_array).unwrap();
+    assert_eq!(rows.len(), 5);
+    let mut kinds = Vec::new();
+    for r in rows {
+        let src = r.get("source").expect("every row has source");
+        let k = src.get("kind").and_then(JsonValue::as_str).unwrap();
+        assert!(["live", "saved-session", "history-log"].contains(&k), "{k}");
+        assert!(src.get("name").and_then(JsonValue::as_str).is_some());
+        assert!(src.get("path").is_some());
+        assert!(r.get("also_in").and_then(JsonValue::as_array).is_some());
+        kinds.push(r.get("row").and_then(JsonValue::as_str).unwrap().to_string());
+    }
+    assert_eq!(kinds, ["agent", "session", "pane", "history", "session"]);
+    assert_eq!(rows[0].get("state").and_then(JsonValue::as_str), Some("working"));
+    assert_eq!(rows[1].get("pane_count").and_then(JsonValue::as_i64), Some(3));
+    assert_eq!(rows[2].get("cwd_trusted").and_then(JsonValue::as_bool), Some(false));
+    assert_eq!(rows[3].get("command").and_then(JsonValue::as_str), Some("ls"));
+    assert_eq!(rows[3].get("exit_code").and_then(JsonValue::as_i64), Some(0));
+    let also = rows[4].get("also_in").and_then(JsonValue::as_array).unwrap();
+    assert_eq!(also[0].get("kind").and_then(JsonValue::as_str), Some("history-log"));
+    // Every Origin and Transport has a stable wire name and label.
+    assert_eq!(source(Origin::Live).label(), "live");
+    assert_eq!(source(Origin::SavedSession).label(), "saved:dev");
+    assert_eq!(source(Origin::HistoryLog).label(), "log:dev");
+    assert_eq!(Transport::SshTmux.as_str(), "ssh-tmux");
+    assert!(Origin::Live.priority() < Origin::SavedSession.priority());
+    assert!(Origin::SavedSession.priority() < Origin::HistoryLog.priority());
+}
+
+#[test]
+fn caps_match_contract() {
+    assert_eq!(CMD_RING_CAP, 2048);
+    assert_eq!(CMD_CAP, 512);
+    assert_eq!(NAME_CAP, 64);
+    assert_eq!(FIND_RESULTS_CAP, 200);
+    assert_eq!(FIND_DEFAULT_LIMIT, 50);
+    assert_eq!(FIND_QUERY_CAP, 128);
+    assert_eq!(FIND_HISTORY_READ_CAP, 20_000);
+    assert_eq!(HISTORY_LOG_BYTES_CAP, 16 * 1024 * 1024);
+    assert_eq!(SAVED_SESSIONS_CAP, 64);
+    assert_eq!(SAVED_FILE_BYTES_CAP, 2 * 1024 * 1024);
+    assert_eq!(PANES_PER_SESSION_CAP, 64);
+    assert_eq!(PANE_OUTBOX_CAP, 64);
+}
+
+#[test]
+fn open_with_empty_providers_reports_zero_results() {
+    let mut wm = fixture(100, 30);
+    run_colon(&mut wm, ":find session dev");
+    let r = wm.find_results();
+    assert_eq!((r.kind, r.query.as_str(), r.rows.len(), r.total, r.masked), (FindKind::Session, "dev", 0, 0, 0));
+    let data = wm.take_command_data().expect("command data stashed");
+    let json = JsonValue::parse(&data).unwrap();
+    assert_eq!(json.get("kind").and_then(JsonValue::as_str), Some("session"));
+    assert_eq!(json.get("returned").and_then(JsonValue::as_i64), Some(0));
+    assert_eq!(json.get("masked").and_then(JsonValue::as_i64), Some(0));
+    let status = wm.active_pane().status_message().unwrap_or("").to_string();
+    assert_eq!(status, "Find session \"dev\": 0 results (0 live, 0 saved, 0 log)");
+    run_colon(&mut wm, ":finder close");
+    assert!(!wm.is_find_visible());
+}

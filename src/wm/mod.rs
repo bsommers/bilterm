@@ -9,6 +9,7 @@ pub mod find_cmd;
 pub mod journal;
 pub mod layout_profile;
 pub mod quick_terminal;
+pub mod registry;
 pub mod session;
 pub mod session_manager;
 pub mod session_tree;
@@ -135,6 +136,8 @@ pub struct WindowManager {
     pub(crate) agents: agent_state::AgentTracker,
     /// In-memory agent traffic bus read by the zoom graph and snoop view (`FLT-02`, Phase 50-05).
     pub(crate) traffic: traffic::TrafficBus,
+    /// Unified agent / session / command-history registry behind `:find` (Phase 50.1).
+    pub(crate) registry: registry::RegistryState,
     /// Floating AGENT TRAFFIC zoom window state (`FLT-02`, Phase 50-07).
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
@@ -216,6 +219,7 @@ impl WindowManager {
             drawer: WorkspaceDrawer::new(),
             agents: agent_state::AgentTracker::new(),
             traffic: traffic::TrafficBus::new(),
+            registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -727,6 +731,7 @@ impl WindowManager {
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
+        registry::capture::tick(self, Instant::now());
         self.maybe_rebalance_scrollback(Instant::now());
         changed
     }
