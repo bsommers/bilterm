@@ -529,8 +529,21 @@ impl GuiWorkspaceRenderer {
         let pane_rects = wm.compute_workspace_rects(ws_area);
         let vp_scale = wm.viewport_scale_pct();
         let framed = wm.is_framed();
-        let drawer_rect = wm.drawer_rect(ws_area);
-        let mcp_rect = wm.mcp_console().panel_rect(ws_area);
+        // Panel scales first: a scaled panel owns the real cells under the pixels it paints (its rect
+        // lives in a virtual grid), and its unscaled copy is not rendered into the cell buffer.
+        let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
+        let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
+        let agents_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
+        let real_rect = |target: crate::ui::typography::PanelTarget, scale: u16, at: &dyn Fn(Rect) -> Option<Rect>| {
+            if scale == 100 {
+                at(ws_area)
+            } else {
+                let vws = wm.panel_virtual_area(ws_area, target);
+                at(vws).map(|vr| crate::ui::typography::scaled_panel_real_rect(ws_area, vr, scale))
+            }
+        };
+        let drawer_rect = real_rect(crate::ui::typography::PanelTarget::Drawer, drawer_scale, &|a| wm.drawer_rect(a));
+        let mcp_rect = real_rect(crate::ui::typography::PanelTarget::Mcp, mcp_scale, &|a| wm.mcp_console().panel_rect(a));
         let modal_rect = wm.active_modal_rect(ws_area);
         let dropdown_rect = wm
             .menubar_state()
@@ -540,16 +553,7 @@ impl GuiWorkspaceRenderer {
             .then(|| wm.quick_terminal().overlay_rect(ws_area));
         // The traffic window floats above panes: a pane drawn at its own font scale must not paint
         // over its cells (they would show through as a frameless, see-through window).
-        let agents_overlay_rect = {
-            let sc = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
-            if sc == 100 {
-                wm.agents_window_rect(ws_area)
-            } else {
-                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::Agents);
-                wm.agents_window_rect(vws)
-                    .map(|vr| crate::ui::typography::scaled_panel_real_rect(ws_area, vr, sc))
-            }
-        };
+        let agents_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Agents, agents_scale, &|a| wm.agents_window_rect(a));
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -585,9 +589,6 @@ impl GuiWorkspaceRenderer {
         };
 
         // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
-        let drawer_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Drawer);
-        let mcp_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Mcp);
-        let agents_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Agents);
         let agents_rect = (agents_scale != 100).then_some(agents_overlay_rect).flatten();
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
             (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
