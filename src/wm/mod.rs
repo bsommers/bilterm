@@ -5,6 +5,7 @@ pub mod agents_cmd;
 pub mod agents_geometry;
 pub mod chrome_style;
 pub mod drawer;
+pub mod find_cmd;
 pub mod journal;
 pub mod layout_profile;
 pub mod quick_terminal;
@@ -77,6 +78,8 @@ pub enum Modal {
     Menubar { category: usize, item: usize },
     /// Interactive Borland/3270 Exit Guard confirmation modal (`SAFE-01`).
     ExitGuard(crate::pane::ExitGuardState),
+    /// Unified registry Find window (`:find agent|session|history`, Phase 50.1).
+    Find { kind: find_cmd::FindKind, query: String, selected: usize },
 }
 
 /// Workspace focus target without `PaneId 0` sentinel collision (`ARCH-R02.4`).

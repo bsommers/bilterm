@@ -179,6 +179,8 @@ pub enum Action {
     DrawerRows(u8),
     /// `:agents [list]` - per-pane agent state (Phase 50-03, FLT-01).
     Agents(crate::wm::agents_cmd::AgentsOp),
+    /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
+    Find(crate::wm::find_cmd::FindOp),
     FontZoomIn,
     FontZoomOut,
     FontZoomReset,
@@ -261,6 +263,7 @@ mod tests {
     use crate::pty::line_discipline::InputRoutingMode;
     use crate::ui::WorkspaceWidget;
     use crate::wm::WindowManager;
+    use crate::wm::find_cmd::{FindKind, FindOp};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
@@ -384,6 +387,7 @@ mod tests {
             Action::DrawerStyle(_) => Some(":drawer style navigator"),
             Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
+            Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
             Action::FontZoomReset => Some(":fontsize reset"),
@@ -597,6 +601,20 @@ mod tests {
             Action::DrawerStyle(Some(crate::wm::drawer::DrawerStyle::Navigator)),
             Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
+            Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
+            Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
+            Action::Find(FindOp::Open { kind: FindKind::History, query: String::new() }),
+            Action::Find(FindOp::SetKind(FindKind::Session)),
+            Action::Find(FindOp::CycleKind(true)),
+            Action::Find(FindOp::SetQuery("x".to_string())),
+            Action::Find(FindOp::Push('a')),
+            Action::Find(FindOp::Pop),
+            Action::Find(FindOp::ClearQuery),
+            Action::Find(FindOp::Move(1)),
+            Action::Find(FindOp::Select(0)),
+            Action::Find(FindOp::Activate),
+            Action::Find(FindOp::Prefill),
+            Action::Find(FindOp::Close),
             Action::FontZoomIn,
             Action::FontZoomOut,
             Action::FontZoomReset,

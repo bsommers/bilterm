@@ -920,6 +920,8 @@ pub(super) fn handle_wm_modal_key(
             }
             Ok(Some(AppAction::Handled))
         }
+        // Replaced by the real key handler in Task 3 (`input::find_modal`).
+        Modal::Find { .. } => Ok(Some(AppAction::Handled)),
         Modal::Menubar { category, item } => {
             let (cat, sel) = (*category, *item);
             match key.code {
