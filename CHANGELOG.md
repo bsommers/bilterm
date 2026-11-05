@@ -8,7 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Agent traffic window is no longer modal.** Keys go to the window only while it has focus; a click on a pane (or `:agents blur`, or any pane focus change) releases the keyboard and the click reaches the pane; a click inside the window takes focus back. Modals (Exit Guard, Help, Palette) still sit above it.
 - **Garbled copy of wide characters**: copying a canvas selection (stream, line or 2D block) turned the empty tail cell of every double-width glyph into a space, so `世界` was copied as `世 界` and emoji gained trailing gaps; a block edge landing on a glyph's tail dropped the whole glyph. The tail cell is now skipped (and the lead glyph kept when only the tail is inside the block). Copy-mode status counts now report characters, not UTF-8 bytes. Regression suite: `tests/copy_paste_unicode.rs`.
+
+### Added
+- **Graph edges trace real communication.** Edge brightness is a pure function of how often and how recently a pair talked (terminal braille and GUI vector alike). After `agents_window.edge_fade_secs` (default 60, also `:agents fade [secs]`) it decays to a floor and never disappears once the pair has spoken.
+- **Communication topology.** A bounded, session-long record of which pairs communicated (count, first/last event) that survives the 512-event ring: `:agents topology` (data over RPC/MCP) and `:agents topology export <name>` (private `0600` file).
 
 ## [v2.8.0] - 2026-11-02
 

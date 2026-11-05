@@ -45,6 +45,15 @@ check() {
 while IFS= read -r v; do check agents "$v"; done <<< "$agents"
 while IFS= read -r v; do check drawer "$v"; done <<< "$drawer_new"
 
+# Sub-forms and config keys the verb list above cannot see (second word of a verb, or a [section] key).
+for phrase in ":agents topology export <name>" "agents_window.edge_fade_secs" ":agents fade [secs]"; do
+  n=$((n + 1))
+  if ! grep -qF -- "$phrase" "$CHAPTER"; then
+    echo "missing $phrase"
+    missing=$((missing + 1))
+  fi
+done
+
 grep -qF "11-navigator-sidebar-and-agent-traffic.md" "$INDEX" || { echo "missing index link in $INDEX"; missing=$((missing + 1)); }
 
 [ "$missing" -eq 0 ] || fail "$missing missing"

@@ -251,6 +251,15 @@ working = ["esc to cancel"]
 blocked = ["allow once", "waiting for user confirmation"]
 ```
 
+### Agent Traffic Window (`[agents_window]`)
+
+```toml
+[agents_window]
+edge_fade_secs = 60   # 1..3600: seconds for a graph edge to fade from recent-traffic brightness to its floor
+```
+
+Settable at runtime with `:agents fade 90` or `:set agents_window.edge_fade_secs 90`. The window settings live in `[agents_window]` because `[agents.<name>]` is reserved for recognition profiles. See [Chapter 11](11-navigator-sidebar-and-agent-traffic.md).
+
 ### Scrollback Memory (`[scrollback]`)
 
 Scrollback is sized from the host's RAM instead of a fixed line count. Every pane starts at

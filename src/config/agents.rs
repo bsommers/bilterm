@@ -39,3 +39,32 @@ impl AgentProfile {
         }
     }
 }
+
+/// Default [`AgentsWindowConfig::edge_fade_secs`].
+pub const DEFAULT_EDGE_FADE_SECS: u32 = 60;
+/// Allowed range of [`AgentsWindowConfig::edge_fade_secs`].
+pub const EDGE_FADE_RANGE: std::ops::RangeInclusive<u32> = 1..=3600;
+
+/// Agent traffic window settings (`[agents_window]`). The profile tables live under `[agents.<name>]`,
+/// so window settings cannot share that table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AgentsWindowConfig {
+    /// Seconds over which a graph edge's brightness from recent traffic decays to its floor
+    /// (`1..=3600`, default `60`). An edge never disappears once its pair has spoken.
+    pub edge_fade_secs: u32,
+}
+
+impl Default for AgentsWindowConfig {
+    fn default() -> Self {
+        Self { edge_fade_secs: DEFAULT_EDGE_FADE_SECS }
+    }
+}
+
+impl AgentsWindowConfig {
+    /// The fade window as a duration, with an out-of-range configured value clamped.
+    pub fn edge_fade(&self) -> std::time::Duration {
+        let s = self.edge_fade_secs.clamp(*EDGE_FADE_RANGE.start(), *EDGE_FADE_RANGE.end());
+        std::time::Duration::from_secs(u64::from(s))
+    }
+}

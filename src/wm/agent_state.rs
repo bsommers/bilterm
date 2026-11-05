@@ -25,6 +25,8 @@ pub const TAIL_ROWS: u16 = 8;
 pub const ANIM_INTERVAL: Duration = Duration::from_millis(120);
 /// An edge keeps animating (flow particles in the GUI) for this long after its last bus event.
 pub const FLOW_WINDOW: Duration = Duration::from_secs(2);
+/// Redraw cadence of the agents window while edge brightness decays after the flow window.
+pub const FADE_REDRAW_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// Live state of the agent / program running in a pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -481,7 +483,8 @@ impl WindowManager {
 
     /// `true` when the agents window is open and either new bus events arrived since the last redraw it
     /// requested, or an edge is still flowing (last event within [`FLOW_WINDOW`], so the GUI particles
-    /// move); both share the [`ANIM_INTERVAL`] throttle with the working animation.
+    /// move; throttled by [`ANIM_INTERVAL`] like the working animation) or still fading (last event
+    /// within the configured fade window; throttled by [`FADE_REDRAW_INTERVAL`]).
     fn tick_agents_window_traffic(&mut self, now: Instant) -> bool {
         if !self.agents_window.active {
             return false;
@@ -495,14 +498,18 @@ impl WindowManager {
             }
             return due;
         }
-        let flowing = self
-            .traffic()
-            .latest_at()
-            .is_some_and(|at| now.saturating_duration_since(at) < FLOW_WINDOW);
-        if flowing && due {
+        // Particles move fast while the newest event is fresh; afterwards the edge brightness decays
+        // slowly over the fade window, which only needs an occasional redraw.
+        let interval = match self.traffic().latest_at().map(|at| now.saturating_duration_since(at)) {
+            Some(age) if age < FLOW_WINDOW => ANIM_INTERVAL,
+            Some(age) if age < self.config.agents_window.edge_fade() => FADE_REDRAW_INTERVAL,
+            _ => return false,
+        };
+        let due = self.agents.last_anim.is_none_or(|t| now.saturating_duration_since(t) >= interval);
+        if due {
             self.agents.last_anim = Some(now);
         }
-        flowing && due
+        due
     }
 }
 

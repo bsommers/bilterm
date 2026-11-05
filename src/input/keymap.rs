@@ -361,7 +361,7 @@ pub enum AgentsKeyScope {
 
 /// Declarative key table of the AGENT TRAFFIC window (`FLT-01`, `ARCH-R01.2`).
 ///
-/// Consulted only while the agents window captures input (open and unpinned, or pinned and focused).
+/// Consulted only while the agents window captures input (open and focused; the window is not modal, so a click on a pane or `:agents blur` releases the keyboard).
 /// Every row lowers to [`Action::Agents`] and runs through `WindowManager::apply`; each operation has
 /// an `:agents` colon twin. Keys the table does not claim are swallowed while the window has the
 /// keyboard; the leader key is never consumed.

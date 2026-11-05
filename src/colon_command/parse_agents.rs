@@ -1,11 +1,14 @@
 //! Parser for the `:agents` view command (Phase 50-03).
 
 use super::ColonCommand;
-use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp};
+use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp, TopologyOp};
+use crate::config::agents::EDGE_FADE_RANGE;
 use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
+const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|fade [secs]|topology [export <name>]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
 
+const FADE_USAGE: &str = "Usage: :agents fade [1..3600] (seconds for an edge to fade to its floor)";
+const TOPOLOGY_USAGE: &str = "Usage: :agents topology [export <name>]";
 const SCALE_USAGE: &str = "Usage: :agents scale <75..200> | +n | -n (GUI only)";
 
 fn graph_dir(raw: &str) -> Option<GraphDir> {
@@ -196,6 +199,7 @@ pub(super) fn parse_agents_colon_command(
         },
         Some("close") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Close)),
         Some("dismiss") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Dismiss)),
+        Some("blur") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Blur)),
         Some("select") if parts.len() == 3 => match (graph_dir(parts[2]), node_key(parts[2])) {
             (Some(dir), _) => Ok(ColonCommand::Agents(AgentsOp::Select(dir))),
             (None, Some(key)) => Ok(ColonCommand::Agents(AgentsOp::SelectNode(key))),
@@ -209,6 +213,16 @@ pub(super) fn parse_agents_colon_command(
             _ => Err("Usage: :agents edge <next|prev|node-key node-key>".to_string()),
         },
         Some("enter") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Activate)),
+        Some("fade") if parts.len() <= 3 => match parts.get(2).map(|raw| raw.parse::<u32>()) {
+            None => Ok(ColonCommand::Agents(AgentsOp::Fade(None))),
+            Some(Ok(n)) if EDGE_FADE_RANGE.contains(&n) => Ok(ColonCommand::Agents(AgentsOp::Fade(Some(n)))),
+            _ => Err(FADE_USAGE.to_string()),
+        },
+        Some("topology") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Topology(TopologyOp::Show))),
+        Some("topology") if parts.len() == 4 && parts[2] == "export" => {
+            Ok(ColonCommand::Agents(AgentsOp::Topology(TopologyOp::Export(parts[3].to_string()))))
+        }
+        Some("topology") => Err(TOPOLOGY_USAGE.to_string()),
         // Absolute scale reuses the shared `PanelScaleOf` Action (`+n` / `-n` are `ScaleStep`).
         Some("scale") if parts.len() == 3 && !parts[2].starts_with(['+', '-']) => {
             match parts[2].trim_end_matches('%').parse::<u16>() {
