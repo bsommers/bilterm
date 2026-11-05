@@ -198,6 +198,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **AGT-02**: Messages can be delivered as mailbox entries, as a one-line "nudge" typed only into an idle/waiting pane, or as a `0600` file whose path is nudged; senders can wait for a reply with a timeout.
 - [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
 
+
+## Milestone v2.10 — Session Management & Packing Viewer (Phases 52–53)
+
+- [ ] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
+- [ ] **SES-02**: Sessions and windows can be renamed by right-click, key sequence and `:` command, with sanitised, deterministic duplicate handling.
+- [ ] **SES-03**: Windows in a session can be multi-selected and acted on in bulk (move, close, rename-prefix, tile, pin) by key, `:` command and menu; bulk close honours the exit guard.
+- [ ] **SES-04**: Move, rename and bulk actions are undo-safe single units and persist across session save/restore and daemon re-attach.
+- [ ] **SES-05**: All session/window management actions lower to `Action` via `WindowManager::apply`, are reachable via RPC/MCP/`bilterm ctl` with existing gating, and have key/mouse/colon parity tests.
+- [ ] **VIEW-01**: A deterministic treemap-style layout packs several sessions as rectangular containers, each with its windows packed inside, scaled to the available area.
+- [ ] **VIEW-02**: The packing is shown in a non-modal window in text mode (braille/box) and as GUI vector graphics, reusing Phase 50 rendering with no new dependency.
+- [ ] **VIEW-03**: Windows can be dragged between sessions in the viewer and in the Navigator tree by mouse (TUI and GUI), lowering to Phase 52's move action.
+- [ ] **VIEW-04**: Every drag gesture has a keyboard equivalent and a `:` command, with parity tests and keymap drift tests.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FLT-01 | Phase 50 | Complete |
@@ -206,6 +219,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGT-01 | Phase 51 | Planned |
 | AGT-02 | Phase 51 | Planned |
 | AGT-03 | Phase 51 | Planned |
+| SES-01 | Phase 52 | Planned |
+| SES-02 | Phase 52 | Planned |
+| SES-03 | Phase 52 | Planned |
+| SES-04 | Phase 52 | Planned |
+| SES-05 | Phase 52 | Planned |
+| VIEW-01 | Phase 53 | Planned |
+| VIEW-02 | Phase 53 | Planned |
+| VIEW-03 | Phase 53 | Planned |
+| VIEW-04 | Phase 53 | Planned |
 
 **Coverage:**
 

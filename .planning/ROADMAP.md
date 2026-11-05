@@ -50,6 +50,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
+- [ ] **Phase 52: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
+- [ ] **Phase 53: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
 
 ## Phase Details
 
@@ -804,6 +806,54 @@ Plans:
 - [ ] 51-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
 - [ ] 51-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
 
+### Milestone v2.10 — Session Management & Packing Viewer (Phases 52–53)
+
+Goal: make the hierarchy Workspace > Session (can nest) > Window (composite pane) > Pane fully manageable and visible. Phase 52 adds the management actions; Phase 53 adds the visual packing viewer and drag-and-drop on top of 52's move action.
+
+Sequencing: Phase 49 (Command Parity & Full Public API) should precede any scripting language (see `.planning/seeds/scripting-language.md`). Phases 52 and 53 can run alongside Phase 49; they add new `Action`s that Phase 49 will then document, so they must follow the same parity rules (every path lowers to `Action` via `WindowManager::apply`).
+
+### Phase 52: Session & Window Management
+
+**Goal**: A user can reorganise their workspace without restarting anything: move a window from one session to another, rename sessions and windows, and select several windows in a session to act on them together.
+**Depends on**: Phase 50 (Navigator tree, right-click menu, `src/wm/drawer/navigator.rs`, `src/input/drawer_navigator.rs`); builds on Phase 38 (`:session rename|move|reorder`) and Phase 33 (session tree persistence).
+**Requirements**: SES-01, SES-02, SES-03, SES-04, SES-05
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Existing `:session ...` commands, drawer keys and Phase 50 menu entries keep working. Every key, mouse and colon path lowers to `Action` and runs via `WindowManager::apply`; every path has a parity test in the style of `tests/phase50_*`.
+**Success Criteria** (what must be TRUE):
+
+  1. Move window (`SES-01`): a window moves to another session (including a nested session) by key sequence, by `:window move <session>` (or equivalent `:` command), and from the Navigator right-click menu; pane PTYs, scrollback and running commands are untouched; moving into the current session or an unknown session is a clear error; z-order and focus are well defined after the move.
+  2. Rename (`SES-02`): sessions and windows are renamed by right-click menu, by key sequence (inline edit in the Navigator) and by `:session rename` / `:window rename`; names pass `validate_safe_name` / `sanitize_display`, duplicates within a parent are rejected or disambiguated deterministically, and the new name appears in the Navigator, title bars and status bar.
+  3. Multi-select (`SES-03`): windows within a session can be multi-selected (key toggle, range, select-all, Ctrl+click in the Navigator, `:window select ...`); bulk actions are move, close, rename-prefix, tile and pin, each by key, `:` command and menu; a bulk action is all-or-nothing, and bulk close honours the exit guard.
+  4. Undo-safe and persistent (`SES-04`): each move, rename and bulk action is a single undoable unit (undo restores placement, name, order and selection), cannot orphan a pane or drop the last window silently, and survives session save/restore and daemon re-attach (TOML and journal round trip, older session files still load).
+  5. API and parity (`SES-05`): all new actions are reachable via `bilterm ctl`, RPC and MCP (`window.move`, `window.rename`, `session.rename`, `window.select`, bulk variants) with the existing `[api]` gating; names from RPC are sanitised; exit-guard interplay is tested (closing the last window of a session, moving a window with a running foreground process); key, mouse and colon parity tests exist for every action.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 52-01-PLAN.md — Spec: Action set, selection model, undo model, persistence schema, naming rules; user sign-off before code (wave 1)
+- [ ] 52-02-PLAN.md — Core: move and rename actions in `wm` with `apply`, `:` commands, persistence, undo, tests (wave 2)
+- [ ] 52-03-PLAN.md — Multi-select and bulk actions, Navigator menu and keys, RPC/MCP/ctl, docs and parity tests (wave 3)
+
+### Phase 53: Session Packing Viewer & Drag-and-Drop
+
+**Goal**: A user can see how windows are packed into sessions, several sessions at once, and rearrange them by dragging, with the same result available from the keyboard.
+**Depends on**: Phase 52 (move action, rename, selection), Phase 50 (`graph_raster`/vector rendering, non-modal agents-window pattern, Navigator tree).
+**Requirements**: VIEW-01, VIEW-02, VIEW-03, VIEW-04
+**Harmony rule**: Add new paths; existing drawer, Navigator and agents-window behaviour is unchanged. The viewer is non-modal (like the Phase 50 agents window) and never steals PTY input unless focused. Every gesture lowers to `Action` via `WindowManager::apply`.
+**Success Criteria** (what must be TRUE):
+
+  1. Layout (`VIEW-01`): a pure, deterministic treemap-style layout packs each session as a rectangular container with its windows packed inside, scaled to the available area; several sessions are shown at once, nested sessions are nested containers; same input gives the same rectangles; tiny areas degrade to labels or counts rather than panic.
+  2. Rendering (`VIEW-02`): text mode (braille/box drawing) in the TUI and a vector rendering in the GUI (reusing Phase 50 `graph_raster`/vector paths, no new dependency); a non-modal window that can be moved, resized, pinned, scaled and closed by key, mouse and `:` command (`:sessions map` or similar); focused/current window and session highlighted; labels sanitised.
+  3. Drag-and-drop (`VIEW-03`): windows can be dragged between session containers in the viewer and between sessions in the Navigator tree, by mouse in the TUI and GUI; drop targets are highlighted, Esc cancels, an invalid drop is a no-op with feedback; a drop lowers to Phase 52's move action (single undoable unit).
+  4. Keyboard equivalents (`VIEW-04`): every drag gesture has a keyboard path (pick up, move target, drop, cancel) and a `:` command, listed in `src/input/keymap.rs` with drift tests; parity tests prove mouse, key and colon give identical results.
+  5. Tests: layout golden/property tests (no overlap, full containment, determinism), TUI snapshot and GUI-dump previews, drag/drop and keyboard parity tests in the style of `tests/phase50_*`.
+
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 53-01-PLAN.md — Spec and pure treemap packing layout with property tests; user sign-off on look before rendering (wave 1)
+- [ ] 53-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
+- [ ] 53-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -822,7 +872,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
