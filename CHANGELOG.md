@@ -5,6 +5,11 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Garbled copy of wide characters**: copying a canvas selection (stream, line or 2D block) turned the empty tail cell of every double-width glyph into a space, so `世界` was copied as `世 界` and emoji gained trailing gaps; a block edge landing on a glyph's tail dropped the whole glyph. The tail cell is now skipped (and the lead glyph kept when only the tail is inside the block). Copy-mode status counts now report characters, not UTF-8 bytes. Regression suite: `tests/copy_paste_unicode.rs`.
+
 ## [v2.8.0] - 2026-11-02
 
 ### Added
