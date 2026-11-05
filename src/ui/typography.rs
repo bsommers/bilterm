@@ -85,8 +85,8 @@ pub enum PanelTarget {
 
 /// Real workspace cells covered by a scaled panel whose rect `virtual_rect` lives in the panel's
 /// virtual grid (see [`WindowManager::panel_virtual_area`]): virtual cell `v` is drawn `scale_pct / 100`
-/// cells wide, anchored at `ws`'s origin. Identity at 100. Rounded outward, clamped to `ws`, so a
-/// mask built from it hides exactly the pixels the scaled panel paints over.
+/// cells wide, anchored at `ws`'s origin. Identity at 100. Rounded to the nearest cell and clamped to
+/// `ws`: a mask built from it hides the cells under the pixels the scaled panel paints over.
 pub fn scaled_panel_real_rect(
     ws: ratatui::layout::Rect,
     virtual_rect: ratatui::layout::Rect,
@@ -96,12 +96,11 @@ pub fn scaled_panel_real_rect(
     if s == 100 {
         return virtual_rect;
     }
-    let lo = |v: u16, o: u16| u32::from(v.saturating_sub(o)) * s / 100;
-    let hi = |v: u16, o: u16| (u32::from(v.saturating_sub(o)) * s).div_ceil(100);
-    let x0 = u32::from(ws.x) + lo(virtual_rect.x, ws.x);
-    let y0 = u32::from(ws.y) + lo(virtual_rect.y, ws.y);
-    let x1 = u32::from(ws.x) + hi(virtual_rect.x.saturating_add(virtual_rect.width), ws.x);
-    let y1 = u32::from(ws.y) + hi(virtual_rect.y.saturating_add(virtual_rect.height), ws.y);
+    let near = |v: u16, o: u16| (u32::from(v.saturating_sub(o)) * s + 50) / 100;
+    let x0 = u32::from(ws.x) + near(virtual_rect.x, ws.x);
+    let y0 = u32::from(ws.y) + near(virtual_rect.y, ws.y);
+    let x1 = u32::from(ws.x) + near(virtual_rect.x.saturating_add(virtual_rect.width), ws.x);
+    let y1 = u32::from(ws.y) + near(virtual_rect.y.saturating_add(virtual_rect.height), ws.y);
     let r = ratatui::layout::Rect::new(
         x0.min(u32::from(u16::MAX)) as u16,
         y0.min(u32::from(u16::MAX)) as u16,
@@ -597,7 +596,7 @@ mod tests {
         assert_eq!(super::scaled_panel_real_rect(ws, v, 100), v);
         // 150%: virtual cells are 1.5 real cells wide, anchored at ws origin.
         assert_eq!(super::scaled_panel_real_rect(ws, v, 150), Rect::new(15, 7, 75, 30));
-        // 75%: rounded outward, never outside ws.
+        // 75%: never outside ws.
         let r = super::scaled_panel_real_rect(ws, Rect::new(0, 1, 130, 50), 75);
         assert_eq!(r.x, 0);
         assert!(r.right() <= ws.right() && r.bottom() <= ws.bottom());

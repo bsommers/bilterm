@@ -732,6 +732,18 @@ impl GuiWorkspaceRenderer {
                         let Some(cell) = scratch.cell((vr_col, vr_row)) else { continue };
                         let x_px = f32::from(ws_area.x.saturating_sub(viewport.x)) * cw + f32::from(vr_col - ws_area.x) * pcw;
                         let y_px = f32::from(ws_area.y.saturating_sub(viewport.y)) * ch + f32::from(vr_row - ws_area.y) * pch;
+                        // Glyphs draw above every quad, so cells under a modal, menu or the quick terminal
+                        // must not be pushed at all (they would show through as transparency).
+                        let (abs_c, abs_r) = (
+                            viewport.x + ((x_px + pcw * 0.5) / cw) as u16,
+                            viewport.y + ((y_px + pch * 0.5) / ch) as u16,
+                        );
+                        if modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                            || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                            || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                        {
+                            continue;
+                        }
                         push_cell(cell, vr_row.saturating_sub(viewport.y), vr_col.saturating_sub(viewport.x), x_px, y_px, pcw, pch, pcw_u, pch_u, ppt);
                     }
                 }
