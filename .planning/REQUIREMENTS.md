@@ -231,8 +231,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 **Coverage:**
 
-- Total tracked requirements: 58 total
-- Mapped to phases: 58 (44 Complete, 14 Planned in Phases 29–34)
+- Total tracked requirements: 62 total (traceability table rows)
+- Mapped to phases: 62 (38 Complete, 24 Planned)
 - Unmapped: 0 ✓
 
 ---
