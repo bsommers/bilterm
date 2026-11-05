@@ -190,7 +190,7 @@ seq has been evicted.
    node and one edge set. Examples are two session or agent names that differ only in dropped control or bidi
    characters, or that share a 64-char prefix (the second becomes `…`-terminated, but all longer names with the
    same first 63 chars are identical). In a security-oriented traffic view this lets an endpoint hide its
-   traffic inside another's node, which matters once Phase 51 adds `Agent(String)` endpoints.
+   traffic inside another's node, which matters once Phase 52 adds `Agent(String)` endpoints.
 2. `sanitize_display` drops C0, DEL, C1, bidi embedding/override/isolate controls, LRM/RLM and BOM. It still
    passes zero-width and invisible format characters: U+200B-U+200D, U+2060-U+2064, U+061C (ALM, a bidi mark),
    U+2028/U+2029 and the Unicode tag block U+E0000-E007F. An agent or session name can therefore be visually
@@ -251,7 +251,7 @@ and render modals above the window. Alternatively auto-release window focus when
 **File:** `src/wm/agents_window.rs:903`
 **Issue:** The text says `[api] allow_agent_messaging`, but no such key exists in `ApiConfig`. This is
 user-visible and misleading.
-**Fix:** Say "agent messaging arrives with Phase 51" without naming a key, or add the key (default false) when Phase 51 lands.
+**Fix:** Say "agent messaging arrives with Phase 52" without naming a key, or add the key (default false) when Phase 52 lands.
 
 ### IN-02: `split_panes` can panic and its bounds disagree with `SPLITTER_RANGE`
 

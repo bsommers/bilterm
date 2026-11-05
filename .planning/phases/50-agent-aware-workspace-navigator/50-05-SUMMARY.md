@@ -15,7 +15,7 @@ provides:
   - "WindowManager::{traffic, record_traffic, record_traffic_with, partners_of} and crate-private record_new_mcp_broadcasts"
   - "Producers: broadcast_command, :mcp broadcast (via mcp_execute wrapper), RPC/HTTP/MCP pane.exec and pane.send_keys"
   - ":agents list per-agent partners plus top-level traffic counters"
-  - "ADR-008 as the Phase 51 bus contract"
+  - "ADR-008 as the Phase 52 bus contract"
 affects: [50-07, 50-08, 50-10, 50-11, 50-12, phase-51]
 
 actuals:
@@ -47,8 +47,8 @@ key-files:
 
 key-decisions:
   - "Bus lives in wm (api sits above wm in the layer DAG); in-memory only, no secure_fs, no tracing of content"
-  - "Phase 50 publishes nothing on /events or events.poll; Phase 51-01 picks external names with user sign-off"
-  - "Agent endpoint and Message kind are reserved for Phase 51; Mcp means the Master Control Program console, the MCP transport is Api"
+  - "Phase 50 publishes nothing on /events or events.poll; Phase 53-01 picks external names with user sign-off"
+  - "Agent endpoint and Message kind are reserved for Phase 52; Mcp means the Master Control Program console, the MCP transport is Api"
   - "exec/send_keys evaluate the password-prompt redaction before dispatch and pass it explicitly"
 
 requirements-completed: [FLT-01, FLT-02]
@@ -79,19 +79,19 @@ coverage:
         status: pass
     human_judgment: false
   - id: D4
-    description: "ADR-008 documents the Phase 51 contract including reserved Agent / Message"
+    description: "ADR-008 documents the Phase 52 contract including reserved Agent / Message"
     requirement: FLT-02
     verification:
       - kind: command
         ref: "grep -c '^## Decisions' docs/architecture/adr/ADR-008-agent-traffic-bus.md"
         status: pass
     human_judgment: true
-    rationale: "Adequacy of the contract for Phase 51 is a design judgement"
+    rationale: "Adequacy of the contract for Phase 52 is a design judgement"
 ---
 
 # Phase 50 Plan 05: Agent Traffic Bus Summary
 
-**Bounded in-memory traffic bus (512 events, sanitised 160-char previews, password redaction, seq cursor) fed by input broadcast, `:mcp broadcast` and RPC/MCP `pane.exec` / `pane.send_keys`, surfaced as `partners` in `:agents list`, with the schema fixed in ADR-008 for Phase 51.**
+**Bounded in-memory traffic bus (512 events, sanitised 160-char previews, password redaction, seq cursor) fed by input broadcast, `:mcp broadcast` and RPC/MCP `pane.exec` / `pane.send_keys`, surfaced as `partners` in `:agents list`, with the schema fixed in ADR-008 for Phase 52.**
 
 ## Performance
 
@@ -117,7 +117,7 @@ None to the plan's behaviour. Notes:
 
 ## Known Stubs
 
-None. `TrafficEndpoint::Agent` and `TrafficKind::Message` are intentionally unused until Phase 51 (documented in ADR-008, covered by `bus_agent_message_kind_reserved_for_phase51`).
+None. `TrafficEndpoint::Agent` and `TrafficKind::Message` are intentionally unused until Phase 52 (documented in ADR-008, covered by `bus_agent_message_kind_reserved_for_phase51`).
 
 ## Threat Flags
 

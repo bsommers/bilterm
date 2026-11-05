@@ -73,10 +73,10 @@ Also recorded (50-13): mouse events on Windows/macOS still carry empty modifiers
 ## Known gaps documented
 
 - Windows/macOS: Ctrl+wheel over a panel still zooms the font; mouse events carry empty modifiers (50-13).
-- The disabled `send as me` compose line (and `[send]`) is a stub until Phase 51 (50-10).
+- The disabled `send as me` compose line (and `[send]`) is a stub until Phase 52 (50-10).
 - X11/GUI visuals (vector icons, curves, particles, glow, comms animation, Ctrl+wheel panel scale) not verified in a real window; Windows/macOS compile-checked only (50-11, 50-12, 50-13).
 - `src/wm/drawer.rs` is 1040 lines, above the ~1000 soft target, under the 1200 backstop (50-12).
-- Also stated: graph is star-shaped until Phase 51, history is the last 512 events, silent long builds read as idle, `:mcp` console overlapping the traffic window gets no clicks in the overlap (50-09).
+- Also stated: graph is star-shaped until Phase 52, history is the last 512 events, silent long builds read as idle, `:mcp` console overlapping the traffic window gets no clicks in the overlap (50-09).
 
 ## Deviations from Plan
 
@@ -86,7 +86,7 @@ Also recorded (50-13): mouse events on Windows/macOS still carry empty modifiers
 
 ## Known Stubs
 
-The documented `send as me` compose stub (50-10, resolved by Phase 51 plan 51-02). No new stubs.
+The documented `send as me` compose stub (50-10, resolved by Phase 52 plan 52-02). No new stubs.
 
 ## Threat Flags
 

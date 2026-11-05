@@ -283,9 +283,9 @@ Open it with `<L> a`, `Ctrl+Alt+A`, `:agents zoom`, `:agents toggle`, the top me
 
 **Node and edge cursor.** Arrow keys move the cursor to the nearest node in that direction; `Tab` / `Shift+Tab` step through the selected node's edges. `Enter` on a pane node focuses it. **Grab mode** (`g`): arrows nudge the selected node one terminal cell and pin it; `g`, `Enter` or `Esc` drops it. `u` or right-click unpins.
 
-**Conversation (right).** The bus events in order, newest last, as `<from> -> <to> [<kind>] <preview>`. Kinds are `input`, `exec`, `keys`, `broadcast` (and `message`, reserved for Phase 51). Previews are sanitised and capped at 160 characters; text sent to a pane in a password prompt shows `[redacted]`, and copy keeps it redacted. The view follows new lines until you scroll up; `f` / `End` / the follow marker resume. Filters (agent, pair, keyword) show as chips in a header row; small panes drop the header, buttons and chips progressively. `y` or `[copy]` copies the selected line to the clipboard.
+**Conversation (right).** The bus events in order, newest last, as `<from> -> <to> [<kind>] <preview>`. Kinds are `input`, `exec`, `keys`, `broadcast` (and `message`, reserved for Phase 52). Previews are sanitised and capped at 160 characters; text sent to a pane in a password prompt shows `[redacted]`, and copy keeps it redacted. The view follows new lines until you scroll up; `f` / `End` / the follow marker resume. Filters (agent, pair, keyword) show as chips in a header row; small panes drop the header, buttons and chips progressively. `y` or `[copy]` copies the selected line to the clipboard.
 
-**Compose line.** `send as me` is shown but **disabled**: nothing typed there is stored or sent, and no pane or bus event is produced. It becomes available only with the Phase 51 permission gate.
+**Compose line.** `send as me` is shown but **disabled**: nothing typed there is stored or sent, and no pane or bus event is produced. It becomes available only with the Phase 52 permission gate.
 
 **Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (`Esc` unless pinned), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`. Pinned or not, the window never blocks the panes: click one (or run `:agents blur`) and keys go to it again.
 
@@ -314,8 +314,8 @@ On Windows and macOS panel scale is therefore reachable only through `[` / `]` a
 
 Known gaps, stated plainly:
 
-- **Compose is disabled.** The `send as me` line (and `[send]`) is a stub until Phase 51 adds the permission gate and agent messaging.
-- **The graph is star-shaped until Phase 51.** Phase 50 sees only input broadcast, `:mcp broadcast`, and `pane.exec` / `pane.send_keys`; pane-to-pane agent messaging arrives with Phase 51.
+- **Compose is disabled.** The `send as me` line (and `[send]`) is a stub until Phase 52 adds the permission gate and agent messaging.
+- **The graph is star-shaped until Phase 52.** Phase 50 sees only input broadcast, `:mcp broadcast`, and `pane.exec` / `pane.send_keys`; pane-to-pane agent messaging arrives with Phase 52.
 - **History is the last 512 events**, kept in memory only: nothing is persisted, logged, or published on `/events` (see [API](../API.md)).
 - **Silent long builds read as idle.** A running command that prints nothing for more than 1.5 s drops from working to idle unless a profile `working` pattern matches.
 - **Windows and macOS GUI runtimes**: `Ctrl` + wheel over a panel still zooms the font and mouse events carry empty modifiers (see [GUI rendering](#gui-rendering)).

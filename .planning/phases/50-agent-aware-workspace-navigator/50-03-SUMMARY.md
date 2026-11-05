@@ -94,7 +94,7 @@ coverage:
 
 # Phase 50 Plan 03: Per-pane Agent State and `:agents list` Summary
 
-**Every pane now carries a working / blocked / idle / done / errored state derived purely from existing signals (OSC 133, running command, output bytes, password prompt, notifications, exit), exposed through `:agents list` with structured data over RPC, plus optional `[agents.<name>]` substring profiles and a `report_agent_state` override seam for Phase 51.**
+**Every pane now carries a working / blocked / idle / done / errored state derived purely from existing signals (OSC 133, running command, output bytes, password prompt, notifications, exit), exposed through `:agents list` with structured data over RPC, plus optional `[agents.<name>]` substring profiles and a `report_agent_state` override seam for Phase 52.**
 
 ## Performance
 

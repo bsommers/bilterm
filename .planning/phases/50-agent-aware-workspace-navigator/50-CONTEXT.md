@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Make the slide-out drawer look and work like a compact left-side navigator: a tree (workspace > session > pane) with per-pane state glyphs, per-row pairing/fan-out comms indicators, full keyboard and mouse parity. Add a resizable zoom window showing an agent-to-agent traffic graph plus a conversation (snoop) view. Phase 50 also owns the traffic-event bus the window reads; Phase 51 (agent messaging) plugs into the same bus.
+Make the slide-out drawer look and work like a compact left-side navigator: a tree (workspace > session > pane) with per-pane state glyphs, per-row pairing/fan-out comms indicators, full keyboard and mouse parity. Add a resizable zoom window showing an agent-to-agent traffic graph plus a conversation (snoop) view. Phase 50 also owns the traffic-event bus the window reads; Phase 52 (agent messaging) plugs into the same bus.
 
 Fixed by the user's brief: glyph status per pane; arrow- and mouse-friendly; show agent state and pairing/fan-out comms; zoom pop-up with connection/flow graph and snoop; keys and mouse/scroll equal; popup resizable like all other windows; text graphics in text mode, high-resolution smooth graphics in GUI mode.
 
@@ -15,12 +15,12 @@ Fixed by the user's brief: glyph status per pane; arrow- and mouse-friendly; sho
 <decisions>
 ## Implementation Decisions
 
-### Scope split with Phase 51
-- **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 51's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 51 and the API events (`agent.message`).
+### Scope split with Phase 52
+- **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 52's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 52 and the API events (`agent.message`).
 - **D-02:** The drawer's new layout is `[drawer] style = "classic" | "navigator"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
 
 ### Agent state
-- **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 51) override heuristics.
+- **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 52) override heuristics.
 - **D-04:** Per-workspace count summary and a jump-to-next-blocked key stay as in the roadmap success criteria.
 
 ### Glyphs and comms indicators
@@ -30,7 +30,7 @@ Fixed by the user's brief: glyph status per pane; arrow- and mouse-friendly; sho
 ### Traffic zoom window
 - **D-07:** Opened by key, mouse click, or command (`:agents zoom`), and from the comms glyph on a row. Behaves like the MCP window: drag-resize edges, pin, Ctrl+wheel scale (independent scale), Esc closes, adjustable splitter. Graph on one side, conversation on the other. Keys and mouse/scroll are equally capable.
 - **D-08:** Layout is automatic: layered or force-directed, with stable node positions so nodes don't jump. TUI: arrow-key selection cursor over nodes/edges. GUI: nodes can be dragged. (Claude's discretion on the exact algorithm per mode.)
-- **D-09:** Snoop view is read-only follow + filter (by agent, pair, keyword) + history scroll + copy, plus a "send as me" compose line that injects a message into the selected edge. Injection goes through the Phase 51 permission gate (`[api] allow_agent_messaging`), rate limits, loop guard and logging; without Phase 51 enabled the compose line is disabled. — **Reversibility:** costly — injection adds an outward-facing write path with security implications.
+- **D-09:** Snoop view is read-only follow + filter (by agent, pair, keyword) + history scroll + copy, plus a "send as me" compose line that injects a message into the selected edge. Injection goes through the Phase 52 permission gate (`[api] allow_agent_messaging`), rate limits, loop guard and logging; without Phase 52 enabled the compose line is disabled. — **Reversibility:** costly — injection adds an outward-facing write path with security implications.
 
 ### Rendering
 - **D-10:** TUI uses box-drawing/braille graph rendering. GUI uses smooth, high-resolution vector graphics built on the existing pixel canvas (`pixel_canvas`, `hires_subcell`): anti-aliased curved edges, animated flow particles along edges, node glow for state, hi-DPI aware, good graph layout algorithms. No new heavy dependency without sign-off (a vector crate such as tiny-skia is an option the plan must justify against cross-platform builds).
@@ -93,7 +93,7 @@ No external specs; navigator was described by the user, not read.
 <deferred>
 ## Deferred Ideas
 
-None - discussion stayed within phase scope. (Agent messaging itself stays in Phase 51.)
+None - discussion stayed within phase scope. (Agent messaging itself stays in Phase 52.)
 
 </deferred>
 

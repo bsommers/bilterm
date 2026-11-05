@@ -131,3 +131,15 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Phase 50 exec checkpoint updated after 50-16 (10/16): .planning/phases/50-agent-aware-workspace-navigator/EXEC-CHECKPOINT.md
 - Phase 50 DONE, PR #5 open (see EXEC-CHECKPOINT.md FINAL STATE), 2026-11-04
 - 2026-11-04: PR #5-#7 merged. PR #8 (fix/agents-graph-heat: non-modal agents window, edge heat, :agents topology) OPEN, clean, awaiting user manual GUI check + merge go-ahead; its worktree .claude/worktrees/agent-a7a79733d4331d20b stays until merged. Branch examples/agent-traffic-demo (this): examples/cookbook/agent-traffic-demo.sh tested with AGY=0 and AGY=1; not yet pushed/PR'd. Other agent worktrees (a4d75..., ad5223..., aea5db...) are not mine: leave. Installed ~/.local/bin/bilterm = Phase 50 build (bilterm.prev = rollback).
+
+## Checkpoint 2026-11-05 (agents launch / status / MCP pin session)
+- Branch `feat/navigator-rows-and-launch` @ 46aa4c1 in worktree `.claude/worktrees/integ`. NOT pushed. Never commit to `main`. Primary checkout has uncommitted `.planning/CHECKPOINT.md` + untracked `docs/mcp-usecases/` (do not stage).
+- Fixed binary installed (byte-identical): `~/.local/bin/bilterm`, `~/.cargo/bin/bilterm`; build at `.claude/worktrees/integ/target/release/bilterm`. User's open GUI (pid 1476386) predates it; restart needed.
+- Done in 46aa4c1: Ctrl+Alt+A reserved chord before raw PTY passthrough (`keymap::reserved_global_action`); OIA status message wins the row for non-Legacy only (Legacy must stay byte-identical, goldens); modern MCP title pin badge (`mcp_modern_title`, click toggles); `:agents demo` (synthetic `[demo]` pane-to-pane traffic); `pane.exec` optional `from_pane`.
+- Checks: verify.sh PASS 63/63, GOLDENS OK 11, DOCS OK 57.
+- Root cause of "two-line rows / @ agents missing": user's drawer is Classic (default). Needs `:drawer style navigator` or `[drawer] style = "navigator"` in ~/.config/bilterm/config.toml (not edited by me).
+- Verified via Xvfb :99 harness (scratchpad k.sh/run.sh; isolated HOME/XDG), not on the user's desktop. Never `pkill -f` (matches own shell); kill by pid.
+- Dead ends: RPC traffic is always api->pane, so examples/cookbook/agent-traffic-demo.sh cannot draw pane-to-pane edges; GUI has no control socket.
+- Not done / user asks: type messages in agents window (compose gated until Phase 51 `[api] allow_agent_messaging`), activity icons on nodes/edges, window always on top (by design). Suggest `/gsd-spec-phase 51`.
+- Authorizations: push/PR/remote-branch deletion need fresh explicit go-ahead. Optional: delete merged remote branches fix/agents-graph-heat, fix/agents-window-layering, examples/agent-traffic-demo.
+- Next: user GUI re-test; then ask before push + PR.

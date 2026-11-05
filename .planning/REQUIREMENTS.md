@@ -189,17 +189,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCP-01 | Phase 34 | Planned |
 | MCP-02 | Phase 34 | Planned |
 
-## Milestone v2.9 — Agent Fleet (Phases 50–51)
+## Milestone v2.9 — Agent Fleet (Phases 50–52)
 
 - [x] **FLT-01**: The slide-out drawer offers a Navigator left sidebar (`[drawer] style = "navigator"`): workspace > session > pane tree, per-pane agent-state dots (working / blocked / idle / done / errored), attention counts and jump-to-next-blocked, keyboard- and mouse-driven, Legacy output unchanged when not selected.
-- [x] **FLT-02**: Agent traffic is observable: a bounded, redacted traffic bus, an `:agents zoom` window with a deterministic node/edge graph, and a read-only snoop view (compose line disabled until Phase 51).
+- [x] **FLT-02**: Agent traffic is observable: a bounded, redacted traffic bus, an `:agents zoom` window with a deterministic node/edge graph, and a read-only snoop view (compose line disabled until Phase 52).
 - [x] **FLT-03**: The agents graph and sidebar state icons render as GUI vector graphics (no new dependency), with TUI braille fallback.
+- [ ] **UIT-01**: `:agents demo stop` closes the demo's panes and clears its `[demo]` traffic events.
+- [ ] **UIT-02**: Every colon-command verb is reachable from the command palette (or listed as deliberately excluded), enforced by a test.
+- [ ] **UIT-03**: `:agents list` opens a floating, pinnable, key/mouse/verb-driven window listing only agents.
+- [ ] **UIT-04**: The window-tiling function includes the agents-list window.
 - [ ] **AGT-01**: Agents running in panes/sessions can be addressed by stable names and exchange structured messages through a per-recipient mailbox (`agent.send`, `agent.inbox`, `agent.ack`, `agent.list`) over RPC, HTTP, MCP and `bilterm ctl`.
 - [ ] **AGT-02**: Messages can be delivered as mailbox entries, as a one-line "nudge" typed only into an idle/waiting pane, or as a `0600` file whose path is nudged; senders can wait for a reply with a timeout.
 - [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
 
 
-## Milestone v2.10 — Session Management & Packing Viewer (Phases 52–53)
+## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
 - [ ] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
 - [ ] **SES-02**: Sessions and windows can be renamed by right-click, key sequence and `:` command, with sanitised, deterministic duplicate handling.
@@ -208,7 +212,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **SES-05**: All session/window management actions lower to `Action` via `WindowManager::apply`, are reachable via RPC/MCP/`bilterm ctl` with existing gating, and have key/mouse/colon parity tests.
 - [ ] **VIEW-01**: A deterministic treemap-style layout packs several sessions as rectangular containers, each with its windows packed inside, scaled to the available area.
 - [ ] **VIEW-02**: The packing is shown in a non-modal window in text mode (braille/box) and as GUI vector graphics, reusing Phase 50 rendering with no new dependency.
-- [ ] **VIEW-03**: Windows can be dragged between sessions in the viewer and in the Navigator tree by mouse (TUI and GUI), lowering to Phase 52's move action.
+- [ ] **VIEW-03**: Windows can be dragged between sessions in the viewer and in the Navigator tree by mouse (TUI and GUI), lowering to Phase 53's move action.
 - [ ] **VIEW-04**: Every drag gesture has a keyboard equivalent and a `:` command, with parity tests and keymap drift tests.
 
 | Requirement | Phase | Status |
@@ -216,18 +220,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FLT-01 | Phase 50 | Complete |
 | FLT-02 | Phase 50 | Complete |
 | FLT-03 | Phase 50 | Complete |
-| AGT-01 | Phase 51 | Planned |
-| AGT-02 | Phase 51 | Planned |
-| AGT-03 | Phase 51 | Planned |
-| SES-01 | Phase 52 | Planned |
-| SES-02 | Phase 52 | Planned |
-| SES-03 | Phase 52 | Planned |
-| SES-04 | Phase 52 | Planned |
-| SES-05 | Phase 52 | Planned |
-| VIEW-01 | Phase 53 | Planned |
-| VIEW-02 | Phase 53 | Planned |
-| VIEW-03 | Phase 53 | Planned |
-| VIEW-04 | Phase 53 | Planned |
+| UIT-01 | Phase 51 | Planned |
+| UIT-02 | Phase 51 | Planned |
+| UIT-03 | Phase 51 | Planned |
+| UIT-04 | Phase 51 | Planned |
+| AGT-01 | Phase 52 | Planned |
+| AGT-02 | Phase 52 | Planned |
+| AGT-03 | Phase 52 | Planned |
+| SES-01 | Phase 53 | Planned |
+| SES-02 | Phase 53 | Planned |
+| SES-03 | Phase 53 | Planned |
+| SES-04 | Phase 53 | Planned |
+| SES-05 | Phase 53 | Planned |
+| VIEW-01 | Phase 54 | Planned |
+| VIEW-02 | Phase 54 | Planned |
+| VIEW-03 | Phase 54 | Planned |
+| VIEW-04 | Phase 54 | Planned |
 
 **Coverage:**
 

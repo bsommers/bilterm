@@ -49,9 +49,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
-- [ ] **Phase 51: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
-- [ ] **Phase 52: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
-- [ ] **Phase 53: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
+- [ ] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
+- [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
+- [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
+- [ ] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
 
 ## Phase Details
 
@@ -746,9 +747,9 @@ Plans:
 - [ ] 48-01-PLAN.md — Regression + perf + accessibility (wave 1)
 - [ ] 48-02-PLAN.md — Polish, docs, release (wave 2)
 
-### Milestone v2.9 — Agent Fleet (Phases 50–51)
+### Milestone v2.9 — Agent Fleet (Phases 50–52)
 
-Goal: make Bilterm a place where several AI agents run side by side, are visible at a glance, and can talk to each other. Phase 50 is the human-facing view; Phase 51 is the agent-facing channel. 51 builds on 50's agent-state model, so run 50 first.
+Goal: make Bilterm a place where several AI agents run side by side, are visible at a glance, and can talk to each other. Phase 50 is the human-facing view; Phase 51 is a UI and command-parity tweak pass on it; Phase 52 is the agent-facing channel. 52 builds on 50's agent-state model, so run 50 first; 51 runs before 52 so the agents-list window exists when messaging lands.
 
 ### Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)
 
@@ -771,7 +772,7 @@ Plans:
 - [x] 50-02-PLAN.md — `[drawer] style = "navigator"`: workspace > session > pane tree rows + renderer, `sanitize_display` (wave 2)
 - [x] 50-03-PLAN.md — `AgentState` classifier/tracker, `[agents.<name>]` profiles, `:agents list` (wave 2)
 - [x] 50-04-PLAN.md — State dots, per-workspace counts, jump-to-attention (`:drawer attention`, leader `!`), `:drawer style` (wave 3)
-- [x] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 51 (wave 3)
+- [x] 50-05-PLAN.md — Traffic-event bus fed by broadcast, `:mcp broadcast`, RPC/MCP; ADR-008 contract for Phase 52 (wave 3)
 - [x] 50-06-PLAN.md — Navigator keyboard: `NAVIGATOR_DRAWER_BINDINGS` in keymap.rs, full `DrawerNavOp` set with `:drawer` verbs (incl. `close-pane`), drift/no-shadow tests, pin/scale, throttled animation (wave 4)
 - [x] 50-07-PLAN.md — Agent traffic zoom window skeleton: state, braille graph, stable layout, selection model, render (wave 4)
 - [x] 50-08-PLAN.md — Zoom window keys: `AGENTS_WINDOW_BINDINGS` in keymap.rs, `:agents zoom/close/dismiss/select/edge/enter`, leader `a`, Esc, node/edge cursor, Enter-to-focus, op drift tests, redraw cadence (wave 5)
@@ -784,7 +785,26 @@ Plans:
 - [x] 50-15-PLAN.md — Navigator sidebar mouse parity: row and fold-marker clicks, footer buttons, title badges, wheel, edge drag, key/mouse parity test (wave 6)
 - [x] 50-16-PLAN.md — Zoom window pin badge + independent panel scale (`PanelTarget::Agents`) by key, mouse and command (wave 7)
 
-### Phase 51: Agent-to-Agent Messaging & Coordination
+### Phase 51: UI Tweaks & Command Parity
+
+**Goal**: Close the gaps found in GUI testing of Phase 50: a way to undo `:agents demo`, a command-palette entry for every colon verb, and `:agents list` as a real floating window that tiles like the other panels.
+**Depends on**: Phase 50 (agents window, `AgentsOp`, traffic bus, panel pin/scale), Phase 47 (command palette).
+**Requirements**: UIT-01, UIT-02, UIT-03, UIT-04
+**Harmony rule**: Add new paths; do not remove or rewire existing ones. Legacy output stays byte-identical (11 goldens). Every key, mouse and colon path lowers to `Action` and runs via `WindowManager::apply`; new paths get parity tests in the style of `tests/phase50_*`.
+**Execution model**: maximally autonomous. Research and GSD planning come first (`/gsd-plan-phase 51`), then execution by dispatched subagents with maximum parallelism (disjoint file ownership per plan, orchestrator-only `Action`/`apply` wiring). Subagents get an explicit `model` (sonnet/haiku for planning and mechanical work).
+**Success Criteria** (what must be TRUE):
+
+  1. `UIT-01`: `:agents demo stop` closes the panes the demo created and removes the `[demo]` traffic events; a no-op with a status message when no demo is running; usage, completion and help catalog updated.
+  2. `UIT-02`: a sweep of all `ColonCommand` verbs produces an inventory; each verb that can run without free-form arguments, or has a small fixed argument set, has a command-palette entry that triggers it (e.g. `drawer style navigator|classic`); verbs deliberately excluded are listed with the reason; a test fails when a new verb has neither.
+  3. `UIT-03`: `:agents list` opens a floating, pinnable window showing only agents (name, state, pane), with key and mouse controls and `:agents` verbs (select, jump, pin, scale, close); non-modal; never steals PTY input unless focused; renders in TUI and GUI.
+  4. `UIT-04`: the existing window-tiling function includes the agents-list window (and the other floating panels where missing) alongside windows when tiling is invoked.
+
+**Plans**: 0/0 plans complete (research + planning pending)
+
+Plans:
+- [ ] 51-01 research: inventory of colon verbs vs palette entries; current tiling function and which panels it covers; agents-list window design options (to be written by `/gsd-plan-phase 51`)
+
+### Phase 52: Agent-to-Agent Messaging & Coordination
 
 **Goal**: AI agents running in different panes or sessions can address each other, pass structured messages, wait for replies, and be coordinated, without the sender needing to know terminal internals.
 **Depends on**: Phase 49 (API/MCP surface), Phase 50 (`AgentState`).
@@ -802,17 +822,17 @@ Plans:
 **Plans**: 0/3 plans complete
 
 Plans:
-- [ ] 51-01-PLAN.md — Spec: message schema, addressing, delivery semantics, threat model (prompt-injection between agents), loop guard; user sign-off before code (wave 1)
-- [ ] 51-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
-- [ ] 51-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
+- [ ] 52-01-PLAN.md — Spec: message schema, addressing, delivery semantics, threat model (prompt-injection between agents), loop guard; user sign-off before code (wave 1)
+- [ ] 52-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
+- [ ] 52-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
 
-### Milestone v2.10 — Session Management & Packing Viewer (Phases 52–53)
+### Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
-Goal: make the hierarchy Workspace > Session (can nest) > Window (composite pane) > Pane fully manageable and visible. Phase 52 adds the management actions; Phase 53 adds the visual packing viewer and drag-and-drop on top of 52's move action.
+Goal: make the hierarchy Workspace > Session (can nest) > Window (composite pane) > Pane fully manageable and visible. Phase 53 adds the management actions; Phase 54 adds the visual packing viewer and drag-and-drop on top of 52's move action.
 
-Sequencing: Phase 49 (Command Parity & Full Public API) should precede any scripting language (see `.planning/seeds/scripting-language.md`). Phases 52 and 53 can run alongside Phase 49; they add new `Action`s that Phase 49 will then document, so they must follow the same parity rules (every path lowers to `Action` via `WindowManager::apply`).
+Sequencing: Phase 49 (Command Parity & Full Public API) should precede any scripting language (see `.planning/seeds/scripting-language.md`). Phases 53 and 54 can run alongside Phase 49; they add new `Action`s that Phase 49 will then document, so they must follow the same parity rules (every path lowers to `Action` via `WindowManager::apply`).
 
-### Phase 52: Session & Window Management
+### Phase 53: Session & Window Management
 
 **Goal**: A user can reorganise their workspace without restarting anything: move a window from one session to another, rename sessions and windows, and select several windows in a session to act on them together.
 **Depends on**: Phase 50 (Navigator tree, right-click menu, `src/wm/drawer/navigator.rs`, `src/input/drawer_navigator.rs`); builds on Phase 38 (`:session rename|move|reorder`) and Phase 33 (session tree persistence).
@@ -829,30 +849,30 @@ Sequencing: Phase 49 (Command Parity & Full Public API) should precede any scrip
 **Plans**: 0/3 plans complete
 
 Plans:
-- [ ] 52-01-PLAN.md — Spec: Action set, selection model, undo model, persistence schema, naming rules; user sign-off before code (wave 1)
-- [ ] 52-02-PLAN.md — Core: move and rename actions in `wm` with `apply`, `:` commands, persistence, undo, tests (wave 2)
-- [ ] 52-03-PLAN.md — Multi-select and bulk actions, Navigator menu and keys, RPC/MCP/ctl, docs and parity tests (wave 3)
+- [ ] 53-01-PLAN.md — Spec: Action set, selection model, undo model, persistence schema, naming rules; user sign-off before code (wave 1)
+- [ ] 53-02-PLAN.md — Core: move and rename actions in `wm` with `apply`, `:` commands, persistence, undo, tests (wave 2)
+- [ ] 53-03-PLAN.md — Multi-select and bulk actions, Navigator menu and keys, RPC/MCP/ctl, docs and parity tests (wave 3)
 
-### Phase 53: Session Packing Viewer & Drag-and-Drop
+### Phase 54: Session Packing Viewer & Drag-and-Drop
 
 **Goal**: A user can see how windows are packed into sessions, several sessions at once, and rearrange them by dragging, with the same result available from the keyboard.
-**Depends on**: Phase 52 (move action, rename, selection), Phase 50 (`graph_raster`/vector rendering, non-modal agents-window pattern, Navigator tree).
+**Depends on**: Phase 53 (move action, rename, selection), Phase 50 (`graph_raster`/vector rendering, non-modal agents-window pattern, Navigator tree).
 **Requirements**: VIEW-01, VIEW-02, VIEW-03, VIEW-04
 **Harmony rule**: Add new paths; existing drawer, Navigator and agents-window behaviour is unchanged. The viewer is non-modal (like the Phase 50 agents window) and never steals PTY input unless focused. Every gesture lowers to `Action` via `WindowManager::apply`.
 **Success Criteria** (what must be TRUE):
 
   1. Layout (`VIEW-01`): a pure, deterministic treemap-style layout packs each session as a rectangular container with its windows packed inside, scaled to the available area; several sessions are shown at once, nested sessions are nested containers; same input gives the same rectangles; tiny areas degrade to labels or counts rather than panic.
   2. Rendering (`VIEW-02`): text mode (braille/box drawing) in the TUI and a vector rendering in the GUI (reusing Phase 50 `graph_raster`/vector paths, no new dependency); a non-modal window that can be moved, resized, pinned, scaled and closed by key, mouse and `:` command (`:sessions map` or similar); focused/current window and session highlighted; labels sanitised.
-  3. Drag-and-drop (`VIEW-03`): windows can be dragged between session containers in the viewer and between sessions in the Navigator tree, by mouse in the TUI and GUI; drop targets are highlighted, Esc cancels, an invalid drop is a no-op with feedback; a drop lowers to Phase 52's move action (single undoable unit).
+  3. Drag-and-drop (`VIEW-03`): windows can be dragged between session containers in the viewer and between sessions in the Navigator tree, by mouse in the TUI and GUI; drop targets are highlighted, Esc cancels, an invalid drop is a no-op with feedback; a drop lowers to Phase 53's move action (single undoable unit).
   4. Keyboard equivalents (`VIEW-04`): every drag gesture has a keyboard path (pick up, move target, drop, cancel) and a `:` command, listed in `src/input/keymap.rs` with drift tests; parity tests prove mouse, key and colon give identical results.
   5. Tests: layout golden/property tests (no overlap, full containment, determinism), TUI snapshot and GUI-dump previews, drag/drop and keyboard parity tests in the style of `tests/phase50_*`.
 
 **Plans**: 0/3 plans complete
 
 Plans:
-- [ ] 53-01-PLAN.md — Spec and pure treemap packing layout with property tests; user sign-off on look before rendering (wave 1)
-- [ ] 53-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
-- [ ] 53-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
+- [ ] 54-01-PLAN.md — Spec and pure treemap packing layout with property tests; user sign-off on look before rendering (wave 1)
+- [ ] 54-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
+- [ ] 54-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
 
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
@@ -872,7 +892,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |

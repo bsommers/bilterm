@@ -95,7 +95,7 @@ Recent decisions affecting current work:
 - [Phase 50]: 50-03: first observation of a pane applies its agent state without dwell; later Working/Idle flips need 500 ms; finish detected from OSC 133 D transition or (last_exit_code,last_duration_ms) change
 - [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
 - [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'
-- [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 51-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
+- [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 52-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
 - [Phase 50]: 50-07: agents graph layout is Mutex-cached FR with 0.06 drift limit; active edge = success colour, selected = accent
 - [Phase 50]: 50-13: fix-linux chosen - X11 fully wired (modifiers, Ctrl+wheel panel scale); Win32/macOS only set_gui_surface(true); Ctrl+wheel over panels still font-zooms there (known gap)
 

@@ -80,7 +80,7 @@ overrides_applied: 0
 | Requirement | Status | Evidence |
 | ----------- | ------ | -------- |
 | FLT-01 (Navigator sidebar, dots, counts, jump-to-blocked, keyboard and mouse, Legacy unchanged) | SATISFIED | Truths 1-5 above. |
-| FLT-02 (bounded redacted traffic bus, `:agents zoom` window, read-only snoop, compose disabled until Phase 51) | SATISFIED (in-phase scope) | `src/wm/traffic.rs` (`record`, `record_traffic`, `record_new_mcp_broadcasts`), `src/wm/agents_window.rs`, `AGENTS_WINDOW_BINDINGS`; tests `phase50_traffic`, `phase50_agents_window` pass. |
+| FLT-02 (bounded redacted traffic bus, `:agents zoom` window, read-only snoop, compose disabled until Phase 52) | SATISFIED (in-phase scope) | `src/wm/traffic.rs` (`record`, `record_traffic`, `record_new_mcp_broadcasts`), `src/wm/agents_window.rs`, `AGENTS_WINDOW_BINDINGS`; tests `phase50_traffic`, `phase50_agents_window` pass. |
 | FLT-03 (GUI vector rendering of graph and sidebar icons, braille fallback) | SATISFIED (headless GUI surface) | `src/ui/agents_gui.rs`, `src/ui/graph_raster.rs`; `phase50_gui_render` (89 tests) passes. Real-window visuals unverified, see Notes. |
 
 ## Anti-Patterns
@@ -90,7 +90,7 @@ No debt markers or stubs found in the verified implementation files that block t
 ## Notes (accepted, not failures)
 
 1. Windows/macOS: Ctrl+wheel over panels still zooms the font (owner chose `fix-linux`); `[` / `]` and `:... scale` still scale panels there. Win32/macOS runners only get `set_gui_surface(true)`, compile-checked.
-2. Disabled compose "send as me" line is a deliberate stub until Phase 51 (`ComposeGate` seam).
+2. Disabled compose "send as me" line is a deliberate stub until Phase 52 (`ComposeGate` seam).
 3. Real-window GUI visuals (X11 vector graph, state icons, glow/particles) are not verified on a desktop; only the headless GUI surface is proven by tests.
 4. Bookkeeping drift (not a code gap): `.planning/REQUIREMENTS.md` still shows FLT-01..03 unticked and "Planned", and ROADMAP Phase 50 line 765 says "16/16 plans executed (0/16 complete)" and the phase checkbox on line 51 is unticked, although all 16 plan boxes are ticked. The orchestrator should tick these on phase completion.
 

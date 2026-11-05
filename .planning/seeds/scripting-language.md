@@ -24,4 +24,4 @@ Run `/gsd-spec-phase` first to settle the purpose (automation vs layout recipes 
 
 - Which of the three purposes comes first?
 - Where do scripts live (config dir, per-workspace, per-session)?
-- Error model: abort, continue, or transactional with undo (see Phase 52 undo-safe semantics)?
+- Error model: abort, continue, or transactional with undo (see Phase 53 undo-safe semantics)?

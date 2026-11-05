@@ -9,12 +9,12 @@
 
 ### Locked Decisions
 
-**Scope split with Phase 51**
-- **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 51's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 51 and the API events (`agent.message`).
+**Scope split with Phase 52**
+- **D-01:** Phase 50 builds the UI on a small internal traffic-event bus (who sent what to whom, with timestamps). Today it is fed by `:mcp broadcast` and control-API/MCP calls; Phase 52's `agent.send` etc. plug into the same bus. Graph and snoop work from day one. — **Reversibility:** costly — the event schema becomes a contract shared with Phase 52 and the API events (`agent.message`).
 - **D-02:** The drawer's new layout is `[drawer] style = "classic" | "navigator"`; `classic` stays byte-identical (Legacy parity, snapshot-proven). Default stays `classic` until the user signs off.
 
 **Agent state**
-- **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 51) override heuristics.
+- **D-03:** State (working / blocked / idle / done / errored) is derived from heuristics on existing signals (OSC 133 phase, output activity, exit code, running command, waiting-for-input prompt patterns) plus optional per-agent profiles (`[agents.<name>]` for known tools such as claude, codex, gemini) carrying their own working/blocked patterns. Explicit `agent.state` reports (Phase 52) override heuristics.
 - **D-04:** Per-workspace count summary and a jump-to-next-blocked key stay as in the roadmap success criteria.
 
 **Glyphs and comms indicators**
@@ -24,7 +24,7 @@
 **Traffic zoom window**
 - **D-07:** Opened by key, mouse click, or command (`:agents zoom`), and from the comms glyph on a row. Behaves like the MCP window: drag-resize edges, pin, Ctrl+wheel scale (independent scale), Esc closes, adjustable splitter. Graph on one side, conversation on the other. Keys and mouse/scroll are equally capable.
 - **D-08:** Layout is automatic: layered or force-directed, with stable node positions so nodes don't jump. TUI: arrow-key selection cursor over nodes/edges. GUI: nodes can be dragged. (Claude's discretion on the exact algorithm per mode.)
-- **D-09:** Snoop view is read-only follow + filter (by agent, pair, keyword) + history scroll + copy, plus a "send as me" compose line that injects a message into the selected edge. Injection goes through the Phase 51 permission gate (`[api] allow_agent_messaging`), rate limits, loop guard and logging; without Phase 51 enabled the compose line is disabled. — **Reversibility:** costly — injection adds an outward-facing write path with security implications.
+- **D-09:** Snoop view is read-only follow + filter (by agent, pair, keyword) + history scroll + copy, plus a "send as me" compose line that injects a message into the selected edge. Injection goes through the Phase 52 permission gate (`[api] allow_agent_messaging`), rate limits, loop guard and logging; without Phase 52 enabled the compose line is disabled. — **Reversibility:** costly — injection adds an outward-facing write path with security implications.
 
 **Rendering**
 - **D-10:** TUI uses box-drawing/braille graph rendering. GUI uses smooth, high-resolution vector graphics built on the existing pixel canvas (`pixel_canvas`, `hires_subcell`): anti-aliased curved edges, animated flow particles along edges, node glow for state, hi-DPI aware, good graph layout algorithms. No new heavy dependency without sign-off (a vector crate such as tiny-skia is an option the plan must justify against cross-platform builds).
@@ -33,7 +33,7 @@
 Exact layout algorithm per mode, glyph choices within the semantic set, animation timings, splitter defaults, key bindings (must not collide with existing keys), and event-bus buffer sizes.
 
 ### Deferred Ideas (OUT OF SCOPE)
-None - discussion stayed within phase scope. (Agent messaging itself stays in Phase 51.)
+None - discussion stayed within phase scope. (Agent messaging itself stays in Phase 52.)
 </user_constraints>
 
 <phase_requirements>
@@ -48,7 +48,7 @@ None - discussion stayed within phase scope. (Agent messaging itself stays in Ph
 
 The existing drawer is a single code path: `WindowManager::drawer_rows()` (src/wm/drawer.rs:402) builds a flat `Vec<DrawerRow>`, `render_workspace_drawer` (src/ui/drawer.rs:147) draws it, and `selected_index` is an index into that same vector for **every** key and mouse handler (modal.rs:334-492, mouse_wm.rs:672-886). The safest navigator implementation is therefore: add `DrawerConfig.style`, make `drawer_rows()` dispatch on style (classic body untouched), reuse `DrawerRowKind::SessionHeader`/`Pane` for the new tree rows so all index-based helpers keep working, and branch once at the top of the renderer and once at the top of the mouse/key handlers. All new logic goes into new modules because `src/wm/drawer.rs` is 1015 lines, `src/input/modal.rs` 925, `src/input/mouse_wm.rs` 887, `src/colon_command/execute_wm.rs` 853, `src/wm/mod.rs` 865 against a hard test backstop of 1200 [VERIFIED: tests/session_lessons_and_regression_suite.rs:375 `line_count <= 1200`].
 
-CONTEXT.md is considerably larger than the roadmap's 3-plan sidebar scope: it adds a traffic-event bus, a resizable zoom window with an agent graph and snoop view, and a GUI vector renderer. These are all locked, so research covers them, but only FLT-01 exists as a requirement. The honest picture of "agent-to-agent traffic" today is thin: the only real sources are input broadcast (`wm.broadcast_command`, src/input/mod.rs:651-653), `:mcp broadcast` (daemon `broadcast_log: Vec<(String, String)>`, src/daemon/mod.rs:160) and API calls such as `pane.send_keys`/`pane.exec`. No agent addressing exists until Phase 51, so the graph is star-shaped (one external sender node fanning out to panes) until then and tests must inject synthetic events.
+CONTEXT.md is considerably larger than the roadmap's 3-plan sidebar scope: it adds a traffic-event bus, a resizable zoom window with an agent graph and snoop view, and a GUI vector renderer. These are all locked, so research covers them, but only FLT-01 exists as a requirement. The honest picture of "agent-to-agent traffic" today is thin: the only real sources are input broadcast (`wm.broadcast_command`, src/input/mod.rs:651-653), `:mcp broadcast` (daemon `broadcast_log: Vec<(String, String)>`, src/daemon/mod.rs:160) and API calls such as `pane.send_keys`/`pane.exec`. No agent addressing exists until Phase 52, so the graph is star-shaped (one external sender node fanning out to panes) until then and tests must inject synthetic events.
 
 No new dependency is needed. The existing `PixelCanvasBuffer` already has anti-aliased lines, cubic Beziers, SDF circles and a braille/sextant/octant cell flusher, and all three GUI backends (X11, Win32, macOS) already paint `GuiFrameSurface.images` RGBA textures. One raster function can feed both modes: flush to braille cells in the TUI, push one `GuiImageTexture` in the GUI. Do not add tiny-skia.
 
@@ -147,7 +147,7 @@ This is a single-process Rust TUI/GUI, so "tiers" are the crate's layered DAG (`
   - broadcast_command (input broadcast)  ring buffer ───> graph model (nodes=panes+external senders, edges=pairs)
   - execute_mcp_command broadcast        (cap 512)         │ stable layout (deterministic)
   - rpc pane.send_keys / pane.exec                         ├─ TUI: PixelCanvasBuffer -> braille flush into Buffer
-  - Phase 51 agent.send (later)                            └─ GUI: same canvas -> GuiImageTexture (no blend, alpha>0 copy)
+  - Phase 52 agent.send (later)                            └─ GUI: same canvas -> GuiImageTexture (no blend, alpha>0 copy)
                                                            snoop list (filter, scroll, copy) + compose line (DISABLED in Phase 50)
 ```
 
@@ -298,11 +298,11 @@ Not a rename/refactor/migration phase - section omitted per template. (Adding `[
 
 ### Pitfall 10: Event-name mismatch with the existing API
 **What goes wrong:** Existing `AutomationEvent` JSON `type` values are snake_case (`command_submitted`, `echo_lock_changed`, ...) [VERIFIED: src/api/playbook.rs:14-44 and docs/API.md "events.poll"], while ROADMAP/CONTEXT name the new events dotted (`agent.message`, `agent.state`). The Phase 50 bus schema becomes a shared contract (D-01, costly).
-**How to avoid:** Keep the internal `TrafficEvent` independent of JSON; give it a `kind()` string and `seq` cursor; define the API mapping (and pick one naming style) in the 50-01 spec for user sign-off before Phase 51 builds on it.
+**How to avoid:** Keep the internal `TrafficEvent` independent of JSON; give it a `kind()` string and `seq` cursor; define the API mapping (and pick one naming style) in the 50-01 spec for user sign-off before Phase 52 builds on it.
 
 ### Pitfall 11: Compose line gate does not exist
 **What goes wrong:** D-09 requires `[api] allow_agent_messaging`, but `ApiConfig` has exactly one field, `allow_config_write` [VERIFIED: src/config/dotted.rs:15-20], and the `[api]` section is never settable over the API.
-**How to avoid:** Phase 50 renders the compose line disabled ("requires agent messaging, Phase 51") and adds NO injection path. Provide the seam only: `trait`/fn pointer or `Option<...>` hook that Phase 51 fills. Adding the key now without rate limits/loop guard/logging would ship an unguarded write path.
+**How to avoid:** Phase 50 renders the compose line disabled ("requires agent messaging, Phase 52") and adds NO injection path. Provide the seam only: `trait`/fn pointer or `Option<...>` hook that Phase 52 fills. Adding the key now without rate limits/loop guard/logging would ship an unguarded write path.
 
 ### Pitfall 12: Key collisions inside the focused drawer
 **What goes wrong:** `handle_wm_modal_key` already consumes (when `drawer.focused`): `q F7 F11 _ - * [ ] M F5 J K N b B > < u U P s S r R : j k h l g G n + c w v | % x z d m p a A t T L space Enter Esc Tab Left Right PageUp PageDown Home End Delete`, plus Shift/Alt+Up/Down and Alt+Left/Right (src/input/modal.rs:342-491). Unused letters include `e f i o y C D E F H I O Q V W X Y Z` and symbols like `!`, `@`, `#`.
@@ -421,7 +421,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 
 ## Open Questions (RESOLVED)
 
-> RESOLVED 2026-11-03 by user sign-off: accept all research defaults (FLT-02/FLT-03 added to REQUIREMENTS.md; compose line disabled stub until Phase 51; no built-in agent profiles; live session only shows panes; graph shows external senders and fan-out; event naming deferred to Phase 51; GUI runtime gaps decided at checkpoint 50-13).
+> RESOLVED 2026-11-03 by user sign-off: accept all research defaults (FLT-02/FLT-03 added to REQUIREMENTS.md; compose line disabled stub until Phase 52; no built-in agent profiles; live session only shows panes; graph shows external senders and fan-out; event naming deferred to Phase 52; GUI runtime gaps decided at checkpoint 50-13).
 
 1. **Requirement coverage for the bus + zoom window + GUI graph (D-01, D-06..D-10).**
    - Known: only FLT-01 (sidebar) exists; ROADMAP lists 3 plans; CONTEXT locks a much larger scope.
@@ -431,7 +431,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 3. **Default per-agent profiles.** Ship none (heuristics only) or ship claude/codex/gemini defaults whose strings are unverified (A3)? Recommend ship none plus documented examples; user supplies patterns.
 4. **GUI runtime gaps (Pitfall 9).** Fix `set_gui_surface`/modifier pass-through in the three runners now, or scope out? Affects whether "Ctrl+wheel scale works in GUI" can truthfully be claimed.
 5. **Event schema naming** (snake_case vs dotted) and API exposure timing (Pitfall 10).
-6. **Traffic sources are thin until Phase 51.** Confirm the graph may ship showing external sender nodes ("you", "api", "mcp") and broadcast fan-out only; add an `:agents demo`-free approach (tests inject events directly).
+6. **Traffic sources are thin until Phase 52.** Confirm the graph may ship showing external sender nodes ("you", "api", "mcp") and broadcast fan-out only; add an `:agents demo`-free approach (tests inject events directly).
 7. **Compose line:** confirm "disabled stub only" for Phase 50 (Pitfall 11).
 
 ## Environment Availability
@@ -494,7 +494,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 |---------------|---------|-----------------|
 | V2 Authentication | no | - (no new auth surface) |
 | V3 Session Management | no | - |
-| V4 Access Control | yes | Compose/injection path stays disabled and gated behind Phase 51 `[api] allow_agent_messaging`; API write gate pattern (`config_write_denied`) is the model |
+| V4 Access Control | yes | Compose/injection path stays disabled and gated behind Phase 52 `[api] allow_agent_messaging`; API write gate pattern (`config_write_denied`) is the model |
 | V5 Input Validation | yes | `sanitize_display()` for pane titles, agent names, message bodies; length caps before layout; profile patterns are plain substrings (no regex ReDoS surface) |
 | V6 Cryptography | no | - |
 | V7 Error handling & logging | yes | Do not log keystroke content; redact preview when target pane is `!ECHO`/password prompt |
@@ -507,7 +507,7 @@ if let Some(delta) = ctrl_wheel_scale_delta(&mouse) && /* inside rect */ { wm.st
 | Terminal escape/bidi injection via OSC titles or message bodies rendered in the sidebar/snoop | Tampering / Spoofing | `sanitize_display` strip C0/C1 + U+202A-202E/U+2066-2069 + length cap (A10 notes ratatui behaviour unverified) |
 | Secret exposure through traffic snoop (passwords sent via `pane.send_keys`/broadcast into prompts) | Information disclosure | Bus events carry kind/byte-count and a short sanitised preview; never record content when `is_password_prompt()`; panes in `!ECHO` lock excluded from previews |
 | Unbounded memory from event flood | Denial of service | Ring buffer cap (match `AutomationControlPlane::push_event` 512, src/api/rpc.rs:234-239), per-event body cap, filter history cap |
-| Outward write path from snoop compose line (prompt injection / agent ping-pong) | Elevation of privilege | Disabled in Phase 50; Phase 51 gate + rate limit + loop guard + logging before enabling |
+| Outward write path from snoop compose line (prompt injection / agent ping-pong) | Elevation of privilege | Disabled in Phase 50; Phase 52 gate + rate limit + loop guard + logging before enabling |
 | Prompt-injection content displayed to a human or copied | Spoofing | Read-only display, explicit "copy" action only, sanitised |
 | Config-write via API for `drawer.style` | Tampering | Already covered: config-mutating commands refused over RPC/HTTP/MCP unless `[api] allow_config_write` (AGENTS.md "Write gate") |
 

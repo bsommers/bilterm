@@ -18,8 +18,8 @@ provides:
   - "AgentsOp FocusPane, SnoopStep, SnoopSelect, SnoopScroll, Follow, Filter(SnoopFilterOp), KeywordEdit, Copy, ComposeSubmit"
   - "Key scopes Snoop / KeywordEntry / Compose; Ctrl+O focus cycle (F6 stays global DeckNext)"
   - ":agents focus|line|scroll|follow|filter|copy"
-  - "ComposeGate::Unavailable seam for Phase 51 (51-02)"
-affects: [50-11, 50-12, 50-13, 50-14, 51-02]
+  - "ComposeGate::Unavailable seam for Phase 52 (52-02)"
+affects: [50-11, 50-12, 50-13, 50-14, 52-02]
 
 actuals:
   tokens: 26400
@@ -120,7 +120,7 @@ completed: 2026-11-04
 
 ## Known Stubs
 
-- `src/wm/agents_window.rs` `compose_gate()` and the `send as me` line: intentionally disabled by D-09 (no Phase 51 permission gate yet); resolved by Phase 51 plan 51-02, which adds an open `ComposeGate` variant. Not a placeholder for missing data, so it was not added to `.planning/WINDOWS.md`.
+- `src/wm/agents_window.rs` `compose_gate()` and the `send as me` line: intentionally disabled by D-09 (no Phase 52 permission gate yet); resolved by Phase 52 plan 52-02, which adds an open `ComposeGate` variant. Not a placeholder for missing data, so it was not added to `.planning/WINDOWS.md`.
 
 ## Threat Flags
 
