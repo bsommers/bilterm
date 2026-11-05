@@ -72,6 +72,9 @@ pub struct NavigatorRowMeta {
     pub comms: Option<CommsIndicator>,
     /// `true` while the newest event of that traffic is younger than [`COMMS_ACTIVE`] (the glyph animates).
     pub comms_active: bool,
+    /// Second-line text of a pane row (`user@host  path`); `None` for every other row, when
+    /// `drawer.row_lines = 1`, or when the pane exposes neither identity nor path.
+    pub detail: Option<String>,
 }
 
 /// Partners considered for the comms indicator: events newer than this.
@@ -136,6 +139,11 @@ impl WorkspaceDrawer {
 }
 
 impl DrawerConfig {
+    /// Lines per pane row in Navigator style: `1` or `2` (anything but `1` means `2`).
+    pub const fn navigator_row_lines(&self) -> u8 {
+        if self.row_lines == 1 { 1 } else { 2 }
+    }
+
     /// Drawer width in columns for the active style (navigator keeps its own width).
     pub fn effective_width_cols(&self) -> u16 {
         match self.style {
@@ -231,6 +239,7 @@ fn other_meta() -> NavigatorRowMeta {
         counts: None,
         comms: None,
         comms_active: false,
+        detail: None,
     }
 }
 
@@ -266,6 +275,7 @@ impl WalkCtx<'_> {
                 counts: live.then(|| self.wm.agent_counts()),
                 comms: None,
                 comms_active: false,
+                detail: None,
             },
         ));
         if collapsed {
@@ -282,6 +292,7 @@ impl WalkCtx<'_> {
     fn push_panes(&self, depth: usize, rows: &mut Vec<DrawerRow>) {
         let top_id = self.wm.z_stack.top();
         let qt_visible = self.wm.quick_terminal.visible;
+        let two_line = self.wm.config.drawer.navigator_row_lines() == 2;
         for &id in &self.pane_ids {
             let Some(pane) = self.wm.panes.get(&id) else { continue };
             let (comms, comms_active) = match self.wm.pane_comms(id) {
@@ -303,6 +314,7 @@ impl WalkCtx<'_> {
                     counts: None,
                     comms,
                     comms_active,
+                    detail: two_line.then(|| super::navigator_detail::pane_detail_line(pane)).flatten(),
                 },
             ));
         }

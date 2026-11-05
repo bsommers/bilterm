@@ -373,6 +373,15 @@ impl WindowManager {
         Some(id)
     }
 
+    /// Sets the lines per Navigator pane row (`drawer.row_lines`): `1` is the compact single-line layout,
+    /// anything else `2`. Takes effect on the next frame; the other drawer styles ignore it.
+    pub fn set_drawer_row_lines(&mut self, lines: u8) -> u8 {
+        let lines = if lines == 1 { 1 } else { 2 };
+        self.config.drawer.row_lines = lines;
+        self.active_pane_mut().set_status_message(Some(format!("Drawer rows: {lines} (navigator style)")));
+        lines
+    }
+
     /// Sets (`Some`) or toggles (`None`) the drawer style, reflows the workspace and returns the new style.
     pub fn set_drawer_style(&mut self, style: Option<DrawerStyle>) -> DrawerStyle {
         let new = style.unwrap_or_else(|| self.config.drawer.style.toggle());

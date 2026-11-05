@@ -775,6 +775,11 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
                 _ => Some(Err("Usage: :drawer style [classic|navigator|toggle]".to_string())),
             }
         }
+        Some("rows" | "row-lines") => match parts.get(2).copied() {
+            Some("1") => Some(Ok(ColonCommand::DrawerRows(1))),
+            Some("2") => Some(Ok(ColonCommand::DrawerRows(2))),
+            _ => Some(Err("Usage: :drawer rows [1|2]".to_string())),
+        },
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
             crate::wm::drawer::DrawerNavOp::NextAttention,
         ))),

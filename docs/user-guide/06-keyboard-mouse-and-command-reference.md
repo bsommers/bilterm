@@ -302,6 +302,7 @@
 | (mouse right-click) | `:drawer menu`, `:drawer menu close`, `:drawer menu pick <n>` | Open, dismiss, or run an entry of the row context menu (entries apply `N`, `a`, `A` (horizontal and vertical), `r` and `x`) |
 | `Right` / `o` / `Enter` on the glyph | `:drawer comms-focus on\|off`, `:drawer comms` | Focus the comms glyph of the selected row; open the Agent Traffic window on its conversation |
 | (none) | `:drawer style [classic\|navigator\|toggle]` | Switch drawer style; see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md) |
+| (none) | `:drawer rows 1\|2` | Lines per Navigator pane row (`drawer.row_lines`); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md) |
 
 `:navigator` is an alias of `:drawer` for the Navigator tree (`:navigator expand all`, `:navigator collapse all`, `:navigator style classic`). `:drawer expand` without `all` keeps its older meaning (maximize the drawer).
 

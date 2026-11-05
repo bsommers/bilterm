@@ -688,6 +688,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.set_drawer_style(style);
             false
         }
+        ColonCommand::DrawerRows(n) => {
+            wm.set_drawer_row_lines(n);
+            false
+        }
         ColonCommand::DrawerNav(op) => {
             wm.apply_drawer_nav(op);
             false

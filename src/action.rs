@@ -175,6 +175,8 @@ pub enum Action {
     DrawerNav(crate::wm::drawer::DrawerNavOp),
     /// `None` toggles the drawer style.
     DrawerStyle(Option<crate::wm::drawer::DrawerStyle>),
+    /// `:drawer rows 1|2` - lines per Navigator pane row (`drawer.row_lines`).
+    DrawerRows(u8),
     /// `:agents [list]` - per-pane agent state (Phase 50-03, FLT-01).
     Agents(crate::wm::agents_cmd::AgentsOp),
     FontZoomIn,
@@ -380,6 +382,7 @@ mod tests {
             Action::DrawerSize(_) => Some(":drawer size 32"),
             Action::DrawerNav(_) => Some(":drawer attention"),
             Action::DrawerStyle(_) => Some(":drawer style navigator"),
+            Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
@@ -592,6 +595,7 @@ mod tests {
             Action::DrawerNav(crate::wm::drawer::DrawerNavOp::ExpandAll),
             Action::DrawerNav(crate::wm::drawer::DrawerNavOp::CollapseAll),
             Action::DrawerStyle(Some(crate::wm::drawer::DrawerStyle::Navigator)),
+            Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::FontZoomIn,
             Action::FontZoomOut,

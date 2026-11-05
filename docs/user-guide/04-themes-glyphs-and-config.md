@@ -215,9 +215,10 @@ default_prompt_height = 3
 [drawer]
 style = "navigator"          # "classic" (default) or "navigator" (agent-aware workspace > session > pane tree)
 navigator_width_cols = 28    # Navigator drawer width, 16-100, default 28 (legacy key: herdr_width_cols)
+row_lines = 2                # Navigator pane rows: 2 (default, title + user@host path) or 1 (compact)
 ```
 
-`drawer.style` and `drawer.navigator_width_cols` are also settable at runtime with `:set drawer.style navigator`, `:drawer style navigator|classic|toggle` and `:drawer widen <+-n>`. With the default `classic` style the drawer is unchanged. The Navigator, its state dots, keys and mouse gestures are documented in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). Dock edge, pinning and push/float modes remain as described in [Chapter 3](03-window-manager-and-z-stack.md).
+`drawer.style`, `drawer.navigator_width_cols` and `drawer.row_lines` are also settable at runtime with `:set drawer.style navigator`, `:drawer style navigator|classic|toggle`, `:drawer widen <+-n>` and `:drawer rows 1|2`. With the default `classic` style the drawer is unchanged. The Navigator, its state dots, keys and mouse gestures are documented in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). Dock edge, pinning and push/float modes remain as described in [Chapter 3](03-window-manager-and-z-stack.md).
 
 ### Agent Recognition Profiles (`[agents.<name>]`)
 
