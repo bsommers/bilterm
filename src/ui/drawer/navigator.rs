@@ -1,4 +1,6 @@
-//! Navigator-style drawer renderer: one buffer line per workspace > session > pane row (`FLT-01`).
+//! Navigator-style drawer renderer: workspace > session > pane rows (`FLT-01`). Workspace and session
+//! rows take one buffer line; with `drawer.row_lines = 2` a pane row takes two (state/title line, then a
+//! shell-prompt style `user@host  path` line).
 //!
 //! Called from [`super::render_workspace_drawer`] via a single early-return branch, so the classic
 //! renderer is never touched when `drawer.style = classic`.
@@ -25,9 +27,57 @@ use crate::wm::drawer::{BRAILLE_SPINNER_FRAMES, CommsIndicator, NavigatorLevel, 
 use crate::wm::{DrawerLayoutMode, DrawerRow, DrawerRowKind, WindowManager, inset_window_frame};
 
 /// Computes `(header_rows, footer_rows, rows_per_item)` for the navigator layout: no header, an optional
-/// one-line footer and exactly one line per item.
-pub fn navigator_layout_metrics(inner_height: u16) -> (u16, u16, usize) {
-    (0, u16::from(inner_height >= 4), 1)
+/// one-line footer and, as `rows_per_item`, the tallest row (`row_lines` clamped to 1 or 2). With two
+/// lines only pane rows that have a detail line are tall; the rest keep one line.
+pub fn navigator_layout_metrics(inner_height: u16, row_lines: u8) -> (u16, u16, usize) {
+    (0, u16::from(inner_height >= 4), if row_lines == 1 { 1 } else { 2 })
+}
+
+/// One list row placed on screen: `height` lines starting at screen row `y`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PlacedRow {
+    /// Index into [`WindowManager::drawer_rows`].
+    row_index: usize,
+    y: u16,
+    height: u16,
+}
+
+/// Lines `row` occupies: 2 for a pane row carrying a detail line, else 1.
+fn row_height(row: &DrawerRow) -> u16 {
+    let tall = row
+        .navigator
+        .as_ref()
+        .is_some_and(|m| matches!(row.kind, DrawerRowKind::Pane(_)) && m.detail.is_some());
+    if tall { 2 } else { 1 }
+}
+
+/// Places rows from `scroll` downwards into `list_h` lines starting at `list_y`; a last row that only
+/// partly fits is clipped to the lines left.
+fn place_rows(heights: &[u16], scroll: usize, list_y: u16, list_h: u16) -> Vec<PlacedRow> {
+    let mut placed = Vec::new();
+    let mut used = 0u16;
+    for (row_index, &h) in heights.iter().enumerate().skip(scroll) {
+        if used >= list_h {
+            break;
+        }
+        let height = h.min(list_h - used);
+        placed.push(PlacedRow { row_index, y: list_y + used, height });
+        used += height;
+    }
+    placed
+}
+
+/// First visible row: the stateless drawer scroll, advanced until `selected` (with its real height)
+/// fits inside `list_h` lines.
+fn scroll_for(base: usize, selected: usize, heights: &[u16], list_h: usize) -> usize {
+    let mut scroll = base;
+    if selected < scroll {
+        return scroll;
+    }
+    while scroll < selected && heights[scroll..=selected].iter().map(|&h| usize::from(h)).sum::<usize>() > list_h {
+        scroll += 1;
+    }
+    scroll
 }
 
 /// Single-width BMP symbols used by the navigator tree (no emoji; RESEARCH anti-pattern).
@@ -159,11 +209,10 @@ struct NavigatorLayout {
     inner: Rect,
     rows: Vec<DrawerRow>,
     selected: usize,
-    scroll: usize,
-    cap: usize,
+    /// Visible rows in display order with their screen position; the single source of row geometry.
+    placed: Vec<PlacedRow>,
     list_y: u16,
     list_bottom: u16,
-    row_step: usize,
     /// Screen row of the footer button bar, `None` when the inner height is below 4.
     footer_y: Option<u16>,
 }
@@ -175,19 +224,20 @@ fn navigator_layout(wm: &WindowManager, drawer_rect: Rect) -> Option<NavigatorLa
     }
     let rows = wm.drawer_rows();
     let selected = wm.drawer().selected_index.min(rows.len().saturating_sub(1));
-    let (header_h, footer_h, row_step) = navigator_layout_metrics(inner.height);
+    let (header_h, footer_h, _) = navigator_layout_metrics(inner.height, wm.drawer_config().row_lines);
     let list_h = usize::from(inner.height.saturating_sub(header_h + footer_h)).max(1);
-    let cap = (list_h / row_step).max(1);
-    let scroll = wm.drawer().effective_scroll(selected, cap, rows.len());
+    let heights: Vec<u16> = rows.iter().map(row_height).collect();
+    let base = wm.drawer().effective_scroll(selected, list_h, rows.len());
+    let scroll = scroll_for(base, selected, &heights, list_h);
+    let list_y = inner.y + header_h;
+    let placed = place_rows(&heights, scroll, list_y, list_h as u16);
     Some(NavigatorLayout {
         inner,
         rows,
         selected,
-        scroll,
-        cap,
-        list_y: inner.y + header_h,
+        placed,
+        list_y,
         list_bottom: inner.y + inner.height.saturating_sub(footer_h),
-        row_step,
         footer_y: (footer_h >= 1).then(|| inner.y + inner.height - 1),
     })
 }
@@ -212,8 +262,8 @@ pub fn navigator_dot_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<Navi
         return Vec::new();
     };
     let mut cells = Vec::new();
-    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
-        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+    for &PlacedRow { row_index, y, .. } in &lay.placed {
+        let row = &lay.rows[row_index];
         if y >= lay.list_bottom {
             break;
         }
@@ -289,8 +339,8 @@ pub fn navigator_comms_cells(wm: &WindowManager, workspace_area: Rect) -> Vec<Na
     let tick = wm.drawer().spinner_tick();
     let width = usize::from(lay.inner.width);
     let mut cells = Vec::new();
-    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
-        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+    for &PlacedRow { row_index, y, .. } in &lay.placed {
+        let row = &lay.rows[row_index];
         if y >= lay.list_bottom {
             break;
         }
@@ -325,8 +375,8 @@ pub fn navigator_fold_marker_cells(wm: &WindowManager, workspace_area: Rect) -> 
         return Vec::new();
     };
     let mut cells = Vec::new();
-    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
-        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+    for &PlacedRow { row_index, y, .. } in &lay.placed {
+        let row = &lay.rows[row_index];
         if y >= lay.list_bottom {
             break;
         }
@@ -458,8 +508,8 @@ fn plus_cells_in(wm: &WindowManager, lay: &NavigatorLayout) -> Vec<NavigatorCell
     let tick = wm.drawer().spinner_tick();
     let width = usize::from(lay.inner.width);
     let mut cells = Vec::new();
-    for (vis_idx, (row_index, row)) in lay.rows.iter().enumerate().skip(lay.scroll).take(lay.cap).enumerate() {
-        let y = lay.list_y + (vis_idx * lay.row_step) as u16;
+    for &PlacedRow { row_index, y, .. } in &lay.placed {
+        let row = &lay.rows[row_index];
         if y >= lay.list_bottom {
             break;
         }
@@ -524,8 +574,8 @@ fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout) -> Option<Navigator
         return None;
     }
     let (ax, ay) = menu.anchor().unwrap_or_else(|| {
-        let vis = lay.selected.saturating_sub(lay.scroll).min(lay.cap.saturating_sub(1));
-        (inner.x + 1, lay.list_y + (vis * lay.row_step) as u16)
+        let at = lay.placed.iter().find(|p| p.row_index == lay.selected).or(lay.placed.last());
+        (inner.x + 1, at.map_or(lay.list_y, |p| p.y))
     });
     let x = ax.clamp(inner.x, inner.x + inner.width - w);
     let bottom = inner.y + inner.height;
@@ -564,12 +614,7 @@ pub fn navigator_row_at(wm: &WindowManager, workspace_area: Rect, col: u16, row:
     if col < lay.inner.x || col >= lay.inner.x + lay.inner.width || row < lay.list_y || row >= lay.list_bottom {
         return None;
     }
-    let vis_idx = usize::from(row - lay.list_y) / lay.row_step;
-    if vis_idx >= lay.cap {
-        return None;
-    }
-    let idx = lay.scroll + vis_idx;
-    (idx < lay.rows.len()).then_some(idx)
+    lay.placed.iter().find(|p| row >= p.y && row < p.y + p.height).map(|p| p.row_index)
 }
 
 /// Truncates `text` to at most `max_w` display columns, ending with `ellipsis` when cut.
@@ -664,7 +709,7 @@ pub fn render_navigator_drawer(
     let buttons = footer_buttons_in(&lay);
     let plus_cells = plus_cells_in(wm, &lay);
     let menu_layout = menu_layout_in(wm, &lay);
-    let NavigatorLayout { inner, rows, selected, scroll, cap, list_y, list_bottom, row_step, .. } = lay;
+    let NavigatorLayout { inner, rows, selected, placed, list_bottom, .. } = lay;
     let base_style = Style::default()
         .fg(palette.text_fg.unwrap_or(palette.inactive_border_fg))
         .bg(palette.window_frame_bg);
@@ -675,10 +720,10 @@ pub fn render_navigator_drawer(
     let hg = NavigatorGlyphs::for_pack(cfg.glyphs);
     let tokens = DesignTokens::from_palette(palette);
     let tick = drawer.spinner_tick();
-    let footer_h = navigator_layout_metrics(inner.height).1;
+    let footer_h = navigator_layout_metrics(inner.height, dcfg.row_lines).1;
 
-    for (vis_idx, (row_idx, row)) in rows.iter().enumerate().skip(scroll).take(cap).enumerate() {
-        let y = list_y + (vis_idx * row_step) as u16;
+    for &PlacedRow { row_index: row_idx, y, height } in &placed {
+        let row = &rows[row_idx];
         if y >= list_bottom {
             break;
         }
@@ -696,7 +741,7 @@ pub fn render_navigator_drawer(
             } else {
                 style.add_modifier(Modifier::REVERSED)
             };
-            fill_rect(buf, Rect::new(inner.x, y, inner.width, 1), style);
+            fill_rect(buf, Rect::new(inner.x, y, inner.width, height), style);
         }
         let marker = if row.is_focused_pane { hg.current } else { " " };
         let (left, rollup) = row_parts(row, &hg);
@@ -767,6 +812,16 @@ pub fn render_navigator_drawer(
         if let Some(c) = plus {
             write_clipped_line(buf, c.x, y, PLUS_COLS, "[+]", style);
         }
+        if height >= 2
+            && let Some(detail) = row.navigator.as_ref().and_then(|m| m.detail.as_deref())
+        {
+            // Second line: aligned under the `#id` label, prompt-like, never bold.
+            let depth = row.navigator.as_ref().map_or(0, |m| usize::from(m.depth));
+            let indent = 1 + 2 * depth + DOT_COLS;
+            let text = fit_width(detail, usize::from(inner.width).saturating_sub(indent + 1), hg.ellipsis);
+            let line = format!("{}{text}", " ".repeat(indent));
+            write_clipped_line(buf, inner.x, y + 1, inner.width, &line, style.remove_modifier(Modifier::BOLD));
+        }
     }
 
     for cell in navigator_dot_cells(wm, workspace_area) {
@@ -818,3 +873,7 @@ pub fn render_navigator_drawer(
         polish_glass_panel_rect(buf, drawer_rect, palette.window_frame_bg, palette, drawer.focused);
     }
 }
+
+#[cfg(test)]
+#[path = "navigator_tests.rs"]
+mod tests;

@@ -31,27 +31,32 @@ The default stays `classic`. Switch to the Navigator in any of three ways:
 [drawer]
 style = "navigator"          # "classic" (default) or "navigator"
 navigator_width_cols = 28    # 16-100, default 28
+row_lines = 2                # pane rows: 2 (default) = title + user@host path line, 1 = compact
 ```
 
 ```text
 :drawer style navigator      # switch now (also: classic, toggle)
 :set drawer.style navigator  # same through the generic config path
+:drawer rows 1               # compact single-line pane rows (2 restores the two-line layout)
 ```
 
 Then open the drawer with `F7`, `Ctrl+X d`, or `:drawer`. `:drawer focus` gives it the keyboard. The width is `navigator_width_cols`; change it with `{` / `}`, `:drawer widen <+-n>`, or by dragging the drawer edge. See [Chapter 4](04-themes-glyphs-and-config.md#7-declarative-configuration-configbilterm-configtoml-cfg-01) for the config tables and `[agents.<name>]` profiles.
 
 ## Reading the sidebar
 
-The tree has three levels, one line per item:
+The tree has three levels. Workspace and session rows take one line; with the default `row_lines = 2` each pane row takes two (set `row_lines = 1` or run `:drawer rows 1` for one line per item):
 
 ```text
 ▾ work                 ⠋2 ▲1 ○3      workspace row, with state counts
   ▾ build              ⠋2            session row
-    ⠋ #3 cargo watch   ⇄you          pane row: dot, #id, title, comms glyph
+    ⠋ #3 cargo watch   ⇄you          pane row, line 1: dot, #id, title, comms glyph
+      bill@dev  ~/src/app            pane row, line 2: user@host  path
   › ▲ #5 codex         ⋔3
-    ○ #6 shell
+      bill@dev  ~/src/api
 ▸ notes                ○1            folded workspace
 ```
+
+- **Second line**: a shell-prompt style `user@host  path`, indented under the `#id`. A local pane shows your login, the short host name and the pane's live working directory (`~` for your home). A pane attached to a remote host (`:ssh`, `:ssh-tmux`) shows that destination and only the directory its shell reported over `OSC 7`. A pane that exposes neither shows no second line. The whole two-line row is one click target and is highlighted as a unit; the dot, `[+]`, fold marker and comms glyph stay on line 1. Classic drawer style ignores `row_lines`.
 
 - **Fold markers**: `▾` open, `▸` folded (ASCII pack `-` / `+`). Workspaces are the roots of the session tree; saved (not running) sessions appear with a pane rollup.
 - **Current pane**: marked with `›` (ASCII `>`).
@@ -208,6 +213,7 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:drawer comms` | `o`, `Enter` on glyph | click glyph | Open the traffic window on the selected row's conversation |
 | `:drawer comms-focus on\|off` | `Right` / `Left`, `Esc` | | Focus / release the comms glyph |
 | `:drawer style [classic\|navigator\|toggle]` | | | Switch drawer style |
+| `:drawer rows 1\|2` | | | Lines per pane row in Navigator style (`drawer.row_lines`) |
 
 `:drawer size`, `toggle`, `focus`, the dock edges and the pinning modes are unchanged; see [Chapter 3](03-window-manager-and-z-stack.md).
 

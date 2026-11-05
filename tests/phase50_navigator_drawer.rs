@@ -260,6 +260,7 @@ fn tree_one_line_per_pane_in_liquid_glass() {
     with_temp_xdg(|| {
         let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":liquid on");
+        run_colon(&mut wm, ":drawer rows 1");
         open_drawer(&mut wm);
         let lines = buffer_lines(&render(&wm, area));
         let a = lines.iter().position(|l| l.contains("#1 alpha")).expect("alpha line");
@@ -320,6 +321,7 @@ fn tree_top_edge_renders_vertical_list() {
     with_temp_xdg(|| {
         let (mut wm, area) = navigator_wm(100, 30);
         run_colon(&mut wm, ":drawer top");
+        run_colon(&mut wm, ":drawer rows 1");
         open_drawer(&mut wm);
         let r = wm.drawer_rect(area).unwrap();
         assert_eq!(r.width, 100);

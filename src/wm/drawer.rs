@@ -19,6 +19,7 @@ use crate::wm::{WindowManager, WorkspaceLayoutMode};
 pub mod navigator;
 pub mod nav;
 pub mod menu;
+pub(crate) mod navigator_detail;
 pub use navigator::{CommsIndicator, DrawerStyle, NavigatorLevel, NavigatorRowMeta};
 pub use nav::DrawerNavOp;
 pub use menu::{NavigatorMenu, NavigatorMenuEntry};
@@ -105,6 +106,10 @@ pub struct DrawerConfig {
     /// Legacy key `herdr_width_cols` is still accepted when loading configs.
     #[serde(alias = "herdr_width_cols")]
     pub navigator_width_cols: u16,
+    /// Navigator style only: `2` (default) draws pane rows over two lines (state/title, then a
+    /// shell-prompt style `user@host  path`); `1` restores the single-line layout. Other values are
+    /// treated as `2`; read it through [`DrawerConfig::navigator_row_lines`].
+    pub row_lines: u8,
 }
 
 impl Default for DrawerConfig {
@@ -117,6 +122,7 @@ impl Default for DrawerConfig {
             height_rows: 6,
             style: DrawerStyle::Classic,
             navigator_width_cols: 28,
+            row_lines: 2,
         }
     }
 }
