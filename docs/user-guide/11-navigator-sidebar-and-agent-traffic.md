@@ -105,9 +105,9 @@ Table `NAVIGATOR_DRAWER_BINDINGS` in `src/input/keymap.rs`. Keys it does not cla
 
 While the comms glyph has focus: `Enter` opens the traffic window on it, `Left` or `Esc` releases it.
 
-### Agent traffic window (window captures the keyboard)
+### Agent traffic window (while the window has the keyboard)
 
-Table `AGENTS_WINDOW_BINDINGS`, by scope. The leader key is never consumed. Keys the table does not claim are swallowed while the window has the keyboard.
+The window is not modal. It takes the keyboard when it opens and whenever you click inside it; a click on a pane, focusing another pane (leader keys, `Alt+Tab`) or `:agents blur` gives the keyboard back while the window stays open. Table `AGENTS_WINDOW_BINDINGS`, by scope. The leader key is never consumed. Keys the table does not claim are swallowed only while the window has the keyboard.
 
 | Scope | Keys | Operation |
 | :--- | :--- | :--- |
@@ -171,10 +171,11 @@ Table `AGENTS_WINDOW_BINDINGS`, by scope. The leader key is never consumed. Keys
 | Header buttons, chips, follow marker | Agent / pair / keyword filters, clear, follow; a chip's `×` removes that filter |
 | `[copy]` | Copy the selected line |
 | `[send]` | Press the (disabled) compose line; nothing is sent |
-| Click outside a pinned window | Release the keyboard to the panes |
+| Click outside the window | Release the keyboard; the click goes on to the pane under it |
+| Click inside an unfocused window | Take the keyboard back |
 | `Ctrl` + wheel over the window | Scale this window (GUI surface only) |
 
-Mouse events over the window never reach the drawer or panes below it. The `:mcp` console is drawn above the window, but the window sees mouse events first, so an MCP panel overlapping the window receives no clicks in the overlap.
+Mouse events over the window never reach the drawer or panes below it; events outside the window pass through to the panes as usual. The `:mcp` console is drawn above the window, but the window sees mouse events first, so an MCP panel overlapping the window receives no clicks in the overlap.
 
 ## Commands
 
@@ -216,7 +217,8 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:agents list` | | | Agent state per pane (data over RPC, see [API](../API.md)) |
 | `:agents zoom [pane-id]` | `<L> a` | footer `@`, comms glyph | Open the traffic window (optionally on a pane) |
 | `:agents close` | | title `[X]` | Close the window |
-| `:agents dismiss` | `Esc` | click outside when pinned | Close, or release the keyboard when pinned |
+| `:agents dismiss` | `Esc` | | Close, or release the keyboard when pinned |
+| `:agents blur` | | click a pane | Release the keyboard without closing (the window is not modal) |
 | `:agents select <left\|right\|up\|down\|node-key>` | arrows | click node | Move the node cursor, or select a node such as `pane:2` |
 | `:agents edge <next\|prev\|a b>` | `Tab` / `Shift+Tab` | click edge | Cycle the node's edges, or select the edge between two nodes |
 | `:agents enter` | `Enter` | second click on a node | Focus the selected pane and leave the window |
@@ -238,6 +240,9 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:agents copy` | `y` | `[copy]` | Copy the selected line |
 | `:agents scroll <±n\|top>` | `PageUp`, `PageDown`, `Home` | wheel | Scroll the history |
 | `:agents follow [on\|off]` | `f`, `End` | follow marker | Follow new lines |
+| `:agents fade [secs]` | | | Seconds (1..3600, default 60) for an edge to fade to its floor; no argument shows it. Same as `agents_window.edge_fade_secs` |
+| `:agents topology` | | | Which pairs communicated this session (data over RPC / MCP) |
+| `:agents topology export <name>` | | | Write the topology to `<name>.json` in the private runtime directory (local only) |
 | `:agents filter agent [label]` | `a` | header button | Filter to a node (no label: the selected line's sender) |
 | `:agents filter pair [a b]` | `p` | `Enter`/click on an edge | Filter to a pair (no nodes: the selected line's pair) |
 | `:agents filter text <keyword>` | `/` then type | header `/` button | Case-insensitive keyword filter (capped at 64 characters) |
@@ -261,9 +266,11 @@ Click the glyph, press `o`, press `Right` then `Enter`, or run `:drawer comms` t
 
 ## Agent traffic window
 
-Open it with `<L> a`, `:agents zoom`, the footer `@` button, or a comms glyph. It floats above the drawer and below the `:mcp` console, default 80% x 70% of the workspace (minimum 40x12, nothing is drawn below 30x10).
+Open it with `<L> a`, `:agents zoom`, the footer `@` button, or a comms glyph. It is an ordinary, non-modal window: it floats above the panes and drawer and below the `:mcp` console, other panes and keys keep working while it is open, and it only receives keys while it has focus (see above), default 80% x 70% of the workspace (minimum 40x12, nothing is drawn below 30x10).
 
-**Graph (left).** One node per live pane plus the endpoints seen on the bus (`you`, `api`, `mcp`, `session:<name>`); labels are `you`, `#<id>`, `@<session>`. Edges are drawn as curves between nodes that exchanged traffic and are highlighted while traffic flows; nodes are coloured by agent state. The layout is deterministic and stable: a topology that has not changed does not wobble between frames, and nodes you pin (drag, nudge, `:agents node-pin`) stay where you put them. Above 64 nodes the layout falls back to a grid and keeps live panes.
+**Graph (left).** One node per live pane plus the endpoints seen on the bus (`you`, `api`, `mcp`, `session:<name>`); labels are `you`, `#<id>`, `@<session>`. Edges are drawn as curves between nodes that exchanged traffic; nodes are coloured by agent state. An edge traces the real conversation: **the more often and the more recently a pair talked, the brighter its edge.** Each event adds a weight that falls linearly from 1 (now) to 0 (one fade window ago), and the brightness is that sum `s` mapped through `s / (s + 1.5)`, so a chatty pair glows and a one-off message is dim. After the fade window (`:agents fade`, default 60 s) the edge decays to a fixed floor but **never disappears once the pair has spoken**. The terminal (braille) and GUI (vector) renderers use the same value; the selected edge keeps the accent colour and edges that carried one of the newest events also get flow particles in the GUI. The layout is deterministic and stable: a topology that has not changed does not wobble between frames, and nodes you pin (drag, nudge, `:agents node-pin`) stay where you put them. Above 64 nodes the layout falls back to a grid and keeps live panes.
+
+**Communication topology.** Independent of the 512-event conversation history, Bilterm keeps a bounded record (at most 256 pairs, least recently active dropped first) of every pair that communicated in this session: event count, first and last event (bus sequence number and age). `:agents topology` reports it (also over RPC `wm.command`, MCP `bilterm_colon_command` and `bilterm ctl`, as data, read-only) and `:agents topology export <name>` writes it as JSON to `<private runtime dir>/agent-topology/<name>.json` (directory `0700`, file `0600`; `<name>` is letters, digits, `-`, `_`, `.`, at most 64, not starting with a dot). Export is refused for API callers. The record holds node labels, counts and times only, never message content, and it is in memory only: it ends with the session unless you export it.
 
 **Node and edge cursor.** Arrow keys move the cursor to the nearest node in that direction; `Tab` / `Shift+Tab` step through the selected node's edges. `Enter` on a pane node focuses it. **Grab mode** (`g`): arrows nudge the selected node one terminal cell and pin it; `g`, `Enter` or `Esc` drops it. `u` or right-click unpins.
 
@@ -271,7 +278,7 @@ Open it with `<L> a`, `:agents zoom`, the footer `@` button, or a comms glyph. I
 
 **Compose line.** `send as me` is shown but **disabled**: nothing typed there is stored or sent, and no pane or bus event is produced. It becomes available only with the Phase 51 permission gate.
 
-**Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (`Esc` unless pinned), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`.
+**Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (`Esc` unless pinned), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`. Pinned or not, the window never blocks the panes: click one (or run `:agents blur`) and keys go to it again.
 
 ## GUI rendering
 

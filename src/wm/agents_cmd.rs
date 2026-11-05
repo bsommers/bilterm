@@ -70,10 +70,24 @@ pub enum AgentsOp {
     /// Keyword entry (`/` then typing): text-field editing; the committed form is
     /// `:agents filter text <kw>`.
     KeywordEdit(KeywordEdit),
+    /// `:agents fade [secs]` - set (or with no argument report) how many seconds the graph edges
+    /// take to fade from recent-traffic brightness to their floor (`agents_window.edge_fade_secs`).
+    Fade(Option<u32>),
+    /// `:agents topology [export <name>]` - the session's communication topology.
+    Topology(TopologyOp),
     /// Enter on the compose line or the `[send]` badge. Carries no text and has no colon form:
     /// Phase 50 has no outward write path (D-09), so the executor only reports that agent
     /// messaging is not enabled.
     ComposeSubmit,
+}
+
+/// One `:agents topology` operation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TopologyOp {
+    /// Report the recorded pairs (counts, first / last event) as data over RPC / MCP.
+    Show,
+    /// Write the topology as JSON to `<private runtime dir>/agent-topology/<name>.json` (local only).
+    Export(String),
 }
 
 /// Which conversation filter a chip removes.

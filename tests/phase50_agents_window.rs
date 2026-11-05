@@ -512,6 +512,10 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
         AgentsOp::Close => ":agents close".to_string(),
         AgentsOp::Dismiss => ":agents dismiss".to_string(),
         AgentsOp::Blur => ":agents blur".to_string(),
+        AgentsOp::Fade(None) => ":agents fade".to_string(),
+        AgentsOp::Fade(Some(n)) => format!(":agents fade {n}"),
+        AgentsOp::Topology(bilterm::wm::agents_cmd::TopologyOp::Show) => ":agents topology".to_string(),
+        AgentsOp::Topology(bilterm::wm::agents_cmd::TopologyOp::Export(n)) => format!(":agents topology export {n}"),
         AgentsOp::Select(dir) => format!(
             ":agents select {}",
             match dir {
@@ -594,6 +598,10 @@ fn sample_ops() -> Vec<AgentsOp> {
         AgentsOp::Close,
         AgentsOp::Dismiss,
         AgentsOp::Blur,
+        AgentsOp::Fade(None),
+        AgentsOp::Fade(Some(90)),
+        AgentsOp::Topology(bilterm::wm::agents_cmd::TopologyOp::Show),
+        AgentsOp::Topology(bilterm::wm::agents_cmd::TopologyOp::Export("run1".to_string())),
         AgentsOp::Select(GraphDir::Left),
         AgentsOp::Select(GraphDir::Right),
         AgentsOp::Select(GraphDir::Up),

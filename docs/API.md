@@ -908,6 +908,20 @@ Bilterm exposes generic dotted-path access to all configuration fields in `Bilte
 
 `:state` is unchanged by Phase 50. **Phase 50 does not publish traffic events on `/events` or `events.poll`**: the traffic bus is in-memory only, previews are sanitised, capped at 160 characters and replaced by `[redacted]` for password prompts, and nothing is persisted. See [ADR-008](architecture/adr/ADR-008-agent-traffic-bus.md); Phase 51 defines the external `agent.*` events. The Navigator and the Agent Traffic window are described in the [user guide, chapter 11](user-guide/11-navigator-sidebar-and-agent-traffic.md).
 
+### Communication Topology: `:agents topology` (Phase 50)
+
+`:agents topology` reports which pairs of endpoints communicated in this session. Like `:agents list` it is read-only and works through `wm.command`, `bilterm_colon_command` and `bilterm ctl`. It is independent of the 512-event traffic ring: a pair stays listed after its events were evicted. The data holds sanitised labels, counts and times only, never message content.
+
+```json
+{"version": 1, "pair_count": 2, "dropped_pairs": 0, "latest_seq": 9, "fade_secs": 60,
+ "pairs": [
+   {"a": "#1", "b": "#2", "a_key": "pane:1", "b_key": "pane:2", "count": 6,
+    "first_seq": 1, "last_seq": 9, "first_ago_ms": 52000, "last_ago_ms": 800, "heat_permille": 610}
+ ]}
+```
+
+Pairs are ordered by descending `count`; `*_ago_ms` is relative to the query; `heat_permille` is the current edge heat (0 once the fade window passed). At most 256 pairs are kept (`dropped_pairs` counts the least recently active ones that were dropped). `:agents topology export <name>` writes the same JSON to a private file and is refused over the API. `:agents fade [secs]` / `[agents_window] edge_fade_secs` set the fade window.
+
 ### API Security Switch: `[api] allow_config_write`
 
 All API-originated operations (invoked via RPC `wm.command` or MCP `bilterm_colon_command`) are subject to strict policy enforcement:

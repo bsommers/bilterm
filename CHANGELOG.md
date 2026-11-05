@@ -5,6 +5,15 @@ All notable changes to **Bilterm** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Agent traffic window is no longer modal.** Keys go to the window only while it has focus; a click on a pane (or `:agents blur`, or any pane focus change) releases the keyboard and the click reaches the pane; a click inside the window takes focus back. Modals (Exit Guard, Help, Palette) still sit above it.
+
+### Added
+- **Graph edges trace real communication.** Edge brightness is a pure function of how often and how recently a pair talked (terminal braille and GUI vector alike). After `agents_window.edge_fade_secs` (default 60, also `:agents fade [secs]`) it decays to a floor and never disappears once the pair has spoken.
+- **Communication topology.** A bounded, session-long record of which pairs communicated (count, first/last event) that survives the 512-event ring: `:agents topology` (data over RPC/MCP) and `:agents topology export <name>` (private `0600` file).
+
 ## [v2.8.0] - 2026-11-02
 
 ### Added
