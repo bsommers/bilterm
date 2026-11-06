@@ -169,8 +169,46 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Follow-ups file: .planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md. Phase 55 daemon still unplanned. User GUI re-test pending. User ssh-tmux repro recorded in .planning/debug/ssh-tmux-early-quit.md.
 - Standing: never commit to main; no PR/merge/remote-branch deletion without go-ahead; explicit model on every subagent (sonnet/haiku); commits end with Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>; never pkill -f; legacy output byte-identical.
 
-## Checkpoint 2026-11-06 (Phase 51.1 complete: 16/16 plans)
-- Branch `feat/navigator-rows-and-launch` in `.claude/worktrees/integ`. All 16 plans of Phase 51.1 (`51.1-01`..`51.1-16`) executed, merged, and verified.
-- Gates: `scripts/verify.sh` = `PASS 105/105 63s` (16 `phase51_1_*` suites), `scripts/check_classic_goldens.sh` = `GOLDENS OK 11`, `scripts/check_phase51_1_doc_coverage.sh` = `DOCS OK 59`, `scripts/check_phase50_doc_coverage.sh` = `DOCS OK 91`, `Cargo.toml`/`Cargo.lock` unchanged.
-- Bookkeeping: `ROADMAP.md` (`16/16 plans complete`), `REQUIREMENTS.md` (`PST-01..PST-04` Complete), `51.1-16-SUMMARY.md` written with 6-step manual UAT script for `bill@bigmac.local`.
-- Next: manual UAT on `bill@bigmac.local`; ask before PR/merge to `main`; Phase 52 (`Agent-to-Agent Messaging`) or Phase 55 (`Daemon Supervisor`) next on roadmap.
+## Checkpoint 2026-11-06 (Phase 51.1 complete: 16/16 plans; Lazenby Computer font inquiry)
+
+**Status:** STABLE — ready for fresh session (`agy` New Chat or `/clear` in Claude Code)
+
+### 1. Goals & User Decisions (Verbatim)
+- **Phase 51.1 Goal**: "continue through all remaining waves of Phase 51.1" -> **DONE** (`16/16` plans complete on `feat/navigator-rows-and-launch` in `.claude/worktrees/integ`).
+- **Next Topic Discussed**: "- can we add a facility to include this and similar fonts? will they work? https://www.1001fonts.com/lazenby-computer-font.html"
+  - **Findings recorded for next session**:
+    - *Lazenby Computer* (`LazenbyCompSmooth.ttf`, `LazenbyCompLiquid.ttf`, by Andrew Young / Disaster Fonts) is licensed under **CC BY-SA 4.0** (free for personal & commercial redistribution with attribution).
+    - Bilterm's GUI renderer (`src/ui/gui_font/geometric.rs`, `src/ui/gui_font/{linux_x11,win32_gdi,macos_ct}.rs`) already draws box-drawing, block elements, Braille, Powerline, and UI icons geometrically and falls back to `font_fallback` for missing glyphs, so retro fonts with ~345 glyphs never produce tofu (`▯`).
+    - Bilterm (`src/pane/typography.rs`) already scans `~/.config/bilterm/fonts/*.{ttf,otf,ttc}`, supports `:font add <path.ttf>`, and `font_files = [...]` in `config.toml`.
+    - **Proposed enhancements when user confirms**:
+      1. Bundle `LazenbyCompSmooth.ttf` and `LazenbyCompLiquid.ttf` in `assets/fonts/` (`src/ui/gui_font/bundled.rs`, installed on demand into private runtime dir when selected; Legacy defaults untouched) and add `FontFamilyPreset::LazenbyComputer` (`:font lazenby` / `:font lazenby-liquid`).
+      2. Horizontally center proportional display glyphs within `cell_width_px` in `linux_x11.rs` / `win32_gdi.rs` / `macos_ct.rs` (`(cell_width_px - glyph_advance_px) / 2`) so proportional sci-fi/retro fonts align like true monospaced fonts in the cell grid.
+      3. Add `:font import <path-or-zip>` to extract/copy `.ttf`/`.otf` files into `~/.config/bilterm/fonts/` via `secure_fs` and register them live.
+- **Standing Rules (Verbatim)**:
+  - "I want to be able to select between the Legacy/retro looks and Obsidian, even if Obsidian is the default. we are taking NOTHING away from the old looks. just adding new looks and capabilities. EXTENDING what we have."
+  - Never commit to `main`.
+  - Commits end with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+
+### 2. Baseline Verification Results (on `.claude/worktrees/integ`)
+- `scripts/verify.sh`: `PASS 105/105 63s` (`target/verify/STATUS` = `PASS`; includes all 16 `t:phase51_1_*` suites)
+- `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
+- `bash scripts/check_phase51_1_doc_coverage.sh`: `DOCS OK 59`
+- `bash scripts/check_phase50_doc_coverage.sh`: `DOCS OK 91`
+- `git diff --exit-code 1b90ab5 -- Cargo.toml Cargo.lock`: `0` (clean)
+
+### 3. Dead Ends & Cross-Plan Lessons Learned
+- `src/wm/registry/remote.rs`: `tests/phase50_1_e2e.rs` attaches a local `"boot"`/`"work"` `TmuxControlSubprocess::from_channels` alongside an unattached `"me@box/main"` `:ssh-tmux` pane on the same `WindowManager`. `control_matches_link(wm)` checks that `active_session_name` (or `ctrl.session_name` before `%session-changed`) matches `tmux_link.target.session`, preventing an unrelated local control stream from marking an unattached `:ssh-tmux` pane as live while keeping `link_down_makes_rows_metadata_only_again` (`tests/phase51_1_labels.rs`) accurate when `tmux_control` drops.
+- Worktree paths for tests: `tests/phase50_1_e2e.rs` expects the working directory path to contain `"work"` (e.g., `.claude/worktrees/<name>`). Always place temporary worktrees under `.claude/worktrees/`.
+
+### 4. Working-Tree & Process State
+- **Active integration worktree**: `/home/bill/src/ai/bilterm/.claude/worktrees/integ` on branch `feat/navigator-rows-and-launch` (clean working tree, ahead of `origin/feat/navigator-rows-and-launch` by the Phase 51.1 commits `a536c68`..HEAD).
+- **Primary checkout**: `/home/bill/src/ai/bilterm` on `main` @ `80ec434` (has uncommitted `.planning/CHECKPOINT.md` and untracked `docs/mcp-usecases/`; do NOT stage or commit on `main`).
+- **Temporary Wave 2–4 worktrees**: All removed (`bilterm-511-02..15` and `agent-a04deb..acae34` cleaned up).
+- **Background tasks / subagents**: `0` running (`manage_subagents` and `manage_task` verified empty; `/tmp/bt-target-integ` deleted).
+
+### 5. Authorizations (Re-confirm Outward-Facing Actions in New Session)
+- Pre-reset session approvals do NOT carry over automatically for outward-facing actions: ask before `git push`, opening/merging a PR to `main`, deleting remote branches, or overwriting `~/.local/bin/bilterm`.
+
+### 6. Exact Next Step / Resume Prompt
+Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
+> Read `/home/bill/src/ai/bilterm/.claude/worktrees/integ/.planning/CHECKPOINT.md` (section `Checkpoint 2026-11-06`). Verify branch and status in `.claude/worktrees/integ`, then ask whether to (A) implement the Lazenby Computer / custom retro font facility, (B) push `feat/navigator-rows-and-launch` / build `~/.local/bin/bilterm` for the 6-step Mac UAT in `51.1-16-SUMMARY.md`, or (C) start Phase 52 / Phase 55.
