@@ -25,15 +25,45 @@ pub fn transport_of(wm: &WindowManager, id: PaneId) -> TransportInfo {
         match target.split_once('/') {
             Some((host, session)) => {
                 info.transport = Transport::SshTmux;
-                info.host = Some(clean(host));
-                info.tmux_session = Some(clean(session));
-                // `connect_ssh_tmux` starts no tmux (gap G2): the row is a label only.
-                info.metadata_only = true;
+                let linked = wm.pane_is_linked(id) && wm.tmux_control.is_some() && !wm.tmux_bridge.exited;
+                info.metadata_only = !linked;
+                info.host = wm
+                    .tmux_link
+                    .target
+                    .as_ref()
+                    .map(|t| clean(t.dest()))
+                    .or_else(|| Some(clean(host)));
+                info.tmux_session = wm
+                    .tmux_link
+                    .target
+                    .as_ref()
+                    .map(|t| clean(&t.session))
+                    .or_else(|| Some(clean(session)));
+                if linked {
+                    info.tmux_pane = wm.tmux_bridge.bilterm_to_tmux.get(&id).copied();
+                }
             }
             None => {
                 info.transport = Transport::Ssh;
                 info.host = Some(clean(target));
             }
+        }
+        info.tags = fleet_tags(wm, id);
+        info.cwd_trusted = osc7;
+        return info;
+    }
+
+    if let Some(&tmux_pane) = wm.tmux_bridge.bilterm_to_tmux.get(&id)
+        && let Some(ref link_target) = wm.tmux_link.target
+        && (wm.tmux_link.primary_pane == Some(id) || id != 1 || pane.title().contains("TMUX"))
+    {
+        let linked = wm.pane_is_linked(id) && wm.tmux_control.is_some() && !wm.tmux_bridge.exited;
+        info.transport = Transport::SshTmux;
+        info.metadata_only = !linked;
+        info.host = Some(clean(link_target.dest()));
+        info.tmux_session = Some(clean(&link_target.session));
+        if linked {
+            info.tmux_pane = Some(tmux_pane);
         }
         info.tags = fleet_tags(wm, id);
         info.cwd_trusted = osc7;
