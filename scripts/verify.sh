@@ -37,6 +37,7 @@ group_stages() {
     g:api)      printf '%s\n' t:mcp_interactive_navigation t:v110_v120_v130_automation_api_mcp_playbooks t:v020_features t:v030_features t:v060_v070_v100_release_features t:v2_phases_30_to_34_integration t:session_lessons_and_regression_suite ;;
     g:security) printf '%s\n' t:phase19_security_cli ;;
     g:perf)     printf '%s\n' t:full_suite_battle_and_perf t:terminal_torture_and_stress ;;
+    g:find)     printf '%s\n' t:phase50_1_find_seam t:phase50_1_redact t:phase50_1_registry t:phase50_1_rank t:phase50_1_remote t:phase50_1_find_ui t:phase50_1_find_input t:phase50_1_surfaces t:phase50_1_capture t:phase50_1_saved t:phase50_1_find_ops t:phase50_1_api t:phase50_1_parity t:phase50_1_e2e ;;
     *)          return 1 ;;
   esac
 }
@@ -45,6 +46,7 @@ list_groups() {
   local g; for g in g:lint g:ui g:vt g:wm g:api g:security g:perf; do
     printf '%s\t%s\n' "$g" "$(group_stages "$g" | paste -sd' ' -)"
   done
+  printf '%s\t%s\n' g:find "$(group_stages g:find | paste -sd' ' -)"
 }
 
 expand_stages() {
