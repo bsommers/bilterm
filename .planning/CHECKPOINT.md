@@ -222,25 +222,37 @@ Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 
 ---
 
-## Checkpoint 2026-11-06 (Phase 51.2 complete: 4/4 plans; v2.9.0 release)
+## Checkpoint 2026-11-06 (v2.9.0 Full Multi-Platform Release Published; Starting Phase 52)
 
-**Status:** STABLE — ready for release testing or Phase 52
+**Status:** IN PROGRESS — needs resume (starting Phase 52: Agent-to-Agent Messaging & Coordination `AGT-01..03`)
 
 ### 1. Goals & Delivered Scope
+- **Full `v2.9.0` Release Complete (`main` @ `c29d56e`, tag `v2.9.0`)**:
+  - Fast-forwarded `main` (`80ec434..c29d56e`) and pushed `main` + annotated tag `v2.9.0` to `origin`.
+  - Built, verified (`file`, `--version`, `ldd`/`otool -L`, `windows-smoke-test.ps1`), and uploaded all 14 archives + merged `SHA256SUMS` across all 7 target triples on [GitHub Release `v2.9.0`](https://github.com/bsommers/bilterm/releases/tag/v2.9.0):
+    - `x86_64-unknown-linux-gnu` (`GLIBC_2.2.5`), `x86_64-unknown-linux-musl` (static), `aarch64-unknown-linux-musl` (static)
+    - `aarch64-apple-darwin` (`minos 11.0`), `x86_64-apple-darwin` (`minos 10.12`)
+    - `x86_64-pc-windows-msvc` (smoke test PASS), `aarch64-pc-windows-msvc` (smoke test PASS)
+  - Installed `bilterm 2.9.0` to `~/.local/bin/bilterm` on both Linux workstation and `bill@bigmac.local`.
 - **Phase 51.2 Goal (`WIN-01..WIN-03`)**: First-Class Utility Windows & Script Studio (`4/4` plans complete):
-  - **Window 1 (`WIN-01`)**: `FONTS` Window (`src/wm/fonts_window.rs`, `src/ui/fonts_window_ui.rs`, `src/input/fonts_window.rs`, `src/input/fonts_window_keys.rs`). Opened by `:fonts`, `:font list`, `:font presets`, `:font scan`, and menubar `View -> Fonts Window`. Supports unpinned one-shot vs pinned real-time live typography preview (`*` or `[•]`), point-size `+`/`-`, scale `[`/`]`, `a` apply-all, and `s` directory rescan.
-  - **Window 2 (`WIN-02`)**: Pinnable `COMMAND PALETTE` Window (`src/wm/command_window.rs`, `src/ui/command_window_ui.rs`, `src/input/command_window.rs`, `src/input/command_window_keys.rs`). Opened by `:commands`, `:palette`, or promoting `Modal::Palette` (`Ctrl+P`) via `Alt+P` / `*`. Supports unpinned one-shot vs persistent workbench mode with execution history logging in the bottom pane.
-  - **Window 3 (`WIN-03`)**: `SCRIPT STUDIO` Window (`src/wm/script_studio.rs`, `src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`, `src/input/script_studio_keys.rs`). Opened by `:script` / `:studio`. Multi-line editor, single-step debugger with instruction pointer `▶` (`F10`), runner (`F5`), reset, live action recorder (`Ctrl+R`), and secure persistence (`~/.config/bilterm/scripts/*.bt` via `secure_fs` `0600`/`0700`).
-  - **Mutual Focus Exclusivity**: Opening any utility window or focusing terminal panes automatically blurs other utility windows and releases keyboard ownership cleanly.
-  - **Surface Uniformity & Parity**: Wired into tab completion, `PALETTE_CATALOG`, `PALETTE_EXCLUSIONS`, and Borland top menubar (`View` menu).
-- **v2.9.0 Release Bump**:
-  - `Cargo.toml` and `Cargo.lock` bumped to version `2.9.0`.
-  - `CHANGELOG.md` updated with `## [2.9.0] - 2026-11-06` documenting Phase 51.2 utility windows, retro font additions, and Phase 51.1 persistent SSH + tmux links.
+  - **Window 1 (`WIN-01`)**: `FONTS` Window (`src/wm/fonts_window.rs`, `src/ui/fonts_window_ui.rs`, `src/input/fonts_window.rs`, `src/input/fonts_window_keys.rs`). Opened by `:fonts`, `:font list`, `:font presets`, `:font scan`, and menubar `View -> Fonts Window`.
+  - **Window 2 (`WIN-02`)**: Pinnable `COMMAND PALETTE` Window (`src/wm/command_window.rs`, `src/ui/command_window_ui.rs`, `src/input/command_window.rs`, `src/input/command_window_keys.rs`). Opened by `:commands`, `:palette`, or promoting `Modal::Palette` (`Ctrl+P`) via `Alt+P` / `*`.
+  - **Window 3 (`WIN-03`)**: `SCRIPT STUDIO` Window (`src/wm/script_studio.rs`, `src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`, `src/input/script_studio_keys.rs`). Opened by `:script` / `:studio`.
+- **Next Active Goal — Phase 52: Agent-to-Agent Messaging & Coordination (`AGT-01..03`)**:
+  - `AGT-01`: Stable agent names (`:agent name <n>`, env `BILTERM_AGENT`); per-recipient ordered bounded mailboxes; `agent.send`, `agent.inbox`, `agent.ack`, `agent.list` RPC methods and MCP tools.
+  - `AGT-02`: Delivery modes (`mailbox` via `bilterm://agent/<name>/inbox` MCP resource, `nudge` one-line notification only when target pane is idle/waiting and never in `!ECHO` lock or `ALT_SCREEN`, and `file` under `0600` private runtime dir) + `wait` with timeout.
+  - `AGT-03`: `agent.broadcast` to a subtree, `/events` streaming (`agent.message`, `agent.state`), unread mail badges in Navigator sidebar & `AGENTS` window, `:agent` command family (`list`, `send`, `inbox`, `ack`, `broadcast`, `name`), and safety guards (`[api] allow_agent_messaging`, per-sender rate limits, max queue depth, hop-count loop guard).
 
-### 2. Verification Gates
-- `scripts/verify.sh --only clippy unit t:phase51_2_fonts_window t:phase51_2_command_window t:phase51_2_script_studio t:pane_typography_coverage t:phase51_palette_parity`: `PASS 108/108 85s`
+### 2. Verification Gates (Baseline at `v2.9.0`)
+- `scripts/verify.sh`: `PASS 108/108 85s`
 - `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
-- Temporary worktrees cleaned up: `worktree-512-fonts`, `worktree-512-cmd`, and `worktree-512-script` removed.
+- All 7 background subagents from Phase 51.2 / `v2.9.0` release terminated cleanly (`0` running).
 
-### 3. Exact Next Step
-- Push `feat/navigator-rows-and-launch` or proceed to Phase 52 (Agent-to-Agent Messaging & Coordination) / Phase 55 (Daemon Supervisor).
+### 3. Working-Tree & Branch State
+- `/home/bill/src/ai/bilterm` (`main` @ `v2.9.0` / `c29d56e`): clean except untracked `docs/mcp-usecases/` (do NOT stage).
+- `/home/bill/src/ai/bilterm/.claude/worktrees/integ`: active worktree for Phase 52 development (`feat/navigator-rows-and-launch`).
+
+### 4. Exact Next Step
+- Execute **Phase 52 (`52-01` through `52-03`)** in `/home/bill/src/ai/bilterm/.claude/worktrees/integ`:
+  1. Write `.planning/phases/52-agent-messaging-and-coordination/{52-CONTRACT.md,52-01-PLAN.md,52-02-PLAN.md,52-03-PLAN.md}`.
+  2. Implement `AGT-01..03` (`src/wm/agent_mail.rs`, `:agent` colon commands, `agent.*` JSON-RPC + MCP tools & `bilterm://agent/<name>/inbox` resource, `/events` integration, Navigator/AGENTS unread badges, and `tests/phase52_agent_messaging.rs`).
