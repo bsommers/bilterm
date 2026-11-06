@@ -219,3 +219,28 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 ### 6. Exact Next Step / Resume Prompt
 Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 > Read `/home/bill/src/ai/bilterm/.claude/worktrees/integ/.planning/CHECKPOINT.md` (section `Checkpoint 2026-11-06`). Verify branch and status in `.claude/worktrees/integ`, then ask whether to (A) implement the Lazenby Computer / custom retro font facility, (B) push `feat/navigator-rows-and-launch` / build `~/.local/bin/bilterm` for the 6-step Mac UAT in `51.1-16-SUMMARY.md`, or (C) start Phase 52 / Phase 55.
+
+---
+
+## Checkpoint 2026-11-06 (Phase 51.2 complete: 4/4 plans; v2.9.0 release)
+
+**Status:** STABLE — ready for release testing or Phase 52
+
+### 1. Goals & Delivered Scope
+- **Phase 51.2 Goal (`WIN-01..WIN-03`)**: First-Class Utility Windows & Script Studio (`4/4` plans complete):
+  - **Window 1 (`WIN-01`)**: `FONTS` Window (`src/wm/fonts_window.rs`, `src/ui/fonts_window_ui.rs`, `src/input/fonts_window.rs`, `src/input/fonts_window_keys.rs`). Opened by `:fonts`, `:font list`, `:font presets`, `:font scan`, and menubar `View -> Fonts Window`. Supports unpinned one-shot vs pinned real-time live typography preview (`*` or `[•]`), point-size `+`/`-`, scale `[`/`]`, `a` apply-all, and `s` directory rescan.
+  - **Window 2 (`WIN-02`)**: Pinnable `COMMAND PALETTE` Window (`src/wm/command_window.rs`, `src/ui/command_window_ui.rs`, `src/input/command_window.rs`, `src/input/command_window_keys.rs`). Opened by `:commands`, `:palette`, or promoting `Modal::Palette` (`Ctrl+P`) via `Alt+P` / `*`. Supports unpinned one-shot vs persistent workbench mode with execution history logging in the bottom pane.
+  - **Window 3 (`WIN-03`)**: `SCRIPT STUDIO` Window (`src/wm/script_studio.rs`, `src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`, `src/input/script_studio_keys.rs`). Opened by `:script` / `:studio`. Multi-line editor, single-step debugger with instruction pointer `▶` (`F10`), runner (`F5`), reset, live action recorder (`Ctrl+R`), and secure persistence (`~/.config/bilterm/scripts/*.bt` via `secure_fs` `0600`/`0700`).
+  - **Mutual Focus Exclusivity**: Opening any utility window or focusing terminal panes automatically blurs other utility windows and releases keyboard ownership cleanly.
+  - **Surface Uniformity & Parity**: Wired into tab completion, `PALETTE_CATALOG`, `PALETTE_EXCLUSIONS`, and Borland top menubar (`View` menu).
+- **v2.9.0 Release Bump**:
+  - `Cargo.toml` and `Cargo.lock` bumped to version `2.9.0`.
+  - `CHANGELOG.md` updated with `## [2.9.0] - 2026-11-06` documenting Phase 51.2 utility windows, retro font additions, and Phase 51.1 persistent SSH + tmux links.
+
+### 2. Verification Gates
+- `scripts/verify.sh --only clippy unit t:phase51_2_fonts_window t:phase51_2_command_window t:phase51_2_script_studio t:pane_typography_coverage t:phase51_palette_parity`: `PASS 108/108 85s`
+- `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
+- Temporary worktrees cleaned up: `worktree-512-fonts`, `worktree-512-cmd`, and `worktree-512-script` removed.
+
+### 3. Exact Next Step
+- Push `feat/navigator-rows-and-launch` or proceed to Phase 52 (Agent-to-Agent Messaging & Coordination) / Phase 55 (Daemon Supervisor).
