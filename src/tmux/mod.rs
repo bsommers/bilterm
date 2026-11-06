@@ -268,6 +268,16 @@ pub struct TmuxControlBridge {
     primary: Option<PaneId>,
     /// `dest/session` badge used to title adopted panes (Phase 51.1).
     badge: Option<String>,
+    /// Panes mapped before the last `reset_for_attach` and not yet re-adopted (Phase 51.1, plan 05).
+    stale: std::collections::BTreeSet<PaneId>,
+    /// Panes whose tmux window closed, waiting for the WM to remove them (plan 05).
+    removed: Vec<PaneId>,
+    /// `%exit` reason text of the current attach (plan 05).
+    exit_reason: Option<String>,
+    /// tmux panes whose `%output` is dropped while a capture is pending (plan 06).
+    held: std::collections::BTreeSet<usize>,
+    /// Reply blocks closed so far, greeting included (plan 06).
+    blocks_closed: u64,
 }
 
 impl TmuxControlBridge {
@@ -286,7 +296,89 @@ impl TmuxControlBridge {
             exited: false,
             primary: None,
             badge: None,
+            stale: std::collections::BTreeSet::new(),
+            removed: Vec::new(),
+            exit_reason: None,
+            held: std::collections::BTreeSet::new(),
+            blocks_closed: 0,
         }
+    }
+
+    /// Moves the current mappings to the stale set and forgets the previous attach's exit state
+    /// (Phase 51.1, plan 05 turns this into the full reconcile rule).
+    pub fn reset_for_attach(&mut self) {
+        self.stale.extend(self.bilterm_to_tmux.keys().copied());
+        self.tmux_to_bilterm.clear();
+        self.bilterm_to_tmux.clear();
+        self.window_of_pane.clear();
+        self.exited = false;
+        self.exit_reason = None;
+        self.held.clear();
+    }
+
+    /// `(tmux pane, bilterm pane)` pairs currently mapped, ordered by tmux pane id.
+    pub fn mapped_panes(&self) -> Vec<(usize, PaneId)> {
+        self.tmux_to_bilterm.iter().map(|(&t, &p)| (t, p)).collect()
+    }
+
+    /// Panes mapped before the last attach that have not been re-adopted.
+    pub fn stale_panes(&self) -> Vec<PaneId> {
+        self.stale.iter().copied().collect()
+    }
+
+    /// `%exit` reason of the current attach, when tmux gave one.
+    pub fn exit_reason(&self) -> Option<&str> {
+        self.exit_reason.as_deref()
+    }
+
+    /// Panes whose tmux window closed since the last call.
+    pub fn take_removed_panes(&mut self) -> Vec<PaneId> {
+        std::mem::take(&mut self.removed)
+    }
+
+    /// tmux panes known to live in `window`.
+    pub fn window_panes(&self, window: usize) -> Vec<usize> {
+        self.window_of_pane
+            .iter()
+            .filter(|(_, w)| **w == window)
+            .map(|(&p, _)| p)
+            .collect()
+    }
+
+    /// Queues a raw tmux command; `_kind` is registered with the reply correlator by plan 05.
+    pub fn queue_command(&mut self, mut cmd: String, _kind: hydrate::ReplyKind) {
+        if !cmd.ends_with('\n') {
+            cmd.push('\n');
+        }
+        self.outbound_commands.push(cmd);
+    }
+
+    /// Correlated replies since the last call (plan 05/06).
+    pub fn take_replies(&mut self) -> Vec<hydrate::Reply> {
+        Vec::new()
+    }
+
+    /// Ends a reattach reconcile: stale panes never re-adopted are returned (orphans) and kept.
+    pub fn finish_reconcile(&mut self) -> Vec<PaneId> {
+        let live: std::collections::BTreeSet<PaneId> = self.bilterm_to_tmux.keys().copied().collect();
+        let orphans: Vec<PaneId> = self.stale.iter().copied().filter(|p| !live.contains(p)).collect();
+        self.stale.clear();
+        orphans
+    }
+
+    /// Drops `%output` for `tmux_pane` until [`Self::release_output`] (capture pending).
+    pub fn hold_output(&mut self, tmux_pane: usize) {
+        self.held.insert(tmux_pane);
+    }
+
+    /// Resumes live output for `tmux_pane`.
+    pub fn release_output(&mut self, tmux_pane: usize) {
+        self.held.remove(&tmux_pane);
+    }
+
+    /// Reply blocks closed so far, greeting included.
+    pub fn blocks_closed(&self) -> u64 {
+        self.blocks_closed
     }
 
     /// Marks `pane` as the link's primary pane: the first tmux pane discovered adopts it
@@ -319,19 +411,19 @@ impl TmuxControlBridge {
         if let Some(&id) = self.tmux_to_bilterm.get(&tmux_pane_id) {
             return id;
         }
-        if let Some(primary) = self.primary.take() {
-            if let Some(pane) = wm.pane_mut(primary) {
-                // Adopt the link's placeholder pane: wipe the ssh text and retitle it.
-                pane.process_pty_output(b"\x1bc");
-                let title = match &self.badge {
-                    Some(b) => format!("TMUX-SSH:{b} %{tmux_pane_id} [#{primary}]"),
-                    None => format!("TMUX %{tmux_pane_id} [#{primary}]"),
-                };
-                pane.set_title(title);
-                self.tmux_to_bilterm.insert(tmux_pane_id, primary);
-                self.bilterm_to_tmux.insert(primary, tmux_pane_id);
-                return primary;
-            }
+        if let Some(primary) = self.primary.take()
+            && let Some(pane) = wm.pane_mut(primary)
+        {
+            // Adopt the link's placeholder pane: wipe the ssh text and retitle it.
+            pane.process_pty_output(b"\x1bc");
+            let title = match &self.badge {
+                Some(b) => format!("TMUX-SSH:{b} %{tmux_pane_id} [#{primary}]"),
+                None => format!("TMUX %{tmux_pane_id} [#{primary}]"),
+            };
+            pane.set_title(title);
+            self.tmux_to_bilterm.insert(tmux_pane_id, primary);
+            self.bilterm_to_tmux.insert(primary, tmux_pane_id);
+            return primary;
         }
         let new_id = wm.insert_tmux_pane(tmux_pane_id);
         self.tmux_to_bilterm.insert(tmux_pane_id, new_id);
@@ -344,6 +436,9 @@ impl TmuxControlBridge {
         let ev = parse_tmux_control_line(line);
         match &ev {
             TmuxControlEvent::Output { pane_id, data } => {
+                if self.held.contains(pane_id) {
+                    return ev;
+                }
                 let bilterm_id = self.ensure_tmux_pane(wm, *pane_id);
                 if let Some(pane) = wm.pane_mut(bilterm_id) {
                     pane.process_pty_output(data);
@@ -377,8 +472,17 @@ impl TmuxControlBridge {
             TmuxControlEvent::SessionChanged { name, .. } => {
                 self.active_session_name = Some(name.clone());
             }
-            TmuxControlEvent::Exit { .. } => {
+            TmuxControlEvent::Exit { reason } => {
                 self.exited = true;
+                self.exit_reason = reason.clone();
+            }
+            TmuxControlEvent::EndBlock => {
+                self.blocks_closed += 1;
+            }
+            TmuxControlEvent::Other(l)
+                if hydrate::parse_block_header(l).is_some_and(|h| h.kind == hydrate::BlockKind::Error) =>
+            {
+                self.blocks_closed += 1;
             }
             _ => {}
         }

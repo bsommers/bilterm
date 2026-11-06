@@ -756,7 +756,7 @@ pub(super) fn handle_wm_modal_key(
     if wm.active_pane().held_exited_shell().is_some() && !wm.is_leader_pending() {
         match key.code {
             KeyCode::Enter | KeyCode::Char('r') | KeyCode::Char('R') if key.modifiers.is_empty() => {
-                let _ = wm.active_pane_mut().respawn_shell_in_place();
+                wm.respawn_active_pane();
                 return Ok(Some(AppAction::Handled));
             }
             KeyCode::Char('d') | KeyCode::Char('D') if key.modifiers.is_empty() => {

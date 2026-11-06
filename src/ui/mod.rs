@@ -36,7 +36,7 @@ pub mod visual_style;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
-pub use exit_guard_ui::{render_exit_guard_modal, render_held_shell_exited_banner};
+pub use exit_guard_ui::{render_exit_guard_modal, render_held_shell_exited_banner, render_link_banner};
 pub use hires_subcell::{CanvasResolution, probe_terminal_pixel_size, subcell_mask_to_octant};
 pub use pixel_canvas::{PixelCanvasBuffer, wrap_tmux_dcs_passthrough};
 pub use status_bar::{render_oia_status_bar, render_oia_status_bar_themed};
@@ -560,6 +560,9 @@ fn render_output_canvas(
         }
         if let Some(held) = pane.held_exited_shell() {
             render_held_shell_exited_banner(buf, canvas, palette, held);
+        }
+        if let Some(banner) = pane.link_banner() {
+            render_link_banner(buf, canvas, palette, banner);
         }
     }
 }

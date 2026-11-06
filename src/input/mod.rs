@@ -6,6 +6,7 @@ pub mod encode;
 pub mod find_modal;
 pub mod gui_route;
 pub mod keymap;
+pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
 mod mouse_wm;

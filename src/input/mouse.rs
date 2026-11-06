@@ -705,6 +705,10 @@ pub fn handle_wm_mouse_event(
         return Ok(action);
     }
 
+    if let Some(action) = super::link_mouse::handle_link_banner_click(wm, mouse, workspace_area) {
+        return Ok(action);
+    }
+
     let (hit_focus, outer, inner) = if wm.active_pane().mouse_drag().is_some()
         && matches!(
             mouse.kind,

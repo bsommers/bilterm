@@ -238,3 +238,236 @@ mod verbs {
         assert_eq!(wm.active_pane().status_message(), Some("No tmux link to disconnect"));
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Task 3: shared skeletons, pane fields, respawn dispatcher
+// ---------------------------------------------------------------------------------------------
+
+mod skeletons {
+    use bilterm::pane::{HeldExitedShellState, LinkBanner};
+    use bilterm::remote::RemoteHostProfile;
+    use bilterm::tmux::TmuxControlBridge;
+    use bilterm::tmux::hydrate::{
+        BlockKind, HydratePhase, HydratePlanner, Reply, ReplyCorrelator, ReplyKind,
+        capture_pane_command, parse_block_header, render_capture,
+    };
+    use bilterm::tmux::link::{
+        DisconnectCause, ExitClass, LinkConnector, LinkDriver, LinkEvent, LinkMachine, LinkState,
+        LinkTarget, ReconnectPolicy, TmuxLinkState, MAPPED_PANES_CAP,
+    };
+    use bilterm::tmux::reconnect::{backoff_delay_ms, classify_exit, disconnect_text, link_banner_text};
+    use bilterm::tmux::splitter::{ControlLineSplitter, SplitOut, diag_lines};
+    use bilterm::tmux::transport::{PtyLinkConnector, PtyLinkDriver};
+    use bilterm::wm::WindowManager;
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use ratatui::layout::Rect;
+
+    fn target() -> LinkTarget {
+        LinkTarget {
+            profile: RemoteHostProfile::new("me@box", "me@box"),
+            session: "main".into(),
+            tags: vec![],
+        }
+    }
+
+    #[test]
+    fn parse_block_header_cases() {
+        let b = parse_block_header("%begin 1700000000 4 1").unwrap();
+        assert_eq!((b.kind, b.time, b.number, b.flags), (BlockKind::Begin, 1_700_000_000, 4, 1));
+        assert_eq!(parse_block_header("%end 1700000000 4 1").unwrap().kind, BlockKind::End);
+        assert_eq!(parse_block_header("%error 1700000000 4 1\r\n").unwrap().kind, BlockKind::Error);
+        for bad in [
+            "", "%begin", "%begin 1 2", "%begin x 2 1", "%begin 1 2 1 9", "%output %1 x",
+            "begin 1 2 1", "%endx 1 2 1", "%begin -1 2 1",
+        ] {
+            assert!(parse_block_header(bad).is_none(), "`{bad}` must not parse");
+        }
+    }
+
+    #[test]
+    fn skeleton_signatures_compile_and_behave_neutrally() {
+        // splitter: everything before control mode is raw
+        let mut sp = ControlLineSplitter::new();
+        assert_eq!(sp.push(b"hello"), vec![SplitOut::Raw(b"hello".to_vec())]);
+        assert!(sp.push(b"").is_empty());
+        assert!(!sp.in_control());
+        assert!(sp.flush_partial().is_empty());
+        assert!(diag_lines(b"x\ny").is_empty());
+
+        // transport: no process, no error from the driver, unsupported connector
+        let mut d = PtyLinkDriver::default();
+        let poll = d.pump();
+        assert!(poll.raw_output.is_empty() && poll.exited.is_none() && !poll.control_started);
+        d.write_raw(b"x").unwrap();
+        d.resize(24, 80);
+        d.kill();
+        let mut c = PtyLinkConnector::default();
+        assert!(c.connect(&target(), (24, 80)).is_err());
+
+        // reconnect helpers
+        let p = ReconnectPolicy::default();
+        assert_eq!((p.base_ms, p.cap_ms, p.factor, p.max_attempts, p.stable_after_ms), (1000, 30_000, 2, 20, 30_000));
+        assert_eq!(backoff_delay_ms(&p, 3), 0);
+        assert_eq!(classify_exit(&DisconnectCause::Eof, None, None, &[]), ExitClass::Transient);
+        let mut m = LinkMachine::new(p.clone());
+        assert_eq!(*m.state(), LinkState::Idle);
+        assert!(m.on_event(LinkEvent::UserDisconnect, 0).is_empty());
+        assert!(m.tick(10).is_empty());
+        assert!(m.next_deadline_ms().is_none() && m.retry_in_ms(5).is_none());
+        let t = target();
+        assert!(link_banner_text(&LinkState::Idle, &t, None, &p, 0).is_none());
+        let down = bilterm::tmux::link::TmuxDisconnect {
+            cause: DisconnectCause::Eof,
+            reason: None,
+            code: None,
+            tail: vec![],
+            at_ms: 0,
+            class: ExitClass::Transient,
+        };
+        assert_eq!(disconnect_text(&down), "");
+
+        // hydrate
+        let mut hp = HydratePlanner::new();
+        assert_eq!(hp.phase(), HydratePhase::AwaitingGreeting);
+        assert!(hp.plan(&[0, 1], 80, 24).is_empty());
+        assert!(!hp.note_capture_done(0));
+        assert_eq!(hp.remaining(), 0);
+        let mut rc = ReplyCorrelator::new();
+        rc.enqueue(ReplyKind::Ignore);
+        assert_eq!(rc.pending(), 0);
+        assert!(!rc.overflowed() && rc.take_failed().is_empty());
+        assert_eq!(capture_pane_command(1), "");
+        assert!(render_capture(&["a".to_string()]).is_empty());
+        let _ = Reply { kind: ReplyKind::Ignore, lines: vec![], ok: true, truncated: false };
+
+        // link record defaults
+        let rec = TmuxLinkState::default();
+        assert!(rec.target.is_none() && rec.driver.is_none() && rec.connector.is_none());
+        assert_eq!(*rec.machine.state(), LinkState::Idle);
+        assert_eq!(MAPPED_PANES_CAP, 64);
+        assert_eq!(LinkState::Backoff { attempt: 1, retry_at_ms: 1 }.as_str(), "reconnecting");
+        assert_eq!(t.badge(), "me@box/main");
+        assert_eq!(t.dest(), "me@box");
+    }
+
+    #[test]
+    fn bridge_facing_signatures_work_over_the_existing_maps() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let mut b = TmuxControlBridge::default();
+        assert!(b.mapped_panes().is_empty() && b.stale_panes().is_empty());
+        assert!(b.exit_reason().is_none() && b.take_removed_panes().is_empty());
+        assert_eq!(b.blocks_closed(), 0);
+        b.handle_control_line(&mut wm, "%layout-change @1 b25d,160x48,0,0{80x48,0,0,3,79x48,81,0,4}");
+        assert_eq!(b.mapped_panes().len(), 2);
+        assert_eq!(b.window_panes(1), vec![3, 4]);
+        b.handle_control_line(&mut wm, "%begin 1 1 0");
+        b.handle_control_line(&mut wm, "%end 1 1 0");
+        b.handle_control_line(&mut wm, "%begin 1 2 0");
+        b.handle_control_line(&mut wm, "%error 1 2 0");
+        assert_eq!(b.blocks_closed(), 2);
+        // output is dropped while held
+        let (t3, p3) = b.mapped_panes()[0];
+        b.hold_output(t3);
+        b.handle_control_line(&mut wm, &format!("%output %{t3} dropped"));
+        assert!(!wm.pane(p3).unwrap().vt().contents().contains("dropped"));
+        b.release_output(t3);
+        b.handle_control_line(&mut wm, &format!("%output %{t3} shown"));
+        assert!(wm.pane(p3).unwrap().vt().contents().contains("shown"));
+        // queue_command appends the newline
+        b.queue_command("list-windows".into(), ReplyKind::Ignore);
+        assert_eq!(b.take_outbound_commands(), vec!["list-windows\n".to_string()]);
+        assert!(b.take_replies().is_empty());
+        // reset moves mappings to stale; nothing re-adopted => all orphans
+        b.handle_control_line(&mut wm, "%exit server exited unexpectedly");
+        assert_eq!(b.exit_reason(), Some("server exited unexpectedly"));
+        b.reset_for_attach();
+        assert!(b.exit_reason().is_none() && b.mapped_panes().is_empty());
+        assert_eq!(b.stale_panes().len(), 2);
+        assert_eq!(b.finish_reconcile().len(), 2);
+        assert!(b.stale_panes().is_empty());
+    }
+
+    fn held_wm() -> WindowManager {
+        let mut wm = WindowManager::new_headless(24, 80);
+        wm.active_pane_mut().hold_exited_shell(Some(1));
+        assert!(wm.active_pane().held_exited_shell().is_some());
+        wm
+    }
+
+    #[test]
+    fn respawn_active_pane_legacy_branch_is_unchanged() {
+        let mut a = held_wm();
+        let mut b = held_wm();
+        a.respawn_active_pane();
+        let _ = b.active_pane_mut().respawn_shell_in_place();
+        assert!(a.active_pane().held_exited_shell().is_none());
+        assert_eq!(a.active_pane().status_message(), b.active_pane().status_message());
+        assert_eq!(a.active_pane().vt().contents(), b.active_pane().vt().contents());
+        assert_eq!(a.active_pane().status_message(), Some("Shell respawned cleanly"));
+
+        // The colon form and Enter on a held pane reach the same dispatcher.
+        let mut c = held_wm();
+        let cmd = bilterm::colon_command::parse_colon_command(":respawn-pane").unwrap().unwrap();
+        c.apply(cmd).unwrap();
+        assert!(c.active_pane().held_exited_shell().is_none());
+        let mut d = held_wm();
+        let enter = crossterm::event::KeyEvent::new(crossterm::event::KeyCode::Enter, KeyModifiers::NONE);
+        bilterm::input::handle_wm_key_event(&mut d, enter).unwrap();
+        assert!(d.active_pane().held_exited_shell().is_none());
+    }
+
+    #[test]
+    fn interactive_link_banner_routes_respawn_to_link_reconnect() {
+        let mut wm = held_wm();
+        wm.active_pane_mut().set_link_banner(Some(LinkBanner {
+            text: "LINK DOWN".into(),
+            interactive: true,
+        }));
+        wm.respawn_active_pane();
+        // Reconnect was requested (no link exists, so only the status line says so); no respawn.
+        assert!(wm.active_pane().held_exited_shell().is_some());
+        assert_eq!(
+            wm.active_pane().status_message(),
+            Some("No tmux link to reconnect (use :ssh-tmux <dest> [session])")
+        );
+        // A non-interactive banner (connecting) never hijacks the respawn.
+        let mut wm = held_wm();
+        wm.active_pane_mut().set_link_banner(Some(LinkBanner {
+            text: "LINK CONNECTING".into(),
+            interactive: false,
+        }));
+        wm.respawn_active_pane();
+        assert!(wm.active_pane().held_exited_shell().is_none());
+    }
+
+    #[test]
+    fn pane_banner_and_remote_hold_api() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let pane = wm.active_pane_mut();
+        assert!(pane.link_banner().is_none());
+        pane.set_link_banner(Some(LinkBanner { text: "x".into(), interactive: true }));
+        assert_eq!(pane.link_banner().unwrap().text, "x");
+        pane.process_pty_output(b"first\r\nlast line  \r\n\r\n");
+        assert_eq!(pane.last_output_line().as_deref(), Some("last line"));
+        pane.hold_remote_exit(Some(255), Some("Connection closed".into()));
+        let held = pane.held_exited_shell().unwrap();
+        assert_eq!(held.exit_code, Some(255));
+        assert_eq!(
+            held.banner_message,
+            "REMOTE SESSION ENDED (code 255): Connection closed | Enter/r: reconnect | d: detach | :quit!: exit"
+        );
+        assert_eq!(*held, HeldExitedShellState::remote(Some(255), Some("Connection closed".into())));
+    }
+
+    #[test]
+    fn link_banner_click_hook_does_not_claim_events_yet() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        let ev = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 3,
+            row: 3,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(bilterm::input::link_mouse::handle_link_banner_click(&mut wm, ev, Rect::new(0, 0, 80, 24)).is_none());
+    }
+}

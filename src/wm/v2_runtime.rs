@@ -149,7 +149,7 @@ impl WindowManager {
                 true
             }
             ExitProtectionPolicy::Respawn => {
-                let _ = self.active_pane_mut().respawn_shell_in_place();
+                self.respawn_active_pane();
                 true
             }
             ExitProtectionPolicy::Detach => {
@@ -179,7 +179,7 @@ impl WindowManager {
                 true
             }
             ExitProtectionPolicy::Respawn => {
-                let _ = self.active_pane_mut().respawn_shell_in_place();
+                self.respawn_active_pane();
                 true
             }
             ExitProtectionPolicy::Detach => self.detach_client(),
@@ -192,7 +192,7 @@ impl WindowManager {
         self.dismiss_exit_guard();
         match choice {
             ExitGuardChoice::RespawnShell => {
-                let _ = self.active_pane_mut().respawn_shell_in_place();
+                self.respawn_active_pane();
                 false
             }
             ExitGuardChoice::DetachClient => self.detach_client(),

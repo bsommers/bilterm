@@ -7,7 +7,7 @@ use ratatui::symbols::border;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
-use crate::pane::exit_guard::{ExitGuardChoice, ExitGuardState, HeldExitedShellState};
+use crate::pane::exit_guard::{ExitGuardChoice, ExitGuardState, HeldExitedShellState, LinkBanner};
 use crate::ui::chrome::{ShadowStyle, render_drop_shadow_styled};
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::theme::ThemePalette;
@@ -157,6 +157,29 @@ pub fn render_held_shell_exited_banner(
     .render(banner_rect, buf);
 }
 
+/// Renders the tmux link state banner on the bottom row of `inner` (Phase 51.1), same style as
+/// the held-shell banner. Draws nothing for an empty text or an empty area.
+pub fn render_link_banner(buf: &mut Buffer, inner: Rect, palette: &ThemePalette, banner: &LinkBanner) {
+    let clamped = inner.intersection(buf.area);
+    if clamped.width == 0 || clamped.height == 0 || banner.text.is_empty() {
+        return;
+    }
+    let banner_y = clamped.y + clamped.height - 1;
+    let banner_rect = Rect::new(clamped.x, banner_y, clamped.width, 1);
+    let banner_style = Style::default()
+        .fg(palette.oia_badge_fg)
+        .bg(palette.title_fg)
+        .add_modifier(Modifier::BOLD);
+    for x in banner_rect.x..banner_rect.x + banner_rect.width {
+        if let Some(cell) = buf.cell_mut((x, banner_y)) {
+            cell.set_symbol(" ");
+            cell.set_style(banner_style);
+        }
+    }
+    Paragraph::new(Line::from(Span::styled(format!(" {} ", banner.text), banner_style)))
+        .render(banner_rect, buf);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,6 +198,17 @@ mod tests {
             render_held_shell_exited_banner(&mut buf, area, &palette, &held);
         }
 
+        let banner = LinkBanner { text: "LINK DOWN | Enter/r: now".into(), interactive: true };
+        for (w, h) in [(0, 0), (1, 1), (9, 4), (80, 24)] {
+            let area = Rect::new(0, 0, w, h);
+            let mut buf = Buffer::empty(area);
+            render_link_banner(&mut buf, area, &palette, &banner);
+        }
+        let area = Rect::new(0, 0, 40, 5);
+        let mut buf = Buffer::empty(area);
+        render_link_banner(&mut buf, area, &palette, &banner);
+        let last: String = (0..40).map(|x| buf[(x, 4)].symbol()).collect();
+        assert!(last.contains("LINK DOWN"), "{last}");
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         render_exit_guard_modal(&mut buf, area, &palette, &state);

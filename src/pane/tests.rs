@@ -136,3 +136,49 @@ fn submitting_prompt_into_inline_raw_tui_uses_bracketed_paste_and_carriage_retur
         "submitting from Command Prompt into a bracketed-paste raw TUI must wrap in 200~/201~ and end with CR (\\r)"
     );
 }
+
+#[test]
+fn remote_input_tap_collects_and_caps() {
+    let mut pane = CompositePane::new_headless(1, 25, 80);
+    // Off by default: nothing is mirrored.
+    pane.write_to_pty(b"ignored").unwrap();
+    assert!(!pane.remote_input_tap());
+    assert!(pane.take_remote_input().is_empty());
+
+    pane.set_remote_input_tap(true);
+    pane.write_to_pty(b"ls\r").unwrap();
+    pane.write_to_pty(b"pwd\r").unwrap();
+    assert_eq!(pane.take_remote_input(), b"ls\rpwd\r".to_vec());
+    assert!(pane.take_remote_input().is_empty(), "drained once");
+
+    // Capped at REMOTE_INPUT_CAP between drains; the excess is dropped.
+    let cap = crate::tmux::link::REMOTE_INPUT_CAP;
+    assert_eq!(cap, 4096);
+    pane.write_to_pty(&b"a".repeat(cap - 10)).unwrap();
+    pane.write_to_pty(&b"b".repeat(100)).unwrap();
+    pane.write_to_pty(b"more").unwrap();
+    let got = pane.take_remote_input();
+    assert_eq!(got.len(), cap);
+    assert_eq!(&got[cap - 10..], b"bbbbbbbbbb");
+
+    // Turning the tap off drops buffered bytes.
+    pane.write_to_pty(b"x").unwrap();
+    pane.set_remote_input_tap(false);
+    assert!(pane.take_remote_input().is_empty());
+}
+
+#[test]
+fn link_raw_input_keeps_typed_bytes_out_of_the_prompt_history() {
+    // T-51.1-01: while the primary pane awaits control, typed ssh passwords go raw to the link.
+    let mut pane = CompositePane::new_headless(1, 25, 80);
+    assert!(pane.is_prompt_visible());
+    pane.set_link_raw_input(true);
+    assert_eq!(pane.effective_routing_mode(), InputRoutingMode::RawPtyPassthrough);
+    pane.set_remote_input_tap(true);
+    pane.write_to_pty(b"hunter2\r").unwrap();
+    assert_eq!(pane.take_remote_input(), b"hunter2\r".to_vec());
+    assert!(pane.prompt().history.is_empty());
+    assert_eq!(pane.prompt().text(), "");
+    pane.set_link_raw_input(false);
+    assert!(pane.is_prompt_visible());
+}
