@@ -333,6 +333,14 @@ pub(super) fn handle_wm_modal_key(
 ) -> Result<Option<AppAction>> {
     // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
     // first: the agents window must not answer a modal it cannot even show on top of (WR-07).
+    // The list window shares the gate; only one of the two windows owns the keyboard at a time.
+    if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.agents_list().captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
     if matches!(wm.modal(), crate::wm::Modal::None)
         && wm.agents_window_captures_input()
         && !wm.is_leader_pending()
