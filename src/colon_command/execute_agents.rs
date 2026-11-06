@@ -17,8 +17,8 @@ const PARTNER_WINDOW: Duration = Duration::from_secs(60);
 pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bool {
     match op {
         AgentsOp::List => {
-            list(wm);
             wm.open_agents_list();
+            list(wm);
         }
         AgentsOp::Zoom(focus) => zoom(wm, focus),
         AgentsOp::Close => wm.close_agents_window(),
@@ -289,6 +289,7 @@ fn list(wm: &mut WindowManager) {
         ("agents", JsonValue::Array(agents)),
         ("counts", counts),
         ("traffic", traffic),
+        ("agents_list", super::execute_agents_list::summary_json(wm)),
     ]);
     wm.set_command_data(data.to_json_string());
     let mut msg = format!(
