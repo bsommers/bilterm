@@ -133,6 +133,7 @@ fn tools_list_only_gains_find() {
             "bilterm_find",
             "bilterm_agents_list",
             "bilterm_agents_demo",
+            "bilterm_remote_link",
         ]
     );
 }

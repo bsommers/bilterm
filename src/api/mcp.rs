@@ -89,6 +89,7 @@ impl AutomationControlPlane {
                     "bilterm_find" => Some(Self::find_method_for_kind(&args).unwrap_or("")),
                     "bilterm_agents_list" => Some("agents.list"),
                     "bilterm_agents_demo" => Some("agents.demo"),
+                    "bilterm_remote_link" => Some("remote.link"),
                     _ => None,
                 };
                 match mapped_method {
@@ -227,6 +228,11 @@ impl AutomationControlPlane {
                 "bilterm_agents_demo",
                 "Start the agent traffic demo (default) or stop it and close the panes it spawned.",
                 &[("stop", "boolean", "true stops the demo")],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_remote_link",
+                "Show, reconnect or stop the persistent remote tmux link over SSH.",
+                &[("op", "string", "status | reconnect | disconnect (default status)")],
             ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])

@@ -41,6 +41,7 @@ pub const RPC_METHODS: &[&str] = &[
     "playbook.run",
     "remote.connect_ssh",
     "remote.connect_tmux",
+    "remote.link",
     "fleet.register",
     "fleet.list",
     "fleet.exec",
@@ -579,12 +580,7 @@ impl AutomationControlPlane {
                         .wm
                         .connect_ssh_tmux(target, tmux_sess, tags)
                         .map_err(|e| e.to_string())?;
-                    return Ok(JsonValue::obj([
-                        ("status", JsonValue::String("connected_ssh_tmux".to_string())),
-                        ("pane_id", JsonValue::Number(pane_id as i64)),
-                        ("target", JsonValue::String(target.to_string())),
-                        ("tmux_session", JsonValue::String(tmux_sess.to_string())),
-                    ]));
+                    return Ok(self.connect_tmux_result(pane_id, target, tmux_sess));
                 }
                 let pane_id = self
                     .wm
@@ -618,12 +614,7 @@ impl AutomationControlPlane {
                     .wm
                     .connect_ssh_tmux(target, session, tags)
                     .map_err(|e| e.to_string())?;
-                Ok(JsonValue::obj([
-                    ("status", JsonValue::String("connected_ssh_tmux".to_string())),
-                    ("pane_id", JsonValue::Number(pane_id as i64)),
-                    ("target", JsonValue::String(target.to_string())),
-                    ("session", JsonValue::String(session.to_string())),
-                ]))
+                Ok(self.connect_tmux_result(pane_id, target, session))
             }
             "fleet.register" => {
                 let name = params
@@ -733,6 +724,7 @@ impl AutomationControlPlane {
             }
             "agents.list" => self.rpc_agents_list(params),
             "agents.demo" => self.rpc_agents_demo(params),
+            "remote.link" => self.rpc_remote_link(params),
             "find.agents" => self.find_rpc(FindKind::Agent, params),
             "find.sessions" => self.find_rpc(FindKind::Session, params),
             "find.history" => self.find_rpc(FindKind::History, params),
