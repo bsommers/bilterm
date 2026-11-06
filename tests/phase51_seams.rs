@@ -266,14 +266,18 @@ fn seams_identity_without_panels() {
     assert_eq!(wm.subtract_docked_panels(area), area);
     let before = rects_of(&wm, area);
     wm.dock_panels_on_arrange();
+    // 51-09: the hook docks the open list (pane rects are derived live, so they already shrink).
+    assert!(wm.agents_list().docked);
+    assert_ne!(rects_of(&wm, area), before);
+    assert!(wm.set_panel_docked(DockPanel::AgentsList, false));
     assert_eq!(rects_of(&wm, area), before);
-    assert!(!wm.agents_list().docked);
-    // The stub flips only the list flag, only when active, and never reflows.
+    // 51-09: the flag flips only for an open panel and every change re-flows the panes.
     assert!(wm.set_panel_docked(DockPanel::AgentsList, true));
     assert!(wm.agents_list().docked);
     assert!(!wm.set_panel_docked(DockPanel::AgentsList, true), "unchanged reports false");
-    assert_eq!(rects_of(&wm, area), before, "stub does not reflow");
+    assert_ne!(rects_of(&wm, area), before, "docking re-flows the panes");
     assert!(wm.set_panel_docked(DockPanel::AgentsList, false));
+    assert_eq!(rects_of(&wm, area), before, "release re-flows back");
     assert!(!wm.set_panel_docked(DockPanel::AgentsList, false));
     assert!(!wm.set_panel_docked(DockPanel::AgentsTraffic, true));
     wm.close_agents_list();
@@ -293,11 +297,11 @@ fn arrange_grid_output_unchanged_without_panels() {
 
     assert_eq!(wm.auto_arrange_windows("grid"), 2);
     assert_eq!(rects_of(&wm, area), expect);
-    // The same with the list open but not docked.
+    // 51-09: an open list is docked by arrange; the panes tile the area left of the strip.
     wm.open_agents_list();
     assert_eq!(wm.auto_arrange_windows("grid"), 2);
-    assert_eq!(rects_of(&wm, area), expect);
-    assert!(!wm.agents_list().docked);
+    assert!(wm.agents_list().docked);
+    assert_ne!(rects_of(&wm, area), expect);
 }
 
 #[test]
