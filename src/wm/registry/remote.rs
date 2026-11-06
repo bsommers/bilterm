@@ -25,7 +25,9 @@ pub fn transport_of(wm: &WindowManager, id: PaneId) -> TransportInfo {
         match target.split_once('/') {
             Some((host, session)) => {
                 info.transport = Transport::SshTmux;
-                let linked = wm.pane_is_linked(id) && wm.tmux_control.is_some() && !wm.tmux_bridge.exited;
+                let linked = wm.pane_is_linked(id)
+                    && control_matches_link(wm)
+                    && !wm.tmux_bridge.exited;
                 info.metadata_only = !linked;
                 info.host = wm
                     .tmux_link
@@ -55,6 +57,7 @@ pub fn transport_of(wm: &WindowManager, id: PaneId) -> TransportInfo {
 
     if let Some(&tmux_pane) = wm.tmux_bridge.bilterm_to_tmux.get(&id)
         && let Some(ref link_target) = wm.tmux_link.target
+        && control_matches_link(wm)
         && (wm.tmux_link.primary_pane == Some(id) || id != 1 || pane.title().contains("TMUX"))
     {
         let linked = wm.pane_is_linked(id) && wm.tmux_control.is_some() && !wm.tmux_bridge.exited;
@@ -87,6 +90,19 @@ pub fn transport_of(wm: &WindowManager, id: PaneId) -> TransportInfo {
         info.cwd_trusted = osc7;
     }
     info
+}
+
+/// True when an attached `tmux_control` stream belongs to the active `tmux_link` target.
+fn control_matches_link(wm: &WindowManager) -> bool {
+    let Some(ref target) = wm.tmux_link.target else {
+        return false;
+    };
+    if let Some(ref active) = wm.tmux_bridge.active_session_name {
+        return active == &target.session;
+    }
+    wm.tmux_control
+        .as_ref()
+        .is_some_and(|ctrl| ctrl.session_name == target.session)
 }
 
 /// Display-safe, bounded copy of attacker-influenced text (T-50.1-12).

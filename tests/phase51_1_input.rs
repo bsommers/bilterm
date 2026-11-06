@@ -277,7 +277,7 @@ fn click_on_held_remote_banner_respawns() {
     let (col, row) = find_text(&render_buf(&wm), "Respawn Shell").expect("held banner rendered");
     assert_eq!(click(&mut wm, col, row), AppAction::Handled);
     assert!(wm.active_pane().held_exited_shell().is_none(), "hold must clear");
-    assert_eq!(status(&wm), "Shell respawned cleanly");
+    assert_eq!(status(&wm), "Reconnecting ssh: me@box");
 }
 
 #[test]
