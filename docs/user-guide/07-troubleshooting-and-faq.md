@@ -12,6 +12,7 @@
   - [Streaming Binary Output (`tail -f /dev/random` / `cat binary`)](#streaming-binary-output-tail--f-devrandom--cat-binary)
   - [Wide Characters (CJK / Emoji / Nerd Fonts) Near Window Borders](#wide-characters-cjk--emoji--nerd-fonts-near-window-borders)
   - [Clipboard Copy (`:yank`) Not Reaching Host Clipboard Inside `tmux`](#clipboard-copy-yank-not-reaching-host-clipboard-inside-tmux)
+  - [Remote tmux over SSH Quits Early or Reconnect is Odd](#remote-tmux-over-ssh-quits-early-or-reconnect-is-odd)
 - [2. Diagnostics & Logging](#2-diagnostics--logging)
 - [3. Terminal State Recovery After Forced Kill (`SIGKILL`)](#3-terminal-state-recovery-after-forced-kill-sigkill)
 - [4. Frequently Asked Questions (FAQ)](#4-frequently-asked-questions-faq)
@@ -77,6 +78,56 @@
   tmux set -g allow-passthrough on
   tmux set -s set-clipboard on
   ```
+
+### Remote tmux over SSH Quits Early or Reconnect is Odd
+
+- **Symptom**: You ran `:ssh-tmux <user@host> [session]`, but the remote session seems to drop, the pane shows `LINK DOWN` or `LINK FAILED`, reconnect backoff loops repeatedly, or after restarting Bilterm a restored session shows `(not connected)`.
+- **Diagnosis Checklist**:
+  1. **Read the Link Banner & Check `:ssh-tmux info`**:
+     - When a connection drops or reconnects, an interactive link banner appears at the bottom of the pane canvas showing current link state and exit cause:
+       `LINK DOWN (<cause>) | retry <attempt>/20 in <secs>s | Enter/r: now | x: stop | d: detach`
+     - Run `:ssh-tmux info` to view the full link status, retry deadline, attempt counter, mapped panes, and last exit reason and diagnostic tail lines.
+  2. **Inspect Structured Tracing Logs (`bilterm.log`)**:
+     - Run Bilterm with debug tracing enabled:
+       ```bash
+       RUST_LOG=bilterm=debug bilterm 2>bilterm-debug.log
+       ```
+     - Logs are written to `./bilterm.log` (or `$XDG_STATE_HOME/bilterm/bilterm.log`, usually `~/.local/state/bilterm/bilterm.log`).
+     - Look for structured `bilterm::link` events:
+       - `link.connect`: Connection attempt started with redacted arguments (`dest`, `session`, `attempt`).
+       - `link.up`: Control stream handshake succeeded (`ESC P 1000 p` sentinel seen).
+       - `link.down`: Connection dropped. Check `cause`, `code`, `reason`, and `tail_lines` for remote error text.
+       - `link.retry`: Exponential backoff timer scheduled (`attempt`, `delay_ms`).
+       - `link.give_up`: 20-attempt retry limit reached.
+       - `link.control_exit`: Remote `tmux` process issued `%exit <reason>`.
+       - `link.spawn_failed`: Local `ssh` executable failed to spawn.
+       - `link.hydrate`: Statistics on pane capture and screen hydration.
+       - `pane.exit`: Child process exited with return code.
+  3. **Verify the Remote `tmux` Session**:
+     - Log in directly to the remote host (e.g. `ssh user@mac`) and check running sessions:
+       ```bash
+       tmux ls
+       ```
+     - If `tmux ls` shows no session (or "no server running"), the remote `tmux` server terminated.
+  4. **Check Remote `~/.tmux.conf` Settings**:
+     - Remote `tmux` options can cause sessions to terminate automatically:
+       - `set -g exit-empty on`: Exits the `tmux` server when no sessions or windows remain.
+       - `set -g destroy-unattached on`: Destroys a session as soon as the client disconnects! Ensure this is set to `off` (or omitted) in `~/.tmux.conf` if you want persistent sessions.
+       - `set -g detach-on-destroy on`: Determines whether `tmux` detaches or switches sessions when destroyed.
+  5. **Check Mac Sleep & Power Management Settings**:
+     - macOS aggressively suspends network connections during system sleep.
+     - On the remote Mac host, inspect sleep parameters:
+       ```bash
+       pmset -g
+       pmset -g | grep -i -E "sleep|womp|tcpkeepalive"
+       ```
+     - If `tcpkeepalive 0` or sleep triggers, TCP connections are dropped when the display sleeps. Enable network keepalives with `sudo pmset -a tcpkeepalive 1`, or prevent sleep during long jobs using `caffeinate -s`.
+  6. **SSH Keepalives & Network Timeouts**:
+     - Bilterm automatically applies `-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o ConnectTimeout=15` to both `:ssh` and `:ssh-tmux` connections.
+     - If stateful NAT gateways or firewalls drop idle connections faster than 15 seconds, adjust your local `~/.ssh/config` or remote `sshd_config` `ClientAliveInterval`.
+  7. **Restored Workspace Shows `(not connected)`**:
+     - When restoring a saved workspace session, Bilterm honestly labels previously remote panes as `(not connected)` if they are running a local shell rather than a live remote transport.
+     - Run `:ssh-tmux <dest> [session]` (or `Ctrl+X u`) to reconnect to the remote session.
 
 ---
 

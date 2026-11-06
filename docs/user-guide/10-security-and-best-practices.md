@@ -13,6 +13,7 @@ Terminal multiplexers and automation daemons sit at the highest-privilege bounda
 3. [Filesystem & Credential Confinement (`SEC-R01..04`)](#3-filesystem--credential-confinement-sec-r0104)
 4. [JSON-RPC Daemon & MCP Control-Plane Hardening](#4-json-rpc-daemon--mcp-control-plane-hardening)
 5. [Production & Multi-Agent Security Best Practices](#5-production--multi-agent-security-best-practices)
+6. [Persistent Remote SSH & `tmux` Security Invariants (Phase 51.1)](#6-persistent-remote-ssh--tmux-security-invariants-phase-511)
 
 ---
 
@@ -94,3 +95,25 @@ bilterm --mcp --snapshot-dir /tmp/bilterm-agent-sandbox
 
 ### Best Practice 4: Audit Terminal State with `<F9>` (`:inspector`)
 If a shell session behaves unexpectedly after an SSH disconnect or a crashed binary, press `<F9>` (`:inspector`) to inspect the active `DECSET` modes (`?1049`, `?1006`, `?2004`) and `termios` flags, or press `Ctrl+G` / `F12` to toggle manual raw passthrough override.
+
+---
+
+## 6. Persistent Remote SSH & `tmux` Security Invariants (Phase 51.1)
+
+Bilterm's persistent remote `tmux -CC` integration (`:ssh-tmux`, `src/tmux/link.rs`, `src/remote/mod.rs`) enforces strict transport security boundaries:
+
+1. **No Secrets on Argv or in Logs**:
+   - Credentials (passwords, passphrases, tokens) are never accepted or passed via command-line arguments.
+   - All tracing and log emissions in `bilterm::link` pass argv vectors through `redact_ssh_argv`, which masks identity key paths (`-i <key>`) and control paths (`ControlPath=<private>`), ensuring zero credential or private path leakage in `./bilterm.log`.
+2. **Host Keys Are Never Auto-Accepted**:
+   - Bilterm never auto-accepts untrusted host keys or disables host key verification.
+   - Any OpenSSH host key verification question (`The authenticity of host ... can't be established`) is rendered directly into the primary pane for explicit user review and confirmation before connection continues.
+3. **Fresh TCP Connection per Reconnect**:
+   - Persistent links explicitly pass `-o ControlMaster=no` and `-o ControlPath=none`.
+   - Each reconnect attempt initiates a clean TCP handshake from scratch. Stale, hung, or corrupted OpenSSH master control sockets cannot deadlock auto-reconnect loops or poison subsequent sessions.
+4. **Typed Passwords Bypass Prompt & History Buffers**:
+   - During the initial connection phase before the `tmux -CC` control sentinel (`ESC P 1000 p`) is detected, the pane operates in raw PTY passthrough mode (`set_link_raw_input`).
+   - Keystrokes typed in response to password or MFA prompts are sent straight to the PTY stdin and bypass Bilterm's prompt editor buffer, undo/redo history, command blocks, `history.log`, and the unified Find index.
+5. **Strict Shell Wrapper Sanitization**:
+   - Remote execution commands are wrapped in `exec $SHELL -lc 'exec env PATH="..." tmux -CC new-session -A -s NAME'`, where the session `NAME` is strictly validated against `[A-Za-z0-9_-]`. The argument contains exactly two single quotes and prohibits user-controlled quote escaping, preventing remote command injection across the SSH domain.
+

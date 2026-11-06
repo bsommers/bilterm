@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Password-prompt input is no longer recorded.** Input submitted while a password prompt is showing, including `pane.exec` with `allow_echo_lock=true`, was written to the prompt history and `history.log`. It is still sent to the program, and is now recorded nowhere (not in the prompt history, command blocks, `history.log` or the Find index).
 
 ### Added
+- **Persistent SSH + `tmux -CC` sessions (`:ssh-tmux`, Phase 51.1, PST-01..04, UNI-R01)**:
+  - **Real PTY transport & macOS PATH**: `:ssh-tmux <user@host> [session]` spawns a dedicated PTY running `ssh -tt` into `tmux -CC new-session -A -s <name>` wrapped in a login shell (`exec $SHELL -lc ...`) that includes macOS Homebrew and MacPorts paths (`/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`).
+  - **Honest status & password safety**: Status honestly reports `connecting` until the `ESC P 1000 p` sentinel arrives. Host-key questions and password prompts render interactively in the primary pane with raw keystroke pass-through, bypassing command prompt history, undo/redo buffers, `history.log`, and Find search indexing.
+  - **Supervisor & auto-reconnect with exponential backoff**: Deterministic, capped exponential backoff (1s, 2s, 4s, 8s, 16s, 30s; max 20 attempts) automatically reconnects after network drops or transient `%exit` reasons (`server exited unexpectedly`, `lost tty`, `too far behind`, `connection`). Never retries fatal auth errors, missing `tmux`, user disconnects, or cleanly ended sessions.
+  - **Topology hydration**: Reconnecting panes settle 300 ms, run `refresh-client -C`, and hydrate screen buffers with `capture-pane -p -e -J -S -2000 -t %N`, holding live output during hydration to prevent interleaved text corruption. Stale unmapped panes are tagged with orphan banners.
+  - **Held exit banners**: Exited remote SSH and tmux panes persist with an interactive status banner displaying return code, exit cause, and last diagnostic output lines rather than closing abruptly; click or `r` respawns in-place.
+  - **Honest restore labels**: Restoring a saved workspace session no longer marks local shells with remote badges; displays `(not connected)` until reconnected.
+  - **SSH keepalive & fresh TCP policy**: Passes `ServerAliveInterval=15`, `ServerAliveCountMax=3`, `TCPKeepAlive=yes`, and `ConnectTimeout=15`. Sets `ControlMaster=no` and `ControlPath=none` for persistent links so every reconnect establishes a fresh TCP connection.
+  - **Structured tracing**: Structured `bilterm::link` tracing events (`link.connect`, `link.up`, `link.down`, `link.retry`, `link.give_up`, `link.control_exit`, `link.spawn_failed`, `link.hydrate`, `pane.exit`) with redacted argv (`redact_ssh_argv`) and zero secret leakage in `bilterm.log`.
+  - **Unified verbs, chords, menu items & API**:
+    - Verbs: `:ssh-tmux reconnect`, `:ssh-tmux disconnect`, `:ssh-tmux info`, `:ssh-tmux prefill`.
+    - Keybindings: `Ctrl+Alt+R` (reconnect, reserved in raw passthrough), leader `Ctrl+X U` (reconnect), `Ctrl+X Q` (disconnect), `Ctrl+X u` (prefill).
+    - Banner keys: `Enter` / `r` (reconnect), `x` (disconnect), `d` (detach), left-click on banner row (reconnect).
+    - Menu bar: Top menu Tmux dropdown items for all four verbs.
+    - Automation: JSON-RPC method `remote.link` (`op: "status" | "reconnect" | "disconnect"`), and MCP tool `bilterm_remote_link` (14th tool).
+  - **Behaviour changes to note**:
+    - `remote.connect_tmux` / `remote.connect_ssh{tmux_session}` returns `status: "connecting"` rather than `connected_ssh_tmux`.
+    - `TmuxControlBridge::new()` starts empty (no longer pre-seeded with `%0 -> pane 1`).
+    - One persistent remote tmux link can be active at a time; starting a second returns an error instructing to disconnect first.
+    - `:ssh` pane OpenSSH connection multiplexing uses `ControlPersist=10s` (shortened from 60s).
 - **Graph edges trace real communication.** Edge brightness is a pure function of how often and how recently a pair talked (terminal braille and GUI vector alike). After `agents_window.edge_fade_secs` (default 60, also `:agents fade [secs]`) it decays to a floor and never disappears once the pair has spoken.
 - **Communication topology.** A bounded, session-long record of which pairs communicated (count, first/last event) that survives the 512-event ring: `:agents topology` (data over RPC/MCP) and `:agents topology export <name>` (private `0600` file).
 - **Find window: `:find agent|session|history` and `Ctrl+Alt+F`** (Phase 50.1). One fuzzy, ranked search over open agents and panes, live and saved sessions, and command history (View > Find Agents / Find Sessions / Find Command History). Every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`). Secret-looking commands are never stored or indexed; secret-looking `history.log` lines are masked on read and only counted (`n masked`). `:finder` drives the open window. Read-only automation: RPC `find.agents`, `find.sessions`, `find.history`, and MCP `bilterm_find` (MCP now has 11 tools). Coverage limits (SSH and tmux, raw-mode input, the `tmux -CC` bridge not reachable from any command) are documented in user guide chapter 12. Bare `:find <text>` and `:search` are unchanged except for the three reserved first words.

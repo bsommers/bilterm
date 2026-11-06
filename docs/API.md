@@ -141,8 +141,9 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `wm.command` | `command` (string, req) | `{"status": "handled", "command": str, "data": ...}` | Execute any `:colon` multiplexer command (e.g. `:split`, `:theme`, `:get`). |
 | `events.poll` | `drain` (bool, default true) | `{"events": [...]}` | Poll and drain queued workspace lifecycle and trigger events. |
 | `playbook.run` | `toml` (string, req) | Playbook completion report, passed flag, step count | Run an end-to-end declarative TOML automation script. |
-| `remote.connect_ssh` | `target` (string, req), `port` (int), `tags` (string[]), `tmux_session` (str) | Connection status, target, created `pane_id` | Spawn SSH or remote tmux -CC pane and register in fleet. |
-| `remote.connect_tmux` | `target` (string, req), `session` (string), `tags` (string[]) | Connection status, target, session, `pane_id` | Connect directly to remote `tmux -CC` session. |
+| `remote.connect_ssh` | `target` (string, req), `port` (int), `tags` (string[]), `tmux_session` (str) | Connection status (`connected_ssh` or `connecting`), target, created `pane_id` | Spawn SSH or remote tmux -CC pane and register in fleet. |
+| `remote.connect_tmux` | `target` (string, req), `session` (string), `tags` (string[]) | Connection status (`connecting`), state, target, session, `pane_id`, `link` | Connect directly to remote persistent `tmux -CC` session. |
+| `remote.link` | `op` (string, optional: `"status"`, `"reconnect"`, `"disconnect"`) | `wm.command` execution fields plus top-level `link` object | Show status, reconnect immediately, or disconnect persistent remote tmux link. |
 | `fleet.register` | `name` (string, req), `destination` (string, req), `tags` (string[]), `rpc_endpoint` (str) | Registration confirmation and node count | Register remote profile in fleet management registry. |
 | `fleet.list` | None (`{}`) | Array of registered fleet nodes and connection states | List all known fleet nodes, tags, and status. |
 | `fleet.exec` | `command` (string, req), `selector` (string) | Dispatched status, matched pane IDs, node names | Fan out shell command to nodes matching selector (all, @tag, name). |
@@ -480,7 +481,7 @@ Connects to an SSH host and spawns an interactive pane, optionally attaching to 
   ```
 
 #### `remote.connect_tmux`
-Directly connects to a remote host and attaches to a specified `tmux -CC` session.
+Directly connects to a remote host and attaches to a specified `tmux -CC` session. Note that `status` reports `"connecting"` honestly until the remote control stream handshake completes.
 - **Parameters**:
   - `target` (string, required): SSH target.
   - `session` (string, optional, default `"bilterm"`): Remote session name.
@@ -495,10 +496,81 @@ Directly connects to a remote host and attaches to a specified `tmux -CC` sessio
     "jsonrpc": "2.0",
     "id": 13,
     "result": {
-      "status": "connected_ssh_tmux",
+      "status": "connecting",
+      "state": "connecting",
       "pane_id": 4,
       "target": "user@host",
-      "session": "main"
+      "session": "main",
+      "link": {
+        "state": "connecting",
+        "dest": "user@host",
+        "session": "main",
+        "attempt": 0,
+        "max_attempts": 20,
+        "retry_in_ms": null,
+        "primary_pane": 4,
+        "panes": [],
+        "stale_panes": [],
+        "last_exit": null
+      }
+    }
+  }
+  ```
+
+#### `remote.link`
+Inspects, reconnects, or disconnects the persistent remote `tmux -CC` session link.
+- **Parameters**:
+  - `op` (string, optional, default `"status"`): One of `"status"`, `"reconnect"`, or `"disconnect"`.
+- **Result Object**:
+  Returns standard `wm.command` execution fields (`status`, `command`, `active_pane_id`, `pane_count`, optional `data`) plus a top-level `"link"` object (`LinkSummary`):
+  - `state` (string): Current link lifecycle state (`"idle"`, `"connecting"`, `"connected"`, `"reconnecting"`, `"detached"`, `"ended"`, `"failed"`).
+  - `dest` (string or null): Target host destination (`user@host[:port]`).
+  - `session` (string or null): Remote `tmux` session name.
+  - `attempt` (integer): Current reconnection attempt count (`0..max_attempts`).
+  - `max_attempts` (integer): Maximum backoff retry cap (20).
+  - `retry_in_ms` (integer or null): Milliseconds remaining until the next automatic retry when in `reconnecting` (`Backoff`) state.
+  - `primary_pane` (integer or null): Bilterm `PaneId` of the primary connection pane.
+  - `panes` (array of objects): List of mapped panes `[{"pane": int, "tmux_pane": int}]`.
+  - `stale_panes` (array of integers): Panes previously mapped that were closed or orphaned.
+  - `last_exit` (object or null): Details of the last disconnect event:
+    - `cause` (string): High-level disconnect cause.
+    - `class` (string): Disconnect classification (`"transient"`, `"clean"`, `"fatal"`).
+    - `code` (integer or null): Process exit code.
+    - `reason` (string or null): `%exit` reason string or error diagnosis.
+    - `tail` (array of strings): Last sanitised diagnostic output lines from stderr/PTY.
+    - `at_ms` (integer): Timestamp (epoch milliseconds) of the disconnect.
+- **Error Responses**:
+  - If `params` is not an object or null: `-32602` `"invalid remote.link parameter: params must be an object"`.
+  - If `op` is not a string: `-32602` `"invalid remote.link parameter: op must be a string"`.
+  - If `op` is not one of the allowed operations: `-32602` `"invalid remote.link parameter: op must be one of status, reconnect, disconnect"`.
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 14, "method": "remote.link", "params": {"op": "status"}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "status": "handled",
+      "command": ":ssh-tmux info",
+      "active_pane_id": 1,
+      "pane_count": 2,
+      "link": {
+        "state": "connected",
+        "dest": "user@remote",
+        "session": "bilterm",
+        "attempt": 0,
+        "max_attempts": 20,
+        "retry_in_ms": null,
+        "primary_pane": 1,
+        "panes": [
+          {"pane": 1, "tmux_pane": 0}
+        ],
+        "stale_panes": [],
+        "last_exit": null
+      }
     }
   }
   ```
@@ -688,7 +760,7 @@ When started with `bilterm --mcp`, Bilterm provides a native Model Context Proto
 
 ### Master Table of MCP Tools
 
-The server exposes **13 tools** (the `tools/list` result).
+The server exposes **14 tools** (the `tools/list` result).
 
 | Tool Name | Parameters (`inputSchema`) | Action / Purpose | Underlying RPC |
 | :--- | :--- | :--- | :--- |
@@ -699,6 +771,7 @@ The server exposes **13 tools** (the `tools/list` result).
 | `bilterm_colon_command` | `command` (string, req) | Execute any `:colon` command (`:split v`, `:layout stack`, `:theme 3278`, `:get theme`). | `wm.command` |
 | `bilterm_run_playbook` | `toml` (string, req) | Execute a declarative TOML automation playbook against the workspace. | `playbook.run` |
 | `bilterm_remote_connect` | `target` (string, req), `tmux_session` (string) | Spawn remote SSH or `tmux -CC` pane and register in fleet registry. | `remote.connect_ssh` |
+| `bilterm_remote_link` | `op` (string, optional: `"status"`, `"reconnect"`, `"disconnect"`) | Show link status, reconnect immediately, or disconnect persistent remote tmux link. | `remote.link` |
 | `bilterm_fleet_exec` | `selector` (string, req), `command` (string, req) | Fan out shell command across sessions matching selector (`all`, `local`, `remote`, `@tag`, node). | `fleet.exec` |
 | `bilterm_workspace_fontsize`| `action` (string), `size` (integer) | Query or dynamically adjust terminal font size and scale percentage. | `workspace.fontsize` |
 | `bilterm_canvas` | `command` (string) | Control Tektronix 4014 vector storage-tube and modern retained graphics canvas. | `canvas.command` |

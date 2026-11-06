@@ -60,6 +60,8 @@ src/
 │   ├── parse_visual.rs         # Parses visual/theme/font/drawer/canvas ":..." strings into Result<Action, String>
 │   ├── parse_agents_list.rs    # `:agents list <verb>` grammar; every non-matching form is one usage error (Phase 51)
 │   ├── execute_agents_list.rs  # Runs an `AgentsListOp`, sets its status and the scalars-only window summary (Phase 51)
+│   ├── parse_link.rs           # `:ssh-tmux` sub-verb grammar (reconnect, disconnect, info, prefill) (Phase 51.1)
+│   ├── execute_link.rs         # Remote link execution and link_summary_json (Phase 51.1)
 │   ├── execute.rs              # Executes ColonCommand against the active CompositePane
 │   └── execute_wm.rs           # Executes Action against WindowManager (WindowManager::apply)
 ├── config/
@@ -67,6 +69,7 @@ src/
 ├── input/
 │   ├── mod.rs                  # Top-level handle_wm_key_event (<= 80 lines), handle_key_event, handle_paste_event
 │   ├── keymap.rs               # Declarative DEFAULT_LEADER_BINDINGS, DEFAULT_GLOBAL_BINDINGS, DEFAULT_PANE_BINDINGS
+│   ├── link_mouse.rs           # Banner hotkeys and mouse click routing for link and held banners (Phase 51.1)
 │   ├── agents_list.rs          # AGENTS list mouse: pure `plan_agents_list_mouse` plus a thin applier (Phase 51, UIT-03)
 │   ├── agents_list_keys.rs     # AGENTS list key table `AGENTS_LIST_BINDINGS` (Phase 51, UIT-03)
 │   ├── modal.rs                # Modal key handlers (Help, Inspector, Palette, Menubar, Copy, Hints, Fuzzy, History)
@@ -119,6 +122,10 @@ src/
 │   ├── agents_list_geometry.rs # AGENTS list rect, layout and hit-test; the one source for render and mouse (Phase 51)
 │   ├── agents_demo.rs          # `:agents demo` / `:agents demo stop`: spawned-pane record and demo event purge (Phase 51, UIT-01)
 │   ├── panel_dock.rs           # Dock strip for `:arrange`: docked panels, slots and `set_panel_docked` (Phase 51, UIT-04)
+│   ├── tmux_link.rs            # Persistent link lifecycle, supervisor, connect/reconnect/disconnect (Phase 51.1)
+│   ├── tmux_io.rs              # I/O pumps: input send-keys, outbound greeting gate, hydrate capture, resize (Phase 51.1)
+│   ├── pane_hold.rs            # Exited remote pane hold and respawn_active_pane (Phase 51.1)
+│   ├── link_cmd.rs             # RemoteLinkOp vocabulary for :ssh-tmux sub-verbs (Phase 51.1)
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── daemon/
 │   ├── mod.rs                  # Background Multiplexer Daemon exports, DaemonAction & DaemonHandshake
@@ -151,7 +158,12 @@ src/
 │   ├── status_bar.rs           # IBM 3270 OIA status bar & Borland DOS F1..F10 Function-Key bar
 │   └── theme.rs                # 5 built-in retro ThemePresets (Borland Blue/Cyan, IBM 3278/3279, Mono)
 ├── tmux/
-│   └── mod.rs                  # TmuxEnv ($TMUX detection), DCS passthrough, TmuxControlBridge (tmux -CC)
+│   ├── mod.rs                  # TmuxEnv ($TMUX detection), DCS passthrough, TmuxControlBridge (tmux -CC)
+│   ├── link.rs                 # LinkState, LinkTarget, LinkSummary, LinkBanner, LinkEvent, LinkCmd (Phase 51.1)
+│   ├── reconnect.rs            # Pure LinkMachine, capped exponential backoff, exit classification (Phase 51.1)
+│   ├── splitter.rs             # ControlLineSplitter: raw PTY stream and ESC P 1000 p sentinel (Phase 51.1)
+│   ├── transport.rs            # PtyLinkDriver, PtyLinkConnector, LinkDriver and LinkConnector traits (Phase 51.1)
+│   └── hydrate.rs              # ReplyCorrelator, HydratePlanner, capture-pane hydration (Phase 51.1)
 ├── remote/
 │   └── mod.rs                  # Validated SSH argv builders, RemoteHostProfile, FleetRegistry & FleetSelector
 └── api/
@@ -160,7 +172,8 @@ src/
     ├── rpc.rs                  # AutomationControlPlane JSON-RPC 2.0 method dispatcher & confined PPM snapshots
     ├── rpc_handlers.rs         # JSON-RPC 2.0 workspace/pane/session.save/session.restore/fleet handlers
     ├── rpc_agents.rs           # `agents.list` and `agents.demo` RPC methods; both lower to `:agents ...` colon commands (Phase 51)
-    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (13 agent tools)
+    ├── rpc_link.rs             # remote.link RPC handler and honest connect result (Phase 51.1)
+    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (14 agent tools)
     ├── playbook.rs             # AutomationEvent bus & declarative TOML Playbook runner
     ├── server.rs               # Async Unix domain socket (0600 + peer UID) & TCP bearer-token RPC server/client
     └── tests.rs                # Security & RPC unit tests
@@ -320,6 +333,75 @@ The AGENTS list window (`src/wm/agents_list*.rs`, `src/input/agents_list*.rs`, `
 7. **Dock.** `set_panel_docked` is the only writer of the `docked` flag. Release the dock on every manual geometry change and on close, and add the panel to `DockPanel` and the `:arrange` hook (`src/wm/panel_dock.rs`).
 8. **Colon, API and palette.** Parse and execute the colon form. For RPC, add the method to `dispatch_method` and to `RPC_METHODS` (`src/api/rpc_agents.rs` is the pattern); for MCP, add a tool mapping in `src/api/mcp.rs`. Add a palette entry or a `PALETTE_EXCLUSIONS` row, a help row and a completion row.
 9. **Docs.** Document every verb in the user guide. The doc gate (`scripts/check_phase50_doc_coverage.sh`) reads the `:agents` and `:drawer` completion rows automatically, so a new verb there must appear in chapter 11 as `:<cmd> <verb>`. Chapter 11's "Surface uniformity" table records the path for each surface, and any exception with its reason.
+
+## 6d. Persistent SSH + tmux link (Phase 51.1)
+
+Phase 51.1 introduces persistent remote `tmux -CC` sessions over SSH (`:ssh-tmux`), replacing the local-shell placeholder with a real PTY transport, an interactive connection phase, a pure supervisor state machine with exponential backoff, bi-directional I/O pumps, and topology hydration.
+
+### Module Map
+
+- **`src/tmux/link.rs`**: Core types and traits (`LinkState`, `LinkTarget`, `LinkSummary`, `LinkExitSummary`, `LinkBanner`, `LinkEvent`, `LinkCmd`, `ReconnectPolicy`, `LinkDriver`, `LinkConnector`).
+- **`src/tmux/reconnect.rs`**: Pure clock-injected `LinkMachine` state machine, deterministic capped exponential backoff (`backoff_delay_ms`: 1, 2, 4, 8, 16, 30s; max 20 attempts), exit classification (`classify_exit`), and banner text formatting (`link_banner_text`).
+- **`src/tmux/splitter.rs`**: `ControlLineSplitter` separating raw initial terminal text (SSH prompts, host-key questions) and the DCS sentinel (`ESC P 1000 p`) from line-oriented `tmux -CC` control streams (`%begin`, `%output`, etc.).
+- **`src/tmux/transport.rs`**: `PtyLinkDriver` and `PtyLinkConnector` implementing child process spawning via `portable-pty`, reading PTY bytes, and writing stdin.
+- **`src/tmux/hydrate.rs`**: `ReplyCorrelator` (FIFO block correlation), `HydratePlanner` (300 ms post-greeting settle, `refresh-client` and `capture-pane` planning), `capture_pane_command`, and `render_capture`.
+- **`src/wm/tmux_link.rs`**: Top-level link lifecycle on `WindowManager` (`connect_ssh_tmux`, `tick_tmux_link`, `link_reconnect`, `link_disconnect`, `tmux_link_summary`, `tmux_link_forget`), single-link guard, and structured `bilterm::link` tracing.
+- **`src/wm/tmux_io.rs`**: Three bi-directional I/O pumps (`pump_tmux_input`, `pump_tmux_outbound`, `pump_tmux_replies`), pane reconciliation (`reap_removed_tmux_panes_and_sync_fleet`), and orphan tagging.
+- **`src/wm/pane_hold.rs`**: `reap_or_hold_exited` holding exited remote panes with status banners and `respawn_active_pane`.
+- **`src/colon_command/parse_link.rs` & `execute_link.rs`**: Grammar and execution for `:ssh-tmux reconnect|disconnect|info|prefill` and `link_summary_json`.
+- **`src/input/link_mouse.rs`**: Interactive banner key routing (`Enter`/`r`, `x`, `d`) and left-click handling on banner rows.
+- **`src/api/rpc_link.rs`**: JSON-RPC `remote.link` method and honest `remote.connect_tmux` / `remote.connect_ssh` result formatting.
+
+### State Machine & Transitions
+
+The link supervisor is a pure finite state machine (`LinkMachine` in `src/tmux/reconnect.rs`) driven by `LinkEvent` and timestamps:
+
+| State | Transition Trigger | Next State | Actions Generated |
+|-------|--------------------|------------|-------------------|
+| `Idle` | `ConnectRequested(target)` | `Connecting` | `[SpawnTransport(target)]` |
+| `Connecting` | `ControlStarted` (`ESC P 1000 p` seen) | `Connected` | `[MarkConnected, UpdateBanners]` |
+| `Connecting` | Process exit / error | `Backoff` or `Failed` | `[KillTransport, UpdateBanners]` |
+| `Connected` | Disconnect / EOF / transient `%exit` | `Backoff` | `[KillTransport, UpdateBanners]` |
+| `Connected` | Clean `%exit` / remote session ended | `Ended` | `[KillTransport, UpdateBanners]` |
+| `Backoff` | Timer reaches `retry_at_ms` | `Connecting` | `[SpawnTransport(target)]` |
+| `Backoff` | User disconnect (`:ssh-tmux disconnect`) | `Detached` | `[KillTransport, MarkDetached]` |
+| `Backoff` | Attempt count exceeds 20 | `Failed` | `[MarkFailed, UpdateBanners]` |
+| Any | `ReconnectRequested` (`Ctrl+Alt+R`, `Enter`) | `Connecting` | `[KillTransport, SpawnTransport(target)]` |
+
+### Tick Processing Order (`tick_tmux_link`)
+
+Each frame in `tick_tmux_link(now_ms)` executes operations in strict sequence:
+1. **Driver Poll**: Polls the link transport driver to drain incoming raw bytes through `ControlLineSplitter`.
+2. **Control Line Processing**: Feeds completed control lines to `poll_tmux_control()`.
+3. **Input Pump (`pump_tmux_input`)**: Flushes user keyboard input to `send-keys -H` chunks or raw PTY stdin.
+4. **Outbound Pump (`pump_tmux_outbound`)**: Flushes queued bridge commands (`split-window`, `resize-pane`) once greeting block has ended.
+5. **Hydration Pump (`pump_tmux_replies`)**: After 300 ms settle delay, executes `capture-pane` queries and hydrates screen cells via `render_capture`.
+6. **Supervisor Tick**: Calls `link_machine.tick(now_ms)` to handle retry deadlines and state transitions.
+7. **Banner Updates**: Refreshes link banners on active and mapped panes.
+
+### Headless Testing Architecture
+
+The entire subsystem is designed to be fully testable without network access, real SSH servers, or macOS targets:
+- **`WindowManager::new_headless()`**: Instantiates an isolated in-memory window manager without a host TTY.
+- **`TmuxControlSubprocess::from_channels()`**: Injects mock `cmd_tx` and `line_rx` channels to simulate arbitrary `tmux -CC` control responses (`%begin`, `%output`, `%layout-change`, `%exit`).
+- **Mock `LinkConnector` & `LinkDriver`**: Implement the `LinkConnector` trait to simulate process spawning, stream delays, or network failures in tests (`wm.set_link_connector(Box::new(mock))`).
+- **Clock Injection**: Time is explicitly passed as `now_ms: u64` to `wm.tick_tmux_link(now_ms)` and `LinkMachine::tick(now_ms)`. No test depends on `tokio::time::sleep`, `std::thread::sleep`, or real wall clocks.
+
+### Test Suites
+
+- `tests/phase51_1_link_seam.rs`: Architectural compilation seam, action lowering, and stub validation.
+- `tests/phase51_1_ssh_argv.rs`: Frozen SSH argv generation, login shell wrapping, and argument redaction.
+- `tests/phase51_1_transport.rs`: PTY link driver, control line splitter, and sentinel detection.
+- `tests/phase51_1_reconnect.rs`: Pure `LinkMachine` state machine, backoff calculation, and exit classification.
+- `tests/phase51_1_bridge.rs`: Bridge unseeding, pane adoption, and `%exit` sanitization.
+- `tests/phase51_1_hydrate.rs`: `ReplyCorrelator` FIFO block parsing and `HydratePlanner` capture generation.
+- `tests/phase51_1_hold.rs`: Exited shell retention with diagnostic banners and respawn-in-place.
+- `tests/phase51_1_labels.rs`: Honest restore labels and drawer badge filtering.
+- `tests/phase51_1_catalog.rs`: Tab completion, palette discovery, and menu bar parity.
+- `tests/phase51_1_input.rs`: Banner hotkeys, mouse clicks, and raw password passthrough safety.
+- `tests/phase51_1_api.rs`: `remote.link` RPC method and `bilterm_remote_link` MCP tool conformance.
+- `tests/phase51_1_link.rs`: Full headless link lifecycle, reconnection supervisor, and fake-clock timing.
+- `tests/phase51_1_io.rs`: Bi-directional I/O pumps (`input`, `outbound`, `replies`), pane hydration, and resize synchronization.
 
 ---
 

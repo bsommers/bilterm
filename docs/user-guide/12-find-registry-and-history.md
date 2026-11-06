@@ -150,7 +150,7 @@ Typing has no mouse path; the mouse equivalents are the tabs, the `[clear]` chip
 - **Session row, saved:** the saved session is switched to. The outgoing session is autosaved first, and the status says so (or says that autosave is off).
 - **Session row, history only** (a `history.log` with no saved layout): the status says `session <name> has history only (no saved layout)` and the window stays open.
 - **Pane row inside a saved session:** the session is switched to, then the pane is focused if its id is still present.
-- **`metadata_only` row** (an `:ssh-tmux` label, gap G2): the pane is focused, and the status says that no remote tmux is attached.
+- **`metadata_only` row** (an unattached `:ssh-tmux` label): the pane is focused, and the status says that no remote tmux is attached.
 - **No row selected:** the status says `Find: no result selected`.
 
 ---
@@ -224,8 +224,8 @@ Find sees what Bilterm itself did in a pane. For SSH and tmux that is less than 
 |------|-----------------|-------------------------|-----|
 | A local pane, command typed in the command box | History row with `cwd` (OSC 7 reported, or the tracked local cwd) and the exit code when OSC 133 reports one | Commands typed in raw mode | P-01, G4 |
 | `:ssh user@host` pane | Pane row with transport `ssh` and `host`. Commands typed in the command box are recorded with `host` and `transport: ssh` | The remote cwd and exit code, unless the remote shell itself reports OSC 7 and OSC 133. Raw-mode input | G3, G8, G4 |
-| `:ssh-tmux host [session]` pane | A `metadata_only` row with transport `ssh-tmux`, the host, and the session name as a label. It is **a label only** | **No tmux starts.** The pane is a local shell with a remote label. Commands typed in it ran locally, yet their history rows carry the remote `host` and `transport: ssh-tmux` | G2 |
-| `tmux -CC` bridge panes (transport `tmux`) | When a control stream is attached, the tmux session, window (`@2` or `@2:name`) and tmux pane | **Nothing in the product attaches the bridge.** Bridge rows appear only where code attaches a control stream | G1, P-02 |
+| `:ssh-tmux host [session]` pane | Active pane with transport `ssh-tmux`, host, session, and live link state | When not connected, row is `metadata_only` | Resolved in Phase 51.1 (formerly G2) |
+| `tmux -CC` bridge panes (transport `tmux`) | When a control stream is attached, the tmux session, window (`@2` or `@2:name`) and tmux pane | Multiple simultaneous links (one link at a time) | Resolved in Phase 51.1 (formerly G1, P-02) |
 | A `tmux` or `ssh` you run by hand inside a local pane | Whatever the local shell recorded, as local commands | Input typed inside the program (raw mode). The pane is **not** an SSH pane | G4, G5 |
 | Restored session with SSH panes | Local shell panes | The remote target is lost on restore | G6 |
 | Headless daemon (`--headless`) | Rows for the panes the daemon holds | Live SSH or tmux PTYs: the daemon holds none | G7 |
@@ -238,8 +238,8 @@ Find sees what Bilterm itself did in a pane. For SSH and tmux that is less than 
 
 These are the documented gaps of the current build.
 
-- **G1: The `tmux -CC` bridge is not reachable from any command.** There is no `:tmux` command. The bridge code only attaches when code or tests attach a control stream. Only one tmux session at a time.
-- **G2: `:ssh-tmux` starts no tmux.** It makes a local shell pane with a remote label and registers a fleet node. Its row is `metadata_only`. An earlier version of chapter 5 said it ran `ssh -tt` with `tmux -CC`; that was wrong and is corrected.
+- **G1: Resolved in Phase 51.1.** The `tmux -CC` bridge is attached via `:ssh-tmux <user@host> [session]` with persistent auto-reconnect and hydration. Only one tmux link at a time in this version.
+- **G2: Resolved in Phase 51.1.** `:ssh-tmux` spawns a real PTY-backed `ssh -tt` session running `tmux -CC` with keepalive options, login-shell wrapper, interactive host-key/password prompts, and automatic reconnect with exponential backoff.
 - **G3: Remote OSC 133 and OSC 7 are never requested.** Bilterm does not send a shell-integration bootstrap to a remote host. A remote exit code and cwd need a remote shell that already emits OSC 133 (exit status) and OSC 7 (cwd).
 - **G4: Raw-mode input is not recorded.** Input in `INPUT: RAW PTY` mode, input to full-screen programs, and remote shell input that bypasses the command box are not captured. Anything typed before attach is not recorded either.
 - **G5: A local pane where you typed `ssh host` is not an SSH pane.** Find does not infer a transport from command text.

@@ -87,6 +87,9 @@
 | `Alt+L` | `<L> l` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane |
 | `Alt+P` | `<L> P` / `<L> H` | `:history` / `:hist` | Toggle Borland Command History Pop-up Window |
 | — | `<L> R` | `:record workspace` | Start or stop whole-workspace Asciicast v2 (`.cast`) recording (`⏺ REC`) |
+| `Ctrl+Alt+R` | `<L> U` | `:ssh-tmux reconnect` | Reconnect persistent remote tmux link now (skips retry timer; reserved in raw passthrough; menu Tmux > Reconnect link) |
+| — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (menu Tmux > SSH tmux link...) |
+| — | `<L> Q` | `:ssh-tmux disconnect` | Stop persistent remote tmux link; remote tmux session keeps running (menu Tmux > Disconnect link) |
 | `Alt+X` | `<L> x` | `:crosshair` | Cycle IBM 3270 Cross-Hair Cursor (`Pane-Local` -> `Full-Screen` -> `Off`) |
 | `Alt+O` | `<L> L` | `:spotlight` | Cycle Focal Spotlight shader around active cursor (`Circle` -> `Ellipse` -> `Pixel` -> `Off`) |
 | `Alt+Shift+O` | — | `:focalzoom` | Cycle Focal Zoom Magnifying Lens (`1.25x` -> `1.5x` -> `2.0x` -> `Off`) |
@@ -116,7 +119,19 @@ The list takes the keyboard when it opens and when you click inside it. Table `A
 | `Esc` | Close, or release the keyboard when pinned (`:agents list dismiss`) |
 | `Ctrl+Alt+N` | Close the list (`:agents list toggle`) |
 
-### Menu bar entries added in Phase 51
+### Interactive Link Banner & Held Pane Keys
+
+When an active pane shows an interactive link banner (`Backoff`, `Failed`, `Detached`, or `Ended` state):
+
+| Key | `:command` twin | Effect |
+|-----|-----------------|--------|
+| `Enter` / `r` / `R` | `:ssh-tmux reconnect` | Reconnect persistent remote tmux link immediately (skips backoff timer) |
+| `x` / `X` | `:ssh-tmux disconnect` | Stop remote tmux link; remote tmux session keeps running |
+| `d` / `D` | `:detach` | Detach Bilterm client |
+
+Non-interactive banners (`Connecting`) pass keystrokes directly to the PTY raw so password and SSH prompts are never swallowed.
+
+### Menu bar entries added in Phase 51 & Phase 51.1
 
 | Menu entry | Runs |
 |------------|------|
@@ -124,6 +139,10 @@ The list takes the keyboard when it opens and when you click inside it. Table `A
 | View > Agent Demo (Ctrl+X y) | `:agents demo` |
 | View > Stop Agent Demo (Ctrl+X Y) | `:agents demo stop` |
 | Window > Tile Windows & Panels | `:arrange grid` |
+| Tmux > SSH tmux link... (Ctrl+X u) | `:ssh-tmux prefill` |
+| Tmux > Reconnect link (Ctrl+Alt+R) | `:ssh-tmux reconnect` |
+| Tmux > Disconnect link (Ctrl+X Q) | `:ssh-tmux disconnect` |
+| Tmux > Link info | `:ssh-tmux info` |
 
 Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded exclusion with a reason. `:arrange` has no key chord: use the palette (`Ctrl+P`, then `arrange`) or the Window menu. The full mapping is in [Chapter 11, Surface uniformity](11-navigator-sidebar-and-agent-traffic.md#surface-uniformity).
 
@@ -231,6 +250,8 @@ Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded
 | **AGENTS list: drag the title bar, an edge or a corner** | Move / resize the window (the drag sends `:agents list rect` as it moves; the keys and colon use `move` and `resize`) |
 | **AGENTS list: wheel / `Ctrl` + wheel** | Scroll three rows / step the window scale by 10 percent on the GUI surface (`:agents list scroll`, `scale +n`/`-n`) |
 | **Open menu-bar dropdown** | Takes the click before the AGENTS list and Agent Traffic windows (a click on a dropdown item runs that item) |
+| **Click on interactive link banner row** | Reconnect persistent remote tmux link immediately (`RemoteLink(Reconnect)` / `:ssh-tmux reconnect`) |
+| **Click on held remote exit banner row** | Respawn exited shell in-place inside held pane (`RespawnPaneInPlace` / `:respawn-pane`) |
 
 ---
 
@@ -357,7 +378,11 @@ Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
 | `:ssh` | — | `<user@host \| profile> [port]` | Connect active pane to remote SSH host or named `[remotes.<profile>]` (`SSH:<host>` badge in OIA) |
-| `:ssh-tmux` | `:sshtmux` | `<user@host \| profile> [session]` | Attach or spawn persistent remote `tmux -CC` session over SSH |
+| `:ssh-tmux` | `:sshtmux` | `<user@host \| profile> [session]` | Attach or spawn persistent remote `tmux -CC` session over SSH (`ssh -tt`) |
+| `:ssh-tmux reconnect` | — | *(none)* | Reconnect the persistent remote tmux link immediately (skips backoff timer; `Ctrl+Alt+R` / `Ctrl+X U`) |
+| `:ssh-tmux disconnect` | — | *(none)* | Stop the remote tmux link; remote tmux session keeps running on the host (`Ctrl+X Q`) |
+| `:ssh-tmux info` | — | *(none)* | Show tmux link state, retry timer, last exit reason and mapped panes |
+| `:ssh-tmux prefill` | — | *(none)* | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (`Ctrl+X u`) |
 | `:remote` | `:fleet`, `:herdr` | `list \| add <name> <user@host> [@tag1,@tag2] \| exec <all\|local\|remote\|@tag\|node> <cmd> \| disconnect <name>` | Register remote fleet nodes, inspect fleet status, fan out commands by `@tag`, or disconnect nodes |
 
 ### 6.8 Workspace Sessions, Master Control Program (`:mcp`), Exit Guard, Recording & Inspection
