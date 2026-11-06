@@ -195,14 +195,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [x] **FLT-02**: Agent traffic is observable: a bounded, redacted traffic bus, an `:agents zoom` window with a deterministic node/edge graph, and a read-only snoop view (compose line disabled until Phase 52).
 - [x] **FLT-03**: The agents graph and sidebar state icons render as GUI vector graphics (no new dependency), with TUI braille fallback.
 - [ ] **UNI-R01**: Surface uniformity rule (AGENTS.md convention 6): every capability has a mouse path, a key sequence working in GUI and TUI, and colon/palette/RPC/MCP commands, proven by parity tests. Applies to all phases from 50.1 on.
-- [ ] **FND-R01**: A read-only registry exposes agents, local/SSH/tmux sessions and per-session command history with stable ids.
-- [ ] **FND-R02**: `:find agent|session|history <text>` give ranked, selectable results that jump to the match.
-- [ ] **FND-R03**: SSH and tmux sessions are registered and searchable; capture gaps are documented.
-- [ ] **FND-R04**: `find.*` RPC/MCP, palette, completion, docs; bounded and redacted history.
-- [ ] **UIT-01**: `:agents demo stop` closes the demo's panes and clears its `[demo]` traffic events.
-- [ ] **UIT-02**: Every colon-command verb is reachable from the command palette (or listed as deliberately excluded), enforced by a test.
-- [ ] **UIT-03**: `:agents list` opens a floating, pinnable, key/mouse/verb-driven window listing only agents.
-- [ ] **UIT-04**: The window-tiling function includes the agents-list window.
+- [x] **FND-R01**: A read-only registry exposes agents, local/SSH/tmux sessions and per-session command history with stable ids.
+- [x] **FND-R02**: `:find agent|session|history <text>` give ranked, selectable results that jump to the match.
+- [x] **FND-R03**: SSH and tmux sessions are registered and searchable; capture gaps are documented.
+- [x] **FND-R04**: `find.*` RPC/MCP, palette, completion, docs; bounded and redacted history.
+- [x] **UIT-01**: `:agents demo stop` closes the demo's panes and clears its `[demo]` traffic events.
+- [x] **UIT-02**: Every colon-command verb is reachable from the command palette (or listed as deliberately excluded), enforced by a test.
+- [x] **UIT-03**: `:agents list` opens a floating, pinnable, key/mouse/verb-driven window listing only agents.
+- [x] **UIT-04**: The window-tiling function includes the agents-list window.
 - [ ] **PST-01**: `:ssh-tmux` runs real ssh -tt + tmux -CC new -A with keepalive and honest status.
 - [ ] **PST-02**: tmux bridge hardened with reconnect/backoff and hydrate.
 - [ ] **PST-03**: exited remote panes held with banner; no fake remote badge on restore.
@@ -236,15 +236,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FLT-01 | Phase 50 | Complete |
 | FLT-02 | Phase 50 | Complete |
 | FLT-03 | Phase 50 | Complete |
-| UNI-R01 | Phases 50.1+ (cross-cutting) | Planned |
-| FND-R01 | Phase 50.1 | Planned |
-| FND-R02 | Phase 50.1 | Planned |
-| FND-R03 | Phase 50.1 | Planned |
-| FND-R04 | Phase 50.1 | Planned |
-| UIT-01 | Phase 51 | Planned |
-| UIT-02 | Phase 51 | Planned |
-| UIT-03 | Phase 51 | Planned |
-| UIT-04 | Phase 51 | Planned |
+| UNI-R01 | Phases 50.1+ (cross-cutting) | In progress (50.1 and 51 parity matrices delivered; 51.1+ pending) |
+| FND-R01 | Phase 50.1 | Complete |
+| FND-R02 | Phase 50.1 | Complete |
+| FND-R03 | Phase 50.1 | Complete |
+| FND-R04 | Phase 50.1 | Complete |
+| UIT-01 | Phase 51 | Complete |
+| UIT-02 | Phase 51 | Complete |
+| UIT-03 | Phase 51 | Complete |
+| UIT-04 | Phase 51 | Complete |
 | PST-01 | Phase 51.1 | Planned |
 | PST-02 | Phase 51.1 | Planned |
 | PST-03 | Phase 51.1 | Planned |

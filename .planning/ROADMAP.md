@@ -49,8 +49,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
 - [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
-- [ ] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
-- [ ] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
+- [x] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
+- [x] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
 - [ ] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
 - [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
@@ -803,24 +803,24 @@ Plans:
   3. `FND-R03`: SSH and tmux sessions register and are searchable (host, session name, window/pane, and the commands run there where capturable); gaps documented.
   4. `FND-R04`: RPC/MCP `find.*` methods, palette entries, completion, help and docs; bounded memory and redaction tested.
 
-**Plans**: 1/15 plans executed — locked decisions D-U1 (reserved first words), D-U2 (secrets dropped/masked, only a count shown), D-U3 (live first; every result carries its `source`) in 50.1-CONTEXT.md; shared interface in 50.1-CONTRACT.md; waves 0-4 with disjoint file ownership per wave
+**Plans**: 15/15 plans complete — locked decisions D-U1 (reserved first words), D-U2 (secrets dropped/masked, only a count shown), D-U3 (live first; every result carries its `source`) in 50.1-CONTEXT.md; shared interface in 50.1-CONTRACT.md; waves 0-4 with disjoint file ownership per wave
 
 Plans:
 - [x] 50.1-01-PLAN.md — Wave 0 seam (orchestrator-only): `Action::Find`/`FindOp`/`Modal::Find`, `:find`/`:finder` grammar, registry contract types and provider skeletons, key table + `Ctrl+Alt+F`/leader `?`, mouse/key hooks (wave 0)
-- [ ] 50.1-02-PLAN.md — Secret-looking command classifier `pane::redact::classify` (D-U2) (wave 1)
-- [ ] 50.1-03-PLAN.md — Live registry rows: agents, workspace session, terminal sessions with stable ids and `source` live (wave 1)
-- [ ] 50.1-04-PLAN.md — Fuzzy ranking with live-first group order (D-U3), palette parity (wave 1)
-- [ ] 50.1-05-PLAN.md — history.log `host=`/`transport=`/`cwd=` fields and `~exit` annotations, backward compatible (wave 1)
-- [ ] 50.1-06-PLAN.md — SSH / ssh-tmux / tmux -CC transport data, tmux window tracking, honest `metadata_only`/`cwd_trusted` (wave 1)
-- [ ] 50.1-07-PLAN.md — Find window rendering: tabs, rows, source tag on every row, masked count, footer chips, snapshots, GUI parity (wave 1)
-- [ ] 50.1-08-PLAN.md — Find window keys and mouse lowered to `Action`, key/mouse/colon parity (wave 1)
-- [ ] 50.1-09-PLAN.md — Completion, palette, help, View-menu entries for `:find`/`:finder` (wave 1)
-- [ ] 50.1-10-PLAN.md — Command capture: password-prompt leak fix, secret drop, bounded ring, host/cwd/exit join (wave 2)
-- [ ] 50.1-11-PLAN.md — Disk sources: saved-session files and history.log with source path, mask-on-read (wave 2)
-- [ ] 50.1-12-PLAN.md — `FindOp` execution: open/rerank/kind switch, jump, prefill (never runs), session switch (wave 2)
-- [ ] 50.1-13-PLAN.md — RPC `find.*` and MCP `bilterm_find` with `source` and `masked`; tool-count pins updated (wave 2)
-- [ ] 50.1-14-PLAN.md — User guide chapter 12, API/CHANGELOG/AGENTS docs, SSH/tmux gap table, doc coverage script (wave 3)
-- [ ] 50.1-15-PLAN.md — UNI-R01 parity matrix, D-U1..D-U3 end-to-end, bounds, `g:find` group, final gates (wave 4)
+- [x] 50.1-02-PLAN.md — Secret-looking command classifier `pane::redact::classify` (D-U2) (wave 1)
+- [x] 50.1-03-PLAN.md — Live registry rows: agents, workspace session, terminal sessions with stable ids and `source` live (wave 1)
+- [x] 50.1-04-PLAN.md — Fuzzy ranking with live-first group order (D-U3), palette parity (wave 1)
+- [x] 50.1-05-PLAN.md — history.log `host=`/`transport=`/`cwd=` fields and `~exit` annotations, backward compatible (wave 1)
+- [x] 50.1-06-PLAN.md — SSH / ssh-tmux / tmux -CC transport data, tmux window tracking, honest `metadata_only`/`cwd_trusted` (wave 1)
+- [x] 50.1-07-PLAN.md — Find window rendering: tabs, rows, source tag on every row, masked count, footer chips, snapshots, GUI parity (wave 1)
+- [x] 50.1-08-PLAN.md — Find window keys and mouse lowered to `Action`, key/mouse/colon parity (wave 1)
+- [x] 50.1-09-PLAN.md — Completion, palette, help, View-menu entries for `:find`/`:finder` (wave 1)
+- [x] 50.1-10-PLAN.md — Command capture: password-prompt leak fix, secret drop, bounded ring, host/cwd/exit join (wave 2)
+- [x] 50.1-11-PLAN.md — Disk sources: saved-session files and history.log with source path, mask-on-read (wave 2)
+- [x] 50.1-12-PLAN.md — `FindOp` execution: open/rerank/kind switch, jump, prefill (never runs), session switch (wave 2)
+- [x] 50.1-13-PLAN.md — RPC `find.*` and MCP `bilterm_find` with `source` and `masked`; tool-count pins updated (wave 2)
+- [x] 50.1-14-PLAN.md — User guide chapter 12, API/CHANGELOG/AGENTS docs, SSH/tmux gap table, doc coverage script (wave 3)
+- [x] 50.1-15-PLAN.md — UNI-R01 parity matrix, D-U1..D-U3 end-to-end, bounds, `g:find` group, final gates (wave 4)
 
 ### Phase 51: UI Tweaks & Command Parity
 
@@ -837,22 +837,22 @@ Plans:
   3. `UIT-03`: `:agents list` opens a floating, pinnable window showing only agents (name, state, pane), with key and mouse controls and `:agents` verbs (select, jump, pin, scale, close); non-modal; never steals PTY input unless focused; renders in TUI and GUI.
   4. `UIT-04`: the existing window-tiling function includes the agents-list window (and the other floating panels where missing) alongside windows when tiling is invoked.
 
-**Plans**: 0/13 plans complete — research done (51-RESEARCH-A/B/C), frozen contract in 51-CONTRACT.md (decisions D-01..D-04, UNI-R01 paths per capability); wave 1-2 seam plans are orchestrator-only, wave 3 is eight parallel plans with disjoint file ownership; assumes Phase 50.1 executes first
+**Plans**: 13/13 plans complete — research done (51-RESEARCH-A/B/C), frozen contract in 51-CONTRACT.md (decisions D-01..D-04, UNI-R01 paths per capability); wave 1-2 seam plans are orchestrator-only, wave 3 is eight parallel plans with disjoint file ownership; assumes Phase 50.1 executes first
 
 Plans:
-- [ ] 51-01-PLAN.md — Tracer: `:agents list` opens a rendered AGENTS window end to end; frozen `AgentsListOp`/`Action::AgentsList`/`PanelTarget::AgentsList`/`AgentsOp::DemoStop` and full colon grammar (wave 1, orchestrator-only seam)
-- [ ] 51-02-PLAN.md — Seams: frozen list geometry and hit-test, panel-dock and demo-state identity hooks, summaries (wave 2, orchestrator-only seam)
-- [ ] 51-03-PLAN.md — `:agents demo stop` (UIT-01): spawned-pane-only close, `[demo]` event and topology purge, replace-on-rerun, unredacted demo events (wave 3, sonnet)
-- [ ] 51-04-PLAN.md — Palette parity (UIT-02): probe sweep test, `PALETTE_EXCLUSIONS`, ~120 new palette entries incl. `drawer style navigator|classic`, completion/help rows for the Phase 51 verbs (wave 3, sonnet)
-- [ ] 51-05-PLAN.md — Agents-list core (UIT-03): rows, filter, selection, scroll, jump, zoom, pin, scale, dock flag, geometry ops, live refresh (wave 3, sonnet)
-- [ ] 51-06-PLAN.md — Agents-list rendering (UIT-03): TUI window and GUI scaled-panel path, occluders, texture overlap (wave 3, sonnet)
-- [ ] 51-07-PLAN.md — Agents-list keys and mouse (UIT-03, UIT-01): `Ctrl+Alt+N`, leader `A`/`y`/`Y`, in-window table, mouse plan/apply handler, GUI wheel routing (wave 3, sonnet)
-- [ ] 51-08-PLAN.md — Agents-list commands and menu (UIT-03): executor status and data, grammar hardening, View/Window menu entries (wave 3, sonnet)
-- [ ] 51-09-PLAN.md — Panel tiling (UIT-04): dock strip in the `:arrange` family for the list, traffic window and MCP console, release paths, no-panel identity (wave 3, sonnet)
-- [ ] 51-10-PLAN.md — RPC/HTTP/ctl/MCP `agents.list` and `agents.demo` (UNI-R01 API path), bounded closed parameters, transport parity (wave 3, sonnet)
-- [ ] 51-11-PLAN.md — Docs: chapter 11, key/mouse reference, API, developer guide; doc coverage gate green (wave 4, haiku)
-- [ ] 51-12-PLAN.md — Uniformity parity matrix (UNI-R01) across colon, key, mouse, palette, menu, RPC, MCP; Phase 50 parity test extended (wave 4, sonnet)
-- [ ] 51-13-PLAN.md — Final gate: `scripts/verify.sh`, `check_classic_goldens.sh` (11), `check_phase50_doc_coverage.sh` count update, bookkeeping (wave 5, sonnet)
+- [x] 51-01-PLAN.md — Tracer: `:agents list` opens a rendered AGENTS window end to end; frozen `AgentsListOp`/`Action::AgentsList`/`PanelTarget::AgentsList`/`AgentsOp::DemoStop` and full colon grammar (wave 1, orchestrator-only seam)
+- [x] 51-02-PLAN.md — Seams: frozen list geometry and hit-test, panel-dock and demo-state identity hooks, summaries (wave 2, orchestrator-only seam)
+- [x] 51-03-PLAN.md — `:agents demo stop` (UIT-01): spawned-pane-only close, `[demo]` event and topology purge, replace-on-rerun, unredacted demo events (wave 3, sonnet)
+- [x] 51-04-PLAN.md — Palette parity (UIT-02): probe sweep test, `PALETTE_EXCLUSIONS`, ~120 new palette entries incl. `drawer style navigator|classic`, completion/help rows for the Phase 51 verbs (wave 3, sonnet)
+- [x] 51-05-PLAN.md — Agents-list core (UIT-03): rows, filter, selection, scroll, jump, zoom, pin, scale, dock flag, geometry ops, live refresh (wave 3, sonnet)
+- [x] 51-06-PLAN.md — Agents-list rendering (UIT-03): TUI window and GUI scaled-panel path, occluders, texture overlap (wave 3, sonnet)
+- [x] 51-07-PLAN.md — Agents-list keys and mouse (UIT-03, UIT-01): `Ctrl+Alt+N`, leader `A`/`y`/`Y`, in-window table, mouse plan/apply handler, GUI wheel routing (wave 3, sonnet)
+- [x] 51-08-PLAN.md — Agents-list commands and menu (UIT-03): executor status and data, grammar hardening, View/Window menu entries (wave 3, sonnet)
+- [x] 51-09-PLAN.md — Panel tiling (UIT-04): dock strip in the `:arrange` family for the list, traffic window and MCP console, release paths, no-panel identity (wave 3, sonnet)
+- [x] 51-10-PLAN.md — RPC/HTTP/ctl/MCP `agents.list` and `agents.demo` (UNI-R01 API path), bounded closed parameters, transport parity (wave 3, sonnet)
+- [x] 51-11-PLAN.md — Docs: chapter 11, key/mouse reference, API, developer guide; doc coverage gate green (wave 4, haiku)
+- [x] 51-12-PLAN.md — Uniformity parity matrix (UNI-R01) across colon, key, mouse, palette, menu, RPC, MCP; Phase 50 parity test extended (wave 4, sonnet)
+- [x] 51-13-PLAN.md — Final gate: `scripts/verify.sh`, `check_classic_goldens.sh` (11), `check_phase50_doc_coverage.sh` count update, bookkeeping (wave 5, sonnet)
 
 ### Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)
 
@@ -1046,8 +1046,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
-| 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 1/15 | Planning | - |
-| 51. UI Tweaks & Command Parity (`UIT-01..04`) | 0/0 | Planning | - |
+| 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 15/15 | Complete | 2026-11-05 |
+| 51. UI Tweaks & Command Parity (`UIT-01..04`) | 13/13 | Complete | 2026-11-05 |
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 0/16 | Planning | - |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
 | 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |

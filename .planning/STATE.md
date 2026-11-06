@@ -1,14 +1,14 @@
 ---
 gsd_state_version: "1.0"
 milestone: v2.6.0
-current_phase: 46
-current_phase_name: shell-display-modes
+current_phase: 51
+current_phase_name: ui-tweaks-and-command-parity
 status: in_progress
-stopped_at: Completed 50.1-01-PLAN.md
-last_updated: "2026-11-05T23:55:52.980Z"
+stopped_at: Completed 51-13-PLAN.md (Phase 51 final gate)
+last_updated: "2026-11-06T01:52:21.591Z"
 last_activity: 2026-11-02
 last_activity_desc: "Phase 46 steps 46-01..06 committed (font default, :appearance, fresh-install Obsidian, :mode, ShellLayout, Zen/Minimal); GSD plans backfilled for 43-45"
-state_head: b0747939ab4f3c2d04f12d25ba9517f656500dc0
+state_head: 580fbca3e59eeeac948e8d8efa15d7ec57f42516
 progress:
   total_phases: 48
   completed_phases: 44
@@ -24,7 +24,7 @@ milestone_name: "UI Modernization (Phases 43-48): design system, display modes, 
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus:** Milestone `v2.6.0` UI Modernization — Phase 46 in progress (43, 44 done; 45 done except `:appearance` profile management, see `phases/45-design-system/GAPS.md`). Standing rule: add new looks, take NOTHING away from Legacy.
+**Current focus (2026-11-05):** Phases 50.1 (Unified Registry & Find, 15/15) and 51 (UI Tweaks & Command Parity, 13/13) complete on `feat/navigator-rows-and-launch`; next is 51.1 (persistent SSH + tmux). Open follow-ups: `.planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md`. Earlier focus: Milestone `v2.6.0` UI Modernization — Phase 46 in progress (43, 44 done; 45 done except `:appearance` profile management, see `phases/45-design-system/GAPS.md`). Standing rule: add new looks, take NOTHING away from Legacy.
 
 ## Current Position
 
@@ -79,6 +79,7 @@ Progress: [██████████] 100% (42/42 Phases)
 | Phase 50 P12 | 25min | 2 tasks | 12 files |
 | Phase 50 P14 | 20min | 2 tasks | 7 files |
 | Phase 50.1 P01 | ~1h | 3 tasks | 28 files |
+| Phase 51 P13 | 40min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,7 @@ Recent decisions affecting current work:
 - [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'
 - [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 52-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
 - [Phase 50]: 50-07: agents graph layout is Mutex-cached FR with 0.06 drift limit; active edge = success colour, selected = accent
+- [Phase 51]: 51-13: final gate green (verify.sh, 11 Legacy goldens, doc gates); UIT-01..04 and FND-R01..04 ticked; UNI-R01 stays open until 51.1+ ships its matrix
 - [Phase 50]: 50-13: fix-linux chosen - X11 fully wired (modifiers, Ctrl+wheel panel scale); Win32/macOS only set_gui_surface(true); Ctrl+wheel over panels still font-zooms there (known gap)
 
 ### Pending Todos
@@ -118,8 +120,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-05T23:55:52.752Z
-Stopped at: Completed 50.1-01-PLAN.md
+Last session: 2026-11-06T01:52:21.004Z
+Stopped at: Completed 51-13-PLAN.md (Phase 51 final gate)
 Resume file: None
 
 ## Quick Tasks Completed
