@@ -597,6 +597,8 @@ fn agents_op_colon_form(op: &AgentsOp) -> Option<String> {
 fn sample_ops() -> Vec<AgentsOp> {
     vec![
         AgentsOp::List,
+        AgentsOp::Demo,
+        AgentsOp::DemoStop,
         AgentsOp::Zoom(None),
         AgentsOp::Zoom(Some(2)),
         AgentsOp::Toggle(None),
