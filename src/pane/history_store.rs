@@ -126,6 +126,134 @@ pub fn parse_history_line(line: &str) -> Option<HistoryEntry> {
     Some(entry)
 }
 
+/// Optional per-command context written as extra header fields (`host=`, `transport=`, `cwd=`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HistoryMeta {
+    pub host: Option<String>,
+    pub transport: Option<String>,
+    pub cwd: Option<String>,
+}
+
+/// A history entry plus its optional meta fields and joined exit code.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryRecord {
+    pub entry: HistoryEntry,
+    pub host: Option<String>,
+    pub transport: Option<String>,
+    pub cwd: Option<String>,
+    pub exit_code: Option<i32>,
+}
+
+/// Prefix of an exit annotation line (never starts with `[`, so legacy readers skip it).
+const EXIT_ANNOTATION_PREFIX: &str = "~exit";
+
+fn is_safe_field_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'~' | b'/' | b'@' | b':' | b'+' | b'-')
+}
+
+/// Percent-encodes every byte outside `[A-Za-z0-9._~/@:+-]` so a value can never contain
+/// a space, `|`, `]`, `%` or a newline.
+fn percent_encode_field(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for &b in value.as_bytes() {
+        if is_safe_field_byte(b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// Reverses `percent_encode_field`; malformed escapes are kept verbatim.
+fn percent_decode_field(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && bytes[i + 1].is_ascii_hexdigit()
+            && bytes[i + 2].is_ascii_hexdigit()
+            && let Some(v) = std::str::from_utf8(&bytes[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// FNV-1a 32-bit hash of `text`'s bytes as 8 lowercase hex digits.
+fn fnv1a_32_hex(text: &str) -> String {
+    let mut h: u32 = 0x811c_9dc5;
+    for &b in text.as_bytes() {
+        h ^= u32::from(b);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    format!("{h:08x}")
+}
+
+/// Parses a command line including the optional meta header fields; `None` for non-command lines.
+pub fn parse_history_record(line: &str) -> Option<HistoryRecord> {
+    let entry = parse_history_line(line)?;
+    let (header, _) = line.strip_prefix('[')?.split_once("] ")?;
+    let mut rec = HistoryRecord {
+        entry,
+        host: None,
+        transport: None,
+        cwd: None,
+        exit_code: None,
+    };
+    for field in header.split(" | ").skip(1) {
+        if let Some(v) = field.strip_prefix("host=") {
+            rec.host = Some(percent_decode_field(v));
+        } else if let Some(v) = field.strip_prefix("transport=") {
+            rec.transport = Some(percent_decode_field(v));
+        } else if let Some(v) = field.strip_prefix("cwd=") {
+            rec.cwd = Some(percent_decode_field(v));
+        }
+    }
+    Some(rec)
+}
+
+/// One parsed `~exit | session=S | run=R | pane=N | h=<hex> | exit=<n>` annotation.
+struct ExitAnnotation {
+    run_id: String,
+    pane_id: Option<usize>,
+    hash: String,
+    exit_code: i32,
+}
+
+fn parse_annotation(line: &str) -> Option<ExitAnnotation> {
+    let rest = line.strip_prefix(EXIT_ANNOTATION_PREFIX)?;
+    let mut ann = ExitAnnotation {
+        run_id: String::new(),
+        pane_id: None,
+        hash: String::new(),
+        exit_code: 0,
+    };
+    let mut have_exit = false;
+    for field in rest.split(" | ") {
+        if let Some(v) = field.strip_prefix("run=") {
+            ann.run_id = v.to_string();
+        } else if let Some(v) = field.strip_prefix("pane=") {
+            ann.pane_id = v.parse().ok();
+        } else if let Some(v) = field.strip_prefix("h=") {
+            ann.hash = v.to_string();
+        } else if let Some(v) = field.strip_prefix("exit=") {
+            ann.exit_code = v.trim().parse().ok()?;
+            have_exit = true;
+        }
+    }
+    (have_exit && !ann.hash.is_empty()).then_some(ann)
+}
+
 /// A group of commands recorded by one bilterm run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistorySegment {
@@ -380,26 +508,73 @@ impl HistoryStore {
     /// Appends a command entry to the session file, compacting it past `max_entries` and
     /// pruning least-recently-modified session directories beyond `max_files`.
     pub fn record_command(&mut self, command: &str) -> std::io::Result<Option<PathBuf>> {
+        self.record_command_meta(command, &HistoryMeta::default())
+    }
+
+    /// Like `record_command`, appending `host=`/`transport=`/`cwd=` header fields (percent-encoded)
+    /// for each `Some` non-empty field of `meta`. With a default meta the line is byte-identical
+    /// to `record_command`'s historical output.
+    pub fn record_command_meta(
+        &mut self,
+        command: &str,
+        meta: &HistoryMeta,
+    ) -> std::io::Result<Option<PathBuf>> {
         if !self.enabled || self.base_dir.as_os_str().is_empty() || command.trim().is_empty() {
             return Ok(None);
         }
-        if let Some(parent) = self.session_file_path.parent() {
-            create_private_dir_all(parent)?;
+        let mut extra = String::new();
+        for (key, value) in [
+            ("host", &meta.host),
+            ("transport", &meta.transport),
+            ("cwd", &meta.cwd),
+        ] {
+            if let Some(v) = value.as_deref().filter(|v| !v.is_empty()) {
+                extra.push_str(&format!(" | {key}={}", percent_encode_field(v)));
+            }
         }
         let record_line = format!(
-            "[{} | session={} | run={} | pane={}] {}\n",
+            "[{} | session={} | run={} | pane={}{}] {}\n",
             format_iso_utc_now(),
             self.session_name,
             self.run_id,
             self.pane_id,
+            extra,
             escape_history_command(command)
         );
+        self.append_line(&record_line)?;
+        let _ = self.prune_excess_files();
+        Ok(Some(self.session_file_path.clone()))
+    }
 
+    /// Appends an exit annotation line for `command` (only its FNV-1a hash is stored, never the
+    /// text). Readers join it to the most recent matching entry of the same run and pane.
+    /// Disabled or path-less stores return `Ok(())`.
+    pub fn record_exit(&mut self, command: &str, exit_code: i32) -> std::io::Result<()> {
+        if !self.enabled || self.base_dir.as_os_str().is_empty() || command.trim().is_empty() {
+            return Ok(());
+        }
+        let line = format!(
+            "{EXIT_ANNOTATION_PREFIX} | session={} | run={} | pane={} | h={} | exit={}\n",
+            self.session_name,
+            self.run_id,
+            self.pane_id,
+            fnv1a_32_hex(command),
+            exit_code
+        );
+        self.append_line(&line)
+    }
+
+    /// Appends one already-formatted line (0600 file, 0700 dir), tracking the line count and
+    /// compacting past the 5% slack above `max_entries`.
+    fn append_line(&mut self, line: &str) -> std::io::Result<()> {
+        if let Some(parent) = self.session_file_path.parent() {
+            create_private_dir_all(parent)?;
+        }
         let mut file = crate::secure_fs::private_open_options()
             .create(true)
             .append(true)
             .open(&self.session_file_path)?;
-        file.write_all(record_line.as_bytes())?;
+        file.write_all(line.as_bytes())?;
         file.flush()?;
         drop(file);
 
@@ -412,9 +587,7 @@ impl HistoryStore {
         if count > self.max_entries + self.max_entries / 20 {
             self.compact()?;
         }
-
-        let _ = self.prune_excess_files();
-        Ok(Some(self.session_file_path.clone()))
+        Ok(())
     }
 
     /// Rewrites the session file keeping only the newest `max_entries` lines (temp file + atomic rename).
@@ -468,6 +641,39 @@ impl HistoryStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
             Err(e) => Err(e),
         }
+    }
+
+    /// Reads every command entry (oldest first) with its meta fields and exit code joined from
+    /// annotation lines in one forward pass. An annotation attaches to the most recent preceding
+    /// entry with the same `(run, pane)` and equal command hash that has no exit yet.
+    pub fn load_entries_annotated(&self) -> std::io::Result<Vec<HistoryRecord>> {
+        if self.base_dir.as_os_str().is_empty() {
+            return Ok(Vec::new());
+        }
+        let raw = match fs::read_to_string(&self.session_file_path) {
+            Ok(raw) => raw,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+        let mut records: Vec<HistoryRecord> = Vec::new();
+        let mut hashes: Vec<String> = Vec::new();
+        // Per (run, pane): indices of entries that still have no exit, oldest first.
+        let mut pending: HashMap<(String, Option<usize>), Vec<usize>> = HashMap::new();
+        for line in raw.lines() {
+            if let Some(rec) = parse_history_record(line) {
+                let key = (rec.entry.run_id.clone(), rec.entry.pane_id);
+                pending.entry(key).or_default().push(records.len());
+                hashes.push(fnv1a_32_hex(&rec.entry.command));
+                records.push(rec);
+            } else if let Some(ann) = parse_annotation(line)
+                && let Some(stack) = pending.get_mut(&(ann.run_id, ann.pane_id))
+                && let Some(pos) = stack.iter().rposition(|&i| hashes[i] == ann.hash)
+            {
+                let idx = stack.remove(pos);
+                records[idx].exit_code = Some(ann.exit_code);
+            }
+        }
+        Ok(records)
     }
 
     /// Groups the session's entries by run id (one segment per bilterm run), ordered by first appearance.
