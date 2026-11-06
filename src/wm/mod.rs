@@ -7,6 +7,8 @@ pub mod agents_list;
 pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
+pub mod script_studio;
+pub mod script_studio_cmd;
 pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
@@ -153,6 +155,8 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
+    pub(crate) script_studio: script_studio::ScriptStudioState,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -239,6 +243,7 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            script_studio: script_studio::ScriptStudioState::default(),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -766,6 +771,7 @@ impl WindowManager {
             self.quick_terminal.visible = false;
             self.agents_window.blur();
             self.agents_list.blur();
+            self.script_studio.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -780,6 +786,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.script_studio.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -791,6 +798,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.script_studio.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

@@ -557,6 +557,7 @@ impl GuiWorkspaceRenderer {
         // The AGENTS list floats above the traffic window; same masking rules (51-06).
         let list_scale = wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList);
         let list_overlay_rect = real_rect(crate::ui::typography::PanelTarget::AgentsList, list_scale, &|a| wm.agents_list_rect(a));
+        let script_overlay_rect = wm.script_studio_rect(ws_area);
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -572,6 +573,7 @@ impl GuiWorkspaceRenderer {
                 || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || list_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || script_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
@@ -795,6 +797,17 @@ impl GuiWorkspaceRenderer {
             } else if agents_scale != 100 && let Some(lr) = list_overlay_rect {
                 // An unscaled list stays above the scaled traffic window: re-push its cells last.
                 for (abs_r, abs_c) in (lr.y..lr.y + lr.height).flat_map(|y| (lr.x..lr.x + lr.width).map(move |x| (y, x))) {
+                    let under_top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                    if let Some(cell) = cell_buf.cell((abs_c, abs_r)).filter(|_| !under_top && abs_c >= viewport.x && abs_r >= viewport.y) {
+                        let (c, r) = (abs_c - viewport.x, abs_r - viewport.y);
+                        push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
+                    }
+                }
+            }
+            if let Some(sr) = script_overlay_rect {
+                for (abs_r, abs_c) in (sr.y..sr.y + sr.height).flat_map(|y| (sr.x..sr.x + sr.width).map(move |x| (y, x))) {
                     let under_top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));

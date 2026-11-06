@@ -608,6 +608,10 @@ pub fn handle_wm_mouse_event(
         .active_modal_rect(workspace_area)
         .is_some_and(|r| rect_contains(r, mouse.column, mouse.row));
     if wm.menubar_state().is_none() && !over_modal {
+        if let Some(action) = super::script_studio::handle_script_studio_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
+
         // The AGENTS list is the smaller, top-most panel: it sees the event before the traffic window.
         if let Some(action) = super::agents_list::handle_agents_list_mouse(wm, mouse, workspace_area) {
             return Ok(action);

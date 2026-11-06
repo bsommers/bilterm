@@ -11,6 +11,10 @@ use crate::wm::split_tree::SplitDirection;
 
 /// Executes a parsed `ColonCommand` against the multi-pane `WindowManager`.
 pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bool {
+    if wm.script_studio().recording {
+        let colon_line = cmd.colon_form_or_summary();
+        wm.script_studio_mut().record_colon_command(&colon_line);
+    }
     match cmd {
         ColonCommand::SplitHorizontal => {
             if let Err(err) = wm.split_focused(SplitDirection::Horizontal) {
@@ -828,6 +832,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::ScriptStudio(op) => {
+            if let Some(msg) = wm.script_studio_apply(&op) {
+                wm.active_pane_mut().set_status_message(Some(msg));
+            }
+            false
+        }
         ColonCommand::Find(op) => super::execute_find::execute_find_command(wm, op),
         ColonCommand::RespawnPaneInPlace => {
             wm.respawn_active_pane();

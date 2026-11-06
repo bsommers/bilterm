@@ -122,6 +122,7 @@ impl WindowManager {
         self.agents_list.active = true;
         self.agents_list.focused = true;
         self.agents_window.blur();
+        self.script_studio.blur();
         if was_active {
             self.normalize_selection();
         } else {

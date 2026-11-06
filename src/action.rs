@@ -183,6 +183,8 @@ pub enum Action {
     Agents(crate::wm::agents_cmd::AgentsOp),
     /// `:agents list <verb>` - the AGENTS list window (Phase 51, UIT-03).
     AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
+    /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
+    ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
     Find(crate::wm::find_cmd::FindOp),
     FontZoomIn,
@@ -251,6 +253,40 @@ impl Action {
             ry: None,
             delta_size: None,
             feather_pct: None,
+        }
+    }
+
+    /// Canonical colon form or string summary of this action for script recording and logs.
+    pub fn colon_form_or_summary(&self) -> String {
+        match self {
+            Self::ScriptStudio(op) => op.colon_form(),
+            Self::PaneFontCommand(sub) => format!(":font {sub}"),
+            Self::AgentsList(op) => op.colon_form(),
+            Self::SplitHorizontal => ":split h".to_string(),
+            Self::SplitVertical => ":split v".to_string(),
+            Self::DeckNext => ":deck next".to_string(),
+            Self::DeckPrev => ":deck prev".to_string(),
+            Self::FocusPane(id) => format!(":focus {id}"),
+            Self::ZoomToggle => ":zoom".to_string(),
+            Self::ClosePane => ":close".to_string(),
+            Self::Clear => ":clear".to_string(),
+            Self::PasteClipboard => ":paste".to_string(),
+            Self::Yank => ":yank".to_string(),
+            Self::PromptTop => ":top".to_string(),
+            Self::PromptBottom => ":bottom".to_string(),
+            Self::PromptSplitTop => ":prompt split-top".to_string(),
+            Self::PromptSplitBottom => ":prompt split-bottom".to_string(),
+            Self::PromptSplitToggle => ":prompt split".to_string(),
+            Self::Scrollback { clear: false } => ":scrollback".to_string(),
+            Self::Scrollback { clear: true } => ":scrollback clear".to_string(),
+            Self::Theme(t) => format!(":theme {}", t.label()),
+            Self::Glyphs(g) => format!(":glyphs {:?}", g).to_lowercase(),
+            Self::FontZoomIn => ":fontsize +".to_string(),
+            Self::FontZoomOut => ":fontsize -".to_string(),
+            Self::FontZoomReset => ":fontsize reset".to_string(),
+            Self::FontSetSize(pt) => format!(":fontsize {pt}"),
+            Self::HelpToggle => ":help".to_string(),
+            other => format!("{other:?}"),
         }
     }
 }
@@ -393,6 +429,7 @@ mod tests {
             Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
             Action::AgentsList(_) => Some(":agents list toggle"),
+            Action::ScriptStudio(_) => Some(":script toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
@@ -612,6 +649,7 @@ mod tests {
             Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::AgentsList(crate::wm::agents_list_cmd::AgentsListOp::Toggle),
+            Action::ScriptStudio(crate::wm::script_studio::ScriptStudioOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
             Action::Find(FindOp::Open { kind: FindKind::History, query: String::new() }),

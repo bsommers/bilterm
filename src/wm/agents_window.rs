@@ -586,6 +586,7 @@ impl WindowManager {
         self.agents_window.active = true;
         self.agents_window.focused = true;
         self.agents_list.blur();
+        self.script_studio.blur();
         if let Some(id) = focus
             && self.panes.contains_key(&id)
         {

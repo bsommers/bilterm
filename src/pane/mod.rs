@@ -778,6 +778,11 @@ impl CompositePane {
         Ok(())
     }
 
+    /// Convenience wrapper for writing input bytes into the pane's PTY.
+    pub fn write_input(&mut self, bytes: &[u8]) -> Result<()> {
+        self.write_to_pty(bytes)
+    }
+
     /// Returns the most recent byte payload passed to [`Self::write_to_pty`].
     pub fn last_pty_write(&self) -> &[u8] {
         &self.last_pty_write

@@ -10,6 +10,8 @@ pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
 mod mouse_wm;
+pub mod script_studio;
+pub mod script_studio_keys;
 
 pub use encode::{
     encode_alternate_scroll_wheel, encode_key_to_pty_bytes, encode_key_to_pty_bytes_full,

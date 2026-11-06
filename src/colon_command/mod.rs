@@ -12,6 +12,7 @@ mod parse_agents_list;
 mod parse_config;
 mod parse_find;
 mod parse_link;
+mod parse_script;
 mod parse_visual;
 
 pub use crate::action::Action;
