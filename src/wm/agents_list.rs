@@ -17,10 +17,6 @@ use crate::wm::WindowResizeEdge;
 use crate::wm::agent_state::AgentState;
 use crate::wm::agents_list_cmd::{AgentsListOp, ListFilter};
 
-/// Smallest workspace in which the window renders at all.
-pub const LIST_MIN_WORKSPACE: (u16, u16) = (24, 6);
-/// Default window width in columns (never wider than the workspace).
-pub const LIST_DEFAULT_WIDTH: u16 = 36;
 /// Maximum characters of an agent name shown in a row.
 pub const LIST_NAME_CAP: usize = 24;
 
@@ -155,26 +151,6 @@ impl WindowManager {
             row_count: self.agents_list_rows().len(),
             scale_pct: self.scale_setting(crate::ui::typography::PanelTarget::AgentsList),
         }
-    }
-
-    /// Window rect inside `ws`, or `None` when inactive or the workspace is too small.
-    pub fn agents_list_rect(&self, ws: Rect) -> Option<Rect> {
-        let s = &self.agents_list;
-        if !s.active || ws.width < LIST_MIN_WORKSPACE.0 || ws.height < LIST_MIN_WORKSPACE.1 {
-            return None;
-        }
-        if let Some(r) = s.rect {
-            let clamped = r.intersection(ws);
-            if clamped.width >= 4 && clamped.height >= 3 {
-                return Some(clamped);
-            }
-        }
-        let width = LIST_DEFAULT_WIDTH.min(ws.width);
-        let rows = u16::try_from(self.agents_list_rows().len()).unwrap_or(u16::MAX);
-        let height = rows.saturating_add(4).min(ws.height * 70 / 100).max(6).min(ws.height);
-        let x = ws.x + ws.width.saturating_sub(width + 1);
-        let y = ws.y + 1u16.min(ws.height.saturating_sub(height));
-        Some(Rect::new(x, y, width, height))
     }
 
     /// Applies one `:agents list` verb; returns an optional status message.
