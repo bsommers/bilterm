@@ -71,7 +71,7 @@ pub(super) fn parse(args: &[&str]) -> Result<ColonCommand, String> {
             Ok(n) => Op::ScaleStep(n),
             Err(_) => return usage(),
         },
-        ["scale", arg] => match arg.trim_end_matches('%').parse::<u16>() {
+        ["scale", arg] => match arg.strip_suffix('%').unwrap_or(arg).parse::<u16>() {
             Ok(n) if (75..=200).contains(&n) => {
                 return Ok(ColonCommand::PanelScaleOf(PanelTarget::AgentsList, n));
             }
