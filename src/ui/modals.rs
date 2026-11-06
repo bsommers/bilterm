@@ -393,6 +393,7 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Window Theme Browser...", ":window theme list"), ("Customize Window Colors...", ":window menu"),
         ("Next Window Theme", ":window theme next"), ("Next Window Outline", ":window outline next"),
         ("Toggle Bold Border", ":window bold toggle"), ("Reset Window Style", ":window reset"),
+        ("Tile Windows & Panels", ":arrange grid"),
     ]),
     ("Prompt", &[
         ("Pin Top (Alt+T)", ":prompt top"), ("Pin Bottom (Alt+B)", ":prompt bottom"),
@@ -406,6 +407,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Find Agents (Ctrl+Alt+F)", ":find agent"),
         ("Find Sessions", ":find session"),
         ("Find Command History", ":find history"),
+        ("Agents List (Ctrl+Alt+N)", ":agents list toggle"), ("Agent Demo (Ctrl+X y)", ":agents demo"),
+        ("Stop Agent Demo (Ctrl+X Y)", ":agents demo stop"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),
