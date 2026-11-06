@@ -309,7 +309,7 @@ mod skeletons {
         // reconnect helpers
         let p = ReconnectPolicy::default();
         assert_eq!((p.base_ms, p.cap_ms, p.factor, p.max_attempts, p.stable_after_ms), (1000, 30_000, 2, 20, 30_000));
-        assert_eq!(backoff_delay_ms(&p, 3), 0);
+        assert_eq!(backoff_delay_ms(&p, 3), 4000);
         assert_eq!(classify_exit(&DisconnectCause::Eof, None, None, &[]), ExitClass::Transient);
         let mut m = LinkMachine::new(p.clone());
         assert_eq!(*m.state(), LinkState::Idle);
@@ -326,7 +326,7 @@ mod skeletons {
             at_ms: 0,
             class: ExitClass::Transient,
         };
-        assert_eq!(disconnect_text(&down), "");
+        assert_eq!(disconnect_text(&down), "connection closed");
 
         // hydrate
         let mut hp = HydratePlanner::new();
