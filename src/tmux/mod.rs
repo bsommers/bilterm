@@ -61,6 +61,8 @@ pub enum TmuxControlEvent {
     WindowPaneChanged { window_id: usize, pane_id: usize },
     /// `%layout-change @<window_id> <layout>`
     LayoutChange { window_id: usize, layout: String },
+    /// `%window-renamed @<window_id> <name>`
+    WindowRenamed { window_id: usize, name: String },
     /// `%session-changed $<session_id> <name>`
     SessionChanged { session_id: usize, name: String },
     /// `%exit [reason]`
@@ -100,6 +102,17 @@ pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
             && let Ok(window_id) = id_str.parse::<usize>() {
                 return TmuxControlEvent::WindowClose { window_id };
             }
+
+    if let Some(rest) = trimmed.strip_prefix("%window-renamed ") {
+        let mut parts = rest.splitn(2, ' ');
+        if let Some(win_tok) = parts.next()
+            && let Some(id_str) = win_tok.strip_prefix('@')
+            && let Ok(window_id) = id_str.parse::<usize>()
+        {
+            let name = parts.next().unwrap_or("").to_string();
+            return TmuxControlEvent::WindowRenamed { window_id, name };
+        }
+    }
 
     if let Some(rest) = trimmed.strip_prefix("%window-pane-changed ") {
         let mut parts = rest.split_whitespace();
@@ -239,6 +252,10 @@ pub struct TmuxControlBridge {
     /// Reverse map from Bilterm `PaneId` -> `tmux` `%pane_id`.
     pub bilterm_to_tmux: BTreeMap<PaneId, usize>,
     pub active_session_name: Option<String>,
+    /// Maps `tmux` `%pane_id` -> `@window_id` (kept current from layout/pane/close events).
+    pub window_of_pane: BTreeMap<usize, usize>,
+    /// Window names learned from `%window-renamed` (windows that predate attach are unnamed, gap G10).
+    pub window_names: BTreeMap<usize, String>,
     pub outbound_commands: Vec<String>,
     pub exited: bool,
 }
@@ -253,9 +270,21 @@ impl TmuxControlBridge {
             tmux_to_bilterm: t2b,
             bilterm_to_tmux: b2t,
             active_session_name: None,
+            window_of_pane: BTreeMap::new(),
+            window_names: BTreeMap::new(),
             outbound_commands: Vec::new(),
             exited: false,
         }
+    }
+
+    /// The `tmux` window id (`@N`) that holds `tmux_pane`, when known.
+    pub fn window_of(&self, tmux_pane: usize) -> Option<usize> {
+        self.window_of_pane.get(&tmux_pane).copied()
+    }
+
+    /// The window's name once a `%window-renamed` was seen for it.
+    pub fn window_name(&self, window: usize) -> Option<&str> {
+        self.window_names.get(&window).map(String::as_str)
     }
 
     fn ensure_tmux_pane(&mut self, wm: &mut WindowManager, tmux_pane_id: usize) -> PaneId {
@@ -278,14 +307,30 @@ impl TmuxControlBridge {
                     pane.process_pty_output(data);
                 }
             }
-            TmuxControlEvent::LayoutChange { layout, .. } => {
-                for tmux_pane_id in parse_tmux_layout_panes(layout) {
+            TmuxControlEvent::LayoutChange { window_id, layout } => {
+                let panes = parse_tmux_layout_panes(layout);
+                self.window_of_pane
+                    .retain(|p, w| *w != *window_id || panes.contains(p));
+                for tmux_pane_id in panes {
+                    self.window_of_pane.insert(tmux_pane_id, *window_id);
                     self.ensure_tmux_pane(wm, tmux_pane_id);
                 }
             }
-            TmuxControlEvent::WindowPaneChanged { pane_id, .. } => {
+            TmuxControlEvent::WindowPaneChanged { window_id, pane_id } => {
+                self.window_of_pane.insert(*pane_id, *window_id);
                 let bilterm_id = self.ensure_tmux_pane(wm, *pane_id);
                 wm.focus_and_raise(bilterm_id);
+            }
+            TmuxControlEvent::WindowClose { window_id } => {
+                self.window_of_pane.retain(|_, w| *w != *window_id);
+                self.window_names.remove(window_id);
+            }
+            TmuxControlEvent::WindowRenamed { window_id, name } => {
+                // Remote-influenced text: bound both the name and the number of tracked windows.
+                if self.window_names.len() < 1024 || self.window_names.contains_key(window_id) {
+                    let capped: String = name.chars().take(256).collect();
+                    self.window_names.insert(*window_id, capped);
+                }
             }
             TmuxControlEvent::SessionChanged { name, .. } => {
                 self.active_session_name = Some(name.clone());
