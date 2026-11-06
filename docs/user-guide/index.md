@@ -34,6 +34,8 @@ Welcome to the official User Guide for **Bilterm (`v1.12.0`)** — the Rust + Ra
     - Defense-in-depth engineering reference covering 3-Signal `!ECHO LOCK`, `/dev/random` flood & escape-trap sanitization, clipboard paste-injection guards, private `0700`/`0600` filesystem confinement, Unix socket `SO_PEERCRED` + bearer-token RPC security, and SSH argument-injection prevention.
 11. **[Chapter 11: The Navigator Sidebar & Agent Traffic Window](11-navigator-sidebar-and-agent-traffic.md)**
     - Optional agent-aware drawer style (`[drawer] style = "navigator"`): workspace > session > pane tree with working/blocked/idle/done/errored state dots, attention jump (`<Leader> !`), pairing/fan-out comms glyphs, full key and mouse operation tables, the AGENT TRAFFIC window (`<Leader> a` / `:agents`) with node graph and conversation snoop view, GUI vector rendering, and honest known limits.
+12. **[Chapter 12: Find: Agents, Sessions & Command History](12-find-registry-and-history.md)**
+    - The Find window (`Ctrl+Alt+F`, `:find agent|session|history`, View menu): fuzzy ranked search of agents, live and saved sessions, and command history; every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`); secrets are masked and counted; `:finder` verbs; `find.*` RPC and `bilterm_find` MCP; SSH and tmux coverage and known gaps G1 to G10.
 
 ---
 

@@ -79,6 +79,7 @@ src/
 │   ├── highlight.rs            # Live shell lexical tokenizer & syntax highlighter
 │   ├── history_store.rs        # Per-session 0600 command history persistence, pruning, and .sh export
 │   ├── history_store_tests.rs  # Unit tests for HistoryStore
+│   ├── redact.rs              # Secret-looking command classifier for Find (D-U2); never stores or returns the text
 │   └── tests.rs                # Unit tests for CompositePane
 ├── pty/
 │   ├── mod.rs                  # PtySession (portable-pty spawn, 64KB blocking reader thread, SIGWINCH dedup)
@@ -108,6 +109,7 @@ src/
 │   ├── z_stack.rs              # Overlapping Borland Turbo Vision z-order window deck (ZStack)
 │   ├── drawer.rs               # slide-out (classic + Navigator styles; `src/wm/drawer/navigator.rs`, `src/ui/drawer/navigator.rs`) Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
 │   ├── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal) & frame helpers
+│   ├── registry/              # Find registry (Phase 50.1): live rows, fuzzy rank, capture ring, saved/history.log reads (masked on read), transport facts
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── daemon/
 │   ├── mod.rs                  # Background Multiplexer Daemon exports, DaemonAction & DaemonHandshake
@@ -281,7 +283,7 @@ Because of the Phase 22 unified `Action` architecture, adding a new workspace or
 - **Transports** (all run the same `AutomationControlPlane::dispatch_method`; method list: `bilterm::api::RPC_METHODS`):
   1. JSON-RPC 2.0 over a Unix socket (default) or `--headless --listen` TCP; `bilterm ctl [-t FILE] [ENDPOINT] <METHOD> [JSON_PARAMS]` (the endpoint may be omitted).
   2. Loopback-only HTTP + SSE: `bilterm --headless --http 127.0.0.1:PORT` (`POST /rpc`, `GET /events`, `GET /health`, bearer token file written 0600 to the private runtime dir, Host/Origin checks, size limits).
-  3. MCP over stdio (`bilterm --mcp`): 10 tools plus resources `bilterm://state|config|commands|pane/<id>`. Error codes: JSON-RPC dispatch failures are `-32000` (parse `-32700`, invalid request `-32600`); MCP uses `-32602` for missing params/unknown tool and `-32601` for unknown methods.
+  3. MCP over stdio (`bilterm --mcp`): 11 tools (including `bilterm_find`, a read-only search over `find.*`) plus resources `bilterm://state|config|commands|pane/<id>`. Error codes: JSON-RPC dispatch failures are `-32000` (parse `-32700`, invalid request `-32600`); MCP uses `-32602` for missing params/unknown tool and `-32601` for unknown methods.
 - **Write gate.** Over RPC/HTTP/MCP/`pane.send_keys`, config-mutating commands (`:set`, `:config save`, `:appearance save`) are refused unless `[api] allow_config_write = true` in `config.toml` (default `false`); the `[api]` section is never settable over the API. Reads (`:get`, `:state`, `:config list`, `:commands`) always work and return structured `data` in the `wm.command` result. Persistence only happens on explicit `:config save` / `:appearance save`.
 - **Conformance.** `tests/api_conformance.rs` drives one request table through direct dispatch, TCP, HTTP and MCP (identical results, error shapes, write gate), sweeps every runnable non-alias catalog example through `wm.command` (explicit skip list with reasons), and checks `RPC_METHODS` against the dispatcher source and `parse_ctl_args`.
 - **Checklist: adding a command so everything stays in sync.**
