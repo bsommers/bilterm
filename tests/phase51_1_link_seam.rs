@@ -336,10 +336,10 @@ mod skeletons {
         assert_eq!(hp.remaining(), 0);
         let mut rc = ReplyCorrelator::new();
         rc.enqueue(ReplyKind::Ignore);
-        assert_eq!(rc.pending(), 0);
+        assert_eq!(rc.pending(), 1);
         assert!(!rc.overflowed() && rc.take_failed().is_empty());
-        assert_eq!(capture_pane_command(1), "");
-        assert!(render_capture(&["a".to_string()]).is_empty());
+        assert_eq!(capture_pane_command(1), "capture-pane -p -e -J -S -2000 -t %1\n");
+        assert_eq!(render_capture(&["a".to_string()]), b"a");
         let _ = Reply { kind: ReplyKind::Ignore, lines: vec![], ok: true, truncated: false };
 
         // link record defaults
