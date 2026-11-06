@@ -417,6 +417,10 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
     ("Tmux", &[
         ("Broadcast Input", ":broadcast"), ("Read-Only Lock (Alt+L)", ":lock"),
         ("Quake Terminal (F10)", ":quake"), ("Raw Passthrough (F12)", ":raw"),
+        ("SSH tmux link... (Ctrl+X u)", ":ssh-tmux prefill"),
+        ("Reconnect link (Ctrl+Alt+R)", ":ssh-tmux reconnect"),
+        ("Disconnect link (Ctrl+X Q)", ":ssh-tmux disconnect"),
+        ("Link info", ":ssh-tmux info"),
     ]),
     ("Help", &[
         ("Help Reference (F1)", ":help"), ("3270 Inspector (F9)", ":inspector"),
