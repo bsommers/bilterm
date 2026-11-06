@@ -292,9 +292,12 @@ fn tmux_control_subprocess_polls_into_window_manager() {
         .unwrap();
 
     wm.poll_all_ptys();
-    assert_eq!(wm.pane_count(), 2);
-    assert!(wm.pane(1).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_1"));
-    assert!(wm.pane(2).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_2"));
+    // No %0 seed: both tmux panes are new panes next to local pane 1.
+    assert_eq!(wm.pane_count(), 3);
+    let (p0, p1) = (2, 3);
+    assert!(wm.pane(1).unwrap().vt().contents().trim().is_empty());
+    assert!(wm.pane(p0).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_1"));
+    assert!(wm.pane(p1).unwrap().vt().contents().contains("TMUX_SUBPROC_PANE_2"));
 
     line_tx.send("%exit client detached".to_string()).unwrap();
     wm.poll_all_ptys();
