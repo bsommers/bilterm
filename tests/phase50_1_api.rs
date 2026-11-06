@@ -105,3 +105,124 @@ fn query_is_capped() {
     assert!(q.chars().count() <= 128);
 }
 
+// ----- Task 2: MCP and disk sources -------------------------------------------------------------
+
+#[test]
+fn mcp_find_equals_direct_dispatch() {
+    let mut plane = plane_with_panes(2);
+    let direct = plane.dispatch_method("find.agents", &params(r#"{"query":"","limit":5}"#)).unwrap();
+    let r = mcp(
+        &mut plane,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bilterm_find","arguments":{"kind":"agent","query":"","limit":5}}}"#,
+    );
+    let result = r.get("result").expect("result");
+    assert_eq!(result.get("isError").and_then(JsonValue::as_bool), Some(false));
+    let text = result
+        .get("content")
+        .and_then(JsonValue::as_array)
+        .and_then(|c| c.first())
+        .and_then(|c| c.get("text"))
+        .and_then(JsonValue::as_str)
+        .expect("text payload");
+    assert_eq!(JsonValue::parse(text).unwrap(), direct);
+}
+
+#[test]
+fn mcp_find_requires_kind() {
+    let mut plane = plane_with_panes(0);
+    for args in [r#"{}"#, r#"{"kind":"nope"}"#, r#"{"kind":7}"#] {
+        let r = mcp(
+            &mut plane,
+            &format!(
+                r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"bilterm_find","arguments":{args}}}}}"#
+            ),
+        );
+        let err = r.get("error").unwrap_or_else(|| panic!("expected error for {args}"));
+        assert_eq!(err.get("code").and_then(JsonValue::as_i64), Some(-32602));
+        let msg = err.get("message").and_then(JsonValue::as_str).unwrap();
+        assert!(msg.starts_with("Invalid params: missing 'kind'"), "{msg}");
+    }
+}
+
+#[test]
+fn mcp_find_accepts_session_and_history_kinds() {
+    let mut plane = plane_with_panes(0);
+    for (kind, want) in [("session", "session"), ("sessions", "session"), ("history", "history")] {
+        let r = mcp(
+            &mut plane,
+            &format!(
+                r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"bilterm_find","arguments":{{"kind":"{kind}"}}}}}}"#
+            ),
+        );
+        let text = r
+            .get("result")
+            .and_then(|x| x.get("content"))
+            .and_then(JsonValue::as_array)
+            .and_then(|c| c.first())
+            .and_then(|c| c.get("text"))
+            .and_then(JsonValue::as_str)
+            .unwrap_or_else(|| panic!("no payload for {kind}"));
+        let v = JsonValue::parse(text).unwrap();
+        assert_eq!(v.get("kind").and_then(JsonValue::as_str), Some(want));
+    }
+}
+
+#[test]
+fn tools_list_has_eleven_tools_with_find_last() {
+    let mut plane = plane_with_panes(0);
+    let r = mcp(&mut plane, r#"{"jsonrpc":"2.0","id":4,"method":"tools/list"}"#);
+    let tools = r.get("result").and_then(|x| x.get("tools")).and_then(JsonValue::as_array).unwrap();
+    assert_eq!(tools.len(), 11);
+    let last = tools.last().unwrap();
+    assert_eq!(last.get("name").and_then(JsonValue::as_str), Some("bilterm_find"));
+    let props = last.get("inputSchema").and_then(|s| s.get("properties")).unwrap();
+    for p in ["kind", "query", "limit"] {
+        assert!(props.get(p).is_some(), "schema property {p}");
+    }
+}
+
+#[test]
+#[ignore = "needs plan 50.1-11 (registry/saved.rs disk source); run with --ignored once merged"]
+fn rpc_sessions_include_saved_session_source_with_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut plane = plane_with_panes(0);
+    plane.wm.config_mut().session_dir = Some(dir.path().to_str().unwrap().to_string());
+    plane.wm.save_session("work").unwrap();
+    let v = plane.dispatch_method("find.sessions", &params(r#"{"query":"work"}"#)).unwrap();
+    let rows = rows_of(&v);
+    let saved = rows
+        .iter()
+        .position(|r| r.get("source").and_then(|s| s.get("kind")).and_then(JsonValue::as_str) == Some("saved-session"))
+        .expect("a saved-session row");
+    let src = rows[saved].get("source").unwrap();
+    assert_eq!(src.get("name").and_then(JsonValue::as_str), Some("work"));
+    assert!(src.get("path").and_then(JsonValue::as_str).unwrap().ends_with("work.toml"));
+    let live = rows
+        .iter()
+        .position(|r| r.get("source").and_then(|s| s.get("kind")).and_then(JsonValue::as_str) == Some("live"))
+        .expect("a live row");
+    assert!(live < saved, "live rows are listed before saved ones");
+}
+
+#[test]
+#[ignore = "needs plan 50.1-11 (registry/saved.rs history.log reader); run with --ignored once merged"]
+fn rpc_history_masks_secrets_from_history_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut plane = plane_with_panes(0);
+    plane.wm.config_mut().history_dir = Some(dir.path().to_str().unwrap().to_string());
+    let session = plane.wm.config().history_session.clone();
+    let log_dir = dir.path().join("sessions").join(&session);
+    std::fs::create_dir_all(&log_dir).unwrap();
+    std::fs::write(log_dir.join("history.log"), "ls -la\nexport API_TOKEN=abc123\n").unwrap();
+    let resp = plane.dispatch_method("find.history", &params("{}")).unwrap();
+    let text = resp.to_json_string();
+    assert!(resp.get("masked").and_then(JsonValue::as_i64).unwrap() >= 1);
+    assert!(!text.contains("abc123"), "secret must never appear: {text}");
+    // The MCP wrapper must not leak it either.
+    let r = plane
+        .handle_mcp_line(
+            r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"bilterm_find","arguments":{"kind":"history"}}}"#,
+        )
+        .unwrap();
+    assert!(!r.contains("abc123"));
+}

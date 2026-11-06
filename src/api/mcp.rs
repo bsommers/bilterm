@@ -86,10 +86,15 @@ impl AutomationControlPlane {
                     "bilterm_fleet_exec" => Some("fleet.exec"),
                     "bilterm_workspace_fontsize" => Some("workspace.fontsize"),
                     "bilterm_canvas" => Some("canvas.command"),
+                    "bilterm_find" => Some(Self::find_method_for_kind(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
-                    Some(rpc_method) => match self.dispatch_method(rpc_method, &args) {
+                    Some(rpc_method) => match if rpc_method.is_empty() {
+                        Err("missing 'kind' parameter: agent, session or history".to_string())
+                    } else {
+                        self.dispatch_method(rpc_method, &args)
+                    } {
                         Ok(val) => Ok(JsonValue::obj([
                             (
                                 "content",
@@ -199,8 +204,27 @@ impl AutomationControlPlane {
                     "Optional canvas command (e.g. 'tek demo', 'line 0 0 20 10', 'sprite 1 4 4 2 0', 'plot candlestick', 'image 24 16', 'clear')",
                 )],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_find",
+                "Search the unified registry: live agents, sessions (live first, then saved on disk) or command history. Every row carries its source (live, saved-session or history-log) and the response a count of masked secret-looking entries.",
+                &[
+                    ("kind", "string", "What to search: agent, session or history (required)"),
+                    ("query", "string", "Optional fuzzy query (empty lists everything, capped at 128 chars)"),
+                    ("limit", "integer", "Maximum rows (default 50, max 200)"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_find` `kind` argument -> the `find.*` RPC method; `None` when missing or unknown.
+    fn find_method_for_kind(args: &JsonValue) -> Option<&'static str> {
+        match args.get("kind").and_then(JsonValue::as_str)? {
+            "agent" | "agents" => Some("find.agents"),
+            "session" | "sessions" => Some("find.sessions"),
+            "history" => Some("find.history"),
+            _ => None,
+        }
     }
 
     fn mcp_tool_schema(name: &str, description: &str, props: &[(&str, &str, &str)]) -> JsonValue {

@@ -107,7 +107,7 @@ fn tool_level_failure_sets_is_error() {
 }
 
 #[test]
-fn tools_list_is_unchanged() {
+fn tools_list_only_gains_find() {
     let mut plane = AutomationControlPlane::new_headless(24, 80);
     let r = call(&mut plane, r#"{"jsonrpc":"2.0","id":6,"method":"tools/list"}"#);
     let Some(JsonValue::Array(tools)) = r.get("result").and_then(|x| x.get("tools")) else {
@@ -130,6 +130,7 @@ fn tools_list_is_unchanged() {
             "bilterm_fleet_exec",
             "bilterm_workspace_fontsize",
             "bilterm_canvas",
+            "bilterm_find",
         ]
     );
 }
