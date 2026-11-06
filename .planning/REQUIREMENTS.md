@@ -207,6 +207,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [x] **PST-02**: tmux bridge hardened with reconnect/backoff and hydrate.
 - [x] **PST-03**: exited remote panes held with banner; no fake remote badge on restore.
 - [x] **PST-04**: keepalive/ControlPersist, tracing, headless tests.
+- [ ] **WIN-01**: First-class `FONTS` Window (`src/wm/fonts_window.rs`, `src/ui/fonts_window_ui.rs`, `src/input/fonts_window.rs`, `src/input/fonts_window_keys.rs`, `Action::FontsWindow(FontsWindowOp)`). Opened by `:fonts [verb]`, `:font list`, `:font presets`, `:font scan [dir]`, and menubar `View -> Fonts Window`. Supports `[•]` Pin (unpinned = `Enter` applies font and dismisses; pinned = stays open for live A/B comparison across presets & custom fonts), `[□]` Dock, `[×]` Close, `+`/`-` point-size step, `[`/`]` scale step, `a` apply to all panes, `s` rescan custom fonts dir, drag/resize.
+- [ ] **WIN-02**: First-class Pinnable `COMMAND PALETTE` Window (`src/wm/command_window.rs`, `src/ui/command_window_ui.rs`, `src/input/command_window.rs`, `src/input/command_window_keys.rs`, `Action::CommandWindow(CommandWindowOp)`). Opened by `:commands [verb]`, `:palette [verb]`, or pinning `Ctrl+P` (`Alt+P` / `*` in `Modal::Palette`). Supports unpinned one-shot execution (dismisses on `Enter`/`Esc`) and pinned workbench mode (`[•]` Pin keeps it open, executes commands repeatedly, and records command + output status in a scrollable `OUTPUT / HISTORY` pane at the bottom of the window).
+- [ ] **WIN-03**: First-class `SCRIPT STUDIO` Window (`src/wm/script_studio.rs`, `src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`, `src/input/script_studio_keys.rs`, `Action::ScriptStudio(ScriptStudioOp)`). Opened by `:script [verb]` or `:studio [verb]`. Multi-line `:colon` & shell script editor + `[▶ Run (F5)]`, `[⏭ Step (F10)]` single-step debugger with program counter `▶`, `[↺ Reset]`, `[● Rec (Ctrl+R)]` live action recorder, `[✎ Edit (i)]`, `[💾 Save]` / `[📂 Load]` (`~/.config/bilterm/scripts/*.bt` via `secure_fs`), and live `RUN LOG` pane.
 - [ ] **AGT-01**: Agents running in panes/sessions can be addressed by stable names and exchange structured messages through a per-recipient mailbox (`agent.send`, `agent.inbox`, `agent.ack`, `agent.list`) over RPC, HTTP, MCP and `bilterm ctl`.
 - [ ] **AGT-02**: Messages can be delivered as mailbox entries, as a one-line "nudge" typed only into an idle/waiting pane, or as a `0600` file whose path is nudged; senders can wait for a reply with a timeout.
 - [ ] **AGT-03**: Coordination: subtree broadcast, `agent.message`/`agent.state` events on `/events`, unread badges in the sidebar, `:agent` commands, and a documented coordinator pattern; gated off by default with rate limits, a queue cap, a loop guard and logging.
@@ -249,6 +252,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PST-02 | Phase 51.1 | Complete |
 | PST-03 | Phase 51.1 | Complete |
 | PST-04 | Phase 51.1 | Complete |
+| WIN-01 | Phase 51.2 | Planned |
+| WIN-02 | Phase 51.2 | Planned |
+| WIN-03 | Phase 51.2 | Planned |
 | AGT-01 | Phase 52 | Planned |
 | AGT-02 | Phase 52 | Planned |
 | AGT-03 | Phase 52 | Planned |
@@ -264,8 +270,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 **Coverage:**
 
-- Total tracked requirements: 62 total (traceability table rows)
-- Mapped to phases: 62 (38 Complete, 24 Planned)
+- Total tracked requirements: 65 total (traceability table rows)
+- Mapped to phases: 65 (38 Complete, 27 Planned)
 - Unmapped: 0 ✓
 
 ---
