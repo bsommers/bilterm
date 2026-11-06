@@ -538,7 +538,7 @@ impl WindowManager {
                 });
             if is_ssh { transport_badges.push("🌐 SSH".to_string()); }
             let is_tmux = pane.title().contains("TMUX")
-                || self.is_tmux_control_attached()
+                || (self.tmux_bridge.bilterm_to_tmux.contains_key(&id) && (id != 1 || pane.title().contains("TMUX")))
                 || self.fleet.nodes.values().any(
                     |n| matches!(&n.kind, FleetNodeKind::SshTmux { pane_ids, .. } if pane_ids.contains(&id)),
                 );

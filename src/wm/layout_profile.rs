@@ -10,7 +10,7 @@
 //! - Switching between layout profiles dynamically (`:profile switch <name>`, `:layout switch <name>`, `:profile next|prev`)
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,15 @@ pub fn sanitize_profile_name(raw: &str) -> String {
     } else {
         cleaned
     }
+}
+
+/// Returns true only when the program actually spawned is an SSH client binary (PST-03).
+pub fn keep_remote_badge(program: &str, spawned_requested: bool) -> bool {
+    spawned_requested
+        && Path::new(program)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|name| name == "ssh")
 }
 
 impl WindowManager {
@@ -521,6 +530,7 @@ impl WindowManager {
             let args = sp.shell_args.clone();
             let cwd_path = PathBuf::from(if sp.cwd.trim().is_empty() { "." } else { &sp.cwd });
             let spawn_cwd = cwd_path.is_dir().then(|| cwd_path.clone());
+            let mut spawned_requested = true;
             let mut pane = if self.headless_mode {
                 CompositePane::new_headless(sp.id, rows, cols)
             } else {
@@ -536,6 +546,7 @@ impl WindowManager {
                     },
                 )
                 .or_else(|_| {
+                    spawned_requested = false;
                     CompositePane::spawn(
                         sp.id,
                         PtyConfig {
@@ -546,12 +557,24 @@ impl WindowManager {
                         },
                     )
                 })
-                .unwrap_or_else(|_| CompositePane::new_headless(sp.id, rows, cols))
+                .unwrap_or_else(|_| {
+                    spawned_requested = false;
+                    CompositePane::new_headless(sp.id, rows, cols)
+                })
             };
-            pane.set_shell_program(program, args);
+            pane.set_shell_program(program.clone(), args);
             pane.set_tracked_cwd(Some(cwd_path));
-            pane.set_remote_target(sp.remote_target.clone());
-            pane.set_title(sp.title.clone());
+            if keep_remote_badge(&program, spawned_requested) {
+                pane.set_remote_target(sp.remote_target.clone());
+                pane.set_title(sp.title.clone());
+            } else {
+                pane.set_remote_target(None);
+                if sp.remote_target.is_some() {
+                    pane.set_title(format!("{} (not connected)", sp.title));
+                } else {
+                    pane.set_title(sp.title.clone());
+                }
+            }
             pane.prompt_mut().anchor = sp.prompt_anchor;
             pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
             pane.prompt_mut().width_cols = sp.prompt_width_cols;
@@ -567,7 +590,16 @@ impl WindowManager {
                 let replayed = format!("{}\r\n", sp.scrollback_lines.join("\r\n"));
                 pane.process_pty_output(replayed.as_bytes());
             }
-            pane.set_read_only(sp.read_only);
+            if sp.read_only {
+                pane.set_read_only(true);
+            }
+            if !keep_remote_badge(&program, spawned_requested)
+                && let Some(ref t) = sp.remote_target
+            {
+                pane.set_status_message(Some(format!(
+                    "Restored without a live remote link (was {t}): run :ssh-tmux <dest> <session> or :ssh <dest>"
+                )));
+            }
             Self::attach_history(&mut pane, &self.config.history_settings());
             pane.prompt_mut().history = sp.history.clone();
             if self.config.clipboard_history_persist && !sp.yank_history.is_empty() {
