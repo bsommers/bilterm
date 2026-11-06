@@ -75,7 +75,7 @@ fn ssh_cwd_untrusted_until_osc7() {
 
 #[test]
 fn fresh_bridge_does_not_mislabel_pane_one() {
-    // `TmuxControlBridge::new()` maps %0 -> pane 1, but nothing is attached.
+    // A fresh bridge maps nothing (Phase 51.1 dropped the %0 -> pane 1 seed); nothing is attached.
     let wm = WindowManager::new_headless(20, 80);
     let t = transport_of(&wm, 1);
     assert_eq!(t.transport, Transport::Local);

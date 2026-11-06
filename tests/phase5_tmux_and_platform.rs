@@ -81,8 +81,10 @@ fn tmux_control_mode_events_and_dcs_passthrough_end_to_end() {
         Some("bilterm-session")
     );
     bridge.handle_control_line(&mut wm, "%output %0 LINE_FROM_TMUX_PANE_0\\015\\012");
+    let mapped = bridge.tmux_to_bilterm[&0];
+    assert_ne!(mapped, 1, "no %0 seed: a tmux id never writes into local pane 1");
     assert!(
-        wm.pane(1)
+        wm.pane(mapped)
             .unwrap()
             .vt()
             .contents()

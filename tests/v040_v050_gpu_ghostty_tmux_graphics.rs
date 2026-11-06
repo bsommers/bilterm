@@ -98,7 +98,9 @@ fn tmux_control_bridge_hydrates_layout_panes_and_routes_bidirectional_commands()
     assert_eq!(parsed_panes, vec![0, 1, 2]);
 
     bridge.handle_control_line(&mut wm, &format!("%layout-change @1 {layout}"));
-    assert_eq!(wm.pane_count(), 3);
+    // No %0 seed: local pane 1 plus the three panes tmux announced.
+    assert_eq!(wm.pane_count(), 4);
+    assert_eq!(bridge.tmux_to_bilterm.len(), 3);
 
     // Focus change from tmux (%window-pane-changed @1 %2) raises corresponding Bilterm pane
     let bilterm_pane_2 = *bridge.tmux_to_bilterm.get(&2).unwrap();
