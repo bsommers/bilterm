@@ -84,6 +84,7 @@ fn every_preset_has_name_badge_and_candidates_and_name_round_trips() {
         FontFamilyPreset::JetBrainsMono, FontFamilyPreset::FiraCode, FontFamilyPreset::IosevkaTerm,
         FontFamilyPreset::CascadiaCode, FontFamilyPreset::Consolas, FontFamilyPreset::IbmPlexMono,
         FontFamilyPreset::Hack, FontFamilyPreset::LucidaConsole, FontFamilyPreset::CourierNew,
+        FontFamilyPreset::LazenbyComputer, FontFamilyPreset::LazenbyLiquid,
     ];
     for p in &presets {
         assert!(!p.display_name().is_empty());
@@ -101,15 +102,15 @@ fn every_preset_has_name_badge_and_candidates_and_name_round_trips() {
 fn next_preset_cycle_visits_every_builtin_then_wraps() {
     let mut p = FontFamilyPreset::CascadiaCode;
     let mut seen = vec![p.clone()];
-    for _ in 0..10 {
+    for _ in 0..12 {
         p = p.next_preset();
         seen.push(p.clone());
     }
-    assert_eq!(seen.last(), Some(&FontFamilyPreset::CourierNew));
+    assert_eq!(seen.last(), Some(&FontFamilyPreset::LazenbyLiquid));
     assert_eq!(p.next_preset(), FontFamilyPreset::CascadiaCode);
     seen.sort_by_key(|s| s.display_name().to_string());
     seen.dedup();
-    assert_eq!(seen.len(), 11);
+    assert_eq!(seen.len(), 13);
     assert_eq!(FontFamilyPreset::Tektronix4014.next_preset(), FontFamilyPreset::CascadiaCode);
     assert_eq!(
         FontFamilyPreset::Custom("x".into()).next_preset(),
@@ -278,6 +279,35 @@ fn bare_numeric_forms_and_multiword_family() {
     assert_eq!(o.size_pt, Some(6));
     run(&mut o, "courier new").unwrap();
     assert_eq!(o.family, FontFamilyPreset::CourierNew);
+    run(&mut o, "lazenby").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyComputer);
+    run(&mut o, "lazenby-liquid").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyLiquid);
+    run(&mut o, "lazenby computer").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyComputer);
+    run(&mut o, "lazenby computer liquid").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyLiquid);
+    run(&mut o, "moore").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyComputer);
+    run(&mut o, "laz-liq").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::LazenbyLiquid);
+}
+
+#[test]
+fn scan_subcommand_scans_and_reports_count() {
+    let mut o = PaneFontOptions::default();
+    let temp_dir = std::env::temp_dir().join(format!("bilterm-font-scan-test-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let res = run(&mut o, &format!("scan \"{}\"", temp_dir.display())).unwrap();
+    assert!(res.starts_with("SCANNED FONTS DIR"));
+    assert!(res.contains("0 font(s) registered"));
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    // List includes lazenby and scan
+    let list = run(&mut o, "list").unwrap();
+    assert!(list.contains("lazenby"));
+    assert!(list.contains("lazenby-liquid"));
+    assert!(list.contains("scan [dir]"));
 }
 
 #[test]

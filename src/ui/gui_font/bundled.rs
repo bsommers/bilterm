@@ -16,12 +16,21 @@ use crate::ui::design::AppearanceProfile;
 /// Family name the bundled files register under.
 pub const BUNDLED_FAMILY: &str = "JetBrains Mono";
 
+/// Family name the bundled Lazenby Computer font files register under.
+pub const BUNDLED_LAZENBY_FAMILY: &str = "Lazenby Computer";
+
 /// `(file name, bytes)` for each bundled face.
 pub const BUNDLED_FONTS: [(&str, &[u8]); 4] = [
     ("JetBrainsMono-Regular.ttf", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf")),
     ("JetBrainsMono-Bold.ttf", include_bytes!("../../../assets/fonts/JetBrainsMono-Bold.ttf")),
     ("JetBrainsMono-Italic.ttf", include_bytes!("../../../assets/fonts/JetBrainsMono-Italic.ttf")),
     ("JetBrainsMono-BoldItalic.ttf", include_bytes!("../../../assets/fonts/JetBrainsMono-BoldItalic.ttf")),
+];
+
+/// `(file name, bytes)` for each extra retro bundled font face.
+pub const BUNDLED_EXTRA_FONTS: [(&str, &[u8]); 2] = [
+    ("LazenbyCompSmooth.ttf", include_bytes!("../../../assets/fonts/LazenbyCompSmooth.ttf")),
+    ("LazenbyCompLiquid.ttf", include_bytes!("../../../assets/fonts/LazenbyCompLiquid.ttf")),
 ];
 
 /// `true` when the resolved appearance profile should use the bundled font (anything but Legacy).
@@ -52,6 +61,31 @@ pub fn install_into(dir: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(out)
 }
 
+/// Writes the extra bundled faces (e.g. Lazenby Computer) into `dir` (created private) and registers them. Returns the written paths.
+pub fn install_extra_into(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    secure_fs::ensure_private_dir(dir)?;
+    let mut out = Vec::with_capacity(BUNDLED_EXTRA_FONTS.len());
+    for (name, bytes) in BUNDLED_EXTRA_FONTS {
+        secure_fs::validate_plain_file_name(name).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        let path = dir.join(name);
+        let up_to_date = std::fs::metadata(&path).map(|m| m.len() == bytes.len() as u64).unwrap_or(false);
+        if !up_to_date {
+            secure_fs::write_private_file(&path, bytes)?;
+        }
+        register_custom_font_file(&path).map_err(io::Error::other)?;
+        out.push(path);
+    }
+    Ok(out)
+}
+
+/// Installs and registers the extra bundled fonts (Lazenby Computer) into the private runtime directory.
+/// Best effort: failures are ignored.
+pub fn install_extra_bundled_fonts() {
+    if let Ok(base) = secure_fs::private_runtime_dir() {
+        let _ = install_extra_into(&base.join("fonts"));
+    }
+}
+
 /// Installs and registers the bundled font when `cfg` selects a non-Legacy profile. Best effort: failures are ignored
 /// so the GUI falls back to the normal font candidates.
 pub fn install_if_wanted(cfg: &BiltermConfig) {
@@ -73,6 +107,14 @@ mod tests {
     fn embedded_faces_are_valid_truetype_with_expected_family() {
         for (name, bytes) in BUNDLED_FONTS {
             assert!(bytes.len() > 100_000, "{name} suspiciously small");
+            assert_eq!(&bytes[..4], &[0, 1, 0, 0], "{name} not TrueType");
+        }
+    }
+
+    #[test]
+    fn embedded_extra_faces_are_valid_truetype_with_expected_family() {
+        for (name, bytes) in BUNDLED_EXTRA_FONTS {
+            assert!(bytes.len() > 50_000, "{name} suspiciously small");
             assert_eq!(&bytes[..4], &[0, 1, 0, 0], "{name} not TrueType");
         }
     }
@@ -113,6 +155,27 @@ mod tests {
         assert!(registered_custom_fonts().iter().any(|(fam, _)| fam == BUNDLED_FAMILY));
         // Idempotent.
         assert_eq!(install_into(&dir).unwrap().len(), 4);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn install_extra_into_writes_private_files_and_registers_family() {
+        let base = std::env::temp_dir().join(format!("bilterm-bundled-extra-font-test-{}", secure_fs::unique_suffix()));
+        std::fs::create_dir_all(&base).unwrap();
+        let dir = base.join("fonts");
+        let paths = install_extra_into(&dir).unwrap();
+        assert_eq!(paths.len(), 2);
+        for p in &paths {
+            assert!(p.exists());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(std::fs::metadata(p).unwrap().permissions().mode() & 0o777, 0o600);
+            }
+        }
+        assert!(registered_custom_fonts().iter().any(|(fam, _)| fam == BUNDLED_LAZENBY_FAMILY));
+        // Idempotent.
+        assert_eq!(install_extra_into(&dir).unwrap().len(), 2);
         let _ = std::fs::remove_dir_all(&base);
     }
 }

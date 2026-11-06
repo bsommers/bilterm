@@ -180,10 +180,11 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
     - *Lazenby Computer* (`LazenbyCompSmooth.ttf`, `LazenbyCompLiquid.ttf`, by Andrew Young / Disaster Fonts) is licensed under **CC BY-SA 4.0** (free for personal & commercial redistribution with attribution).
     - Bilterm's GUI renderer (`src/ui/gui_font/geometric.rs`, `src/ui/gui_font/{linux_x11,win32_gdi,macos_ct}.rs`) already draws box-drawing, block elements, Braille, Powerline, and UI icons geometrically and falls back to `font_fallback` for missing glyphs, so retro fonts with ~345 glyphs never produce tofu (`▯`).
     - Bilterm (`src/pane/typography.rs`) already scans `~/.config/bilterm/fonts/*.{ttf,otf,ttc}`, supports `:font add <path.ttf>`, and `font_files = [...]` in `config.toml`.
-    - **Proposed enhancements when user confirms**:
-      1. Bundle `LazenbyCompSmooth.ttf` and `LazenbyCompLiquid.ttf` in `assets/fonts/` (`src/ui/gui_font/bundled.rs`, installed on demand into private runtime dir when selected; Legacy defaults untouched) and add `FontFamilyPreset::LazenbyComputer` (`:font lazenby` / `:font lazenby-liquid`).
-      2. Horizontally center proportional display glyphs within `cell_width_px` in `linux_x11.rs` / `win32_gdi.rs` / `macos_ct.rs` (`(cell_width_px - glyph_advance_px) / 2`) so proportional sci-fi/retro fonts align like true monospaced fonts in the cell grid.
-      3. Add `:font import <path-or-zip>` to extract/copy `.ttf`/`.otf` files into `~/.config/bilterm/fonts/` via `secure_fs` and register them live.
+    - **Lazenby Computer & Custom Retro Font Implementation (DONE)**:
+      1. Bundled `LazenbyCompSmooth.ttf` and `LazenbyCompLiquid.ttf` in `assets/fonts/` (`assets/fonts/README.md`, `src/ui/gui_font/bundled.rs` via `BUNDLED_EXTRA_FONTS`, `install_extra_bundled_fonts()` installed into private runtime dir for Linux X11, macOS CoreText, and Windows GDI; Legacy defaults untouched).
+      2. Added `FontFamilyPreset::LazenbyComputer` (`:font lazenby`) and `FontFamilyPreset::LazenbyLiquid` (`:font lazenby-liquid`), added to `next_preset()` cycle (`CourierNew -> LazenbyComputer -> LazenbyLiquid -> CascadiaCode`), and added `:font scan [dir]` directory scanner.
+      3. Horizontally centered proportional display glyphs within `cell_width_px` in `linux_x11.rs` (`(cell_w - ext.x_off) / 2`) so narrow/proportional retro computer fonts center cleanly in the terminal grid.
+      4. Added tab-completion in `src/pane/completion.rs`, help catalog in `src/ui/help_catalog.rs`, and command registry exclusion in `src/command_registry.rs`.
 - **Standing Rules (Verbatim)**:
   - "I want to be able to select between the Legacy/retro looks and Obsidian, even if Obsidian is the default. we are taking NOTHING away from the old looks. just adding new looks and capabilities. EXTENDING what we have."
   - Never commit to `main`.

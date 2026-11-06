@@ -168,6 +168,10 @@ pub enum FontFamilyPreset {
     LucidaConsole,
     /// Classic slab-serif typewriter monospace font (`"Courier New"`).
     CourierNew,
+    /// Retro computer display font Smooth variant (`"Lazenby Computer"`).
+    LazenbyComputer,
+    /// Retro computer display font Liquid variant (`"Lazenby Computer Liquid"`).
+    LazenbyLiquid,
     /// User-specified custom font family name.
     Custom(String),
 }
@@ -193,6 +197,17 @@ impl FontFamilyPreset {
             "hack" => Some(Self::Hack),
             "lucida" | "lucida-console" | "lucida console" => Some(Self::LucidaConsole),
             "courier" | "courier-new" | "courier new" => Some(Self::CourierNew),
+            "lazenby"
+            | "lazenby-computer"
+            | "lazenby computer"
+            | "lazenby-smooth"
+            | "lazenby computer smooth"
+            | "moore"
+            | "computer" => Some(Self::LazenbyComputer),
+            "lazenby-liquid"
+            | "lazenby computer liquid"
+            | "lazenby liquid"
+            | "laz-liq" => Some(Self::LazenbyLiquid),
             _ => None,
         }
     }
@@ -211,6 +226,8 @@ impl FontFamilyPreset {
             Self::Hack => "Hack",
             Self::LucidaConsole => "Lucida Console",
             Self::CourierNew => "Courier New",
+            Self::LazenbyComputer => "Lazenby Computer",
+            Self::LazenbyLiquid => "Lazenby Computer Liquid",
             Self::Custom(name) => name.as_str(),
         }
     }
@@ -229,6 +246,8 @@ impl FontFamilyPreset {
             Self::Hack => "Hack",
             Self::LucidaConsole => "Lucida",
             Self::CourierNew => "Courier",
+            Self::LazenbyComputer => "LAZENBY",
+            Self::LazenbyLiquid => "LAZ-LIQ",
             Self::Custom(name) => name.as_str(),
         }
     }
@@ -327,6 +346,26 @@ impl FontFamilyPreset {
             Self::Tektronix4014 => vec!["Tektronix 4014", "Cascadia Mono", "SF Mono", "Menlo", "Consolas"],
             Self::LucidaConsole => vec!["Lucida Console", "Menlo", "Consolas", "Courier New"],
             Self::CourierNew => vec!["Courier New", "Consolas", "Menlo"],
+            Self::LazenbyComputer => vec![
+                "Lazenby Computer:style=Smooth",
+                "Lazenby Computer Smooth",
+                "Lazenby Computer",
+                "Cascadia Mono",
+                "JetBrains Mono",
+                "SF Mono",
+                "Menlo",
+                "Consolas",
+            ],
+            Self::LazenbyLiquid => vec![
+                "Lazenby Computer:style=Liquid",
+                "Lazenby Computer Liquid",
+                "Lazenby Computer",
+                "Cascadia Mono",
+                "JetBrains Mono",
+                "SF Mono",
+                "Menlo",
+                "Consolas",
+            ],
             Self::Custom(name) => vec![
                 name.as_str(),
                 "Cascadia Mono",
@@ -352,7 +391,9 @@ impl FontFamilyPreset {
             Self::Ibm3270 => Self::BorlandDosVga,
             Self::BorlandDosVga => Self::LucidaConsole,
             Self::LucidaConsole => Self::CourierNew,
-            Self::CourierNew | Self::Tektronix4014 | Self::Custom(_) => Self::CascadiaCode,
+            Self::CourierNew => Self::LazenbyComputer,
+            Self::LazenbyComputer => Self::LazenbyLiquid,
+            Self::LazenbyLiquid | Self::Tektronix4014 | Self::Custom(_) => Self::CascadiaCode,
         }
     }
 }
@@ -567,7 +608,27 @@ impl PaneFontOptions {
                     format!(" | loaded: [{}]", names.join(", "))
                 };
                 Ok(format!(
-                    "FONT PRESETS: cascadia | consolas | jetbrains | firacode | iosevka | plex | hack | ibm3270 | vga (Borland DOS) | tek4014 | lucida | courier | custom <name> | add <path.ttf>{custom_suffix}"
+                    "FONT PRESETS: cascadia | consolas | jetbrains | firacode | iosevka | plex | hack | ibm3270 | vga (Borland DOS) | tek4014 | lucida | courier | lazenby | lazenby-liquid | custom <name> | add <path.ttf> | scan [dir]{custom_suffix}"
+                ))
+            }
+            "scan" | "dir" => {
+                let target_dir = if let Some(arg) = parts
+                    .get(1..)
+                    .map(|s| s.join(" "))
+                    .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
+                    .filter(|s| !s.is_empty())
+                {
+                    PathBuf::from(arg)
+                } else if let Some(def) = default_custom_fonts_dir() {
+                    def
+                } else {
+                    return Err("No custom fonts directory specified and default directory unavailable".to_string());
+                };
+                let registered = scan_and_register_fonts_dir(&target_dir);
+                Ok(format!(
+                    "SCANNED FONTS DIR '{}': {} font(s) registered",
+                    target_dir.display(),
+                    registered.len()
                 ))
             }
             "cycle" | "next" => {
@@ -703,6 +764,14 @@ impl PaneFontOptions {
                 ))
             }
             other => {
+                let joined = parts.join(" ");
+                if let Some(preset) = FontFamilyPreset::from_name(&joined) {
+                    self.family = preset;
+                    return Ok(format!(
+                        "PANE FONT: {}",
+                        self.summary_with_defaults(default_size_pt, default_scale_pct)
+                    ));
+                }
                 if let Some(preset) = FontFamilyPreset::from_name(other) {
                     self.family = preset;
                     if let Some(arg2) = parts.get(1).copied() {
@@ -750,16 +819,8 @@ impl PaneFontOptions {
                         self.summary_with_defaults(default_size_pt, default_scale_pct)
                     ));
                 }
-                let joined = parts.join(" ");
-                if let Some(preset) = FontFamilyPreset::from_name(&joined) {
-                    self.family = preset;
-                    return Ok(format!(
-                        "PANE FONT: {}",
-                        self.summary_with_defaults(default_size_pt, default_scale_pct)
-                    ));
-                }
                 Err(format!(
-                    "Unknown :font option '{other}'. Usage: :font <cascadia|consolas|jetbrains|firacode|iosevka|plex|hack|ibm3270|vga|tek4014|lucida|courier|custom <name>|add <path.ttf>|cycle|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
+                    "Unknown :font option '{other}'. Usage: :font <cascadia|consolas|jetbrains|firacode|iosevka|plex|hack|ibm3270|vga|tek4014|lucida|courier|lazenby|lazenby-liquid|custom <name>|add <path.ttf>|scan [dir]|cycle|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
                 ))
             }
         }

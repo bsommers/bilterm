@@ -262,6 +262,7 @@ impl<'a> X11GuiCanvas<'a> {
             scaled_fonts: std::collections::BTreeMap::new(),
         };
         super::bundled::install_if_wanted(wm.config());
+        super::bundled::install_extra_bundled_fonts();
         if let Some(dir) = default_custom_fonts_dir() {
             let _ = scan_and_register_fonts_dir(&dir);
         }
@@ -547,7 +548,16 @@ impl<'a> X11GuiCanvas<'a> {
                     pixel: ((c_ulong::from(r)) << 16) | ((c_ulong::from(gr)) << 8) | c_ulong::from(b),
                     color: XRenderColor { red: u16::from(r) * 257, green: u16::from(gr) * 257, blue: u16::from(b) * 257, alpha: 0xFFFF },
                 };
-                let (x, y) = (g.x_px.max(0.0) as c_int, g.y_px.max(0.0) as c_int + ascent);
+                let (mut x, y) = (g.x_px.max(0.0) as c_int, g.y_px.max(0.0) as c_int + ascent);
+                if g.cell_width_px == surface.cell_width_px
+                    && let Some(ext_fn) = self.api.xft_text_extents_utf8
+                {
+                    let mut ext = XGlyphInfo::default();
+                    unsafe { ext_fn(self.dpy, font, g.text.as_ptr().cast(), g.text.len() as c_int, &mut ext) };
+                    if ext.x_off > 0 && (cell_w as i32 - i32::from(ext.x_off)).abs() >= 2 {
+                        x += ((cell_w as i32 - i32::from(ext.x_off)) / 2).max(0);
+                    }
+                }
                 unsafe { draw_str(self.xft_draw, &col, font, x, y, g.text.as_ptr(), g.text.len() as c_int) };
             }
         }
