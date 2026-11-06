@@ -744,6 +744,21 @@ impl VtParser {
         }
     }
 
+    /// Scrolls the viewport so the absolute output row `row` is at the bottom edge, the same offset
+    /// math as block navigation but without touching the block selection (Find jumps, Phase 50.1).
+    /// Returns `false` (and leaves the viewport alone) when the row has already been evicted from
+    /// the scrollback.
+    pub fn scroll_to_absolute_row(&mut self, row: usize) -> bool {
+        let current_bottom =
+            self.total_lines_scrolled + usize::from(self.parser.screen().cursor_position().0);
+        let offset = current_bottom.saturating_sub(row);
+        if offset > self.scrollback_capacity {
+            return false;
+        }
+        self.parser.screen_mut().set_scrollback(offset);
+        true
+    }
+
     pub fn take_outbound_osc52(&mut self) -> Vec<String> {
         std::mem::take(&mut self.pending_osc52)
     }
