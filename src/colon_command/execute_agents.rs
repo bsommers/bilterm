@@ -59,7 +59,7 @@ pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bo
         },
         // No text, no pane write, no bus event: the gate is closed in Phase 50 (D-09).
         AgentsOp::ComposeSubmit => match wm.compose_gate() {
-            ComposeGate::Unavailable(_) => status(wm, "Agent messaging is not enabled (Phase 51)".to_string()),
+            ComposeGate::Unavailable(_) => status(wm, "Agent messaging is not enabled (Phase 52)".to_string()),
         },
         AgentsOp::SnoopScroll(n) => wm.scroll_snoop(n),
         AgentsOp::Follow(mode) => wm.set_snoop_follow(mode),

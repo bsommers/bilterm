@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Phase 50 doc coverage gate: every `:agents` verb and every `:drawer` verb added since the phase base
+# Phase 50 (+ Phase 51 sub-forms) doc coverage gate: every `:agents` verb and every `:drawer` verb added since the phase base
 # commit (0915792) must appear in user-guide chapter 11 as `:<cmd> <verb>`; the guide index must link it.
 # Lists are derived from src/pane/completion.rs, so new verbs are covered without editing this script.
+# Phase 51 adds sub-forms the verb list cannot see (demo stop, list select, arrange grid, the list chord,
+# the palette exclusion table) to the phrase loop below.
 # Prints missing items, then ONE final line: `DOCS OK <n>` (exit 0) or `DOCS FAIL: <reason>` (exit 1).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -46,7 +48,8 @@ while IFS= read -r v; do check agents "$v"; done <<< "$agents"
 while IFS= read -r v; do check drawer "$v"; done <<< "$drawer_new"
 
 # Sub-forms and config keys the verb list above cannot see (second word of a verb, or a [section] key).
-for phrase in ":agents topology export <name>" "agents_window.edge_fade_secs" ":agents fade [secs]"; do
+for phrase in ":agents topology export <name>" "agents_window.edge_fade_secs" ":agents fade [secs]" \
+  ":agents demo stop" ":agents list select <pane-id>" ":arrange grid" "Ctrl+Alt+N" "PALETTE_EXCLUSIONS"; do
   n=$((n + 1))
   if ! grep -qF -- "$phrase" "$CHAPTER"; then
     echo "missing $phrase"
