@@ -219,7 +219,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":finder kind|query|move|select", "Drive the open Find window: kind agent|session|history|next|prev; query <text>; move <+n|-n|top|bottom>; select <n> (0-based row). No palette entry: the window must be open"),
     (":finder enter|prefill|close", "Drive the open Find window: enter jumps to the selected row, prefill copies its command into the prompt, close dismisses the window"),
     ("Find window keys", "Ctrl+Alt+F open/close; Tab / Shift+Tab switch kind; Up/Down PgUp/PgDn Home/End move; typing filters; Backspace edits; Ctrl+U clears; Enter jumps; Ctrl+Y prefills the prompt; Esc closes"),
-    ("Find window mouse", "click a kind tab; click a row to select it, click again or the [Enter] chip to jump; [clear] chip; wheel moves the selection; footer chips [Enter] [^Y prefill] [x] (each gesture = the key or :finder twin)"),
+    ("Find window mouse", "click a kind tab; click a row to jump to it (or the [Enter] chip for the selected row); [clear] chip; wheel moves the selection; footer chips [Enter] [^Y prefill] [x] (each gesture = the key or :finder twin)"),
 ];
 
 /// Complete Fuzzy Command Palette catalog (`Ctrl+P` / `:palette`) paired with shortcuts and descriptions.
