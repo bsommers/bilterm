@@ -557,6 +557,7 @@ impl GuiWorkspaceRenderer {
         // The AGENTS list floats above the traffic window; same masking rules (51-06).
         let list_scale = wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList);
         let list_overlay_rect = real_rect(crate::ui::typography::PanelTarget::AgentsList, list_scale, &|a| wm.agents_list_rect(a));
+        let fonts_overlay_rect = wm.fonts_window_rect(ws_area);
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -572,6 +573,7 @@ impl GuiWorkspaceRenderer {
                 || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || list_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || fonts_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
@@ -810,7 +812,8 @@ impl GuiWorkspaceRenderer {
                     let (abs_c, abs_r) = (viewport.x + c, viewport.y + r);
                     let top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
-                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || fonts_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
                     if top && let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
                         push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
                     }

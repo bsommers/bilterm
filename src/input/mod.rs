@@ -4,6 +4,8 @@ mod agents_window;
 mod drawer_navigator;
 pub mod encode;
 pub mod find_modal;
+pub mod fonts_window;
+pub mod fonts_window_keys;
 pub mod gui_route;
 pub mod keymap;
 pub mod link_mouse;

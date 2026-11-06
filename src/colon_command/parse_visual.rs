@@ -434,6 +434,85 @@ pub(super) fn parse_visual_colon_command(
             };
             Some(Ok(ColonCommand::PaneFontCommand(subcmd)))
         }
+        "fonts" => {
+            use crate::wm::fonts_window::FontsWindowOp;
+            let op = match parts.get(1).copied() {
+                None | Some("open") => FontsWindowOp::Open,
+                Some("close") => FontsWindowOp::Close,
+                Some("toggle") => FontsWindowOp::Toggle,
+                Some("dismiss") => FontsWindowOp::Dismiss,
+                Some("blur") => FontsWindowOp::Blur,
+                Some("pin") => match parts.get(2).copied() {
+                    Some("on" | "true" | "1") => FontsWindowOp::Pin(Some(true)),
+                    Some("off" | "false" | "0") => FontsWindowOp::Pin(Some(false)),
+                    _ => FontsWindowOp::Pin(None),
+                },
+                Some("unpin") => FontsWindowOp::Pin(Some(false)),
+                Some("dock") => match parts.get(2).copied() {
+                    Some("on" | "true" | "1") => FontsWindowOp::Dock(Some(true)),
+                    Some("off" | "false" | "0") => FontsWindowOp::Dock(Some(false)),
+                    _ => FontsWindowOp::Dock(None),
+                },
+                Some("float") => FontsWindowOp::Dock(Some(false)),
+                Some("apply") => FontsWindowOp::ApplySelected,
+                Some("all") => FontsWindowOp::ApplyAll,
+                Some("scan") => FontsWindowOp::Scan,
+                Some("next" | "down") => FontsWindowOp::Step(1),
+                Some("prev" | "up") => FontsWindowOp::Step(-1),
+                Some("step") => {
+                    let n = parts.get(2).and_then(|s| s.parse::<i32>().ok()).unwrap_or(1);
+                    FontsWindowOp::Step(n)
+                }
+                Some("page-up") => FontsWindowOp::Page(-1),
+                Some("page-down") => FontsWindowOp::Page(1),
+                Some("page") => {
+                    let n = parts.get(2).and_then(|s| s.parse::<i32>().ok()).unwrap_or(1);
+                    FontsWindowOp::Page(n)
+                }
+                Some("first" | "home") => FontsWindowOp::First,
+                Some("last" | "end") => FontsWindowOp::Last,
+                Some("scroll") => {
+                    let n = parts.get(2).and_then(|s| s.parse::<i32>().ok()).unwrap_or(3);
+                    FontsWindowOp::Scroll(n)
+                }
+                Some("select") => {
+                    if let Some(idx) = parts.get(2).and_then(|s| s.parse::<usize>().ok()) {
+                        FontsWindowOp::SelectRow(idx)
+                    } else {
+                        FontsWindowOp::ApplySelected
+                    }
+                }
+                Some("size" | "size-step") => {
+                    let d = parts.get(2).and_then(|s| s.parse::<i16>().ok()).unwrap_or(1);
+                    FontsWindowOp::SizeStep(d)
+                }
+                Some("scale" | "scale-step") => {
+                    let d = parts.get(2).and_then(|s| s.parse::<i16>().ok()).unwrap_or(10);
+                    FontsWindowOp::ScaleStep(d)
+                }
+                Some("move") => {
+                    let dx = parts.get(2).and_then(|s| s.parse::<i16>().ok()).unwrap_or(0);
+                    let dy = parts.get(3).and_then(|s| s.parse::<i16>().ok()).unwrap_or(0);
+                    FontsWindowOp::Move { dx, dy }
+                }
+                Some("resize") => {
+                    let dw = parts.get(2).and_then(|s| s.parse::<i16>().ok()).unwrap_or(0);
+                    let dh = parts.get(3).and_then(|s| s.parse::<i16>().ok()).unwrap_or(0);
+                    FontsWindowOp::Resize { dw, dh }
+                }
+                Some("rect") => {
+                    let x = parts.get(2).and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+                    let y = parts.get(3).and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+                    let w = parts.get(4).and_then(|s| s.parse::<u16>().ok()).unwrap_or(58);
+                    let h = parts.get(5).and_then(|s| s.parse::<u16>().ok()).unwrap_or(18);
+                    FontsWindowOp::SetRect { x, y, w, h }
+                }
+                Some(other) => {
+                    return Some(Err(format!("Unknown :fonts subcommand '{other}'. Usage: :fonts [open|close|toggle|pin|dock|apply|all|scan|next|prev]")));
+                }
+            };
+            Some(Ok(ColonCommand::FontsWindow(op)))
+        }
         "canvas" | "tek" => {
             let subcmd = if parts[0].eq_ignore_ascii_case("tek") {
                 if parts.len() > 1 {

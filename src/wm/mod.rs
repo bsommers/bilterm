@@ -10,6 +10,7 @@ pub mod agents_list_geometry;
 pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
+pub mod fonts_window;
 pub mod journal;
 pub mod layout_profile;
 pub mod link_cmd;
@@ -153,6 +154,9 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Floating FONTS window state (`WIN-01`, Phase 51.2).
+    pub(crate) fonts_window: fonts_window::FontsWindowState,
+    pub(crate) fonts_window_dirty: bool,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -239,6 +243,8 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            fonts_window: fonts_window::FontsWindowState::default(),
+            fonts_window_dirty: false,
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -766,6 +772,7 @@ impl WindowManager {
             self.quick_terminal.visible = false;
             self.agents_window.blur();
             self.agents_list.blur();
+            self.fonts_window.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -780,6 +787,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.fonts_window.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -791,6 +799,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.fonts_window.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

@@ -698,7 +698,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::PaneFontCommand(ref subcmd) => {
-            let _ = wm.execute_pane_font_command(subcmd);
+            let res = wm.execute_pane_font_command(subcmd);
+            let first_word = subcmd.split_whitespace().next().unwrap_or("").to_ascii_lowercase();
+            if matches!(first_word.as_str(), "list" | "presets" | "scan" | "dir") {
+                wm.open_fonts_window();
+                match &res {
+                    Ok(msg) => wm.fonts_window_mut().last_status = Some(msg.clone()),
+                    Err(err) => wm.fonts_window_mut().last_status = Some(err.clone()),
+                }
+            }
             false
         }
         ColonCommand::CanvasCommand(ref subcmd) => {
@@ -828,6 +836,13 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::FontsWindow(op) => {
+            let msg = wm.fonts_window_apply(&op);
+            if let Some(msg) = msg {
+                wm.active_pane_mut().set_status_message(Some(msg));
+            }
+            false
+        }
         ColonCommand::Find(op) => super::execute_find::execute_find_command(wm, op),
         ColonCommand::RespawnPaneInPlace => {
             wm.respawn_active_pane();

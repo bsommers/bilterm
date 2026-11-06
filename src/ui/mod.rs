@@ -7,6 +7,7 @@ pub mod contrast;
 pub mod exit_guard_ui;
 pub mod file_browser;
 pub mod find_ui;
+pub mod fonts_window_ui;
 pub mod gui_font;
 #[cfg(target_os = "macos")]
 pub mod gui_macos;
@@ -728,6 +729,7 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList) == 100 {
             agents_list_ui::render_agents_list(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+        fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
