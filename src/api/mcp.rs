@@ -89,6 +89,7 @@ impl AutomationControlPlane {
                     "bilterm_find" => Some(Self::find_method_for_kind(&args).unwrap_or("")),
                     "bilterm_agents_list" => Some("agents.list"),
                     "bilterm_agents_demo" => Some("agents.demo"),
+                    "bilterm_session_map" => Some("session.map"),
                     "bilterm_remote_link" => Some("remote.link"),
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     _ => None,
@@ -227,6 +228,15 @@ impl AutomationControlPlane {
                 &[
                     ("op", "string", "Optional operation: open, close, toggle, dismiss, blur, select, jump, zoom, pin, unpin, scale, filter, dock, float, move, resize, rect, size or scroll (absent or list reads the state)"),
                     ("args", "string", "Space-separated arguments, for example `down` or `110`"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_session_map",
+                "Inspect or manage the session packing viewer, pick up windows, and drag-and-drop between sessions.",
+                &[
+                    ("op", "string", "Optional operation: open, close, toggle, pin, dock, pickup, target, drop, cancel, scale"),
+                    ("pane_id", "integer", "Pane ID for pickup or drop"),
+                    ("session", "string", "Target session name"),
                 ],
             ),
             Self::mcp_tool_schema(

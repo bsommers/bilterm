@@ -25,6 +25,8 @@ pub mod quick_terminal;
 pub mod registry;
 pub mod session;
 pub mod session_manager;
+pub mod session_map;
+pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
 pub mod tmux_io;
@@ -42,6 +44,11 @@ pub use journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 pub use layout_profile::{BUILTIN_LAYOUT_PROFILES, LayoutProfileMeta, sanitize_profile_name};
 pub use quick_terminal::{encode_sgr_mouse_local, inset_window_frame, rect_contains};
 pub use session::{SavedPaneState, SavedWorkspaceSession};
+pub use session_map::{SessionMapDrag, SessionMapOp, SessionMapState};
+pub use session_pack_layout::{
+    compute_inner_rect, pack_rects, pack_sessions_treemap, SessionPackInput, SessionPackRect,
+    WindowPackInput, WindowPackRect,
+};
 pub use session_tree::{SessionNodeKind, SessionTree, SessionTreeNode};
 pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 pub use command_window::{
@@ -163,6 +170,8 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
+    pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
     pub(crate) fonts_window: fonts_window::FontsWindowState,
     pub(crate) fonts_window_dirty: bool,
@@ -185,6 +194,8 @@ pub struct WindowManager {
     pub(crate) agents_scale_pct: u16,
     /// Same for the AGENTS list window (Phase 51).
     pub(crate) agents_list_scale_pct: u16,
+    /// Same for the SESSION MAP packing viewer (Phase 54).
+    pub(crate) session_map_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -258,6 +269,7 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            session_map: session_map::SessionMapState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
@@ -270,6 +282,7 @@ impl WindowManager {
             mcp_scale_pct: 100,
             agents_scale_pct: 100,
             agents_list_scale_pct: 100,
+            session_map_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),

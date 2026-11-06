@@ -362,6 +362,13 @@ pub(super) fn handle_wm_modal_key(
         return Ok(Some(action));
     }
     if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.session_map().captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::session_map_keys::handle_session_map_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
+    if matches!(wm.modal(), crate::wm::Modal::None)
         && wm.agents_window_captures_input()
         && !wm.is_leader_pending()
         && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)

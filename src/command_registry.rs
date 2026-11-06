@@ -77,6 +77,7 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":nonretro", ":modern", "Alias of :modern."),
     (":pager", ":scroll", "Alias of :scroll."),
     (":pane-style", ":window", "Alias of :window (style the focused pane: theme, outline, bold and colors)."),
+    (":packing", ":sessions", "Alias of :sessions map for the 2D session packing viewer."),
     (":palette", ":commands", "Alias of :commands."),
     (":panefont", "", "Show or change the focused pane's font settings."),
     (":navigator", ":drawer", "Alias of :drawer for the Navigator tree (expand all, collapse all, style)."),

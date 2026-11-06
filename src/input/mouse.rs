@@ -618,6 +618,10 @@ pub fn handle_wm_mouse_event(
             return Ok(action);
         }
 
+        if let Some(action) = super::session_map::handle_session_map_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
+
         // The AGENTS list is the smaller, top-most panel: it sees the event before the traffic window.
         if let Some(action) = super::agents_list::handle_agents_list_mouse(wm, mouse, workspace_area) {
             return Ok(action);
