@@ -33,6 +33,7 @@ pub struct CommandInfo {
 /// `(name, alias_of or "", summary)`.
 pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":aero", ":glass", "Alias of :glass."),
+    (":auto-arrange", ":arrange", "Alias of :arrange."),
     (":asciinema", ":record", "Alias of :record."),
     (":bcast", ":broadcast", "Alias of :broadcast."),
     (":block-select", ":rect", "Alias of :rect."),
@@ -160,6 +161,7 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":canvas pan", "numeric"),
     (":canvas zoom", "numeric"),
     (":agents rect", "numeric"),
+    (":agents list rect", "numeric"),
     (":agents node-pin", "numeric"),
     (":focus 1", "entity-id"),
     (":focus 2", "entity-id"),
@@ -459,7 +461,7 @@ mod tests {
     }
 
     /// Parser arm heads that are not Tab-completion rows (short spellings kept for muscle memory).
-    const PARSER_ONLY_ALIASES: &[&str] = &["?", "a", "cb", "d", "h", "p", "sb", "sp", "vi", "vs", "arrange", "auto-arrange"];
+    const PARSER_ONLY_ALIASES: &[&str] = &["?", "a", "cb", "d", "h", "p", "sb", "sp", "vi", "vs"];
 
     #[test]
     fn parser_heads_are_known_best_effort() {
