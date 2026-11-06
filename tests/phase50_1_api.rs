@@ -182,7 +182,6 @@ fn tools_list_has_eleven_tools_with_find_last() {
 }
 
 #[test]
-#[ignore = "needs plan 50.1-11 (registry/saved.rs disk source); run with --ignored once merged"]
 fn rpc_sessions_include_saved_session_source_with_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut plane = plane_with_panes(0);
@@ -205,7 +204,6 @@ fn rpc_sessions_include_saved_session_source_with_path() {
 }
 
 #[test]
-#[ignore = "needs plan 50.1-11 (registry/saved.rs history.log reader); run with --ignored once merged"]
 fn rpc_history_masks_secrets_from_history_log() {
     let dir = tempfile::tempdir().unwrap();
     let mut plane = plane_with_panes(0);
