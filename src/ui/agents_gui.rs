@@ -109,7 +109,7 @@ fn pixel_rects_overlap(a: (u32, u32, u32, u32), b: (u32, u32, u32, u32)) -> bool
 type PxRect = (u32, u32, u32, u32);
 
 /// Pixel rectangles drawn above the agents window and the drawer (`:mcp` console, modal, menu
-/// dropdown, quick terminal).
+/// dropdown, quick terminal, AGENTS list).
 fn overlay_rects(wm: &WindowManager, ws_area: Rect, base: &PanelFrame) -> Vec<PxRect> {
     [
         wm.mcp_console().panel_rect(ws_area),
@@ -120,7 +120,20 @@ fn overlay_rects(wm: &WindowManager, ws_area: Rect, base: &PanelFrame) -> Vec<Px
     .into_iter()
     .flatten()
     .map(|r| base.real_pixel_rect(r))
+    .chain(agents_list_pixels(wm, ws_area, base))
     .collect()
+}
+
+/// Pixel rectangle of the open AGENTS list at its own scale (it floats above the graph and the
+/// Navigator icons, so no texture may paint over it). `base` supplies the cell size and origin.
+fn agents_list_pixels(wm: &WindowManager, ws_area: Rect, base: &PanelFrame) -> Option<PxRect> {
+    let vws = wm.panel_virtual_area(ws_area, PanelTarget::AgentsList);
+    let outer = wm.agents_list_rect(vws)?;
+    let k = f32::from(wm.scale_pct(PanelTarget::AgentsList)) / 100.0;
+    let f = PanelFrame { cell: (base.base.0 * k, base.base.1 * k), ..*base };
+    let (x0, y0) = f.px(outer.x, outer.y);
+    let (x1, y1) = f.px(outer.x + outer.width, outer.y + outer.height);
+    Some((x0 as u32, y0 as u32, (x1 - x0).max(0.0) as u32, (y1 - y0).max(0.0) as u32))
 }
 
 /// Pixel rectangle of the open agents window (any scale), `None` when it is closed.

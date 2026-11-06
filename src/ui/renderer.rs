@@ -554,6 +554,9 @@ impl GuiWorkspaceRenderer {
         // The traffic window floats above panes: a pane drawn at its own font scale must not paint
         // over its cells (they would show through as a frameless, see-through window).
         let agents_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Agents, agents_scale, &|a| wm.agents_window_rect(a));
+        // The AGENTS list floats above the traffic window; same masking rules (51-06).
+        let list_scale = wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList);
+        let list_overlay_rect = real_rect(crate::ui::typography::PanelTarget::AgentsList, list_scale, &|a| wm.agents_list_rect(a));
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -568,6 +571,7 @@ impl GuiWorkspaceRenderer {
                 || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || list_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
         let cell_in_scaled_pane = |abs_c: u16, abs_r: u16| -> bool {
@@ -590,10 +594,12 @@ impl GuiWorkspaceRenderer {
 
         // Drawer / :mcp panels drawn at their own font scale (46-04d); identity (never true) at 100%.
         let agents_rect = (agents_scale != 100).then_some(agents_overlay_rect).flatten();
+        let list_rect = (list_scale != 100).then_some(list_overlay_rect).flatten();
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
             (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
-                || agents_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+                || agents_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || list_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
                 && !(modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
@@ -720,7 +726,7 @@ impl GuiWorkspaceRenderer {
             }
         }
 
-        if drawer_scale != 100 || mcp_scale != 100 || agents_scale != 100 {
+        if drawer_scale != 100 || mcp_scale != 100 || agents_scale != 100 || list_scale != 100 {
             let cfg = wm.config();
             let (pal, glyphs) = (cfg.palette(), cfg.glyph_set());
             let mut draw_panel = |scratch: &Buffer, vr: Rect, scale: u16| {
@@ -777,6 +783,25 @@ impl GuiWorkspaceRenderer {
                         wm, ws_area, vws, viewport, eff_cw, eff_ch, agents_scale, &mut scratch, &mut surface.images, gui_tick,
                     );
                     draw_panel(&scratch, vr, agents_scale);
+                }
+            }
+            if list_scale != 100 {
+                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::AgentsList);
+                if let Some(vr) = wm.agents_list_rect(vws) {
+                    let mut scratch = Buffer::empty(vws);
+                    crate::ui::agents_list_ui::render_agents_list(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    draw_panel(&scratch, vr, list_scale);
+                }
+            } else if agents_scale != 100 && let Some(lr) = list_overlay_rect {
+                // An unscaled list stays above the scaled traffic window: re-push its cells last.
+                for (abs_r, abs_c) in (lr.y..lr.y + lr.height).flat_map(|y| (lr.x..lr.x + lr.width).map(move |x| (y, x))) {
+                    let under_top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                    if let Some(cell) = cell_buf.cell((abs_c, abs_r)).filter(|_| !under_top && abs_c >= viewport.x && abs_r >= viewport.y) {
+                        let (c, r) = (abs_c - viewport.x, abs_r - viewport.y);
+                        push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
+                    }
                 }
             }
             // Modals, menus and the quick terminal stay above the scaled panels.
