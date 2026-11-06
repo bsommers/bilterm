@@ -5,16 +5,18 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::style::{Color, Modifier, Style};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::BiltermConfig;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
+use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens};
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::theme::ThemePalette;
 use crate::ui::visual_style::{apply_frosted_glass_surface, render_liquid_ambient_halo};
+use crate::wm::find_cmd::FindKind;
+use crate::wm::registry::types::{FindResults, FindRow, RowData, Transport};
 use crate::wm::{WindowManager, inset_window_frame};
 
 /// Window title (the frame draws it between the borders).
@@ -142,7 +144,7 @@ pub(super) fn render_find_modal(
     glyphs: &GlyphSet,
     buf: &mut Buffer,
 ) {
-    let Some((kind, query, _selected)) = wm.find_modal_state() else {
+    let Some((kind, query, selected)) = wm.find_modal_state() else {
         return;
     };
     let Some(outer) = wm.active_modal_rect(workspace_area) else {
@@ -150,17 +152,356 @@ pub(super) fn render_find_modal(
     };
     render_frame(outer, workspace_area, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(outer);
-    if inner.width == 0 || inner.height == 0 {
+    if is_empty(inner) {
         return;
     }
-    let header = Line::from(Span::styled(
-        format!("Find {} > {query}_", kind.as_str()),
-        Style::default()
-            .fg(palette.prompt_prefix_fg)
-            .bg(palette.window_frame_bg)
-            .add_modifier(Modifier::BOLD),
-    ));
-    Paragraph::new(vec![header]).render(inner, buf);
+    let st = FindStyles::new(cfg, palette, glyphs);
+    let layout = find_layout(inner, cfg);
+    let results = wm.find_results();
+    buf.set_style(inner, st.base);
+    render_tabs(buf, &layout, kind, results, &st);
+    render_query(buf, &layout, kind, query, &st);
+    render_rows(buf, layout.list, kind, results, selected, &st);
+    render_footer(buf, &layout, results, selected, &st);
+}
+
+/// Colours and glyph choices shared by the Find window parts.
+struct FindStyles {
+    base: Style,
+    dim: Style,
+    accent: Style,
+    chip: Style,
+    chip_active: Style,
+    selected: Style,
+    ascii: bool,
+    modern: bool,
+}
+
+impl FindStyles {
+    fn new(cfg: &BiltermConfig, palette: &ThemePalette, glyphs: &GlyphSet) -> Self {
+        let bg = palette.window_frame_bg;
+        let fg = palette.text_fg.unwrap_or(Color::White);
+        let modern = AppearanceProfile::resolve(cfg) != AppearanceProfile::Legacy;
+        let selected = if modern {
+            let overlay = DesignTokens::from_palette(palette).get(ColorRole::Overlay);
+            Style::default().fg(palette.title_fg).bg(overlay).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Black).bg(palette.active_border_fg)
+        };
+        Self {
+            base: Style::default().fg(fg).bg(bg),
+            dim: Style::default().fg(palette.inactive_border_fg).bg(bg),
+            accent: Style::default().fg(palette.prompt_prefix_fg).bg(bg).add_modifier(Modifier::BOLD),
+            chip: Style::default().fg(palette.prompt_prefix_fg).bg(bg),
+            chip_active: Style::default()
+                .fg(palette.prompt_prefix_fg)
+                .bg(bg)
+                .add_modifier(Modifier::REVERSED | Modifier::BOLD),
+            selected,
+            ascii: glyphs.oia_separator.is_ascii(),
+            modern,
+        }
+    }
+
+    fn ellipsis(&self) -> char {
+        if self.ascii { '~' } else { '…' }
+    }
+
+    fn marker(&self, selected: bool) -> &'static str {
+        match (selected, self.ascii) {
+            (false, _) => " ",
+            (true, true) => ">",
+            (true, false) => "▎",
+        }
+    }
+}
+
+/// Replaces control and bidi-override characters with `?` (T-50.1-14); one char in, one char out.
+fn clean(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            let bidi = matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}');
+            if c.is_control() || bidi { '?' } else { c }
+        })
+        .collect()
+}
+
+/// `text` cut to at most `max` display cells, ending in `ellipsis` when something was dropped.
+fn truncate(text: &str, max: usize, ellipsis: char) -> String {
+    if UnicodeWidthStr::width(text) <= max {
+        return text.to_string();
+    }
+    if max == 0 {
+        return String::new();
+    }
+    let budget = max - 1;
+    let mut out = String::new();
+    let mut used = 0;
+    for c in text.chars() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if used + w > budget {
+            break;
+        }
+        used += w;
+        out.push(c);
+    }
+    out.push(ellipsis);
+    out
+}
+
+/// Draws `text` from `(x, y)` up to column `limit` (exclusive); returns the next free column.
+fn put(buf: &mut Buffer, x: u16, y: u16, limit: u16, text: &str, style: Style) -> u16 {
+    let mut x = x;
+    for c in text.chars() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0) as u16;
+        if w == 0 {
+            continue;
+        }
+        if x.saturating_add(w) > limit {
+            break;
+        }
+        let mut tmp = [0u8; 4];
+        buf[(x, y)].set_symbol(c.encode_utf8(&mut tmp)).set_style(style);
+        for dx in 1..w {
+            buf[(x + dx, y)].set_symbol("").set_style(style);
+        }
+        x += w;
+    }
+    x
+}
+
+fn rect_end(r: Rect) -> u16 {
+    r.x.saturating_add(r.width)
+}
+
+fn is_empty(r: Rect) -> bool {
+    r.width == 0 || r.height == 0
+}
+
+/// Rightmost edge of the chips that were laid out (zero-width chips are ignored).
+fn chips_end(chips: &[Rect], fallback: u16) -> u16 {
+    chips.iter().filter(|c| !is_empty(**c)).map(|c| rect_end(*c)).max().unwrap_or(fallback)
+}
+
+/// Draws `text` right-aligned in `row` when it fits right of `left_end`; reports whether it did.
+fn put_right(buf: &mut Buffer, row: Rect, left_end: u16, text: &str, style: Style) -> bool {
+    if is_empty(row) || text.is_empty() {
+        return false;
+    }
+    let w = UnicodeWidthStr::width(text) as u16;
+    let x = rect_end(row).saturating_sub(w);
+    let clear_of_chips = left_end <= row.x || x > left_end;
+    if w > row.width || !clear_of_chips {
+        return false;
+    }
+    put(buf, x, row.y, rect_end(row), text, style);
+    true
+}
+
+fn fmt_age(ms: u64) -> String {
+    let s = ms / 1000;
+    match s {
+        0..=59 => format!("{s}s"),
+        60..=3599 => format!("{}m", s / 60),
+        3600..=86_399 => format!("{}h", s / 3600),
+        _ => format!("{}d", s / 86_400),
+    }
+}
+
+fn host_word(row: &FindRow) -> String {
+    row.host.as_deref().map_or_else(|| "local".to_string(), clean)
+}
+
+/// Secondary text of a row, per kind (D-U3 row shapes).
+fn row_detail(row: &FindRow) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let transport_words = |parts: &mut Vec<String>| {
+        if row.transport != Transport::Local {
+            parts.push(row.transport.as_str().to_string());
+        }
+        if row.metadata_only {
+            parts.push("label-only".to_string());
+        }
+    };
+    match &row.data {
+        RowData::Agent(a) => {
+            parts.push(format!("#{}", a.pane));
+            parts.push(a.state.as_str().to_string());
+            parts.push(host_word(row));
+            parts.push(fmt_age(a.since_ms));
+        }
+        RowData::Session(s) => {
+            parts.push(format!("{} panes", s.pane_count));
+            transport_words(&mut parts);
+        }
+        RowData::Pane(p) => {
+            parts.push(format!("#{}", p.pane));
+            transport_words(&mut parts);
+            if let Some(host) = row.host.as_deref() {
+                parts.push(clean(host));
+            }
+        }
+        RowData::History(h) => {
+            if let Some(pane) = h.pane {
+                parts.push(format!("#{pane}"));
+            }
+            parts.push(host_word(row));
+            if let Some(code) = h.exit_code {
+                parts.push(format!("exit {code}"));
+            }
+        }
+    }
+    if let Some(also) = row.also_in.first() {
+        parts.push(format!("(also {})", also.label()));
+    }
+    clean(&parts.join(" "))
+}
+
+/// Draws one result row into the one-line `rect`: marker, label with matches emphasised, dimmer
+/// detail, and the right-aligned source tag (never truncated before the label, D-U3).
+fn draw_row(buf: &mut Buffer, rect: Rect, row: &FindRow, selected: bool, st: &FindStyles) {
+    let base = if selected { st.selected } else { st.base };
+    buf.set_style(rect, base);
+    let end = rect_end(rect);
+    put(buf, rect.x, rect.y, end, st.marker(selected), if selected { st.selected } else { st.accent });
+    let width = usize::from(rect.width);
+    let tag = truncate(&format!("[{}]", clean(&row.source.label())), width.saturating_sub(4).max(1), st.ellipsis());
+    let tag_w = UnicodeWidthStr::width(tag.as_str());
+    let body_w = width.saturating_sub(2 + tag_w + 1);
+    let label_t = truncate(&clean(&row.label), body_w, st.ellipsis());
+    let label_w = UnicodeWidthStr::width(label_t.as_str());
+    let detail_room = body_w.saturating_sub(label_w + 2);
+    let detail = if detail_room >= 2 { truncate(&row_detail(row), detail_room, st.ellipsis()) } else { String::new() };
+
+    let hit_style = base.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+    let mut x = rect.x.saturating_add(2);
+    for (i, c) in label_t.chars().enumerate() {
+        let style = if row.matched.contains(&(i as u32)) { hit_style } else { base };
+        let mut tmp = [0u8; 4];
+        x = put(buf, x, rect.y, end, c.encode_utf8(&mut tmp), style);
+    }
+    if !detail.is_empty() {
+        put(buf, x.saturating_add(2), rect.y, end, &detail, if selected { base } else { st.dim });
+    }
+    let tag_x = end.saturating_sub(tag_w as u16);
+    put(buf, tag_x, rect.y, end, &tag, if selected { base } else { st.accent });
+}
+
+fn kind_noun(kind: FindKind) -> &'static str {
+    match kind {
+        FindKind::Agent => "agents",
+        FindKind::Session => "sessions",
+        FindKind::History => "history",
+    }
+}
+
+fn render_rows(buf: &mut Buffer, list: Rect, kind: FindKind, results: &FindResults, selected: usize, st: &FindStyles) {
+    if is_empty(list) {
+        return;
+    }
+    if results.rows.is_empty() {
+        let mut msg = format!("No {} match", kind_noun(kind));
+        if results.masked > 0 {
+            msg.push_str(&format!(", {} masked", results.masked));
+        }
+        put(buf, list.x, list.y, rect_end(list), &msg, st.dim);
+        return;
+    }
+    let rows = usize::from(list.height);
+    let sel = selected.min(results.rows.len() - 1);
+    let start = sel.saturating_sub(rows - 1);
+    for (i, row) in results.rows.iter().enumerate().skip(start).take(rows) {
+        let rect = Rect::new(list.x, list.y + (i - start) as u16, list.width, 1);
+        draw_row(buf, rect, row, i == sel, st);
+    }
+}
+
+fn render_tabs(buf: &mut Buffer, layout: &FindLayout, kind: FindKind, results: &FindResults, st: &FindStyles) {
+    for (i, chip) in layout.tab_chips.iter().enumerate() {
+        if !is_empty(*chip) {
+            let style = if i == kind.index() { st.chip_active } else { st.chip };
+            put(buf, chip.x, chip.y, rect_end(*chip), TAB_LABELS[i], style);
+        }
+    }
+    let left_end = chips_end(&layout.tab_chips, layout.tabs.x);
+    put_right(buf, layout.tabs, left_end, &format!("{} results", results.total), st.dim);
+}
+
+fn render_query(buf: &mut Buffer, layout: &FindLayout, kind: FindKind, query: &str, st: &FindStyles) {
+    if is_empty(layout.query) {
+        return;
+    }
+    let shown = clean(query);
+    let text = if st.modern && !st.ascii {
+        format!("❯ {shown}▍")
+    } else {
+        format!("Find {} > {shown}_", kind.as_str())
+    };
+    // Keep the tail (the cursor end) visible when the query is longer than the row.
+    let room = usize::from(layout.query.width);
+    let mut tail: Vec<char> = Vec::new();
+    let mut used = 0;
+    for c in text.chars().rev() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if used + w > room {
+            break;
+        }
+        used += w;
+        tail.push(c);
+    }
+    let text: String = tail.into_iter().rev().collect();
+    put(buf, layout.query.x, layout.query.y, rect_end(layout.query), &text, st.accent);
+    if !is_empty(layout.clear_chip) {
+        let c = layout.clear_chip;
+        put(buf, c.x, c.y, rect_end(c), CLEAR_LABEL, st.chip);
+    }
+}
+
+/// Source line of the selected row, footer chips, `<i>/<total>` and the masked count (a number only).
+fn render_footer(buf: &mut Buffer, layout: &FindLayout, results: &FindResults, selected: usize, st: &FindStyles) {
+    let masked = (results.masked > 0).then(|| format!("{} masked", results.masked));
+    let sel = selected.min(results.rows.len().saturating_sub(1));
+    let pos = (!results.rows.is_empty()).then(|| format!("{}/{}", sel + 1, results.total.max(results.rows.len())));
+    let mut masked_placed = false;
+    if !is_empty(layout.footer) {
+        for (i, chip) in layout.footer_chips.iter().enumerate() {
+            if !is_empty(*chip) {
+                put(buf, chip.x, chip.y, rect_end(*chip), FOOTER_LABELS[i], st.chip);
+            }
+        }
+        let left_end = chips_end(&layout.footer_chips, layout.footer.x);
+        let both = pos.iter().chain(masked.iter()).cloned().collect::<Vec<_>>().join("  ");
+        if masked.is_some() && put_right(buf, layout.footer, left_end, &both, st.dim) {
+            masked_placed = true;
+        } else if let Some(m) = &masked {
+            masked_placed = put_right(buf, layout.footer, left_end, m, st.dim);
+        }
+        if masked.is_none()
+            && let Some(p) = &pos
+        {
+            put_right(buf, layout.footer, left_end, p, st.dim);
+        }
+    }
+    let r = layout.source_line;
+    if is_empty(r) {
+        return;
+    }
+    // The footer chips can fill a narrow row; the masked count then rides on the source line.
+    let mut reserve = 0usize;
+    if let Some(m) = masked.as_deref().filter(|_| !masked_placed)
+        && put_right(buf, r, r.x, m, st.dim)
+    {
+        reserve = UnicodeWidthStr::width(m) + 1;
+    }
+    if let Some(row) = results.rows.get(sel) {
+        let mut text = format!("source: {} {}", row.source.origin.as_str(), clean(&row.source.name));
+        if let Some(path) = row.source.path.as_deref() {
+            text.push(' ');
+            text.push_str(&clean(path));
+        }
+        let room = usize::from(r.width).saturating_sub(reserve);
+        put(buf, r.x, r.y, rect_end(r), &truncate(&text, room, st.ellipsis()), st.dim);
+    }
 }
 
 #[cfg(test)]
