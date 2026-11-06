@@ -27,7 +27,7 @@ Bilterm's `TmuxControlBridge` and `TmuxControlSubprocess` (`src/tmux/mod.rs`) pr
 - **`%window-add`, `%window-pane-changed`, `%window-close`, `%session-changed`, `%exit`**: Synchronizes `tmux` windows, focus changes, closures, and session lifecycles with Bilterm's `WindowManager`.
 - **Bi-Directional Command & Split Dispatch**:
   - Commands submitted from Bilterm's `FloatingCommandPrompt` are routed via `TmuxControlBridge::route_prompt_submission` (`send-keys -t %<id> -H <hex>`).
-  - Local pane splits and client resizes queue `split-window -v/-h -t %<id>` (`queue_split`) and `refresh-client -C <cols>x<rows>` (`queue_resize_client`) to the live `tmux -CC` subprocess (`TmuxControlSubprocess::spawn_attach_or_new`).
+  - Local pane splits and client resizes queue `split-window -v/-h -t %<id>` (`queue_split`) and `refresh-client -C <cols>x<rows>` (`queue_resize_client`) to the live `tmux -CC` subprocess (`TmuxControlSubprocess::spawn_attach_or_new`). No command in this version attaches that subprocess (gap G1 in [chapter 12](12-find-registry-and-history.md#9-known-limits-g1-to-g10)), so these paths are reached only from code that attaches a control stream.
 
 ---
 
@@ -35,7 +35,7 @@ Bilterm's `TmuxControlBridge` and `TmuxControlSubprocess` (`src/tmux/mod.rs`) pr
 
 Bilterm `v1.4.0` extends `tmux` and composite pane multiplexing across remote SSH hosts (`src/remote/mod.rs`):
 - **First-Class SSH Composite Panes (`:ssh [split h|v] <user@host[:port]> [cmd]`)**: Spawns an OpenSSH session with `ServerAliveInterval=15` inside the focused or newly split pane and displays `SSH:<user@host>` in the 3270 OIA status bar while keeping the floating command prompt completely local and zero-latency. Destinations are strictly validated (no leading `-`, no whitespace/control characters) and arguments are separated with `--` before the destination. SSH connection multiplexing sockets are placed safely in Bilterm's private runtime directory (`ControlPath=<private_dir>/ssh-%C`).
-- **Persistent Remote `tmux -CC` Over SSH (`:ssh-tmux <user@host[:port]> [session]`)**: Launches `ssh -tt <user@host> tmux -CC new-session -A -s <session>` via `TmuxControlSubprocess::spawn_remote_ssh_attach_or_new`, hydrating remote `tmux` panes directly into local Bilterm Composite Panes that survive laptop sleep or network disconnects.
+- **`:ssh-tmux <user@host[:port]> [session]` labels a local pane (it does not start tmux)**: The command splits the focused pane, gives it a `TMUX-SSH:<host>/<session>` title and a remote label, and registers a fleet node. It runs no `ssh` and no `tmux`, so nothing is hydrated from the remote host, and the pane is a local shell. Its registry row is metadata only. Gap G2 in [chapter 12](12-find-registry-and-history.md#9-known-limits-g1-to-g10) lists the details. A persistent remote `tmux -CC` bridge is not reachable from any command in this version (gap G1).
 - **`herdr`-Style Central Fleet Federation (`:remote add|list|connect|exec|disconnect`)**: Connects to remote `bilterm --headless` daemons across your infrastructure (remote daemons require `--allow-remote --token-file <path>`) and forwards JSON-RPC 2.0 requests (`remote.exec` / `:remote exec <name> <method> [json]`) from a single central Bilterm dashboard.
 
 ---

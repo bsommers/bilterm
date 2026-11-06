@@ -151,6 +151,9 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `canvas.status` | `command` (string, optional) | Retained canvas scene statistics | Read canvas geometry, sprites, plots, and collision metrics. |
 | `session.save` | `name` (string, optional, default `"default"`) | `{"saved": true, "session": str, "path": str, "panes": int}` | Save current workspace topology to disk. |
 | `session.restore` | `name` (string, optional, default `"default"`) | `{"restored": true, "session": str, "panes": int}` | Restore saved workspace topology from disk. |
+| `find.agents` | `query` (string, optional, max 128 chars), `limit` (int, optional, default 50, range 1..200) | Find envelope `{"kind","query","total","returned","truncated","masked","rows":[...]}`; each row has `source` | Ranked search of live agents and panes. Read-only: the Find window does not open. See [section 7](#unified-find-find-methods-and-bilterm_find-phase-501). |
+| `find.sessions` | `query` (string, optional), `limit` (int, optional) | Find envelope; rows of kind `session` and `pane` | Live sessions first, then saved sessions and history-only sessions on disk. |
+| `find.history` | `query` (string, optional), `limit` (int, optional) | Find envelope; rows of kind `history` | Commands captured in this run, then `history.log` files on disk. Secret-looking lines are masked and only counted in `masked`. |
 
 ---
 
@@ -695,6 +698,7 @@ When started with `bilterm --mcp`, Bilterm provides a native Model Context Proto
 | `bilterm_fleet_exec` | `selector` (string, req), `command` (string, req) | Fan out shell command across sessions matching selector (`all`, `local`, `remote`, `@tag`, node). | `fleet.exec` |
 | `bilterm_workspace_fontsize`| `action` (string), `size` (integer) | Query or dynamically adjust terminal font size and scale percentage. | `workspace.fontsize` |
 | `bilterm_canvas` | `command` (string) | Control Tektronix 4014 vector storage-tube and modern retained graphics canvas. | `canvas.command` |
+| `bilterm_find` | `kind` (string, req: `agent`, `session` or `history`), `query` (string), `limit` (integer, default 50, max 200) | Search the unified registry (agents, sessions, command history). Every row carries `source`; the response carries `masked`. | `find.agents` / `find.sessions` / `find.history` |
 
 ### MCP Tool Calling Format
 
@@ -921,6 +925,47 @@ Bilterm exposes generic dotted-path access to all configuration fields in `Bilte
 ```
 
 Pairs are ordered by descending `count`; `*_ago_ms` is relative to the query; `heat_permille` is the current edge heat (0 once the fade window passed). At most 256 pairs are kept (`dropped_pairs` counts the least recently active ones that were dropped). `:agents topology export <name>` writes the same JSON to a private file and is refused over the API. `:agents fade [secs]` / `[agents_window] edge_fade_secs` set the fade window.
+
+### Unified Find: `find.*` methods and `bilterm_find` (Phase 50.1)
+
+`find.agents`, `find.sessions` and `find.history` (RPC) and `bilterm_find` (MCP, `kind` = `agent` | `session` | `history`) run the same search as the Find window (`Ctrl+Alt+F`, `:find agent|session|history`). They are read-only: they do not open the window, move focus or change any modal state, and they are not subject to `[api] allow_config_write`.
+
+- **Request**: `bilterm ctl find.history '{"query":"cargo","limit":10}'`, or the `tools/call` wrapper with `"name":"bilterm_find"` and `"arguments":{"kind":"history","query":"cargo","limit":10}`.
+- **Parameters**: `query` is optional and truncated to 128 characters. `limit` is optional, defaults to 50 and is clamped to 1..200. A non-string `query`, a non-integer `limit`, or a missing or unknown MCP `kind` is an invalid-parameters error (`-32602`).
+- **Response**: the envelope is the result itself, not wrapped in `data`. `wm.command` with `:find ...` returns the same JSON in its `data` field.
+
+```json
+{"kind":"history","query":"cargo","total":2,"returned":2,"truncated":false,"masked":1,
+ "rows":[
+   {"id":"history:main/12","kind":"history","row":"history","label":"cargo test -q",
+    "detail":"cwd /home/me/src/app","score":812,
+    "source":{"kind":"live","name":"main","path":null},"also_in":[],
+    "transport":"local","host":null,"tmux_session":null,"tmux_window":null,"tmux_pane":null,
+    "tags":[],"metadata_only":false,"pane":1,"session":"main",
+    "seq":12,"command":"cargo test -q","exit_code":0,"duration_ms":1210},
+   {"id":"history:dev/3","kind":"history","row":"history","label":"cargo fmt --check",
+    "detail":"cwd /home/me/src/app","score":640,
+    "source":{"kind":"history-log","name":"dev","path":"/home/me/.local/state/bilterm/sessions/dev/history.log"},
+    "also_in":[],"transport":"local","host":null,"tmux_session":null,"tmux_window":null,
+    "tmux_pane":null,"tags":[],"metadata_only":false,"pane":null,"session":"dev",
+    "seq":3,"command":"cargo fmt --check","exit_code":null,"duration_ms":null}
+ ]}
+```
+
+| Field | Type | Meaning |
+| :--- | :--- | :--- |
+| `total` | int | Rows that matched, before `limit` |
+| `returned` | int | Rows in `rows` |
+| `truncated` | bool | `true` when `total` is greater than `returned` |
+| `masked` | int | Secret-looking entries found and excluded. A count only; masked text is never returned |
+| `rows[].kind` | str | `agent`, `session`, `pane` or `history` (the session kind returns `session` and `pane` rows) |
+| `rows[].source` | object | Where the row came from: `kind` (`live`, `saved-session`, `history-log`), `name` (workspace session), `path` (absolute path for disk rows, `null` for live rows) |
+| `rows[].also_in` | array | Other `source` objects that hold the same session name |
+| `rows[].transport` | str | `local`, `ssh`, `tmux` or `ssh-tmux` |
+| `rows[].metadata_only` | bool | `true` for an `:ssh-tmux` label row, which starts no tmux (gap G2) |
+| `rows[].exit_code` | int or null | History rows: exit code when observed, else `null` |
+
+Gaps that affect these results (remote exit codes and cwd need OSC 133 and OSC 7 on the remote shell; raw-mode input is not captured; no command attaches the `tmux -CC` bridge) are listed in [user guide chapter 12](user-guide/12-find-registry-and-history.md#9-known-limits-g1-to-g10).
 
 ### API Security Switch: `[api] allow_config_write`
 

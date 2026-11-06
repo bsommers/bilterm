@@ -71,6 +71,7 @@
 | **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
 | — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
 | `Ctrl+Alt+A` | — | `:agents toggle` | Open the Agent Traffic window, or close it when open (also menu View > Agent Traffic and the Navigator footer `@ agents` button; every `F` key is already taken) |
+| `Ctrl+Alt+F` | — | `:find agent` | Open the Find window (agents, sessions and command history; `Tab` switches kind), or close it when open. Also View > Find Agents. No leader chord ([Chapter 12](12-find-registry-and-history.md)) |
 | — | `<L> a` | `:agents zoom` | Open the Agent Traffic window (graph + conversation); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). `Ctrl+O` inside it cycles graph / conversation / compose; `F6` keeps its global `DeckNext` meaning |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
 | **`F10`** / `Alt+\`` / `Ctrl+\` / `Ctrl+Space` | `<L> q` / `<L> \`` / `<L> ~` / `<L> F10` | `:quake` / `:guake` | Toggle persistent Guake/Quake-style drop-down quick terminal |
@@ -221,7 +222,9 @@
 | `:raw` | — | *(none)* | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` |
 | `:history` | `:hist` | `[popup \| save [path] \| on \| off \| toggle \| runs \| max-files <N>]` | Open History Pop-up, export commands to `.sh`, toggle persistence, view run segments, or set max retained session dirs |
 | `:block` | — | `prev \| next` | Jump to previous or next `OSC 133` semantic command block in scrollback |
-| `:search` | `:find` | `<query> \| next \| prev \| clear \| off` | Search `OutputCanvas` text, jump between matches, or clear search highlights |
+| `:search` | `:find` | `<query> \| next \| prev \| clear \| off` | Search `OutputCanvas` text, jump between matches, or clear search highlights. `:find <text>` does the same, except that `:find agent`, `:find session` and `:find history` open the Find window instead ([Chapter 12](12-find-registry-and-history.md)); use `:search <word>` to search for one of those words |
+| `:find` | — | `agent \| session \| history [text]` | Open the Find window: fuzzy, ranked search of agents and panes, live and saved sessions, or command history. Every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`); secrets are masked and counted, never shown ([Chapter 12](12-find-registry-and-history.md)) |
+| `:finder` | — | `kind <agent\|session\|history\|next\|prev> \| query [text] \| move <+n\|-n\|top\|bottom> \| select <n> \| enter \| prefill \| close` | Drive the open Find window from the keyboard or a script. No palette entry: the window must be open |
 | `:copy` | `:vi` | `[rect \| block \| line \| char \| all \| yank \| cut \| clear \| mode [on\|off\|toggle]]` | Toggle keyboard-driven Vi Copy Mode or execute rectangular/character/line copy actions |
 | `:rect` | `:select`, `:rect-select`, `:box-select` | `[mode [on\|off\|toggle] \| <r1> <c1> <r2> <c2> [copy\|highlight] \| all [copy] \| copy \| yank \| cut \| clear \| off \| status]` | Enter 2D rectangular block selection mode, toggle persistent mouse rectangular drag mode, highlight/copy an exact 1-based `(r1, c1)..(r2, c2)` rectangle, or yank/cut/clear the rectangular selection |
 | `:yank` | — | *(none)* | Copy active selection, command block, or screen via `OSC 52` clipboard |
