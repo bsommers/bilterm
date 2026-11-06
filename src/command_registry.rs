@@ -375,10 +375,10 @@ mod tests {
 
     fn is_covered(probe: &str, needs_arg: bool, palette: &[&str], palette_actions: &[crate::action::Action]) -> bool {
         let parsed = parse_colon_command(probe);
-        if let Some(Ok(a)) = &parsed {
-            if palette_actions.contains(a) {
-                return true;
-            }
+        if let Some(Ok(a)) = &parsed
+            && palette_actions.contains(a)
+        {
+            return true;
         }
         let needs_arg = needs_arg || matches!(parsed, Some(Err(_)));
         needs_arg && palette.iter().any(|e| e.starts_with(probe))
