@@ -44,6 +44,13 @@ impl AutomationControlPlane {
                 "Visible lines, cursor, command blocks, hints and notifications for the pane.",
             ));
         }
+        for (name, pid, unread) in self.wm.agent_mail().list() {
+            list.push(resource(
+                &format!("bilterm://agent/{name}/inbox"),
+                &format!("Agent '{name}' Inbox"),
+                &format!("Inbox messages for agent '{name}' (pane #{pid}, {unread} unread)."),
+            ));
+        }
         JsonValue::obj([("resources", JsonValue::Array(list))])
     }
 
@@ -57,18 +64,30 @@ impl AutomationControlPlane {
             "bilterm://config" => self.mcp_config_resource(),
             "bilterm://commands" => Self::mcp_commands_resource(),
             _ => {
-                let id = uri
-                    .strip_prefix("bilterm://pane/")
-                    .and_then(|r| r.parse::<usize>().ok())
-                    .ok_or_else(|| {
+                if let Some(agent_tail) = uri.strip_prefix("bilterm://agent/") {
+                    let agent_name = agent_tail.strip_suffix("/inbox").ok_or_else(|| {
                         (-32602, format!("Invalid params: unknown resource URI: {uri}"))
                     })?;
-                if self.wm.pane(id).is_none() {
-                    return Err((-32602, format!("Invalid params: pane #{id} not found")));
+                    let args = JsonValue::obj([
+                        ("agent", JsonValue::String(agent_name.to_string())),
+                        ("unread_only", JsonValue::Bool(false)),
+                    ]);
+                    self.dispatch_method("agent.inbox", &args)
+                        .map_err(|e| (-32603, format!("Internal error: {e}")))?
+                } else {
+                    let id = uri
+                        .strip_prefix("bilterm://pane/")
+                        .and_then(|r| r.parse::<usize>().ok())
+                        .ok_or_else(|| {
+                            (-32602, format!("Invalid params: unknown resource URI: {uri}"))
+                        })?;
+                    if self.wm.pane(id).is_none() {
+                        return Err((-32602, format!("Invalid params: pane #{id} not found")));
+                    }
+                    let args = JsonValue::obj([("pane_id", JsonValue::Number(id as i64))]);
+                    self.dispatch_method("pane.read", &args)
+                        .map_err(|e| (-32603, format!("Internal error: {e}")))?
                 }
-                let args = JsonValue::obj([("pane_id", JsonValue::Number(id as i64))]);
-                self.dispatch_method("pane.read", &args)
-                    .map_err(|e| (-32603, format!("Internal error: {e}")))?
             }
         };
         Ok(JsonValue::obj([(

@@ -1,3 +1,5 @@
+pub mod agent_mail;
+mod agent_mail_apply;
 pub mod agent_state;
 pub mod agents_topology;
 pub mod agents_window;
@@ -168,6 +170,8 @@ pub struct WindowManager {
     pub(crate) command_window: command_window::CommandWindowState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
     pub(crate) script_studio: script_studio::ScriptStudioState,
+    /// In-memory agent mailbox & coordination registry (`AGT-01..03`, Phase 52).
+    pub(crate) agent_mail: agent_mail::AgentMailRegistry,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -258,6 +262,7 @@ impl WindowManager {
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
+            agent_mail: agent_mail::AgentMailRegistry::new(false),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -366,6 +371,27 @@ impl WindowManager {
     /// Records the first error of the running automation action (surfaced by [`Self::apply_automation`]).
     pub fn record_automation_error(&mut self, err: String) {
         self.automation_error.get_or_insert(err);
+    }
+
+    /// Agent-to-agent messaging registry (`AGT-01..03`, Phase 52).
+    pub fn agent_mail(&self) -> &agent_mail::AgentMailRegistry {
+        &self.agent_mail
+    }
+
+    /// Mutable agent-to-agent messaging registry (`AGT-01..03`, Phase 52).
+    pub fn agent_mail_mut(&mut self) -> &mut agent_mail::AgentMailRegistry {
+        &mut self.agent_mail
+    }
+
+    /// Sets whether agent messaging is permitted (`[api] allow_agent_messaging` / `:agent enable`).
+    pub fn set_agent_messaging_enabled(&mut self, enabled: bool) {
+        self.agent_mail.set_enabled(enabled);
+        self.config.api.allow_agent_messaging = enabled;
+    }
+
+    /// Returns `true` if agent messaging is currently permitted.
+    pub fn is_agent_messaging_enabled(&self) -> bool {
+        self.agent_mail.is_enabled()
     }
 
     /// Starts whole-workspace `.cast` compositor frame recording (`REC-02`).
@@ -709,6 +735,7 @@ impl WindowManager {
             self.zoomed_pane = None;
         }
         self.fleet.remove_pane_references(target_id);
+        self.agent_mail.remove_pane(target_id);
         self.reflow_default_viewport();
         self.rebalance_scrollback(Instant::now());
         self.maybe_autosave_layout();

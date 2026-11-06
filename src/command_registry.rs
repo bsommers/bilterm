@@ -32,6 +32,7 @@ pub struct CommandInfo {
 /// Commands whose text exists in neither the palette nor the help lines:
 /// `(name, alias_of or "", summary)`.
 pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
+    (":agent", "", "Agent-to-agent messaging and coordination (:agent name|send|broadcast|inbox|ack|list|enable)."),
     (":aero", ":glass", "Alias of :glass."),
     (":auto-arrange", ":arrange", "Alias of :arrange."),
     (":asciinema", ":record", "Alias of :record."),
@@ -140,6 +141,10 @@ pub(crate) const EXCLUSION_REASONS: &[&str] = &[
 /// without a palette entry (same parsed `Action`) must be listed here; the sweep in `tests` fails
 /// for a new verb that is neither, and for a stale row that is real but already covered (D-02).
 pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
+    (":agent name", "free-text"),
+    (":agent send", "free-text"),
+    (":agent broadcast", "free-text"),
+    (":agent ack", "free-text"),
     (":prompt float", "numeric"),
     (":prompt height", "numeric"),
     (":prompt width", "numeric"),

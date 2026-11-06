@@ -528,6 +528,8 @@ impl WindowManager {
             if self.broadcast_input { mode_badges.push("📡 BCAST".to_string()); }
             let notif_count = pane.vt().notifications().len();
             if notif_count > 0 { mode_badges.push(format!("🔔 {notif_count}")); }
+            let unread_mail = self.agent_mail.unread_count_by_pane(id);
+            if unread_mail > 0 { mode_badges.push(format!("✉ {unread_mail}")); }
 
             let mut transport_badges = Vec::new();
             let is_ssh = pane.remote_target().is_some()

@@ -924,12 +924,12 @@ Plans:
   4. Safety: off by default behind `[api] allow_agent_messaging` (or a per-session opt-in); per-sender rate limits and max queue depth; loop guard (hop count / `reply_to` chain limit) so two agents cannot ping-pong forever; all messages and nudges logged; nothing is injected into password prompts (`!ECHO` lock) or alternate-screen apps; paths use `secure_fs`.
   5. Tests: headless two-agent round trip, rate-limit and loop-guard cases, gating off/on, nudge refused when busy, restart behavior of the queue, fuzz for oversized or malformed bodies.
 
-**Plans**: 0/3 plans complete
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 52-01-PLAN.md — Spec: message schema, addressing, delivery semantics, threat model (prompt-injection between agents), loop guard; user sign-off before code (wave 1)
-- [ ] 52-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
-- [ ] 52-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
+- [x] 52-01-PLAN.md — Spec: message schema, addressing, delivery semantics, threat model (prompt-injection between agents), loop guard; user sign-off before code (wave 1)
+- [x] 52-02-PLAN.md — Core: `AgentRegistry`/mailbox in `wm`, `agent.*` RPC + MCP tools/resource, `:agent` commands, gating and limits (wave 2)
+- [x] 52-03-PLAN.md — Nudge/file delivery, `/events` and sidebar unread badges, `bilterm ctl agent ...`, docs/API.md + coordinator example, tests (wave 3)
 
 ### Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 

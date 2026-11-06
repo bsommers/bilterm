@@ -90,11 +90,16 @@ impl AutomationControlPlane {
                     "bilterm_agents_list" => Some("agents.list"),
                     "bilterm_agents_demo" => Some("agents.demo"),
                     "bilterm_remote_link" => Some("remote.link"),
+                    "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
                     Some(rpc_method) => match if rpc_method.is_empty() {
-                        Err("missing 'kind' parameter: agent, session or history".to_string())
+                        if tool_name == "bilterm_agent_mail" {
+                            Err("missing or invalid 'action' parameter: send, broadcast, inbox, ack, list, name or wait".to_string())
+                        } else {
+                            Err("missing 'kind' parameter: agent, session or history".to_string())
+                        }
                     } else {
                         self.dispatch_method(rpc_method, &args)
                     } {
@@ -234,8 +239,40 @@ impl AutomationControlPlane {
                 "Show, reconnect or stop the persistent remote tmux link over SSH.",
                 &[("op", "string", "status | reconnect | disconnect (default status)")],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_agent_mail",
+                "Agent-to-agent messaging and coordination: send structured messages, check inboxes, acknowledge mail, broadcast, register names, and wait for replies.",
+                &[
+                    ("action", "string", "Operation: send | broadcast | inbox | ack | list | name | wait (default 'inbox')"),
+                    ("to", "string", "Recipient agent name (for send)"),
+                    ("from", "string", "Optional sender agent name"),
+                    ("body", "string", "Message body text (for send and broadcast, max 8192 bytes)"),
+                    ("kind", "string", "Optional message kind (default 'message')"),
+                    ("delivery", "string", "Delivery mode: mailbox | nudge | file (default 'mailbox')"),
+                    ("reply_to", "integer", "Optional previous message id being replied to"),
+                    ("agent", "string", "Target agent name (for inbox and ack)"),
+                    ("message_id", "integer", "Specific message id to ack (for ack) or wait for reply (for wait)"),
+                    ("unread_only", "boolean", "Only return unacknowledged messages (for inbox)"),
+                    ("timeout_ms", "integer", "Timeout in milliseconds (for wait, default 5000)"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_agent_mail` `action` argument -> the `agent.*` RPC method; `None` when missing or unknown.
+    fn agent_mail_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("inbox");
+        match action {
+            "name" => Some("agent.name"),
+            "send" => Some("agent.send"),
+            "broadcast" => Some("agent.broadcast"),
+            "inbox" => Some("agent.inbox"),
+            "ack" => Some("agent.ack"),
+            "list" => Some("agent.list"),
+            "wait" => Some("agent.wait"),
+            _ => None,
+        }
     }
 
     /// `bilterm_find` `kind` argument -> the `find.*` RPC method; `None` when missing or unknown.

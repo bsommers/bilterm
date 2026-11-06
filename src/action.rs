@@ -228,6 +228,8 @@ pub enum Action {
     FkeyModeCommand(Option<String>),
     /// `:style [classic|snazzy|glass|both|cycle]` / `:snazzy [on|off]` / `:glass [on|off]` / `F11`: Visual style (`STYLE-01`).
     VisualStyleCommand(Option<String>),
+    /// `:agent [name|send|broadcast|inbox|ack|list|enable]` (`AGT-01..03`, Phase 52).
+    AgentMail(crate::wm::agent_mail::AgentMailOp),
     Quit,
 }
 
@@ -263,6 +265,7 @@ impl Action {
     /// Canonical colon form or string summary of this action for script recording and logs.
     pub fn colon_form_or_summary(&self) -> String {
         match self {
+            Self::AgentMail(op) => op.colon_form(),
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
@@ -459,6 +462,7 @@ mod tests {
             Action::McpCommand(_) => Some(":mcp status"),
             Action::FkeyModeCommand(_) => Some(":fkeys bilterm"),
             Action::VisualStyleCommand(_) => Some(":style snazzy"),
+            Action::AgentMail(_) => Some(":agent list"),
             Action::Quit => Some(":quit"),
         };
 
@@ -694,6 +698,7 @@ mod tests {
             Action::McpCommand("status".to_string()),
             Action::FkeyModeCommand(None),
             Action::VisualStyleCommand(None),
+            Action::AgentMail(crate::wm::agent_mail::AgentMailOp::List),
             Action::Quit,
         ];
 

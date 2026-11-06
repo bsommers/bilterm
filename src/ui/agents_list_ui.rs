@@ -238,6 +238,9 @@ fn render_rows(
         put(buf, clip, area.x + 1, y, &g.dot(row.state, tick), dot_style);
         let name = sanitize_display(&row.name, name_w.max(1));
         let mut line = format!(" {} {}", fit_pad(row.state.as_str(), 7), fit_pad(&name, name_w));
+        if row.unread_mail > 0 {
+            line.push_str(&format!(" ✉{}", row.unread_mail));
+        }
         if pane {
             line.push(' ');
             line.push_str(&fit_pad(&format!("#{}", row.pane_id), PANE_COL_W - 1));

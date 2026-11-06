@@ -41,6 +41,18 @@ pub enum AutomationEvent {
         pane_id: usize,
         active: bool,
     },
+    AgentMessage {
+        message_id: u64,
+        from: String,
+        to: String,
+        kind: String,
+        body: String,
+    },
+    AgentStateChanged {
+        pane_id: usize,
+        name: String,
+        state: String,
+    },
 }
 
 impl AutomationEvent {
@@ -106,6 +118,30 @@ impl AutomationEvent {
                 ),
                 ("pane_id", JsonValue::Number(*pane_id as i64)),
                 ("active", JsonValue::Bool(*active)),
+            ]),
+            Self::AgentMessage {
+                message_id,
+                from,
+                to,
+                kind,
+                body,
+            } => JsonValue::obj([
+                ("type", JsonValue::String("agent_message".to_string())),
+                ("message_id", JsonValue::Number(*message_id as i64)),
+                ("from", JsonValue::String(from.clone())),
+                ("to", JsonValue::String(to.clone())),
+                ("kind", JsonValue::String(kind.clone())),
+                ("body", JsonValue::String(body.clone())),
+            ]),
+            Self::AgentStateChanged {
+                pane_id,
+                name,
+                state,
+            } => JsonValue::obj([
+                ("type", JsonValue::String("agent_state".to_string())),
+                ("pane_id", JsonValue::Number(*pane_id as i64)),
+                ("name", JsonValue::String(name.clone())),
+                ("state", JsonValue::String(state.clone())),
             ]),
         }
     }

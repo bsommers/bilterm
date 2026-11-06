@@ -1,4 +1,5 @@
 pub mod execute;
+pub mod execute_agent_mail;
 mod execute_agents;
 mod execute_agents_list;
 mod execute_agents_topology;
@@ -8,6 +9,7 @@ pub mod execute_find;
 pub mod execute_link;
 pub mod execute_wm;
 pub mod parse;
+mod parse_agent_mail;
 mod parse_agents;
 mod parse_agents_list;
 mod parse_command_window;

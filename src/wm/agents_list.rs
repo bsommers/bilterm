@@ -86,6 +86,8 @@ pub struct AgentsListRow {
     pub is_agent: bool,
     /// The row is the active pane.
     pub is_active_pane: bool,
+    /// Unread messages in the pane's mailbox (`AGT-03`).
+    pub unread_mail: usize,
 }
 
 /// Machine-readable summary of the window (RPC `agents_list` object, 51-10).
@@ -151,13 +153,17 @@ impl WindowManager {
         let active = self.active_pane_id();
         self.agent_statuses()
             .into_iter()
-            .map(|s| AgentsListRow {
-                pane_id: s.pane_id,
-                name: sanitize_display(&s.name, LIST_NAME_CAP),
-                state: s.state,
-                since_ms: s.since_ms,
-                is_agent: s.profile.is_some() || s.reported,
-                is_active_pane: s.pane_id == active,
+            .map(|s| {
+                let unread_mail = self.agent_mail.unread_count_by_pane(s.pane_id);
+                AgentsListRow {
+                    pane_id: s.pane_id,
+                    name: sanitize_display(&s.name, LIST_NAME_CAP),
+                    state: s.state,
+                    since_ms: s.since_ms,
+                    is_agent: s.profile.is_some() || s.reported,
+                    is_active_pane: s.pane_id == active,
+                    unread_mail,
+                }
             })
             .filter(|r| self.agents_list.filter == ListFilter::All || r.is_agent)
             .collect()

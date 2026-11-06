@@ -222,37 +222,24 @@ Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 
 ---
 
-## Checkpoint 2026-11-06 (v2.9.0 Full Multi-Platform Release Published; Starting Phase 52)
+## Checkpoint 2026-11-06 (Phase 52: Agent-to-Agent Messaging & Coordination Complete)
 
-**Status:** IN PROGRESS — needs resume (starting Phase 52: Agent-to-Agent Messaging & Coordination `AGT-01..03`)
+**Status:** COMPLETE (Phase 52: Agent-to-Agent Messaging & Coordination `AGT-01..03` delivered; 3/3 plans complete)
 
 ### 1. Goals & Delivered Scope
-- **Full `v2.9.0` Release Complete (`main` @ `c29d56e`, tag `v2.9.0`)**:
-  - Fast-forwarded `main` (`80ec434..c29d56e`) and pushed `main` + annotated tag `v2.9.0` to `origin`.
-  - Built, verified (`file`, `--version`, `ldd`/`otool -L`, `windows-smoke-test.ps1`), and uploaded all 14 archives + merged `SHA256SUMS` across all 7 target triples on [GitHub Release `v2.9.0`](https://github.com/bsommers/bilterm/releases/tag/v2.9.0):
-    - `x86_64-unknown-linux-gnu` (`GLIBC_2.2.5`), `x86_64-unknown-linux-musl` (static), `aarch64-unknown-linux-musl` (static)
-    - `aarch64-apple-darwin` (`minos 11.0`), `x86_64-apple-darwin` (`minos 10.12`)
-    - `x86_64-pc-windows-msvc` (smoke test PASS), `aarch64-pc-windows-msvc` (smoke test PASS)
-  - Installed `bilterm 2.9.0` to `~/.local/bin/bilterm` on both Linux workstation and `bill@bigmac.local`.
-- **Phase 51.2 Goal (`WIN-01..WIN-03`)**: First-Class Utility Windows & Script Studio (`4/4` plans complete):
-  - **Window 1 (`WIN-01`)**: `FONTS` Window (`src/wm/fonts_window.rs`, `src/ui/fonts_window_ui.rs`, `src/input/fonts_window.rs`, `src/input/fonts_window_keys.rs`). Opened by `:fonts`, `:font list`, `:font presets`, `:font scan`, and menubar `View -> Fonts Window`.
-  - **Window 2 (`WIN-02`)**: Pinnable `COMMAND PALETTE` Window (`src/wm/command_window.rs`, `src/ui/command_window_ui.rs`, `src/input/command_window.rs`, `src/input/command_window_keys.rs`). Opened by `:commands`, `:palette`, or promoting `Modal::Palette` (`Ctrl+P`) via `Alt+P` / `*`.
-  - **Window 3 (`WIN-03`)**: `SCRIPT STUDIO` Window (`src/wm/script_studio.rs`, `src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`, `src/input/script_studio_keys.rs`). Opened by `:script` / `:studio`.
-- **Next Active Goal — Phase 52: Agent-to-Agent Messaging & Coordination (`AGT-01..03`)**:
-  - `AGT-01`: Stable agent names (`:agent name <n>`, env `BILTERM_AGENT`); per-recipient ordered bounded mailboxes; `agent.send`, `agent.inbox`, `agent.ack`, `agent.list` RPC methods and MCP tools.
-  - `AGT-02`: Delivery modes (`mailbox` via `bilterm://agent/<name>/inbox` MCP resource, `nudge` one-line notification only when target pane is idle/waiting and never in `!ECHO` lock or `ALT_SCREEN`, and `file` under `0600` private runtime dir) + `wait` with timeout.
-  - `AGT-03`: `agent.broadcast` to a subtree, `/events` streaming (`agent.message`, `agent.state`), unread mail badges in Navigator sidebar & `AGENTS` window, `:agent` command family (`list`, `send`, `inbox`, `ack`, `broadcast`, `name`), and safety guards (`[api] allow_agent_messaging`, per-sender rate limits, max queue depth, hop-count loop guard).
+- **Phase 52 Goal (`AGT-01..AGT-03`)**: Agent-to-Agent Messaging & Coordination (`3/3` plans complete):
+  - `AGT-01`: Stable agent names (`:agent name [id] <name>`, `agent.name`); per-recipient ordered bounded mailboxes (`MAX_INBOX_DEPTH = 64`); `agent.send`, `agent.inbox`, `agent.ack`, `agent.list` RPC methods, `bilterm_agent_mail` MCP tool, and `:agent` colon commands.
+  - `AGT-02`: Delivery modes (`mailbox` default, `nudge` typed one-line notification suppressed when pane is busy/locked in `!ECHO` or `ALT_SCREEN`, and `file` written with `0600` permissions via `secure_fs` under `agent-mail/<to>/msg-<id>.txt` with attached path) + `agent.wait` with reply matching and timeout.
+  - `AGT-03`: `agent.broadcast` to all registered agents (or optional `--tree`), `AutomationEvent::AgentMessage` event on `/events`, unread mail badges (`✉N`) in `AGENTS` list window & Navigator drawer rows, `:agent` command family (`list`, `send`, `inbox`, `ack`, `broadcast`, `name`, `enable`), and safety guards (`allow_agent_messaging` config/runtime toggle, per-sender rate limit of 32/min, loop guard `MAX_HOPS = 8`, oversized body rejection >8192 bytes).
 
-### 2. Verification Gates (Baseline at `v2.9.0`)
-- `scripts/verify.sh`: `PASS 108/108 85s`
+### 2. Verification Gates
+- `scripts/verify.sh`: `PASS 109/109 64s` (includes `t:phase52_agent_messaging`, `clippy`, `unit`, `t:api_mcp_resources`, `t:api_conformance`, `t:phase51_palette_parity`)
 - `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
-- All 7 background subagents from Phase 51.2 / `v2.9.0` release terminated cleanly (`0` running).
+- `tests/phase52_agent_messaging.rs`: 17/17 tests passing cleanly.
 
 ### 3. Working-Tree & Branch State
-- `/home/bill/src/ai/bilterm` (`main` @ `v2.9.0` / `c29d56e`): clean except untracked `docs/mcp-usecases/` (do NOT stage).
-- `/home/bill/src/ai/bilterm/.claude/worktrees/integ`: active worktree for Phase 52 development (`feat/navigator-rows-and-launch`).
+- Active worktree: `/home/bill/src/ai/bilterm/.claude/worktrees/integ` on branch `feat/navigator-rows-and-launch`.
+- Primary checkout: `/home/bill/src/ai/bilterm` on `main`.
 
-### 4. Exact Next Step
-- Execute **Phase 52 (`52-01` through `52-03`)** in `/home/bill/src/ai/bilterm/.claude/worktrees/integ`:
-  1. Write `.planning/phases/52-agent-messaging-and-coordination/{52-CONTRACT.md,52-01-PLAN.md,52-02-PLAN.md,52-03-PLAN.md}`.
-  2. Implement `AGT-01..03` (`src/wm/agent_mail.rs`, `:agent` colon commands, `agent.*` JSON-RPC + MCP tools & `bilterm://agent/<name>/inbox` resource, `/events` integration, Navigator/AGENTS unread badges, and `tests/phase52_agent_messaging.rs`).
+### 4. Next Steps
+- Merge / PR `feat/navigator-rows-and-launch` into `main`, or begin **Phase 53: Session & Window Management (`SES-01..05`)**.

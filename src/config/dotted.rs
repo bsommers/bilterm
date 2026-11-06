@@ -18,6 +18,8 @@ use super::BiltermConfig;
 pub struct ApiConfig {
     /// Allows `:set`, `:config save` and `:appearance save` over the API (default `false`).
     pub allow_config_write: bool,
+    /// Allows agent-to-agent messaging and coordination (`AGT-01..03`, Phase 52).
+    pub allow_agent_messaging: bool,
 }
 
 fn to_value(cfg: &BiltermConfig) -> Result<toml::Value, String> {

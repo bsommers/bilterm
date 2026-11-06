@@ -53,6 +53,13 @@ pub const RPC_METHODS: &[&str] = &[
     "canvas.status",
     "session.save",
     "session.restore",
+    "agent.name",
+    "agent.send",
+    "agent.broadcast",
+    "agent.inbox",
+    "agent.ack",
+    "agent.list",
+    "agent.wait",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
@@ -732,6 +739,13 @@ impl AutomationControlPlane {
             "canvas.command" | "canvas.status" => self.handle_rpc_canvas(params),
             "session.save" => self.handle_rpc_session_save(params),
             "session.restore" => self.handle_rpc_session_restore(params),
+            "agent.name" => self.rpc_agent_name(params),
+            "agent.send" => self.rpc_agent_send(params),
+            "agent.broadcast" => self.rpc_agent_broadcast(params),
+            "agent.inbox" => self.rpc_agent_inbox(params),
+            "agent.ack" => self.rpc_agent_ack(params),
+            "agent.list" => self.rpc_agent_list(params),
+            "agent.wait" => self.rpc_agent_wait(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }
@@ -813,6 +827,251 @@ impl AutomationControlPlane {
             ),
             ("panes", JsonValue::Array(panes)),
         ])
+    }
+
+    fn rpc_agent_name(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let name = params
+            .get("name")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| "missing 'name' parameter".to_string())?;
+        let pane_id = params.get("pane_id").and_then(JsonValue::as_usize);
+        self.wm.agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::SetName {
+            pane_id,
+            name: name.to_string(),
+        })?;
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+        Ok(data)
+    }
+
+    fn rpc_agent_send(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let to = params
+            .get("to")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| "missing 'to' parameter".to_string())?;
+        let body = params
+            .get("body")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| "missing 'body' parameter".to_string())?;
+        let from = params.get("from").and_then(JsonValue::as_str).map(String::from);
+        let kind = params
+            .get("kind")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("message")
+            .to_string();
+        let delivery_str = params
+            .get("delivery")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("mailbox");
+        let delivery = match delivery_str {
+            "nudge" => crate::wm::agent_mail::AgentDeliveryMode::Nudge,
+            "file" => crate::wm::agent_mail::AgentDeliveryMode::File,
+            _ => crate::wm::agent_mail::AgentDeliveryMode::Mailbox,
+        };
+        let reply_to = params
+            .get("reply_to")
+            .and_then(JsonValue::as_i64)
+            .and_then(|n| u64::try_from(n).ok());
+
+        self.wm.agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::Send {
+            from: from.clone(),
+            to: to.to_string(),
+            body: body.to_string(),
+            kind: kind.clone(),
+            delivery,
+            reply_to,
+        })?;
+
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+
+        if let Some(msg_id) = data
+            .get("message_id")
+            .and_then(JsonValue::as_i64)
+            .and_then(|n| u64::try_from(n).ok())
+        {
+            let sender = data
+                .get("from")
+                .and_then(JsonValue::as_str)
+                .unwrap_or("")
+                .to_string();
+            let recipient = data
+                .get("to")
+                .and_then(JsonValue::as_str)
+                .unwrap_or("")
+                .to_string();
+            self.push_event(AutomationEvent::AgentMessage {
+                message_id: msg_id,
+                from: sender,
+                to: recipient,
+                kind,
+                body: body.to_string(),
+            });
+        }
+        Ok(data)
+    }
+
+    fn rpc_agent_broadcast(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let body = params
+            .get("body")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| "missing 'body' parameter".to_string())?;
+        let from = params.get("from").and_then(JsonValue::as_str).map(String::from);
+        let subtree = params.get("subtree").and_then(JsonValue::as_str).map(String::from);
+        let kind = params
+            .get("kind")
+            .and_then(JsonValue::as_str)
+            .unwrap_or("broadcast")
+            .to_string();
+
+        self.wm.agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::Broadcast {
+            from: from.clone(),
+            subtree,
+            body: body.to_string(),
+            kind: kind.clone(),
+        })?;
+
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+
+        if let Some(recipients) = data.get("recipients").and_then(JsonValue::as_array) {
+            for r in recipients {
+                if let Some(to_name) = r.as_str() {
+                    self.push_event(AutomationEvent::AgentMessage {
+                        message_id: 0,
+                        from: from.clone().unwrap_or_else(|| "operator".to_string()),
+                        to: to_name.to_string(),
+                        kind: kind.clone(),
+                        body: body.to_string(),
+                    });
+                }
+            }
+        }
+        Ok(data)
+    }
+
+    fn rpc_agent_inbox(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let agent = params.get("agent").and_then(JsonValue::as_str).map(String::from);
+        let unread_only = params
+            .get("unread_only")
+            .and_then(JsonValue::as_bool)
+            .unwrap_or(false);
+
+        self.wm.agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::Inbox {
+            agent,
+            unread_only,
+        })?;
+
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+        Ok(data)
+    }
+
+    fn rpc_agent_ack(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let agent = params.get("agent").and_then(JsonValue::as_str).map(String::from);
+        let message_id = params
+            .get("message_id")
+            .and_then(JsonValue::as_i64)
+            .and_then(|n| u64::try_from(n).ok());
+
+        self.wm.agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::Ack {
+            agent,
+            message_id,
+        })?;
+
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+        Ok(data)
+    }
+
+    fn rpc_agent_list(&mut self, _params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        self.wm
+            .agent_mail_apply(&crate::wm::agent_mail::AgentMailOp::List)?;
+
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+        Ok(data)
+    }
+
+    fn rpc_agent_wait(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let target_agent = params
+            .get("agent")
+            .and_then(JsonValue::as_str)
+            .or_else(|| self.wm.agent_mail().name_for_pane(self.wm.active_pane_id()))
+            .ok_or_else(|| "missing 'agent' parameter".to_string())?;
+        let reply_id = params
+            .get("reply_to")
+            .and_then(JsonValue::as_i64)
+            .and_then(|n| u64::try_from(n).ok());
+        let timeout_ms = params
+            .get("timeout_ms")
+            .and_then(JsonValue::as_i64)
+            .and_then(|n| u64::try_from(n).ok())
+            .unwrap_or(5000)
+            .min(10000);
+
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_millis(timeout_ms);
+        loop {
+            let inbox = self.wm.agent_mail().get_inbox(target_agent, true);
+            if let Some(msg) = inbox.iter().find(|m| match reply_id {
+                Some(rid) => m.reply_to == Some(rid),
+                None => true,
+            }) {
+                return Ok(JsonValue::obj([
+                    ("status", JsonValue::String("received".to_string())),
+                    (
+                        "message",
+                        JsonValue::obj([
+                            ("id", JsonValue::Number(msg.id as i64)),
+                            ("from", JsonValue::String(msg.from.clone())),
+                            ("to", JsonValue::String(msg.to.clone())),
+                            ("body", JsonValue::String(msg.body.clone())),
+                            ("kind", JsonValue::String(msg.kind.clone())),
+                            (
+                                "reply_to",
+                                msg.reply_to
+                                    .map_or(JsonValue::Null, |id| JsonValue::Number(id as i64)),
+                            ),
+                            ("hop_count", JsonValue::Number(msg.hop_count as i64)),
+                            ("timestamp_ms", JsonValue::Number(msg.timestamp_ms as i64)),
+                            ("acked", JsonValue::Bool(msg.acked)),
+                            (
+                                "file_path",
+                                msg.file_path
+                                    .clone()
+                                    .map_or(JsonValue::Null, JsonValue::String),
+                            ),
+                        ]),
+                    ),
+                ]));
+            }
+            if start.elapsed() >= timeout {
+                return Ok(JsonValue::obj([
+                    ("status", JsonValue::String("timeout".to_string())),
+                    ("agent", JsonValue::String(target_agent.to_string())),
+                ]));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     pub(crate) fn error_response(id: JsonValue, code: i64, message: &str) -> JsonValue {
