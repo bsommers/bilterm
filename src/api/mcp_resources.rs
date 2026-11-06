@@ -153,6 +153,15 @@ impl AutomationControlPlane {
                     ("subargs", strs(c.subargs)),
                     ("examples", strs(&c.examples)),
                     ("shortcut", c.shortcut.map_or(JsonValue::Null, s)),
+                    (
+                        "palette_exclusions",
+                        JsonValue::Array(
+                            c.palette_exclusions
+                                .iter()
+                                .map(|(probe, reason)| JsonValue::obj([("probe", s(*probe)), ("reason", s(*reason))]))
+                                .collect(),
+                        ),
+                    ),
                 ])
             })
             .collect();
