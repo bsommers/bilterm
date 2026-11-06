@@ -118,10 +118,11 @@ fn finder_edit_ops_change_modal_state_and_cap_the_query() {
     assert_eq!(wm.find_modal_state().unwrap().1.chars().count(), 128);
     run_colon(&mut wm, &format!(":find session {long}"));
     assert_eq!(wm.find_modal_state().unwrap().1.chars().count(), 128);
-    // Selection clamps to zero rows.
+    // Selection clamps to the last result row (zero when there are none).
+    let last = wm.find_results().rows.len().saturating_sub(1);
     run_colon(&mut wm, ":finder move +5");
     run_colon(&mut wm, ":finder select 9");
-    assert_eq!(wm.find_modal_state().unwrap().2, 0);
+    assert_eq!(wm.find_modal_state().unwrap().2, last);
 }
 
 // ---- Task 2: registry contract, JSON shape ----------------------------------------------------
@@ -255,18 +256,20 @@ fn caps_match_contract() {
 }
 
 #[test]
-fn open_with_empty_providers_reports_zero_results() {
+fn open_stashes_results_envelope_and_status() {
     let mut wm = fixture(100, 30);
     run_colon(&mut wm, ":find session dev");
     let r = wm.find_results();
-    assert_eq!((r.kind, r.query.as_str(), r.rows.len(), r.total, r.masked), (FindKind::Session, "dev", 0, 0, 0));
+    let n = r.rows.len();
+    assert_eq!((r.kind, r.query.as_str(), r.total, r.masked), (FindKind::Session, "dev", n, 0));
     let data = wm.take_command_data().expect("command data stashed");
     let json = JsonValue::parse(&data).unwrap();
     assert_eq!(json.get("kind").and_then(JsonValue::as_str), Some("session"));
-    assert_eq!(json.get("returned").and_then(JsonValue::as_i64), Some(0));
+    assert_eq!(json.get("returned").and_then(JsonValue::as_i64), Some(n as i64));
     assert_eq!(json.get("masked").and_then(JsonValue::as_i64), Some(0));
     let status = wm.active_pane().status_message().unwrap_or("").to_string();
-    assert_eq!(status, "Find session \"dev\": 0 results (0 live, 0 saved, 0 log)");
+    // Only live providers are filled so far: every returned row is live (D-U3).
+    assert_eq!(status, format!("Find session \"dev\": {n} results ({n} live, 0 saved, 0 log)"));
     run_colon(&mut wm, ":finder close");
     assert!(!wm.is_find_visible());
 }
@@ -369,8 +372,10 @@ fn find_modal_keys_edit_state() {
     assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "a", 0)));
     press(&mut wm, KeyCode::Char('B'), KeyModifiers::SHIFT);
     assert_eq!(wm.find_modal_state(), Some((FindKind::Agent, "aB", 0)));
-    press(&mut wm, KeyCode::Down, KeyModifiers::NONE); // zero rows: selection stays 0
-    assert_eq!(wm.find_modal_state().unwrap().2, 0);
+    // Down moves one row, clamped to the last result row (stays 0 when there are none).
+    let expect = 1.min(wm.find_results().rows.len().saturating_sub(1));
+    press(&mut wm, KeyCode::Down, KeyModifiers::NONE);
+    assert_eq!(wm.find_modal_state().unwrap().2, expect);
     press(&mut wm, KeyCode::Tab, KeyModifiers::NONE);
     assert_eq!(wm.find_modal_state().unwrap().0, FindKind::Session);
     press(&mut wm, KeyCode::BackTab, KeyModifiers::SHIFT);
