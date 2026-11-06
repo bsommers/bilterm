@@ -112,3 +112,129 @@ fn legacy_poll_without_link_is_unchanged() {
     assert!(wm.panes().values().any(|p| p.title().starts_with("TMUX %5")));
     assert_eq!(*wm.tmux_link_state(), LinkState::Idle);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Task 2: Action::RemoteLink, grammar, executor, key rows
+// ---------------------------------------------------------------------------------------------
+
+mod verbs {
+    use bilterm::action::Action;
+    use bilterm::colon_command::parse_colon_command;
+    use bilterm::input::keymap::{DEFAULT_GLOBAL_BINDINGS, DEFAULT_LEADER_BINDINGS};
+    use bilterm::input::{AppAction, handle_wm_key_event};
+    use bilterm::wm::WindowManager;
+    use bilterm::wm::link_cmd::RemoteLinkOp;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn parse(s: &str) -> Result<Action, String> {
+        parse_colon_command(s).expect("recognised")
+    }
+
+    #[test]
+    fn grammar_maps_every_verb() {
+        for (word, op) in [
+            ("reconnect", RemoteLinkOp::Reconnect),
+            ("disconnect", RemoteLinkOp::Disconnect),
+            ("info", RemoteLinkOp::Info),
+            ("prefill", RemoteLinkOp::Prefill),
+        ] {
+            assert_eq!(parse(&format!(":ssh-tmux {word}")).unwrap(), Action::RemoteLink(op));
+            assert_eq!(parse(&format!(":sshtmux {word}")).unwrap(), Action::RemoteLink(op));
+            assert_eq!(parse(&format!(":ssh-tmux {}", word.to_uppercase())).unwrap(), Action::RemoteLink(op));
+            assert_eq!(parse(op.colon_form()).unwrap(), Action::RemoteLink(op), "colon_form round-trips");
+        }
+        assert_eq!(
+            parse(":ssh-tmux me@box main").unwrap(),
+            Action::SshTmuxConnect { target: "me@box".into(), session: "main".into() }
+        );
+        for list in [":ssh-tmux", ":ssh-tmux list", ":ssh-tmux ls", ":ssh-tmux status"] {
+            assert_eq!(parse(list).unwrap(), Action::RemoteList, "{list}");
+        }
+        for bad in [":ssh-tmux reconnect now", ":ssh-tmux info x", ":sshtmux prefill a b"] {
+            let err = parse(bad).unwrap_err();
+            assert!(err.starts_with("Usage: :ssh-tmux reconnect | disconnect | info | prefill"), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn verbs_without_a_link_set_a_status_and_never_error() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        for (op, want) in [
+            (RemoteLinkOp::Reconnect, "No tmux link to reconnect (use :ssh-tmux <dest> [session])"),
+            (RemoteLinkOp::Disconnect, "No tmux link to disconnect"),
+            (RemoteLinkOp::Info, "No tmux link (use :ssh-tmux <dest> [session])"),
+        ] {
+            wm.apply(Action::RemoteLink(op)).expect("never an error without a link");
+            assert_eq!(wm.active_pane().status_message(), Some(want));
+        }
+        // `Info` stored structured data.
+        wm.apply(Action::RemoteLink(RemoteLinkOp::Info)).unwrap();
+        let data = wm.take_command_data().expect("info stores data");
+        assert!(data.contains("\"state\":\"idle\""), "{data}");
+        assert!(wm.take_command_data().is_none(), "data is taken once");
+    }
+
+    #[test]
+    fn prefill_sets_the_prompt() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        assert!(wm.active_pane().is_prompt_visible());
+        wm.apply(Action::RemoteLink(RemoteLinkOp::Prefill)).unwrap();
+        assert_eq!(wm.active_pane().prompt().text(), ":ssh-tmux ");
+    }
+
+    fn leader_row(code: char) -> Option<&'static Action> {
+        DEFAULT_LEADER_BINDINGS.iter().find(|(c, _)| *c == KeyCode::Char(code)).map(|(_, a)| a)
+    }
+
+    fn global_rows(code: char) -> Vec<&'static Action> {
+        let ca = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        DEFAULT_GLOBAL_BINDINGS
+            .iter()
+            .filter(|(m, c, _)| *m == ca && *c == KeyCode::Char(code))
+            .map(|(_, _, a)| a)
+            .collect()
+    }
+
+    #[test]
+    fn keymap_rows_lower_to_the_actions() {
+        assert_eq!(leader_row('u'), Some(&Action::RemoteLink(RemoteLinkOp::Prefill)));
+        assert_eq!(leader_row('U'), Some(&Action::RemoteLink(RemoteLinkOp::Reconnect)));
+        assert_eq!(leader_row('Q'), Some(&Action::RemoteLink(RemoteLinkOp::Disconnect)));
+        for c in ['r', 'R'] {
+            assert_eq!(global_rows(c), vec![&Action::RemoteLink(RemoteLinkOp::Reconnect)]);
+        }
+        // Each link chord is unique across the tables (read live, nothing hard-coded).
+        let link = |a: &Action| matches!(a, Action::RemoteLink(_));
+        assert_eq!(DEFAULT_LEADER_BINDINGS.iter().filter(|(_, a)| link(a)).count(), 3);
+        assert_eq!(DEFAULT_GLOBAL_BINDINGS.iter().filter(|(_, _, a)| link(a)).count(), 2);
+        for c in ['u', 'U', 'Q'] {
+            assert_eq!(DEFAULT_LEADER_BINDINGS.iter().filter(|(k, _)| *k == KeyCode::Char(c)).count(), 1, "leader {c}");
+        }
+        let ca = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        for c in ['r', 'R'] {
+            let n = DEFAULT_GLOBAL_BINDINGS.iter().filter(|(m, k, _)| *m == ca && *k == KeyCode::Char(c)).count();
+            assert_eq!(n, 1, "Ctrl+Alt+{c}");
+        }
+    }
+
+    #[test]
+    fn ctrl_alt_r_reaches_the_wm_in_raw_passthrough_and_leader_keys_run_verbs() {
+        let mut wm = WindowManager::new_headless(24, 80);
+        // Alternate screen forces raw passthrough, where only reserved global chords reach the WM.
+        wm.active_pane_mut().process_pty_output(b"\x1b[?1049h");
+        assert!(wm.active_pane().vt().is_alternate_screen());
+        let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let r = handle_wm_key_event(&mut wm, key).unwrap();
+        assert!(matches!(r, AppAction::Handled), "{r:?}");
+        assert_eq!(
+            wm.active_pane().status_message(),
+            Some("No tmux link to reconnect (use :ssh-tmux <dest> [session])")
+        );
+
+        let mut wm = WindowManager::new_headless(24, 80);
+        let leader = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);
+        handle_wm_key_event(&mut wm, leader).unwrap();
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('Q'), KeyModifiers::SHIFT)).unwrap();
+        assert_eq!(wm.active_pane().status_message(), Some("No tmux link to disconnect"));
+    }
+}

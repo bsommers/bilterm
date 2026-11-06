@@ -12,6 +12,7 @@ use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
 use crate::wm::agents_list_cmd::AgentsListOp;
 use crate::wm::find_cmd::{FindKind, FindOp};
+use crate::wm::link_cmd::RemoteLinkOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -33,6 +34,10 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('A'), Action::AgentsList(AgentsListOp::Toggle)),
     (KeyCode::Char('y'), Action::Agents(AgentsOp::Demo)),
     (KeyCode::Char('Y'), Action::Agents(AgentsOp::DemoStop)),
+    // Persistent tmux link: prefill `:ssh-tmux `, reconnect, disconnect (Phase 51.1, P-16)
+    (KeyCode::Char('u'), Action::RemoteLink(RemoteLinkOp::Prefill)),
+    (KeyCode::Char('U'), Action::RemoteLink(RemoteLinkOp::Reconnect)),
+    (KeyCode::Char('Q'), Action::RemoteLink(RemoteLinkOp::Disconnect)),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
     (KeyCode::F(5), Action::ZoomToggle),
@@ -192,6 +197,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
+    // Reconnect the tmux link (`:ssh-tmux reconnect`): Ctrl+Alt+R, also reserved in raw passthrough.
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('r'), Action::RemoteLink(RemoteLinkOp::Reconnect)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('R'), Action::RemoteLink(RemoteLinkOp::Reconnect)),
     (KeyModifiers::NONE, KeyCode::F(7), Action::DrawerToggle),
     (KeyModifiers::NONE, KeyCode::F(11), Action::VisualStyleCommand(None)),
     (KeyModifiers::ALT, KeyCode::F(12), Action::FkeyModeCommand(None)),
@@ -536,10 +544,11 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// The global chords that must reach the window manager even while the active pane is in raw PTY
 /// passthrough (an alternate-screen app such as an agent TUI, `vim` or `less`), where every other
 /// global shortcut is forwarded to the child. Today that is the agent-traffic toggle (`Ctrl+Alt+A`)
-/// and the Find window (`Ctrl+Alt+F`): the launchers the user needs while an agent owns the pane.
+/// the Find window (`Ctrl+Alt+F`) and the tmux link reconnect (`Ctrl+Alt+R`): the launchers the user needs
+/// while an agent or a remote ssh prompt owns the pane.
 pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
     match default_global_action(key, false) {
-        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::Find(FindOp::Open { .. }))) => Some(a),
+        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
         _ => None,
     }
 }
