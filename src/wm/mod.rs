@@ -8,10 +8,12 @@ pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
 pub mod command_window;
+pub mod fonts_window;
+pub mod script_studio;
+pub mod script_studio_cmd;
 pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
-pub mod fonts_window;
 pub mod journal;
 pub mod layout_profile;
 pub mod link_cmd;
@@ -164,6 +166,8 @@ pub struct WindowManager {
     pub(crate) fonts_window_dirty: bool,
     /// Pinnable COMMAND PALETTE first-class window (`WIN-02`, Phase 51.2).
     pub(crate) command_window: command_window::CommandWindowState,
+    /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
+    pub(crate) script_studio: script_studio::ScriptStudioState,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -253,6 +257,7 @@ impl WindowManager {
             fonts_window: fonts_window::FontsWindowState::default(),
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
+            script_studio: script_studio::ScriptStudioState::default(),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -786,6 +791,7 @@ impl WindowManager {
             self.agents_list.blur();
             self.fonts_window.blur();
             self.command_window.blur();
+            self.script_studio.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -802,6 +808,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.fonts_window.blur();
         self.command_window.blur();
+        self.script_studio.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -815,6 +822,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.fonts_window.blur();
         self.command_window.blur();
+        self.script_studio.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

@@ -140,6 +140,8 @@ impl WindowManager {
         self.fonts_window.focused = true;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.command_window.blur();
+        self.script_studio.blur();
         let rows = self.fonts_window_rows();
         if let Some(pos) = rows.iter().position(|r| r.active_on_focused) {
             self.fonts_window.selected = pos;

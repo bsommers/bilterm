@@ -29,6 +29,7 @@ pub mod oia;
 pub mod pixel_canvas;
 pub mod navigator;
 pub mod renderer;
+pub mod script_studio_ui;
 pub mod shell;
 pub mod status_bar;
 pub mod theme;
@@ -732,6 +733,7 @@ impl Widget for WorkspaceWidget<'_> {
         }
         fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        script_studio_ui::render_script_studio(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);

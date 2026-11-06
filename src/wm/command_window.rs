@@ -201,6 +201,8 @@ impl WindowManager {
         self.command_window.focused = true;
         self.agents_list.blur();
         self.agents_window.blur();
+        self.fonts_window.blur();
+        self.script_studio.blur();
     }
 
     pub fn close_command_window(&mut self) {

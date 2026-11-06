@@ -614,6 +614,9 @@ pub fn handle_wm_mouse_event(
         if let Some(action) = super::command_window::handle_command_window_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
+        if let Some(action) = super::script_studio::handle_script_studio_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
 
         // The AGENTS list is the smaller, top-most panel: it sees the event before the traffic window.
         if let Some(action) = super::agents_list::handle_agents_list_mouse(wm, mouse, workspace_area) {

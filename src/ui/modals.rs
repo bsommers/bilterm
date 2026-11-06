@@ -409,6 +409,9 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Find Command History", ":find history"),
         ("Agents List (Ctrl+Alt+N)", ":agents list toggle"), ("Agent Demo (Ctrl+X y)", ":agents demo"),
         ("Stop Agent Demo (Ctrl+X Y)", ":agents demo stop"),
+        ("Fonts Window", ":fonts toggle"),
+        ("Command Palette Window", ":commands toggle"),
+        ("Script Studio", ":script toggle"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),

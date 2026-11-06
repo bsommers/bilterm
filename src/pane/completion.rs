@@ -297,7 +297,12 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":clip", &[]),
     (":clipboard", &[]),
     (":cmd", &[]),
-    (":commands", &[]),
+    (
+        ":commands",
+        &[
+            "open", "close", "toggle", "dismiss", "blur", "pin", "unpin", "dock", "float", "clear",
+        ],
+    ),
     (":exit!", &[]),
     (":exit-protection", &[]),
     (":exitguard", &[]),
@@ -480,6 +485,8 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
         ],
     ),
     (":agents", &["list", "zoom", "toggle", "demo", "demo stop", "list open", "list close", "list toggle", "list dismiss", "list blur", "list select ", "list jump", "list zoom", "list pin", "list unpin", "list scale ", "list filter ", "list dock", "list float", "list move ", "list resize ", "list rect ", "list size ", "list scroll ", "close", "dismiss", "blur", "select ", "edge ", "enter", "move ", "resize ", "rect ", "size ", "max", "split ", "grab", "nudge ", "node-pin ", "node-unpin", "pin", "unpin", "scale ", "focus ", "line ", "copy", "scroll ", "follow", "fade ", "topology ", "filter "]),
+    (":script", &["open", "close", "toggle", "run", "step", "reset", "record", "edit", "add ", "clear", "clear-log", "save", "save ", "load ", "list", "pin", "dock", "up", "down", "left", "right", "select "]),
+    (":studio", &["open", "close", "toggle", "run", "step", "reset", "record", "edit", "add ", "clear", "clear-log", "save", "save ", "load ", "list", "pin", "dock", "up", "down", "left", "right", "select "]),
     (":detach", &[]),
     (":attach", &["default"]),
     (":exit-guard", &["guard", "respawn", "detach", "off"]),
@@ -542,7 +549,12 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":paste", &[]),
     (":clear", &[]),
     (":raw", &[]),
-    (":palette", &[]),
+    (
+        ":palette",
+        &[
+            "open", "close", "toggle", "dismiss", "blur", "pin", "unpin", "dock", "float", "clear",
+        ],
+    ),
     (":version", &["on", "off"]),
     (":crt", &["on", "off"]),
     (":scroll", &["smooth", "page", "instant", "toggle", "next", "prev"]),

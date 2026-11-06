@@ -241,6 +241,10 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":finder enter|prefill|close", "Drive the open Find window: enter jumps to the selected row, prefill copies its command into the prompt, close dismisses the window"),
     ("Find window keys", "Ctrl+Alt+F open/close; Tab / Shift+Tab switch kind; Up/Down PgUp/PgDn Home/End move; typing filters; Backspace edits; Ctrl+U clears; Enter jumps; Ctrl+Y prefills the prompt; Esc closes"),
     ("Find window mouse", "click a kind tab; click a row to jump to it (or the [Enter] chip for the selected row); [clear] chip; wheel moves the selection; footer chips [Enter] [^Y prefill] [x] (each gesture = the key or :finder twin)"),
+    (":fonts [open|close|toggle|pin|dock]", "Interactive First-Class FONTS utility window for live typography preview"),
+    (":commands [open|close|toggle|pin|clear]", "Interactive Pinnable Command Palette & Workbench window with execution history"),
+    (":script [open|run|step|reset|record|save|load]", "Interactive SCRIPT STUDIO window with debugger and live action recorder"),
+    (":studio [open|run|step|reset|record|save|load]", "Alias of :script"),
 ];
 
 /// Complete Fuzzy Command Palette catalog (`Ctrl+P` / `:palette`) paired with shortcuts and descriptions.
@@ -746,6 +750,16 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":scroll", "—", "Cycle the scroller mode (smooth, page, instant)"),
     (":scroll toggle", "—", "Toggle the page-hold (MORE...) scroller"),
     (":scroll prev", "—", "Step back one full page in page-hold mode"),
+    (":fonts open", "—", "Open the first-class FONTS utility window for live typography preview"),
+    (":fonts close", "—", "Close the FONTS utility window"),
+    (":fonts toggle", "—", "Open or close the FONTS utility window"),
+    (":commands open", "—", "Open the first-class Pinnable Command Palette window"),
+    (":commands close", "—", "Close the Command Palette window"),
+    (":commands toggle", "—", "Open or close the Command Palette window"),
+    (":commands clear", "—", "Clear the Command Palette output history buffer"),
+    (":script open", "—", "Open the SCRIPT STUDIO window with debugger and action recorder"),
+    (":script close", "—", "Close the SCRIPT STUDIO window"),
+    (":script toggle", "—", "Open or close the SCRIPT STUDIO window"),
 ];
 
 #[cfg(test)]

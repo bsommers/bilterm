@@ -348,6 +348,13 @@ pub(super) fn handle_wm_modal_key(
         return Ok(Some(action));
     }
     if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.script_studio().captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
+    if matches!(wm.modal(), crate::wm::Modal::None)
         && wm.agents_list().captures_input()
         && !wm.is_leader_pending()
         && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
