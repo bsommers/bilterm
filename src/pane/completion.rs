@@ -377,7 +377,8 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":lens", &["1.25x", "1.5x", "2x", "3x", "circle", "ellipse", "fuzzy", "pixel", "off"]),
     (":fkeybar", &["on", "off"]),
     (":search", &["next", "prev", "off", "prefill"]),
-    (":find", &["next", "prev", "off"]),
+    (":find", &["next", "prev", "off", "agent", "session", "history"]),
+    (":finder", &["kind ", "query ", "move ", "select ", "enter", "prefill", "close"]),
     (
         ":copy",
         &[

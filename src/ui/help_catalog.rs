@@ -214,6 +214,12 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":version [on|off] / :inspector [on|off]", "Toggle OIA version badge or F9 3270 Terminal Inspector"),
     (":tek [on|off|demo|erase|clear]", "Tektronix 4010/4014 vector storage-tube mode & demo"),
     (":canvas [hires|demo|mode|plot|image|clear]", "High-resolution Braille/Sextant/Kitty/Sixel/iTerm2 canvas"),
+    (":find <text> | :find next|prev|off", "Search the active pane's scrollback. Reserved first words open the Find window: agent, session, history (other text still searches scrollback; use :search <word> for a word that collides)"),
+    (":find agent|session|history [text]", "Find window (fuzzy, ranked): agents, live and saved sessions, or command history. Every row shows its source (live | saved-session | history-log); secrets are masked and counted (n masked), never shown"),
+    (":finder kind|query|move|select", "Drive the open Find window: kind agent|session|history|next|prev; query <text>; move <+n|-n|top|bottom>; select <n> (0-based row). No palette entry: the window must be open"),
+    (":finder enter|prefill|close", "Drive the open Find window: enter jumps to the selected row, prefill copies its command into the prompt, close dismisses the window"),
+    ("Find window keys", "Ctrl+Alt+F open/close; Tab / Shift+Tab switch kind; Up/Down PgUp/PgDn Home/End move; typing filters; Backspace edits; Ctrl+U clears; Enter jumps; Ctrl+Y prefills the prompt; Esc closes"),
+    ("Find window mouse", "click a kind tab; click a row to select it, click again or the [Enter] chip to jump; [clear] chip; wheel moves the selection; footer chips [Enter] [^Y prefill] [x] (each gesture = the key or :finder twin)"),
 ];
 
 /// Complete Fuzzy Command Palette catalog (`Ctrl+P` / `:palette`) paired with shortcuts and descriptions.
@@ -455,7 +461,10 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":buffers", "—", "List the clipboard / yank history buffers (alias of :clipboard list)"),
     (":commands", "—", "Open this command palette (alias of :palette)"),
     (":equalize", "—", "Reset window geometry: equalize sizes / re-cascade (alias of :cascade)"),
-    (":find", "—", "Search the active pane's scrollback: :find <text>, then :find next|prev|off (alias of :search)"),
+    (":find agent", "Ctrl+Alt+F", "Find agents / sessions / command history: fuzzy, ranked, Enter jumps; other \":find <text>\" still searches scrollback"),
+    (":find session", "—", "Find live and saved sessions (ranked; each row shows its source)"),
+    (":find history", "—", "Find command history (live, saved and history.log; secrets masked and counted)"),
+    (":find", "—", "Search the active pane's scrollback: :find <text>, then :find next|prev|off (alias of :search); agent, session, history open the Find window"),
     (":fkeys", "—", "Cycle F-key mode (Bilterm / app passthrough / auto); :fkeys status, :fkeys send F5"),
     (":inspect", "—", "Toggle the 3270 Terminal Inspector (alias of :inspector, F9)"),
     (":lens", "—", "Focal-zoom lens over the cursor area (alias of :focalzoom): :lens 2x|circle|off"),
