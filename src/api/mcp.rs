@@ -87,6 +87,8 @@ impl AutomationControlPlane {
                     "bilterm_workspace_fontsize" => Some("workspace.fontsize"),
                     "bilterm_canvas" => Some("canvas.command"),
                     "bilterm_find" => Some(Self::find_method_for_kind(&args).unwrap_or("")),
+                    "bilterm_agents_list" => Some("agents.list"),
+                    "bilterm_agents_demo" => Some("agents.demo"),
                     _ => None,
                 };
                 match mapped_method {
@@ -212,6 +214,19 @@ impl AutomationControlPlane {
                     ("query", "string", "Optional fuzzy query (empty lists everything, capped at 128 chars)"),
                     ("limit", "integer", "Maximum rows (default 50, max 200)"),
                 ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_agents_list",
+                "Open, close, pin, select, jump, zoom, scale, filter, dock or position the floating agents-list window, or read the agent state (no op).",
+                &[
+                    ("op", "string", "Optional operation: open, close, toggle, dismiss, blur, select, jump, zoom, pin, unpin, scale, filter, dock, float, move, resize, rect, size or scroll (absent or list reads the state)"),
+                    ("args", "string", "Space-separated arguments, for example `down` or `110`"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_agents_demo",
+                "Start the agent traffic demo (default) or stop it and close the panes it spawned.",
+                &[("stop", "boolean", "true stops the demo")],
             ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])

@@ -35,6 +35,8 @@ pub const RPC_METHODS: &[&str] = &[
     "pane.feed_output",
     "pane.send_keys",
     "wm.command",
+    "agents.list",
+    "agents.demo",
     "events.poll",
     "playbook.run",
     "remote.connect_ssh",
@@ -729,6 +731,8 @@ impl AutomationControlPlane {
                     ("name", JsonValue::String(name.to_string())),
                 ]))
             }
+            "agents.list" => self.rpc_agents_list(params),
+            "agents.demo" => self.rpc_agents_demo(params),
             "find.agents" => self.find_rpc(FindKind::Agent, params),
             "find.sessions" => self.find_rpc(FindKind::Session, params),
             "find.history" => self.find_rpc(FindKind::History, params),

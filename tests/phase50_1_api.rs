@@ -172,8 +172,9 @@ fn tools_list_has_eleven_tools_with_find_last() {
     let mut plane = plane_with_panes(0);
     let r = mcp(&mut plane, r#"{"jsonrpc":"2.0","id":4,"method":"tools/list"}"#);
     let tools = r.get("result").and_then(|x| x.get("tools")).and_then(JsonValue::as_array).unwrap();
-    assert_eq!(tools.len(), 11);
-    let last = tools.last().unwrap();
+    // Phase 51-10 appended `bilterm_agents_list` and `bilterm_agents_demo` after `bilterm_find`.
+    assert_eq!(tools.len(), 13);
+    let last = &tools[10];
     assert_eq!(last.get("name").and_then(JsonValue::as_str), Some("bilterm_find"));
     let props = last.get("inputSchema").and_then(|s| s.get("properties")).unwrap();
     for p in ["kind", "query", "limit"] {
