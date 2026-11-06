@@ -322,7 +322,11 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::PaletteToggle => {
-            wm.toggle_palette();
+            if wm.command_window().pinned && wm.command_window().active {
+                wm.command_window_mut().focused = true;
+            } else {
+                wm.toggle_palette();
+            }
             false
         }
         ColonCommand::TriggerAdd(pat) => {
@@ -828,6 +832,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::CommandWindow(op) => super::execute_command_window::execute_command_window(wm, op),
         ColonCommand::Find(op) => super::execute_find::execute_find_command(wm, op),
         ColonCommand::RespawnPaneInPlace => {
             wm.respawn_active_pane();

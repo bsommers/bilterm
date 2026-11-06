@@ -7,6 +7,7 @@ pub mod agents_list;
 pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
+pub mod command_window;
 pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
@@ -38,6 +39,10 @@ pub use quick_terminal::{encode_sgr_mouse_local, inset_window_frame, rect_contai
 pub use session::{SavedPaneState, SavedWorkspaceSession};
 pub use session_tree::{SessionNodeKind, SessionTree, SessionTreeNode};
 pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
+pub use command_window::{
+    CommandLogEntry, CommandWindowBadge, CommandWindowHit, CommandWindowOp, CommandWindowState,
+    PaletteCommandItem, PALETTE_ITEMS,
+};
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -153,6 +158,8 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Pinnable COMMAND PALETTE first-class window (`WIN-02`, Phase 51.2).
+    pub(crate) command_window: command_window::CommandWindowState,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -239,6 +246,7 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            command_window: command_window::CommandWindowState::default(),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -553,6 +561,10 @@ impl WindowManager {
 
     /// Toggles the interactive Fuzzy Command Palette modal (`Ctrl+P` / `Alt+Space` / `:palette`, `v0.6.0`).
     pub fn toggle_palette(&mut self) {
+        if self.command_window.pinned && self.command_window.active {
+            self.command_window.focused = true;
+            return;
+        }
         if matches!(self.modal, Modal::Palette { .. }) {
             self.modal = Modal::None;
         } else {
@@ -766,6 +778,7 @@ impl WindowManager {
             self.quick_terminal.visible = false;
             self.agents_window.blur();
             self.agents_list.blur();
+            self.command_window.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -780,6 +793,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.command_window.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -791,6 +805,7 @@ impl WindowManager {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
         self.agents_list.blur();
+        self.command_window.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

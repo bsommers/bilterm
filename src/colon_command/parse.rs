@@ -426,7 +426,14 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::SessionTreeCommand(sub)))
         }
-        "palette" | "commands" | "cmd" => Some(Ok(ColonCommand::PaletteToggle)),
+        "commands" | "cmd" => Some(super::parse_command_window::parse(&parts[1..])),
+        "palette" => {
+            if parts.len() > 1 {
+                Some(super::parse_command_window::parse(&parts[1..]))
+            } else {
+                Some(Ok(ColonCommand::PaletteToggle))
+            }
+        }
         "notifications" | "notify" | "bell" => Some(Ok(ColonCommand::NotificationsClear)),
         "trigger" | "triggers" => match parts.get(1).copied() {
             Some("add") => {

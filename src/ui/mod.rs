@@ -1,6 +1,7 @@
 pub mod agents_gui;
 pub mod agents_list_ui;
 pub mod agents_ui;
+pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
@@ -728,6 +729,7 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList) == 100 {
             agents_list_ui::render_agents_list(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+        command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
