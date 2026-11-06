@@ -520,7 +520,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":record", &["start", "workspace", "pane", "stop"]),
     (":remote", &["list", "add ", "exec ", "disconnect "]),
     (":ssh", &["list", "-p ", "user@host"]),
-    (":ssh-tmux", &["list", "user@host"]),
+    (":ssh-tmux", &["list", "reconnect", "disconnect", "info", "prefill", "user@host"]),
     (":modern", &["on", "off", "toggle"]),
     (":liquid", &["on", "off", "toggle"]),
     (":style", &["classic", "snazzy", "glass", "both", "modern", "liquid", "cycle"]),
