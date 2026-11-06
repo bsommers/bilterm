@@ -178,16 +178,24 @@ fn agents_args_accept_string_or_array() {
 fn agents_demo_start_stop() {
     let mut p = plane();
     p.wm.config_mut().api.allow_config_write = false;
+    let panes_before = p.wm.pane_count();
     let r = p.dispatch_method("agents.demo", &j("{}")).unwrap();
     assert_eq!(r.get("command").and_then(JsonValue::as_str), Some(":agents demo"));
     let demo = r.get("demo").expect("demo object");
-    // `running` tracks 51-03's demo bookkeeping (not merged in every base): only its shape is pinned here.
-    assert!(demo.get("running").and_then(JsonValue::as_bool).is_some());
-    assert!(demo.get("endpoints").and_then(JsonValue::as_array).is_some());
+    assert_eq!(demo.get("running").and_then(JsonValue::as_bool), Some(true), "start reports a running demo");
+    let endpoints = demo.get("endpoints").and_then(JsonValue::as_array).expect("endpoints");
+    assert!(!endpoints.is_empty(), "the demo seeded endpoints");
     assert!(demo.get("spawned").and_then(JsonValue::as_array).is_some());
     let r = p.dispatch_method("agents.demo", &j(r#"{"stop":true}"#)).unwrap();
     assert_eq!(r.get("command").and_then(JsonValue::as_str), Some(":agents demo stop"));
-    assert!(r.get("demo").is_some());
+    let demo = r.get("demo").expect("demo object after stop");
+    assert_eq!(demo.get("running").and_then(JsonValue::as_bool), Some(false), "stop clears the demo");
+    assert!(demo.get("endpoints").and_then(JsonValue::as_array).is_some_and(|e| e.is_empty()));
+    assert!(demo.get("spawned").and_then(JsonValue::as_array).is_some_and(|e| e.is_empty()));
+    assert_eq!(p.wm.pane_count(), panes_before, "stop closes exactly the panes the demo spawned");
+    // A second stop is a no-op that still reports not running.
+    let r = p.dispatch_method("agents.demo", &j(r#"{"stop":true}"#)).unwrap();
+    assert_eq!(r.get("demo").and_then(|d| d.get("running")).and_then(JsonValue::as_bool), Some(false));
     let before = state(&p);
     let err = p.dispatch_method("agents.demo", &j(r#"{"stop":"yes"}"#)).unwrap_err();
     assert!(err.starts_with("invalid agents.demo parameter"), "{err}");
