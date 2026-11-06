@@ -30,7 +30,7 @@ pub struct RemoteHostProfile {
     /// Optional SSH private key path (`-i <identity_file>`).
     #[serde(default)]
     pub identity_file: Option<String>,
-    /// Enables OpenSSH `ControlMaster=auto` and `ControlPersist=60s` for instant multi-pane SSH multiplexing.
+    /// Enables OpenSSH `ControlMaster=auto` and `ControlPersist=10s` for instant multi-pane SSH multiplexing.
     #[serde(default = "default_true")]
     pub control_master: bool,
     /// Optional POSIX `OSC 133` prompt-marker bootstrap over SSH (disabled by default to avoid pre-login echo).
@@ -85,8 +85,14 @@ impl RemoteHostProfile {
         }
     }
 
-    fn push_common_args(&self, args: &mut Vec<String>, control_dir: Option<&Path>) {
-        if self.control_master
+    fn push_common_args(&self, args: &mut Vec<String>, control_dir: Option<&Path>, is_link: bool) {
+        push_keepalive_args(args);
+        if is_link {
+            args.push("-o".to_string());
+            args.push("ControlMaster=no".to_string());
+            args.push("-o".to_string());
+            args.push("ControlPath=none".to_string());
+        } else if self.control_master
             && let Some(dir) = control_dir
             && let Some(s) = dir.to_str()
         {
@@ -97,7 +103,7 @@ impl RemoteHostProfile {
                 args.push("-o".to_string());
                 args.push("ControlMaster=auto".to_string());
                 args.push("-o".to_string());
-                args.push("ControlPersist=60s".to_string());
+                args.push("ControlPersist=10s".to_string());
                 args.push("-o".to_string());
                 args.push(format!("ControlPath={s}/{CONTROL_PATH_LEAF}"));
             } else {
@@ -125,7 +131,7 @@ impl RemoteHostProfile {
     pub fn build_ssh_args(&self, control_dir: Option<&Path>) -> Result<Vec<String>> {
         validate_destination(&self.destination)?;
         let mut args = vec!["-tt".to_string()];
-        self.push_common_args(&mut args, control_dir);
+        self.push_common_args(&mut args, control_dir, false);
         args.push("--".to_string());
         args.push(self.destination.clone());
         Ok(args)
@@ -134,15 +140,17 @@ impl RemoteHostProfile {
     /// Builds the `ssh` CLI arguments for attaching to a persistent remote `tmux -CC` Control Mode session over SSH.
     ///
     /// Validates destination against injection attacks, pushes `--` before destination,
-    /// and keeps the remote tmux command as the final argument.
+    /// and wraps the remote `tmux -CC` command in a login shell (`$SHELL -lc`) so non-interactive
+    /// `sshd` sessions discover Homebrew/MacPorts installations of tmux on macOS (csh/tcsh logins
+    /// are unsupported).
     pub fn build_ssh_tmux_cc_args(
         &self,
         session_name: &str,
         control_dir: Option<&Path>,
     ) -> Result<Vec<String>> {
         validate_destination(&self.destination)?;
-        let mut args = vec!["-T".to_string()];
-        self.push_common_args(&mut args, control_dir);
+        let mut args = vec!["-tt".to_string()];
+        self.push_common_args(&mut args, control_dir, true);
         args.push("--".to_string());
         args.push(self.destination.clone());
         let sanitized_session: String = session_name
@@ -154,9 +162,46 @@ impl RemoteHostProfile {
         } else {
             &sanitized_session
         };
-        args.push(format!("tmux -CC new-session -A -s {sess}"));
+        args.push(format!(
+            "exec $SHELL -lc 'exec env PATH=\"$PATH:/opt/homebrew/bin:/usr/local/bin:/opt/local/bin\" tmux -CC new-session -A -s {sess}'"
+        ));
         Ok(args)
     }
+}
+
+fn push_keepalive_args(args: &mut Vec<String>) {
+    args.push("-o".to_string());
+    args.push("ServerAliveInterval=15".to_string());
+    args.push("-o".to_string());
+    args.push("ServerAliveCountMax=3".to_string());
+    args.push("-o".to_string());
+    args.push("TCPKeepAlive=yes".to_string());
+    args.push("-o".to_string());
+    args.push("ConnectTimeout=15".to_string());
+}
+
+/// Redacts sensitive parameters (identity files, ControlPath sockets) from an SSH argv for safe logging.
+///
+/// This is the only sanctioned way to log an SSH argv in `bilterm` (see Phase 51.1 CONTRACT section 11).
+pub fn redact_ssh_argv(args: &[String]) -> String {
+    let mut redacted = Vec::with_capacity(args.len());
+    let mut mask_next_as_key = false;
+    for arg in args {
+        if mask_next_as_key {
+            redacted.push("<key>".to_string());
+            mask_next_as_key = false;
+            continue;
+        }
+        if arg == "-i" {
+            redacted.push("-i".to_string());
+            mask_next_as_key = true;
+        } else if let Some((prefix, _)) = arg.split_once("ControlPath=") {
+            redacted.push(format!("{prefix}ControlPath=<private>"));
+        } else {
+            redacted.push(arg.clone());
+        }
+    }
+    redacted.join(" ")
 }
 
 /// Returns a one-line POSIX shell snippet that configures `OSC 133` prompt/command-exit markers
@@ -443,7 +488,10 @@ mod tests {
         assert!(len >= 3);
         assert_eq!(args[len - 3], "--");
         assert_eq!(args[len - 2], "ubuntu@10.0.0.42");
-        assert_eq!(args[len - 1], "tmux -CC new-session -A -s main");
+        assert!(args[len - 1].contains("-s main"));
+        // Phase 51.1: wraps in login shell with macOS Homebrew path
+        assert!(args[len - 1].starts_with("exec $SHELL -lc '"));
+        assert!(args[len - 1].ends_with("-s main'"));
     }
 
     #[test]

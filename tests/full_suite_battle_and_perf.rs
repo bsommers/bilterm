@@ -56,22 +56,20 @@ fn unit_exhaustively_covers_remote_profiles_fleet_selectors_and_snapshots() {
     let tmux_args = prof
         .build_ssh_tmux_cc_args("prod/main!@#", Some(control_dir))
         .unwrap();
-    assert!(tmux_args.contains(&"-T".to_string()));
+    // Phase 51.1: persistent link uses -tt, not -T
+    assert!(tmux_args.contains(&"-tt".to_string()));
     assert_eq!(tmux_args[tmux_args.len() - 3], "--");
     assert_eq!(tmux_args[tmux_args.len() - 2], "ubuntu@10.0.0.42");
-    assert_eq!(
-        tmux_args.last().map(String::as_str),
-        Some("tmux -CC new-session -A -s prodmain")
-    );
+    // Phase 51.1: wraps remote tmux in login shell with macOS PATH
+    assert!(tmux_args.last().is_some_and(|s| s.contains("-s prodmain")));
 
     // Empty sanitized session falls back to "bilterm" and control_master=false omits ControlMaster flags
     prof.control_master = false;
     let minimal_tmux = prof.build_ssh_tmux_cc_args("!!!", None).unwrap();
-    assert!(!minimal_tmux.iter().any(|a| a.contains("ControlMaster")));
-    assert_eq!(
-        minimal_tmux.last().map(String::as_str),
-        Some("tmux -CC new-session -A -s bilterm")
-    );
+    // Phase 51.1: link uses ControlMaster=no, never ControlMaster=auto
+    assert!(!minimal_tmux.iter().any(|a| a.contains("ControlMaster=auto")));
+    // Phase 51.1: wraps remote tmux in login shell with macOS PATH
+    assert!(minimal_tmux.last().is_some_and(|s| s.contains("-s bilterm")));
     let minimal_ssh = prof.build_ssh_args(None).unwrap();
     assert!(!minimal_ssh.iter().any(|a| a.contains("ControlMaster")));
     assert!(remote_osc133_bootstrap_command().contains("133;D"));
