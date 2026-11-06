@@ -256,10 +256,11 @@ impl WindowManager {
     }
 
     /// Workspace as the list window sees it: the scaled (virtual) cell space shared with the
-    /// renderer and the mouse handler (identity at 100%).
+    /// renderer and the mouse handler (identity at 100%). Built on the real shell workspace, not the
+    /// effective one: the effective area has the dock strip removed, which would clip a docked
+    /// list's slot away (51-09).
     pub(crate) fn agents_list_workspace(&self) -> Rect {
-        let ws = self.current_workspace_area().1;
-        self.panel_virtual_area(ws, PanelTarget::AgentsList)
+        self.panel_virtual_area(self.dock_base_area(), PanelTarget::AgentsList)
     }
 
     /// Rows that fit in the window's row area (at least 1).
