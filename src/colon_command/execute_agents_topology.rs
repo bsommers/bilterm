@@ -146,59 +146,37 @@ fn export(name: &str, data: &JsonValue) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Synthetic conversation for `:agents demo`: `(from index, to index, seconds ago, text)` over three
-/// panes, skewed so edge brightness and width differ (A<->B busy, B->C occasional, A->C rare).
-const DEMO_SCRIPT: &[(usize, usize, u64, &str)] = &[
-    (0, 1, 19, "[demo] plan: split the refactor in two"),
-    (1, 0, 18, "[demo] ack, taking the parser half"),
-    (0, 1, 16, "[demo] ping 1"),
-    (1, 0, 15, "[demo] pong 1"),
-    (1, 2, 14, "[demo] relay: parser done, please review"),
-    (0, 1, 12, "[demo] ping 2"),
-    (1, 0, 11, "[demo] pong 2"),
-    (2, 1, 9, "[demo] review: two nits, see line 40"),
-    (0, 1, 7, "[demo] ping 3"),
-    (1, 0, 6, "[demo] pong 3"),
-    (0, 2, 4, "[demo] rare: heads-up, merging at the top of the hour"),
-    (0, 1, 2, "[demo] ping 4"),
-    (1, 0, 1, "[demo] pong 4"),
-];
-
 /// `:agents demo` - local, in-memory synthetic traffic between the first three panes (splitting the
 /// focused pane until there are three) and the window opened on it. Every line is prefixed `[demo]`.
+/// Re-running replaces the earlier demo events; `:agents demo stop` undoes the demo.
 pub(super) fn demo(wm: &mut WindowManager) {
-    use crate::wm::SplitDirection;
-    use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
-    use std::time::{Duration, Instant};
-
-    let mut guard = 0;
-    while wm.pane_count() < 3 && guard < 2 {
-        let dir = if guard == 0 { SplitDirection::Vertical } else { SplitDirection::Horizontal };
-        if wm.split_focused(dir).is_err() {
-            break;
-        }
-        guard += 1;
+    let report = wm.start_agents_demo();
+    if report.endpoints.len() < 2 {
+        return status(wm, "Demo needs at least two panes".to_string());
     }
-    let ids: Vec<crate::pane::PaneId> = wm.panes().keys().copied().take(3).collect();
-    if ids.len() < 2 {
-        status(wm, "Demo needs at least two panes".to_string());
-        return;
-    }
-    let now = Instant::now();
-    for &(from, to, ago, text) in DEMO_SCRIPT {
-        let (Some(&f), Some(&t)) = (ids.get(from), ids.get(to)) else { continue };
-        let at = now.checked_sub(Duration::from_secs(ago)).unwrap_or(now);
-        wm.record_traffic(TrafficEndpoint::Pane(f), TrafficEndpoint::Pane(t), TrafficKind::Message, text, at);
-    }
-    wm.open_agents_window(ids.first().copied());
+    wm.open_agents_window(report.endpoints.first().copied());
     status(
         wm,
-        format!("Demo: {} synthetic [demo] events between panes {:?} (memory only; :agents topology shows them)", DEMO_SCRIPT.len(), ids),
+        format!(
+            "Demo: {} synthetic [demo] events between panes {:?} (memory only; :agents topology shows them; :agents demo stop undoes it)",
+            report.events, report.endpoints
+        ),
     );
 }
 
-/// `:agents demo stop` - seam stub (Phase 51-01): reports that nothing is running and changes
-/// nothing. Plan 51-03 owns the real body (close the demo's spawned panes, purge its events).
+/// `:agents demo stop` - closes the panes the demo spawned and removes its `[demo]` events and
+/// topology pairs; nothing else is touched.
 pub(super) fn demo_stop(wm: &mut WindowManager) {
-    status(wm, "No agent demo to stop (run :agents demo first)".to_string());
+    let r = wm.stop_agents_demo();
+    if !r.was_running {
+        return status(wm, "No agent demo to stop (run :agents demo first)".to_string());
+    }
+    let mut msg = format!("Demo stopped: closed {} pane(s), removed {} [demo] events", r.closed.len(), r.events_removed);
+    for id in &r.kept {
+        msg.push_str(&format!("; kept pane {id} (last pane)"));
+    }
+    if r.skipped > 0 {
+        msg.push_str(&format!("; skipped {} already closed", r.skipped));
+    }
+    status(wm, msg);
 }
