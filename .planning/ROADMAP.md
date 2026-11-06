@@ -52,7 +52,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
 - [x] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
 - [ ] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
-- [ ] **Phase 51.2: First-Class Utility Windows & Script Studio (INSERTED)** - Floating, pinnable, dockable utility windows (`FONTS` window with live preview, workbench-style pinned `COMMAND PALETTE` with execution history, and `SCRIPT STUDIO` with live recorder and single-step debugger) (`WIN-01..WIN-03`)
+- [x] **Phase 51.2: First-Class Utility Windows & Script Studio (INSERTED)** - Floating, pinnable, dockable utility windows (`FONTS` window with live preview, workbench-style pinned `COMMAND PALETTE` with execution history, and `SCRIPT STUDIO` with live recorder and single-step debugger) (`WIN-01..WIN-03`)
 - [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [ ] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
@@ -901,13 +901,13 @@ Plans:
   2. `WIN-02` (Pinnable `COMMAND PALETTE` Window): Opened by `:commands [verb]`, `:palette [verb]`, or pinning `Ctrl+P` (`Alt+P` / `*` in `Modal::Palette`). Supports unpinned one-shot execution (dismisses on `Enter`/`Esc`) and pinned workbench mode (`[•]` Pin keeps it open, executes commands repeatedly, and records command + output status in a scrollable `OUTPUT / HISTORY` pane at the bottom).
   3. `WIN-03` (`SCRIPT STUDIO` Window): Opened by `:script [verb]` or `:studio [verb]`. Multi-line `:colon` & shell script editor + `[▶ Run (F5)]`, `[⏭ Step (F10)]` single-step debugger with program counter `▶`, `[↺ Reset]`, `[● Rec (Ctrl+R)]` live action recorder, `[✎ Edit (i)]`, `[💾 Save]` / `[📂 Load]` (`~/.config/bilterm/scripts/*.bt` via `secure_fs`), and live `RUN LOG` pane.
 
-**Plans**: 0/4 plans complete
+**Plans**: 4/4 plans complete
 
 Plans:
-- [ ] 51.2-01-PLAN.md — Window 1 (`WIN-01`): `FONTS` Window + `:font list` / `:font scan` pop-up integration + `tests/phase51_2_fonts_window.rs` (wave 1, sonnet)
-- [ ] 51.2-02-PLAN.md — Window 2 (`WIN-02`): Pinnable `COMMAND PALETTE` Window + `Ctrl+P` pin promotion + `tests/phase51_2_command_window.rs` (wave 1, sonnet)
-- [ ] 51.2-03-PLAN.md — Window 3 (`WIN-03`): `SCRIPT STUDIO` Window + live recorder + single-step runner + `tests/phase51_2_script_studio.rs` (wave 1, sonnet)
-- [ ] 51.2-04-PLAN.md — Wave 2 integration merge, menubar/completion/help parity, full verification (`scripts/verify.sh`, `scripts/check_classic_goldens.sh`), and release build (wave 2, sonnet)
+- [x] 51.2-01-PLAN.md — Window 1 (`WIN-01`): `FONTS` Window + `:font list` / `:font scan` pop-up integration + `tests/phase51_2_fonts_window.rs` (wave 1, sonnet)
+- [x] 51.2-02-PLAN.md — Window 2 (`WIN-02`): Pinnable `COMMAND PALETTE` Window + `Ctrl+P` pin promotion + `tests/phase51_2_command_window.rs` (wave 1, sonnet)
+- [x] 51.2-03-PLAN.md — Window 3 (`WIN-03`): `SCRIPT STUDIO` Window + live recorder + single-step runner + `tests/phase51_2_script_studio.rs` (wave 1, sonnet)
+- [x] 51.2-04-PLAN.md — Wave 2 integration merge, menubar/completion/help parity, full verification (`scripts/verify.sh`, `scripts/check_classic_goldens.sh`), and release build (wave 2, sonnet)
 
 ### Phase 52: Agent-to-Agent Messaging & Coordination
 
@@ -1070,7 +1070,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 15/15 | Complete | 2026-11-05 |
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 13/13 | Complete | 2026-11-05 |
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 16/16 | Complete | 2026-11-06 |
-| 51.2. First-Class Utility Windows & Script Studio (INSERTED) (`WIN-01..WIN-03`) | 0/4 | Planned | - |
+| 51.2. First-Class Utility Windows & Script Studio (INSERTED) (`WIN-01..WIN-03`) | 4/4 | Complete | 2026-11-06 |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
 | 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/0 | Planned | - |
