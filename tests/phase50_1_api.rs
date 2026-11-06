@@ -187,7 +187,7 @@ fn rpc_sessions_include_saved_session_source_with_path() {
     let mut plane = plane_with_panes(0);
     plane.wm.config_mut().session_dir = Some(dir.path().to_str().unwrap().to_string());
     plane.wm.save_session("work").unwrap();
-    let v = plane.dispatch_method("find.sessions", &params(r#"{"query":"work"}"#)).unwrap();
+    let v = plane.dispatch_method("find.sessions", &params("{}")).unwrap();
     let rows = rows_of(&v);
     let saved = rows
         .iter()
@@ -209,9 +209,12 @@ fn rpc_history_masks_secrets_from_history_log() {
     let mut plane = plane_with_panes(0);
     plane.wm.config_mut().history_dir = Some(dir.path().to_str().unwrap().to_string());
     let session = plane.wm.config().history_session.clone();
-    let log_dir = dir.path().join("sessions").join(&session);
+    let log_dir = dir.path().join("sessions").join(bilterm::pane::history_store::sanitize_session_name(&session));
     std::fs::create_dir_all(&log_dir).unwrap();
-    std::fs::write(log_dir.join("history.log"), "ls -la\nexport API_TOKEN=abc123\n").unwrap();
+    // Real `history.log` line layout: `[ts | session=S | run=R | pane=N] <command>`.
+    let line = |cmd: &str| format!("[2026-01-01T00:00:00Z | session={session} | run=old-run | pane=1] {cmd}\n");
+    let body = format!("{}{}", line("ls -la"), line("export API_TOKEN=abc123"));
+    std::fs::write(log_dir.join("history.log"), body).unwrap();
     let resp = plane.dispatch_method("find.history", &params("{}")).unwrap();
     let text = resp.to_json_string();
     assert!(resp.get("masked").and_then(JsonValue::as_i64).unwrap() >= 1);

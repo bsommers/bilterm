@@ -258,6 +258,10 @@ fn caps_match_contract() {
 #[test]
 fn open_stashes_results_envelope_and_status() {
     let mut wm = fixture(100, 30);
+    // Hermetic: never read the developer's real saved sessions or history.
+    let (sessions, history) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    wm.config_mut().session_dir = Some(sessions.path().to_str().unwrap().to_string());
+    wm.config_mut().history_dir = Some(history.path().to_str().unwrap().to_string());
     run_colon(&mut wm, ":find session dev");
     let r = wm.find_results();
     let n = r.rows.len();
