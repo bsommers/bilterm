@@ -243,3 +243,167 @@ mod splitter {
         let _ = sp.flush_partial();
     }
 }
+
+mod transport {
+    use bilterm::pty::PtyConfig;
+    use bilterm::remote::RemoteHostProfile;
+    use bilterm::tmux::link::{DriverExit, LinkConnector, LinkDriver, LinkTarget};
+    use bilterm::tmux::transport::{PtyLinkConnector, PtyLinkDriver};
+
+    fn target(dest: &str) -> LinkTarget {
+        LinkTarget {
+            profile: RemoteHostProfile::new("t", dest),
+            session: "main".into(),
+            tags: vec![],
+        }
+    }
+
+    #[cfg(unix)]
+    mod pty {
+        use super::*;
+        use bilterm::pty::PtySession;
+        use std::time::{Duration, Instant};
+
+        fn sh(script: &str) -> PtyConfig {
+            PtyConfig {
+                program: "/bin/sh".into(),
+                args: vec!["-c".into(), script.into()],
+                rows: 24,
+                cols: 80,
+                ..PtyConfig::default()
+            }
+        }
+
+        #[test]
+        fn driver_reports_raw_then_control_lines_then_exit_code() {
+            let (mut control, mut driver) = PtyLinkDriver::spawn_named(
+                "main",
+                sh("printf 'login: '; printf '\\033P1000p'; printf '%%begin 1 1 0\\n%%end 1 1 0\\n'; exit 3"),
+            )
+            .expect("spawn sh");
+            assert_eq!(control.session_name, "main");
+            let mut raw = Vec::new();
+            let mut starts = 0;
+            let mut lines = Vec::new();
+            let mut exit = None;
+            let mut lines_at_exit = 0;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while exit.is_none() && Instant::now() < deadline {
+                let p = driver.pump();
+                raw.extend(p.raw_output);
+                if p.control_started {
+                    starts += 1;
+                }
+                while let Ok(l) = control.line_rx.try_recv() {
+                    lines.push(l);
+                }
+                if p.exited.is_some() {
+                    lines_at_exit = lines.len();
+                    exit = p.exited;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(String::from_utf8_lossy(&raw).contains("login: "), "{raw:?}");
+            assert_eq!(starts, 1);
+            assert_eq!(lines, vec!["%begin 1 1 0".to_string(), "%end 1 1 0".to_string()]);
+            assert_eq!(lines_at_exit, 2, "lines delivered before the exit");
+            assert_eq!(exit, Some(DriverExit { code: Some(3) }));
+            // exactly once
+            for _ in 0..3 {
+                assert!(driver.pump().exited.is_none());
+            }
+        }
+
+        #[test]
+        fn driver_writes_commands_and_raw_input() {
+            let (control, mut driver) = PtyLinkDriver::spawn_named(
+                "main",
+                sh("read x; echo got1:$x; read y; echo got2:$y; sleep 1"),
+            )
+            .expect("spawn sh");
+            control.cmd_tx.send("abc".to_string()).unwrap();
+            let mut raw = Vec::new();
+            let mut wrote_raw = false;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                raw.extend(driver.pump().raw_output);
+                let text = String::from_utf8_lossy(&raw).into_owned();
+                if text.contains("got1:abc") && !wrote_raw {
+                    driver.write_raw(b"def\n").expect("write_raw");
+                    wrote_raw = true;
+                }
+                if text.contains("got2:def") {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "no echo: {text:?}");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            driver.kill();
+        }
+
+        #[test]
+        fn driver_kill_is_safe() {
+            let (_control, mut driver) =
+                PtyLinkDriver::spawn_named("main", sh("sleep 30")).expect("spawn sh");
+            driver.kill();
+            let started = Instant::now();
+            for _ in 0..3 {
+                let p = driver.pump();
+                assert!(p.exited.is_none());
+                assert!(p.raw_output.is_empty());
+            }
+            driver.write_raw(b"x").expect("write after kill is a no-op");
+            driver.resize(30, 100);
+            driver.kill();
+            assert!(started.elapsed() < Duration::from_secs(1));
+        }
+
+        #[test]
+        fn exit_code_respects_patience() {
+            let running = PtySession::spawn(sh("sleep 5")).expect("spawn");
+            let t0 = Instant::now();
+            assert_eq!(running.exit_code(Duration::from_millis(30)), None);
+            assert!(t0.elapsed() < Duration::from_millis(300), "{:?}", t0.elapsed());
+            drop(running);
+
+            let done = PtySession::spawn(sh("exit 7")).expect("spawn");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut code = None;
+            while code.is_none() && Instant::now() < deadline {
+                code = done.exit_code(Duration::from_millis(100));
+            }
+            assert_eq!(code, Some(7));
+            // a reaped child keeps reporting its code
+            assert_eq!(done.exit_code(Duration::from_millis(10)), Some(7));
+        }
+
+        #[test]
+        fn spawn_failure_is_an_error_with_a_reason() {
+            let cfg = PtyConfig {
+                program: "/nonexistent/bilterm-no-such-program".into(),
+                ..PtyConfig::default()
+            };
+            let err = PtyLinkDriver::spawn_named("main", cfg).err().expect("must fail");
+            assert!(!err.to_string().is_empty());
+        }
+
+        #[test]
+        fn connector_builds_ssh_argv_and_reports_spawn_errors() {
+            let mut c = PtyLinkConnector::default();
+            // An unsafe destination is rejected before any process exists.
+            let err = c
+                .connect(&target("-oProxyCommand=x"), (24, 80))
+                .err()
+                .expect("unsafe destination");
+            assert!(!err.to_string().is_empty());
+            // A valid destination either fails with a reason (no ssh) or yields a driver to kill.
+            match c.connect(&target("bilterm-test@invalid.invalid"), (24, 80)) {
+                Err(e) => assert!(!e.to_string().is_empty()),
+                Ok(mut t) => {
+                    assert_eq!(t.control.session_name, "main");
+                    t.driver.as_mut().expect("driver").kill();
+                }
+            }
+        }
+    }
+}
