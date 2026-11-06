@@ -154,17 +154,6 @@ impl CompositePane {
         )
     }
 
-    /// Takes the commands captured since the last drain plus the count of secret-looking commands
-    /// withheld meanwhile (Phase 50.1, D-U2). Filled by 50.1-10; empty until then.
-    #[allow(dead_code)] // consumed by registry::capture::tick (50.1-10)
-    pub(crate) fn drain_captured(&mut self) -> (Vec<capture::CapturedCommand>, u32) {
-        (std::mem::take(&mut self.captured), std::mem::take(&mut self.captured_masked))
-    }
-
-    /// Records the exit code of a finished `command` for the history log (50.1-05 / 50.1-10; no-op for now).
-    #[allow(dead_code)] // wired by 50.1-05 and 50.1-10
-    pub(crate) fn record_history_exit(&mut self, _command: &str, _exit_code: i32) {}
-
     /// Spawns a live `CompositePane` backed by a `portable-pty` shell process.
     pub fn spawn(id: PaneId, mut pty_config: PtyConfig) -> Result<Self> {
         let canvas_rows = pty_config.rows.saturating_sub(1).max(1);
@@ -207,6 +196,15 @@ impl CompositePane {
             )));
         }
         let cmd_str = cmd.to_string();
+        // Decided before the PTY write: the prompt state belongs to the previous program.
+        let decision = self.capture_decision(&cmd_str);
+        if decision == capture::Decision::PasswordInput {
+            // Password input is recorded nowhere (D-U2, P-04); it is only written to the PTY.
+            self.vt.reset_scrollback();
+            self.reset_page_anchor();
+            let payload = self.build_submission_payload(&cmd_str);
+            return self.write_to_pty(&payload);
+        }
         if !cmd_str.trim().is_empty() {
             if self.prompt.history.last() != Some(&cmd_str) {
                 self.prompt.history.push(cmd_str.clone());
@@ -231,7 +229,13 @@ impl CompositePane {
         self.vt.reset_scrollback();
         self.reset_page_anchor();
         self.vt.record_command_submission(cmd_str.clone());
-        let _ = self.history_store.record_command(&cmd_str);
+        match decision {
+            capture::Decision::Capture => self.record_captured(&cmd_str),
+            capture::Decision::Secret => self.note_masked(),
+            _ => {
+                let _ = self.history_store.record_command(&cmd_str);
+            }
+        }
         let payload = self.build_submission_payload(&cmd_str);
         self.write_to_pty(&payload)
     }
