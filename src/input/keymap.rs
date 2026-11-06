@@ -10,6 +10,7 @@ use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
+use crate::wm::agents_list_cmd::AgentsListOp;
 use crate::wm::find_cmd::{FindKind, FindOp};
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
@@ -28,6 +29,10 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('V'), Action::SplitVertical),
     (KeyCode::Char('!'), Action::DrawerNav(crate::wm::drawer::DrawerNavOp::NextAttention)),
     (KeyCode::Char('a'), Action::Agents(AgentsOp::Zoom(None))),
+    // AGENTS list toggle and agent demo / stop (Phase 51-07, D-03)
+    (KeyCode::Char('A'), Action::AgentsList(AgentsListOp::Toggle)),
+    (KeyCode::Char('y'), Action::Agents(AgentsOp::Demo)),
+    (KeyCode::Char('Y'), Action::Agents(AgentsOp::DemoStop)),
     (KeyCode::Char('z'), Action::ZoomToggle),
     (KeyCode::Char('Z'), Action::ZoomToggle),
     (KeyCode::F(5), Action::ZoomToggle),
@@ -181,6 +186,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
+    // AGENTS list toggle: Ctrl+Alt+N (verified free; D-03).
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('n'), Action::AgentsList(AgentsListOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('N'), Action::AgentsList(AgentsListOp::Toggle)),
     // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
@@ -531,7 +539,7 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// and the Find window (`Ctrl+Alt+F`): the launchers the user needs while an agent owns the pane.
 pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
     match default_global_action(key, false) {
-        Some(action @ (Action::Agents(AgentsOp::Toggle(_)) | Action::Find(FindOp::Open { .. }))) => Some(action),
+        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::Find(FindOp::Open { .. }))) => Some(a),
         _ => None,
     }
 }
