@@ -358,10 +358,13 @@ fn badge_cell(wm: &WindowManager, which: bilterm::wm::agents_list_geometry::List
 #[test]
 fn mouse_row_click_plans() {
     let mut wm = open_list(3);
-    let (c, r) = row_cell(&wm, 1);
-    let id = row_id(&wm, 1);
+    // A fresh open selects the active pane's row (51-05); click a different row.
+    let active = wm.active_pane_id();
+    assert_eq!(wm.agents_list().selected, Some(active));
+    let other = (0..3).find(|&i| row_id(&wm, i) != active).expect("a row besides the active pane");
+    let (c, r) = row_cell(&wm, other);
+    let id = row_id(&wm, other);
     // Focused, not selected: select.
-    assert_eq!(wm.agents_list().selected, None);
     let p = plan(&wm, down(c, r));
     assert_eq!(actions(&p), vec![list_action(AgentsListOp::SelectPane(id))]);
     assert!(p.swallow);
@@ -378,9 +381,12 @@ fn mouse_row_click_plans() {
     wm.open_agents_list();
     let right = ev(MouseEventKind::Down(MouseButton::Right), c, r);
     assert_eq!(actions(&plan(&wm, right)), vec![list_action(AgentsListOp::Zoom(Some(id)))]);
-    // The real handler swallows the click and lowers it through apply (seam-real: stays open).
+    // The real handler swallows the click and lowers it through apply: the selected row jumps to
+    // its pane and (unpinned) the list closes (51-05 semantics).
+    wm.agents_list_mut().selected = Some(id);
     mouse(&mut wm, down(c, r));
-    assert!(wm.agents_list().active);
+    assert_eq!(wm.active_pane_id(), id);
+    assert!(!wm.agents_list().active);
 }
 
 #[test]
