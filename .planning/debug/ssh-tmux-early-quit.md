@@ -126,3 +126,8 @@ Do these in order; each step has a regression test that needs no network or real
 - src/pane/mod.rs:738-780 (exit/hold/respawn), src/pty/mod.rs:154-175 (reader exit)
 - src/wm/layout_profile.rs:504-562, src/wm/v2_runtime.rs:209-222 (restore/detach)
 - User data (read-only, hosts redacted): ~/.local/state/bilterm/sessions/{main,dual-h,test270}.toml; ~/.local/state/bilterm/bilterm.log (empty)
+
+## User report follow-up (2026-11-05)
+- Command typed: `:ssh-tmux bill@bigmac.local`.
+- Message on quit: not captured. `tmux ls` on the Mac after a drop: not checked.
+- Has not recurred in roughly 4 hours of use, so the drop is intermittent. Consistent with the diagnosis that `:ssh-tmux` today only splits a local shell (no ServerAlive options, no reconnect, no `-CC` bridge), so any network blip or idle timeout ends the session. Use this host as the Phase 51.1 manual UAT target.
