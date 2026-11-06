@@ -304,6 +304,7 @@ impl WindowManager {
         }
 
         self.zoomed_pane = None;
+        self.dock_panels_on_arrange();
         let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
         let _ = self.resize_all(vp);
         if self.config.layout_autosave {
@@ -609,6 +610,7 @@ impl WindowManager {
         self.layout_mode = saved.layout_mode;
         self.zoomed_pane = saved.zoomed_pane;
         self.next_pane_id = max_id + 1;
+        self.clear_agents_demo();
         let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);
         let _ = self.resize_all(vp);
         pane_count

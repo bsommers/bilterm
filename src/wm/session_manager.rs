@@ -232,6 +232,7 @@ impl WindowManager {
         self.layout_mode = WorkspaceLayoutMode::Tiled;
         self.zoomed_pane = None;
         self.next_pane_id = 2;
+        self.clear_agents_demo();
         self.client_detached = false;
 
         self.config.history_session = new_name.clone();

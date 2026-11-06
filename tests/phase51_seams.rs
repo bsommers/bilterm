@@ -250,3 +250,95 @@ fn badges_hidden_when_narrow() {
         }
     }
 }
+
+// ---------------------------------------------------------------- task 2: identity hooks
+
+#[test]
+fn seams_identity_without_panels() {
+    let (mut wm, area) = fixture(120, 40, 2);
+    for a in [area, Rect::new(0, 0, 24, 6), Rect::new(3, 2, 80, 30), Rect::new(0, 0, 1, 1)] {
+        assert_eq!(wm.subtract_docked_panels(a), a);
+        assert_eq!(wm.effective_workspace_area(a), a);
+        assert_eq!(wm.panel_dock_slot(a, DockPanel::AgentsList), None);
+        assert_eq!(wm.panel_dock_slot(a, DockPanel::AgentsTraffic), None);
+    }
+    wm.open_agents_list();
+    assert_eq!(wm.subtract_docked_panels(area), area);
+    let before = rects_of(&wm, area);
+    wm.dock_panels_on_arrange();
+    assert_eq!(rects_of(&wm, area), before);
+    assert!(!wm.agents_list().docked);
+    // The stub flips only the list flag, only when active, and never reflows.
+    assert!(wm.set_panel_docked(DockPanel::AgentsList, true));
+    assert!(wm.agents_list().docked);
+    assert!(!wm.set_panel_docked(DockPanel::AgentsList, true), "unchanged reports false");
+    assert_eq!(rects_of(&wm, area), before, "stub does not reflow");
+    assert!(wm.set_panel_docked(DockPanel::AgentsList, false));
+    assert!(!wm.set_panel_docked(DockPanel::AgentsList, false));
+    assert!(!wm.set_panel_docked(DockPanel::AgentsTraffic, true));
+    wm.close_agents_list();
+    assert!(!wm.set_panel_docked(DockPanel::AgentsList, true), "inactive list refuses");
+    assert!(!wm.agents_list().docked);
+}
+
+#[test]
+fn arrange_grid_output_unchanged_without_panels() {
+    let (mut wm, area) = fixture(120, 40, 2);
+    let ids: Vec<usize> = wm.ordered_pane_ids();
+    assert_eq!(ids.len(), 2);
+    let mut tree = SplitTree::new(ids[0]);
+    tree.split_leaf(ids[0], ids[1], SplitDirection::Vertical);
+    let mut expect = tree.compute_rects(area);
+    expect.sort_by_key(|(id, _)| *id);
+
+    assert_eq!(wm.auto_arrange_windows("grid"), 2);
+    assert_eq!(rects_of(&wm, area), expect);
+    // The same with the list open but not docked.
+    wm.open_agents_list();
+    assert_eq!(wm.auto_arrange_windows("grid"), 2);
+    assert_eq!(rects_of(&wm, area), expect);
+    assert!(!wm.agents_list().docked);
+}
+
+#[test]
+fn clear_demo_hook_runs() {
+    let (mut wm, _) = fixture(120, 40, 2);
+    assert!(!wm.agents_demo_summary().running);
+    wm.seed_agents_demo_for_tests(vec![1, 2], vec![2]);
+    let s = wm.agents_demo_summary();
+    assert!(s.running && s.endpoints == vec![1, 2] && s.spawned == vec![2]);
+    wm.clear_agents_demo();
+    assert!(!wm.agents_demo_summary().running);
+
+    // create_new_session resets it (pane ids restart at 2 there).
+    wm.seed_agents_demo_for_tests(vec![1], vec![2]);
+    wm.create_new_session(Some("seam-a"), true).unwrap();
+    assert!(!wm.agents_demo_summary().running, "create_new_session must clear demo state");
+
+    // apply_saved_session_snapshot (through a layout-profile restore) resets it too.
+    wm.save_layout_profile(Some("seam-p")).unwrap();
+    wm.switch_layout_profile("seam-q").unwrap();
+    wm.seed_agents_demo_for_tests(vec![1], vec![2]);
+    wm.switch_layout_profile("seam-p").unwrap();
+    assert!(!wm.agents_demo_summary().running, "snapshot restore must clear demo state");
+}
+
+#[test]
+fn summaries_read_only() {
+    let (mut wm, _) = fixture(120, 40, 2);
+    let s = wm.agents_list_summary();
+    assert!(!s.active && !s.pinned && !s.focused && s.selected.is_none());
+    assert!(!wm.agents_demo_summary().running);
+    for cmd in [":agents list", ":agents list pin"] {
+        let parsed = bilterm::colon_command::parse_colon_command(cmd).unwrap().unwrap();
+        wm.apply(parsed).unwrap();
+    }
+    let s = wm.agents_list_summary();
+    assert!(s.active && s.focused);
+    assert_eq!(s.scale_pct, 100);
+    assert_eq!(s.row_count, 2);
+    wm.set_scale(PanelTarget::AgentsList, 125);
+    assert_eq!(wm.agents_list_summary().scale_pct, 125, "summary reflects scale_setting");
+    let again = wm.agents_list_summary();
+    assert_eq!(again, wm.agents_list_summary(), "reading is idempotent");
+}

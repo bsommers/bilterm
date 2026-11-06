@@ -398,7 +398,7 @@ impl WindowManager {
         {
             area = subtract_dock_rect(area, self.mcp_console.edge, mr);
         }
-        area
+        self.subtract_docked_panels(area)
     }
 
     /// Updates rolling throughput sparklines and spinner ticks across all panes (`DRW-02`).
