@@ -602,8 +602,12 @@ pub fn handle_wm_mouse_event(
     }
 
     // An open menubar dropdown outranks both floating windows (51-08): a click on an item the
-    // window happens to cover must reach the menu, not the window.
-    if wm.menubar_state().is_none() {
+    // window happens to cover must reach the menu, not the window. Same for a modal (palette, help,
+    // find): the part of it drawn over a floating window belongs to the modal (51-12).
+    let over_modal = wm
+        .active_modal_rect(workspace_area)
+        .is_some_and(|r| rect_contains(r, mouse.column, mouse.row));
+    if wm.menubar_state().is_none() && !over_modal {
         // The AGENTS list is the smaller, top-most panel: it sees the event before the traffic window.
         if let Some(action) = super::agents_list::handle_agents_list_mouse(wm, mouse, workspace_area) {
             return Ok(action);
