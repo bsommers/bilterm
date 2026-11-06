@@ -394,7 +394,7 @@ fn find_modal_keys_edit_state() {
 }
 
 #[test]
-fn find_mouse_hook_is_installed_and_inert_in_the_skeleton() {
+fn find_mouse_hook_is_installed_and_modal_stays_open() {
     use bilterm::ui::find_ui::{FindLayout, find_layout};
     let mut wm = fixture(100, 30);
     run_colon(&mut wm, ":find agent");
@@ -409,7 +409,7 @@ fn find_mouse_hook_is_installed_and_inert_in_the_skeleton() {
         row: layout.list.y,
         modifiers: KeyModifiers::NONE,
     };
-    assert!(bilterm::input::find_modal::handle_find_modal_mouse(&mut wm, mouse, outer, area).is_none());
-    assert!(bilterm::input::find_modal::lower_find_mouse(mouse, &layout, 0, 0, FindKind::Agent).is_none());
+    // Plan 50.1-08 made the hook live: a move over the empty list is consumed, never fatal.
+    let _ = bilterm::input::find_modal::handle_find_modal_mouse(&mut wm, mouse, outer, area);
     assert!(wm.is_find_visible());
 }
