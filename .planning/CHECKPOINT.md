@@ -242,4 +242,8 @@ Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 - Primary checkout: `/home/bill/src/ai/bilterm` on `main`.
 
 ### 4. Next Steps
-- Merge / PR `feat/navigator-rows-and-launch` into `main`, or begin **Phase 53: Session & Window Management (`SES-01..05`)**.
+- **Phases 53, 54, and 55 are now fully planned**:
+  - `.planning/phases/53-session-and-window-management/` (`53-CONTRACT.md`, `53-01..03-PLAN.md`)
+  - `.planning/phases/54-session-packing-viewer/` (`54-CONTRACT.md`, `54-01..03-PLAN.md`)
+  - `.planning/phases/55-daemon-supervisor/` (`55-RESEARCH.md`, `55-CONTRACT.md`, `55-01..03-PLAN.md`)
+- Ready to execute **Phase 53 (`Session & Window Management`, `SES-01..05`)** and **Phase 55 (`Daemon Supervisor & Multi-Daemon Awareness`, `DAEM-05..08`)** in parallel worktrees (since Phase 53 touches `src/wm/window_manage.rs` / Navigator while Phase 55 touches `src/daemon/`), followed by **Phase 54 (`Session Packing Viewer`, `VIEW-01..04`)**!

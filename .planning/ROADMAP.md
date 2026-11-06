@@ -993,7 +993,12 @@ Plans:
   3. `DAEM-07`: peer awareness: a registry of live daemons (id, name, pid, uptime, panes, sessions, agents) that every daemon and client can read; `daemon.list` RPC/MCP, `:daemon list|status|stop|start`, drawer/palette entries, and `:find` can search across daemons.
   4. `DAEM-08`: lifecycle safety: graceful stop, crash cleanup, version-mismatch handling, no cross-daemon PTY/input leakage unless explicitly allowed.
 
-**Plans**: 0/0 plans complete (research + planning pending)
+**Plans**: 0/3 plans complete
+
+Plans:
+- [ ] 55-01-PLAN.md — Singleton lock, stale-lock recovery, `DaemonRegistry`, and `--daemon --name <n>` multi-daemon isolation (wave 1)
+- [ ] 55-02-PLAN.md — Auto-spawn on `:detach` / `bilterm ctl`, `:daemon list|status|start|stop|switch`, JSON-RPC `daemon.*` & MCP `bilterm_daemon`, version-handshake safety (wave 2)
+- [ ] 55-03-PLAN.md — Cross-daemon `:find` integration, Navigator/Palette/Menu surface parity (`UNI-R01`), documentation, and uniformity test suite (wave 3)
 
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
@@ -1071,7 +1076,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 13/13 | Complete | 2026-11-05 |
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 16/16 | Complete | 2026-11-06 |
 | 51.2. First-Class Utility Windows & Script Studio (INSERTED) (`WIN-01..WIN-03`) | 4/4 | Complete | 2026-11-06 |
-| 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
-| 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |
-| 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/0 | Planned | - |
-| 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 0/0 | Not planned | - |
+| 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 3/3 | Complete | 2026-11-06 |
+| 53. Session & Window Management (`SES-01..05`) | 0/3 | Planned | - |
+| 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/3 | Planned | - |
+| 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 0/3 | Planned | - |
