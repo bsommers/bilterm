@@ -157,8 +157,16 @@ async fn main() -> color_eyre::Result<()> {
             .unwrap_or_else(|_| DEFAULT_TCP_LISTEN.to_string());
 
         let (endpoint, method, params) = bilterm::api::parse_ctl_args(&rest, &default_ep);
-        let resp =
-            send_rpc_request_with_token(&endpoint, &method, params, ctl_token.as_deref()).await?;
+        let resp = match send_rpc_request_with_token(&endpoint, &method, params.clone(), ctl_token.as_deref()).await {
+            Ok(r) => r,
+            Err(_) if endpoint.starts_with("unix:") => {
+                if let Ok(runtime_dir) = bilterm::secure_fs::private_runtime_dir() {
+                    let _ = bilterm::daemon::supervisor::ensure_started(&runtime_dir, "default");
+                }
+                send_rpc_request_with_token(&endpoint, &method, params, ctl_token.as_deref()).await?
+            }
+            Err(e) => return Err(e.into()),
+        };
         println!("{resp}");
         return Ok(());
     }

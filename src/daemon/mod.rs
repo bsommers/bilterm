@@ -20,6 +20,12 @@ use serde::{Deserialize, Serialize};
 pub mod process;
 pub use process::*;
 
+pub mod registry;
+pub use registry::*;
+
+pub mod supervisor;
+pub use supervisor::*;
+
 use crate::secure_fs::private_runtime_dir;
 use crate::wm::journal::{
     PaneJournalRecord, SessionJournalRecord, WorkspaceJournal,
@@ -98,11 +104,25 @@ pub enum DaemonRequest {
     Shutdown {
         confirmed: bool,
     },
+    Handshake {
+        client_version: String,
+        client_id: u64,
+    },
 }
 
 /// Wire protocol responses emitted by the background session daemon (`DAEM-01`, `DAEM-02`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DaemonResponse {
+    HandshakeOk {
+        server_version: String,
+        daemon_pid: u32,
+        daemon_name: String,
+    },
+    VersionMismatch {
+        server_version: String,
+        client_version: String,
+        diagnostic: String,
+    },
     Pong {
         pid: u32,
         uptime_secs: u64,
@@ -161,6 +181,8 @@ pub struct DaemonServerState {
     pub journal_dir: Option<PathBuf>,
     pub running: bool,
     pub started_at: Instant,
+    pub daemon_name: Option<String>,
+    pub socket_path: Option<PathBuf>,
 }
 
 impl Default for DaemonServerState {
@@ -182,6 +204,8 @@ impl DaemonServerState {
             journal_dir: None,
             running: true,
             started_at: Instant::now(),
+            daemon_name: Some("default".to_string()),
+            socket_path: None,
         }
     }
 
@@ -492,6 +516,40 @@ impl DaemonServerState {
                     self.clients.clear();
                     DaemonResponse::Ok {
                         message: "MASTER CONTROL PROGRAM SHUTDOWN COMPLETE. END OF LINE.".to_string(),
+                    }
+                }
+            }
+            DaemonRequest::Handshake {
+                client_version,
+                client_id: _,
+            } => {
+                let server_version = env!("CARGO_PKG_VERSION").to_string();
+                if client_version != server_version {
+                    let sock_display = self
+                        .socket_path
+                        .as_deref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "unknown socket".to_string());
+                    let diagnostic = format!(
+                        "bilterm: daemon version mismatch\n  client version: {}\n  daemon version: {} (PID {} at {})\n  action required: restart daemon using ':daemon stop' or 'bilterm ctl daemon.stop --name default'",
+                        client_version,
+                        server_version,
+                        std::process::id(),
+                        sock_display
+                    );
+                    DaemonResponse::VersionMismatch {
+                        server_version,
+                        client_version,
+                        diagnostic,
+                    }
+                } else {
+                    DaemonResponse::HandshakeOk {
+                        server_version,
+                        daemon_pid: std::process::id(),
+                        daemon_name: self
+                            .daemon_name
+                            .clone()
+                            .unwrap_or_else(|| "default".to_string()),
                     }
                 }
             }

@@ -26,6 +26,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_link::parse_link_colon_command(head, &parts) {
         return Some(res);
     }
+    if let Some(res) = super::parse_daemon::parse_daemon_colon_command(head, &parts) {
+        return Some(res);
+    }
     if let Some(res) = super::parse_script::parse_script_colon_command(head, &parts, rest) {
         return Some(res);
     }

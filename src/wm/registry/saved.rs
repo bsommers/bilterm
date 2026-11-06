@@ -316,6 +316,26 @@ fn session_rows(wm: &WindowManager) -> Vec<FindRow> {
         row.data = RowData::Session(SessionRow { name: shown, active: false, parent: None, pane_count: 0 });
         rows.push(row);
     }
+    if let Ok(runtime_dir) = crate::secure_fs::private_runtime_dir() {
+        for (i, d) in crate::daemon::registry::DaemonRegistry::list_active(&runtime_dir).into_iter().enumerate() {
+            let shown = clean(&d.name);
+            let mut row = FindRow::empty(FindKind::Session);
+            row.source = ResultSource::daemon(shown.clone());
+            row.session = shown.clone();
+            row.order = u64::MAX - i as u64;
+            row.id = format!("daemon:{shown}");
+            row.label = format!("daemon:{shown}");
+            row.detail = format!("daemon (pid {}, {} sess, {} panes)", d.pid, d.sessions_count, d.panes_count);
+            row.haystack = format!("daemon:{shown} {} {}", d.pid, d.version);
+            row.data = RowData::Session(SessionRow {
+                name: shown,
+                active: true,
+                parent: None,
+                pane_count: d.panes_count,
+            });
+            rows.push(row);
+        }
+    }
     rows
 }
 

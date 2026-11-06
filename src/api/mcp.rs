@@ -91,12 +91,15 @@ impl AutomationControlPlane {
                     "bilterm_agents_demo" => Some("agents.demo"),
                     "bilterm_remote_link" => Some("remote.link"),
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
+                    "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
                     Some(rpc_method) => match if rpc_method.is_empty() {
                         if tool_name == "bilterm_agent_mail" {
                             Err("missing or invalid 'action' parameter: send, broadcast, inbox, ack, list, name or wait".to_string())
+                        } else if tool_name == "bilterm_daemon" {
+                            Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
@@ -256,8 +259,30 @@ impl AutomationControlPlane {
                     ("timeout_ms", "integer", "Timeout in milliseconds (for wait, default 5000)"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_daemon",
+                "Supervise and inspect Bilterm background daemons (list, status, start, stop, switch).",
+                &[
+                    ("action", "string", "Operation: list | status | start | stop | switch"),
+                    ("name", "string", "Optional daemon name (defaults to 'default')"),
+                    ("force", "boolean", "Optional flag to force stop without graceful shutdown"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_daemon` `action` argument -> the `daemon.*` RPC method; `None` when missing or unknown.
+    fn daemon_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str)?;
+        match action {
+            "list" => Some("daemon.list"),
+            "status" => Some("daemon.status"),
+            "start" => Some("daemon.start"),
+            "stop" => Some("daemon.stop"),
+            "switch" => Some("daemon.switch"),
+            _ => None,
+        }
     }
 
     /// `bilterm_agent_mail` `action` argument -> the `agent.*` RPC method; `None` when missing or unknown.

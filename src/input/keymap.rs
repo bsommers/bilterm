@@ -150,6 +150,33 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::PageDown, Action::ScrollModeTogglePage),
 ];
 
+/// Multi-key daemon supervisor sub-chord bindings (`Ctrl+X D <key>`, `DAEM-05..08`).
+pub fn resolve_daemon_subchord(key: KeyCode) -> Option<Action> {
+    match key {
+        KeyCode::Char('l') | KeyCode::Char('L') => {
+            Some(Action::DaemonSupervisor(crate::action::DaemonSupervisorOp::List))
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            Some(Action::DaemonSupervisor(crate::action::DaemonSupervisorOp::Status { name: None }))
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') => {
+            Some(Action::DaemonSupervisor(crate::action::DaemonSupervisorOp::Start { name: None }))
+        }
+        KeyCode::Char('q') | KeyCode::Char('Q') => {
+            Some(Action::DaemonSupervisor(crate::action::DaemonSupervisorOp::Stop {
+                name: None,
+                force: false,
+            }))
+        }
+        KeyCode::Char('w') | KeyCode::Char('W') => {
+            Some(Action::DaemonSupervisor(crate::action::DaemonSupervisorOp::Switch {
+                name: "default".to_string(),
+            }))
+        }
+        _ => None,
+    }
+}
+
 /// Declarative global workspace shortcut table (`F1`..`F10`, `Alt+<key>`, `Ctrl+P`, `Ctrl+\\`, `ARCH-R01.2`).
 pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Direct OS clipboard paste (`Ctrl+Shift+V` / `Shift+Insert`) across CommandPrompt and Raw PTY / herdr

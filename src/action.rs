@@ -9,6 +9,7 @@ use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
+use serde::{Deserialize, Serialize};
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -230,8 +231,25 @@ pub enum Action {
     VisualStyleCommand(Option<String>),
     /// `:agent [name|send|broadcast|inbox|ack|list|enable]` (`AGT-01..03`, Phase 52).
     AgentMail(crate::wm::agent_mail::AgentMailOp),
+    /// `:daemon [list|status|start|stop|switch|prune]` (`DAEM-05..08`, Phase 55).
+    DaemonSupervisor(DaemonSupervisorOp),
+    /// Alias for `DaemonSupervisor` matching contract shorthand (`DAEM-05..08`).
+    Daemon(DaemonSupervisorOp),
     Quit,
 }
+
+/// Operations supported by the background daemon supervisor (`DAEM-05..08`, Phase 55).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DaemonSupervisorOp {
+    List,
+    Status { name: Option<String> },
+    Start { name: Option<String> },
+    Stop { name: Option<String>, force: bool },
+    Switch { name: String },
+    Prune,
+}
+
+pub type DaemonOp = DaemonSupervisorOp;
 
 impl Action {
     /// Default spotlight cycle action (`Alt+O` / `Ctrl+X L` / `:spotlight`).
@@ -463,6 +481,7 @@ mod tests {
             Action::FkeyModeCommand(_) => Some(":fkeys bilterm"),
             Action::VisualStyleCommand(_) => Some(":style snazzy"),
             Action::AgentMail(_) => Some(":agent list"),
+            Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
             Action::Quit => Some(":quit"),
         };
 
@@ -699,6 +718,8 @@ mod tests {
             Action::FkeyModeCommand(None),
             Action::VisualStyleCommand(None),
             Action::AgentMail(crate::wm::agent_mail::AgentMailOp::List),
+            Action::DaemonSupervisor(DaemonSupervisorOp::List),
+            Action::Daemon(DaemonSupervisorOp::List),
             Action::Quit,
         ];
 

@@ -13,6 +13,7 @@ pub mod mcp_resources;
 pub mod playbook;
 pub mod rpc;
 pub mod rpc_agents;
+pub mod rpc_daemon;
 pub mod rpc_handlers;
 pub mod rpc_link;
 pub mod server;

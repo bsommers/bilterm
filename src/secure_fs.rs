@@ -297,6 +297,26 @@ pub fn validate_plain_file_name(name: &str) -> std::result::Result<(), String> {
     }
 }
 
+/// Validates that `name` is a safe identifier matching `^[A-Za-z0-9_-]{1,64}$` (`SEC-R01`, `D-03`).
+///
+/// Rejects empty names, names exceeding 64 characters, names containing directory separators
+/// (`/`, `\`), dots (`.`, `..`), whitespace, or NUL bytes.
+pub fn validate_safe_name(name: &str) -> std::result::Result<(), String> {
+    if name.is_empty() {
+        return Err("identifier cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("identifier exceeds maximum length of 64 characters".to_string());
+    }
+    if name == "." || name == ".." {
+        return Err("identifier cannot be '.' or '..'".to_string());
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("identifier must contain only ASCII alphanumeric, '-', or '_' characters".to_string());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -555,5 +575,27 @@ mod tests {
             let s = unique_suffix();
             assert!(seen.insert(s), "unique_suffix generated duplicate");
         }
+    }
+
+    #[test]
+    fn validate_safe_name_accepts_valid_identifiers() {
+        assert!(validate_safe_name("default").is_ok());
+        assert!(validate_safe_name("worker-1").is_ok());
+        assert!(validate_safe_name("sess_01").is_ok());
+        assert!(validate_safe_name("A-Z_0-9").is_ok());
+    }
+
+    #[test]
+    fn validate_safe_name_rejects_unsafe_identifiers() {
+        assert!(validate_safe_name("").is_err());
+        assert!(validate_safe_name(".").is_err());
+        assert!(validate_safe_name("..").is_err());
+        assert!(validate_safe_name("../foo").is_err());
+        assert!(validate_safe_name("foo/bar").is_err());
+        assert!(validate_safe_name("foo\\bar").is_err());
+        assert!(validate_safe_name("foo bar").is_err());
+        assert!(validate_safe_name("foo\0bar").is_err());
+        let too_long = "a".repeat(65);
+        assert!(validate_safe_name(&too_long).is_err());
     }
 }
