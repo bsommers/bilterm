@@ -168,3 +168,9 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
 - Seam facts: LinkDriver/LinkConnector are Send; connect_ssh_tmux_body in wm/tmux_link.rs (spawns nothing until plan 12); keys Ctrl+Alt+R, leader u/U/Q; keymap.rs 975, modal 949, mouse 839 lines.
 - Follow-ups file: .planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md. Phase 55 daemon still unplanned. User GUI re-test pending. User ssh-tmux repro recorded in .planning/debug/ssh-tmux-early-quit.md.
 - Standing: never commit to main; no PR/merge/remote-branch deletion without go-ahead; explicit model on every subagent (sonnet/haiku); commits end with Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>; never pkill -f; legacy output byte-identical.
+
+## Checkpoint 2026-11-06 (Phase 51.1 complete: 16/16 plans)
+- Branch `feat/navigator-rows-and-launch` in `.claude/worktrees/integ`. All 16 plans of Phase 51.1 (`51.1-01`..`51.1-16`) executed, merged, and verified.
+- Gates: `scripts/verify.sh` = `PASS 105/105 63s` (16 `phase51_1_*` suites), `scripts/check_classic_goldens.sh` = `GOLDENS OK 11`, `scripts/check_phase51_1_doc_coverage.sh` = `DOCS OK 59`, `scripts/check_phase50_doc_coverage.sh` = `DOCS OK 91`, `Cargo.toml`/`Cargo.lock` unchanged.
+- Bookkeeping: `ROADMAP.md` (`16/16 plans complete`), `REQUIREMENTS.md` (`PST-01..PST-04` Complete), `51.1-16-SUMMARY.md` written with 6-step manual UAT script for `bill@bigmac.local`.
+- Next: manual UAT on `bill@bigmac.local`; ask before PR/merge to `main`; Phase 52 (`Agent-to-Agent Messaging`) or Phase 55 (`Daemon Supervisor`) next on roadmap.

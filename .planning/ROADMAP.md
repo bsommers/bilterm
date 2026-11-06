@@ -868,25 +868,25 @@ Plans:
   3. `PST-03`: exited remote panes are held with a banner (exit code, reason) instead of vanishing; restore never shows a remote badge on a local shell.
   4. `PST-04`: shorter ControlPersist plus keepalive on `:ssh`; tracing of connect/exit/`%exit`; headless tests via `TmuxControlSubprocess::from_channels`; macOS PATH handling documented/tested.
 
-**Plans**: 0/16 plans complete — diagnosis in `.planning/debug/ssh-tmux-early-quit.md`, frozen contract in 51.1-CONTRACT.md (planner defaults P-01..P-16; no user decision is locked yet, three open questions in 51.1-CONTEXT.md); wave 1 seam is orchestrator-only, wave 2 is ten parallel plans with disjoint file ownership; assumes Phases 50.1 and 51 execute first
+**Plans**: 16/16 plans complete — diagnosis in `.planning/debug/ssh-tmux-early-quit.md`, frozen contract in 51.1-CONTRACT.md (planner defaults P-01..P-16; no user decision is locked yet, three open questions in 51.1-CONTEXT.md); wave 1 seam is orchestrator-only, wave 2 is ten parallel plans with disjoint file ownership; assumes Phases 50.1 and 51 execute first
 
 Plans:
-- [ ] 51.1-01-PLAN.md — Seam and tracer (orchestrator-only): honest `:ssh-tmux` end to end through a `from_channels` transport, `Action::RemoteLink` grammar/executor/key rows, shared link types, pane tap and banner fields, respawn dispatcher, skeletons for waves 2-3 (wave 1)
-- [ ] 51.1-02-PLAN.md — ssh argv: `ssh -tt`, ServerAlive options, login-shell wrapper with macOS Homebrew PATH, no ControlMaster for the link, `:ssh` keepalive and `ControlPersist=10s`, `redact_ssh_argv` (wave 2, sonnet)
-- [ ] 51.1-03-PLAN.md — PTY transport: DCS-aware control-line splitter (interactive prompts stay visible), `PtyLinkDriver`/`PtyLinkConnector`, `PtySession::exit_code` (wave 2, sonnet)
-- [ ] 51.1-04-PLAN.md — Reconnect state machine: capped backoff, exit classification, banner text, fake-clock tests (wave 2, sonnet)
-- [ ] 51.1-05-PLAN.md — Bridge hardening: `%0` seed dropped, primary-pane adoption, id reconcile on reattach, `WindowClose`/layout removals, `%exit` reason, safe reply blocks, queued commands with reply kinds (wave 2, sonnet)
-- [ ] 51.1-06-PLAN.md — Hydrate: FIFO reply correlator, hydrate planner, `capture-pane` commands and capture rendering (wave 2, sonnet)
-- [ ] 51.1-07-PLAN.md — Exited remote panes held with a banner (exit code, last line), reconnect via respawn, link-banner rendering (wave 2, sonnet)
-- [ ] 51.1-08-PLAN.md — Honest labels: restore never badges a local shell, drawer TMUX badge only on mapped panes, registry rows live when linked (wave 2, haiku)
-- [ ] 51.1-09-PLAN.md — Catalogs and mouse-by-menu: completion, palette, help, Tmux menu items for `reconnect|disconnect|info|prefill` (wave 2, haiku)
-- [ ] 51.1-10-PLAN.md — Banner keys (`Enter`/`r`/`x`/`d`), chord proofs, banner click, password-safe by construction (wave 2, sonnet)
-- [ ] 51.1-11-PLAN.md — RPC/HTTP/ctl `remote.link`, MCP `bilterm_remote_link`, honest connect results, tool-count pins (wave 2, sonnet)
-- [ ] 51.1-12-PLAN.md — Link lifecycle: connect, spawn, drop handling, backoff supervisor, banners, user verbs, summary, tracing (wave 3, sonnet)
-- [ ] 51.1-13-PLAN.md — Link I/O pumps: outbound commands, input to `send-keys`, hydrate with held output, window closures, fleet pane ids, resize (wave 3, sonnet)
-- [ ] 51.1-14-PLAN.md — Docs: tmux chapter corrected, reference rows, troubleshooting, security notes, API, developer guide, changelog, doc gate (wave 4, haiku)
-- [ ] 51.1-15-PLAN.md — UNI-R01 parity matrix, end-to-end drop/reconnect/hydrate scenario, control-stream fuzz, tracing contract (wave 4, sonnet)
-- [ ] 51.1-16-PLAN.md — Final gate: `scripts/verify.sh`, `check_classic_goldens.sh` (11), doc gates, bookkeeping, real-Mac UAT script (wave 5, sonnet)
+- [x] 51.1-01-PLAN.md — Seam and tracer (orchestrator-only): honest `:ssh-tmux` end to end through a `from_channels` transport, `Action::RemoteLink` grammar/executor/key rows, shared link types, pane tap and banner fields, respawn dispatcher, skeletons for waves 2-3 (wave 1)
+- [x] 51.1-02-PLAN.md — ssh argv: `ssh -tt`, ServerAlive options, login-shell wrapper with macOS Homebrew PATH, no ControlMaster for the link, `:ssh` keepalive and `ControlPersist=10s`, `redact_ssh_argv` (wave 2, sonnet)
+- [x] 51.1-03-PLAN.md — PTY transport: DCS-aware control-line splitter (interactive prompts stay visible), `PtyLinkDriver`/`PtyLinkConnector`, `PtySession::exit_code` (wave 2, sonnet)
+- [x] 51.1-04-PLAN.md — Reconnect state machine: capped backoff, exit classification, banner text, fake-clock tests (wave 2, sonnet)
+- [x] 51.1-05-PLAN.md — Bridge hardening: `%0` seed dropped, primary-pane adoption, id reconcile on reattach, `WindowClose`/layout removals, `%exit` reason, safe reply blocks, queued commands with reply kinds (wave 2, sonnet)
+- [x] 51.1-06-PLAN.md — Hydrate: FIFO reply correlator, hydrate planner, `capture-pane` commands and capture rendering (wave 2, sonnet)
+- [x] 51.1-07-PLAN.md — Exited remote panes held with a banner (exit code, last line), reconnect via respawn, link-banner rendering (wave 2, sonnet)
+- [x] 51.1-08-PLAN.md — Honest labels: restore never badges a local shell, drawer TMUX badge only on mapped panes, registry rows live when linked (wave 2, haiku)
+- [x] 51.1-09-PLAN.md — Catalogs and mouse-by-menu: completion, palette, help, Tmux menu items for `reconnect|disconnect|info|prefill` (wave 2, haiku)
+- [x] 51.1-10-PLAN.md — Banner keys (`Enter`/`r`/`x`/`d`), chord proofs, banner click, password-safe by construction (wave 2, sonnet)
+- [x] 51.1-11-PLAN.md — RPC/HTTP/ctl `remote.link`, MCP `bilterm_remote_link`, honest connect results, tool-count pins (wave 2, sonnet)
+- [x] 51.1-12-PLAN.md — Link lifecycle: connect, spawn, drop handling, backoff supervisor, banners, user verbs, summary, tracing (wave 3, sonnet)
+- [x] 51.1-13-PLAN.md — Link I/O pumps: outbound commands, input to `send-keys`, hydrate with held output, window closures, fleet pane ids, resize (wave 3, sonnet)
+- [x] 51.1-14-PLAN.md — Docs: tmux chapter corrected, reference rows, troubleshooting, security notes, API, developer guide, changelog, doc gate (wave 4, haiku)
+- [x] 51.1-15-PLAN.md — UNI-R01 parity matrix, end-to-end drop/reconnect/hydrate scenario, control-stream fuzz, tracing contract (wave 4, sonnet)
+- [x] 51.1-16-PLAN.md — Final gate: `scripts/verify.sh`, `check_classic_goldens.sh` (11), doc gates, bookkeeping, real-Mac UAT script (wave 5, sonnet)
 
 ### Phase 52: Agent-to-Agent Messaging & Coordination
 
@@ -1048,7 +1048,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
 | 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 15/15 | Complete | 2026-11-05 |
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 13/13 | Complete | 2026-11-05 |
-| 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 0/16 | Planning | - |
+| 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 16/16 | Complete | 2026-11-06 |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 0/3 | Planned | - |
 | 53. Session & Window Management (`SES-01..05`) | 0/0 | Planned | - |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/0 | Planned | - |
