@@ -168,6 +168,13 @@ impl Topology {
         self.pairs.get(&key)
     }
 
+    /// Removes the record of the pair `{a, b}` (either order); `true` when it existed. Used by
+    /// `:agents demo stop` to purge the synthetic demo pairs.
+    pub fn remove_pair(&mut self, a: &NodeKey, b: &NodeKey) -> bool {
+        let key = if a < b { (a.clone(), b.clone()) } else { (b.clone(), a.clone()) };
+        self.pairs.remove(&key).is_some()
+    }
+
     /// Number of pairs held.
     pub fn len(&self) -> usize {
         self.pairs.len()

@@ -1,11 +1,12 @@
 //! Agent traffic bus (Phase 50-05, D-01): a small in-memory ring of "who sent what to whom" events.
 //!
 //! Producers today: input broadcast, `:mcp broadcast`, and automation-API `pane.exec` /
-//! `pane.send_keys` (RPC, HTTP and MCP all share one dispatcher). Phase 51 plugs `agent.send` into
+//! `pane.send_keys` (RPC, HTTP and MCP all share one dispatcher), plus the synthetic `:agents demo`
+//! script. Phase 52 plugs `agent.send` into
 //! the same bus through [`WindowManager::record_traffic`]. The zoom window graph and snoop view
 //! read it with a sequence cursor ([`TrafficBus::events_since`]).
 //!
-//! The schema is the Phase 51 contract documented in ADR-008. The bus is in-memory only (nothing
+//! The schema is the contract documented in ADR-008. The bus is in-memory only (nothing
 //! is persisted), bounded to [`TRAFFIC_CAP`] events, and previews are sanitised, capped to
 //! [`PREVIEW_CAP`] chars and replaced by `[redacted]` for password prompts (T-50-11..13).
 //! Content is never written to tracing logs.
@@ -17,6 +18,7 @@ use crate::pane::PaneId;
 use crate::vt::sanitize_display;
 use crate::wm::WindowManager;
 use crate::wm::agents_topology::Topology;
+use crate::wm::agents_window::NodeKey;
 
 /// Maximum number of events kept on the bus; the oldest is evicted first.
 pub const TRAFFIC_CAP: usize = 512;
@@ -40,7 +42,7 @@ pub enum TrafficEndpoint {
     Pane(PaneId),
     /// A named session node in the session tree.
     Session(String),
-    /// A named agent. Reserved for Phase 51.
+    /// A named agent. Reserved for the Phase 52 agent-to-agent family.
     Agent(String),
 }
 
@@ -69,7 +71,7 @@ pub enum TrafficKind {
     Keys,
     /// A command fanned out to several targets (input broadcast, `:mcp broadcast`).
     Broadcast,
-    /// A message between agents. Reserved for Phase 51.
+    /// A message between agents (Phase 52 family; today only the `:agents demo` script records it).
     Message,
 }
 
@@ -159,6 +161,22 @@ impl TrafficBus {
             self.dropped += 1;
         }
         seq
+    }
+
+    /// Removes every event `keep` rejects and returns how many were removed. Sequence numbers
+    /// and the eviction counter are untouched (`latest_seq` never decrements, a seq is never reused).
+    /// Only caller: `:agents demo stop` (`WindowManager::stop_agents_demo`), which deletes the
+    /// synthetic demo events; the topology is purged separately through [`Self::remove_topology_pair`].
+    pub fn retain_events(&mut self, keep: impl FnMut(&TrafficEvent) -> bool) -> usize {
+        let before = self.events.len();
+        self.events.retain(keep);
+        before - self.events.len()
+    }
+
+    /// Removes the topology record of the pair `{a, b}`; `true` when it existed. Only caller:
+    /// `:agents demo` start/stop.
+    pub fn remove_topology_pair(&mut self, a: &NodeKey, b: &NodeKey) -> bool {
+        self.topology.remove_pair(a, b)
     }
 
     /// Events with `seq` strictly greater than the cursor, oldest first.
