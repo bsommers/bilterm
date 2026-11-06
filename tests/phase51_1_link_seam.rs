@@ -292,9 +292,9 @@ mod skeletons {
         assert!(sp.push(b"").is_empty());
         assert!(!sp.in_control());
         assert!(sp.flush_partial().is_empty());
-        assert!(diag_lines(b"x\ny").is_empty());
+        assert_eq!(diag_lines(b"x\ny"), vec!["x".to_string(), "y".to_string()]);
 
-        // transport: no process, no error from the driver, unsupported connector
+        // transport: an empty driver starts no process; the connector may or may not find ssh
         let mut d = PtyLinkDriver::default();
         let poll = d.pump();
         assert!(poll.raw_output.is_empty() && poll.exited.is_none() && !poll.control_started);
@@ -302,7 +302,9 @@ mod skeletons {
         d.resize(24, 80);
         d.kill();
         let mut c = PtyLinkConnector::default();
-        assert!(c.connect(&target(), (24, 80)).is_err());
+        let mut bad = target();
+        bad.profile.destination = "-oProxyCommand=x".into();
+        assert!(c.connect(&bad, (24, 80)).is_err(), "an unsafe destination never reaches a process");
 
         // reconnect helpers
         let p = ReconnectPolicy::default();
