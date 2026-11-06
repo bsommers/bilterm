@@ -402,6 +402,8 @@ pub struct AgentsWindowState {
     pub pane_focus: WindowPane,
     /// Conversation (snoop) view state.
     pub snoop: SnoopState,
+    /// Docked into the tiling strip by `:arrange` (Phase 51-09); manual geometry clears it.
+    pub docked: bool,
 }
 
 /// Part of the AGENT TRAFFIC window that owns the keyboard.
@@ -536,6 +538,7 @@ impl Default for AgentsWindowState {
             grab_mode: false,
             pane_focus: WindowPane::Graph,
             snoop: SnoopState::default(),
+            docked: false,
         }
     }
 }
@@ -600,6 +603,7 @@ impl WindowManager {
         self.agents_window.grab_mode = false;
         self.agents_window.pane_focus = WindowPane::Graph;
         self.agents_window.snoop.keyword_entry = None;
+        self.set_panel_docked(crate::wm::panel_dock::DockPanel::AgentsTraffic, false);
     }
 
     /// Stores (or clears) the pointer-gesture bookkeeping of the window.
@@ -618,6 +622,11 @@ impl WindowManager {
         }
         if w.maximized {
             return Some(workspace_area);
+        }
+        if w.docked
+            && let Some(slot) = self.panel_dock_slot(workspace_area, crate::wm::panel_dock::DockPanel::AgentsTraffic)
+        {
+            return Some(slot);
         }
         if let Some(r) = w.rect {
             let clamped = r.intersection(workspace_area);

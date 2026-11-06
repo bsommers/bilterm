@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::ui::agents_ui::split_panes;
 use crate::ui::graph_raster::{curve_controls, label_cell, node_px};
+use crate::wm::panel_dock::DockPanel;
 use crate::wm::agents_window::{GraphDir, GraphSelection, MIN_WINDOW, NodeKey, SceneNode};
 use crate::wm::{WindowManager, WindowResizeEdge, rect_contains};
 
@@ -239,6 +240,7 @@ impl WindowManager {
     /// Sets the window rect, clamped to the workspace (min 40x12, or the workspace when smaller);
     /// leaves maximized mode. Returns the stored rect.
     pub fn set_agents_rect(&mut self, rect: Rect) -> Rect {
+        self.set_panel_docked(DockPanel::AgentsTraffic, false);
         let ws = self.agents_workspace();
         let (ws_w, ws_h) = (ws.width.max(1), ws.height.max(1));
         let w = rect.width.clamp(MIN_WINDOW.0.min(ws_w), ws_w);
@@ -276,6 +278,7 @@ impl WindowManager {
 
     /// Sets the window size (`Some`, position kept) or returns to the default centred rect (`None`).
     pub fn set_agents_size(&mut self, size: Option<(u16, u16)>) {
+        self.set_panel_docked(DockPanel::AgentsTraffic, false);
         let ws = self.agents_workspace();
         match size {
             None => {
@@ -294,6 +297,7 @@ impl WindowManager {
 
     /// Toggles the maximized state.
     pub fn toggle_agents_maximize(&mut self) {
+        self.set_panel_docked(DockPanel::AgentsTraffic, false);
         let state = self.agents_window_mut();
         state.maximized = !state.maximized;
     }
