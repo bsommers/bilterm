@@ -461,10 +461,11 @@ impl WindowManager {
 
     /// Poll-loop hook. Returns `true` only while the navigator drawer is visible, and then when a state
     /// changed or a pane is Working (or a row's comms glyph is flowing) and [`ANIM_INTERVAL`] passed since the last animation redraw, so the
-    /// classic redraw cadence is unchanged (RESEARCH Pitfall 8).
+    /// classic redraw cadence is unchanged (RESEARCH Pitfall 8). While the agents_list window is open
+    /// its row changes are also reported, drawer visible or not (51-05).
     pub fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
-        let traffic = self.tick_agents_window_traffic(now);
+        let traffic = self.tick_agents_window_traffic(now) | self.agents_list_tick_changed();
         if self.config.drawer.style != crate::wm::drawer::DrawerStyle::Navigator
             || !self.is_drawer_effectively_visible()
         {
