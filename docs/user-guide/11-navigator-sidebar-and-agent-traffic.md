@@ -17,8 +17,12 @@ The Navigator changes nothing about the classic drawer: with the default style t
 5. [Commands](#commands)
 6. [Communication indicators](#communication-indicators)
 7. [Agent traffic window](#agent-traffic-window)
-8. [GUI rendering](#gui-rendering)
-9. [Assumptions and limits](#assumptions-and-limits)
+8. [Agents list window](#agents-list-window)
+9. [Tiling floating panels](#tiling-floating-panels)
+10. [Command palette coverage](#command-palette-coverage)
+11. [Surface uniformity](#surface-uniformity)
+12. [GUI rendering](#gui-rendering)
+13. [Assumptions and limits](#assumptions-and-limits)
 
 ---
 
@@ -86,6 +90,10 @@ Leader chords (`<L>` is `Ctrl+B` or `Ctrl+X`; inside an outer `$TMUX` only `Ctrl
 | `<L> !` | `:drawer attention` | Focus the next pane needing attention |
 | `<L> a` | `:agents zoom` | Open the AGENT TRAFFIC window |
 | `Ctrl+Alt+A` | `:agents toggle` | Open the AGENT TRAFFIC window, or close it when open (all of `F1`..`F12` are already bound, so this is a global chord) |
+| `Ctrl+Alt+N` | `:agents list toggle` | Open the AGENTS list window, or close it when open. Works while a full-screen program owns the pane (the same reserved path as `Ctrl+Alt+A`) |
+| `<L> A` | `:agents list toggle` | The same toggle as a leader chord, for hosts that swallow `Ctrl+Alt+N` |
+| `<L> y` | `:agents demo` | Start the agent traffic demo (see [Agent traffic window](#agent-traffic-window)) |
+| `<L> Y` | `:agents demo stop` | Stop the demo: close only the panes it created and remove its traffic |
 
 ### Navigator drawer (drawer focused, `drawer.style = navigator`)
 
@@ -183,6 +191,8 @@ The window is not modal. It takes the keyboard when it opens and whenever you cl
 
 Mouse events over the window never reach the drawer or panes below it; events outside the window pass through to the panes as usual. The `:mcp` console is drawn above the window, but the window sees mouse events first, so an MCP panel overlapping the window receives no clicks in the overlap.
 
+When both floating windows are open, the AGENTS list window handles mouse events before the traffic window. An **open menu-bar dropdown outranks both**: a click on an item it covers runs that item, and neither window takes the click.
+
 ## Commands
 
 All of these lower to the same internal action as their key and mouse twin. `:navigator` is an alias of `:drawer` for the verbs below. **`:drawer close` still minimizes the drawer** (classic meaning, unchanged); **`:drawer close-pane` closes the selected pane**. `:drawer expand` without `all` still maximizes the drawer.
@@ -212,8 +222,17 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:drawer menu pick <n>` | | click entry | Run menu entry n |
 | `:drawer comms` | `o`, `Enter` on glyph | click glyph | Open the traffic window on the selected row's conversation |
 | `:drawer comms-focus on\|off` | `Right` / `Left`, `Esc` | | Focus / release the comms glyph |
-| `:drawer style [classic\|navigator\|toggle]` | | | Switch drawer style |
-| `:drawer rows 1\|2` | | | Lines per pane row in Navigator style (`drawer.row_lines`) |
+| `:drawer style classic` | | | Classic drawer style (telemetry rows) |
+| `:drawer style navigator` | | | Navigator drawer style (the workspace > session > pane tree) |
+| `:drawer style [classic\|navigator\|toggle]` | | | Switch drawer style (no argument or `toggle` flips it) |
+| `:drawer rows 1` | | | One line per pane row in Navigator style (`drawer.row_lines = 1`) |
+| `:drawer rows 2` | | | Two lines per pane row in Navigator style, the default (title plus `user@host  path`) |
+| `:drawer minimize` | | title minimize badge | Minimize the drawer (size 0), the same as `:drawer close` |
+| `:drawer maximize` | | title maximize badge | Maximize the drawer, the same as `:drawer expand` without `all` |
+| `:drawer pin` | | | Fixed visibility: the drawer stays open |
+| `:drawer unpin` | | | On-demand visibility: the drawer hides when it is not needed |
+| `:drawer mode float` / `push` | | | Overlay (drawn over the panes) or Push (reflows the panes); `mode` with no argument toggles |
+| `:drawer edge left` / `right` / `top` / `bottom` | | | Dock the drawer to an edge, the same as `:drawer left`, `right`, `top`, `bottom` |
 
 `:drawer size`, `toggle`, `focus`, the dock edges and the pinning modes are unchanged; see [Chapter 3](03-window-manager-and-z-stack.md).
 
@@ -221,7 +240,24 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 
 | Command | Key | Mouse | Effect |
 | :--- | :--- | :--- | :--- |
-| `:agents list` | | | Agent state per pane (data over RPC, see [API](../API.md)) |
+| `:agents list` | | | Agent state per pane (data over RPC, see [API](../API.md)). It also opens the AGENTS list window; bare `:agents`, `:agents ls` and `:agents status` do the same |
+| `:agents list open` / `close` / `toggle` | `Ctrl+Alt+N`, leader `A` | menu View > Agents List; title `[X]` | Open, close or toggle the AGENTS list window |
+| `:agents list dismiss` | `Esc` | title minimize badge | Close, or release the keyboard when pinned |
+| `:agents list blur` | | click outside the window | Release the keyboard without closing |
+| `:agents list select up` / `down` / `first` / `last` / `page-up` / `page-down` | `Up`/`k`, `Down`/`j`, `Home`, `End`, `PageUp`, `PageDown` | wheel (scrolls) | Move the row selection |
+| `:agents list select <pane-id>` | | click a row | Select a row by pane id (`#3` is accepted) |
+| `:agents list jump [pane-id]` | `Enter` | click the selected row again | Focus the pane and leave the list |
+| `:agents list zoom [pane-id]` | `z` | right-click a row, chip `[zoom]` | Open the traffic window on the pane |
+| `:agents list pin` / `:agents list unpin` / `:agents list pin toggle` | `*` (toggle) | title pin badge | Pin, unpin, or toggle the pin on the list window |
+| `:agents list scale +n` / `-n` | `]` / `[` (+10 / -10) | `Ctrl` + wheel (±10) | Step the window's GUI scale |
+| `:agents list scale <75..200>` | | | Set the window's GUI scale to an absolute value (colon and API only) |
+| `:agents list filter all` / `agents` / `toggle` | `f` (toggle) | chip `[filter]` | Show every tracked pane, only panes that match an agent profile or report a state, or toggle |
+| `:agents list dock` / `dock toggle` / `float` | `d` (toggle) | title dock badge, chip `[dock]` | Dock into the tiling strip, toggle, or float the window |
+| `:agents list move <dx> <dy>` | `Shift`+arrows | drag the title bar | Move the window by cells |
+| `:agents list resize <dw> <dh>` | `Alt`+arrows | drag an edge or corner | Resize the window by cells |
+| `:agents list rect <x> <y> <w> <h>` | | | Set the window rectangle (clamped to the workspace) |
+| `:agents list size <cols>x<rows>` / `size auto` | | | Set the window size, or the default size |
+| `:agents list scroll <±n>` | | wheel | Scroll the row list by n rows (`PageUp`/`PageDown` page it) |
 | `:agents zoom [pane-id]` | `<L> a` | footer `@`, comms glyph | Open the traffic window (optionally on a pane) |
 | `:agents toggle [pane-id]` | `Ctrl+Alt+A` | menu View > Agent Traffic, footer `@ agents` | Open the window (optionally on a pane), or close it when it is open |
 | `:agents close` | | title `[X]` | Close the window |
@@ -249,7 +285,8 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:agents scroll <±n\|top>` | `PageUp`, `PageDown`, `Home` | wheel | Scroll the history |
 | `:agents follow [on\|off]` | `f`, `End` | follow marker | Follow new lines |
 | `:agents fade [secs]` | | | Seconds (1..3600, default 60) for an edge to fade to its floor; no argument shows it. Same as `agents_window.edge_fade_secs` |
-| `:agents demo` | | | Fill the window with synthetic `[demo]` pane-to-pane events (splits to three panes if needed; memory only, nothing is sent to any pane) to try the graph and conversation |
+| `:agents demo` | `<L> y` | menu View > Agent Demo | Fill the window with synthetic `[demo]` pane-to-pane events (splits to three panes if needed; memory only, nothing is sent to any pane) to try the graph and conversation. Running it again replaces the earlier demo events and demo topology pairs |
+| `:agents demo stop` | `<L> Y` | menu View > Stop Agent Demo | Close only the panes the demo created, remove its `[demo]` events and its topology pairs. Not behind `[api] allow_config_write` over the API |
 | `:agents topology` | | | Which pairs communicated this session (data over RPC / MCP) |
 | `:agents topology export <name>` | | | Write the topology to `<name>.json` in the private runtime directory (local only) |
 | `:agents filter agent [label]` | `a` | header button | Filter to a node (no label: the selected line's sender) |
@@ -288,6 +325,122 @@ Open it with `<L> a`, `Ctrl+Alt+A`, `:agents zoom`, `:agents toggle`, the top me
 **Compose line.** `send as me` is shown but **disabled**: nothing typed there is stored or sent, and no pane or bus event is produced. It becomes available only with the Phase 52 permission gate.
 
 **Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (`Esc` unless pinned), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`. Pinned or not, the window never blocks the panes: click one (or run `:agents blur`) and keys go to it again.
+
+## Agents list window
+
+The AGENTS list is a floating window with one row per tracked pane: its agent state, its name, its pane id, and how long it has been in that state. Use it to see every pane at once, select one, and jump to it. It is separate from the AGENT TRAFFIC window. The two windows can both be open, but only one owns the keyboard at a time.
+
+**Rows.** By default every tracked pane is listed, in pane-id order. The agents filter (`f`, the `[filter]` chip, or `:agents list filter agents`) narrows the list to panes that match an `[agents.<name>]` profile or report their state explicitly. No profile ships built in (see [Assumptions and limits](#assumptions-and-limits)), so until you add one the agents filter can show no rows. The rows refresh as the agent states change.
+
+**Opening and closing.** Open it with `Ctrl+Alt+N`, leader `A`, View > Agents List in the menu, `:agents list` (also `:agents list open`, bare `:agents`, `:agents ls` or `:agents status`), or the `agents.list` API method. Opening it gives it the keyboard. The same toggle chord closes it, as do `:agents list close` and the title's close badge `[X]`. `Esc` closes it unless it is pinned.
+
+**Keys** (while the list has the keyboard; table `AGENTS_LIST_BINDINGS` in `src/input/agents_list_keys.rs`):
+
+| Key | Operation |
+| :--- | :--- |
+| `Up` / `k`, `Down` / `j` | Select the previous / next row |
+| `PageUp`, `PageDown` | Select a page up / down |
+| `Home`, `End` | Select the first / last row |
+| `Enter` | Focus the selected pane and leave the list (jump) |
+| `z` | Open the traffic window on the selected pane (zoom) |
+| `f` | Toggle the agents filter |
+| `*` | Pin / unpin the window |
+| `[`, `]` | Panel scale -10 / +10 (GUI surface) |
+| `Shift`+arrows | Move the window one cell |
+| `Alt`+arrows | Resize the window one cell |
+| `d` | Dock into the tiling strip / float |
+| `Esc` | Close, or release the keyboard when pinned |
+| `Ctrl+Alt+N` | Close (the same toggle as outside the list) |
+
+The leader key is never consumed. Other keys are swallowed while the list has the keyboard, so typing does not reach the pane underneath. Click a pane, or run `:agents list blur`, to hand the keyboard back while the list stays open.
+
+**Mouse** (table in `src/input/agents_list.rs`):
+
+| Gesture | Operation |
+| :--- | :--- |
+| Click a row | Select it. Clicking the selected row again, while the list has the keyboard, jumps to that pane. In an unfocused list the click takes the keyboard and selects; it never jumps |
+| Right-click a row | Open the traffic window on that pane (zoom) |
+| Title badges: pin, minimize, dock, close | Pin / unpin; dismiss (same as `Esc`); dock / float; close |
+| Footer chips `[filter]`, `[dock]`, `[zoom]` | Toggle the filter; dock / float; open the traffic window on the selection |
+| Drag the title bar | Move the window (this releases any docking) |
+| Drag an edge or corner | Resize the window (this releases any docking) |
+| Wheel | Scroll three rows |
+| `Ctrl` + wheel | Panel scale -10 / +10 (GUI surface only) |
+| Press outside the window while it has the keyboard | Release the keyboard; the press then goes on to whatever is underneath |
+
+**Pin.** A pinned list stays open, and `Esc` then only releases the keyboard. Closing the window clears the pin.
+
+**Scale and default placement.** The list has its own panel scale, 75 to 200 percent, on the GUI surface, set by `[` / `]`, `Ctrl` + wheel, `:agents list scale`, or `:agents list scale <75..200>`. Its default size is 36 columns wide (or the workspace width when that is narrower), tall enough for its rows and never more than 70 percent of the workspace height (at least 6 rows). It sits one column in from the right edge and one row below the top. Any move, resize, rectangle or size change releases the dock.
+
+**Docking.** `d`, the dock badge, the `[dock]` chip and `:agents list dock` move the window into the strip described in [Tiling floating panels](#tiling-floating-panels). If there is no room, the window stays floating and `:agents list dock` reports `No room to dock the agents list`. `float` or `:agents list float` puts it back.
+
+**Text and GUI.** In the terminal the window is drawn as cells: a frame with the pin badge and the title buttons, a `STATE NAME PANE SINCE` header, one row per pane with its state dot, the selected row in reverse video, the active pane marked, a scroll indicator when the rows overflow, and the footer chips. In GUI mode the same layout is drawn at the window's own scale. Pane names come from running commands and titles, so they are sanitised before they are shown.
+
+**Verbs.** Every key and gesture above has a colon twin, listed in [Commands](#commands) under `:agents list`. The window is also available over the API (`agents.list`, `bilterm_agents_list`); see [API](../API.md).
+
+## Tiling floating panels
+
+`:arrange` (and `:auto-arrange`), and the `:layout` forms `grid`, `columns`, `rows`, `main-side`, `main-top`, `stack-grid` and `float-grid`, now also tile the open floating panels. The menu entry Window > Tile Windows & Panels runs `:arrange grid`. Each arrange does three things:
+
+- **Docks the open panels.** The AGENTS list and the AGENT TRAFFIC window are placed in a strip beside the panes. When the workspace is at least 100 columns wide the strip is on the right, `clamp(width / 3, 28, 48)` columns wide, with the open panels stacked at equal height. Otherwise the strip is along the bottom, `max(6, height / 3)` rows tall, with the panels side by side.
+- **Switches an open `:mcp` console to Push layout** (its existing reflowing mode).
+- **Re-flows the panes** into the space that is left.
+
+The strip is recomputed from the live workspace, so a terminal resize keeps the panels docked. If the panes would be left with less than 20 by 6 cells, nothing docks and the panels stay floating. After `:arrange` the status line shows the arrange result, not the no-room notice.
+
+Moving, resizing, closing or floating a docked panel releases its space in the strip. The docked state is not written to layout profiles or to config. With no list, traffic window or `:mcp` console open, arrange behaves as it did before.
+
+Unchanged by this: `:layout tile`, `:layout stack`, `:layout cycle` and `Alt+M` (these switch the tiled and stacked modes and never dock panels), and the drawer's own Push or Overlay setting.
+
+## Command palette coverage
+
+Every colon verb must be reachable from the command palette (`Ctrl+P`, `Alt+Space`, or leader `Space`, then type). Each verb either has a palette entry that runs the same action, or a row in `PALETTE_EXCLUSIONS` (`src/command_registry.rs`) with a reason. A test sweeps every Tab-completion probe and fails when a new verb has neither, so the rule is checked on every change.
+
+The reasons come from a closed list:
+
+| Reason | Meaning |
+| :--- | :--- |
+| `free-text` | Needs free text that a palette entry cannot supply |
+| `host-or-path` | Needs a host name or a path |
+| `entity-id` | Needs a specific pane, session or other id |
+| `numeric` | Needs an exact number; use the drag or the step keys instead |
+| `combinatorial` | Too many combinations to list |
+| `destructive` | Has effects a palette click should not trigger |
+| `reachable-via-picker` | Covered by a picker (the 14 `:window theme <preset>` forms are in the theme picker) |
+| `short-alias` | Another spelling of an entry that is already listed |
+
+Exclusions are visible to agents: each command in the `bilterm://commands` resource carries its `palette_exclusions`, so automation can see why a form has no palette entry. Pressing `Enter` on a fill-in entry (for example `:ssh `) still runs the bare verb, as before; prefilling the text is a follow-up that needs its own sign-off.
+
+## Surface uniformity
+
+Every capability in this chapter must behave the same on every surface, the rule in AGENTS.md convention 6 (`UNI-R01`). The table gives the path for each Phase 51 capability. Any colon form also runs over RPC and MCP through `wm.command` and `bilterm_colon_command`.
+
+| Capability | Mouse | Key (GUI and TUI) | Colon | Palette and help | RPC, HTTP, `bilterm ctl` | MCP |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Demo start | menu View > Agent Demo | leader `y` | `:agents demo` | yes | `agents.demo` | `bilterm_agents_demo` |
+| Demo stop | menu View > Stop Agent Demo | leader `Y` | `:agents demo stop` | yes | `agents.demo` with `stop: true` | `bilterm_agents_demo` with `stop: true` |
+| Palette coverage | click an entry | `Ctrl+P`, `Alt+Space`, leader `Space` | `:palette`, `:commands` | the table itself | `bilterm://commands` (`palette_exclusions`) | resource |
+| Open, close, toggle the list | menu View > Agents List; `[X]` badge | `Ctrl+Alt+N`, leader `A` | `:agents list open`, `close`, `toggle` | yes | `agents.list` | `bilterm_agents_list` |
+| Dismiss, blur | minimize badge; click outside | `Esc` | `:agents list dismiss`, `blur` | yes | `agents.list` | `bilterm_agents_list` |
+| Select, step, page, first, last | click a row; wheel | `Up` / `k`, `Down` / `j`, `PageUp`, `PageDown`, `Home`, `End` | `:agents list select ...` | yes | `agents.list` | `bilterm_agents_list` |
+| Jump to the pane | click the selected row again | `Enter` | `:agents list jump [id]` | yes | `agents.list` | `bilterm_agents_list` |
+| Zoom to the traffic window | right-click a row; chip `[zoom]` | `z` | `:agents list zoom [id]` | yes | `agents.list` | `bilterm_agents_list` |
+| Pin | pin badge | `*` | `:agents list pin`, `unpin`, `pin toggle` | yes | `agents.list` | `bilterm_agents_list` |
+| Scale | `Ctrl` + wheel | `[`, `]` | `:agents list scale ...` | yes | `agents.list` | `bilterm_agents_list` |
+| Filter | chip `[filter]` | `f` | `:agents list filter ...` | yes | `agents.list` | `bilterm_agents_list` |
+| Move, resize, rect, size | drag the title or an edge | `Shift`+arrows, `Alt`+arrows | `:agents list move`, `resize`, `rect`, `size` | `rect` is excluded (`numeric`); the rest yes | `agents.list` | `bilterm_agents_list` |
+| Scroll | wheel | `PageUp`, `PageDown` (as `page`) | `:agents list scroll <±n>` | yes | `agents.list` | `bilterm_agents_list` |
+| Dock and float | dock badge; chip `[dock]` | `d` | `:agents list dock`, `dock toggle`, `float` | yes | `agents.list` | `bilterm_agents_list` |
+| Tile everything | menu Window > Tile Windows & Panels | none (exception 4) | `:arrange grid` and the other patterns | yes | `wm.command ":arrange grid"` | `bilterm_colon_command` |
+
+The recorded exceptions, each with its reason:
+
+1. **Explicit pane ids** (`:agents list select <id>`, `jump <id>`, `zoom <id>`): no key. `Up`, `Down` and `Enter` act on the selection. Reason: `entity-id`.
+2. **`size` and `rect`**: no key, because they take numbers. The mouse does the same job through the title drag and the edge drag, which send `rect`. Reason: `numeric`.
+3. **Explicit-value forms** (`pin`, `unpin`, `filter all|agents`, `dock`, `float`, and the absolute `scale <75..200>`): the keys and the mouse send the toggle form. The explicit forms are colon, RPC and palette only.
+4. **`:arrange <pattern>`**: no key chord, because the pattern is text. The keyboard path is the palette (`Ctrl+P`, then type `arrange`). The menu entry Window > Tile Windows & Panels runs `:arrange grid`. A key for arrange would need its own action in a later change.
+5. **Dismiss and page**: the mouse twin of `dismiss` is the minimize badge, and the mouse twin of `page` is the wheel (`scroll`).
+6. **`:agents list status` and the bare forms** (`:agents`, `:agents ls`, `:agents status`, `:agents list`): these read the agent data and open the window. They have no separate key; the window's toggle is `Ctrl+Alt+N` or leader `A`.
 
 ## GUI rendering
 
