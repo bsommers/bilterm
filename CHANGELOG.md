@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Agent traffic window is no longer modal.** Keys go to the window only while it has focus; a click on a pane (or `:agents blur`, or any pane focus change) releases the keyboard and the click reaches the pane; a click inside the window takes focus back. Modals (Exit Guard, Help, Palette) still sit above it.
-- **Garbled copy of wide characters**: copying a canvas selection (stream, line or 2D block) turned the empty tail cell of every double-width glyph into a space, so `世界` was copied as `世 界` and emoji gained trailing gaps; a block edge landing on a glyph's tail dropped the whole glyph. The tail cell is now skipped (and the lead glyph kept when only the tail is inside the block). Copy-mode status counts now report characters, not UTF-8 bytes. Regression suite: `tests/copy_paste_unicode.rs`.
-- **Password-prompt input is no longer recorded.** Input submitted while a password prompt is showing, including `pane.exec` with `allow_echo_lock=true`, was written to the prompt history and `history.log`. It is still sent to the program, and is now recorded nowhere (not in the prompt history, command blocks, `history.log` or the Find index).
+## [2.9.0] - 2026-11-06
 
 ### Added
+- **First-Class Utility Windows & Script Studio (Phase 51.2, WIN-01..03, UNI-R01)**:
+  - **FONTS Utility Window (`WIN-01`, `:fonts`, `:font list`, `:font presets`, `:font scan`)**: First-class floating, pinnable, and dockable window for live typography configuration. Unpinned mode dismisses on Enter apply; pinned mode (`*` or `[•]`) stays open for instant real-time A/B visual comparison while cycling font presets and custom TTF files. Includes `+`/`-` point-size stepping, `[`/`]` scale percentage stepping, `a` apply-to-all toggle, `s` directory rescan, and menubar integration (`View -> Fonts Window`).
+  - **Pinnable COMMAND PALETTE Window (`WIN-02`, `:commands`, `:palette`)**: Searchable command window supporting one-shot execution and persistent workbench mode. Pressing `Alt+P` or `*` or clicking `[•]` inside `Modal::Palette` (`Ctrl+P`) promotes the search modal into `CommandWindowState` with query retained. Records command executions, timestamps, exit status, and return messages into a scrollable `OUTPUT / HISTORY` bottom pane.
+  - **SCRIPT STUDIO Window (`WIN-03`, `:script`, `:studio`)**: Multi-line `:colon` and shell script editor with live single-step debugging (`[⏭ Step (F10)]`, program counter `▶`), full script runner (`[▶ Run (F5)]`), debugger reset (`[↺ Reset]`), live action recorder (`[● Rec (Ctrl+R)]` capturing executed Bilterm commands into the buffer), and secure persistence (`[💾 Save]` / `[📂 Load]` under `~/.config/bilterm/scripts/*.bt` via `secure_fs` `0600`/`0700`).
+  - **Mutual Focus Exclusivity**: Opening any utility window or focusing terminal panes automatically blurs other utility windows and releases keyboard ownership cleanly.
+- **Bundled Retro Fonts & Online Font Installers**:
+  - Bundled retro fonts: `Lazenby Computer` (Smooth & Liquid variants) and Google Font `VT323` classic DEC pixel terminal font.
+  - On-demand Google Fonts installer: `:font google <name-or-url>` downloads and activates Google Fonts dynamically.
+  - ZIP / URL font archive installer: `:font add <path.zip|url>` unpacks and loads custom font archives into `~/.config/bilterm/fonts/`.
 - **Persistent SSH + `tmux -CC` sessions (`:ssh-tmux`, Phase 51.1, PST-01..04, UNI-R01)**:
   - **Real PTY transport & macOS PATH**: `:ssh-tmux <user@host> [session]` spawns a dedicated PTY running `ssh -tt` into `tmux -CC new-session -A -s <name>` wrapped in a login shell (`exec $SHELL -lc ...`) that includes macOS Homebrew and MacPorts paths (`/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`).
   - **Honest status & password safety**: Status honestly reports `connecting` until the `ESC P 1000 p` sentinel arrives. Host-key questions and password prompts render interactively in the primary pane with raw keystroke pass-through, bypassing command prompt history, undo/redo buffers, `history.log`, and Find search indexing.
