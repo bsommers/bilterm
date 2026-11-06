@@ -335,6 +335,13 @@ pub(super) fn handle_wm_modal_key(
     // first: the agents window must not answer a modal it cannot even show on top of (WR-07).
     // The list window shares the gate; only one of the two windows owns the keyboard at a time.
     if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.fonts_window().captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
+    if matches!(wm.modal(), crate::wm::Modal::None)
         && wm.agents_list().captures_input()
         && !wm.is_leader_pending()
         && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)

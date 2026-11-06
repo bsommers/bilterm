@@ -516,6 +516,13 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "status",
         ],
     ),
+    (
+        ":fonts",
+        &[
+            "open", "close", "toggle", "dismiss", "blur", "pin", "unpin", "dock", "float",
+            "apply", "all", "scan", "next", "prev", "first", "last",
+        ],
+    ),
     (":resize", &["left", "right", "up", "down", "+w", "-w", "+h", "-h", "reset"]),
     (":move", &["left", "right", "up", "down", "reset"]),
     (":cascade", &[]),
