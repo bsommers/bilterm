@@ -120,6 +120,7 @@ pub(crate) const FINDER_REASON: &str =
     "modal-control verbs, reachable only while the Find modal is open (50.1 exception E1)";
 
 /// The closed vocabulary of exclusion reasons (D-02).
+#[cfg(test)]
 pub(crate) const EXCLUSION_REASONS: &[&str] = &[
     "free-text",
     "host-or-path",
@@ -185,12 +186,8 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":mcp derez", "destructive"),
     (":mcp shutdown --confirm", "destructive"),
     (":trigger add", "free-text"),
-    (":session cmd", "free-text"),
     (":session shell", "free-text"),
     (":session cwd", "free-text"),
-    (":rename-session", "free-text"),
-    (":renamesession", "free-text"),
-    (":session-rename", "free-text"),
     (":font pane", "free-text"),
     (":font all", "free-text"),
     (":ssh -p", "host-or-path"),
@@ -248,6 +245,15 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":window theme monokai-remastered", "reachable-via-picker"),
     (":window theme tron-grid", "reachable-via-picker"),
     (":border", "short-alias"),
+    (":session-rename", "short-alias"),
+    (":layout main-side", "short-alias"),
+    (":profile single", "short-alias"),
+    (":profile dual-v", "short-alias"),
+    (":profile dual-h", "short-alias"),
+    (":profile main-side", "short-alias"),
+    (":profile quad", "short-alias"),
+    (":profile cascade", "short-alias"),
+    (":raise", "short-alias"),
     (":finder", FINDER_REASON),
     (":finder kind", FINDER_REASON),
     (":finder query", FINDER_REASON),
