@@ -166,20 +166,23 @@ impl HeldExitedShellState {
 
 impl HeldExitedShellState {
     /// Hold state for a remote (`remote_target`) pane whose PTY child exited (Phase 51.1, PST-03).
-    pub fn remote(exit_code: Option<i32>, reason: Option<String>) -> Self {
+    pub fn remote(exit_code: Option<i32>, reason: Option<&str>) -> Self {
         let code = match exit_code {
             Some(c) => format!(" (code {c})"),
             None => String::new(),
         };
-        let why = match reason.as_deref().filter(|r| !r.is_empty()) {
+        let sanitized_reason = reason.map(|r| crate::vt::sanitize_display(r, 80));
+        let why = match sanitized_reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
             Some(r) => format!(": {r}"),
             None => String::new(),
         };
+        let raw_banner = format!(
+            "REMOTE SESSION ENDED{code}{why} | Enter/r: reconnect | d: detach | :quit!: exit"
+        );
+        let banner_message = crate::vt::sanitize_display(&raw_banner, 160);
         Self {
             exit_code,
-            banner_message: format!(
-                "REMOTE SESSION ENDED{code}{why} | Enter/r: reconnect | d: detach | :quit!: exit"
-            ),
+            banner_message,
         }
     }
 }
@@ -187,6 +190,9 @@ impl HeldExitedShellState {
 /// One-row banner for a tmux link state shown at the bottom of the link's panes (Phase 51.1).
 /// `interactive` banners accept `Enter`/`r`/`x`/`d` and a click; the connecting banner does not,
 /// so ssh prompts (passwords) are never swallowed.
+///
+/// NOTE: `LinkBanner` performs no sanitisation of its own; callers must ensure `text`
+/// is pre-sanitised (e.g. via `crate::vt::sanitize_display`) before constructing it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinkBanner {
     pub text: String,

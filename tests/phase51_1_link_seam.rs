@@ -451,14 +451,14 @@ mod skeletons {
         assert_eq!(pane.link_banner().unwrap().text, "x");
         pane.process_pty_output(b"first\r\nlast line  \r\n\r\n");
         assert_eq!(pane.last_output_line().as_deref(), Some("last line"));
-        pane.hold_remote_exit(Some(255), Some("Connection closed".into()));
+        pane.hold_remote_exit(Some(255), Some("Connection closed"));
         let held = pane.held_exited_shell().unwrap();
         assert_eq!(held.exit_code, Some(255));
         assert_eq!(
             held.banner_message,
             "REMOTE SESSION ENDED (code 255): Connection closed | Enter/r: reconnect | d: detach | :quit!: exit"
         );
-        assert_eq!(*held, HeldExitedShellState::remote(Some(255), Some("Connection closed".into())));
+        assert_eq!(*held, HeldExitedShellState::remote(Some(255), Some("Connection closed")));
     }
 
     #[test]

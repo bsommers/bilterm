@@ -729,9 +729,16 @@ impl CompositePane {
                 PtyEvent::Output(bytes) => {
                     coalesced.extend_from_slice(&bytes);
                 }
-                PtyEvent::Exited(_) => {
+                PtyEvent::Exited(code_opt) => {
                     self.exited = true;
                     exited_now = true;
+                    if let Some(c) = code_opt {
+                        self.exit_code = Some(c as i32);
+                    } else if self.remote_target.is_some()
+                        && let Some(pty) = &self.pty
+                    {
+                        self.exit_code = pty.exit_code(std::time::Duration::from_millis(50));
+                    }
                 }
             }
         }
@@ -840,9 +847,17 @@ impl CompositePane {
         std::mem::take(&mut self.remote_input)
     }
 
+    /// Returns the exit code of the child process once known.
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_code
+    }
+
     /// Sets or clears the link banner drawn on the pane's bottom row.
     pub fn set_link_banner(&mut self, b: Option<LinkBanner>) {
-        self.link_banner = b;
+        self.link_banner = b.map(|banner| LinkBanner {
+            text: crate::vt::sanitize_display(&banner.text, 160),
+            interactive: banner.interactive,
+        });
     }
 
     pub fn link_banner(&self) -> Option<&LinkBanner> {
@@ -863,11 +878,17 @@ impl CompositePane {
     }
 
     /// Holds a remote pane whose child exited, with a banner naming the code and reason.
-    pub fn hold_remote_exit(&mut self, exit_code: Option<i32>, reason: Option<String>) {
+    pub fn hold_remote_exit(&mut self, exit_code: Option<i32>, reason: Option<&str>) {
         self.pty = None;
         self.exited = false;
         self.exit_code = exit_code;
         let held = HeldExitedShellState::remote(exit_code, reason);
+        self.status_message = Some(held.banner_message.clone());
+        self.held_exited_shell = Some(held);
+    }
+
+    /// Restores previously saved held-on-exit state (e.g. after a failed reconnect).
+    pub fn restore_held_shell(&mut self, held: HeldExitedShellState) {
         self.status_message = Some(held.banner_message.clone());
         self.held_exited_shell = Some(held);
     }
