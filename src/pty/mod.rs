@@ -255,9 +255,26 @@ impl PtySession {
         self.child_pid
     }
 
-    /// Child exit code, polled for at most `patience` (plan 51.1-03 fills the body).
-    pub fn exit_code(&self, _patience: std::time::Duration) -> Option<i32> {
-        None
+    /// Child exit code, polled (`try_wait` every 2 ms) for at most `patience`.
+    ///
+    /// `None` while the child is still running after `patience`, or when the child handle is
+    /// gone. Never blocks longer than `patience`.
+    pub fn exit_code(&self, patience: std::time::Duration) -> Option<i32> {
+        let deadline = std::time::Instant::now() + patience;
+        loop {
+            {
+                let mut guard = self.child.lock().ok()?;
+                let child = guard.as_mut()?;
+                if let Ok(Some(status)) = child.try_wait() {
+                    return Some(i32::try_from(status.exit_code()).unwrap_or(i32::MAX));
+                }
+            }
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return None;
+            }
+            thread::sleep(std::time::Duration::from_millis(2).min(deadline - now));
+        }
     }
 
     /// Raw file descriptor of the PTY master on Unix platforms (used for `tcgetattr` / `tcgetpgrp`).
