@@ -52,7 +52,8 @@ fn over_scalable_panel(wm: &WindowManager, mouse: MouseEvent, workspace: Rect) -
         let (pm, pws) = wm.panel_space(mouse, workspace, target);
         rect_of(pws).is_some_and(|r| contains(r, pm.column, pm.row))
     };
-    inside(PanelTarget::Agents, &|a| wm.agents_window_rect(a))
+    inside(PanelTarget::AgentsList, &|a| wm.agents_list_rect(a))
+        || inside(PanelTarget::Agents, &|a| wm.agents_window_rect(a))
         || inside(PanelTarget::Mcp, &|a| wm.mcp_console().panel_rect(a))
         || inside(PanelTarget::Drawer, &|a| wm.drawer_rect(a))
 }

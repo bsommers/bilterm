@@ -7,15 +7,22 @@ use std::sync::Mutex;
 
 use bilterm::action::Action;
 use bilterm::colon_command::parse_colon_command;
+use bilterm::input::agents_list::{ListMousePlan, plan_agents_list_mouse};
 use bilterm::input::agents_list_keys::{AGENTS_LIST_BINDINGS, agents_list_action};
+use bilterm::input::gui_route::{GuiWheelRoute, route_gui_wheel};
 use bilterm::input::keymap::{default_global_action, default_leader_action};
 use bilterm::input::{
     DEFAULT_GLOBAL_BINDINGS, DEFAULT_LEADER_BINDINGS, DEFAULT_PANE_BINDINGS, handle_wm_key_event,
+    handle_wm_mouse_event,
 };
+use bilterm::ui::shell::ShellLayout;
+use bilterm::ui::typography::PanelTarget;
 use bilterm::wm::agents_cmd::AgentsOp;
+use bilterm::wm::agents_list::ListDrag;
 use bilterm::wm::agents_list_cmd::AgentsListOp;
-use bilterm::wm::{SplitDirection, WindowManager};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use bilterm::wm::agents_list_geometry::AgentsListRects;
+use bilterm::wm::{SplitDirection, WindowManager, WindowResizeEdge};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -278,7 +285,8 @@ fn key_input_calls_only_allow_listed_wm_methods() {
     ];
     for (name, src) in [
         ("agents_list_keys.rs", include_str!("../src/input/agents_list_keys.rs")),
-            ] {
+        ("agents_list.rs", include_str!("../src/input/agents_list.rs")),
+    ] {
         let mut rest = src;
         let mut seen = 0;
         while let Some(at) = rest.find("wm.") {
@@ -295,3 +303,300 @@ fn key_input_calls_only_allow_listed_wm_methods() {
     }
 }
 
+// ---------------------------------------------------------------- mouse
+
+fn ws_of(wm: &WindowManager) -> Rect {
+    ShellLayout::compute(AREA, wm.config(), wm.pane_count()).workspace
+}
+
+fn lay(wm: &WindowManager) -> AgentsListRects {
+    wm.agents_list_layout(ws_of(wm)).expect("list layout")
+}
+
+fn ev(kind: MouseEventKind, col: u16, row: u16) -> MouseEvent {
+    MouseEvent { kind, column: col, row, modifiers: KeyModifiers::NONE }
+}
+
+fn down(col: u16, row: u16) -> MouseEvent {
+    ev(MouseEventKind::Down(MouseButton::Left), col, row)
+}
+
+fn plan(wm: &WindowManager, e: MouseEvent) -> ListMousePlan {
+    plan_agents_list_mouse(wm, e, ws_of(wm)).expect("plan for an open list")
+}
+
+fn actions(p: &ListMousePlan) -> Vec<Action> {
+    p.actions.clone()
+}
+
+fn mouse(wm: &mut WindowManager, e: MouseEvent) {
+    handle_wm_mouse_event(wm, e, AREA).unwrap();
+}
+
+/// Open list with `panes` panes; returns the manager.
+fn open_list(panes: usize) -> WindowManager {
+    let mut wm = fixture(panes);
+    wm.open_agents_list();
+    wm
+}
+
+fn row_cell(wm: &WindowManager, i: usize) -> (u16, u16) {
+    let l = lay(wm);
+    (l.rows_area.x + 2, l.rows_area.y + i as u16)
+}
+
+fn row_id(wm: &WindowManager, i: usize) -> usize {
+    wm.agents_list_rows()[i].pane_id
+}
+
+fn badge_cell(wm: &WindowManager, which: bilterm::wm::agents_list_geometry::ListBadge) -> (u16, u16) {
+    let l = lay(wm);
+    let (_, r) = l.badges.iter().find(|(b, _)| *b == which).expect("badge");
+    (r.x, r.y)
+}
+
+#[test]
+fn mouse_row_click_plans() {
+    let mut wm = open_list(3);
+    let (c, r) = row_cell(&wm, 1);
+    let id = row_id(&wm, 1);
+    // Focused, not selected: select.
+    assert_eq!(wm.agents_list().selected, None);
+    let p = plan(&wm, down(c, r));
+    assert_eq!(actions(&p), vec![list_action(AgentsListOp::SelectPane(id))]);
+    assert!(p.swallow);
+    // Selected row again: jump.
+    wm.agents_list_mut().selected = Some(id);
+    assert_eq!(actions(&plan(&wm, down(c, r))), vec![list_action(AgentsListOp::Jump(Some(id)))]);
+    // Unfocused: retake first, never jump, even on the selected row.
+    wm.agents_list_mut().blur();
+    assert_eq!(
+        actions(&plan(&wm, down(c, r))),
+        vec![list_action(AgentsListOp::Open), list_action(AgentsListOp::SelectPane(id))]
+    );
+    // Right-click zooms that row.
+    wm.open_agents_list();
+    let right = ev(MouseEventKind::Down(MouseButton::Right), c, r);
+    assert_eq!(actions(&plan(&wm, right)), vec![list_action(AgentsListOp::Zoom(Some(id)))]);
+    // The real handler swallows the click and lowers it through apply (seam-real: stays open).
+    mouse(&mut wm, down(c, r));
+    assert!(wm.agents_list().active);
+}
+
+#[test]
+fn mouse_badges_and_chips_plan() {
+    use bilterm::wm::agents_list_geometry::{ListBadge, ListChip};
+    let wm = open_list(3);
+    for (badge, want) in [
+        (ListBadge::Pin, AgentsListOp::Pin(None)),
+        (ListBadge::Minimize, AgentsListOp::Dismiss),
+        (ListBadge::Dock, AgentsListOp::Dock(None)),
+        (ListBadge::Close, AgentsListOp::Close),
+    ] {
+        let (c, r) = badge_cell(&wm, badge);
+        let p = plan(&wm, down(c, r));
+        assert_eq!(actions(&p), vec![list_action(want)], "{badge:?}");
+        assert!(p.swallow && p.drag.is_none(), "{badge:?} does not start a drag");
+    }
+    let l = lay(&wm);
+    for (chip, want) in [
+        (ListChip::Filter, AgentsListOp::Filter(None)),
+        (ListChip::Dock, AgentsListOp::Dock(None)),
+        (ListChip::Zoom, AgentsListOp::Zoom(None)),
+    ] {
+        let (_, rect) = l.chips.iter().find(|(c, _)| *c == chip).expect("chip");
+        assert_eq!(actions(&plan(&wm, down(rect.x, rect.y))), vec![list_action(want)], "{chip:?}");
+    }
+    // An unfocused click on the plain footer or body only retakes the keyboard.
+    let mut wm = wm;
+    wm.agents_list_mut().blur();
+    assert_eq!(actions(&plan(&wm, down(l.header.x + 1, l.header.y))), vec![list_action(AgentsListOp::Open)]);
+}
+
+#[test]
+fn mouse_drag_title_and_border() {
+    let mut wm = open_list(3);
+    let ws = ws_of(&wm);
+    let outer = lay(&wm).outer;
+    // Press on a plain title cell (left of the badges, away from the corner).
+    let (tc, tr) = (outer.x + 3, outer.y);
+    assert_eq!(wm.agents_list_hit(ws, tc, tr), bilterm::wm::agents_list_geometry::ListHit::Title);
+    let p = plan(&wm, down(tc, tr));
+    assert!(p.actions.is_empty());
+    assert_eq!(p.drag, Some(Some(ListDrag::Move { grab_dx: 3, grab_dy: 0 })));
+    // Motions keep the grab offset and the size.
+    wm.agents_list_mut().drag = Some(ListDrag::Move { grab_dx: 3, grab_dy: 0 });
+    let p = plan(&wm, ev(MouseEventKind::Drag(MouseButton::Left), 50, 12));
+    assert_eq!(
+        actions(&p),
+        vec![list_action(AgentsListOp::SetRect { x: 47, y: 12, w: outer.width, h: outer.height })]
+    );
+    assert!(p.swallow);
+    // Extreme coordinates saturate instead of overflowing (T-51-19), and apply never panics.
+    let p = plan(&wm, ev(MouseEventKind::Drag(MouseButton::Left), u16::MAX, u16::MAX));
+    assert_eq!(p.actions.len(), 1);
+    for a in p.actions {
+        let _ = wm.apply(a);
+    }
+    // Release clears the drag.
+    let up = plan(&wm, ev(MouseEventKind::Up(MouseButton::Left), 50, 12));
+    assert_eq!(up.drag, Some(None));
+    assert!(up.swallow);
+
+    // Border drag: bottom-right corner resizes through `apply_rect_edge_resize`.
+    let mut wm = open_list(3);
+    let outer = lay(&wm).outer;
+    let (bc, br) = (outer.x + outer.width - 1, outer.y + outer.height - 1);
+    let p = plan(&wm, down(bc, br));
+    assert_eq!(
+        p.drag,
+        Some(Some(ListDrag::Resize { edge: WindowResizeEdge::BottomRight, initial: outer }))
+    );
+    wm.agents_list_mut().drag = Some(ListDrag::Resize { edge: WindowResizeEdge::BottomRight, initial: outer });
+    let p = plan(&wm, ev(MouseEventKind::Drag(MouseButton::Left), bc + 4, br + 3));
+    assert_eq!(
+        actions(&p),
+        vec![list_action(AgentsListOp::SetRect {
+            x: outer.x,
+            y: outer.y,
+            w: outer.width + 4,
+            h: outer.height + 3,
+        })]
+    );
+}
+
+#[test]
+fn mouse_outside_blurs_and_passes() {
+    with_temp_xdg(|| {
+        let mut wm = open_list(2);
+        wm.focus_and_raise(1);
+        wm.open_agents_list();
+        assert!(wm.agents_list().captures_input());
+        // A cell inside pane 2 (left of the list, far from it).
+        let ws = ws_of(&wm);
+        let (oc, or) = (ws.x + ws.width - 1, ws.y + ws.height - 1);
+        assert_eq!(wm.agents_list_hit(ws, oc, or), bilterm::wm::agents_list_geometry::ListHit::Outside);
+        let p = plan(&wm, down(oc, or));
+        assert_eq!(actions(&p), vec![list_action(AgentsListOp::Blur)]);
+        assert!(p.pass_through && !p.swallow);
+        mouse(&mut wm, down(oc, or));
+        assert!(wm.agents_list().active && !wm.agents_list().focused, "blurred, still open");
+        assert_eq!(wm.active_pane_id(), 2, "the press reached the pane under the pointer");
+
+        // Unfocused window: an outside press plans nothing; a press inside never blurs.
+        let p = plan(&wm, down(oc, or));
+        assert!(p.actions.is_empty() && !p.swallow);
+        wm.open_agents_list();
+        let (c, r) = row_cell(&wm, 0);
+        assert!(!actions(&plan(&wm, down(c, r))).contains(&list_action(AgentsListOp::Blur)));
+        // Moves outside the window are not presses.
+        assert!(plan(&wm, ev(MouseEventKind::Moved, oc, or)).actions.is_empty());
+    });
+}
+
+#[test]
+fn mouse_inside_is_swallowed() {
+    with_temp_xdg(|| {
+        let mut wm = open_list(2);
+        let before = prompts(&wm);
+        let active = wm.active_pane_id();
+        let l = lay(&wm);
+        for (c, r) in [(l.inner.x + 1, l.inner.y + 1), (l.outer.x + 3, l.outer.y), (l.footer.x, l.footer.y)] {
+            for kind in [
+                MouseEventKind::Down(MouseButton::Left),
+                MouseEventKind::Up(MouseButton::Left),
+                MouseEventKind::Moved,
+                MouseEventKind::ScrollDown,
+            ] {
+                assert!(plan(&wm, ev(kind, c, r)).swallow, "{kind:?} at {c},{r} is swallowed");
+                mouse(&mut wm, ev(kind, c, r));
+            }
+        }
+        assert_eq!(prompts(&wm), before);
+        assert_eq!(wm.active_pane_id(), active, "no event reached a pane beneath the list");
+        // Outside both windows nothing is swallowed.
+        let ws = ws_of(&wm);
+        assert!(!plan(&wm, ev(MouseEventKind::Moved, ws.x, ws.y + ws.height - 1)).swallow);
+        // A closed list plans nothing at all.
+        wm.close_agents_list();
+        assert!(plan_agents_list_mouse(&wm, down(l.inner.x + 1, l.inner.y + 1), ws_of(&wm)).is_none());
+    });
+}
+
+#[test]
+fn mouse_wheel_scroll_and_scale() {
+    let mut wm = open_list(3);
+    let (c, r) = row_cell(&wm, 0);
+    assert_eq!(actions(&plan(&wm, ev(MouseEventKind::ScrollUp, c, r))), vec![list_action(AgentsListOp::Scroll(-3))]);
+    assert_eq!(actions(&plan(&wm, ev(MouseEventKind::ScrollDown, c, r))), vec![list_action(AgentsListOp::Scroll(3))]);
+    let ctrl = |kind| MouseEvent { kind, column: c, row: r, modifiers: KeyModifiers::CONTROL };
+    assert_eq!(
+        actions(&plan(&wm, ctrl(MouseEventKind::ScrollUp))),
+        vec![list_action(AgentsListOp::ScaleStep(10))]
+    );
+    assert_eq!(
+        actions(&plan(&wm, ctrl(MouseEventKind::ScrollDown))),
+        vec![list_action(AgentsListOp::ScaleStep(-10))]
+    );
+
+    // At a GUI surface and scale 150 the hit-test uses the panel's own scaled space: the real cell
+    // that maps onto a virtual row cell hits the same row.
+    wm.set_gui_surface(true);
+    wm.set_scale(PanelTarget::AgentsList, 150);
+    let ws = ws_of(&wm);
+    let (_, vws) = wm.panel_space(down(0, 0), ws, PanelTarget::AgentsList);
+    let rows_area = wm.agents_list_layout(vws).expect("scaled layout").rows_area;
+    let (vc, vr) = (rows_area.x + 2, rows_area.y + 1);
+    let id = wm.agents_list_rows()[1].pane_id;
+    // The real cell for the virtual cell is `ws.x + v * 150 / 100` (the inverse of `panel_space`).
+    let (rc, rr) = (ws.x + vc * 3 / 2, ws.y + vr * 3 / 2);
+    let p = plan(&wm, down(rc, rr));
+    assert_eq!(actions(&p), vec![list_action(AgentsListOp::SelectPane(id))], "scaled click hits the same row");
+}
+
+#[test]
+fn mouse_list_above_traffic_window() {
+    with_temp_xdg(|| {
+        let mut wm = fixture(3);
+        wm.broadcast_command("echo hi").unwrap();
+        wm.open_agents_window(None);
+        wm.open_agents_list();
+        let ws = ws_of(&wm);
+        let list = wm.agents_list_rect(ws).unwrap();
+        let traffic = wm.agents_window_rect(ws).unwrap();
+        let overlap = list.intersection(traffic);
+        assert!(overlap.area() > 0, "list {list:?} must overlap traffic {traffic:?}");
+        // A cell of the overlap (inside both windows): the list takes the click.
+        let cell = (overlap.x + overlap.width / 2, overlap.y + overlap.height / 2);
+        assert!(traffic.contains(cell.into()) && list.contains(cell.into()));
+        mouse(&mut wm, down(cell.0, cell.1));
+        assert!(wm.agents_list().captures_input(), "the list got the click");
+        assert!(!wm.agents_window().captures_input(), "the traffic window did not");
+        // A cell of the traffic window outside the list goes to the traffic window.
+        let t = (traffic.x + 1, traffic.y + traffic.height / 2);
+        assert!(!list.contains(t.into()));
+        mouse(&mut wm, down(t.0, t.1));
+        assert!(wm.agents_window().captures_input(), "traffic-only part reaches the traffic window");
+        assert!(!wm.agents_list().captures_input(), "the list was blurred by the press outside");
+    });
+}
+
+#[test]
+fn gui_wheel_over_list_forwards() {
+    let mut wm = fixture(3);
+    wm.set_gui_surface(true);
+    wm.open_agents_list();
+    let ws = ws_of(&wm);
+    let l = wm.agents_list_rect(ws).unwrap();
+    let (c, r) = (l.x + l.width / 2, l.y + l.height / 2);
+    let route = route_gui_wheel(&wm, c, r, true, KeyModifiers::CONTROL, AREA);
+    let GuiWheelRoute::Forward(e) = route else { panic!("expected Forward, got {route:?}") };
+    assert!(e.modifiers.contains(KeyModifiers::CONTROL));
+    // Elsewhere (a pane cell away from every panel) Ctrl+wheel is a font zoom.
+    assert_eq!(
+        route_gui_wheel(&wm, ws.x, ws.y + ws.height - 1, true, KeyModifiers::CONTROL, AREA),
+        GuiWheelRoute::FontZoom { up: true }
+    );
+    // The forwarded event is consumed by the list handler (51-05 owns what ScaleStep does).
+    handle_wm_mouse_event(&mut wm, e, AREA).unwrap();
+}
