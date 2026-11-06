@@ -403,6 +403,9 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Rectangular Select (Alt+R)", ":rect"), ("Toggle Rect Mouse Mode", ":rect mode"),
         ("Cross-Hair Ruler (Alt+X)", ":crosshair"), ("DOS F-Key Bar", ":fkeybar"),
         ("Agent Traffic (Ctrl+Alt+A)", ":agents toggle"),
+        ("Find Agents (Ctrl+Alt+F)", ":find agent"),
+        ("Find Sessions", ":find session"),
+        ("Find Command History", ":find history"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),
