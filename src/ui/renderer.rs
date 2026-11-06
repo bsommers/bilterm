@@ -558,6 +558,7 @@ impl GuiWorkspaceRenderer {
         let list_scale = wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList);
         let list_overlay_rect = real_rect(crate::ui::typography::PanelTarget::AgentsList, list_scale, &|a| wm.agents_list_rect(a));
         let fonts_overlay_rect = wm.fonts_window_rect(ws_area);
+        let cmd_overlay_rect = wm.command_window_rect(ws_area);
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -799,7 +800,8 @@ impl GuiWorkspaceRenderer {
                 for (abs_r, abs_c) in (lr.y..lr.y + lr.height).flat_map(|y| (lr.x..lr.x + lr.width).map(move |x| (y, x))) {
                     let under_top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
-                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                        || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || cmd_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
                     if let Some(cell) = cell_buf.cell((abs_c, abs_r)).filter(|_| !under_top && abs_c >= viewport.x && abs_r >= viewport.y) {
                         let (c, r) = (abs_c - viewport.x, abs_r - viewport.y);
                         push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
@@ -813,7 +815,8 @@ impl GuiWorkspaceRenderer {
                     let top = modal_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
-                        || fonts_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
+                        || fonts_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || cmd_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
                     if top && let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
                         push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);
                     }

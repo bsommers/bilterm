@@ -185,6 +185,8 @@ pub enum Action {
     AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
     /// `:fonts <verb>` - the first-class FONTS utility window (`WIN-01`, Phase 51.2).
     FontsWindow(crate::wm::fonts_window::FontsWindowOp),
+    /// `:commands [open|close|toggle|pin|...]` - Pinnable Command Palette window (WIN-02, Phase 51.2).
+    CommandWindow(crate::wm::command_window::CommandWindowOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
     Find(crate::wm::find_cmd::FindOp),
     FontZoomIn,
@@ -396,6 +398,7 @@ mod tests {
             Action::Agents(_) => Some(":agents list"),
             Action::AgentsList(_) => Some(":agents list toggle"),
             Action::FontsWindow(_) => Some(":fonts toggle"),
+            Action::CommandWindow(_) => Some(":commands toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
@@ -616,6 +619,7 @@ mod tests {
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::AgentsList(crate::wm::agents_list_cmd::AgentsListOp::Toggle),
             Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
+            Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
             Action::Find(FindOp::Open { kind: FindKind::History, query: String::new() }),

@@ -1,6 +1,8 @@
 pub mod agents_list;
 pub mod agents_list_keys;
 mod agents_window;
+pub mod command_window;
+pub mod command_window_keys;
 mod drawer_navigator;
 pub mod encode;
 pub mod find_modal;

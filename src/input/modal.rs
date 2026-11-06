@@ -332,8 +332,14 @@ pub(super) fn handle_wm_modal_key(
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
     // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
-    // first: the agents window must not answer a modal it cannot even show on top of (WR-07).
-    // The list window shares the gate; only one of the two windows owns the keyboard at a time.
+    // first: floating utility windows must not answer a modal they cannot even show on top of.
+    if matches!(wm.modal(), crate::wm::Modal::None)
+        && wm.command_window().captures_input()
+        && !wm.is_leader_pending()
+        && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)
+    {
+        return Ok(Some(action));
+    }
     if matches!(wm.modal(), crate::wm::Modal::None)
         && wm.fonts_window().captures_input()
         && !wm.is_leader_pending()
@@ -879,6 +885,24 @@ pub(super) fn handle_wm_modal_key(
         }
         Modal::Palette { .. } => {
             match key.code {
+                KeyCode::Char('p') | KeyCode::Char('P') if key.modifiers.contains(KeyModifiers::ALT) => {
+                    let q = wm.palette_state().map(|(q, _)| q.to_string()).unwrap_or_default();
+                    wm.close_modal();
+                    wm.command_window_mut().pinned = true;
+                    if !q.is_empty() {
+                        wm.command_window_mut().query = q;
+                    }
+                    wm.open_command_window();
+                }
+                KeyCode::Char('*') => {
+                    let q = wm.palette_state().map(|(q, _)| q.to_string()).unwrap_or_default();
+                    wm.close_modal();
+                    wm.command_window_mut().pinned = true;
+                    if !q.is_empty() {
+                        wm.command_window_mut().query = q;
+                    }
+                    wm.open_command_window();
+                }
                 KeyCode::Esc => {
                     wm.close_modal();
                 }

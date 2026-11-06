@@ -322,7 +322,11 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::PaletteToggle => {
-            wm.toggle_palette();
+            if wm.command_window().pinned && wm.command_window().active {
+                wm.command_window_mut().focused = true;
+            } else {
+                wm.toggle_palette();
+            }
             false
         }
         ColonCommand::TriggerAdd(pat) => {
@@ -843,6 +847,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
+        ColonCommand::CommandWindow(op) => super::execute_command_window::execute_command_window(wm, op),
         ColonCommand::Find(op) => super::execute_find::execute_find_command(wm, op),
         ColonCommand::RespawnPaneInPlace => {
             wm.respawn_active_pane();
