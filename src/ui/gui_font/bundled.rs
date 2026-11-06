@@ -19,6 +19,9 @@ pub const BUNDLED_FAMILY: &str = "JetBrains Mono";
 /// Family name the bundled Lazenby Computer font files register under.
 pub const BUNDLED_LAZENBY_FAMILY: &str = "Lazenby Computer";
 
+/// Family name the bundled VT323 font file registers under.
+pub const BUNDLED_VT323_FAMILY: &str = "VT323";
+
 /// `(file name, bytes)` for each bundled face.
 pub const BUNDLED_FONTS: [(&str, &[u8]); 4] = [
     ("JetBrainsMono-Regular.ttf", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf")),
@@ -28,9 +31,10 @@ pub const BUNDLED_FONTS: [(&str, &[u8]); 4] = [
 ];
 
 /// `(file name, bytes)` for each extra retro bundled font face.
-pub const BUNDLED_EXTRA_FONTS: [(&str, &[u8]); 2] = [
+pub const BUNDLED_EXTRA_FONTS: [(&str, &[u8]); 3] = [
     ("LazenbyCompSmooth.ttf", include_bytes!("../../../assets/fonts/LazenbyCompSmooth.ttf")),
     ("LazenbyCompLiquid.ttf", include_bytes!("../../../assets/fonts/LazenbyCompLiquid.ttf")),
+    ("VT323-Regular.ttf", include_bytes!("../../../assets/fonts/VT323-Regular.ttf")),
 ];
 
 /// `true` when the resolved appearance profile should use the bundled font (anything but Legacy).
@@ -164,7 +168,7 @@ mod tests {
         std::fs::create_dir_all(&base).unwrap();
         let dir = base.join("fonts");
         let paths = install_extra_into(&dir).unwrap();
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 3);
         for p in &paths {
             assert!(p.exists());
             #[cfg(unix)]
@@ -174,8 +178,9 @@ mod tests {
             }
         }
         assert!(registered_custom_fonts().iter().any(|(fam, _)| fam == BUNDLED_LAZENBY_FAMILY));
+        assert!(registered_custom_fonts().iter().any(|(fam, _)| fam == BUNDLED_VT323_FAMILY));
         // Idempotent.
-        assert_eq!(install_extra_into(&dir).unwrap().len(), 2);
+        assert_eq!(install_extra_into(&dir).unwrap().len(), 3);
         let _ = std::fs::remove_dir_all(&base);
     }
 }

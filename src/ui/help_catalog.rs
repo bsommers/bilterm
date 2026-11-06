@@ -457,6 +457,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":font vga", "—", "Switch font family to Borland DOS PxPlus IBM VGA8"),
     (":font lazenby", "—", "Switch font family to Lazenby Computer"),
     (":font lazenby-liquid", "—", "Switch font family to Lazenby Computer Liquid"),
+    (":font vt323", "—", "Switch font family to DEC VT320 / VT323 pixel font"),
     (":font list", "—", "List available font presets and loaded .ttf/.otf font files"),
     (":tek", "—", "Toggle Tektronix 4010/4014 storage-tube vector mode"),
     (":tek demo", "—", "Render Tektronix 4014 storage-tube wireframe vector demo"),

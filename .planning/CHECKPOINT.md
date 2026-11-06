@@ -185,6 +185,12 @@ Open notes: resize_all has its own offset copy (pill row added); WorkspaceFrameS
       2. Added `FontFamilyPreset::LazenbyComputer` (`:font lazenby`) and `FontFamilyPreset::LazenbyLiquid` (`:font lazenby-liquid`), added to `next_preset()` cycle (`CourierNew -> LazenbyComputer -> LazenbyLiquid -> CascadiaCode`), and added `:font scan [dir]` directory scanner.
       3. Horizontally centered proportional display glyphs within `cell_width_px` in `linux_x11.rs` (`(cell_w - ext.x_off) / 2`) so narrow/proportional retro computer fonts center cleanly in the terminal grid.
       4. Added tab-completion in `src/pane/completion.rs`, help catalog in `src/ui/help_catalog.rs`, and command registry exclusion in `src/command_registry.rs`.
+    - **Google Fonts (`:font google`) & Font Archive / VT323 Follow-up (DONE)**:
+      1. Bundled DEC VT320 pixel font `VT323-Regular.ttf` (SIL OFL 1.1) in `assets/fonts/` (`BUNDLED_EXTRA_FONTS`, `BUNDLED_VT323_FAMILY`).
+      2. Added `FontFamilyPreset::Vt323` (`:font vt323`, `:font vt320`, `:font dec`), integrated into `next_preset()` cycle (`LazenbyLiquid -> Vt323 -> CascadiaCode`).
+      3. Created `src/pane/font_fetch.rs` providing `parse_google_font_family`, `extract_ttf_url_from_google_css`, `install_google_font` (with offline fast path for bundled presets), and `install_font_source` (`.zip` auto-unzip with magic-byte validation, URLs, local paths).
+      4. Wired `:font google <name-or-url>` and `:font add <path.ttf|path.zip|url>`, updated completion, help catalog, and command registry.
+      5. Full coverage tests added in `tests/pane_typography_coverage.rs` (21 tests pass, clippy clean, goldens pass, verify.sh PASS 105/105).
 - **Standing Rules (Verbatim)**:
   - "I want to be able to select between the Legacy/retro looks and Obsidian, even if Obsidian is the default. we are taking NOTHING away from the old looks. just adding new looks and capabilities. EXTENDING what we have."
   - Never commit to `main`.

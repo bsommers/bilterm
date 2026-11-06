@@ -6,6 +6,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+#[path = "font_fetch.rs"]
+mod font_fetch;
+pub use font_fetch::*;
+
 /// Cached terminal pixel size (`(wx << 32) | wy`, `u64::MAX` = unprobed, `0` = unavailable).
 static CACHED_TERMINAL_PIXELS: AtomicU64 = AtomicU64::new(u64::MAX);
 
@@ -172,6 +176,8 @@ pub enum FontFamilyPreset {
     LazenbyComputer,
     /// Retro computer display font Liquid variant (`"Lazenby Computer Liquid"`).
     LazenbyLiquid,
+    /// DEC VT320 retro pixel/CRT terminal font (`"VT323"`).
+    Vt323,
     /// User-specified custom font family name.
     Custom(String),
 }
@@ -208,6 +214,7 @@ impl FontFamilyPreset {
             | "lazenby computer liquid"
             | "lazenby liquid"
             | "laz-liq" => Some(Self::LazenbyLiquid),
+            "vt323" | "vt320" | "dec" | "dec-vt320" => Some(Self::Vt323),
             _ => None,
         }
     }
@@ -228,6 +235,7 @@ impl FontFamilyPreset {
             Self::CourierNew => "Courier New",
             Self::LazenbyComputer => "Lazenby Computer",
             Self::LazenbyLiquid => "Lazenby Computer Liquid",
+            Self::Vt323 => "VT323",
             Self::Custom(name) => name.as_str(),
         }
     }
@@ -248,6 +256,7 @@ impl FontFamilyPreset {
             Self::CourierNew => "Courier",
             Self::LazenbyComputer => "LAZENBY",
             Self::LazenbyLiquid => "LAZ-LIQ",
+            Self::Vt323 => "VT323",
             Self::Custom(name) => name.as_str(),
         }
     }
@@ -366,6 +375,15 @@ impl FontFamilyPreset {
                 "Menlo",
                 "Consolas",
             ],
+            Self::Vt323 => vec![
+                "VT323",
+                "Glass TTY VT220",
+                "3270 Nerd Font Mono",
+                "Cascadia Mono",
+                "SF Mono",
+                "Menlo",
+                "Consolas",
+            ],
             Self::Custom(name) => vec![
                 name.as_str(),
                 "Cascadia Mono",
@@ -393,7 +411,8 @@ impl FontFamilyPreset {
             Self::LucidaConsole => Self::CourierNew,
             Self::CourierNew => Self::LazenbyComputer,
             Self::LazenbyComputer => Self::LazenbyLiquid,
-            Self::LazenbyLiquid | Self::Tektronix4014 | Self::Custom(_) => Self::CascadiaCode,
+            Self::LazenbyLiquid => Self::Vt323,
+            Self::Vt323 | Self::Tektronix4014 | Self::Custom(_) => Self::CascadiaCode,
         }
     }
 }
@@ -608,7 +627,7 @@ impl PaneFontOptions {
                     format!(" | loaded: [{}]", names.join(", "))
                 };
                 Ok(format!(
-                    "FONT PRESETS: cascadia | consolas | jetbrains | firacode | iosevka | plex | hack | ibm3270 | vga (Borland DOS) | tek4014 | lucida | courier | lazenby | lazenby-liquid | custom <name> | add <path.ttf> | scan [dir]{custom_suffix}"
+                    "FONT PRESETS: cascadia | consolas | jetbrains | firacode | iosevka | plex | hack | ibm3270 | vga (Borland DOS) | tek4014 | lucida | courier | lazenby | lazenby-liquid | vt323 | google <name|url> | custom <name> | add <path.ttf|zip|url> | scan [dir]{custom_suffix}"
                 ))
             }
             "scan" | "dir" => {
@@ -648,14 +667,35 @@ impl PaneFontOptions {
                     .trim_matches('\'')
                     .to_string();
                 if raw_path.is_empty() {
-                    return Err("Usage: :font add <path/to/font.ttf>".to_string());
+                    return Err("Usage: :font add <path.ttf|path.zip|url>".to_string());
                 }
-                let fam = register_custom_font_file(Path::new(&raw_path))?;
+                let fam = install_font_source(&raw_path)?;
                 self.family = FontFamilyPreset::from_name(&fam)
                     .unwrap_or_else(|| FontFamilyPreset::Custom(fam.clone()));
                 Ok(format!(
                     "LOADED FONT FILE '{}' -> {}",
                     raw_path,
+                    self.summary_with_defaults(default_size_pt, default_scale_pct)
+                ))
+            }
+            "google" | "gfont" => {
+                let raw_arg = parts
+                    .get(1..)
+                    .map(|s| s.join(" "))
+                    .unwrap_or_default()
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if raw_arg.is_empty() {
+                    return Err("Usage: :font google <FamilyName|URL>".to_string());
+                }
+                let fam = install_google_font(&raw_arg)?;
+                self.family = FontFamilyPreset::from_name(&fam)
+                    .unwrap_or_else(|| FontFamilyPreset::Custom(fam.clone()));
+                Ok(format!(
+                    "GOOGLE FONT '{}' -> {}",
+                    fam,
                     self.summary_with_defaults(default_size_pt, default_scale_pct)
                 ))
             }
@@ -820,7 +860,7 @@ impl PaneFontOptions {
                     ));
                 }
                 Err(format!(
-                    "Unknown :font option '{other}'. Usage: :font <cascadia|consolas|jetbrains|firacode|iosevka|plex|hack|ibm3270|vga|tek4014|lucida|courier|lazenby|lazenby-liquid|custom <name>|add <path.ttf>|scan [dir]|cycle|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
+                    "Unknown :font option '{other}'. Usage: :font <cascadia|consolas|jetbrains|firacode|iosevka|plex|hack|ibm3270|vga|tek4014|lucida|courier|lazenby|lazenby-liquid|vt323|google <name|url>|custom <name>|add <path.ttf|zip|url>|scan [dir]|cycle|size <pt>|scale <pct>%|+|-|bold|italic|double|pane <id> ...|all ...|reset|list>"
                 ))
             }
         }

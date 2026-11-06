@@ -500,6 +500,8 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "hack",
             "lazenby",
             "lazenby-liquid",
+            "vt323",
+            "google ",
             "scan",
             "custom ",
             "size ",

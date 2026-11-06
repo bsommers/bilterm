@@ -197,6 +197,7 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":remote exec", "host-or-path"),
     (":remote disconnect", "host-or-path"),
     (":font custom", "host-or-path"),
+    (":font google", "host-or-path"),
     (":font scan", "host-or-path"),
     (":canvas image", "host-or-path"),
     (":canvas export", "host-or-path"),

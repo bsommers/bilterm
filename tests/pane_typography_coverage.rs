@@ -1,6 +1,9 @@
 //! Coverage for `pane::typography`: resolution names, px-per-cell, font presets and `:font` commands.
 
-use bilterm::pane::typography::{CanvasResolution, FontFamilyPreset, PaneFontOptions};
+use bilterm::pane::typography::{
+    extract_ttf_url_from_google_css, parse_google_font_family, CanvasResolution, FontFamilyPreset,
+    PaneFontOptions,
+};
 
 fn run(o: &mut PaneFontOptions, cmd: &str) -> Result<String, String> {
     o.execute_command_with_defaults(12, 100, cmd)
@@ -85,6 +88,7 @@ fn every_preset_has_name_badge_and_candidates_and_name_round_trips() {
         FontFamilyPreset::CascadiaCode, FontFamilyPreset::Consolas, FontFamilyPreset::IbmPlexMono,
         FontFamilyPreset::Hack, FontFamilyPreset::LucidaConsole, FontFamilyPreset::CourierNew,
         FontFamilyPreset::LazenbyComputer, FontFamilyPreset::LazenbyLiquid,
+        FontFamilyPreset::Vt323,
     ];
     for p in &presets {
         assert!(!p.display_name().is_empty());
@@ -102,15 +106,15 @@ fn every_preset_has_name_badge_and_candidates_and_name_round_trips() {
 fn next_preset_cycle_visits_every_builtin_then_wraps() {
     let mut p = FontFamilyPreset::CascadiaCode;
     let mut seen = vec![p.clone()];
-    for _ in 0..12 {
+    for _ in 0..13 {
         p = p.next_preset();
         seen.push(p.clone());
     }
-    assert_eq!(seen.last(), Some(&FontFamilyPreset::LazenbyLiquid));
+    assert_eq!(seen.last(), Some(&FontFamilyPreset::Vt323));
     assert_eq!(p.next_preset(), FontFamilyPreset::CascadiaCode);
     seen.sort_by_key(|s| s.display_name().to_string());
     seen.dedup();
-    assert_eq!(seen.len(), 13);
+    assert_eq!(seen.len(), 14);
     assert_eq!(FontFamilyPreset::Tektronix4014.next_preset(), FontFamilyPreset::CascadiaCode);
     assert_eq!(
         FontFamilyPreset::Custom("x".into()).next_preset(),
@@ -291,6 +295,12 @@ fn bare_numeric_forms_and_multiword_family() {
     assert_eq!(o.family, FontFamilyPreset::LazenbyComputer);
     run(&mut o, "laz-liq").unwrap();
     assert_eq!(o.family, FontFamilyPreset::LazenbyLiquid);
+    run(&mut o, "vt323").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::Vt323);
+    run(&mut o, "vt320").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::Vt323);
+    run(&mut o, "dec").unwrap();
+    assert_eq!(o.family, FontFamilyPreset::Vt323);
 }
 
 #[test]
@@ -303,11 +313,95 @@ fn scan_subcommand_scans_and_reports_count() {
     assert!(res.contains("0 font(s) registered"));
     let _ = std::fs::remove_dir_all(&temp_dir);
 
-    // List includes lazenby and scan
+    // List includes lazenby, vt323, google, and scan
     let list = run(&mut o, "list").unwrap();
     assert!(list.contains("lazenby"));
     assert!(list.contains("lazenby-liquid"));
+    assert!(list.contains("vt323"));
+    assert!(list.contains("google"));
     assert!(list.contains("scan [dir]"));
+}
+
+#[test]
+fn google_font_url_parsing_and_css_extraction() {
+    assert_eq!(
+        parse_google_font_family("https://fonts.google.com/specimen/VT323?preview.script=Latn").unwrap(),
+        "VT323"
+    );
+    assert_eq!(
+        parse_google_font_family("https://fonts.google.com/specimen/Share+Tech+Mono").unwrap(),
+        "Share Tech Mono"
+    );
+    assert_eq!(
+        parse_google_font_family("Share+Tech+Mono").unwrap(),
+        "Share Tech Mono"
+    );
+    assert_eq!(
+        parse_google_font_family("\"Press Start 2P\"").unwrap(),
+        "Press Start 2P"
+    );
+    assert!(parse_google_font_family("").is_err());
+    assert!(parse_google_font_family("bad*char!").is_err());
+
+    let sample_css = r#"
+/* latin */
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  src: url(https://fonts.gstatic.com/s/vt323/v17/pxiKyp0ihIEF2isRFJY.ttf) format('truetype');
+}
+"#;
+    assert_eq!(
+        extract_ttf_url_from_google_css(sample_css).as_deref(),
+        Some("https://fonts.gstatic.com/s/vt323/v17/pxiKyp0ihIEF2isRFJY.ttf")
+    );
+    assert_eq!(extract_ttf_url_from_google_css("no font url here"), None);
+}
+
+#[test]
+fn google_font_subcommand_offline_preset_resolution() {
+    let mut o = PaneFontOptions::default();
+    let res = run(
+        &mut o,
+        "google https://fonts.google.com/specimen/VT323?preview.script=Latn",
+    )
+    .unwrap();
+    assert!(res.contains("GOOGLE FONT 'VT323'"));
+    assert_eq!(o.family, FontFamilyPreset::Vt323);
+
+    let res_laz = run(&mut o, "gfont \"Lazenby Computer\"").unwrap();
+    assert!(res_laz.contains("GOOGLE FONT 'Lazenby Computer'"));
+    assert_eq!(o.family, FontFamilyPreset::LazenbyComputer);
+}
+
+#[test]
+fn font_add_synthetic_zip_or_source() {
+    let mut o = PaneFontOptions::default();
+    let font_src = std::path::Path::new("assets/fonts/VT323-Regular.ttf");
+    assert!(font_src.exists(), "bundled VT323-Regular.ttf must exist");
+
+    let temp_dir = std::env::temp_dir().join(format!("bilterm-font-zip-test-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let zip_path = temp_dir.join("test-font.zip");
+
+    let zip_created = std::process::Command::new("zip")
+        .args(["-jq", zip_path.to_str().unwrap(), font_src.to_str().unwrap()])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if zip_created {
+        let res = run(&mut o, &format!("add \"{}\"", zip_path.display())).unwrap();
+        assert!(res.contains("LOADED FONT FILE"));
+        assert_eq!(o.family, FontFamilyPreset::Vt323);
+    } else {
+        let res = run(&mut o, &format!("add \"{}\"", font_src.display())).unwrap();
+        assert!(res.contains("LOADED FONT FILE"));
+        assert_eq!(o.family, FontFamilyPreset::Vt323);
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]

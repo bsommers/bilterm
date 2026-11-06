@@ -7,3 +7,8 @@ Lazenby Computer (Smooth, Liquid), Creative Commons Attribution-ShareAlike 4.0 I
 Created 2014 by Andrew Young, Disaster Fonts (https://www.1001fonts.com/lazenby-computer-font.html, disasterfonts.co.uk).
 Files: `LazenbyCompSmooth.ttf`, `LazenbyCompLiquid.ttf`, `lazenbycomputer.txt`.
 Embedded by src/ui/gui_font/bundled.rs (`BUNDLED_EXTRA_FONTS`); available in all appearance profiles for retro display typography.
+
+VT323 Regular, SIL Open Font License 1.1 (see VT323-OFL.txt).
+Created 2011 by Peter Hull (https://fonts.google.com/specimen/VT323).
+Files: `VT323-Regular.ttf`, `VT323-OFL.txt`.
+Embedded by src/ui/gui_font/bundled.rs (`BUNDLED_EXTRA_FONTS`); available in all appearance profiles for retro DEC VT320 pixel terminal typography.
