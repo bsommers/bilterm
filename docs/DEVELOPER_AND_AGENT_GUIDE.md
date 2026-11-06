@@ -58,6 +58,8 @@ src/
 │   ├── mod.rs                  # Re-exports Action as ColonCommand alias, parse & execute entrypoints
 │   ├── parse.rs                # Parses pane/WM ":..." strings into Result<Action, String>
 │   ├── parse_visual.rs         # Parses visual/theme/font/drawer/canvas ":..." strings into Result<Action, String>
+│   ├── parse_agents_list.rs    # `:agents list <verb>` grammar; every non-matching form is one usage error (Phase 51)
+│   ├── execute_agents_list.rs  # Runs an `AgentsListOp`, sets its status and the scalars-only window summary (Phase 51)
 │   ├── execute.rs              # Executes ColonCommand against the active CompositePane
 │   └── execute_wm.rs           # Executes Action against WindowManager (WindowManager::apply)
 ├── config/
@@ -65,6 +67,8 @@ src/
 ├── input/
 │   ├── mod.rs                  # Top-level handle_wm_key_event (<= 80 lines), handle_key_event, handle_paste_event
 │   ├── keymap.rs               # Declarative DEFAULT_LEADER_BINDINGS, DEFAULT_GLOBAL_BINDINGS, DEFAULT_PANE_BINDINGS
+│   ├── agents_list.rs          # AGENTS list mouse: pure `plan_agents_list_mouse` plus a thin applier (Phase 51, UIT-03)
+│   ├── agents_list_keys.rs     # AGENTS list key table `AGENTS_LIST_BINDINGS` (Phase 51, UIT-03)
 │   ├── modal.rs                # Modal key handlers (Help, Inspector, Palette, Menubar, Copy, Hints, Fuzzy, History)
 │   ├── mouse.rs                # SGR 1006 mouse drag/resize/click/wheel routing across WM and CompositePane
 │   └── encode.rs               # VT100/Xterm/DECCKM/Kitty CSI-u keystroke & alternate-scroll byte encoders
@@ -110,6 +114,11 @@ src/
 │   ├── drawer.rs               # slide-out (classic + Navigator styles; `src/wm/drawer/navigator.rs`, `src/ui/drawer/navigator.rs`) Sessions/Windows/Panes drawer & telemetry builder (DRW-01..02)
 │   ├── quick_terminal.rs       # Persistent Guake/Quake-style F10 drop-down terminal (QuickTerminal) & frame helpers
 │   ├── registry/              # Find registry (Phase 50.1): live rows, fuzzy rank, capture ring, saved/history.log reads (masked on read), transport facts
+│   ├── agents_list.rs          # AGENTS list window state, row model and `agents_list_apply` (Phase 51, UIT-03)
+│   ├── agents_list_cmd.rs      # `AgentsListOp` and `ListFilter`: the list's colon/RPC/key vocabulary (Phase 51)
+│   ├── agents_list_geometry.rs # AGENTS list rect, layout and hit-test; the one source for render and mouse (Phase 51)
+│   ├── agents_demo.rs          # `:agents demo` / `:agents demo stop`: spawned-pane record and demo event purge (Phase 51, UIT-01)
+│   ├── panel_dock.rs           # Dock strip for `:arrange`: docked panels, slots and `set_panel_docked` (Phase 51, UIT-04)
 │   └── tests.rs                # Unit tests for WindowManager & ZStack
 ├── daemon/
 │   ├── mod.rs                  # Background Multiplexer Daemon exports, DaemonAction & DaemonHandshake
@@ -132,6 +141,7 @@ src/
 │   ├── pixel_canvas.rs         # Anti-aliased RGBA PixelCanvasBuffer, HalfBlock TrueColor blitter & SSH Kitty/Sixel/iTerm2 encoders
 │   ├── typography.rs           # Dynamic font scaling (50%..=300%), DEC DECDWL/DECDHL & host OSC 50 passthrough (FONT-01)
 │   ├── drawer.rs               # 4-edge slide-out drawer TUI/GUI renderer (Overlay drop shadow + Push reflow)
+│   ├── agents_list_ui.rs       # AGENTS list window renderer: TUI cells and GUI scaled panel, drawn only from the layout (Phase 51)
 │   ├── chrome.rs               # Borland borders (8 OutlineStyles), 4 DOS ShadowStyles, Top Menu Bar
 │   ├── cursor.rs               # IBM 3270 cross-hairs, software carets, Focal Spotlight & Focal Zoom lens shaders
 │   ├── glyphs.rs               # Unicode, CP437, Nerd Font, and ASCII glyph packs
@@ -149,7 +159,8 @@ src/
     ├── json.rs                 # Zero-dependency recursive-descent JSON parser/serializer (depth-guarded <= 64)
     ├── rpc.rs                  # AutomationControlPlane JSON-RPC 2.0 method dispatcher & confined PPM snapshots
     ├── rpc_handlers.rs         # JSON-RPC 2.0 workspace/pane/session.save/session.restore/fleet handlers
-    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (11 agent tools)
+    ├── rpc_agents.rs           # `agents.list` and `agents.demo` RPC methods; both lower to `:agents ...` colon commands (Phase 51)
+    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (13 agent tools)
     ├── playbook.rs             # AutomationEvent bus & declarative TOML Playbook runner
     ├── server.rs               # Async Unix domain socket (0600 + peer UID) & TCP bearer-token RPC server/client
     └── tests.rs                # Security & RPC unit tests
@@ -283,16 +294,32 @@ Because of the Phase 22 unified `Action` architecture, adding a new workspace or
 - **Transports** (all run the same `AutomationControlPlane::dispatch_method`; method list: `bilterm::api::RPC_METHODS`):
   1. JSON-RPC 2.0 over a Unix socket (default) or `--headless --listen` TCP; `bilterm ctl [-t FILE] [ENDPOINT] <METHOD> [JSON_PARAMS]` (the endpoint may be omitted).
   2. Loopback-only HTTP + SSE: `bilterm --headless --http 127.0.0.1:PORT` (`POST /rpc`, `GET /events`, `GET /health`, bearer token file written 0600 to the private runtime dir, Host/Origin checks, size limits).
-  3. MCP over stdio (`bilterm --mcp`): 11 tools (including `bilterm_find`, a read-only search over `find.*`) plus resources `bilterm://state|config|commands|pane/<id>`. Error codes: JSON-RPC dispatch failures are `-32000` (parse `-32700`, invalid request `-32600`); MCP uses `-32602` for missing params/unknown tool and `-32601` for unknown methods.
+  3. MCP over stdio (`bilterm --mcp`): 13 tools (including `bilterm_find`, a read-only search over `find.*`, and `bilterm_agents_list` / `bilterm_agents_demo`) plus resources `bilterm://state|config|commands|pane/<id>`. Error codes: JSON-RPC dispatch failures are `-32000` (parse `-32700`, invalid request `-32600`); MCP uses `-32602` for missing params/unknown tool and `-32601` for unknown methods.
 - **Write gate.** Over RPC/HTTP/MCP/`pane.send_keys`, config-mutating commands (`:set`, `:config save`, `:appearance save`) are refused unless `[api] allow_config_write = true` in `config.toml` (default `false`); the `[api]` section is never settable over the API. Reads (`:get`, `:state`, `:config list`, `:commands`) always work and return structured `data` in the `wm.command` result. Persistence only happens on explicit `:config save` / `:appearance save`.
 - **Conformance.** `tests/api_conformance.rs` drives one request table through direct dispatch, TCP, HTTP and MCP (identical results, error shapes, write gate), sweeps every runnable non-alias catalog example through `wm.command` (explicit skip list with reasons), and checks `RPC_METHODS` against the dispatcher source and `parse_ctl_args`.
 - **Checklist: adding a command so everything stays in sync.**
   1. `Action` variant (`src/action.rs`) + parse (`src/colon_command/parse.rs`) + execute (`execute*.rs`).
-  2. Add the name (and sub-arguments) to the Tab-completion table (`src/pane/completion.rs`), a palette entry in `PALETTE_CATALOG` and/or a help line; add an `EXTRA` row in `src/command_registry.rs` only if neither has a description (aliases: set the target).
+  2. Add the name (and sub-arguments) to the Tab-completion table (`src/pane/completion.rs`), a palette entry in `PALETTE_CATALOG` and/or a help line; add an `EXTRA` row in `src/command_registry.rs` only if neither has a description (aliases: set the target). A verb with no palette entry needs a `PALETTE_EXCLUSIONS` row with a reason from the closed vocabulary in `src/command_registry.rs`; the palette sweep test fails otherwise.
   3. Make it reachable from keymap, colon or RPC in `every_action_is_reachable_from_keymap_colon_or_rpc`.
   4. Return structured output through `take_command_data` if callers should read it back; config-writing commands must go through `config_write_denied`.
   5. A new RPC method goes in `dispatch_method` AND `RPC_METHODS` (the conformance test fails otherwise); a new MCP tool needs a mapping in `src/api/mcp.rs` and `mcp_tools_list`.
   6. Run `scripts/verify.sh` (one line: `PASS n/n`; on FAIL read `target/verify/<stage>/fail.txt`).
+
+---
+
+## 6c. Adding a floating panel (Phase 51)
+
+The AGENTS list window (`src/wm/agents_list*.rs`, `src/input/agents_list*.rs`, `src/ui/agents_list_ui.rs`, `src/api/rpc_agents.rs`) is the reference. A new floating panel splits the same way, so every surface lowers to the same `Action`s run through `WindowManager::apply` (UNI-R01, AGENTS.md convention 6). Keep each new file near the 800-1000 line soft goal (`ARCH-R04`).
+
+1. **State.** A state struct in its own `src/wm/<panel>.rs` with `active`, `focused`, `pinned`, `docked`, `rect` and `drag`, and `captures_input() = active && focused`. `WindowManager` holds it in a `pub(crate)` field. Only one floating window owns the keyboard: opening one blurs the others, and `focus_and_raise` blurs both.
+2. **Vocabulary.** An `Op` enum in `src/wm/<panel>_cmd.rs` with a `colon_form()` inverse, one `Action` variant for it, and a `PanelTarget` for the GUI scale. The `*_apply` match is exhaustive, with no wildcard arm.
+3. **Geometry is the single source.** One `src/wm/<panel>_geometry.rs` with `rect`, `layout` and `hit`, in the panel's scaled virtual space (`panel_space`). The renderer and the mouse code both read it; neither computes its own rectangle.
+4. **Render.** `src/ui/<panel>_ui.rs` draws only from the layout, in TUI cells and the GUI scaled panel. Sanitise every name with `sanitize_display`.
+5. **Keys.** A declarative table in `src/input/<panel>_keys.rs`. The leader key is never consumed, and the toggle chord is checked before the table.
+6. **Mouse.** A pure `plan_<panel>_mouse(wm, event, ws)` that returns a plan (actions, drag bookkeeping, swallow flag), plus a thin applier that calls `WindowManager::apply`. Test the plan, not the applier.
+7. **Dock.** `set_panel_docked` is the only writer of the `docked` flag. Release the dock on every manual geometry change and on close, and add the panel to `DockPanel` and the `:arrange` hook (`src/wm/panel_dock.rs`).
+8. **Colon, API and palette.** Parse and execute the colon form. For RPC, add the method to `dispatch_method` and to `RPC_METHODS` (`src/api/rpc_agents.rs` is the pattern); for MCP, add a tool mapping in `src/api/mcp.rs`. Add a palette entry or a `PALETTE_EXCLUSIONS` row, a help row and a completion row.
+9. **Docs.** Document every verb in the user guide. The doc gate (`scripts/check_phase50_doc_coverage.sh`) reads the `:agents` and `:drawer` completion rows automatically, so a new verb there must appear in chapter 11 as `:<cmd> <verb>`. Chapter 11's "Surface uniformity" table records the path for each surface, and any exception with its reason.
 
 ---
 

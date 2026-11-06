@@ -154,6 +154,8 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `find.agents` | `query` (string, optional, max 128 chars), `limit` (int, optional, default 50, range 1..200) | Find envelope `{"kind","query","total","returned","truncated","masked","rows":[...]}`; each row has `source` | Ranked search of live agents and panes. Read-only: the Find window does not open. See [section 7](#unified-find-find-methods-and-bilterm_find-phase-501). |
 | `find.sessions` | `query` (string, optional), `limit` (int, optional) | Find envelope; rows of kind `session` and `pane` | Live sessions first, then saved sessions and history-only sessions on disk. |
 | `find.history` | `query` (string, optional), `limit` (int, optional) | Find envelope; rows of kind `history` | Commands captured in this run, then `history.log` files on disk. Secret-looking lines are masked and only counted in `masked`. |
+| `agents.list` | `op` (string, optional: absent or `list` reads the state; otherwise one of `open close toggle dismiss blur select jump zoom pin unpin scale filter dock float move resize rect size scroll`), `args` (array of strings or integers, or one whitespace-separated string; optional, at most 8 tokens) | `wm.command` result fields plus a top-level `agents_list` object (`active`, `pinned`, `focused`, `docked`, `filter`, `selected`, `row_count`, `scale_pct`) | Read the AGENTS list state or run a list operation (`:agents list [op args]`). Also opens the AGENTS list window (Phase 51). See "Agents list and demo" below. |
+| `agents.demo` | `stop` (boolean, optional, default `false`) | `wm.command` result fields plus `demo` (`running`, `endpoints`, `spawned`) | Start the agent traffic demo, or with `stop: true` close the panes the demo created and remove its traffic. No write gate. See "Agents list and demo" below. |
 
 ---
 
@@ -686,6 +688,8 @@ When started with `bilterm --mcp`, Bilterm provides a native Model Context Proto
 
 ### Master Table of MCP Tools
 
+The server exposes **13 tools** (the `tools/list` result).
+
 | Tool Name | Parameters (`inputSchema`) | Action / Purpose | Underlying RPC |
 | :--- | :--- | :--- | :--- |
 | `bilterm_workspace_status` | None (`{}`) | Inspect all composite panes, topology (Tiled/Stacked), active pane, and 3270 OIA telemetry. | `workspace.status` |
@@ -699,6 +703,8 @@ When started with `bilterm --mcp`, Bilterm provides a native Model Context Proto
 | `bilterm_workspace_fontsize`| `action` (string), `size` (integer) | Query or dynamically adjust terminal font size and scale percentage. | `workspace.fontsize` |
 | `bilterm_canvas` | `command` (string) | Control Tektronix 4014 vector storage-tube and modern retained graphics canvas. | `canvas.command` |
 | `bilterm_find` | `kind` (string, req: `agent`, `session` or `history`), `query` (string), `limit` (integer, default 50, max 200) | Search the unified registry (agents, sessions, command history). Every row carries `source`; the response carries `masked`. | `find.agents` / `find.sessions` / `find.history` |
+| `bilterm_agents_list` | `op` (string, optional: `open`, `close`, `toggle`, `dismiss`, `blur`, `select`, `jump`, `zoom`, `pin`, `unpin`, `scale`, `filter`, `dock`, `float`, `move`, `resize`, `rect`, `size` or `scroll`; absent reads the state), `args` (string, space-separated) | Open, close, pin, select, jump, zoom, scale, filter, dock or position the AGENTS list window, or read the agent state. Returns the `agents_list` object (see "Agents list and demo"). | `agents.list` |
+| `bilterm_agents_demo` | `stop` (boolean, optional; `true` stops the demo and closes the panes it spawned) | Start the agent traffic demo, or stop it. No write gate. | `agents.demo` |
 
 ### MCP Tool Calling Format
 
@@ -886,7 +892,7 @@ Bilterm exposes generic dotted-path access to all configuration fields in `Bilte
 
 ### Agent State: `:agents list` (Phase 50)
 
-`:agents list` (also `:agents` and `:agents status`) reports the per-pane agent state shown by the Navigator drawer. Run it through `wm.command` (RPC), `bilterm_colon_command` (MCP) or `bilterm ctl`; it is read-only, so it is not subject to `[api] allow_config_write`.
+`:agents list` (also `:agents` and `:agents status`) reports the per-pane agent state shown by the Navigator drawer. Run it through `wm.command` (RPC), `bilterm_colon_command` (MCP) or `bilterm ctl`. The data is a read and is not subject to `[api] allow_config_write`. Since Phase 51 the same command also opens the AGENTS list window, and the payload gained an `agents_list` object (see "Agents list and demo" below).
 
 ```json
 {"agents": [
@@ -925,6 +931,64 @@ Bilterm exposes generic dotted-path access to all configuration fields in `Bilte
 ```
 
 Pairs are ordered by descending `count`; `*_ago_ms` is relative to the query; `heat_permille` is the current edge heat (0 once the fade window passed). At most 256 pairs are kept (`dropped_pairs` counts the least recently active ones that were dropped). `:agents topology export <name>` writes the same JSON to a private file and is refused over the API. `:agents fade [secs]` / `[agents_window] edge_fade_secs` set the fade window.
+
+### Agents list and demo: `agents.list`, `agents.demo` and MCP tools (Phase 51)
+
+`agents.list` and `agents.demo` (RPC, HTTP `POST /rpc`, `bilterm ctl`) and the MCP tools `bilterm_agents_list` and `bilterm_agents_demo` build the colon form (`:agents list [op args...]` or `:agents demo [stop]`), run it through the same parser and executor as `wm.command`, and add a small summary object. They are the same operations as the AGENTS list window's keys and mouse, not a second implementation. Neither is subject to `[api] allow_config_write`: they change window and demo state, never configuration.
+
+**`agents.list`**
+
+- `op` (optional string). Absent or `list` reads the state. Any other value must be one of `open`, `close`, `toggle`, `dismiss`, `blur`, `select`, `jump`, `zoom`, `pin`, `unpin`, `scale`, `filter`, `dock`, `float`, `move`, `resize`, `rect`, `size`, `scroll`. Anything else is rejected.
+- `args` (optional): an array of strings or integers, or one whitespace-separated string. Each token must match `[A-Za-z0-9+\-_.#%:]`, be at most 32 characters, and not start with `:`. At most 8 tokens. `args` without an `op` (or with `op` `list`) is rejected. Because every token is checked, no argument can carry a second command.
+- Rejections are `invalid agents.list parameter: <reason>` (JSON-RPC error `-32000`; MCP `isError: true`).
+- **Opens the window.** Like `:agents list`, the call opens the AGENTS list window and gives it the keyboard (Phase 51, D-03).
+
+Result: the `wm.command` result fields (`status`, `command`, `active_pane_id`, `pane_count`, and `data` when the verb returns data) plus a top-level `agents_list` object:
+
+| Field | Type | Meaning |
+| :--- | :--- | :--- |
+| `active` | bool | The window is open |
+| `pinned` | bool | The window is pinned |
+| `focused` | bool | The window has the keyboard |
+| `docked` | bool | The window is in the tiling strip |
+| `filter` | str | `all` or `agents` |
+| `selected` | int or null | Selected pane id |
+| `row_count` | int | Rows after the filter |
+| `scale_pct` | int | GUI scale, 75 to 200 |
+
+The object carries flags, counts and ids only; it never includes pane names. When `op` is an absolute `scale <75..200>` the verb runs the generic panel-scale path and returns no `data`; `agents_list` is still present at the top level.
+
+**`agents.demo`**
+
+- `stop` (optional boolean, default `false`). `false` starts the demo; `true` stops it.
+- Result: the `wm.command` result fields plus `demo`: `running` (true while the demo has endpoints or spawned panes), `endpoints` (pane ids the demo drew traffic between) and `spawned` (pane ids the demo created).
+- Starting the demo again replaces the earlier demo events and demo topology pairs; it does not leak panes.
+- **Stop closes only the panes the demo created** (`spawned`), removes the `[demo]` events and the demo's topology pairs, and never closes a pane it did not create. `agents.demo {"stop": true}` needs no write gate: it works with `[api] allow_config_write = false`.
+
+**Requests**
+
+```bash
+bilterm ctl agents.list '{"op":"toggle"}'
+bilterm ctl agents.list '{"op":"select","args":["down"]}'
+bilterm ctl agents.demo '{}'
+bilterm ctl agents.demo '{"stop":true}'
+```
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":2,"method":"agents.demo","params":{"stop":true}}' \
+     http://127.0.0.1:7371/rpc
+```
+
+MCP `tools/call` with `"name":"bilterm_agents_list"` and `"arguments":{"op":"open"}`, or `"name":"bilterm_agents_demo"` and `"arguments":{"stop":true}`. The `bilterm_agents_list` tool takes `op` and `args` (a space-separated string, for example `"args":"down"`); `bilterm_agents_demo` takes `stop`.
+
+**The `:agents list` payload.** `wm.command ":agents list"`, bare `:agents`, `:agents ls` and `:agents status` all open the window, and their `data` gained the additive `agents_list` object (the same fields as above).
+
+**Other Phase 51 API changes.**
+
+- `bilterm://commands` (MCP resource): every command carries `palette_exclusions`, an array of `{probe, reason}` objects. The `reason` is one of `free-text`, `host-or-path`, `entity-id`, `numeric`, `combinatorial`, `destructive`, `reachable-via-picker`, `short-alias`. The list shows which forms have no palette entry and why. See [Chapter 11, Command palette coverage](user-guide/11-navigator-sidebar-and-agent-traffic.md#command-palette-coverage).
+- MCP tools: `tools/list` returns **13 tools**, up from 11: `bilterm_agents_list` and `bilterm_agents_demo` are the two added at the end, after `bilterm_find`.
 
 ### Unified Find: `find.*` methods and `bilterm_find` (Phase 50.1)
 

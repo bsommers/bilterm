@@ -71,6 +71,10 @@
 | **`F7`** / `Alt+Shift+D` | `<L> d` / `<L> D` | `:drawer [toggle]` | Toggle Navigator-style Slide-Out Sessions/Windows/Panes & Fleet Drawer |
 | — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
 | `Ctrl+Alt+A` | — | `:agents toggle` | Open the Agent Traffic window, or close it when open (also menu View > Agent Traffic and the Navigator footer `@ agents` button; every `F` key is already taken) |
+| `Ctrl+Alt+N` | — | `:agents list toggle` | Open the AGENTS list window (one row per pane, with agent state), or close it when open. Also menu View > Agents List; works while a full-screen program owns the pane. See [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#agents-list-window) |
+| — | `<L> A` | `:agents list toggle` | The same toggle as a leader chord, for hosts that swallow `Ctrl+Alt+N` |
+| — | `<L> y` | `:agents demo` | Start the agent traffic demo (memory only; re-running replaces the earlier demo). Also menu View > Agent Demo |
+| — | `<L> Y` | `:agents demo stop` | Stop the demo: close only the panes it created and remove its traffic. Also menu View > Stop Agent Demo |
 | `Ctrl+Alt+F` | — | `:find agent` | Open the Find window (agents, sessions and command history; `Tab` switches kind), or close it when open. Also View > Find Agents. No leader chord ([Chapter 12](12-find-registry-and-history.md)) |
 | — | `<L> a` | `:agents zoom` | Open the Agent Traffic window (graph + conversation); see [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). `Ctrl+O` inside it cycles graph / conversation / compose; `F6` keeps its global `DeckNext` meaning |
 | **`F9`** | `<L> i` / `<L> F9` | `:inspector` / `:inspect` | Toggle live 3270 Terminal Inspector modal (DECSET modes, cell `U+XXXX`, CSI/OSC log) |
@@ -91,6 +95,37 @@
 | — | — | `:attach [name]` | Re-attach & restore saved/detached multi-pane window layout in-place |
 | — | — | `:mcp [status\|tree\|...]` | Open interactive Master Control Program Console (`↑`/`↓`/`j`/`k`/`Enter`/Click, `r`, `f`, `n`, `m`, `d`) |
 | **`Ctrl+Q`** | `<L> Ctrl+Q` | `:quit` / `:q` / `:quit!` | Exit Bilterm (`:quit` honors Exit Guard; `:quit!` forces immediate exit) |
+
+### AGENTS list window keys (while the list has the keyboard)
+
+The list takes the keyboard when it opens and when you click inside it. Table `AGENTS_LIST_BINDINGS` in `src/input/agents_list_keys.rs`; the leader key is never consumed, and other keys are swallowed while the list has focus. Full detail: [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#agents-list-window).
+
+| Key | Action (colon twin) |
+|-----|---------------------|
+| `Up` / `k`, `Down` / `j` | Select previous / next row (`:agents list select up` / `down`) |
+| `PageUp` / `PageDown` | Select a page up / down (`:agents list select page-up` / `page-down`) |
+| `Home` / `End` | First / last row (`:agents list select first` / `last`) |
+| `Enter` | Focus the selected pane and leave the list (`:agents list jump`) |
+| `z` | Open the traffic window on the selected pane (`:agents list zoom`) |
+| `f` | Toggle the agents filter (`:agents list filter toggle`) |
+| `*` | Pin / unpin (`:agents list pin toggle`) |
+| `[` / `]` | Panel scale -10 / +10 (`:agents list scale -10` / `+10`) |
+| `Shift`+arrows | Move the window one cell (`:agents list move <dx> <dy>`) |
+| `Alt`+arrows | Resize the window one cell (`:agents list resize <dw> <dh>`) |
+| `d` | Dock into the tiling strip, or float (`:agents list dock toggle`) |
+| `Esc` | Close, or release the keyboard when pinned (`:agents list dismiss`) |
+| `Ctrl+Alt+N` | Close the list (`:agents list toggle`) |
+
+### Menu bar entries added in Phase 51
+
+| Menu entry | Runs |
+|------------|------|
+| View > Agents List (Ctrl+Alt+N) | `:agents list toggle` |
+| View > Agent Demo (Ctrl+X y) | `:agents demo` |
+| View > Stop Agent Demo (Ctrl+X Y) | `:agents demo stop` |
+| Window > Tile Windows & Panels | `:arrange grid` |
+
+Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded exclusion with a reason. `:arrange` has no key chord: use the palette (`Ctrl+P`, then `arrange`) or the Window menu. The full mapping is in [Chapter 11, Surface uniformity](11-navigator-sidebar-and-agent-traffic.md#surface-uniformity).
 
 ---
 
@@ -189,6 +224,13 @@
 | **Agent Traffic window: click an edge** | Select it; `Enter` or a second click filters the conversation to that pair (`:agents edge`, `:agents filter pair`) |
 | **Agent Traffic window: conversation line, wheel, `[copy]`, filter buttons, chips, follow marker** | Select / scroll / copy / filter / follow (`:agents line`, `scroll`, `copy`, `filter ...`, `follow`); `[send]` is disabled |
 | **`Ctrl` + wheel over the drawer, `:mcp` console or Agent Traffic window** | Scale that panel on the GUI surface (`:drawer scale`, `:agents scale`). Real GUI windows: Linux/X11 only; on Windows and macOS `Ctrl` + wheel over a panel still zooms the font (use `[` `]` or the scale commands) |
+| **AGENTS list: click a row** | Select it; click the selected row again (while the list has the keyboard) to jump to its pane (`:agents list select <id>`, `:agents list jump`). An unfocused list takes the keyboard and selects; it does not jump |
+| **AGENTS list: right-click a row** | Open the Agent Traffic window on that pane (`:agents list zoom <id>`) |
+| **AGENTS list: title badges** | Pin / unpin, minimize (dismiss), dock / float, close (`:agents list pin toggle`, `dismiss`, `dock toggle`, `close`) |
+| **AGENTS list: footer chips `[filter]` `[dock]` `[zoom]`** | Toggle the filter; dock / float; open the traffic window on the selection (`:agents list filter toggle`, `dock toggle`, `zoom`) |
+| **AGENTS list: drag the title bar, an edge or a corner** | Move / resize the window (the drag sends `:agents list rect` as it moves; the keys and colon use `move` and `resize`) |
+| **AGENTS list: wheel / `Ctrl` + wheel** | Scroll three rows / step the window scale by 10 percent on the GUI surface (`:agents list scroll`, `scale +n`/`-n`) |
+| **Open menu-bar dropdown** | Takes the click before the AGENTS list and Agent Traffic windows (a click on a dropdown item runs that item) |
 
 ---
 
