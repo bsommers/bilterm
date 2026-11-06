@@ -340,9 +340,8 @@ fn menu_pick_by_mouse() {
     let before = wm.pane_count();
     mouse_pick(&mut wm, find_entry(":agents demo"));
     assert!(wm.pane_count() >= before.max(3), "demo adds panes up to three");
-    // The demo opens the traffic window, which sits over the dropdown and takes the click first
-    // (pre-existing layering, deferred); close it so the dropdown is reachable.
-    run_colon(&mut wm, ":agents close");
+    // The demo opens the traffic window over the dropdown; an open menu still gets the click first.
+    assert!(wm.agents_window().active, "demo opened the traffic window");
     mouse_pick(&mut wm, find_entry(":agents demo stop"));
 
     let mut wm = fixture();
