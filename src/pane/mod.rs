@@ -16,7 +16,9 @@ pub use canvas_scene::{
     CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
     PaneCanvasScene, PlotKind, Sprite2D, VectorPrimitive,
 };
-pub use exit_guard::{ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, HeldExitedShellState};
+pub use exit_guard::{
+    ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, HeldExitedShellState, LinkBanner,
+};
 pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
 pub use scroll::{PaneScrollMode, PaneScrollState};
@@ -93,6 +95,14 @@ pub struct CompositePane {
     captured: Vec<capture::CapturedCommand>,
     /// Secret-looking commands withheld from `captured` since the last drain (count only, D-U2).
     captured_masked: u32,
+    /// Bytes typed into this pane are mirrored to `remote_input` for the tmux link (Phase 51.1).
+    remote_input_tap: bool,
+    /// Tap buffer, bounded by `REMOTE_INPUT_CAP`; drained once per link tick.
+    remote_input: Vec<u8>,
+    /// Link state banner drawn on the pane's bottom row (Phase 51.1).
+    link_banner: Option<LinkBanner>,
+    /// Exit code of the PTY child once known (hold path).
+    exit_code: Option<i32>,
 }
 
 impl CompositePane {
@@ -136,6 +146,10 @@ impl CompositePane {
             held_exited_shell: None,
             captured: Vec::new(),
             captured_masked: 0,
+            remote_input_tap: false,
+            remote_input: Vec::new(),
+            link_banner: None,
+            exit_code: None,
         }
     }
 
@@ -747,6 +761,10 @@ impl CompositePane {
     pub fn write_to_pty(&mut self, bytes: &[u8]) -> Result<()> {
         self.last_pty_write.clear();
         self.last_pty_write.extend_from_slice(bytes);
+        if self.remote_input_tap {
+            let room = crate::tmux::link::REMOTE_INPUT_CAP.saturating_sub(self.remote_input.len());
+            self.remote_input.extend_from_slice(&bytes[..bytes.len().min(room)]);
+        }
         if let Some(pty) = &self.pty {
             pty.write_all(bytes)?;
         }
@@ -801,6 +819,57 @@ impl CompositePane {
         }
         self.status_message = Some("Shell respawned cleanly".to_string());
         Ok(())
+    }
+
+    /// Turns the remote-input tap on or off; turning it off drops buffered bytes (Phase 51.1).
+    pub fn set_remote_input_tap(&mut self, on: bool) {
+        self.remote_input_tap = on;
+        if !on {
+            self.remote_input.clear();
+        }
+    }
+
+    /// `true` while typed bytes are mirrored to the tmux link.
+    pub fn remote_input_tap(&self) -> bool {
+        self.remote_input_tap
+    }
+
+    /// Drains the bytes mirrored since the last call (the input pump, plan 51.1-13).
+    #[allow(dead_code)]
+    pub(crate) fn take_remote_input(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.remote_input)
+    }
+
+    /// Sets or clears the link banner drawn on the pane's bottom row.
+    pub fn set_link_banner(&mut self, b: Option<LinkBanner>) {
+        self.link_banner = b;
+    }
+
+    pub fn link_banner(&self) -> Option<&LinkBanner> {
+        self.link_banner.as_ref()
+    }
+
+    /// Forces raw PTY input so typed ssh passwords never reach the prompt, history or capture ring.
+    pub fn set_link_raw_input(&mut self, on: bool) {
+        self.prompt.manual_raw_override = on;
+        self.prompt.force_command_prompt = !on;
+    }
+
+    /// Last non-empty screen row, sanitised and at most 80 characters.
+    pub fn last_output_line(&self) -> Option<String> {
+        let contents = self.vt.contents();
+        let line = contents.lines().rev().find(|l| !l.trim().is_empty())?;
+        Some(crate::vt::sanitize_display(line.trim(), 80))
+    }
+
+    /// Holds a remote pane whose child exited, with a banner naming the code and reason.
+    pub fn hold_remote_exit(&mut self, exit_code: Option<i32>, reason: Option<String>) {
+        self.pty = None;
+        self.exited = false;
+        self.exit_code = exit_code;
+        let held = HeldExitedShellState::remote(exit_code, reason);
+        self.status_message = Some(held.banner_message.clone());
+        self.held_exited_shell = Some(held);
     }
 
     /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).

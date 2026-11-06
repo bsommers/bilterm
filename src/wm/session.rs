@@ -250,34 +250,7 @@ impl WindowManager {
         session_name: &str,
         tags: Vec<String>,
     ) -> Result<PaneId> {
-        let profile = self
-            .fleet
-            .profiles
-            .get(target)
-            .cloned()
-            .or_else(|| self.config.remotes.get(target).cloned())
-            .unwrap_or_else(|| RemoteHostProfile::new(target, target));
-        let dest = profile.destination.clone();
-        crate::remote::validate_destination(&dest)?;
-        let new_id = self.split_focused(SplitDirection::Vertical)?;
-        let badge = format!("{dest}/{session_name}");
-        if let Some(pane) = self.panes.get_mut(&new_id) {
-            pane.set_title(format!("TMUX-SSH:{badge} [#{new_id}]"));
-            pane.set_remote_target(Some(badge.clone()));
-            pane.set_status_message(Some(format!(
-                "🌐 Attached remote tmux -CC session '{session_name}' on {dest} (pane #{new_id})"
-            )));
-        }
-        let mut merged_tags = profile.tags.clone();
-        for t in tags {
-            if !merged_tags.contains(&t) {
-                merged_tags.push(t);
-            }
-        }
-        let node_name = format!("tmux-{dest}-{session_name}");
-        self.fleet
-            .register_ssh_tmux(node_name, dest, session_name, vec![new_id], merged_tags);
-        Ok(new_id)
+        self.connect_ssh_tmux_body(target, session_name, tags)
     }
 
     /// Executes `command` across all local/remote panes and fleet nodes matching `selector` (`herdr`-style fan-out, `v1.4.0`).

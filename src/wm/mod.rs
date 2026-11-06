@@ -12,6 +12,8 @@ pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
 pub mod layout_profile;
+pub mod link_cmd;
+pub mod pane_hold;
 pub mod panel_dock;
 pub mod quick_terminal;
 pub mod registry;
@@ -19,6 +21,8 @@ pub mod session;
 pub mod session_manager;
 pub mod session_tree;
 pub mod split_tree;
+pub mod tmux_io;
+pub mod tmux_link;
 pub mod traffic;
 pub mod v2_runtime;
 pub mod window_style;
@@ -135,6 +139,8 @@ pub struct WindowManager {
     pub(crate) tmux_control: Option<crate::tmux::TmuxControlSubprocess>,
     /// Bi-directional `tmux -CC` Control Mode parser/router (`TMUX-03`, `ARCH-R05`).
     pub(crate) tmux_bridge: crate::tmux::TmuxControlBridge,
+    /// Persistent SSH + tmux link record: target, state machine, transport (Phase 51.1).
+    pub(crate) tmux_link: crate::tmux::link::TmuxLinkState,
     /// Navigator-style slide-out Sessions / Windows / Panes & Fleet drawer runtime state (`DRW-01`, `DRW-02`).
     pub(crate) drawer: WorkspaceDrawer,
     /// Per-pane agent state tracker (`FLT-01`, Phase 50-03).
@@ -226,6 +232,7 @@ impl WindowManager {
             api_origin: false,
             tmux_control: None,
             tmux_bridge: crate::tmux::TmuxControlBridge::new(),
+            tmux_link: crate::tmux::link::TmuxLinkState::default(),
             drawer: WorkspaceDrawer::new(),
             agents: agent_state::AgentTracker::new(),
             traffic: traffic::TrafficBus::new(),
@@ -718,10 +725,8 @@ impl WindowManager {
                 exited_ids.push(id);
             }
         }
-        for id in exited_ids {
-            if self.panes.len() > 1 && self.remove_pane(id) {
-                changed = true;
-            }
+        if self.reap_or_hold_exited(exited_ids) {
+            changed = true;
         }
         let prev_qt_ld = *self.quick_terminal.pane.line_discipline();
         if self.quick_terminal.pane.poll_pty_events() {
@@ -734,7 +739,8 @@ impl WindowManager {
         if *self.quick_terminal.pane.line_discipline() != prev_qt_ld {
             changed = true;
         }
-        if self.poll_tmux_control() > 0 {
+        let link_ms = self.link_now_ms();
+        if self.tick_tmux_link(link_ms) {
             changed = true;
         }
         if !self.headless_mode && self.tick_cursor_blink(Instant::now()) {

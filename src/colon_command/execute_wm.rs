@@ -356,16 +356,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::SshTmuxConnect { target, session } => {
-            match wm.connect_ssh_tmux(&target, &session, Vec::new()) {
-                Ok(new_id) => {
-                    wm.active_pane_mut().set_status_message(Some(format!(
-                        "🌐 Attached remote tmux -CC '{session}' on {target} (pane #{new_id})"
-                    )));
-                }
-                Err(err) => {
-                    wm.active_pane_mut()
-                        .set_status_message(Some(format!("SSH tmux connect error: {err}")));
-                }
+            // The new pane already carries the honest `Connecting to ...` status.
+            if let Err(err) = wm.connect_ssh_tmux(&target, &session, Vec::new()) {
+                wm.active_pane_mut()
+                    .set_status_message(Some(format!("SSH tmux connect error: {err}")));
             }
             false
         }

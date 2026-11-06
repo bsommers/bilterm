@@ -255,6 +255,11 @@ impl PtySession {
         self.child_pid
     }
 
+    /// Child exit code, polled for at most `patience` (plan 51.1-03 fills the body).
+    pub fn exit_code(&self, _patience: std::time::Duration) -> Option<i32> {
+        None
+    }
+
     /// Raw file descriptor of the PTY master on Unix platforms (used for `tcgetattr` / `tcgetpgrp`).
     #[cfg(unix)]
     pub fn master_raw_fd(&self) -> Option<std::os::fd::RawFd> {

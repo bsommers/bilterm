@@ -743,9 +743,16 @@ fn performance_and_stress_benchmark_verifies_sub_millisecond_frame_and_rpc_budge
                 .wm
                 .spawn_ssh_pane(&format!("user@node-{i}.internal"), Some(2200 + i as u16), vec!["fleet".to_string()]);
         } else if i % 5 == 0 {
-            let _ = plane
+            // One tmux link at a time (Phase 51.1, P-01): later calls fail, so they fall back to a split.
+            if plane
                 .wm
-                .connect_ssh_tmux(&format!("ops@tmux-{i}.internal"), "persist", vec!["fleet".to_string()]);
+                .connect_ssh_tmux(&format!("ops@tmux-{i}.internal"), "persist", vec!["fleet".to_string()])
+                .is_err()
+            {
+                let _ = plane
+                    .wm
+                    .split_focused(bilterm::wm::split_tree::SplitDirection::Vertical);
+            }
         } else {
             let _ = plane
                 .wm

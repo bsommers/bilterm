@@ -1,3 +1,9 @@
+pub mod hydrate;
+pub mod link;
+pub mod reconnect;
+pub mod splitter;
+pub mod transport;
+
 use std::collections::BTreeMap;
 
 use crate::pane::PaneId;
@@ -258,6 +264,10 @@ pub struct TmuxControlBridge {
     pub window_names: BTreeMap<usize, String>,
     pub outbound_commands: Vec<String>,
     pub exited: bool,
+    /// Link primary pane waiting to adopt the first discovered tmux pane (Phase 51.1, P-08).
+    primary: Option<PaneId>,
+    /// `dest/session` badge used to title adopted panes (Phase 51.1).
+    badge: Option<String>,
 }
 
 impl TmuxControlBridge {
@@ -274,7 +284,25 @@ impl TmuxControlBridge {
             window_names: BTreeMap::new(),
             outbound_commands: Vec::new(),
             exited: false,
+            primary: None,
+            badge: None,
         }
+    }
+
+    /// Marks `pane` as the link's primary pane: the first tmux pane discovered adopts it
+    /// instead of creating a new pane (Phase 51.1, P-08).
+    pub fn set_primary(&mut self, pane: PaneId) {
+        self.primary = Some(pane);
+    }
+
+    /// The primary pane that has not adopted a tmux pane yet.
+    pub fn primary(&self) -> Option<PaneId> {
+        self.primary
+    }
+
+    /// `dest/session` text used to title adopted panes.
+    pub fn set_badge(&mut self, badge: Option<String>) {
+        self.badge = badge;
     }
 
     /// The `tmux` window id (`@N`) that holds `tmux_pane`, when known.
@@ -290,6 +318,20 @@ impl TmuxControlBridge {
     fn ensure_tmux_pane(&mut self, wm: &mut WindowManager, tmux_pane_id: usize) -> PaneId {
         if let Some(&id) = self.tmux_to_bilterm.get(&tmux_pane_id) {
             return id;
+        }
+        if let Some(primary) = self.primary.take() {
+            if let Some(pane) = wm.pane_mut(primary) {
+                // Adopt the link's placeholder pane: wipe the ssh text and retitle it.
+                pane.process_pty_output(b"\x1bc");
+                let title = match &self.badge {
+                    Some(b) => format!("TMUX-SSH:{b} %{tmux_pane_id} [#{primary}]"),
+                    None => format!("TMUX %{tmux_pane_id} [#{primary}]"),
+                };
+                pane.set_title(title);
+                self.tmux_to_bilterm.insert(tmux_pane_id, primary);
+                self.bilterm_to_tmux.insert(primary, tmux_pane_id);
+                return primary;
+            }
         }
         let new_id = wm.insert_tmux_pane(tmux_pane_id);
         self.tmux_to_bilterm.insert(tmux_pane_id, new_id);
@@ -456,6 +498,9 @@ impl WindowManager {
     pub fn attach_tmux_control(&mut self, subproc: TmuxControlSubprocess) {
         self.tmux_bridge.active_session_name = Some(subproc.session_name.clone());
         self.tmux_control = Some(subproc);
+        if self.tmux_link.target.is_some() {
+            self.on_tmux_control_attached();
+        }
     }
 
     /// Returns `true` if a `TmuxControlSubprocess` is currently attached (`ARCH-R05`).

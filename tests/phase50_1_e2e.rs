@@ -264,7 +264,8 @@ fn ssh_tmux_end_to_end() {
         line_tx.send(l.to_string()).unwrap();
     }
     e.plane.wm.poll_all_ptys();
-    let tmux_pane = *e.plane.wm.panes().iter().find(|(_, p)| p.title().starts_with("TMUX %4")).map(|(id, _)| id).unwrap();
+    // Phase 51.1 (P-08): the first tmux pane (%4) adopts the link pane `label_only`; %5 is a new TMUX pane.
+    let tmux_pane = *e.plane.wm.panes().iter().find(|(_, p)| p.title().starts_with("TMUX %5")).map(|(id, _)| id).unwrap();
     e.submit(ssh, "uptime");
     e.plane.wm.poll_all_ptys();
 
@@ -289,7 +290,7 @@ fn ssh_tmux_end_to_end() {
             .find(|r| r.get("pane").and_then(JsonValue::as_i64) == Some(tmux_pane as i64))
             .unwrap_or_else(|| panic!("tmux pane not found by `{q}`"));
         assert_eq!(str_of(t, "transport"), "tmux");
-        assert_eq!(t.get("tmux_pane").and_then(JsonValue::as_i64), Some(4), "by tmux pane id");
+        assert_eq!(t.get("tmux_pane").and_then(JsonValue::as_i64), Some(5), "by tmux pane id");
         assert_eq!(str_of(t, "tmux_session"), "work");
         assert!(str_of(t, "tmux_window").contains("editor"), "{}", str_of(t, "tmux_window"));
     }
