@@ -1,4 +1,5 @@
 pub mod agents_gui;
+pub mod agents_list_ui;
 pub mod agents_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
@@ -720,6 +721,9 @@ impl Widget for WorkspaceWidget<'_> {
         // grid; an unscaled copy here would be a second, offset window.
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Agents) == 100 {
             agents_ui::render_agents_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList) == 100 {
+            agents_list_ui::render_agents_list(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {

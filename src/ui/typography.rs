@@ -81,6 +81,8 @@ pub enum PanelTarget {
     Mcp,
     /// The AGENT TRAFFIC window (Phase 50-16).
     Agents,
+    /// The AGENTS list window (Phase 51).
+    AgentsList,
 }
 
 /// Real workspace cells covered by a scaled panel whose rect `virtual_rect` lives in the panel's
@@ -234,6 +236,7 @@ impl WindowManager {
             PanelTarget::Drawer => self.drawer_scale_pct,
             PanelTarget::Mcp => self.mcp_scale_pct,
             PanelTarget::Agents => self.agents_scale_pct,
+            PanelTarget::AgentsList => self.agents_list_scale_pct,
         }
         .clamp(75, 200)
     }
@@ -245,6 +248,7 @@ impl WindowManager {
             PanelTarget::Drawer => self.drawer_scale_pct = pct,
             PanelTarget::Mcp => self.mcp_scale_pct = pct,
             PanelTarget::Agents => self.agents_scale_pct = pct,
+            PanelTarget::AgentsList => self.agents_list_scale_pct = pct,
         }
     }
 
@@ -253,6 +257,7 @@ impl WindowManager {
         self.set_scale(PanelTarget::Drawer, pct);
         self.set_scale(PanelTarget::Mcp, pct);
         self.set_scale(PanelTarget::Agents, pct);
+        self.set_scale(PanelTarget::AgentsList, pct);
     }
 
     /// Steps one panel's scale by `delta` percent (clamped to `75..=200`); returns the new setting.

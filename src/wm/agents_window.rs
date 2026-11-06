@@ -582,6 +582,7 @@ impl WindowManager {
     pub fn open_agents_window(&mut self, focus: Option<PaneId>) {
         self.agents_window.active = true;
         self.agents_window.focused = true;
+        self.agents_list.blur();
         if let Some(id) = focus
             && self.panes.contains_key(&id)
         {

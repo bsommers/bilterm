@@ -16,7 +16,10 @@ const PARTNER_WINDOW: Duration = Duration::from_secs(60);
 /// Executes one `:agents` operation; always returns `false` (never quits).
 pub(super) fn execute_agents_command(wm: &mut WindowManager, op: AgentsOp) -> bool {
     match op {
-        AgentsOp::List => list(wm),
+        AgentsOp::List => {
+            list(wm);
+            wm.open_agents_list();
+        }
         AgentsOp::Zoom(focus) => zoom(wm, focus),
         AgentsOp::Close => wm.close_agents_window(),
         AgentsOp::Toggle(focus) => {

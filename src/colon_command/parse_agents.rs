@@ -190,6 +190,7 @@ pub(super) fn parse_agents_colon_command(
         None | Some("list" | "ls" | "status") if parts.len() <= 2 => {
             Ok(ColonCommand::Agents(AgentsOp::List))
         }
+        Some("list" | "ls") if parts.len() > 2 => super::parse_agents_list::parse(&parts[2..]),
         Some("zoom") if parts.len() <= 3 => match parts.get(2) {
             None => Ok(ColonCommand::Agents(AgentsOp::Zoom(None))),
             Some(raw) => match raw.trim_start_matches('#').parse::<crate::pane::PaneId>() {

@@ -179,6 +179,8 @@ pub enum Action {
     DrawerRows(u8),
     /// `:agents [list]` - per-pane agent state (Phase 50-03, FLT-01).
     Agents(crate::wm::agents_cmd::AgentsOp),
+    /// `:agents list <verb>` - the AGENTS list window (Phase 51, UIT-03).
+    AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
     Find(crate::wm::find_cmd::FindOp),
     FontZoomIn,
@@ -387,6 +389,7 @@ mod tests {
             Action::DrawerStyle(_) => Some(":drawer style navigator"),
             Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
+            Action::AgentsList(_) => Some(":agents list toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
             Action::FontZoomOut => Some(":fontsize -"),
@@ -601,6 +604,7 @@ mod tests {
             Action::DrawerStyle(Some(crate::wm::drawer::DrawerStyle::Navigator)),
             Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
+            Action::AgentsList(crate::wm::agents_list_cmd::AgentsListOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
             Action::Find(FindOp::Open { kind: FindKind::History, query: String::new() }),

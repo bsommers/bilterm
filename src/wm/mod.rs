@@ -2,6 +2,8 @@ pub mod agent_state;
 pub mod agents_topology;
 pub mod agents_window;
 pub mod agents_cmd;
+pub mod agents_list;
+pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod chrome_style;
 pub mod drawer;
@@ -140,6 +142,8 @@ pub struct WindowManager {
     pub(crate) registry: registry::RegistryState,
     /// Floating AGENT TRAFFIC zoom window state (`FLT-02`, Phase 50-07).
     pub(crate) agents_window: agents_window::AgentsWindowState,
+    /// Floating AGENTS list window state (`UIT-03`, Phase 51).
+    pub(crate) agents_list: agents_list::AgentsListState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
     /// Scale percentage at which `default_size` viewport was computed (`100` by default).
@@ -150,6 +154,8 @@ pub struct WindowManager {
     pub(crate) mcp_scale_pct: u16,
     /// Same for the AGENT TRAFFIC window; independent of the drawer's and the console's (50-16).
     pub(crate) agents_scale_pct: u16,
+    /// Same for the AGENTS list window (Phase 51).
+    pub(crate) agents_list_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -221,11 +227,13 @@ impl WindowManager {
             traffic: traffic::TrafficBus::new(),
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
+            agents_list: agents_list::AgentsListState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
             drawer_scale_pct: 100,
             mcp_scale_pct: 100,
             agents_scale_pct: 100,
+            agents_list_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
@@ -746,6 +754,7 @@ impl WindowManager {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
             self.agents_window.blur();
+            self.agents_list.blur();
             let changed = self.z_stack.raise(pane_id);
             self.clear_inactive_transient_copy_cursors();
             self.sync_config_scale_from_active_pane();
@@ -759,6 +768,7 @@ impl WindowManager {
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
+        self.agents_list.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();
@@ -769,6 +779,7 @@ impl WindowManager {
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
         self.agents_window.blur();
+        self.agents_list.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
         self.clear_inactive_transient_copy_cursors();
         self.sync_config_scale_from_active_pane();

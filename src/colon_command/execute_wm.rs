@@ -833,6 +833,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::AppearanceSave
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
+        ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
         ColonCommand::Find(op) => super::execute_find::execute_find_command(wm, op),
         other => {
             let is_prompt_layout = matches!(
@@ -864,5 +865,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
         PanelTarget::Drawer => "Drawer",
         PanelTarget::Mcp => "MCP",
         PanelTarget::Agents => "Agents",
+        PanelTarget::AgentsList => "Agents list",
     }
 }
