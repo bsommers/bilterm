@@ -5,7 +5,7 @@ use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp, TopologyOp
 use crate::config::agents::EDGE_FADE_RANGE;
 use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list|zoom [pane-id]|toggle [pane-id]|demo|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|fade [secs]|topology [export <name>]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
+const USAGE: &str = "Usage: :agents [list [verb]|zoom [pane-id]|toggle [pane-id]|demo [stop]|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|fade [secs]|topology [export <name>]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
 
 const FADE_USAGE: &str = "Usage: :agents fade [1..3600] (seconds for an edge to fade to its floor)";
 const TOPOLOGY_USAGE: &str = "Usage: :agents topology [export <name>]";
@@ -206,6 +206,8 @@ pub(super) fn parse_agents_colon_command(
             },
         },
         Some("demo") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Demo)),
+        Some("demo") if parts.len() == 3 && parts[2] == "stop" => Ok(ColonCommand::Agents(AgentsOp::DemoStop)),
+        Some("demo") => Err("Usage: :agents demo [stop]".to_string()),
         Some("close") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Close)),
         Some("dismiss") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Dismiss)),
         Some("blur") if parts.len() == 2 => Ok(ColonCommand::Agents(AgentsOp::Blur)),

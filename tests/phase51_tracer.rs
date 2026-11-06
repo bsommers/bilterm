@@ -2,9 +2,13 @@
 //! `:agents demo stop` (UIT-01). `list_tracer` = parse -> Action -> apply -> state -> render,
 //! `list_grammar` = the frozen colon grammar of 51-CONTRACT.md section 3.
 
+use bilterm::action::Action;
 use bilterm::api::{AutomationControlPlane, JsonValue};
 use bilterm::colon_command::parse_colon_command;
 use bilterm::ui::WorkspaceWidget;
+use bilterm::ui::typography::PanelTarget;
+use bilterm::wm::agents_cmd::AgentsOp;
+use bilterm::wm::agents_list_cmd::{AgentsListOp, ListFilter};
 use bilterm::wm::{SplitDirection, WindowManager};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -102,4 +106,96 @@ fn list_dismiss_closes_unpinned_only() {
     assert!(wm.agents_list().active && !wm.agents_list().focused, "pinned: only the keyboard is released");
     run_colon(&mut wm, ":agents list toggle");
     assert!(!wm.agents_list().active, "toggle closes an open window");
+}
+
+/// One value of every `AgentsListOp` variant (both Option forms where the grammar has two).
+fn sample_list_ops() -> Vec<AgentsListOp> {
+    use AgentsListOp::*;
+    vec![
+        Open, Close, Toggle, Dismiss, Blur,
+        Step(-1), Step(1), First, Last, Page(-1), Page(1), SelectPane(3),
+        Jump(None), Jump(Some(2)), Zoom(None), Zoom(Some(2)),
+        Pin(Some(true)), Pin(Some(false)), Pin(None),
+        ScaleStep(10), ScaleStep(-10),
+        Filter(Some(ListFilter::All)), Filter(Some(ListFilter::Agents)), Filter(None),
+        Dock(Some(true)), Dock(Some(false)), Dock(None),
+        Move { dx: -1, dy: 2 }, Resize { dw: 3, dh: -4 }, SetRect { x: 1, y: 2, w: 30, h: 8 },
+        Size(None), Size(Some((40, 12))), Scroll(-3), Scroll(3),
+    ]
+}
+
+fn parsed(cmd: &str) -> Result<Action, String> {
+    parse_colon_command(cmd).unwrap_or_else(|| panic!("not a colon command: {cmd}"))
+}
+
+#[test]
+fn list_grammar_round_trip() {
+    for op in sample_list_ops() {
+        let form = op.colon_form();
+        assert_eq!(parsed(&form), Ok(Action::AgentsList(op.clone())), "round trip of {form}");
+    }
+}
+
+#[test]
+fn list_grammar_scale_absolute() {
+    for cmd in [":agents list scale 150", ":agents list scale 150%"] {
+        assert_eq!(parsed(cmd), Ok(Action::PanelScaleOf(PanelTarget::AgentsList, 150)), "{cmd}");
+    }
+    assert_eq!(parsed(":agents list scale +10"), Ok(Action::AgentsList(AgentsListOp::ScaleStep(10))));
+    assert_eq!(parsed(":agents list scale -10"), Ok(Action::AgentsList(AgentsListOp::ScaleStep(-10))));
+    for bad in ["scale 74", "scale 201", "scale x", "scale", "scale 100 100", "scale +x"] {
+        assert!(parsed(&format!(":agents list {bad}")).is_err(), "{bad} must be a usage error");
+    }
+}
+
+#[test]
+fn list_grammar_select_forms() {
+    use AgentsListOp::*;
+    for (arg, op) in [
+        ("up", Step(-1)), ("down", Step(1)), ("first", First), ("last", Last),
+        ("page-up", Page(-1)), ("page-down", Page(1)), ("3", SelectPane(3)), ("#3", SelectPane(3)),
+    ] {
+        assert_eq!(parsed(&format!(":agents list select {arg}")), Ok(Action::AgentsList(op)), "select {arg}");
+    }
+    for bad in ["select", "select sideways", "select 99999999999", "select 1 2", "select #"] {
+        assert!(parsed(&format!(":agents list {bad}")).is_err(), "{bad} must be a usage error");
+    }
+}
+
+#[test]
+fn list_grammar_rejects_garbage() {
+    for bad in [
+        ":agents list bogus", ":agents list close now", ":agents list move 1", ":agents list move a b",
+        ":agents list rect 1 2 3", ":agents list rect 1 2 3 -4", ":agents list size 0x5",
+        ":agents list size 9999x9999", ":agents list size 40", ":agents list resize 1",
+        ":agents list scroll", ":agents list scroll x", ":agents list scroll 99999",
+        ":agents list filter", ":agents list filter bogus", ":agents list dock now",
+        ":agents list pin maybe", ":agents list jump x", ":agents list zoom 1 2",
+        ":agents list open extra", ":agents list \u{202e}", ":agents demo x", ":agents demo stop x",
+    ] {
+        let res = parsed(bad);
+        let err = res.err().unwrap_or_else(|| panic!("{bad} must be a usage error"));
+        assert!(err.starts_with("Usage:"), "{bad}: {err}");
+    }
+}
+
+#[test]
+fn list_aliases_and_bare_list_unchanged() {
+    for cmd in [":agents", ":agents list", ":agents ls", ":agents status"] {
+        assert_eq!(parsed(cmd), Ok(Action::Agents(AgentsOp::List)), "{cmd}");
+    }
+    assert_eq!(parsed(":agents ls close"), parsed(":agents list close"));
+    assert_eq!(parsed(":agents ls close"), Ok(Action::AgentsList(AgentsListOp::Close)));
+}
+
+#[test]
+fn demo_stop_parses_and_stub_reports() {
+    assert_eq!(parsed(":agents demo stop"), Ok(Action::Agents(AgentsOp::DemoStop)));
+    assert_eq!(parsed(":agents demo"), Ok(Action::Agents(AgentsOp::Demo)));
+    let (mut wm, _) = fixture(120, 40);
+    let before = wm.pane_count();
+    run_colon(&mut wm, ":agents demo stop");
+    let msg = wm.active_pane().status_message().unwrap_or("").to_string();
+    assert!(msg.contains("No agent demo"), "status: {msg}");
+    assert_eq!(wm.pane_count(), before, "the seam stub changes nothing");
 }

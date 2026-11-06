@@ -1,7 +1,7 @@
 //! Operations of the `:agents` command family (Phase 50-03, FLT-01).
 //!
 //! `:agents` (plural) is the Phase 50 view command; `:agent` (singular) is reserved for the
-//! Phase 51 messaging family. Later Phase 50 plans extend this enum.
+//! Phase 52 messaging family (ADR-008). Later Phase 50 / 51 plans extend this enum.
 
 /// One `:agents` operation, lowered to [`crate::action::Action::Agents`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,6 +81,9 @@ pub enum AgentsOp {
     /// `:agents demo` - fill the traffic bus with clearly labelled synthetic pane-to-pane events
     /// (and open the window) so the graph and conversation have something to show.
     Demo,
+    /// `:agents demo stop` - close the panes the demo spawned and remove its `[demo]` events and
+    /// topology pairs; a no-op with a status when no demo is running.
+    DemoStop,
     /// Enter on the compose line or the `[send]` badge. Carries no text and has no colon form:
     /// Phase 50 has no outward write path (D-09), so the executor only reports that agent
     /// messaging is not enabled.

@@ -196,3 +196,9 @@ pub(super) fn demo(wm: &mut WindowManager) {
         format!("Demo: {} synthetic [demo] events between panes {:?} (memory only; :agents topology shows them)", DEMO_SCRIPT.len(), ids),
     );
 }
+
+/// `:agents demo stop` - seam stub (Phase 51-01): reports that nothing is running and changes
+/// nothing. Plan 51-03 owns the real body (close the demo's spawned panes, purge its events).
+pub(super) fn demo_stop(wm: &mut WindowManager) {
+    status(wm, "No agent demo to stop (run :agents demo first)".to_string());
+}
