@@ -753,6 +753,10 @@ pub(super) fn handle_wm_modal_key(
         }
     }
 
+    if let Some(action) = super::link_mouse::handle_link_banner_key(wm, key)? {
+        return Ok(Some(action));
+    }
+
     if wm.active_pane().held_exited_shell().is_some() && !wm.is_leader_pending() {
         match key.code {
             KeyCode::Enter | KeyCode::Char('r') | KeyCode::Char('R') if key.modifiers.is_empty() => {
