@@ -9,12 +9,15 @@ use ratatui::layout::Rect;
 use super::json::JsonValue;
 use super::mcp::parse_key_chord_str;
 use super::playbook::{AutomationEvent, Playbook};
+use crate::colon_command::execute_find::find_results_json;
 use crate::colon_command::parse_colon_command;
 use crate::input::{AppAction, handle_wm_key_event};
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::remote::{FleetSelector, RemoteHostProfile};
 use crate::ui::renderer::{GuiFrameSurface, GuiWorkspaceRenderer, WorkspaceFrameRenderer};
 use crate::vt::VtParser;
+use crate::wm::find_cmd::{FindKind, cap_query};
+use crate::wm::registry::FIND_DEFAULT_LIMIT;
 use crate::wm::traffic::{TrafficEndpoint, TrafficKind};
 use crate::wm::{WindowManager, WorkspaceLayoutMode};
 
@@ -40,6 +43,9 @@ pub const RPC_METHODS: &[&str] = &[
     "fleet.list",
     "fleet.exec",
     "fleet.disconnect",
+    "find.agents",
+    "find.sessions",
+    "find.history",
     "canvas.command",
     "canvas.status",
     "session.save",
@@ -723,12 +729,30 @@ impl AutomationControlPlane {
                     ("name", JsonValue::String(name.to_string())),
                 ]))
             }
+            "find.agents" => self.find_rpc(FindKind::Agent, params),
+            "find.sessions" => self.find_rpc(FindKind::Session, params),
+            "find.history" => self.find_rpc(FindKind::History, params),
             "workspace.fontsize" => self.handle_rpc_fontsize(params),
             "canvas.command" | "canvas.status" => self.handle_rpc_canvas(params),
             "session.save" => self.handle_rpc_session_save(params),
             "session.restore" => self.handle_rpc_session_restore(params),
             _ => Err(format!("Method not found: {method}")),
         }
+    }
+
+    /// `find.agents|sessions|history`: read-only registry search (FND-R04). Same JSON as the
+    /// `:find` data; no modal, no focus change, no command data (same exposure class as `pane.read`).
+    fn find_rpc(&mut self, kind: FindKind, params: &JsonValue) -> std::result::Result<JsonValue, String> {
+        let query = match params.get("query") {
+            None | Some(JsonValue::Null) => String::new(),
+            Some(v) => v.as_str().ok_or_else(|| "invalid 'query' parameter".to_string())?.to_string(),
+        };
+        let limit = match params.get("limit") {
+            None | Some(JsonValue::Null) => FIND_DEFAULT_LIMIT,
+            Some(v) => v.as_usize().ok_or_else(|| "invalid 'limit' parameter".to_string())?,
+        };
+        let results = self.wm.run_find(kind, &cap_query(&query), limit);
+        Ok(find_results_json(&results))
     }
 
     pub fn workspace_status_json(&self) -> JsonValue {
