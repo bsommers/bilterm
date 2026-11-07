@@ -1,4 +1,4 @@
-# Purpose, Motivation & Threat Model (`v3.0.3`)
+# Purpose, Motivation & Threat Model (`v3.0.4`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md) | [Chapter 10: Security & Best Practices →](user-guide/10-security-and-best-practices.md)
 
