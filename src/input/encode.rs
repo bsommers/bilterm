@@ -100,6 +100,12 @@ pub fn encode_key_to_pty_bytes_full(
         }
     }
 
+    if let Some(m) = xterm_modifier_param(key.modifiers)
+        && let Some(bytes) = encode_modified_special_key(key.code, m)
+    {
+        return bytes;
+    }
+
     match key.code {
         KeyCode::Char(c) => {
             let mut buf = [0u8; 4];
@@ -165,6 +171,7 @@ pub fn encode_key_to_pty_bytes_full(
                 b"\x1b[F".to_vec()
             }
         }
+        KeyCode::Insert => b"\x1b[2~".to_vec(),
         KeyCode::Delete => b"\x1b[3~".to_vec(),
         KeyCode::PageUp => b"\x1b[5~".to_vec(),
         KeyCode::PageDown => b"\x1b[6~".to_vec(),
@@ -182,4 +189,51 @@ pub fn encode_key_to_pty_bytes_full(
         KeyCode::F(12) => b"\x1b[24~".to_vec(),
         _ => Vec::new(),
     }
+}
+
+/// xterm modifier parameter `m = 1 + Shift(1) + Alt(2) + Ctrl(4)`; `None` when none of them is held.
+fn xterm_modifier_param(mods: KeyModifiers) -> Option<u8> {
+    let mut m = 1u8;
+    if mods.contains(KeyModifiers::SHIFT) {
+        m += 1;
+    }
+    if mods.contains(KeyModifiers::ALT) {
+        m += 2;
+    }
+    if mods.contains(KeyModifiers::CONTROL) {
+        m += 4;
+    }
+    (m > 1).then_some(m)
+}
+
+/// Encodes a modified cursor / editing / function key the way xterm does by default:
+/// `CSI 1;m {A,B,C,D,H,F,P,Q,R,S}` or `CSI n;m ~`. Always the `CSI` form, even under `DECCKM`
+/// application cursor mode, because `ESC O` cannot carry a modifier parameter.
+fn encode_modified_special_key(code: KeyCode, m: u8) -> Option<Vec<u8>> {
+    let (n, final_byte) = match code {
+        KeyCode::Up => (1, 'A'),
+        KeyCode::Down => (1, 'B'),
+        KeyCode::Right => (1, 'C'),
+        KeyCode::Left => (1, 'D'),
+        KeyCode::Home => (1, 'H'),
+        KeyCode::End => (1, 'F'),
+        KeyCode::F(1) => (1, 'P'),
+        KeyCode::F(2) => (1, 'Q'),
+        KeyCode::F(3) => (1, 'R'),
+        KeyCode::F(4) => (1, 'S'),
+        KeyCode::Insert => (2, '~'),
+        KeyCode::Delete => (3, '~'),
+        KeyCode::PageUp => (5, '~'),
+        KeyCode::PageDown => (6, '~'),
+        KeyCode::F(5) => (15, '~'),
+        KeyCode::F(6) => (17, '~'),
+        KeyCode::F(7) => (18, '~'),
+        KeyCode::F(8) => (19, '~'),
+        KeyCode::F(9) => (20, '~'),
+        KeyCode::F(10) => (21, '~'),
+        KeyCode::F(11) => (23, '~'),
+        KeyCode::F(12) => (24, '~'),
+        _ => return None,
+    };
+    Some(format!("\x1b[{n};{m}{final_byte}").into_bytes())
 }
