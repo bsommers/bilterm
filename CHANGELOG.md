@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-11-07
+
+### Added
+- **Multi-Mode Window/Session/Drawer Rename Dialog (`src/wm/rename_dialog.rs`, `src/ui/rename_dialog_ui.rs`)**:
+  - Interactive `RenameDialog` modal supporting in-place renaming of windows, sessions, and drawer entries with input validation, `Esc` cancellation, and `Enter` submission.
+  - Surface parity across `:rename-window [name]`, `:rename-session [name]`, context menus, and JSON-RPC dispatch.
+- **Right-Click Context Menus Across All UI Modes (`src/input/mouse.rs`, `src/input/mouse_wm.rs`, `src/wm/drawer/menu.rs`)**:
+  - Interactive right-click context menu handling across Classic, Modern Minimal, and Liquid Glass UI modes.
+  - Quick-action menus for Window Rename, Split, Close, Zoom, Pin, and Theme/Profile switching.
+- **100% Colon Command & Command Palette Parity**:
+  - Full parity across canonical `Action` enum, `:colon` parser, fuzzy Command Palette (`PALETTE_CATALOG`), tab completion, and JSON-RPC dispatch.
+  - Refactored large modules into focused submodules (`src/api/rpc_dispatch.rs`, `src/input/keymap_tables.rs`, `src/input/modal_palette.rs`, `src/ui/help_catalog_data.rs`, `src/wm/window_manage_bulk.rs`).
+- **Phase 45 8-Profile Design System (`src/ui/design/{config,profiles,tokens}.rs`)**:
+  - Complete token engine and persistent configuration for all 8 design profiles: `ClassicIBM`, `BorlandTurbo`, `ModernMinimal`, `LiquidGlass`, `CyberpunkNeon`, `SolarizedDark`, `NordFrost`, and `MonochromePhosphor`.
+  - Verified by `tests/design_system_coverage.rs`.
+- **Cross-Platform `BiltermLiveDriver` Test Suite (`tests/bilterm_live_driver_suite.rs`, `tests/live_driver_support/`)**:
+  - 4-mode automated live driver architecture for testing end-to-end PTY interaction, window management, and UI rendering across platforms.
+
+### Fixed
+- **11 Phase 51 Follow-ups Resolved (`51-FOLLOWUPS.md`)**:
+  - Effective area calculation for docked traffic windows (`src/wm/agents_geometry.rs`, `tests/panel_dock.rs`).
+  - Preserved dock notices during `:arrange` (`src/wm/layout_profile.rs`).
+  - Accurate runtime transport attribution for `:ssh-tmux` panes (`src/pane/capture.rs`).
+  - Palette Enter prefill for fill-in command entries (`src/input/modal_palette.rs`).
+  - Dedicated key chords and `Action` lowerings for `:arrange <pattern>`.
+  - Data-only split for `:agents status` / RPC query vs. window presentation.
+  - Module line ceiling splits: `src/wm/drawer.rs` + `src/wm/drawer/ops.rs`, `src/wm/agents_window.rs` + `src/wm/agents_window_ops.rs`.
+  - Test line ceiling split: `tests/phase51_uniformity.rs` + `tests/phase51_uniformity_support/`.
+  - 100% hermetic test execution with isolated RAII temporary state directories across drawer and state suites.
+  - Source tree map documentation updates in `AGENTS.md` and `CLAUDE.md`.
+  - Accurate persistent SSH+tmux bridge descriptions in `docs/architecture.md`.
+
 ## [3.0.1] - 2026-11-06
 
 ### Fixed

@@ -5,7 +5,9 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{self, ErrorKind, Read, Write};
+#[cfg(unix)]
+use std::io::{Seek, SeekFrom};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
@@ -19,7 +21,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::api::json::JsonValue;
-use crate::secure_fs::{ensure_private_dir, private_open_options, validate_safe_name};
+use crate::secure_fs::{ensure_private_dir, validate_safe_name};
+#[cfg(unix)]
+use crate::secure_fs::private_open_options;
 
 /// Lockfile record written to `<runtime_dir>/daemons/daemon-<name>.lock` or `daemon-singleton.lock`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,17 +219,13 @@ pub fn acquire_lock(
 ) -> io::Result<DaemonLockResult> {
     let lock_path = daemon_lock_path_in(runtime_dir, name)?;
 
-    let mut open_opts = private_open_options();
-    open_opts.read(true).write(true).create(true);
     #[cfg(unix)]
     {
+        let mut open_opts = private_open_options();
+        open_opts.read(true).write(true).create(true);
         open_opts.custom_flags(libc::O_NOFOLLOW);
-    }
 
-    let mut file = open_opts.open(&lock_path)?;
-
-    #[cfg(unix)]
-    {
+        let mut file = open_opts.open(&lock_path)?;
         let fd = file.as_raw_fd();
         let flock_res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
         if flock_res == 0 {
@@ -294,6 +294,11 @@ pub fn acquire_lock(
                 }));
             }
         }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = &socket_path;
     }
 
     Err(io::Error::new(
@@ -381,6 +386,8 @@ pub fn ensure_started(runtime_dir: &Path, name: &str) -> io::Result<DaemonStartR
 
 /// Gracefully stops daemon `name`.
 pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bool> {
+    #[cfg(not(unix))]
+    let _ = force;
     validate_safe_name(name)
         .map_err(|e| io::Error::new(ErrorKind::InvalidInput, format!("invalid daemon name: {e}")))?;
 

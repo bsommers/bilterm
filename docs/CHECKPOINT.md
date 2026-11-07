@@ -36,4 +36,15 @@
    - Upgraded `scripts/verify.sh` with composable tier filtering (`--tier <smoke|unit|integration|system|perf|stress|torture|security>`), `--match <pattern>`, `--coverage` (`cargo llvm-cov`), and `--xvfb` (headless X11).
    - Added standardized verification artifact emission (`target/verify/report.md` and `target/verify/junit.xml`).
    - Documented the new 4-mode `BiltermLiveDriver` architecture in `docs/TEST_COVERAGE.md`.
-   - Verified: 120/120 verification stages clean, 11/11 classic goldens matching.
+   - Verified: 121/121 verification stages clean, 11/11 classic goldens matching.
+8. **Release `v3.0.2` Cross-Target Verification & Multi-Platform Binary Builds**:
+   - Version bumped to `3.0.2` in `Cargo.toml` with detailed changelog entry in `CHANGELOG.md`.
+   - Cross-compilation verified with 0 errors and 0 warnings for both Windows (`x86_64-pc-windows-gnu`) and macOS (`aarch64-apple-darwin`).
+   - Built 4 release binaries via `cargo-zigbuild`:
+     - `x86_64-unknown-linux-gnu` (`target/release/bilterm`, 13MB)
+     - `x86_64-unknown-linux-musl` (`target/x86_64-unknown-linux-musl/release/bilterm`, 11MB)
+     - `aarch64-unknown-linux-musl` (`target/aarch64-unknown-linux-musl/release/bilterm`, 9.3MB)
+     - `x86_64-pc-windows-gnu` (`target/x86_64-pc-windows-gnu/release/bilterm.exe`, 14MB)
+   - Smoke tests verified: `--version` (`bilterm 3.0.2`), `--completions bash`, `--man`.
+   - Integration test suite verified: `cargo test -q --test bilterm_live_driver_suite` (6 passed, 0 failed).
+   - Full verification: `scripts/verify.sh --quick` (`PASS 121/121`).

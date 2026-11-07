@@ -61,19 +61,19 @@ pub fn validate_http_bind(s: &str) -> Result<SocketAddr> {
 
 /// Generates a 256-bit random bearer token (hex) from the OS CSPRNG.
 pub fn generate_http_token() -> Result<String> {
-    let mut buf = [0u8; 32];
     #[cfg(unix)]
     {
         use std::io::Read;
+        let mut buf = [0u8; 32];
         std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+        Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
     }
     #[cfg(not(unix))]
     {
-        return Err(BiltermError::Config(
+        Err(BiltermError::Config(
             "HTTP token generation is unsupported on this platform".to_string(),
-        ));
+        ))
     }
-    Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Writes `token` to `<private runtime dir>/bilterm-http.token` (0600, atomic) and returns the path.
