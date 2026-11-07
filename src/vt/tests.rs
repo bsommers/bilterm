@@ -197,6 +197,71 @@ fn detects_urls_and_searches_canvas_grid() {
     assert_eq!(matches[0].row, 0);
 }
 
+#[test]
+fn kitty_graphics_rejects_oversized_dimensions_and_payloads() {
+    let mut vt = VtParser::new(10, 40, 100);
+    vt.process(b"\x1b_Ga=T,f=32,s=65535,v=65535;\x1b\\");
+    vt.process(b"\x1b_Ga=T,f=32,s=513,v=2;\x1b\\");
+    assert!(vt.graphic_placements().is_empty());
+
+    let huge = "A".repeat(MAX_KITTY_PAYLOAD_B64_BYTES + 4);
+    vt.process(format!("\x1b_Ga=T,f=32,s=4,v=4;{huge}\x1b\\").as_bytes());
+    assert!(vt.graphic_placements().is_empty());
+
+    let max = MAX_GRAPHIC_DIM_PX;
+    vt.process(format!("\x1b_Ga=T,f=32,s={max},v={max};AAAA\x1b\\").as_bytes());
+    let placements = vt.graphic_placements();
+    assert_eq!(placements.len(), 1);
+    assert_eq!(placements[0].rgba_bytes.len(), usize::from(max) * usize::from(max) * 4);
+}
+
+#[test]
+fn graphic_placements_retain_only_the_most_recent() {
+    let mut vt = VtParser::new(10, 40, 100);
+    for i in 0..MAX_GRAPHIC_PLACEMENTS + 10 {
+        vt.process(format!("\x1b_Ga=T,i={},s=2,v=2,q=2;AAAA\x1b\\", i + 1).as_bytes());
+    }
+    let placements = vt.graphic_placements();
+    assert_eq!(placements.len(), MAX_GRAPHIC_PLACEMENTS);
+    assert_eq!(placements.first().map(|g| g.id), Some(11));
+    assert_eq!(
+        placements.last().map(|g| g.id),
+        Some((MAX_GRAPHIC_PLACEMENTS + 10) as u32)
+    );
+}
+
+#[test]
+fn osc8_links_and_notifications_retain_only_the_most_recent() {
+    let mut vt = VtParser::new(10, 40, 100);
+    let total = MAX_OSC8_LINKS + 100;
+    for i in 0..total {
+        vt.process(format!("\x1b]8;;https://e.test/{i}\x07x\x1b]8;;\x07").as_bytes());
+    }
+    assert_eq!(vt.osc8_links().len(), MAX_OSC8_LINKS);
+    assert_eq!(vt.osc8_links()[0].uri, "https://e.test/100");
+    assert_eq!(
+        vt.osc8_links().last().map(|l| l.uri.clone()),
+        Some(format!("https://e.test/{}", total - 1))
+    );
+
+    let total = MAX_NOTIFICATIONS + 100;
+    for i in 0..total {
+        let seq = if i % 2 == 0 {
+            format!("\x1b]9;n{i}\x07")
+        } else {
+            format!("\x1b]777;notify;t;n{i}\x07")
+        };
+        vt.process(seq.as_bytes());
+    }
+    assert_eq!(vt.notifications().len(), MAX_NOTIFICATIONS);
+    assert_eq!(vt.notifications()[0].body, "n100");
+    assert_eq!(
+        vt.notifications().last().map(|n| n.body.clone()),
+        Some(format!("n{}", total - 1))
+    );
+    assert_eq!(vt.notifications_received(), total as u64);
+}
+
 fn history_text(vt: &mut VtParser) -> String {
     let used = vt.scrollback_used_rows();
     let (rows, _) = vt.size();
