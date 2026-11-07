@@ -3,22 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bilterm</title>
-<meta name="description" content="Retro-futuristic terminal multiplexer in Rust: IBM 3270 x Borland Turbo Vision x TRON.">
+<title>Bilterm v3.0.1 — Retro-Futuristic Terminal Multiplexer & Agent Control Plane</title>
+<meta name="description" content="Bilterm v3.0: Retro-futuristic terminal multiplexer, native desktop GUI, and AI agent control plane in Rust. IBM 3270 x Borland Turbo Vision x TRON.">
 <link rel="icon" href="assets/bilterm-64.png">
 <style>
 :root{
   --void:#02040f; --navy:#000a3a; --borland:#0000aa; --borland-hi:#1a1aff;
   --neon:#00e5ff; --neon-dim:#0a7a99; --white:#e8f6ff; --amber:#ffd84a;
-  --grid:rgba(0,229,255,.22);
-  --mono:ui-monospace,"IBM Plex Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
+  --green:#00ff66; --red:#ff3366; --purple:#cc66ff;
+  --grid:rgba(0,229,255,.18);
+  --mono:ui-monospace,"IBM Plex Mono","JetBrains Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
-html{background:var(--void)}
+html{background:var(--void);scroll-behavior:smooth}
 body{
   margin:0; min-height:100vh; color:var(--white); font:15px/1.55 var(--mono);
   background:
-    radial-gradient(ellipse at 50% 0%,rgba(0,80,255,.35),transparent 60%),
+    radial-gradient(ellipse at 50% 0%,rgba(0,80,255,.35),transparent 65%),
     linear-gradient(var(--void),var(--navy) 60%,var(--void));
   background-attachment:fixed; overflow-x:hidden;
 }
@@ -32,62 +33,111 @@ body{
   -webkit-mask-image:linear-gradient(to top,#000 20%,transparent 95%);
   animation:drift 6s linear infinite}
 @keyframes drift{to{background-position:0 48px,0 0}}
-/* Borland-style hatch + scanlines */
-.hatch{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+/* Borland hatch & scanline texture */
+.hatch{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.45;
   background:
-    repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px),
-    repeating-linear-gradient(45deg,rgba(0,100,255,.06) 0 2px,transparent 2px 6px)}
-.wrap{max-width:980px;margin:0 auto;padding:0 16px 48px}
-/* menu bar */
-.menubar{background:#c8d8e8;color:#000;display:flex;gap:0;flex-wrap:wrap;font-weight:600}
-.menubar span,.menubar a{padding:2px 14px;color:#000;text-decoration:none}
+    repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(45deg,rgba(0,100,255,.05) 0 2px,transparent 2px 6px)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 56px}
+
+/* Menu bar */
+.menubar{background:#c8d8e8;color:#000;display:flex;gap:0;flex-wrap:wrap;font-weight:600;font-size:14px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.menubar span,.menubar a{padding:3px 12px;color:#000;text-decoration:none;display:inline-flex;align-items:center}
 .menubar a:hover,.menubar a:focus-visible{background:#000;color:var(--white);outline:none}
-.menubar b{color:#a00;font-weight:700;color:#000;text-decoration:underline}
+.menubar b{color:#a00;font-weight:700;text-decoration:underline;margin-right:1px}
 .menubar .sp{flex:1}
-/* Borland window */
-.win{position:relative;margin:28px 0;background:var(--borland);
-  border:3px double var(--white);box-shadow:10px 10px 0 rgba(0,0,0,.7),0 0 28px rgba(0,229,255,.35)}
-.win>h2{margin:0;text-align:center;font-size:14px;font-weight:600;letter-spacing:.12em;
-  background:var(--white);color:#000;padding:1px 0;text-transform:uppercase}
-.win .body{padding:18px 22px}
-.win.neon{border-color:var(--neon);box-shadow:10px 10px 0 rgba(0,0,0,.7),0 0 22px var(--neon)}
-.win.neon>h2{background:var(--neon)}
-/* hero */
-.hero{text-align:center;padding:40px 0 8px}
-.logo{margin:0;font-size:clamp(34px,9vw,84px);line-height:1;letter-spacing:.14em;font-weight:800;
-  color:var(--white);text-shadow:0 0 6px var(--neon),0 0 22px var(--neon),0 0 60px #0066ff}
+.menubar .badge{background:var(--borland);color:var(--neon);padding:2px 8px;font-size:12px;font-weight:700;border-left:1px solid #9ab;border-right:1px solid #9ab}
+
+/* Borland window box */
+.win{position:relative;margin:32px 0;background:var(--borland);
+  border:3px double var(--white);box-shadow:10px 10px 0 rgba(0,0,0,.7),0 0 28px rgba(0,229,255,.3)}
+.win>h2{margin:0;text-align:center;font-size:13px;font-weight:700;letter-spacing:.14em;
+  background:var(--white);color:#000;padding:2px 6px;text-transform:uppercase}
+.win .body{padding:20px 24px}
+.win.neon{border-color:var(--neon);box-shadow:10px 10px 0 rgba(0,0,0,.7),0 0 26px var(--neon)}
+.win.neon>h2{background:var(--neon);color:#000}
+.win.amber{border-color:var(--amber);box-shadow:10px 10px 0 rgba(0,0,0,.7),0 0 26px var(--amber)}
+.win.amber>h2{background:var(--amber);color:#000}
+
+/* Hero */
+.hero{text-align:center;padding:48px 0 16px}
+.logo{margin:0;font-size:clamp(36px,9vw,88px);line-height:1;letter-spacing:.14em;font-weight:800;
+  color:var(--white);text-shadow:0 0 6px var(--neon),0 0 24px var(--neon),0 0 60px #0066ff}
 .logo i{font-style:normal;color:var(--neon)}
-.tag{margin:14px 0 0;color:var(--neon);letter-spacing:.2em;text-transform:uppercase;font-size:13px}
+.tag{margin:12px 0 0;color:var(--neon);letter-spacing:.22em;text-transform:uppercase;font-size:13px}
 .tag em{font-style:normal;color:var(--white)}
+.subtag{margin:8px auto 0;max-width:760px;font-size:15px;color:#c0ddff;line-height:1.4}
 .cursor{display:inline-block;width:.6em;height:1em;background:var(--neon);vertical-align:-.12em;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
-/* install box */
+
+/* Version pill */
+.v-pill{display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,255,.15);border:1px solid var(--neon);padding:4px 14px;border-radius:2px;font-size:13px;color:var(--neon);margin-top:14px;text-decoration:none}
+.v-pill:hover{background:var(--neon);color:#000}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot-working{background:var(--neon);box-shadow:0 0 6px var(--neon)}
+.dot-idle{background:#888}
+.dot-blocked{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.dot-done{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot-errored{background:var(--red);box-shadow:0 0 6px var(--red)}
+
+/* Install box */
 .cmd{display:flex;align-items:stretch;background:#000;border:1px solid var(--neon)}
-.cmd .p{padding:10px 12px;color:var(--neon);user-select:none}
+.cmd .p{padding:10px 14px;color:var(--neon);user-select:none;font-weight:700}
 .cmd code{flex:1;padding:10px 4px;overflow-x:auto;white-space:nowrap;color:var(--white);scrollbar-width:thin}
 .cmd button{font:inherit;font-weight:700;border:0;border-left:1px solid var(--neon);cursor:pointer;
-  padding:0 16px;background:var(--neon);color:#000}
+  padding:0 20px;background:var(--neon);color:#000;transition:all .15s}
 .cmd button:hover,.cmd button:focus-visible{background:var(--white);outline:2px solid var(--amber);outline-offset:-4px}
 .note{margin:10px 0 0;color:#b8d4ff;font-size:13px}
-.btns{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px}
-.btn{display:inline-block;padding:8px 18px;color:#000;background:#c8d8e8;text-decoration:none;font-weight:700;
-  border-right:4px solid #000;border-bottom:4px solid #000}
+.btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+.btn{display:inline-block;padding:8px 16px;color:#000;background:#c8d8e8;text-decoration:none;font-weight:700;font-size:13px;
+  border-right:4px solid #000;border-bottom:4px solid #000;cursor:pointer}
 .btn:hover,.btn:focus-visible{background:var(--neon);outline:2px solid var(--white);outline-offset:2px}
 .btn:active{border:0;transform:translate(4px,4px)}
-/* screenshot */
-.shot{display:block;width:100%;height:auto;border:1px solid var(--neon);background:#000}
-.cap{margin:8px 0 0;font-size:12px;color:#b8d4ff;text-align:center}
-/* features */
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
-.cell{border:1px solid var(--neon-dim);padding:12px 14px;background:rgba(0,0,40,.55)}
-.cell h3{margin:0 0 6px;font-size:13px;color:var(--neon);letter-spacing:.08em;text-transform:uppercase}
-.cell h3::before{content:"\25B8 "}
-.cell p{margin:0;font-size:13.5px;color:var(--white)}
-/* status bar */
-.status{background:#c8d8e8;color:#000;padding:2px 14px;display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px}
+.btn-amber{background:var(--amber)}
+.btn-amber:hover{background:#ffeaa7}
+
+/* Screenshots / Gallery tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:#000;padding:6px;border-bottom:1px solid var(--neon)}
+.tab-btn{font:inherit;font-size:12px;font-weight:700;color:var(--white);background:transparent;border:1px solid transparent;padding:6px 12px;cursor:pointer}
+.tab-btn:hover{color:var(--neon);border-color:var(--neon-dim)}
+.tab-btn.active{background:var(--borland-hi);color:var(--neon);border-color:var(--neon)}
+.shot-box{background:#000;position:relative;min-height:360px}
+.shot{display:none;width:100%;height:auto;border:1px solid var(--neon);background:#000}
+.shot.active{display:block}
+.cap{margin:10px 0 0;font-size:13px;color:#b8d4ff;text-align:center}
+
+/* Features Grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:16px}
+.cell{border:1px solid var(--neon-dim);padding:14px 16px;background:rgba(0,0,32,.65);box-shadow:inset 0 0 16px rgba(0,0,60,.4)}
+.cell h3{margin:0 0 8px;font-size:13px;color:var(--neon);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.cell h3::before{content:"\25B8 ";color:var(--neon)}
+.cell p{margin:0 0 8px;font-size:13.5px;color:var(--white);line-height:1.45}
+.cell .meta{font-size:11.5px;color:#89b4fa;border-top:1px dashed rgba(0,229,255,.25);padding-top:6px;margin-top:6px}
+.cell code{background:#000;padding:1px 5px;border:1px solid rgba(0,229,255,.3);color:var(--neon);font-size:12px}
+
+/* Command table */
+.tbl-wrap{overflow-x:auto}
+table.ref-tbl{width:100%;border-collapse:collapse;font-size:13px;background:rgba(0,0,32,.85);border:1px solid var(--neon-dim)}
+table.ref-tbl th{background:#001144;color:var(--neon);padding:8px 12px;text-align:left;border:1px solid var(--neon-dim);font-weight:700}
+table.ref-tbl td{padding:7px 12px;border:1px solid rgba(0,229,255,.2);color:var(--white)}
+table.ref-tbl tr:nth-child(even){background:rgba(0,20,60,.5)}
+table.ref-tbl kbd{background:#000;border:1px solid var(--neon);padding:1px 6px;color:var(--amber);font-size:12px;border-radius:2px}
+table.ref-tbl code{background:#000;color:var(--neon);padding:1px 4px}
+
+/* Status Bar */
+.status{background:#c8d8e8;color:#000;padding:4px 14px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;align-items:center}
 .status b{background:#000;color:var(--white);padding:0 6px}
+.status a{color:#000;font-weight:700;text-decoration:underline}
+.status a:hover{color:#0000aa}
 a{color:var(--neon)}
-@media (max-width:560px){.win .body{padding:14px}.cmd{flex-wrap:wrap}.cmd button{width:100%;padding:8px;border-left:0;border-top:1px solid var(--neon)}}
+a:hover{color:var(--white)}
+
+@media (max-width:680px){
+  .win .body{padding:14px}
+  .cmd{flex-wrap:wrap}
+  .cmd button{width:100%;padding:10px;border-left:0;border-top:1px solid var(--neon)}
+  .grid{grid-template-columns:1fr}
+}
 @media (prefers-reduced-motion:reduce){.floor,.cursor{animation:none}}
 </style>
 </head>
@@ -98,70 +148,362 @@ a{color:var(--neon)}
 <nav class="menubar" aria-label="Primary">
   <span>&#9776;</span>
   <a href="#install"><b>I</b>nstall</a>
-  <a href="#screens"><b>S</b>creens</a>
+  <a href="#v3-highlights"><b>N</b>ew in v3.0</a>
+  <a href="#screens"><b>S</b>creenshots</a>
   <a href="#features"><b>F</b>eatures</a>
+  <a href="#reference"><b>R</b>eference</a>
+  <a href="#api-mcp"><b>A</b>PI / MCP</a>
   <a href="https://github.com/bsommers/bilterm"><b>G</b>itHub</a>
   <span class="sp"></span>
-  <span>v2.1.1</span>
+  <span class="badge">v3.0.1</span>
 </nav>
 
 <main class="wrap">
   <header class="hero">
     <h1 class="logo">BIL<i>TERM</i></h1>
-    <p class="tag">IBM 3270 <em>&times;</em> Borland Turbo Vision <em>&times;</em> TRON MCP</p>
-    <p class="tag"><em>Composite terminal panes in Rust</em><span class="cursor" aria-hidden="true"></span></p>
+    <p class="tag">IBM 3270 <em>&times;</em> Borland Turbo Vision <em>&times;</em> Autonomous AI Swarms</p>
+    <p class="subtag">A retro-futuristic terminal multiplexer, native desktop GUI terminal, and AI agent coordination workspace in Rust. Zero <code>SIGWINCH</code> thrash, 2D rectangular block copy, and resilient remote SSH/tmux sessions.</p>
+    <div>
+      <a class="v-pill" href="https://github.com/bsommers/bilterm/releases/tag/v3.0.1">
+        <span class="dot dot-done"></span><strong>Bilterm v3.0.1 Released</strong> &bull; Agent-Aware Navigator &bull; Remote SSH+tmux &bull; 8 Modern Profiles &bull; Script Studio
+      </a>
+    </div>
   </header>
 
+  <!-- Install Section -->
   <section class="win neon" id="install">
-    <h2>[&#9632;] Install</h2>
+    <h2>[&#9632;] Quick Start &amp; One-Line Installer</h2>
     <div class="body">
       <div class="cmd">
         <span class="p">$</span>
         <code id="cmd">curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash</code>
         <button id="copy" type="button" aria-label="Copy install command">COPY</button>
       </div>
-      <p class="note">Linux &amp; macOS. Installs to <code>~/.local/bin</code> with manpage, completions and desktop launcher. Read the <a href="https://github.com/bsommers/bilterm/blob/main/scripts/install.sh">script</a> first if you like.</p>
+      <p class="note">Linux &amp; macOS supported (Windows via source/cargo). Installs pre-built binary to <code>~/.local/bin</code> with manpage, bash/zsh/fish completions, and desktop icon.</p>
+      
+      <div style="margin-top:16px;background:rgba(0,0,0,.6);border:1px solid var(--neon-dim);padding:12px;">
+        <span style="color:var(--amber);font-weight:700;"># Build from Source (Rust 1.88+, Edition 2024):</span><br>
+        <code>git clone https://github.com/bsommers/bilterm.git &amp;&amp; cd bilterm<br>
+cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local/bin/bilterm</code>
+      </div>
+
       <div class="btns">
-        <a class="btn" href="https://github.com/bsommers/bilterm">&#9658; GitHub Repo</a>
-        <a class="btn" href="#screens">&#9658; Screenshot</a>
-        <a class="btn" href="https://github.com/bsommers/bilterm/releases">&#9658; Releases</a>
+        <a class="btn" href="https://github.com/bsommers/bilterm">&#9658; GitHub Repository</a>
+        <a class="btn btn-amber" href="https://github.com/bsommers/bilterm/releases">&#9658; Download v3.0.1 Binaries</a>
+        <a class="btn" href="#v3-highlights">&#9658; Explore v3.0 Features</a>
+        <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/user-guide/README.md">&#9658; 12-Chapter User Guide</a>
+        <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/API.md">&#9658; API &amp; RPC Reference</a>
       </div>
     </div>
   </section>
 
-  <section class="win" id="screens">
-    <h2>[&#9632;] WORKSPACE.SCR</h2>
-    <div class="body">
-      <a href="assets/screenshot-workspace.png"><img class="shot" src="assets/screenshot-workspace.png" width="1184" height="642" alt="Bilterm multi-pane workspace in the Turbo Blue theme with split panes, floating prompt and OIA status bar"></a>
-      <p class="cap">Multi-pane composite workspace, Turbo Blue theme.</p>
+  <!-- v3.0 Highlights Section -->
+  <section class="win amber" id="v3-highlights">
+    <h2>[&#9632;] What's New in Bilterm v3.0</h2>
+    <div class="body grid">
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Agent-Aware Navigator (F7)</h3>
+        <p>A slide-out/push-out left sidebar (<code>:drawer style navigator</code>) displaying workspace hierarchy, sessions, and live agent status dots (<span class="dot dot-working"></span> Working, <span class="dot dot-idle"></span> Idle, <span class="dot dot-blocked"></span> Blocked, <span class="dot dot-done"></span> Done, <span class="dot dot-errored"></span> Errored).</p>
+        <div class="meta">Attention badges &bull; Jump to blocked (<code>Alt+]</code>) &bull; Snoop View (<code>:agent snoop</code>) &bull; Agent Traffic Bus</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Agent-to-Agent Messaging</h3>
+        <p>Direct inter-agent communication across terminal panes: <code>:agent send &lt;name&gt; &lt;msg&gt;</code>, per-agent bounded mailboxes (64 max), and 3 delivery modes: <code>mailbox</code>, <code>nudge</code> (when shell is idle), and <code>file</code> (for large payloads).</p>
+        <div class="meta">JSON-RPC <code>agent.*</code> &bull; MCP <code>bilterm_agent_mail</code> &bull; Loop guard (8 hops) &bull; Rate limiter</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Unified Registry &amp; Fuzzy Find</h3>
+        <p>Instant global search across agents, active and saved sessions, and command history: <code>:find agent|session|history &lt;query&gt;</code> or <code>Ctrl+Alt+F</code>. Automatic zero-trust secret masking protects tokens and credentials.</p>
+        <div class="meta">Fast nucleo-matcher &bull; Secret redaction &bull; Read-only RPC <code>find.*</code> &amp; MCP <code>bilterm_find</code></div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> UI Modernization Design System</h3>
+        <p>Switch between 8 built-in visual profiles via <code>:appearance</code>: <b>Obsidian</b> (modern dark slate, fresh default), <b>Legacy</b> (Borland Blue), <b>Midnight</b>, <b>Arctic</b>, <b>Liquid</b>, <b>Amber</b>, <b>Synthwave</b>, and <b>Solarized</b>. Plus <code>:mode standard|minimal|zen</code>.</p>
+        <div class="meta">Profile export/import/save &bull; Non-destructive design tokens &bull; Frosted glass controls</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-blocked"></span> Persistent SSH + tmux Fleet</h3>
+        <p>Remote sessions via <code>:ssh-tmux &lt;host&gt; [session]</code> maintain state across connection drops. Automatic reconnection with exponential backoff, capture-pane hydration upon reconnect, and exit hold banners.</p>
+        <div class="meta">Remote <code>tmux -CC</code> bridge &bull; Scrollback replay &bull; Crash prevention banner</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> First-Class Utility Windows</h3>
+        <p>Pinnable and dockable workbench windows: <b><code>:fonts</code></b> live typography preview, <b><code>:commands</code></b> execution history workbench, and <b><code>:script</code> / <code>:studio</code></b> Script Studio with multi-line editor, live recorder, and step debugger.</p>
+        <div class="meta">Clickable title badges &bull; Pinning (<code>*</code>) &bull; Floating or docked borders &bull; Panel scaling (<code>[</code>/<code>]</code>)</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Session Packing Viewer &amp; Drag-and-Drop</h3>
+        <p>Visualize and pack multi-session container hierarchies with <b><code>:sessions map</code></b> in Braille/UTF-8 box-drawing or native GUI vector rendering. Move panes across sessions with mouse drag-and-drop or <code>:window move</code>.</p>
+        <div class="meta">Multi-select windows (<code>Space</code>) &bull; Bulk ops &bull; Topology undo (<code>:window undo</code>)</div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Daemon Supervisor &amp; Automation</h3>
+        <p>Singleton daemon supervisor with automatic startup and stale-lock recovery. Manage named daemons via <code>:daemon list|status|start|stop|prune</code>. Drive headless sessions over HTTP+SSE (<code>--http</code>) and strict RFC 8259 JSON-RPC 2.0.</p>
+        <div class="meta">11+ MCP tools &amp; resources &bull; TOML robot playbooks &bull; Dotted config <code>:get</code> / <code>:set</code></div>
+      </div>
     </div>
   </section>
 
+  <!-- Screenshots / Interactive Gallery -->
+  <section class="win" id="screens">
+    <h2>[&#9632;] Visual Gallery &amp; Interactive Workspace Views</h2>
+    <div class="body" style="padding:0;">
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" data-target="shot-multi-agent" type="button">Multi-Agent Swarm &amp; Navigator</button>
+        <button class="tab-btn" data-target="shot-workspace" type="button">Turbo Blue Multi-Pane</button>
+        <button class="tab-btn" data-target="shot-scaling" type="button">Per-Pane Font Scaling</button>
+        <button class="tab-btn" data-target="shot-3278" type="button">IBM 3278 Green &amp; Inspector</button>
+        <button class="tab-btn" data-target="shot-3279" type="button">IBM 3279 Amber CRT</button>
+      </div>
+      <div class="shot-box">
+        <img id="shot-multi-agent" class="shot active" src="assets/screenshot-multi-agent-swarm.svg" alt="Multi-Agent AI Swarm in Bilterm with Navigator Sidebar and Agent Traffic Bus">
+        <img id="shot-workspace" class="shot" src="assets/screenshot-workspace.svg" alt="Bilterm multi-pane composite workspace in Turbo Blue theme with split panes and floating prompt">
+        <img id="shot-scaling" class="shot" src="assets/screenshot-per-pane-scaling.svg" alt="Bilterm per-pane font scaling from 50% to 300% on native desktop GUI">
+        <img id="shot-3278" class="shot" src="assets/screenshot-3278-inspector.svg" alt="Bilterm in IBM 3278 Phosphor Green theme with 3270 Inspector">
+        <img id="shot-3279" class="shot" src="assets/screenshot-3279-palette.svg" alt="Bilterm in IBM 3279 Amber CRT theme with 22-color palette switcher">
+      </div>
+      <p id="shot-cap" class="cap" style="padding:10px 16px;">Multi-Agent Swarm with Navigator Sidebar, agent state dots, and Agent Traffic Bus packet stream.</p>
+    </div>
+  </section>
+
+  <!-- Core Architectural Capabilities -->
   <section class="win neon" id="features">
-    <h2>[&#9632;] Features</h2>
+    <h2>[&#9632;] Core Architectural Pillars</h2>
     <div class="body grid">
-      <div class="cell"><h3>Composite panes</h3><p>Floating command prompt over a scrolling PTY canvas with a 3270 OIA status bar. No SIGWINCH thrash.</p></div>
-      <div class="cell"><h3>Detach / attach</h3><p>Leave the whole split layout running in a daemon and resume later.</p></div>
-      <div class="cell"><h3>MCP &amp; automation</h3><p><code>bilterm --mcp</code>, JSON-RPC <code>bilterm ctl</code>, TOML playbooks.</p></div>
-      <div class="cell"><h3>22 themes</h3><p>Turbo Blue, 3278 green, 3279 amber, TRON Legacy, plus .itermcolors import.</p></div>
-      <div class="cell"><h3>SSH fleet</h3><p>Fan commands out to tagged hosts and tmux sessions.</p></div>
-      <div class="cell"><h3>Native GUI</h3><p><code>--gui</code> on Linux, macOS and Windows with per-pane font scaling.</p></div>
+      <div class="cell">
+        <h3>Composite Terminal Panes</h3>
+        <p>The floating command prompt, scrolling PTY output canvas, and 3270 OIA status bar form a single atomic pane. Command prompt can float, pin to top/bottom, or split, with zero <code>SIGWINCH</code> geometry thrashing.</p>
+        <div class="meta">Auto-hides on <code>vim</code> / <code>htop</code> (DECSET 1049) &bull; 3-signal <code>!ECHO LOCK</code> password protection</div>
+      </div>
+
+      <div class="cell">
+        <h3>2D Rectangular Block Select &amp; Copy</h3>
+        <p>Hold <code>Alt+LeftDrag</code> or toggle <code>:rect mode</code> to select, highlight, and copy rectangular columns and boxes directly out of terminal output, table columns, or logs. Pastes cleanly to system and OSC 52 clipboards.</p>
+        <div class="meta">Keyboard <code>Alt+R</code> &bull; Vi copy mode <code>r</code>/<code>R</code> &bull; Coordinate-based <code>:rect r1 c1 r2 c2</code></div>
+      </div>
+
+      <div class="cell">
+        <h3>Full Session Persistence</h3>
+        <p>Detach with <code>Ctrl+X D</code> or <code>:detach</code>. Bilterm serializes the complete workspace: split tree geometry, z-stack order, prompt anchors, active shells, running commands, and per-pane working directories (CWD).</p>
+        <div class="meta">Resume via <code>bilterm attach</code> &bull; Atomic <code>0600</code> crash journals &bull; Exit Guard protection</div>
+      </div>
+
+      <div class="cell">
+        <h3>Native Desktop GUI (--gui)</h3>
+        <p>Run standalone without a host terminal using hardware-accelerated desktop rendering on Linux (X11), macOS (Cocoa), and Windows (Win32 GDI). Scale each pane's font independently from 50% to 300% (<code>Ctrl+Wheel</code>).</p>
+        <div class="meta">All-border mouse resizing &bull; High-res Kitty/Sixel/Braille graphics &bull; Custom TTF/OTF fonts</div>
+      </div>
+
+      <div class="cell">
+        <h3>Mainframe Paging &amp; QuickSelect</h3>
+        <p>Experience classic IBM 3270 mainframe paging: <code>MORE...</code> / <code>HOLDING</code> page pauses prevent run-away flood from blowing away your output buffer. QuickSelect hints (<code>F3</code>) jump to URLs, paths, and hashes.</p>
+        <div class="meta">Vi Copy Mode (<code>F8</code>) &bull; Mainframe Cross-hairs (<code>Alt+X</code>) &bull; Spotlight / Zoom Lens (<code>Alt+O</code>)</div>
+      </div>
+
+      <div class="cell">
+        <h3>Zero-Trust Confinement</h3>
+        <p>All IPC sockets, session TOMLs, command history exports, and <code>.cast</code> recordings reside in <code>0700</code> directories with <code>0600</code> atomic file permissions. Unix domain sockets enforce <code>SO_PEERCRED</code> UID checking.</p>
+        <div class="meta">No secrets on CLI argv &bull; Bearer token authentication &bull; Secret-masked history logs</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Essential Shortcuts & Reference Table -->
+  <section class="win" id="reference">
+    <h2>[&#9632;] Essential Shortcuts &amp; Colon Commands</h2>
+    <div class="body">
+      <div class="tbl-wrap">
+        <table class="ref-tbl">
+          <thead>
+            <tr>
+              <th>Action / Function</th>
+              <th>Keyboard Shortcut</th>
+              <th>Colon Command (<code>:</code>)</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Help / Palette / Inspector</strong></td>
+              <td><kbd>F1</kbd> / <kbd>Ctrl+P</kbd> / <kbd>F9</kbd></td>
+              <td><code>:help</code> / <code>:palette</code> / <code>:inspector</code></td>
+              <td>Command catalog, search &amp; 3270 inspection</td>
+            </tr>
+            <tr>
+              <td><strong>Navigator Drawer</strong></td>
+              <td><kbd>F7</kbd> (<kbd>&lt;L&gt; d</kbd>) / Click OIA</td>
+              <td><code>:drawer [toggle|navigator|classic]</code></td>
+              <td>Workspaces, sessions, agent state dots</td>
+            </tr>
+            <tr>
+              <td><strong>Global Fuzzy Finder</strong></td>
+              <td><kbd>Ctrl+Alt+F</kbd></td>
+              <td><code>:find [agent|session|history] &lt;q&gt;</code></td>
+              <td>Unified registry search with secret masking</td>
+            </tr>
+            <tr>
+              <td><strong>Agent Messaging &amp; Swarm</strong></td>
+              <td><kbd>Alt+]</kbd> (jump to blocked)</td>
+              <td><code>:agent [name|send|inbox|list|snoop]</code></td>
+              <td>Direct messaging, mailboxes, packet telemetry</td>
+            </tr>
+            <tr>
+              <td><strong>Split Horizontal / Vertical / Zoom</strong></td>
+              <td><kbd>F2</kbd> / <kbd>Alt+V</kbd> / <kbd>F5</kbd></td>
+              <td><code>:split h</code> / <code>:split v</code> / <code>:zoom</code></td>
+              <td>Binary space partitioning tiling</td>
+            </tr>
+            <tr>
+              <td><strong>Tiled Splits vs. Z-Stack Deck</strong></td>
+              <td><kbd>Alt+M</kbd> / <kbd>F6</kbd> / <kbd>Alt+1..9</kbd></td>
+              <td><code>:layout tile|stack</code> / <code>:deck next|prev</code></td>
+              <td>Borland overlapping window cascade</td>
+            </tr>
+            <tr>
+              <td><strong>Appearance &amp; Display Modes</strong></td>
+              <td><kbd>F11</kbd> / <kbd>F4</kbd></td>
+              <td><code>:appearance [obsidian|legacy|...]</code> / <code>:mode [standard|zen]</code></td>
+              <td>8 modern design profiles &amp; Zen mode</td>
+            </tr>
+            <tr>
+              <td><strong>Remote SSH + tmux Sessions</strong></td>
+              <td>—</td>
+              <td><code>:ssh-tmux &lt;host&gt; [session]</code></td>
+              <td>Auto-reconnecting resilient remote sessions</td>
+            </tr>
+            <tr>
+              <td><strong>Utility Windows (Fonts / Studio)</strong></td>
+              <td><kbd>*</kbd> (pin) / <kbd>[</kbd> / <kbd>]</kbd> (scale)</td>
+              <td><code>:fonts</code> / <code>:commands</code> / <code>:studio</code></td>
+              <td>Workbench windows, live recorder &amp; debugger</td>
+            </tr>
+            <tr>
+              <td><strong>2D Rectangular Select &amp; Copy</strong></td>
+              <td><kbd>Alt+R</kbd> / <kbd>Alt+LeftDrag</kbd></td>
+              <td><code>:rect [mode|copy|cut|clear]</code></td>
+              <td>Block highlight &amp; yank across canvas</td>
+            </tr>
+            <tr>
+              <td><strong>Detach Session / Re-Attach</strong></td>
+              <td><kbd>Ctrl+X D</kbd> / Exit Guard <kbd>[d]</kbd></td>
+              <td><code>:detach [name]</code> / <code>:attach [name]</code></td>
+              <td>Leaves shells running in background daemon</td>
+            </tr>
+            <tr>
+              <td><strong>Session Map &amp; Window Move</strong></td>
+              <td><kbd>m</kbd> (in Map)</td>
+              <td><code>:sessions map</code> / <code>:window move &lt;sess&gt;</code></td>
+              <td>Packing treemap &amp; live window migration</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" style="margin-top:12px;">Leader Prefix (<kbd>&lt;L&gt;</kbd>) defaults to <kbd>Ctrl+X</kbd> (or <kbd>Ctrl+B</kbd> outside tmux). Every keyboard action has a colon equivalent for 100% surface parity.</p>
+    </div>
+  </section>
+
+  <!-- Automation, API, and MCP Section -->
+  <section class="win neon" id="api-mcp">
+    <h2>[&#9632;] API, JSON-RPC &amp; MCP Automation</h2>
+    <div class="body">
+      <p style="margin-top:0;">Bilterm is built from the ground up for autonomous AI coding agents, robot test harnesses, and external script orchestration:</p>
+      
+      <div class="grid">
+        <div class="cell">
+          <h3>Model Context Protocol (MCP)</h3>
+          <p>Run <code>bilterm --mcp</code> for 11+ first-class MCP tools and dynamic resources:</p>
+          <code>bilterm_agent_mail</code> &bull; <code>bilterm_find</code> &bull; <code>bilterm_run_action</code> &bull; <code>bilterm_session_manager</code> &bull; <code>bilterm://state</code> &bull; <code>bilterm://config</code> &bull; <code>bilterm://agent/{name}/inbox</code>
+        </div>
+        <div class="cell">
+          <h3>Strict JSON-RPC 2.0 &amp; HTTP+SSE</h3>
+          <p>Drive headless workspaces via <code>bilterm ctl</code> or HTTP transport (<code>--http 127.0.0.1:9090</code>):</p>
+          <code>agent.send</code> &bull; <code>agent.wait</code> &bull; <code>find.agents</code> &bull; <code>window.move</code> &bull; <code>daemon.list</code> &bull; <code>wm.command</code> &bull; <code>pane.send_keys</code> &bull; <code>workspace.status</code>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;background:#000;border:1px solid var(--neon-dim);padding:14px;">
+        <span style="color:var(--neon);font-weight:700;"># Example: Sending a message to an agent via bilterm ctl</span><br>
+        <code>$ bilterm ctl agent.send '{"to":"auditor","body":"Review PR #42","mode":"mailbox"}'<br>
+{"jsonrpc":"2.0","result":{"delivered":true,"msg_id":"msg-104"},"id":1}</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Documentation & Ecosystem -->
+  <section class="win" id="docs">
+    <h2>[&#9632;] Comprehensive Documentation &amp; Guides</h2>
+    <div class="body grid">
+      <div class="cell">
+        <h3><a href="https://github.com/bsommers/bilterm/blob/main/docs/user-guide/README.md">12-Chapter User Guide</a></h3>
+        <p>Complete documentation from getting started to advanced multi-agent swarm orchestration, SSH fleets, and security best practices.</p>
+      </div>
+      <div class="cell">
+        <h3><a href="https://github.com/bsommers/bilterm/blob/main/docs/API.md">API &amp; RPC Specification</a></h3>
+        <p>Exhaustive wire contract for JSON-RPC 2.0 methods, HTTP SSE streaming endpoints, MCP tools, and error codes.</p>
+      </div>
+      <div class="cell">
+        <h3><a href="https://github.com/bsommers/bilterm/blob/main/docs/VISUAL_GALLERY.md">Visual Gallery</a></h3>
+        <p>Full-resolution vector SVG screenshots showing CRT shaders, phosphor green/amber, multi-pane splits, and typography.</p>
+      </div>
+      <div class="cell">
+        <h3><a href="https://github.com/bsommers/bilterm/tree/main/starter-packs">Starter Packs &amp; Playbooks</a></h3>
+        <p>5 ready-to-run configurations: Multi-Agent Swarm, Remote Fleet, Robot QA, Incident War Room, and Retro CRT.</p>
+      </div>
     </div>
   </section>
 </main>
 
-<div class="status" role="contentinfo">
-  <span><b>F1</b> Help</span><span><b>F9</b> Inspector</span>
-  <span>Apache-2.0</span>
-  <a href="https://github.com/bsommers/bilterm" style="color:#000">github.com/bsommers/bilterm</a>
-</div>
+<!-- 3270 Operator Information Area (OIA) Status Bar -->
+<footer class="status" role="contentinfo">
+  <span><b>F1</b> Help</span>
+  <span><b>F2</b> Split</span>
+  <span><b>F5</b> Zoom</span>
+  <span><b>F7</b> Navigator</span>
+  <span><b>F9</b> Inspector</span>
+  <span><b>F11</b> Appearance</span>
+  <span><b>Ctrl+P</b> Palette</span>
+  <span style="flex:1"></span>
+  <span>Apache-2.0 License</span>
+  <a href="https://github.com/bsommers/bilterm">github.com/bsommers/bilterm</a>
+</footer>
 
 <script>
+// Clipboard copy
 document.getElementById('copy').addEventListener('click',function(){
   var b=this,t=document.getElementById('cmd').textContent;
   function done(m){b.textContent=m;setTimeout(function(){b.textContent='COPY'},1600)}
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){done('COPIED')},function(){done('SELECT')})}
   else{var r=document.createRange();r.selectNode(document.getElementById('cmd'));var s=getSelection();s.removeAllRanges();s.addRange(r);done('SELECT')}
+});
+
+// Interactive gallery tabs
+var caps = {
+  'shot-multi-agent': 'Multi-Agent Swarm with Navigator Sidebar, agent state dots, and Agent Traffic Bus packet stream.',
+  'shot-workspace': 'Multi-pane composite workspace, Turbo Blue theme, split panes with floating prompt and 3270 status bar.',
+  'shot-scaling': 'Independent per-pane font scaling from 50% to 300% on native desktop GUI (--gui).',
+  'shot-3278': 'IBM 3278 Phosphor Green theme with cross-hair software cursor and interactive 3270 Inspector.',
+  'shot-3279': 'IBM 3279 Amber CRT theme with 22-color palette switcher and retro scanline shaders.'
+};
+
+document.querySelectorAll('.tab-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('.shot').forEach(function(s){s.classList.remove('active')});
+    btn.classList.add('active');
+    var targetId = btn.getAttribute('data-target');
+    var targetImg = document.getElementById(targetId);
+    if(targetImg){
+      targetImg.classList.add('active');
+      document.getElementById('shot-cap').textContent = caps[targetId] || '';
+    }
+  });
 });
 </script>
 </body>
