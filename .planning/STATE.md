@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 milestone: v3.0.1
-current_phase: 55
-current_phase_name: daemon-supervisor-and-multi-daemon-awareness
-status: complete
-stopped_at: "Completed multi-mode window rename & context menus, 100% command parity, 8-profile design system, all 11 Phase 51 followups, and test-coverage runner upgrades; 120/120 verification stages clean"
-last_updated: "2026-11-07T13:25:00Z"
+current_phase: 56
+current_phase_name: drawer-window-peek-preview
+status: ready_to_execute
+stopped_at: "Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md)"
+last_updated: "2026-11-07T21:35:00Z"
 last_activity: 2026-11-07
-last_activity_desc: "Completed multi-mode window rename & context menus, 100% command parity, 8-profile design system, all 11 Phase 51 followups, and test-coverage runner upgrades"
+last_activity_desc: "Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md)"
 state_head: a46f949
 progress:
-  total_phases: 55
+  total_phases: 59
   completed_phases: 55
-  total_plans: 130
+  total_plans: 140
   completed_plans: 130
 milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
 ---
@@ -24,16 +24,16 @@ milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Pe
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-07):** All 55 core roadmap phases and follow-ups complete. All 11 items in `.planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md` resolved. Multi-mode window/session rename popup dialog and right-click context menus wired across all UI surfaces. Phase 45 8-profile Design System fully active. Composable test runner `scripts/verify.sh` upgraded with 8-tier filtering, `--match`, `--coverage`, `--xvfb`, `report.md`, and `junit.xml`.
+**Current focus (2026-11-07):** All 55 core roadmap phases complete. Phases 56–59 research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into `ROADMAP.md` (Phase 56: Drawer Window Peek Preview, Phase 57: Smart Clipboard Paste Fix & Viewer Window, Phase 58: Local AI STT Optional Module, Phase 59: GUI Chrome Engine Browser & Video Player Canvas).
 
 ## Current Position
 
-Phase: 55 (daemon-supervisor-and-multi-daemon-awareness) — COMPLETE
-Plan: All plans across Phases 1–55 complete (130/130).
-Status: 55/55 Phases complete across `v1.0` through `v3.0.1`.
-Last activity: 2026-11-07 — Completed multi-mode window/session rename popup dialog, interactive right-click context menus across all UI surfaces, 100% command parity and modular file ceilings, all 11 Phase 51 follow-ups, and `/swe-skills:test-coverage` `BiltermLiveDriver` upgrades.
+Phase: 56 (drawer-window-peek-preview) — READY TO EXECUTE
+Plan: All plans across Phases 1–55 complete (130/130). Phases 56–59 planned (10 plans created).
+Status: 55/59 Phases complete.
+Last activity: 2026-11-07 — Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md).
 
-Progress: [██████████] 100% (55/55 Phases)
+Progress: [█████████░] 93% (55/59 Phases)
 
 ## Performance Metrics
 
@@ -66,6 +66,10 @@ Recent decisions affecting current work:
 - [Phase 53]: Added universal right-click context menu across Classic, Modern Minimal, and Liquid Glass modes for instant window management.
 - [Phase 45]: Design system profile engine verified across 8 profiles with persistent `:appearance` lifecycle.
 - [Verification]: Composable runner `scripts/verify.sh` supports 8 tiers (smoke, unit, integration, system, perf, stress, torture, security), `--match`, `--coverage` (`cargo-llvm-cov`), `--xvfb`, `report.md`, and `junit.xml`.
+- [Phase 56]: Live and snapshot drawer peek preview pane designed with zero-copy, zero-`SIGWINCH` compositing and transient Esc/click-to-focus semantics (`56-RESEARCH.md`, `56-CONTRACT.md`).
+- [Phase 57]: Smart MIME-aware clipboard paste fix for Herdr/Claude Code in `RawPtyPassthrough` wrapping text in `DECSET 2004` bracketed paste; multi-session tagged `ClipboardRegistry` and first-class `CLIPBOARD` viewer window designed (`57-RESEARCH.md`, `57-CONTRACT.md`).
+- [Phase 58]: Local AI STT optional module (`src/stt/`) spike complete: zero-bloat two-tier audio capture, OpenAI-compatible Whisper + Ollama + CLI protocols, prompt buffer staging, and OIA status bar telemetry (`58-RESEARCH-SPIKE.md`, `58-ARCHITECTURE-ADR.md`).
+- [Phase 59]: Embedded Chrome engine browser canvas (CDP Screencast frame-sink) and 60fps RGBA video player canvas (`ffmpeg` pipe + audio sync) spike complete across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`59-RESEARCH-SPIKE.md`, `59-ARCHITECTURE-ADR.md`).
 
 ### Pending Todos
 

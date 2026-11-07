@@ -48,3 +48,11 @@
    - Smoke tests verified: `--version` (`bilterm 3.0.2`), `--completions bash`, `--man`.
    - Integration test suite verified: `cargo test -q --test bilterm_live_driver_suite` (6 passed, 0 failed).
    - Full verification: `scripts/verify.sh --quick` (`PASS 121/121`).
+9. **Phases 56–59 Architecture & Execution Planning Integration**:
+   - Completed comprehensive research spikes, architecture ADRs, interface contracts, and wave-by-wave execution plans for Phases 56, 57, 58, and 59:
+     - **Phase 56 (Drawer Window Peek & Live Preview Pane)**: `56-RESEARCH.md`, `56-CONTRACT.md`, `56-01-PLAN.md` .. `56-03-PLAN.md` (`DRW-PEEK-01..03`).
+     - **Phase 57 (Smart Clipboard Paste Fix & Multi-Session Clipboard Viewer Window)**: `57-RESEARCH.md`, `57-CONTRACT.md`, `57-01-PLAN.md` .. `57-03-PLAN.md` (`CLIP-01..04`).
+     - **Phase 58 (Local AI Speech-to-Text Optional Module)**: `58-RESEARCH-SPIKE.md`, `58-ARCHITECTURE-ADR.md`, `58-01-PLAN.md`, `58-02-PLAN.md` (`STT-01..03`).
+     - **Phase 59 (GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas)**: `59-RESEARCH-SPIKE.md`, `59-ARCHITECTURE-ADR.md`, `59-01-PLAN.md`, `59-02-PLAN.md` (`WEB-01..02`, `VID-01..02`).
+   - Integrated Phases 56–59 into `.planning/ROADMAP.md`, updated requirements traceability in `.planning/REQUIREMENTS.md`, and refreshed `.planning/STATE.md`.
+

@@ -57,6 +57,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [x] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
 - [x] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
+- [ ] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`)
+- [ ] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`)
+- [ ] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
+- [ ] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
 
 ## Phase Details
 
@@ -1000,6 +1004,90 @@ Plans:
 - [x] 55-02-PLAN.md — Auto-spawn on `:detach` / `bilterm ctl`, `:daemon list|status|start|stop|switch`, JSON-RPC `daemon.*` & MCP `bilterm_daemon`, version-handshake safety (wave 2)
 - [x] 55-03-PLAN.md — Cross-daemon `:find` integration, Navigator/Palette/Menu surface parity (`UNI-R01`), documentation, and uniformity test suite (wave 3)
 
+### Phase 56: Drawer Window Peek & Live Preview Pane
+
+**Goal**: As a user navigating windows or sessions in the Classic or Navigator drawer, I want a transient non-destructive floating preview pane showing the live output canvas or saved-session snapshot of whatever row is currently selected/highlighted, so that I can instantly identify and inspect window contents without activating, unminimizing, or shuffling the window z-stack.
+**Depends on**: Phase 24 (`WorkspaceDrawer`), Phase 33 (`SavedWorkspaceSession`), Phase 50 (`Navigator`), Phase 53 (`WindowManageState`).
+**Requirements**: DRW-PEEK-01, DRW-PEEK-02, DRW-PEEK-03
+**Today (baseline)**: Moving the selection in Classic or Navigator drawer updates `selected_index` without showing window contents; occluded, minimized, or background session windows cannot be previewed before pressing Enter or clicking.
+**Uniformity (`UNI-R01`)**: Mouse wheel hover / click-to-focus, keyboard navigation (`j`/`k`, `Up`/`Down`, `PageUp`/`PageDown`, `Enter` focus, `Esc` dismiss), `:drawer peek [on|off|toggle]`, Command Palette entry, Top Menu toggle, and JSON-RPC / MCP inspection.
+**Success Criteria** (what must be TRUE):
+
+  1. `DRW-PEEK-01`: Highlighting any live window (active, minimized, stacked, or background session) or saved session in the Classic or Navigator drawer displays a transient floating preview pane adjacent to the drawer without modifying active pane focus, z-order, or triggering child PTY `SIGWINCH` resizes.
+  2. `DRW-PEEK-02`: Keyboard navigation (`Up`/`Down`/`j`/`k`/`PageUp`/`PageDown`) and mouse wheel scrolling in the drawer update the preview target; pressing `Enter` or clicking inside the preview commits focus to that window/session; pressing `Esc`, clicking outside, or closing the drawer cleanly dismisses the preview.
+  3. `DRW-PEEK-03`: Zero-copy live PTY canvas rendering for active and background sessions, cached snapshot rendering for cold saved sessions, configurable preview geometry/delay (`[drawer] peek_preview = true`), and full parity across Classic and Navigator drawer styles.
+
+**Artifacts**:
+- Research: `.planning/phases/56-drawer-window-peek-preview/56-RESEARCH.md`
+- Contract: `.planning/phases/56-drawer-window-peek-preview/56-CONTRACT.md`
+- Plans:
+  - [ ] 56-01-PLAN.md — Peek State, Config, Zero-SIGWINCH Live & Snapshot Preview Renderer, and Drawer Row Layout Geometry (wave 1)
+  - [ ] 56-02-PLAN.md — Transient Peek Activation, Keyboard/Mouse Wheel Triggers, Click-to-Focus, and Esc/Dismissal Transitions (wave 2)
+  - [ ] 56-03-PLAN.md — Background Session Navigator Window Hierarchy, Drawer Style Parity, and End-to-End Verification (wave 3)
+
+### Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window
+
+**Goal**: Fix the longstanding `"No image or video found in clipboard"` error when pasting text into `herdr`, Claude Code, or other nested TUIs in raw-passthrough mode, and provide a first-class floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, media, and fuzzy search.
+**Depends on**: Phase 19 (`SEC-R01..04`), Phase 22 (`ARCH-R01`), Phase 49 (`API-01`), Phase 51.2 (`PanelDock` utility windows).
+**Requirements**: CLIP-01, CLIP-02, CLIP-03, CLIP-04
+**Today (baseline)**: In `RawPtyPassthrough` mode, pressing `Ctrl+V` passes raw `0x16` to the child PTY, causing tools like Herdr/Claude Code to attempt an image/video clipboard probe which fails on text content; right/middle click is swallowed by SGR mouse tracking; inbound OSC 52 is discarded in GUI mode; and there is no unified multi-session clipboard history window.
+**Uniformity (`UNI-R01`)**: Mouse (GUI & TUI click/drag/resize/pin/dock), Keyboard (`Ctrl+Alt+V`, Leader `;`, in-window hotkeys), `:clipboard` / `:clips` colon commands, Command Palette, Top Menu (`Edit -> Clipboard Viewer...`), JSON-RPC (`clipboard.*`), and MCP (`bilterm_clipboard`).
+**Success Criteria** (what must be TRUE):
+
+  1. `CLIP-01`: Pressing `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` mode inspects the OS clipboard MIME kind: text pastes are forwarded wrapped in `DECSET 2004` bracketed paste (`\x1b[200~<text>\x1b[201~`), fixing Herdr and Claude Code text pastes; media clipboards pass raw `0x16` through; `Shift+RightClick` pastes text over SGR mouse tracking; and inbound `OSC 52` sequences update the system clipboard and registry in both GUI and TUI modes.
+  2. `CLIP-02`: Multi-session, multi-window `ClipboardRegistry` records all copy/cut/yank/kill/OSC-52/OS-sync events up to 200 entries with session, window title, timestamp, MIME kind, and secret classification (`pane::redact`) masking sensitive tokens per `SEC-R01..04`.
+  3. `CLIP-03`: First-class floating, pinnable, dockable `CLIPBOARD` viewer window (`src/wm/clipboard_window.rs`) with dual TUI and native GUI rendering (`CLIPBOARD_WINDOW_TEXTURE_ID = 980_000`), filterable by scope (`All`, `Session`, `Window`, `Pinned`, `Media`) and live fuzzy search query, with entry paste, prompt-insert, pin/star, delete, clear, and per-panel typography scaling.
+  4. `CLIP-04`: 100% surface uniformity across Mouse, Keyboard (`Ctrl+Alt+V` / Leader `;`), `:clipboard` colon verbs, Command Palette, Top Menu, JSON-RPC, and MCP with end-to-end parity test suite.
+
+**Artifacts**:
+- Research: `.planning/phases/57-clipboard-fix-and-viewer-window/57-RESEARCH.md`
+- Contract: `.planning/phases/57-clipboard-fix-and-viewer-window/57-CONTRACT.md`
+- Plans:
+  - [ ] 57-01-PLAN.md — Smart Clipboard Paste & Bracketed Paste Fix for Herdr / Claude Code / TUIs (wave 1)
+  - [ ] 57-02-PLAN.md — Multi-Session Clipboard History Registry, Metadata Tagging & Secret Redaction (wave 2)
+  - [ ] 57-03-PLAN.md — First-Class Filterable `CLIPBOARD` Viewer Window, Surface Parity & Test Suite (wave 3)
+
+### Phase 58: Local AI Speech-to-Text (`STT`) Optional Module
+
+**Goal**: Provide an independent, zero-bloat local AI voice dictation and command synthesis module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk, VAD, and OIA status bar telemetry, safely staging transcribed text into the pane's floating command prompt before execution.
+**Depends on**: Phase 1 (`CompositePane`), Phase 4 (`OiaStatusBar`), Phase 19 (`SEC-R01..04`), Phase 22 (`Action`), Phase 49 (`API-01`).
+**Requirements**: STT-01, STT-02, STT-03
+**Today (baseline)**: Bilterm is strictly keyboard and mouse driven with no audio capture, voice input, or local AI speech transcription capabilities.
+**Uniformity (`UNI-R01`)**: Push-to-talk mouse button / titlebar mic icon, Keyboard toggle (`Ctrl+Space` / Leader `v`), `:stt` colon verbs, Command Palette, Top Menu (`Tools -> Voice Dictation...`), JSON-RPC (`stt.*`), and MCP (`bilterm_stt`).
+**Success Criteria** (what must be TRUE):
+
+  1. `STT-01`: Pluggable Local AI STT backends supporting OpenAI-compatible `POST /v1/audio/transcriptions` (via zero-dependency HTTP/1.1 client over `TcpStream` / `UnixStream`), Ollama native multimodal/audio endpoints, and local CLI subprocess pipes (`whisper-cli`, `mlx_whisper`) with prompt context biasing and optional voice-to-shell translation.
+  2. `STT-02`: Two-tier zero-bloat audio capture architecture: Tier 1 default uses OS recorder pipes (`pw-record`/`parecord`/`arecord`, `rec`/`sox`/`ffmpeg`, Windows helpers) writing 16kHz mono WAV to `0600` private pipes via `secure_fs` without C/ALSA link dependencies; Tier 2 opt-in `--features stt-native-audio` enables in-process `cpal` ring-buffer capture.
+  3. `STT-03`: Isolated subsystem seam in `src/stt/` communicating exclusively via `Action::Voice` and `AppEvent::SttEvent`, push-to-talk and VAD support, OIA `[🎙 REC]` / `[🎙 BUSY]` telemetry, staging into `FloatingCommandPrompt` without auto-executing, zero runtime overhead when `[stt] enabled = false`, and full surface parity.
+
+**Artifacts**:
+- Research Spike: `.planning/phases/58-speech-to-text-spike-and-plan/58-RESEARCH-SPIKE.md`
+- Architecture ADR: `.planning/phases/58-speech-to-text-spike-and-plan/58-ARCHITECTURE-ADR.md`
+- Plans:
+  - [ ] 58-01-PLAN.md — Pluggable Local AI STT Engine & Wire Protocols (OpenAI/Whisper, Ollama, CLI) (wave 1)
+  - [ ] 58-02-PLAN.md — Audio Capture Pipeline, Push-to-Talk / VAD, UI Telemetry & Surface Parity (wave 2)
+
+### Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas
+
+**Goal**: Deliver embedded Chromium engine web browser canvases (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA hardware-accelerated video player canvases (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes, composited seamlessly with Borland/OIA chrome and floating prompts in GUI mode (`GuiTextureQuad`) and adaptive sub-cell graphics in TUI mode (`Kitty`/`Sixel`/`HalfBlock`).
+**Depends on**: Phase 10 (`GuiWorkspaceRenderer`), Phase 26/27 (`PixelCanvasBuffer`), Phase 49 (`API-01`).
+**Requirements**: WEB-01, WEB-02, VID-01, VID-02
+**Today (baseline)**: Panes display either PTY terminal emulation or Tektronix/vector/image pixel canvases; no embedded live web browser engine or full-motion 60fps video playback canvas exists.
+**Uniformity (`UNI-R01`)**: Full mouse click/scroll/drag, keyboard shortcuts, `:browse <url>`, `:video <path|url>`, Command Palette, Top Menu (`View -> New Browser Pane / Video Pane`), JSON-RPC (`browser.*`, `video.*`), and MCP (`bilterm_browse`, `bilterm_video`).
+**Success Criteria** (what must be TRUE):
+
+  1. `WEB-01`: Out-of-process Chromium engine web browser canvas via CDP Screencast (`CdpBrowserEngine`) delivering live RGBA frames into `GuiWorkspaceRenderer` (Pass 2) under private `0700` profile sandboxing, plus optional in-process CEF off-screen renderer (`--features cef-browser`).
+  2. `WEB-02`: Full interactive browser navigation: interactive URL/Navigation bar, mouse click/scroll forwarding via CDP `Input.dispatchMouseEvent`, keyboard typing via `Input.dispatchKeyEvent`, navigation history back/forward/reload, zoom, and adaptive TUI sub-cell fallback.
+  3. `VID-01`: Embedded 60fps RGBA video player canvas (`VideoCanvasEngine`) driven by `ffmpeg` subprocess pipe (or optional `libavcodec`) decoding multi-format video into shared pixel buffers with monotonic audio clock synchronization.
+  4. `VID-02`: On-screen transport controls (Play/Pause, Seek bar, Volume slider, Speed, Loop toggle), keyboard hotkeys (`Space`, `Left`/`Right`, `m`, `f`), Borland OIA status bar timecode display, and surface parity (`UNI-R01`).
+
+**Artifacts**:
+- Research Spike: `.planning/phases/59-browser-and-video-canvas-spike/59-RESEARCH-SPIKE.md`
+- Architecture ADR: `.planning/phases/59-browser-and-video-canvas-spike/59-ARCHITECTURE-ADR.md`
+- Plans:
+  - [ ] 59-01-PLAN.md — Chrome Engine (CDP Screencast + CEF Off-Screen) Web Browser Canvas Pipeline (wave 1)
+  - [ ] 59-02-PLAN.md — 60fps RGBA Video Player Canvas Engine, Surface Parity & Test Suite (wave 2)
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -1018,7 +1106,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1080,3 +1168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 53. Session & Window Management (`SES-01..05`) | 3/3 | Complete | 2026-11-06 |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 3/3 | Complete | 2026-11-06 |
 | 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 3/3 | Complete | 2026-11-06 |
+| 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 0/3 | Planned | - |
+| 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 0/3 | Planned | - |
+| 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 0/2 | Planned (Spike Complete) | - |
+| 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 0/2 | Planned (Spike Complete) | - |
