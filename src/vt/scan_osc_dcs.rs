@@ -8,9 +8,12 @@ use super::codec::{
 };
 use super::detect::Osc8Hyperlink;
 use super::graphics::{
-    GraphicProtocol, TerminalGraphicPlacement, decode_sixel_placement, expand_kitty_payload_to_rgba,
+    GraphicProtocol, MAX_GRAPHIC_PLACEMENTS, MAX_KITTY_PAYLOAD_B64_BYTES, TerminalGraphicPlacement,
+    decode_sixel_placement, expand_kitty_payload_to_rgba,
 };
-use super::{Osc9Progress, Osc133Phase, TerminalNotification, VtParser};
+use super::{
+    MAX_NOTIFICATIONS, MAX_OSC8_LINKS, Osc9Progress, Osc133Phase, TerminalNotification, VtParser,
+};
 
 impl VtParser {
     /// Dispatches a single `OSC` (`\x1b]...`) sequence starting at `osc_rest` (`&text[idx + 2..]`).
@@ -83,10 +86,14 @@ impl VtParser {
                         .split(':')
                         .find_map(|kv| kv.strip_prefix("id="))
                         .map(str::to_string);
-                    self.osc8_links.push(Osc8Hyperlink {
-                        id,
-                        uri: uri.to_string(),
-                    });
+                    push_bounded(
+                        &mut self.osc8_links,
+                        Osc8Hyperlink {
+                            id,
+                            uri: uri.to_string(),
+                        },
+                        MAX_OSC8_LINKS,
+                    );
                     self.record_escape_sequence(format!("OSC 8 {uri}"));
                 }
             }
@@ -123,7 +130,7 @@ impl VtParser {
             if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
                 let msg = rest[..end].trim();
                 if !msg.is_empty() {
-                    self.notifications.push(TerminalNotification {
+                    self.push_notification(TerminalNotification {
                         title: "OSC 9".to_string(),
                         body: msg.to_string(),
                     });
@@ -138,7 +145,7 @@ impl VtParser {
             if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
                 let payload = &rest[..end];
                 let (title, body) = payload.split_once(';').unwrap_or(("NOTIFY", payload));
-                self.notifications.push(TerminalNotification {
+                self.push_notification(TerminalNotification {
                     title: title.trim().to_string(),
                     body: body.trim().to_string(),
                 });
@@ -264,7 +271,7 @@ impl VtParser {
                     "DCS Sixel id={id} {}x{}px",
                     placement.pixel_width, placement.pixel_height
                 ));
-                self.graphic_placements.push(placement);
+                push_bounded(&mut self.graphic_placements, placement, MAX_GRAPHIC_PLACEMENTS);
             }
         }
     }
@@ -324,10 +331,20 @@ impl VtParser {
                 self.record_escape_sequence("APC Kitty Delete");
             }
             't' | 'T' | 'p' => {
-                let raw_bytes = base64_decode(b64_payload);
                 let w = px_w.max(2);
                 let h = px_h.max(2);
-                let rgba = expand_kitty_payload_to_rgba(&raw_bytes, format_code, w, h);
+                if b64_payload.len() > MAX_KITTY_PAYLOAD_B64_BYTES {
+                    self.record_escape_sequence(format!("APC Kitty rejected i={resolved_id}"));
+                    return;
+                }
+                let raw_bytes = base64_decode(b64_payload);
+                let Some(rgba) = expand_kitty_payload_to_rgba(&raw_bytes, format_code, w, h)
+                else {
+                    self.record_escape_sequence(format!(
+                        "APC Kitty rejected i={resolved_id} {w}x{h}px"
+                    ));
+                    return;
+                };
                 let (cur_row, cur_col) = self.parser.screen().cursor_position();
                 let cols = if cell_c > 0 {
                     cell_c
@@ -339,7 +356,7 @@ impl VtParser {
                 } else {
                     h.div_ceil(16).max(1)
                 };
-                self.graphic_placements.push(TerminalGraphicPlacement {
+                let placement = TerminalGraphicPlacement {
                     id: resolved_id,
                     protocol: GraphicProtocol::Kitty,
                     row: cur_row,
@@ -349,7 +366,8 @@ impl VtParser {
                     pixel_width: w,
                     pixel_height: h,
                     rgba_bytes: rgba,
-                });
+                };
+                push_bounded(&mut self.graphic_placements, placement, MAX_GRAPHIC_PLACEMENTS);
                 if image_id.is_some() && quiet == 0 {
                     self.pending_query_responses
                         .push(format!("\x1b_Gi={resolved_id};OK\x1b\\").into_bytes());
@@ -361,6 +379,21 @@ impl VtParser {
             _ => {}
         }
     }
+}
+
+impl VtParser {
+    fn push_notification(&mut self, notification: TerminalNotification) {
+        push_bounded(&mut self.notifications, notification, MAX_NOTIFICATIONS);
+        self.notifications_received = self.notifications_received.wrapping_add(1);
+    }
+}
+
+/// Appends `item`, dropping the oldest entries so at most `cap` remain.
+fn push_bounded<T>(items: &mut Vec<T>, item: T, cap: usize) {
+    if items.len() >= cap {
+        items.drain(..=items.len() - cap);
+    }
+    items.push(item);
 }
 
 fn format_osc_color_reply(code: u8, palette_idx: Option<u8>, (r, g, b): (u8, u8, u8)) -> String {

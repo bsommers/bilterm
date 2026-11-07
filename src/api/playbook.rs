@@ -215,16 +215,16 @@ impl AutomationControlPlane {
             .command_blocks()
             .last()
             .and_then(|b| b.exit_code);
-        let prev_notifs = pane.vt().notifications().len();
+        let prev_notifs = pane.vt().notifications_received();
 
         pane.process_pty_output(bytes);
 
         let now_alt = pane.vt().is_alternate_screen();
-        let new_notifs: Vec<(String, String)> = pane
-            .vt()
-            .notifications()
+        let notifs = pane.vt().notifications();
+        let added = pane.vt().notifications_received().wrapping_sub(prev_notifs);
+        let added = usize::try_from(added).unwrap_or(usize::MAX).min(notifs.len());
+        let new_notifs: Vec<(String, String)> = notifs[notifs.len() - added..]
             .iter()
-            .skip(prev_notifs)
             .map(|n| (n.title.clone(), n.body.clone()))
             .collect();
         let completed_block = pane.vt().command_blocks().last().and_then(|b| {

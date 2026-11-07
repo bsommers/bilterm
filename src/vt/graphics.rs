@@ -1,5 +1,13 @@
 use super::VtParser;
 
+/// Largest pixel width/height accepted for a decoded Kitty or Sixel image (`GFX-01`).
+pub const MAX_GRAPHIC_DIM_PX: u16 = 512;
+/// Largest base64 Kitty payload decoded: enough for a `MAX_GRAPHIC_DIM_PX`² RGBA image.
+pub const MAX_KITTY_PAYLOAD_B64_BYTES: usize =
+    (MAX_GRAPHIC_DIM_PX as usize * MAX_GRAPHIC_DIM_PX as usize * 4).div_ceil(3) * 4;
+/// Most graphic placements retained per terminal; the oldest are dropped first.
+pub const MAX_GRAPHIC_PLACEMENTS: usize = 64;
+
 /// Terminal graphics protocol family (`GFX-01`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GraphicProtocol {
@@ -65,9 +73,20 @@ pub(super) fn strip_apc_and_dcs_envelopes(input: &str) -> String {
     out
 }
 
-pub(super) fn expand_kitty_payload_to_rgba(raw: &[u8], format_code: u32, w: u16, h: u16) -> Vec<u8> {
-    let total_px = usize::from(w) * usize::from(h);
-    let mut rgba = Vec::with_capacity(total_px * 4);
+/// Expands a decoded Kitty payload into `w * h` RGBA pixels; `None` (nothing allocated) when
+/// either dimension exceeds [`MAX_GRAPHIC_DIM_PX`].
+pub(super) fn expand_kitty_payload_to_rgba(
+    raw: &[u8],
+    format_code: u32,
+    w: u16,
+    h: u16,
+) -> Option<Vec<u8>> {
+    if w > MAX_GRAPHIC_DIM_PX || h > MAX_GRAPHIC_DIM_PX {
+        return None;
+    }
+    let total_px = usize::from(w).checked_mul(usize::from(h))?;
+    let rgba_len = total_px.checked_mul(4)?;
+    let mut rgba = Vec::with_capacity(rgba_len);
     match format_code {
         24 => {
             for px in raw.chunks(3).take(total_px) {
@@ -87,10 +106,10 @@ pub(super) fn expand_kitty_payload_to_rgba(raw: &[u8], format_code: u32, w: u16,
             }
         }
     }
-    while rgba.len() < total_px * 4 {
+    while rgba.len() < rgba_len {
         rgba.extend_from_slice(&[0, 0xFF, 0x66, 255]);
     }
-    rgba
+    Some(rgba)
 }
 
 pub(super) fn decode_sixel_placement(
@@ -222,8 +241,8 @@ pub(super) fn decode_sixel_placement(
         }
     }
 
-    let w = width_px.clamp(1, 512);
-    let h = height_px.clamp(6, 512);
+    let w = width_px.clamp(1, MAX_GRAPHIC_DIM_PX);
+    let h = height_px.clamp(6, MAX_GRAPHIC_DIM_PX);
     let mut rgba = vec![0u8; usize::from(w) * usize::from(h) * 4];
     for (band_idx, band) in bands.iter().enumerate() {
         for (x, &(r, g, b, bits)) in band.iter().enumerate() {

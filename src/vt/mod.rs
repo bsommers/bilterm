@@ -102,6 +102,7 @@ pub struct VtParser {
     graphic_placements: Vec<TerminalGraphicPlacement>,
     next_graphic_id: u32,
     notifications: Vec<TerminalNotification>,
+    notifications_received: u64,
     unread_bell: bool,
     recording_started_at: Option<Instant>,
     recording_path: Option<PathBuf>,
@@ -129,6 +130,10 @@ pub struct VtParser {
 
 /// Smallest grid dimension handed to `vt100-ctt` (1-row grids panic on soft-wrap).
 pub const MIN_GRID_DIM: u16 = 2;
+/// Most `OSC 8` hyperlinks retained per terminal; the oldest are dropped first.
+pub const MAX_OSC8_LINKS: usize = 1024;
+/// Most `OSC 9` / `OSC 777` notifications retained per terminal; the oldest are dropped first.
+pub const MAX_NOTIFICATIONS: usize = 256;
 
 impl VtParser {
     pub fn new(rows: u16, cols: u16, scrollback_capacity: usize) -> Self {
@@ -169,6 +174,7 @@ impl VtParser {
             graphic_placements: Vec::new(),
             next_graphic_id: 1,
             notifications: Vec::new(),
+            notifications_received: 0,
             unread_bell: false,
             recording_started_at: None,
             recording_path: None,
@@ -664,6 +670,8 @@ impl VtParser {
 
     pub fn osc9_progress(&self) -> Option<Osc9Progress> { self.osc9_progress }
     pub fn notifications(&self) -> &[TerminalNotification] { &self.notifications }
+    /// Monotonic count of notifications ever received, unaffected by retention or clearing.
+    pub fn notifications_received(&self) -> u64 { self.notifications_received }
 
     pub fn clear_notifications(&mut self) {
         self.notifications.clear();
