@@ -30,7 +30,7 @@ pub use keymap::{
 };
 pub use mouse::{handle_mouse_event, handle_wm_mouse_event};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::action::Action;
 use crate::colon_command::{execute_colon_command, parse_colon_command};
@@ -601,6 +601,11 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
         return wm.apply(Action::Quit);
+    }
+
+    // Holding a chord the WM consumes as a toggle fires once. Keys forwarded to the pane keep auto-repeating.
+    if raw_key.kind == KeyEventKind::Repeat && keymap::is_wm_toggle_chord(wm, key) {
+        return Ok(AppAction::Handled);
     }
 
     // Active WM modal overlays (Help, Inspector, Palette, Menu Bar)
