@@ -164,7 +164,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
    - Command submission MUST go exclusively through `CompositePane::submit_command(&mut self) -> Result<Option<SubmittedCommand>>`.
    - Overlays are mutually exclusive via `Modal` (`None`, `Help`, `CommandPalette`, `Inspector`, `TopMenu`); intra-pane focus is mutually exclusive via `Focus` (`FloatingPrompt`, `RawPassthrough`, `HistoryPopup`, `CopyMode`).
 4. **Filesystem & Credential Confinement (`SEC-R01..04`)**:
-   - All runtime state, session TOMLs, history exports, `.cast` recordings,Unix RPC sockets, and snapshots MUST use `src/util/secure_fs.rs` (`ensure_private_dir` `0700`, `write_private_file_atomic` `0600`, `validate_safe_name` rejecting `..`, `/`, `\`, NUL).
+   - All runtime state, session TOMLs, history exports, `.cast` recordings,Unix RPC sockets, and snapshots MUST use `src/secure_fs.rs` (`ensure_private_dir` `0700`, `write_private_file_atomic` `0600`, `validate_safe_name` rejecting `..`, `/`, `\`, NUL).
    - Never pass secrets on CLI argv; use `--token-file <path>` (`0600`).
 5. **Context Window & Token-Efficiency Discipline (`PERF-CTX-01..03`)**:
    - **Compact Between Tasks**: Recommend or run `/compact` after updating `.planning/CHECKPOINT.md` when switching between major tasks so tool turns do not replay large historical contexts.

@@ -1,8 +1,8 @@
-# Bilterm User Guide (`v1.12.0`)
+# Bilterm User Guide (`v3.0.3`)
 
 [← Back to Project README](../../README.md) | [Starter Packs (`starter-packs/`)](../../starter-packs/README.md)
 
-Welcome to the official User Guide for **Bilterm (`v1.12.0`)** — the Rust + Ratatui terminal multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator inspired by **IBM 3270 Mainframe Terminals** and **DOS Borland Turbo Vision (Turbo C / Turbo Pascal IDE)**.
+Welcome to the official User Guide for **Bilterm (`v3.0.3`)** — the Rust + Ratatui terminal multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator inspired by **IBM 3270 Mainframe Terminals** and **DOS Borland Turbo Vision (Turbo C / Turbo Pascal IDE)**.
 
 > **Quick Interactive Help (`<F1>`)**: At any time inside Bilterm, press **`F1`** or run **`:help`** to open the scrollable Borland Turbo Vision Help Modal directly on screen (`Up`/`Down`/`PageUp`/`PageDown` to scroll, `F1`/`Esc` to close).
 

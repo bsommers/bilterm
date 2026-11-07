@@ -8,7 +8,7 @@ Please read **[`AGENTS.md`](AGENTS.md)** and **[`docs/DEVELOPER_AND_AGENT_GUIDE.
    - `src/input/mod.rs::handle_wm_key_event` MUST stay **`<= 80` lines** (`ARCH-R01`).
    - All user-triggerable commands/keybindings/RPC calls lower to `crate::action::Action` and execute via `WindowManager::apply(Action)` (`src/colon_command/execute_wm.rs`).
    - All `WindowManager` and `CompositePane` internal fields are private (`ARCH-R02`); pane removal goes exclusively through `WindowManager::remove_pane(id)` and command submission goes exclusively through `CompositePane::submit_command(&mut self)`.
-   - All runtime directories and files use `src/util/secure_fs.rs` (`0700` dirs, `0600` atomic files, `validate_safe_name`).
+   - All runtime directories and files use `src/secure_fs.rs` (`0700` dirs, `0600` atomic files, `validate_safe_name`).
 3. **Inspectability & Debugging**:
    - Live TUI: Press **`F9`** (`:inspector`) for the 3270 Terminal Inspector modal.
    - Trace logs: `RUST_LOG=bilterm=debug cargo run` writes to `bilterm.log`.
