@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.5] - 2026-11-07
+
+Bug-fix release. Thanks to @kitsumiko for the key-repeat fix.
+
 ### Fixed
 - **Holding a WM toggle key no longer flickers it (supersedes #20, thanks @kitsumiko).** Key auto-repeat (`KeyEventKind::Repeat`) of a chord the window manager consumes as a toggle (F7 drawer, Ctrl+P palette, the leader key, user `[keybindings]` toggles, ...) is now ignored, so a held key fires once. The filter only applies to keys the WM actually handles: keys forwarded to the pane, including `Alt+h/t/c/l/x`, `Ctrl+Space`, `F2` and `F5` in alt-screen apps, keep their auto-repeat.
 
