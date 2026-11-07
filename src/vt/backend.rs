@@ -521,7 +521,7 @@ impl TerminalBackend for MockTerminalBackend {
                             osc.push(chars[i]);
                             i += 1;
                         }
-                        if osc.starts_with("52;") {
+                        if crate::vt::is_forwardable_osc52_write(&osc) {
                             self.pending_osc52.push(format!("\x1b]{osc}\x07"));
                         }
                     }

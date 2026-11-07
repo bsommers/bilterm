@@ -86,6 +86,62 @@ fn tracks_decset_2004_bracketed_paste_and_osc52_clipboard() {
 }
 
 #[test]
+fn osc52_bel_and_st_terminated_writes_forward_byte_identically() {
+    let mut vt = VtParser::new(10, 40, 100);
+    let bel = "\x1b]52;c;aGVsbG8=\x07";
+    let st = "\x1b]52;p0;aGVsbG8=\x1b\\";
+    vt.process(format!("pre{bel}mid{st}post").as_bytes());
+    assert_eq!(vt.take_outbound_osc52(), vec![bel.to_string(), st.to_string()]);
+}
+
+#[test]
+fn osc52_does_not_forward_escapes_smuggled_before_a_later_bel() {
+    let mut vt = VtParser::new(10, 40, 100);
+    // ST ends the OSC; the trailing CSI and BEL belong to unrelated output.
+    vt.process(b"\x1b]52;c;eA==\x1b\\\x1b[2J\x1b]0;t\x07");
+    assert_eq!(vt.take_outbound_osc52(), vec!["\x1b]52;c;eA==\x1b\\".to_string()]);
+
+    // An ESC inside the body that is not ST aborts the sequence entirely.
+    vt.process(b"\x1b]52;c;eA\x1b[2Jxx\x07");
+    assert!(vt.take_outbound_osc52().is_empty());
+}
+
+#[test]
+fn osc52_rejects_read_queries_and_malformed_payloads() {
+    let mut vt = VtParser::new(10, 40, 100);
+    for seq in [
+        "\x1b]52;c;?\x07",
+        "\x1b]52;c;?\x1b\\",
+        "\x1b]52;x;aGk=\x07",
+        "\x1b]52;c;a\u{9b}2J\x07",
+        "\x1b]52;c;a b\x07",
+        "\x1b]52;aGk=\x07",
+    ] {
+        vt.process(seq.as_bytes());
+        assert!(vt.take_outbound_osc52().is_empty(), "forwarded {seq:?}");
+    }
+
+    let oversized = format!("\x1b]52;c;{}\x07", "A".repeat(MAX_OSC52_PAYLOAD_BYTES + 4));
+    vt.process(oversized.as_bytes());
+    assert!(vt.take_outbound_osc52().is_empty());
+}
+
+#[test]
+fn osc52_split_across_chunks_is_not_forwarded() {
+    let mut vt = VtParser::new(10, 40, 100);
+    vt.process(b"\x1b]52;c;aGVs");
+    vt.process(b"bG8=\x07");
+    assert!(vt.take_outbound_osc52().is_empty());
+}
+
+#[test]
+fn mock_backend_osc52_drops_queries_and_embedded_escapes() {
+    let mut mock = MockTerminalBackend::new(10, 40, 100);
+    mock.process(b"\x1b]52;c;?\x07\x1b]52;c;eA\x1b[2J\x07\x1b]52;c;aGk=\x07");
+    assert_eq!(mock.take_outbound_osc52(), vec!["\x1b]52;c;aGk=\x07".to_string()]);
+}
+
+#[test]
 fn jumps_between_osc133_command_blocks_in_scrollback() {
     let mut vt = VtParser::new(4, 40, 200);
     vt.record_command_submission("cmd-one");

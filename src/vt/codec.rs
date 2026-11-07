@@ -86,6 +86,29 @@ pub fn encode_osc52_clipboard(text: &str) -> String {
     format!("\x1b]52;c;{encoded}\x07")
 }
 
+/// Upper bound on the base64 payload of an `OSC 52` clipboard write forwarded to the host terminal (1 MiB).
+pub const MAX_OSC52_PAYLOAD_BYTES: usize = 1024 * 1024;
+
+/// Returns `true` when `body` (the OSC text between `ESC ]` and its BEL/ST terminator) is a
+/// well-formed `OSC 52` clipboard *write* that is safe to forward to the host terminal:
+/// `52;<selection>;<base64>` with selection chars in `[cpqs0-7]`, only base64 alphabet characters,
+/// and a payload no larger than [`MAX_OSC52_PAYLOAD_BYTES`]. Clipboard read queries (`?`) are rejected.
+pub fn is_forwardable_osc52_write(body: &str) -> bool {
+    let Some((selection, payload)) = body
+        .strip_prefix("52;")
+        .and_then(|rest| rest.split_once(';'))
+    else {
+        return false;
+    };
+    selection
+        .bytes()
+        .all(|b| matches!(b, b'c' | b'p' | b'q' | b's' | b'0'..=b'7'))
+        && payload.len() <= MAX_OSC52_PAYLOAD_BYTES
+        && payload
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
+}
+
 /// Pure-Rust RFC 4648 Base64 encoder for `OSC 52` clipboard payloads.
 pub fn base64_encode(input: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
