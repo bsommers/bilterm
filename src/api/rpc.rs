@@ -284,14 +284,18 @@ impl AutomationControlPlane {
             .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
 
         match self.dispatch_method(method, &params) {
-            Ok(result) => JsonValue::obj([
-                ("jsonrpc", JsonValue::String("2.0".to_string())),
-                ("id", id),
-                ("result", result),
-            ])
-            .to_json_string(),
+            Ok(result) => Self::result_response(id, result).to_json_string(),
             Err(msg) => Self::error_response(id, -32000, &msg).to_json_string(),
         }
+    }
+
+    /// JSON-RPC 2.0 success envelope `{"jsonrpc":"2.0","id":..,"result":..}`.
+    pub(crate) fn result_response(id: JsonValue, result: JsonValue) -> JsonValue {
+        JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", id),
+            ("result", result),
+        ])
     }
 
     /// Dispatches a JSON-RPC 2.0 control plane method against the workspace.
@@ -1033,69 +1037,6 @@ impl AutomationControlPlane {
             .and_then(|d| JsonValue::parse(&d))
             .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
         Ok(data)
-    }
-
-    fn rpc_agent_wait(&mut self, params: &JsonValue) -> std::result::Result<JsonValue, String> {
-        let target_agent = params
-            .get("agent")
-            .and_then(JsonValue::as_str)
-            .or_else(|| self.wm.agent_mail().name_for_pane(self.wm.active_pane_id()))
-            .ok_or_else(|| "missing 'agent' parameter".to_string())?;
-        let reply_id = params
-            .get("reply_to")
-            .and_then(JsonValue::as_i64)
-            .and_then(|n| u64::try_from(n).ok());
-        let timeout_ms = params
-            .get("timeout_ms")
-            .and_then(JsonValue::as_i64)
-            .and_then(|n| u64::try_from(n).ok())
-            .unwrap_or(5000)
-            .min(10000);
-
-        let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis(timeout_ms);
-        loop {
-            let inbox = self.wm.agent_mail().get_inbox(target_agent, true);
-            if let Some(msg) = inbox.iter().find(|m| match reply_id {
-                Some(rid) => m.reply_to == Some(rid),
-                None => true,
-            }) {
-                return Ok(JsonValue::obj([
-                    ("status", JsonValue::String("received".to_string())),
-                    (
-                        "message",
-                        JsonValue::obj([
-                            ("id", JsonValue::Number(msg.id as i64)),
-                            ("from", JsonValue::String(msg.from.clone())),
-                            ("to", JsonValue::String(msg.to.clone())),
-                            ("body", JsonValue::String(msg.body.clone())),
-                            ("kind", JsonValue::String(msg.kind.clone())),
-                            (
-                                "reply_to",
-                                msg.reply_to
-                                    .map_or(JsonValue::Null, |id| JsonValue::Number(id as i64)),
-                            ),
-                            ("hop_count", JsonValue::Number(msg.hop_count as i64)),
-                            ("timestamp_ms", JsonValue::Number(msg.timestamp_ms as i64)),
-                            ("acked", JsonValue::Bool(msg.acked)),
-                            (
-                                "file_path",
-                                msg.file_path
-                                    .clone()
-                                    .map_or(JsonValue::Null, JsonValue::String),
-                            ),
-                        ]),
-                    ),
-                ]));
-            }
-            if start.elapsed() >= timeout {
-                return Ok(JsonValue::obj([
-                    ("status", JsonValue::String("timeout".to_string())),
-                    ("agent", JsonValue::String(target_agent.to_string())),
-                ]));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
     }
 
     pub(crate) fn error_response(id: JsonValue, code: i64, message: &str) -> JsonValue {

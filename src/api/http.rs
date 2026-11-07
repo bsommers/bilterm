@@ -16,6 +16,7 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot};
 
+use super::agent_wait::{AgentWaiters, WAIT_TICK};
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
 use crate::error::{BiltermError, Result};
@@ -127,10 +128,13 @@ pub async fn serve_http_standalone(
     let (tx, mut rx) = mpsc::channel::<RpcRequest>(64);
     let server = serve_http(listener, tx, token);
     tokio::pin!(server);
+    let mut waiters = AgentWaiters::default();
+    let mut wait_tick = tokio::time::interval(WAIT_TICK);
     loop {
         tokio::select! {
             r = &mut server => return r,
-            Some((line, reply)) = rx.recv() => { let _ = reply.send(plane.handle_jsonrpc_line(&line)); }
+            Some((line, reply)) = rx.recv() => waiters.handle(&mut plane, &line, reply),
+            _ = wait_tick.tick(), if !waiters.is_empty() => waiters.poll(&plane),
         }
     }
 }
