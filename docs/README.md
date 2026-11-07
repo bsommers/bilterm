@@ -1,8 +1,8 @@
-# Bilterm Documentation Hub (`v3.0.3`)
+# Bilterm Documentation Hub (`v3.0.4`)
 
 [← Back to Project README](../README.md) | [Visual Gallery (`docs/VISUAL_GALLERY.md`)](VISUAL_GALLERY.md) | [Starter Packs (`starter-packs/`)](../starter-packs/README.md)
 
-Welcome to the comprehensive documentation suite for **Bilterm (`v3.0.3`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
+Welcome to the comprehensive documentation suite for **Bilterm (`v3.0.4`)** — the IBM 3270 Mainframe, DOS Borland Turbo Vision, & TRON Master Control Program (`MCP`) inspired TUI multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH fleet manager, and AI-automatable terminal emulator written in Rust + Ratatui.
 
 ---
 
@@ -30,7 +30,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v3.0.3`)** — 
 | **[`docs/architecture/OVERVIEW.md`](architecture/OVERVIEW.md)** | Architecture Decision Records (`ADR-001` through `ADR-008`) |
 | **[`docs/TEST_COVERAGE.md`](TEST_COVERAGE.md)** | Test coverage report (**`83.45%` line coverage**, 250+ passing tests) and battle/stress/performance benchmarks |
 | **[`docs/launch-presentation-and-pitch-script.md`](launch-presentation-and-pitch-script.md)** | 12-slide technical deck specification and 5-minute product launch video script |
-| **[`CHANGELOG.md`](../CHANGELOG.md)** | Semantic versioning release history (`v0.1.0` through `v3.0.3`) |
+| **[`CHANGELOG.md`](../CHANGELOG.md)** | Semantic versioning release history (`v0.1.0` through `v3.0.4`) |
 
 ---
 
@@ -60,7 +60,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v3.0.3`)** — 
 | `bilterm -c` / `--config <file.toml>` | Load configuration from custom TOML file path |
 | `bilterm -C` / `--completions <bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `bilterm -M` / `--man` | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 3.0.3`) |
+| `bilterm -v` / `--version` (`-V`) | Print version information (`bilterm 3.0.4`) |
 | `bilterm -h` / `--help` | Print CLI help summary |
 
 ---

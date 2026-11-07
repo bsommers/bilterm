@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.4] - 2026-11-07
+
+Bug-fix and tooling release. Thanks to @kitsumiko for the `agent.wait`, macOS `verify.sh` and docs fixes.
+
+### Fixed
+- **`agent.wait` no longer blocks the JSON-RPC server (#26).** Previously, a client waiting for an agent message stopped every other client's requests until the wait ended, which took up to 10 s. Waits that have no message yet are now parked and checked every 50 ms while the serve loop keeps handling other requests. This applies to the Unix-socket, TCP and HTTP endpoints. The 10 s timeout cap is unchanged, and at most 64 waits can be parked at once.
+- **`scripts/verify.sh` runs under macOS `/bin/bash` 3.2 (#25).** It no longer uses `mapfile`, empty arrays no longer trip `set -u`, an unknown `--only` group or `--tier` exits 2, and the summary line no longer picks up the extra spaces BSD `wc -l` adds. The macOS CI job is green again and is now a required check.
+
+### Changed
+- **`scripts/build-release-assets.sh` builds only the Linux targets, and builds the tag (#24).** It used to try to cross-link the macOS targets, which fails without the Apple SDK, so it aborted before packaging anything. It also copied its windows-gnu zip over the `bilterm-x86_64-pc-windows-msvc.zip` alias, which an upload would have used to replace the native Windows installer. macOS and Windows archives come from the `release-binaries` workflow. The script now builds the tag in a clean worktree, and adds `--upload`, which merges its checksums into the release's `SHA256SUMS`, and `--no-build`.
+
+### Documentation
+- Current-version references are back in sync with `Cargo.toml`: README badge, docs hub, user guide, man page, `flake.nix` and API examples (#27).
+- Fixed the `secure_fs` path in `CLAUDE.md`, `AGENTS.md` and the docs. It is `src/secure_fs.rs`, not `src/util/secure_fs.rs` (#27).
+
 ## [3.0.3] - 2026-11-07
 
 Security and hardening release. Thanks to @kitsumiko for reporting and fixing all of the issues below.
