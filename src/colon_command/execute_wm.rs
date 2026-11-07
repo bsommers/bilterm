@@ -9,6 +9,31 @@ use crate::ui::cursor::SpotlightMode;
 use crate::wm::WindowManager;
 use crate::wm::split_tree::SplitDirection;
 
+/// Resolves a user-supplied `:record` path. Under automation confinement only a plain file name
+/// is accepted and it is placed inside `confine`; interactive (unconfined) paths pass through.
+pub(crate) fn resolve_recording_path(
+    confine: Option<&std::path::Path>,
+    p: &str,
+) -> Result<std::path::PathBuf, String> {
+    match confine {
+        Some(dir) => crate::secure_fs::validate_plain_file_name(p).map(|()| dir.join(p)),
+        None => Ok(std::path::PathBuf::from(p)),
+    }
+}
+
+/// [`resolve_recording_path`] against `wm`'s confine dir; on rejection records the automation
+/// error, shows it on the active pane, and returns `None`.
+fn confined_recording_path(wm: &mut WindowManager, p: &str) -> Option<std::path::PathBuf> {
+    match resolve_recording_path(wm.automation_confine_dir(), p) {
+        Ok(path) => Some(path),
+        Err(e) => {
+            wm.record_automation_error(e.clone());
+            wm.active_pane_mut().set_status_message(Some(e));
+            None
+        }
+    }
+}
+
 /// Executes a parsed `ColonCommand` against the multi-pane `WindowManager`.
 pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bool {
     if wm.script_studio().recording {
@@ -105,16 +130,8 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::RecordStart(path_opt) | ColonCommand::RecordWorkspaceStart(path_opt) => {
             if let Some(p) = path_opt {
-                let path = match wm.automation_confine_dir().map(std::path::Path::to_path_buf) {
-                    Some(dir) => match crate::secure_fs::validate_plain_file_name(&p) {
-                        Ok(()) => dir.join(&p),
-                        Err(e) => {
-                            wm.record_automation_error(e.clone());
-                            wm.active_pane_mut().set_status_message(Some(e));
-                            return false;
-                        }
-                    },
-                    None => std::path::PathBuf::from(p),
+                let Some(path) = confined_recording_path(wm, &p) else {
+                    return false;
                 };
                 wm.start_workspace_recording(path.clone(), false);
                 wm.active_pane_mut().vt_mut().start_recording(path.clone());
@@ -147,6 +164,18 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                     }
                 }
             }
+            false
+        }
+        ColonCommand::RecordPaneStart(Some(p)) => {
+            let Some(path) = confined_recording_path(wm, &p) else {
+                return false;
+            };
+            let pane = wm.active_pane_mut();
+            pane.vt_mut().start_recording(path.clone());
+            pane.set_status_message(Some(format!(
+                "⏺ Recording asciicast v2 to {}",
+                path.display()
+            )));
             false
         }
         ColonCommand::RecordStop => {

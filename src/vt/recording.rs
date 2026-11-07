@@ -105,7 +105,8 @@ impl WorkspaceRecorder {
         }
     }
 
-    /// Flushes the recorded workspace `.cast` stream to disk (`0600` when `private == true`).
+    /// Flushes the recorded workspace `.cast` stream to disk (always `0600`, never through a
+    /// symlink at the final path).
     pub fn stop(mut self) -> std::io::Result<PathBuf> {
         if !self.private
             && let Some(parent) = self.path.parent()
@@ -127,7 +128,7 @@ impl WorkspaceRecorder {
             file.write_all(out.as_bytes())?;
             file.sync_all()?;
         } else {
-            std::fs::write(&self.path, out)?;
+            crate::secure_fs::write_private_file(&self.path, out.as_bytes())?;
         }
         Ok(self.path)
     }
@@ -280,7 +281,8 @@ impl VtParser {
             file.write_all(out.as_bytes())?;
             file.sync_all()?;
         } else {
-            std::fs::write(&path, out)?;
+            // User-chosen path: replace (never follow) a symlink at the final path, write 0600.
+            crate::secure_fs::write_private_file(&path, out.as_bytes())?;
         }
         Ok(Some(path))
     }
