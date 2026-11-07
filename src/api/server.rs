@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use super::agent_wait::{AgentWaiters, WAIT_TICK};
 use super::http::{HttpListen, RpcRequest};
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
@@ -492,6 +493,10 @@ async fn serve_loop<A: RpcAcceptor>(
         });
     }
 
+    let mut waiters = AgentWaiters::default();
+    let mut wait_tick = tokio::time::interval(WAIT_TICK);
+    wait_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
         tokio::select! {
             accepted = acceptor.accept() => {
@@ -509,8 +514,9 @@ async fn serve_loop<A: RpcAcceptor>(
                 }
             }
             Some((line, reply_tx)) = req_rx.recv() => {
-                let _ = reply_tx.send(plane.handle_jsonrpc_line(&line));
+                waiters.handle(&mut plane, &line, reply_tx);
             }
+            _ = wait_tick.tick(), if !waiters.is_empty() => waiters.poll(&plane),
         }
     }
 }
