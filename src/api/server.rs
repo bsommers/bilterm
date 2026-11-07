@@ -160,6 +160,14 @@ pub fn validate_listen_config(
             };
 
             if addr.ip().is_loopback() {
+                // Loopback TCP is reachable by every local user and by browsers (cross-protocol
+                // requests), so it needs a bearer token just like remote listeners.
+                if token.is_none() {
+                    return Err(BiltermError::Config(
+                        "TCP listener requires a bearer token via --token-file (mode 0600); use the default Unix socket for tokenless local access"
+                            .to_string(),
+                    ));
+                }
                 Ok(ListenConfig {
                     endpoint: ListenEndpoint::Tcp(addr),
                     token,
@@ -429,9 +437,15 @@ pub async fn run_headless_server_with_http(
     }
 }
 
-/// Runs a headless JSON-RPC 2.0 TCP automation server (`bilterm --headless --listen 127.0.0.1:PORT`).
-pub async fn run_headless_tcp_server(bind_addr: &str, rows: u16, cols: u16) -> Result<()> {
-    let cfg = validate_listen_config(Some(bind_addr), false, None, None)?;
+/// Runs a headless JSON-RPC 2.0 TCP automation server
+/// (`bilterm --headless --listen 127.0.0.1:PORT --token-file PATH`). TCP listeners require a token.
+pub async fn run_headless_tcp_server(
+    bind_addr: &str,
+    token: String,
+    rows: u16,
+    cols: u16,
+) -> Result<()> {
+    let cfg = validate_listen_config(Some(bind_addr), false, Some(token), None)?;
     run_headless_server(cfg, AutomationControlPlane::new_headless(rows, cols)).await
 }
 
@@ -501,6 +515,24 @@ async fn serve_loop<A: RpcAcceptor>(
     }
 }
 
+/// Returns true when `line` looks like an HTTP request line (`METHOD SP ...` or `... HTTP/1.x`).
+///
+/// JSON objects/arrays are never treated as HTTP, so request payloads may mention `HTTP/1.1`.
+fn looks_like_http(line: &str) -> bool {
+    if line.starts_with('{') || line.starts_with('[') {
+        return false;
+    }
+    const METHODS: [&str; 9] = [
+        "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "CONNECT", "TRACE",
+    ];
+    let starts_with_method = METHODS.iter().any(|m| {
+        line.len() > m.len()
+            && line.as_bytes()[..m.len()].eq_ignore_ascii_case(m.as_bytes())
+            && line.as_bytes()[m.len()] == b' '
+    });
+    starts_with_method || line.contains(" HTTP/1.")
+}
+
 async fn serve_jsonrpc_connection<S>(
     stream: S,
     req_tx: tokio::sync::mpsc::Sender<(String, tokio::sync::oneshot::Sender<String>)>,
@@ -537,30 +569,25 @@ where
             continue;
         }
 
-        let parsed = match JsonValue::parse(trimmed) {
+        // A non-JSON line (or anything shaped like an HTTP request) means the peer is not
+        // speaking line-delimited JSON-RPC, e.g. a browser POST aimed at a loopback port. Reply
+        // once and close so that later lines (such as an HTTP body) are never dispatched.
+        let parsed = match JsonValue::parse(trimmed).filter(|_| !looks_like_http(trimmed)) {
             Some(val) => val,
             None => {
-                if !authed {
-                    let err_resp = AutomationControlPlane::error_response(
+                let err_resp = if authed {
+                    AutomationControlPlane::error_response(JsonValue::Null, -32700, "Parse error")
+                } else {
+                    AutomationControlPlane::error_response(
                         JsonValue::Null,
                         RPC_AUTH_ERROR_CODE,
                         "authentication required: send auth.login first",
                     )
-                    .to_json_string();
-                    wr.write_all(format!("{err_resp}\n").as_bytes()).await?;
-                    wr.flush().await?;
-                    return Ok(());
                 }
-                let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-                if req_tx.send((trimmed.to_string(), reply_tx)).await.is_err() {
-                    return Ok(());
-                }
-                let Ok(resp) = reply_rx.await else {
-                    return Ok(());
-                };
-                wr.write_all(format!("{resp}\n").as_bytes()).await?;
+                .to_json_string();
+                wr.write_all(format!("{err_resp}\n").as_bytes()).await?;
                 wr.flush().await?;
-                continue;
+                return Ok(());
             }
         };
 

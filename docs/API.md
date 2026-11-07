@@ -30,7 +30,7 @@ Bilterm exposes three primary automation surfaces backed by a unified internal s
 1. **JSON-RPC 2.0 Daemon (Unix Domain Socket / TCP)**:
    - Line-delimited JSON-RPC 2.0 stream server running in headless mode (`bilterm --headless --listen <ADDR>`).
    - Default transport on Unix is a private Unix domain socket located at `$XDG_RUNTIME_DIR/bilterm/bilterm.sock` or `~/.local/state/bilterm/bilterm.sock` (mode `0600`, peer UID authenticated).
-   - TCP listeners default to `127.0.0.1:7370` with mandatory bearer token authentication when exposed outside loopback.
+   - TCP listeners (loopback included) require bearer token authentication via `--token-file`. A line that is not JSON (e.g. an HTTP request line) gets one error reply and the connection is closed.
 2. **Model Context Protocol (MCP 2024-11-05)**:
    - Native stdio-based MCP server (`bilterm --mcp`) conforming to the Model Context Protocol specification.
    - Provides AI coding agents (Claude Desktop, Antigravity, OpenCodeInterpreter, etc.) with structured tools (`tools/list`, `tools/call`) and dynamic read-only resources (`resources/list`, `resources/read`).
@@ -53,17 +53,14 @@ bilterm --headless
 # Explicit Unix socket path
 bilterm --headless --listen unix:/tmp/bilterm-custom.sock
 
-# Loopback TCP listener on default port 127.0.0.1:7370
-bilterm --headless --listen 127.0.0.1:7370
-
-# Loopback TCP with bearer token authentication
+# Loopback TCP listener (every TCP listener requires a 0600 --token-file)
 bilterm --headless --listen 127.0.0.1:7370 --token-file /path/to/token.secret
 
 # Remote TCP listening (strictly requires --allow-remote and a 0600 --token-file)
 bilterm --headless --listen 0.0.0.0:7370 --allow-remote --token-file /path/to/token.secret
 
 # Headless daemon with concurrent HTTP + SSE transport
-bilterm --headless --listen 127.0.0.1:7370 --http 127.0.0.1:7371
+bilterm --headless --http 127.0.0.1:7371
 ```
 
 ### Running the Native MCP Server
