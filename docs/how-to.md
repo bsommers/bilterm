@@ -1,4 +1,4 @@
-# Operational How-To Recipes & Troubleshooting Matrix (`v3.0.4`)
+# Operational How-To Recipes & Troubleshooting Matrix (`v3.0.5`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 

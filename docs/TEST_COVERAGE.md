@@ -1,4 +1,4 @@
-# Test Suite & Coverage Report — `bilterm` (`v3.0.4`)
+# Test Suite & Coverage Report — `bilterm` (`v3.0.5`)
 
 **Date:** `2026-11-07`  
 **Tooling used:** `cargo llvm-cov 0.9.1`, `cargo test 1.90`, `insta 1.42`, `ratatui::backend::TestBackend`, `tokio::test`, `xvfb-run -a` (Linux X11 Headless Driver), `scripts/verify.sh` cross-platform composable runner.
