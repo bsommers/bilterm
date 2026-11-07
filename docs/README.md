@@ -47,7 +47,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v2.5.1`)** — 
 | `bilterm --gui-font-file <PATH>` (`--font-file`) | Load custom `.ttf` / `.otf` font file directly from disk |
 | `bilterm -T` / `--theme <THEME>` | Override color palette (`turbo-blue`, `ibm-3278-green`, `ibm-3279-amber`, `tron-legacy`, `dracula`, etc.) |
 | `bilterm -m` / `--mcp` | Run native Model Context Protocol (MCP `2024-11-05`) server over `stdio` |
-| `bilterm -d` / `--headless [-l <addr>]` | Run headless JSON-RPC daemon (default private `0600` Unix socket; loopback TCP via `-l 127.0.0.1:PORT`) |
+| `bilterm -d` / `--headless [-l <addr>]` | Run headless JSON-RPC daemon (default private `0600` Unix socket; loopback TCP via `-l 127.0.0.1:PORT -t <token-file>`) |
 | `bilterm -r` / `--allow-remote` | Allow listening on non-loopback TCP addresses (requires `-t` / `--token-file`) |
 | `bilterm -t` / `--token-file <path>` | Path to `0600` file containing bearer token (or `BILTERM_TOKEN_FILE`) |
 | `bilterm -S` / `--snapshot-dir <path>` | Directory for confined workspace snapshots (default: `$XDG_STATE_HOME/bilterm/snapshots`) |

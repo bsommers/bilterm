@@ -36,7 +36,7 @@ bilterm --gui --gui-font-file /path/to/font.ttf --gui-font-size 15 # Native GUI 
 bilterm -T / --theme ibm-3278-green             # Launch with a specific color palette preset
 bilterm -m / --mcp                              # Run Model Context Protocol (MCP 2024-11-05) server over stdio
 bilterm -d / --headless                         # Run headless JSON-RPC 2.0 daemon (default: private 0600 Unix socket)
-bilterm -d -l 127.0.0.1:7370                    # Run headless daemon on loopback TCP
+bilterm -d -l 127.0.0.1:7370 -t ~/.config/bilterm/token # Run headless daemon on loopback TCP (requires 0600 token file)
 bilterm -d -l 0.0.0.0:7370 -r -t ~/.config/bilterm/token # Listen on remote TCP (requires -r and 0600 token file)
 bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
 bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP
@@ -59,7 +59,7 @@ bilterm -h / --help                             # Print CLI usage summary
 ### Daemon Security & Authentication
 
 - **Default Unix Domain Socket**: `bilterm --headless` binds a private Unix domain socket located at `$XDG_RUNTIME_DIR/bilterm/bilterm.sock` (or `/tmp/bilterm-<uid>/bilterm.sock` if `$XDG_RUNTIME_DIR` is unset) created with file permissions `0600` inside a `0700` directory. Peer credentials (`SO_PEERCRED`) are verified on every connection, dropping non-matching UIDs.
-- **Listen Policy**: TCP listener endpoints are restricted to loopback (`127.0.0.1`, `::1`, `localhost`) by default. Binding non-loopback addresses (`0.0.0.0`, LAN IPs) is refused unless `--allow-remote` is passed alongside a mandatory `--token-file` containing a bearer token.
+- **Listen Policy**: TCP listener endpoints are restricted to loopback (`127.0.0.1`, `::1`, `localhost`) by default and always require `--token-file`. Binding non-loopback addresses (`0.0.0.0`, LAN IPs) is refused unless `--allow-remote` is passed alongside a mandatory `--token-file` containing a bearer token.
 - **Bearer Token Authentication**: When a token is configured (via `--token-file <path>` or `BILTERM_TOKEN_FILE`), all connections must complete an `auth.login` handshake as their first request. Any unauthenticated command is rejected with error code `-32001` and the connection is closed.
 - **Generating a Token File**:
   ```bash

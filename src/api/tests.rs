@@ -77,9 +77,12 @@ fn listen_policy_default_is_unix_socket() {
 }
 
 #[test]
-fn listen_policy_loopback_tcp_without_token_ok() {
+fn listen_policy_loopback_tcp_requires_token() {
     for addr_str in ["127.0.0.1:7370", "[::1]:7370", "localhost:7370"] {
-        let cfg = validate_listen_config(Some(addr_str), false, None, None).unwrap();
+        let err = validate_listen_config(Some(addr_str), false, None, None).unwrap_err();
+        assert!(err.to_string().contains("--token-file"), "{addr_str}: {err}");
+        let cfg =
+            validate_listen_config(Some(addr_str), false, Some("tok".to_string()), None).unwrap();
         match cfg.endpoint {
             ListenEndpoint::Tcp(addr) => {
                 assert!(addr.ip().is_loopback(), "expected loopback for {addr_str}");
@@ -87,7 +90,7 @@ fn listen_policy_loopback_tcp_without_token_ok() {
             }
             _ => panic!("expected Tcp endpoint for {addr_str}"),
         }
-        assert_eq!(cfg.token, None);
+        assert_eq!(cfg.token.as_deref(), Some("tok"));
     }
 }
 

@@ -76,8 +76,8 @@ async fn main() -> color_eyre::Result<()> {
                    --font-file, --gui-font-file <PATH.ttf> Load and activate a custom .ttf/.otf/.ttc font file\n  \
                -T, --theme <THEME>              Set color theme preset (borland, green, amber,mono, solarized, dracula, cyberpunk)\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
-               -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT)\n  \
-               -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH)\n  \
+               -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT -t PATH)\n  \
+               -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH); TCP requires -t/--token-file\n  \
                --http <ADDR>                    With --headless: also serve loopback-only HTTP+SSE (POST /rpc, GET /events, GET /health); random bearer token written 0600 to the private runtime dir\n  \
                -r, --allow-remote               Allow listening on non-loopback TCP addresses (requires -t/--token-file)\n  \
                -t, --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
