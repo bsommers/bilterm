@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-06
+
+### Added
+- **Agent-to-Agent Messaging & Coordination (Phase 52, AGT-01..03, UNI-R01)**:
+  - **Addressing & Bounded Mailboxes (`AGT-01`)**: Stable per-pane agent names (`:agent name [id] <name>`, `agent.name`, env `BILTERM_AGENT`) mapped in `AgentMailRegistry` with ordered per-recipient mailboxes (`MAX_INBOX_DEPTH = 64`, `MAX_BODY_BYTES = 8192`).
+  - **Three Delivery Modes (`AGT-02`)**: `mailbox` (default queued delivery), `nudge` (one-line notification injected into the target pane only when idle/waiting and automatically suppressed during `!ECHO` password lock or `ALT_SCREEN`), and `file` (`0600` private payload file written via `secure_fs` under `agent-mail/<to>/msg-<id>.txt` with path attached), plus blocking/polled `agent.wait` with reply matching and timeout.
+  - **Coordination, Safety & Surfaces (`AGT-03`)**: `:agent <name|send|broadcast|inbox|ack|list|enable>`, JSON-RPC `agent.{name,send,broadcast,inbox,ack,list,wait}`, MCP tool `bilterm_agent_mail`, dynamic MCP resource `bilterm://agent/<name>/inbox`, `/events` `AutomationEvent::AgentMessage`, unread mail badges (`✉N`) in the `AGENTS` list window and Navigator drawer, opt-in `[api] allow_agent_messaging` gate, per-sender rate limit (`32/min`), and `reply_to` hop-count loop guard (`MAX_HOPS = 8`).
+- **Session & Window Management (Phase 53, SES-01..05, UNI-R01)**:
+  - **Cross-Session Window Move (`SES-01`)**: Live window migration between sessions (`:window move <session>`, Navigator `m` key, and right-click context menu) preserving the live PTY process, scrollback buffer, running command, and z-order/focus invariants.
+  - **Window & Session Rename (`SES-02`)**: `:window rename [id] <new>` and `:session rename <old> <new>` with `validate_safe_name`/`sanitize_display` enforcement and deterministic duplicate disambiguation.
+  - **Multi-Select & Atomic Bulk Operations (`SES-03`)**: Multi-select windows in the Navigator (`Space`, `Shift+Up/Down`, `Ctrl+A`, `Ctrl+Click`, `:window select <toggle|range|all|none|invert|id>`) with visual `[✓]` badges and all-or-nothing bulk actions (`:window bulk <move|close|force-close|rename-prefix|tile|pin>`) honoring exit-guard protection.
+  - **Single-Step Topology Undo & Persistence (`SES-04`)**: `TopologyUndoEntry` undo stack (`:window undo`, Navigator `u` key) restoring placement, name, order, and selection across moves, renames, and bulk operations, persisted across TOML session save/load.
+  - **Automation API Parity (`SES-05`)**: JSON-RPC `window.{move,rename,select,bulk,undo}` and `session.rename`, plus MCP tool `bilterm_window_manage`.
+- **Session Packing Viewer & Drag-and-Drop (Phase 54, VIEW-01..04, UNI-R01)**:
+  - **Deterministic 2D Squarified Treemap (`VIEW-01`)**: Pure layout engine (`pack_sessions_treemap`) packing sessions and nested sub-sessions into proportional 2D containers with character-cell aspect ratio compensation and zero-panic tiny-rect fallback.
+  - **Non-Modal `SESSION MAP` Window (`VIEW-02`)**: First-class floating, pinnable (`[•]`), and dockable (`[□]`) window (`:sessions map`, `:packing`) rendering packed session containers and window cards in both TUI (Borland box-drawing) and `--gui` vector mode.
+  - **Mouse Drag-and-Drop & Keyboard Equivalents (`VIEW-03`, `VIEW-04`)**: Drag window cards across session containers by mouse (highlighting valid drop targets, `Esc` to cancel) or via keyboard pickup/target/drop (`Space`/`m` pickup, `Tab`/arrows target session, `Enter` drop, `Esc` cancel), plus JSON-RPC `session.map` and MCP tool `bilterm_session_map`.
+- **Daemon Supervisor & Multi-Daemon Awareness (Phase 55, DAEM-05..08, UNI-R01)**:
+  - **Singleton Lock & Auto-Dispatch (`DAEM-05`)**: Exclusive flock/PID `DaemonLock` (`daemon-singleton.lock`) under `0700` `secure_fs` runtime dir with stale-PID verification (`kill(pid, 0)`) and automatic stale socket recovery; `bilterm ctl` auto-spawns the singleton daemon on first need.
+  - **Opt-In Multi-Daemon Isolation (`DAEM-06`)**: `--daemon --name <name>` and `[daemon] mode = "multi"` isolate each named daemon with its own `daemon-<name>.sock`, `daemon-<name>.lock`, and metadata entry.
+  - **Live Peer Registry, Handshake Safety & Cross-Daemon Find (`DAEM-07`, `DAEM-08`)**: `DaemonRegistry` with atomic `0600` JSON metadata and dead-peer pruning, `CARGO_PKG_VERSION` wire handshake check, `:daemon <list|status|start|stop|switch|prune>`, leader chords `Ctrl+X D <L|S|N|Q|W>`, `Tools > Daemons` menubar dropdown, JSON-RPC `daemon.*`, MCP tool `bilterm_daemon`, and cross-daemon `:find` discovery (`Origin::Daemon`).
+
 ## [2.9.0] - 2026-11-06
 
 ### Added

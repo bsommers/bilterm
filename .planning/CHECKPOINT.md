@@ -277,3 +277,4 @@ Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 - Temporary worktrees removed: `bilterm-53`, `bilterm-54`, `bilterm-55`.
 - Temporary branches deleted: `worktree-phase53`, `worktree-phase54`, `worktree-phase55`.
 - Active integration worktree: `/home/bill/src/ai/bilterm/.claude/worktrees/integ` on branch `feat/navigator-rows-and-launch`.
+- **v3.0.0 Release**: All 55 roadmap phases (`1 -> 55`) complete (`PASS 118/118`, `GOLDENS OK 11`). Version bumped to `3.0.0` in `Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`, and `.planning/STATE.md`, fast-forwarded to `main`, tagged `v3.0.0`, and published on GitHub Release `v3.0.0`.
