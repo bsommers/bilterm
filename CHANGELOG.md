@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-11-07
+
+Security and hardening release. Thanks to @kitsumiko for reporting and fixing all of the issues below.
+
+### ⚠️ Breaking: TCP listeners now require `--token-file`
+`bilterm --headless --listen 127.0.0.1:PORT` (also `[::1]:PORT` and `localhost:PORT`) **no longer starts without a bearer token**. Loopback TCP can be reached by every local user and, cross-protocol, by any web page you visit, so it now needs a token just like remote listeners.
+
+To migrate, create a `0600` token file and pass it with `-t/--token-file` (or `BILTERM_TOKEN_FILE`):
+
+```sh
+umask 077; mkdir -p ~/.config/bilterm
+head -c 32 /dev/urandom | base64 > ~/.config/bilterm/token   # >= 16 chars, mode 0600
+bilterm --headless --listen 127.0.0.1:7370 --token-file ~/.config/bilterm/token
+bilterm ctl --token-file ~/.config/bilterm/token 127.0.0.1:7370 workspace.status
+```
+
+Custom clients must send `auth.login` with the token before any other request. Alternatively, use the default private Unix socket, which checks the peer UID and stays tokenless.
+
+### Security
+- **[GHSA-637v-r3qr-rm5x](https://github.com/bsommers/bilterm/security/advisories/GHSA-637v-r3qr-rm5x) (high): a tokenless loopback TCP control listener could be driven cross-protocol from a web page or by any local user (#22).**
+  - TCP listeners now require a token (see above).
+  - The JSON-RPC line reader now replies once and **closes the connection** on any non-JSON or HTTP-shaped line, so an HTTP body is never dispatched. This applies to both TCP and Unix sockets.
+- **[GHSA-6269-rw3f-9hr4](https://github.com/bsommers/bilterm/security/advisories/GHSA-6269-rw3f-9hr4) (high): `:record pane <path>` wrote to any path and followed symlinks, so a file could be overwritten via RPC/MCP (#23).**
+  - Under automation confinement, `:record pane` only accepts a plain file name inside the confine directory, the same as `:record` and `:record workspace`.
+  - User-chosen recording paths are written atomically with mode `0600`. A symlink at the final path is replaced, not followed.
+- **OSC 52 clipboard passthrough is sanitized (#16).**
+  - Each sequence ends at its own terminator, and only well-formed set-clipboard payloads are forwarded.
+  - Clipboard read queries are dropped.
+- **Kitty graphics and VT side-channel state are bounded (#17).**
+  - Images are limited to 512 px per side, size arithmetic is checked, and the payload size is capped.
+  - Retained notification and image lists drop their oldest entries once full.
+- **Session and layout state files are written privately: `0600` files in `0700` directories (#18).**
+- **The daemon stop command only signals a PID that still holds the daemon lock (#19).**
+  - PIDs ≤ 1 and PIDs that don't fit in a `pid_t` are rejected.
+  - A stale lock is cleaned up without sending any signal.
+
+### Fixed
+- Ctrl/Alt/Shift with arrows, Home/End, Insert/Delete, PageUp/PageDown and F1–F12 now send standard xterm modifier sequences (`CSI 1;m X` / `CSI n;m ~`), so word-jump and selection work in shells and editors. Unmodified Insert now sends `CSI 2~` (#21).
+- Fixed 21 broken or invalid rustdoc intra-doc links.
+
+### CI
+- Added a PR/push CI workflow that runs clippy, a quick verify and `cargo-deny`. Actions are pinned to commit SHAs and run with least-privilege permissions (#13).
+- Hardened the `release-binaries` workflow (#14).
+
 ## [3.0.2] - 2026-11-07
 
 ### Added
