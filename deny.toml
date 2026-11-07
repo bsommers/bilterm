@@ -1,0 +1,32 @@
+# cargo-deny configuration (https://embarkstudios.github.io/cargo-deny/).
+# Run locally with `cargo deny check`; CI runs it in .github/workflows/ci.yml.
+
+[advisories]
+# Vulnerabilities, unmaintained and yanked crates fail the check by default.
+# Add exceptions as `{ id = "RUSTSEC-YYYY-NNNN", reason = "..." }`.
+ignore = []
+
+[licenses]
+# Built from the `license` fields in `cargo metadata`. Most OR-expressions are
+# satisfied by MIT / Apache-2.0; the rest are needed by specific crates:
+#   MPL-2.0      nucleo-matcher
+#   Zlib         foldhash
+#   Unicode-3.0  unicode-ident
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
