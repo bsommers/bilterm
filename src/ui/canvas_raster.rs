@@ -1,7 +1,7 @@
 //! Dual-Backend Graphical Canvas Rasterizer (`TEK-01`, `CANV-01`).
 //!
-//! Renders both the classic Tektronix 4010/4014 storage-tube vector state machine ([`TektronixState`])
-//! and the modern 2026/2027 retained scene-graph ([`PaneCanvasScene`]) onto:
+//! Renders both the classic Tektronix 4010/4014 storage-tube vector state machine ([`TektronixState`](crate::vt::tektronix::TektronixState))
+//! and the modern 2026/2027 retained scene-graph ([`PaneCanvasScene`](crate::pane::canvas_scene::PaneCanvasScene)) onto:
 //! 1. **TUI Sub-Cell Character Grid (`Ratatui` `Buffer`)**:
 //!    - `CanvasSubcellMode::Braille` (`2×4` sub-pixels per cell, `U+2800..U+28FF`)
 //!    - `CanvasSubcellMode::Sextant` (`2×3` sub-pixels per cell, `U+1FB00..U+1FB3B`)

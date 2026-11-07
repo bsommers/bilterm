@@ -1,7 +1,7 @@
 //! Modern 2026/2027 Retained Scene-Graph, 2D Sprite Engine, Declarative Plotting & Image Viewer (`CANV-01`).
 //!
 //! Provides a retained, inspectable graphical scene-graph ([`PaneCanvasScene`]) per composite pane
-//! alongside the classic Tektronix 4010/4014 storage-tube state machine ([`TektronixState`](crate::vt::tektronix::TektronixState)):
+//! alongside the classic Tektronix 4010/4014 storage-tube state machine ([`TektronixState`]):
 //! - **Vector Primitives ([`VectorPrimitive`])**: `Line`, `Polyline`, `CubicBezier`, `Circle`, `RectShape`, `Polygon`, `TextLabel`.
 //! - **2D Sprite Engine ([`Sprite2D`])**: Position `(x, y)`, velocity `(vx, vy)`, dimensions `(width, height)`,
 //!   `z_index`, frame animation, deterministic Euler physics (`step_physics`), and AABB collision detection (`collides_with`).

@@ -2,7 +2,7 @@
 //!
 //! This module only resolves which key scopes are active, looks the key up in the declarative
 //! [`NAVIGATOR_DRAWER_BINDINGS`](super::keymap::NAVIGATOR_DRAWER_BINDINGS) table and runs the resulting
-//! [`Action`](crate::action::Action) through `WindowManager::apply`. It never changes drawer, pane or
+//! [`Action`] through `WindowManager::apply`. It never changes drawer, pane or
 //! prompt state itself (`ARCH-R01`).
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};

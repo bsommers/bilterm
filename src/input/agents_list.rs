@@ -3,7 +3,7 @@
 //! The logic is split in two: [`plan_agents_list_mouse`] is a pure function from an event and a
 //! `&WindowManager` to a [`ListMousePlan`] (which `Action`s to run, what to do with the drag
 //! bookkeeping, whether the event is swallowed), so tests assert exactly which Action every gesture
-//! produces. [`handle_agents_list_mouse`] is the thin wrapper that stores the drag, applies every
+//! produces. `handle_agents_list_mouse` is the thin wrapper that stores the drag, applies every
 //! Action through `WindowManager::apply` and reports whether the event was consumed. The only
 //! pointer state kept is the drag (`AgentsListState::drag`); every visible effect is an
 //! `Action::AgentsList`.

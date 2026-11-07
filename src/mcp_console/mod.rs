@@ -1,7 +1,7 @@
 //! TRON-Inspired Master Control Program (`MCP`) Root Terminal (`MCP-01`, `MCP-02`).
 //!
 //! Provides the top-level supervisor console (`bilterm mcp` / `:mcp`) that inspects and
-//! orchestrates the background [`DaemonServerState`] and [`SessionTree`] (`status`, `tree`,
+//! orchestrates the background [`DaemonServerState`] and [`SessionTree`](crate::wm::session_tree::SessionTree) (`status`, `tree`,
 //! `attach`, `spawn`, `graft`, `detach-subtree`, `broadcast`, `freeze`, `thaw`, `derez`,
 //! `checkpoint`, `shutdown --confirm`).
 //!

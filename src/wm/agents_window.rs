@@ -116,7 +116,7 @@ pub struct SceneEdge {
     pub count: usize,
     /// Sequence number of the newest such event.
     pub last_seq: u64,
-    /// Recent-communication heat in `[0, 1)` ([`edge_heat`]); `0` once the fade window passed.
+    /// Recent-communication heat in `[0, 1)` ([`edge_heat`](crate::wm::agents_topology::edge_heat)); `0` once the fade window passed.
     pub heat: f32,
     /// Draw brightness in `[MIN_EDGE_BRIGHTNESS, 1)` ([`edge_brightness`]); never below the floor.
     pub brightness: f32,
@@ -167,7 +167,7 @@ struct LayoutCache {
 /// Deterministic, stable node placement (Fruchterman-Reingold, `+ - * / sqrt` only).
 ///
 /// The layout remembers the previous positions, so adding a node starts from the old picture
-/// (warm start) and moves existing nodes by at most [`MAX_WARM_DRIFT`]. Asking again for an
+/// (warm start) and moves existing nodes by at most `MAX_WARM_DRIFT`. Asking again for an
 /// unchanged topology returns the cached positions, so repeated frames never wobble. `pinned`
 /// holds positions fixed by the user (node drag, 50-09).
 #[derive(Debug, Default)]

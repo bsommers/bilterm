@@ -118,7 +118,7 @@ pub fn probe_terminal_pixel_size() -> Option<(u32, u32)> {
     refresh_terminal_pixel_size()
 }
 
-/// Re-probes `ioctl(TIOCGWINSZ)` on terminal resize events and updates [`CACHED_TERMINAL_PIXELS`].
+/// Re-probes `ioctl(TIOCGWINSZ)` on terminal resize events and updates `CACHED_TERMINAL_PIXELS`.
 pub fn refresh_terminal_pixel_size() -> Option<(u32, u32)> {
     #[cfg(unix)]
     {
@@ -545,7 +545,7 @@ pub fn registered_custom_fonts() -> Vec<(String, PathBuf)> {
         .unwrap_or_default()
 }
 
-/// Scans `dir` for `.ttf`, `.otf`, and `.ttc` files and registers them in [`CUSTOM_FONT_FILES`].
+/// Scans `dir` for `.ttf`, `.otf`, and `.ttc` files and registers them in `CUSTOM_FONT_FILES`.
 pub fn scan_and_register_fonts_dir(dir: &Path) -> Vec<(String, PathBuf)> {
     let mut added = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else {

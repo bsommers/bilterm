@@ -1,13 +1,13 @@
 //! Standalone Native OS GUI Window Runner (`bilterm --gui` / `-G`, `GPU-02`).
 //!
-//! Drives [`App`] + [`GuiWorkspaceRenderer`] + [`GuiFrameSurface`] inside a native desktop window
+//! Drives [`App`] + [`GuiWorkspaceRenderer`](crate::ui::renderer::GuiWorkspaceRenderer) + [`GuiFrameSurface`](crate::ui::renderer::GuiFrameSurface) inside a native desktop window
 //! without requiring an external terminal emulator:
 //! - **Windows (`#[cfg(windows)]`)**: Native HiDPI Win32 (`user32.dll` + `gdi32.dll`) window backed by
-//!   [`crate::ui::gui_font::win32_gdi::Win32GuiCanvas`] (ClearType TrueType/OpenType text rendering +
+//!   `crate::ui::gui_font::win32_gdi::Win32GuiCanvas` (ClearType TrueType/OpenType text rendering +
 //!   1:1 `CreateDIBSection` + `BitBlt` + edge-to-edge geometric box-drawing), full keyboard (`WM_KEYDOWN` /
 //!   `WM_SYSKEYDOWN` / `WM_CHAR`), mouse drag/click/scroll (`WM_LBUTTONDOWN`, `WM_MOUSEMOVE`,
 //!   `WM_MOUSEWHEEL` + `Ctrl+Wheel` font zoom), and live pixel-to-cell window resizing (`WM_SIZE`).
-//! - **Linux / macOS (`#[cfg(not(windows))]`)**: Renders initial [`GuiFrameSurface`] verification
+//! - **Linux / macOS (`#[cfg(not(windows))]`)**: Renders initial [`GuiFrameSurface`](crate::ui::renderer::GuiFrameSurface) verification
 //!   and launches a dedicated standalone window via [`crate::launcher::ensure_terminal_or_relaunch`].
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

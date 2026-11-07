@@ -195,7 +195,7 @@ impl VtParser {
         line.trim_end().to_string()
     }
 
-    /// Returns the trimmed plain-text contents of viewport `row`. Alias for [`row_text`].
+    /// Returns the trimmed plain-text contents of viewport `row`. Alias for [`row_text`](Self::row_text).
     pub fn viewport_line_text(&self, row: u16) -> String {
         self.row_text(row)
     }

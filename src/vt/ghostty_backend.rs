@@ -1,4 +1,4 @@
-//! **[EXPERIMENTAL]** `libghostty-vt` terminal core adapter & C-ABI FFI bridge (`ARCH-02`, `ARCH-03`, `ARCH-R05`, `GHOSTTY-01`).
+//! **\[EXPERIMENTAL\]** `libghostty-vt` terminal core adapter & C-ABI FFI bridge (`ARCH-02`, `ARCH-03`, `ARCH-R05`, `GHOSTTY-01`).
 //!
 //! > **Subsystem Status (`ADR-007` / `ARCH-R05`):** This module is an **experimental, opt-in** backend
 //! > exercised by tests and gated behind `--features ghostty-vt` (requires Rust `1.90+` and `zig 0.15`).
@@ -9,8 +9,8 @@
 //!    pointers matching `ghostty-vt-sys`'s `ghostty_terminal_new`, `ghostty_terminal_vt_write`,
 //!    `ghostty_terminal_resize`, and `ghostty_render_state_snapshot`) that works across all builds and
 //!    allows dynamic/static C-ABI binding without requiring a system Zig compiler for default builds.
-//! 2. [`GhosttyVtEngine`] — When compiled with `--features ghostty-vt`, wraps Ghostty's `libghostty-vt`
-//!    [`Terminal`](libghostty_vt::Terminal) and [`RenderState`](libghostty_vt::RenderState) directly and
+//! 2. `GhosttyVtEngine` — When compiled with `--features ghostty-vt`, wraps Ghostty's `libghostty-vt`
+//!    `libghostty_vt::Terminal` and `libghostty_vt::RenderState` directly and
 //!    implements [`crate::vt::TerminalBackend`].
 
 use std::ffi::c_void;
@@ -166,7 +166,7 @@ use crate::vt::snapshot::{
     RowSnapshot, UnderlineKind,
 };
 
-/// **[EXPERIMENTAL]** Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
+/// **\[EXPERIMENTAL\]** Safe wrapper around `libghostty_vt::Terminal` + `libghostty_vt::RenderState` that lives on a
 /// dedicated worker thread (`!Send`, `!Sync`) and produces thread-safe [`GridSnapshot`] frames (`ARCH-R03`, `ARCH-R05`).
 #[cfg(feature = "ghostty-vt")]
 pub struct GhosttyVtEngine {
