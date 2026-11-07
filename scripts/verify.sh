@@ -3,13 +3,21 @@
 #   scripts/verify.sh              full: clippy, unit, every tests/*.rs (fmt is opt-in: --only fmt; repo has legacy drift)
 #   scripts/verify.sh --quick      clippy, unit
 #   scripts/verify.sh --failed     re-run only stages that failed last run
+#   scripts/verify.sh --tier <name> smoke|unit|integration|system|perf|stress|torture|security
 #   scripts/verify.sh --only a b   named stages or hierarchical groups g:<name> (see --list / --groups)
+#   scripts/verify.sh --match <pat> pass pattern to cargo test stages
+#   scripts/verify.sh --coverage   run cargo llvm-cov --summary-only -> target/verify/coverage.txt
+#   scripts/verify.sh --xvfb       wrap test execution in xvfb-run -a when on Linux (graceful fallback on macOS/Win)
+#   scripts/verify.sh --fmt        check cargo fmt
 #   scripts/verify.sh --list       stage names
 #   scripts/verify.sh --groups     group names and member stages
 #   scripts/verify.sh --status     print last result line (no run)
 # Result tree (target/verify/):
 #   STATUS            PASS | FAIL            (read this first)
 #   summary.tsv       stage<TAB>PASS|FAIL<TAB>secs   (read on FAIL)
+#   report.md         comprehensive Markdown verification report
+#   junit.xml         standard JUnit XML test report
+#   coverage.txt      cargo llvm-cov summary (when --coverage requested)
 #   <stage>/status    PASS|FAIL   <stage>/fail.txt  compact failure excerpt (<=40 lines)
 #   <stage>/log       full output (read only if fail.txt is not enough)
 # Exit code: 0 all pass, 1 any fail, 2 usage.
@@ -17,16 +25,122 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT=target/verify
 mkdir -p "$OUT"
-# Isolate tests from the user's real saved sessions/state (drawer tests read them).
+
+# Cross-platform CPU count detection (Linux: nproc, macOS: sysctl, Windows/MSYS: NUMBER_OF_PROCESSORS, fallback: 4)
+detect_cpus() {
+  if command -v nproc >/dev/null 2>&1; then
+    nproc
+  elif command -v sysctl >/dev/null 2>&1 && sysctl -n hw.ncpu >/dev/null 2>&1; then
+    sysctl -n hw.ncpu
+  elif [ -n "${NUMBER_OF_PROCESSORS:-}" ]; then
+    echo "$NUMBER_OF_PROCESSORS"
+  else
+    echo 4
+  fi
+}
+export CARGO_BUILD_JOBS="$(detect_cpus)"
+
+# Cross-platform environment and temp directory isolation:
+# Covers Linux/POSIX (XDG_*), macOS ($HOME, XDG_*), and Windows/MSYS ($USERPROFILE, $APPDATA, $LOCALAPPDATA).
 VERIFY_STATE="$(mktemp -d "${TMPDIR:-/tmp}/bilterm-verify-state.XXXXXX")"
 trap 'rm -rf "$VERIFY_STATE"' EXIT
-export XDG_STATE_HOME="$VERIFY_STATE"
+export XDG_STATE_HOME="$VERIFY_STATE/state"
+export XDG_CONFIG_HOME="$VERIFY_STATE/config"
+export XDG_DATA_HOME="$VERIFY_STATE/data"
+export HOME="$VERIFY_STATE/home"
+export USERPROFILE="$VERIFY_STATE/home"
+export APPDATA="$VERIFY_STATE/appdata/roaming"
+export LOCALAPPDATA="$VERIFY_STATE/appdata/local"
+mkdir -p "$XDG_STATE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$HOME" "$APPDATA" "$LOCALAPPDATA"
+
+MATCH_PATTERN=""
+DO_COVERAGE=false
+USE_XVFB=false
+tier_name=""
 
 all_stages() {
   echo clippy; echo unit
   local f; for f in tests/*.rs; do echo "t:$(basename "$f" .rs)"; done
 }
 quick_stages() { echo clippy; echo unit; }
+
+tier_stages() {
+  case "$1" in
+    smoke)
+      echo unit
+      ;;
+    unit)
+      echo clippy
+      echo unit
+      ;;
+    integration)
+      for s in \
+        t:composite_pane_snapshots \
+        t:phase2_prompt_ergonomics \
+        t:phase3_window_manager \
+        t:phase4_retro_aesthetics \
+        t:phase5_tmux_and_platform \
+        t:slide_out_drawer_and_telemetry \
+        t:itermcolors_and_paste_fixes \
+        t:theme_import_coverage \
+        t:drawer_classic_parity \
+        t:drawer_behaviour_coverage \
+        t:panel_dock \
+        t:panel_pin_scale \
+        t:phase51_panel_tiling \
+        t:phase53_window_manage \
+        t:layout_profile_coverage \
+        t:layout_profiles_and_autosave \
+        t:pane_typography_coverage \
+        t:design_system_coverage \
+        t:linux_session_regression_and_gui_scaling \
+        t:high_res_pixel_and_ssh_canvas \
+        t:font_scaling_and_dec_line_attrs \
+        t:tektronix_and_graphical_canvas \
+        t:v040_v050_gpu_ghostty_tmux_graphics \
+        t:copy_paste_unicode; do
+        if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
+      done
+      ;;
+    system)
+      for s in \
+        t:phase50_1_e2e \
+        t:phase51_1_e2e \
+        t:phase51_integration \
+        t:v110_v120_v130_automation_api_mcp_playbooks \
+        t:mcp_interactive_navigation \
+        t:mcp_list_edge_status \
+        t:api_conformance \
+        t:api_error_paths \
+        t:api_http \
+        t:api_mcp_resources \
+        t:api_server_edges \
+        t:phase50_agents_window \
+        t:live_daemon_detach_attach \
+        t:bilterm_live_driver_suite; do
+        if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
+      done
+      ;;
+    perf)
+      for s in t:full_suite_battle_and_perf; do
+        if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
+      done
+      ;;
+    stress|torture)
+      for s in t:terminal_torture_and_stress t:vttest_esctest_fuzz_torture; do
+        if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
+      done
+      ;;
+    security)
+      for s in t:phase19_security_cli t:security_hardening_audit; do
+        if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
+      done
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 group_stages() {
   case "$1" in
@@ -56,11 +170,15 @@ expand_stages() {
 }
 
 cmd_for() {
+  local extra=""
+  if [ -n "$MATCH_PATTERN" ]; then
+    extra=" -- $MATCH_PATTERN"
+  fi
   case "$1" in
     fmt)    echo "cargo fmt --check" ;;
     clippy) echo "cargo clippy -q --all-targets -- -D warnings" ;;
-    unit)   echo "cargo test -q --lib --bins --no-fail-fast" ;;
-    t:*)    echo "cargo test -q --test ${1#t:} --no-fail-fast" ;;
+    unit)   echo "cargo test -q --lib --bins --no-fail-fast$extra" ;;
+    t:*)    echo "cargo test -q --test ${1#t:} --no-fail-fast$extra" ;;
     *)      return 1 ;;
   esac
 }
@@ -68,28 +186,217 @@ cmd_for() {
 line() { # one-line result from summary.tsv
   [ -f "$OUT/summary.tsv" ] || { echo "NORUN"; return; }
   local n p f secs
-  n=$(wc -l <"$OUT/summary.tsv"); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv"); p=$((n-f))
+  n=$(wc -l <"$OUT/summary.tsv"); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv" || true); p=$((n-f))
   secs=$(awk -F'\t' '{s+=$3} END{print s+0}' "$OUT/summary.tsv")
   if [ "$f" -eq 0 ]; then echo "PASS $p/$n ${secs}s"
   else echo "FAIL $f/$n: $(awk -F'\t' '$2=="FAIL"{printf "%s ",$1}' "$OUT/summary.tsv")-> $OUT/<stage>/fail.txt"; fi
 }
 
-mode=full; stages=()
-case "${1:-}" in
-  "")       ;;
-  --quick)  mode=quick ;;
-  --failed) mode=failed ;;
-  --list)   all_stages; exit 0 ;;
-  --groups) list_groups; exit 0 ;;
-  --status) cat "$OUT/STATUS" 2>/dev/null >/dev/null; line; exit 0 ;;
-  --only)   shift; mode=only; mapfile -t stages < <(expand_stages "$@") || { echo "unknown group in: $* (try --groups)"; exit 2; } ;;
-  *)        sed -n '2,10p' "$0"; exit 2 ;;
-esac
+generate_reports() {
+  local status_str="$1"
+  local total_stages="$2"
+  local passed_stages="$3"
+  local failed_stages="$4"
+  local total_secs="$5"
+  local iso_date
+  iso_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
+
+  # Generate target/verify/report.md
+  cat <<EOF >"$OUT/report.md"
+# Bilterm Verification Report
+
+- **Overall Status:** $status_str
+- **Stages Run:** $total_stages
+- **Passed:** $passed_stages
+- **Failed:** $failed_stages
+- **Total Duration:** ${total_secs}s
+- **Timestamp:** $iso_date
+
+## Summary Table
+
+| Stage | Status | Duration (s) |
+|---|---|---|
+EOF
+
+  while IFS=$'\t' read -r stage st secs; do
+    [ -z "$stage" ] && continue
+    echo "| \`$stage\` | **$st** | ${secs}s |" >>"$OUT/report.md"
+  done <"$OUT/summary.tsv"
+
+  if [ "$failed_stages" -gt 0 ]; then
+    cat <<EOF >>"$OUT/report.md"
+
+## Failure Details
+
+EOF
+    while IFS=$'\t' read -r stage st secs; do
+      if [ "$st" = "FAIL" ]; then
+        local stage_dir="$OUT/${stage//:/_}"
+        echo "### \`$stage\`" >>"$OUT/report.md"
+        echo '```text' >>"$OUT/report.md"
+        if [ -f "$stage_dir/fail.txt" ]; then
+          cat "$stage_dir/fail.txt" >>"$OUT/report.md"
+        elif [ -f "$stage_dir/log" ]; then
+          tail -n 25 "$stage_dir/log" >>"$OUT/report.md"
+        fi
+        echo '```' >>"$OUT/report.md"
+        echo "" >>"$OUT/report.md"
+      fi
+    done <"$OUT/summary.tsv"
+  fi
+
+  # Generate target/verify/junit.xml
+  cat <<EOF >"$OUT/junit.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bilterm-verify" tests="$total_stages" failures="$failed_stages" errors="0" time="$total_secs">
+  <testsuite name="verification-suite" tests="$total_stages" failures="$failed_stages" errors="0" time="$total_secs" timestamp="$iso_date">
+EOF
+
+  while IFS=$'\t' read -r stage st secs; do
+    [ -z "$stage" ] && continue
+    local stage_dir="$OUT/${stage//:/_}"
+    if [ "$st" = "FAIL" ]; then
+      cat <<EOF >>"$OUT/junit.xml"
+    <testcase name="$stage" classname="verify" time="$secs">
+      <failure message="Stage $stage failed"><![CDATA[
+EOF
+      if [ -f "$stage_dir/fail.txt" ]; then
+        sed 's/]]>/]]&gt;/g' "$stage_dir/fail.txt" >>"$OUT/junit.xml"
+      elif [ -f "$stage_dir/log" ]; then
+        tail -n 25 "$stage_dir/log" | sed 's/]]>/]]&gt;/g' >>"$OUT/junit.xml"
+      fi
+      cat <<EOF >>"$OUT/junit.xml"
+]]></failure>
+    </testcase>
+EOF
+    else
+      cat <<EOF >>"$OUT/junit.xml"
+    <testcase name="$stage" classname="verify" time="$secs" />
+EOF
+    fi
+  done <"$OUT/summary.tsv"
+
+  cat <<EOF >>"$OUT/junit.xml"
+  </testsuite>
+</testsuites>
+EOF
+}
+
+mode=full
+stages=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --quick)
+      mode=quick
+      shift
+      ;;
+    --failed)
+      mode=failed
+      shift
+      ;;
+    --list)
+      all_stages
+      exit 0
+      ;;
+    --groups)
+      list_groups
+      exit 0
+      ;;
+    --status)
+      cat "$OUT/STATUS" 2>/dev/null >/dev/null || true
+      line
+      exit 0
+      ;;
+    --fmt)
+      mode=only
+      stages+=("fmt")
+      shift
+      ;;
+    --tier)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing argument for --tier (expected: smoke|unit|integration|system|perf|stress|torture|security)" >&2
+        exit 2
+      fi
+      mode=tier
+      tier_name="$2"
+      shift 2
+      ;;
+    --match)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing argument for --match <pattern>" >&2
+        exit 2
+      fi
+      MATCH_PATTERN="$2"
+      shift 2
+      ;;
+    --coverage)
+      DO_COVERAGE=true
+      shift
+      ;;
+    --xvfb)
+      USE_XVFB=true
+      shift
+      ;;
+    --only)
+      shift
+      mode=only
+      while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+        expanded=()
+        mapfile -t expanded < <(expand_stages "$1") || { echo "unknown group in: $1 (try --groups)"; exit 2; }
+        stages+=("${expanded[@]}")
+        shift
+      done
+      if [ ${#stages[@]} -eq 0 ]; then
+        echo "Missing stages for --only" >&2
+        exit 2
+      fi
+      ;;
+    *)
+      echo "Usage: scripts/verify.sh [OPTIONS] [STAGE...]" >&2
+      echo "  scripts/verify.sh              full: clippy, unit, every tests/*.rs" >&2
+      echo "  scripts/verify.sh --quick      clippy, unit" >&2
+      echo "  scripts/verify.sh --failed     re-run only stages that failed last run" >&2
+      echo "  scripts/verify.sh --tier <name> smoke|unit|integration|system|perf|stress|torture|security" >&2
+      echo "  scripts/verify.sh --only a b   named stages or groups g:<name> (--list / --groups)" >&2
+      echo "  scripts/verify.sh --match <pat> pass pattern to cargo test stages" >&2
+      echo "  scripts/verify.sh --coverage   run cargo llvm-cov --summary-only -> target/verify/coverage.txt" >&2
+      echo "  scripts/verify.sh --xvfb       wrap test execution in xvfb-run -a when on Linux" >&2
+      echo "  scripts/verify.sh --fmt        check cargo fmt" >&2
+      echo "  scripts/verify.sh --list       list all stage names" >&2
+      echo "  scripts/verify.sh --groups     list group names and stages" >&2
+      echo "  scripts/verify.sh --status     print last result line (no run)" >&2
+      exit 2
+      ;;
+  esac
+done
+
 case $mode in
   full)   mapfile -t stages < <(all_stages) ;;
   quick)  mapfile -t stages < <(quick_stages) ;;
   failed) mapfile -t stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
           [ ${#stages[@]} -eq 0 ] && { echo "PASS nothing-failed"; exit 0; } ;;
+  tier)   mapfile -t stages < <(tier_stages "$tier_name") || {
+            echo "unknown tier: $tier_name (expected: smoke|unit|integration|system|perf|stress|torture|security)" >&2
+            exit 2
+          } ;;
+  only)   ;;
+esac
+
+# OS-aware headless display detection:
+# - Linux: Use xvfb-run -a when available and requested via --xvfb.
+# - macOS (Darwin) & Windows (MSYS/MINGW/CYGWIN): native headless/GUI dump without requiring xvfb-run.
+OS_NAME="$(uname -s 2>/dev/null || echo "Unknown")"
+HAVE_XVFB=false
+case "$OS_NAME" in
+  Linux*)
+    if command -v xvfb-run >/dev/null 2>&1; then
+      HAVE_XVFB=true
+    fi
+    ;;
+  Darwin*|MINGW*|MSYS*|CYGWIN*)
+    HAVE_XVFB=false
+    ;;
 esac
 
 new=$(mktemp)
@@ -97,9 +404,13 @@ for s in "${stages[@]}"; do
   c=$(cmd_for "$s") || { echo "unknown stage: $s (try --list)"; exit 2; }
   d="$OUT/${s//:/_}"; rm -rf "$d"; mkdir -p "$d"
   t0=$SECONDS
-  if bash -c "$c" >"$d/log" 2>&1; then st=PASS; else st=FAIL; fi
+  if [ "$USE_XVFB" = true ] && [ "$HAVE_XVFB" = true ]; then
+    if xvfb-run -a bash -c "$c" >"$d/log" 2>&1; then st=PASS; else st=FAIL; fi
+  else
+    if bash -c "$c" >"$d/log" 2>&1; then st=PASS; else st=FAIL; fi
+  fi
   echo "$st" >"$d/status"
-  if [ $st = FAIL ]; then
+  if [ "$st" = FAIL ]; then
     { grep -E '^(error|warning)(\[|:)|^---- |panicked at|^test .* FAILED|^failures:|^    [A-Za-z0-9_:]+$|^Diff in|^ *--> ' "$d/log" || tail -n 20 "$d/log"; } \
       | awk '!seen[$0]++' | head -40 >"$d/fail.txt"
   fi
@@ -107,13 +418,33 @@ for s in "${stages[@]}"; do
 done
 
 # merge: partial runs replace only the stages they ran
-if [ "$mode" = full ] || [ "$mode" = quick ] || [ ! -f "$OUT/summary.tsv" ]; then
-  [ "$mode" = quick ] && [ -f "$OUT/summary.tsv" ] && grep -vE '^(clippy|unit)'$'\t' "$OUT/summary.tsv" >>"$new"
+if [ "$mode" = full ] || [ ! -f "$OUT/summary.tsv" ]; then
+  sort -u -k1,1 "$new" >"$OUT/summary.tsv"
+elif [ "$mode" = quick ]; then
+  grep -vE '^(clippy|unit)'$'\t' "$OUT/summary.tsv" >>"$new" 2>/dev/null || true
   sort -u -k1,1 "$new" >"$OUT/summary.tsv"
 else
-  { grep -vFf <(printf '%s\t\n' "${stages[@]}") "$OUT/summary.tsv"; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
+  { grep -vFf <(printf '%s\t\n' "${stages[@]}") "$OUT/summary.tsv" 2>/dev/null || true; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
   mv "$OUT/summary.tsv.tmp" "$OUT/summary.tsv"
 fi
 rm -f "$new"
-r=$(line); echo "${r%% *}" >"$OUT/STATUS"; echo "$r"
-[ "${r%% *}" = PASS ]
+
+if [ "$DO_COVERAGE" = true ]; then
+  if command -v cargo-llvm-cov >/dev/null 2>&1 || cargo llvm-cov --version >/dev/null 2>&1; then
+    cargo llvm-cov --summary-only >"$OUT/coverage.txt" 2>&1 || true
+  fi
+fi
+
+r=$(line)
+st_overall="${r%% *}"
+echo "$st_overall" >"$OUT/STATUS"
+
+n_total=$(wc -l <"$OUT/summary.tsv")
+n_fail=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv" || true)
+n_pass=$((n_total - n_fail))
+s_secs=$(awk -F'\t' '{s+=$3} END{print s+0}' "$OUT/summary.tsv")
+
+generate_reports "$st_overall" "$n_total" "$n_pass" "$n_fail" "$s_secs"
+
+echo "$r"
+[ "$st_overall" = PASS ]

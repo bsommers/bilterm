@@ -60,7 +60,13 @@ impl CompositePane {
         match self.remote_target.as_deref() {
             Some(target) => {
                 let (host, transport) = match target.split_once('/') {
-                    Some((host, _)) => (host, "ssh-tmux"),
+                    Some((host, _)) => {
+                        if !self.remote_input_tap {
+                            let cwd = self.vt.reported_cwd().or(self.tracked_cwd.as_deref());
+                            return (None, None, cwd.map(|p| p.display().to_string()));
+                        }
+                        (host, "ssh-tmux")
+                    }
                     None => (target, "ssh"),
                 };
                 let cwd = self.vt.reported_cwd().map(|p| p.display().to_string());
@@ -120,5 +126,25 @@ mod tests {
         let mut pane = CompositePane::new_headless(1, 10, 40);
         assert_eq!(pane.drain_captured(), (Vec::new(), 0));
         assert_eq!(pane.drain_captured(), (Vec::new(), 0));
+    }
+
+    #[test]
+    fn honest_ssh_tmux_capture_context() {
+        let mut pane = CompositePane::new_headless(1, 10, 40);
+        pane.set_remote_target(Some("user@host/session".to_string()));
+        // Local fallback / unlinked: remote_input_tap is false -> treated as local
+        assert_eq!(pane.capture_context().0, None);
+        assert_eq!(pane.capture_context().1, None);
+
+        // Connected tmux link: remote_input_tap is true -> treated as ssh-tmux
+        pane.set_remote_input_tap(true);
+        assert_eq!(pane.capture_context().0.as_deref(), Some("user@host"));
+        assert_eq!(pane.capture_context().1, Some("ssh-tmux"));
+
+        // Pure SSH target (no slash) -> always ssh
+        pane.set_remote_target(Some("user@host".to_string()));
+        pane.set_remote_input_tap(false);
+        assert_eq!(pane.capture_context().0.as_deref(), Some("user@host"));
+        assert_eq!(pane.capture_context().1, Some("ssh"));
     }
 }

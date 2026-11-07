@@ -229,8 +229,7 @@ impl WindowManager {
     /// Workspace as the window sees it: the scaled (virtual) cell space the renderer, the mouse
     /// handler and the GUI path all use (identity at 100%). WR-02.
     pub(crate) fn agents_workspace(&self) -> Rect {
-        let ws = self.current_workspace_area().1;
-        self.panel_virtual_area(ws, crate::ui::typography::PanelTarget::Agents)
+        self.panel_virtual_area(self.dock_base_area(), crate::ui::typography::PanelTarget::Agents)
     }
 
     fn agents_closed_status(&mut self) {

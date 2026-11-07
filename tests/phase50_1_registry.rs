@@ -1,5 +1,6 @@
 //! Phase 50.1-03: live half of the registry (agents, panes, active session). Headless only.
 
+use std::sync::Once;
 use std::time::Instant;
 
 use bilterm::api::JsonValue;
@@ -9,8 +10,28 @@ use bilterm::wm::registry::{FindRow, Origin, PANES_PER_SESSION_CAP, RowData};
 use bilterm::wm::find_cmd::FindKind;
 use bilterm::wm::{SplitDirection, WindowManager};
 
+static INIT: Once = Once::new();
+
+fn init_env() {
+    INIT.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("bilterm-p50-1-reg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", dir.join("config"));
+            std::env::set_var("XDG_STATE_HOME", dir.join("state"));
+            std::env::set_var("XDG_DATA_HOME", dir.join("data"));
+        }
+    });
+}
+
+fn wm_new(rows: u16, cols: u16) -> WindowManager {
+    init_env();
+    WindowManager::new_headless(rows, cols)
+}
+
 fn three_panes() -> WindowManager {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     wm.split_focused(SplitDirection::Vertical).unwrap();
     wm.split_focused(SplitDirection::Vertical).unwrap();
     assert_eq!(wm.panes().len(), 3);
@@ -161,7 +182,7 @@ fn local_pane_cwd_is_trusted() {
 
 #[test]
 fn pane_rows_capped_per_session() {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     for id in 2..=100usize {
         wm.panes_mut().insert(id, CompositePane::new_headless(id, 24, 80));
     }

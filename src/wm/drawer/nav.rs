@@ -159,6 +159,7 @@ impl WindowManager {
                 prompt.manual_raw_override = false;
                 prompt.force_command_prompt = true;
                 prompt.set_text(":drawer rename ");
+                self.open_drawer_rename_dialog();
                 true
             }
             DrawerNavOp::Rename(name) => self.drawer_rename_selected(&name),
@@ -226,7 +227,7 @@ impl WindowManager {
     }
 
     /// Session name the selected row belongs to (its own name, or the enclosing session of a pane row).
-    fn selected_navigator_session(&self, rows: &[DrawerRow]) -> Option<String> {
+    pub(crate) fn selected_navigator_session(&self, rows: &[DrawerRow]) -> Option<String> {
         let sel = self.drawer.selected_index;
         match rows.get(sel)?.kind {
             DrawerRowKind::SessionHeader(ref name) => Some(name.clone()),
@@ -306,14 +307,36 @@ impl WindowManager {
         true
     }
 
-    /// Renames the selected session through the existing `rename` session-tree command (T-50-17).
+    /// Renames the selected window (when a pane row is selected) or session (`:drawer rename <name>`).
     fn drawer_rename_selected(&mut self, name: &str) -> bool {
-        if name.is_empty() || name.chars().any(char::is_whitespace) {
+        self.window_manage.rename_dialog = None;
+        self.window_manage.inline_rename = None;
+        let trimmed = name.trim();
+        if trimmed.is_empty() || trimmed.chars().any(char::is_whitespace) {
             self.active_pane_mut().set_status_message(Some("Usage: :drawer rename <name>".to_string()));
             return false;
         }
+        let rows = self.drawer_rows();
+        if let Some(DrawerRow {
+            kind: DrawerRowKind::Pane(pane_id),
+            ..
+        }) = rows.get(self.drawer.selected_index)
+        {
+            let session = self.selected_navigator_session(&rows);
+            return match self.rename_window_in_session(Some(*pane_id), session.as_deref(), trimmed) {
+                Ok(msg) => {
+                    self.active_pane_mut().set_status_message(Some(msg));
+                    true
+                }
+                Err(err) => {
+                    self.record_automation_error(err.clone());
+                    self.active_pane_mut().set_status_message(Some(err));
+                    false
+                }
+            };
+        }
         let target = self.selected_drawer_session_name();
-        self.apply(Action::SessionTreeCommand(format!("rename {target} {name}"))).is_ok()
+        self.apply(Action::SessionTreeCommand(format!("rename {target} {trimmed}"))).is_ok()
     }
 
     /// Folds the selected session row; a pane (or other nested) row folds its enclosing session row and

@@ -28,6 +28,7 @@ pub mod pane_actions;
 pub mod oia;
 pub mod pixel_canvas;
 pub mod navigator;
+pub mod rename_dialog_ui;
 pub mod renderer;
 pub mod script_studio_ui;
 pub mod session_map_gui;
@@ -766,6 +767,14 @@ impl Widget for WorkspaceWidget<'_> {
 
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Mcp) == 100 {
             mcp_ui::render_mcp_console_overlay(self.wm, workspace_area, cfg, &palette, buf);
+        }
+
+        if self.wm.drawer().navigator_menu_open() || self.wm.context_menu_anchor().is_some() {
+            crate::ui::drawer::navigator::render_standalone_context_menu(self.wm, area, buf);
+        }
+
+        if self.wm.rename_dialog_open() {
+            rename_dialog_ui::render_rename_dialog(self.wm, area, buf);
         }
 
         // Capture full composited workspace frame if Whole-Workspace Asciicast v2 recording is active (REC-02)

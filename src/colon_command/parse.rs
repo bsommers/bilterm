@@ -352,7 +352,14 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some(Ok(ColonCommand::SessionSave(name)))
         }
         "rename" | "session-rename" => {
-            if parts.len() < 2 {
+            if parts.len() == 1 && !input.ends_with(' ') {
+                Some(Ok(ColonCommand::SessionManage(
+                    crate::wm::window_manage::SessionManageOp::Rename {
+                        old_name: None,
+                        new_name: String::new(),
+                    },
+                )))
+            } else if parts.len() < 2 {
                 Some(Err("Usage: :rename [old_name] <new_name>".to_string()))
             } else {
                 Some(super::parse_window::parse_session_rename(&parts[1..]))
@@ -436,7 +443,14 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some(Ok(ColonCommand::SessionTreeCommand(sub)))
         }
         "rename-session" | "renamesession" => {
-            if parts.len() < 2 {
+            if parts.len() == 1 && !input.ends_with(' ') {
+                Some(Ok(ColonCommand::SessionManage(
+                    crate::wm::window_manage::SessionManageOp::Rename {
+                        old_name: None,
+                        new_name: String::new(),
+                    },
+                )))
+            } else if parts.len() < 2 {
                 Some(Err("Usage: :rename-session [old_name] <new_name>".to_string()))
             } else {
                 Some(super::parse_window::parse_session_rename(&parts[1..]))
@@ -730,6 +744,28 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
         }
         "mcp" | "master-control" => {
+            if parts.get(1) == Some(&"scale") {
+                return match parts.get(2).copied() {
+                    Some("reset" | "default" | "100" | "100%") => Some(Ok(
+                        ColonCommand::PanelScaleOf(crate::ui::typography::PanelTarget::Mcp, 100),
+                    )),
+                    Some("+" | "up" | "in") => Some(Ok(ColonCommand::PanelScaleStepOf(
+                        crate::ui::typography::PanelTarget::Mcp,
+                        10,
+                    ))),
+                    Some("-" | "down" | "out") => Some(Ok(ColonCommand::PanelScaleStepOf(
+                        crate::ui::typography::PanelTarget::Mcp,
+                        -10,
+                    ))),
+                    Some(s) => match s.trim_end_matches('%').parse::<u16>() {
+                        Ok(pct) if (50..=200).contains(&pct) => Some(Ok(
+                            ColonCommand::PanelScaleOf(crate::ui::typography::PanelTarget::Mcp, pct),
+                        )),
+                        _ => Some(Err("Usage: :mcp scale <50..=200|+|-|reset>".to_string())),
+                    },
+                    None => Some(Err("Usage: :mcp scale <50..=200|+|-|reset>".to_string())),
+                };
+            }
             let sub = if parts.len() > 1 {
                 parts[1..].join(" ")
             } else {
@@ -737,6 +773,30 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             };
             Some(Ok(ColonCommand::McpCommand(sub)))
         }
+        "title" => Some(super::parse_window::parse_window_rename(&parts[1..])),
+        "pane" => {
+            if let Some(res) = super::parse_window::parse_window_manage_command(&parts[1..]) {
+                return Some(res);
+            }
+            super::parse_visual::parse_visual_colon_command("window", &parts)
+        }
+        "kill-pane" => Some(Ok(ColonCommand::ClosePane)),
+        "tabnew" => Some(Ok(ColonCommand::SplitHorizontal)),
+        "tabnext" => Some(Ok(ColonCommand::DeckNext)),
+        "tabprev" => Some(Ok(ColonCommand::DeckPrev)),
+        "tabclose" => Some(Ok(ColonCommand::ClosePane)),
+        "tab" => match parts.get(1).copied() {
+            Some("new" | "create") | None => Some(Ok(ColonCommand::SplitHorizontal)),
+            Some("next" | "n") => Some(Ok(ColonCommand::DeckNext)),
+            Some("prev" | "p") => Some(Ok(ColonCommand::DeckPrev)),
+            Some("close" | "kill" | "x") => Some(Ok(ColonCommand::ClosePane)),
+            Some("rename" | "title") => {
+                Some(super::parse_window::parse_window_rename(&parts[2..]))
+            }
+            _ => Some(Err(
+                "Usage: :tab <new | next | prev | close | rename [name]>".to_string(),
+            )),
+        },
         "detach" | "d" => Some(Ok(ColonCommand::DetachClient)),
         "attach" | "a" | "resume" => {
             let name = parts.get(1).copied().unwrap_or("default").to_string();

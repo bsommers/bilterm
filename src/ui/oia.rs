@@ -47,8 +47,9 @@ pub fn render_oia_status_bar_themed(
     let sep = glyphs.oia_separator;
     // Tokens apply only to palettes that name a non-Legacy appearance profile.
     // Existing looks (incl. MODERN-SLATE / LIQUID-GLASS) keep their literals byte-identical.
-    let uses_tokens = AppearanceProfile::from_name(&palette.name)
-        .is_some_and(|p| p != AppearanceProfile::Legacy);
+    let uses_tokens = !matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
+        && AppearanceProfile::from_name(&palette.name)
+            .is_some_and(|p| p != AppearanceProfile::Legacy);
     let is_modern = sep == "·"
         || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
         || uses_tokens;

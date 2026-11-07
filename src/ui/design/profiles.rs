@@ -6,12 +6,13 @@ use super::config::AppearanceConfig;
 use super::materials::{Material, Materials};
 use crate::config::BiltermConfig;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AppearanceProfile {
     /// Existing Classic/Snazzy/Glass look, untouched.
     Legacy,
     /// Dark, near-opaque, crisp hairlines. Default for new installs (Phase 46 adopts it).
+    #[default]
     Obsidian,
     /// Deep-blue, slightly translucent.
     Midnight,
@@ -19,9 +20,27 @@ pub enum AppearanceProfile {
     Arctic,
     /// Translucent glass with bevel and halo.
     Liquid,
+    /// Warm amber CRT modern dark profile (`#120C06` canvas, `#FFB000` accent, `#FFE8B8` text).
+    Amber,
+    /// Deep violet-indigo synthwave profile (`#140B24` canvas, `#FF2A85` / `#05D9E8` accents).
+    Synthwave,
+    /// Balanced studio slate solarized profile (`#002B36` canvas, `#2AA198` / `#B58900` accents).
+    Solarized,
 }
 
 impl AppearanceProfile {
+    /// All 8 built-in appearance profiles (`UIM-02`).
+    pub const ALL: [Self; 8] = [
+        Self::Legacy,
+        Self::Obsidian,
+        Self::Midnight,
+        Self::Arctic,
+        Self::Liquid,
+        Self::Amber,
+        Self::Synthwave,
+        Self::Solarized,
+    ];
+
     /// Explicit `[appearance].profile` wins; otherwise legacy flags map onto profiles:
     /// `liquid_glass` -> Liquid, `modern_mode` -> Obsidian, anything else -> Legacy.
     pub fn resolve(cfg: &BiltermConfig) -> Self {
@@ -43,7 +62,10 @@ impl AppearanceProfile {
             "obsidian" => Some(Self::Obsidian),
             "midnight" => Some(Self::Midnight),
             "arctic" => Some(Self::Arctic),
-            "liquid" => Some(Self::Liquid),
+            "liquid" | "liquid-glass" => Some(Self::Liquid),
+            "amber" | "phosphor" | "retro-amber" => Some(Self::Amber),
+            "synthwave" | "outrun" | "cyber" => Some(Self::Synthwave),
+            "solarized" | "paper" => Some(Self::Solarized),
             _ => None,
         }
     }
@@ -55,7 +77,15 @@ impl AppearanceProfile {
             Self::Midnight => "midnight",
             Self::Arctic => "arctic",
             Self::Liquid => "liquid",
+            Self::Amber => "amber",
+            Self::Synthwave => "synthwave",
+            Self::Solarized => "solarized",
         }
+    }
+
+    /// Semantic design tokens for this profile.
+    pub fn tokens(self) -> super::tokens::DesignTokens {
+        super::tokens::DesignTokens::for_profile(self)
     }
 
     /// Base materials for the profile with `[appearance]` overrides applied.
@@ -66,6 +96,9 @@ impl AppearanceProfile {
             Self::Midnight => build(90, 60, false, 15, 8),
             Self::Arctic => build(94, 55, false, 0, 8),
             Self::Liquid => build(72, 80, true, 55, 12),
+            Self::Amber => build(88, 65, false, 20, 6),
+            Self::Synthwave => build(82, 75, true, 35, 10),
+            Self::Solarized => build(98, 65, false, 0, 4),
         };
         if self == Self::Legacy {
             return m;

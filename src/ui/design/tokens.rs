@@ -60,6 +60,18 @@ pub fn blend(a: Color, b: Color, pct: u8) -> Color {
 }
 
 impl DesignTokens {
+    pub fn for_profile(profile: super::AppearanceProfile) -> Self {
+        use super::AppearanceProfile as P;
+        let pal = match profile {
+            P::Legacy => crate::ui::theme::ThemePreset::TurboBlue.palette(),
+            P::Obsidian => crate::ui::visual_style::modern_obsidian_palette(false),
+            P::Liquid => crate::ui::visual_style::modern_obsidian_palette(true),
+            other => crate::ui::visual_style::profile_palette(other)
+                .unwrap_or_else(|| crate::ui::visual_style::modern_obsidian_palette(false)),
+        };
+        Self::from_palette(&pal)
+    }
+
     pub fn from_palette(p: &ThemePalette) -> Self {
         let text = p.text_fg.unwrap_or(p.title_fg);
         Self {

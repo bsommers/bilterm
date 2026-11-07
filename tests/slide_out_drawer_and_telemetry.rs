@@ -1,3 +1,5 @@
+use std::sync::Once;
+
 use bilterm::colon_command::{execute_wm_colon_command, parse_colon_command};
 use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
 use bilterm::ui::renderer::{
@@ -12,9 +14,29 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
 
+static INIT: Once = Once::new();
+
+fn init_env() {
+    INIT.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("bilterm-slideout-drawer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", dir.join("config"));
+            std::env::set_var("XDG_STATE_HOME", dir.join("state"));
+            std::env::set_var("XDG_DATA_HOME", dir.join("data"));
+        }
+    });
+}
+
+fn wm_new(rows: u16, cols: u16) -> WindowManager {
+    init_env();
+    WindowManager::new_headless(rows, cols)
+}
+
 #[test]
 fn drawer_supports_all_four_edges_and_visibility_modes_including_autohide_triggers() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     let area = Rect::new(0, 0, 100, 24);
 
     // Default: OnDemand, Left, Push -> initially hidden
@@ -94,7 +116,7 @@ fn drawer_supports_all_four_edges_and_visibility_modes_including_autohide_trigge
 
 #[test]
 fn drawer_overlay_mode_preserves_pty_size_while_push_mode_reflows_workspace_panes() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.config_mut().drop_shadows = true;
     let area = Rect::new(0, 0, 100, 24);
     wm.resize_all(area).unwrap();
@@ -136,7 +158,7 @@ fn drawer_overlay_mode_preserves_pty_size_while_push_mode_reflows_workspace_pane
 
 #[test]
 fn drawer_telemetry_renders_hierarchy_spinners_sparklines_osc133_and_all_status_badges() {
-    let mut wm = WindowManager::new_headless(26, 110);
+    let mut wm = wm_new(26, 110);
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     let p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
 
@@ -197,7 +219,7 @@ fn drawer_telemetry_renders_hierarchy_spinners_sparklines_osc133_and_all_status_
 
 #[test]
 fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     let area = Rect::new(0, 0, 100, 24);
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     assert_eq!(wm.active_pane_id(), p2);
@@ -279,7 +301,7 @@ fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
 
 #[test]
 fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_terminal() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     let area = Rect::new(0, 0, 100, 24);
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     let p3 = wm.split_focused(SplitDirection::Horizontal).unwrap();
@@ -332,7 +354,7 @@ fn per_window_colors_drawer_ctrl_x_raw_fkeys_and_session_save_rename_work() {
     use ratatui::widgets::Widget;
 
     let tmp = tempfile::tempdir().unwrap();
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
     let area = Rect::new(0, 0, 100, 24);
 
@@ -417,7 +439,7 @@ fn modern_liquid_glass_per_window_vs_global_theme_cursor_and_ssh_work() {
     use ratatui::widgets::Widget;
     use std::path::Path;
 
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     let area = Rect::new(0, 0, 100, 24);
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
     assert_eq!(wm.active_pane_id(), p2);
@@ -559,7 +581,7 @@ fn rect_mode_works_in_raw_non_3270_mode_via_keyboard_mouse_and_palette() {
     use bilterm::pane::CopySelectionKind;
     use bilterm::pty::line_discipline::InputRoutingMode;
 
-    let mut wm = WindowManager::new_headless(20, 60);
+    let mut wm = wm_new(20, 60);
     let area = Rect::new(0, 0, 60, 20);
     wm.resize_all(area).unwrap();
 
@@ -674,7 +696,7 @@ fn rect_mode_works_in_raw_non_3270_mode_via_keyboard_mouse_and_palette() {
     );
 
     // 5. Liquid Glass ZenTerm/REX multi-row graphical Drawer, MCP Console, and Command Palette
-    let mut wm_liq = WindowManager::new_headless(26, 110);
+    let mut wm_liq = wm_new(26, 110);
     let area_liq = Rect::new(0, 0, 110, 26);
     let p2 = wm_liq.split_focused(SplitDirection::Vertical).unwrap();
     assert_eq!(wm_liq.active_pane_id(), p2);
@@ -766,7 +788,7 @@ fn rect_mode_works_in_raw_non_3270_mode_via_keyboard_mouse_and_palette() {
 #[test]
 fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_window_session() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut wm = WindowManager::new_headless(24, 120);
+    let mut wm = wm_new(24, 120);
     let area = Rect::new(0, 0, 120, 24);
     wm.config_mut().history_dir = Some(tmp.path().to_string_lossy().into_owned());
     wm.config_mut().history_session = "alpha-session".to_string();
@@ -989,7 +1011,7 @@ fn da2_query_drawer_new_win_sess_and_visual_parent_moves_work() {
 
     // 2. Slide-out drawer defaults to Push and supports new windows & sessions via keyboard & mouse
     let tmp = tempfile::tempdir().unwrap();
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
     let area = Rect::new(0, 0, 100, 24);
     assert_eq!(wm.drawer_config().layout, DrawerLayoutMode::Push);

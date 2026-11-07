@@ -182,7 +182,7 @@ Bilterm is a terminal user interface (TUI) multiplexer, shell wrapper, and termi
 
 ## Architecture
 
-Bilterm is organized as a cycle-free 48-file modular DAG under `src/` (`vt` / `config` / `theme` / `tmux` / `util` → `pane` → `wm` → `action` / `colon_command` / `input` → `api` / `app` → `lib` / `main`):
+Bilterm is organized as a cycle-free modular DAG under `src/` (`vt` / `config` / `theme` / `tmux` / `util` → `pane` → `wm` → `action` / `colon_command` / `input` → `api` / `app` → `lib` / `main`):
 
 - **`src/action.rs` & `src/colon_command/{mod,parse,execute,complete}.rs`**: Canonical `Action` enum (`60+` variants), `:colon` parser, `WindowManager::apply(Action)` executor (`execute_colon_command`), and `<Tab>` completion.
 - **`src/input/{mod,keymap,modal,mouse,normalize}.rs`**: Declarative keymap tables (`DEFAULT_LEADER_BINDINGS`, `DEFAULT_GLOBAL_BINDINGS`, `DEFAULT_PANE_BINDINGS`), dual `Ctrl+B`/`Ctrl+X` leader with `$TMUX` fallback and held-`Ctrl` normalization, modal key handlers, SGR mouse routing, and macOS `Option`-as-`Alt` normalization.

@@ -178,13 +178,87 @@ pub(super) fn parse_visual_colon_command(
                 }
             },
         },
-        "appearance" => match parts
-            .get(1)
-            .and_then(|s| crate::ui::design::AppearanceProfile::from_name(s))
-        {
-            Some(p) => Some(Ok(ColonCommand::Appearance(p))),
-            None => Some(Err(
-                "Usage: :appearance legacy | obsidian | midnight | arctic | liquid".to_string(),
+        "appearance" => match parts.get(1).copied() {
+            None | Some("list" | "ls") if parts.len() <= 2 => Some(Ok(
+                ColonCommand::AppearanceManage(crate::action::AppearanceOp::List),
+            )),
+            Some("reset" | "default") if parts.len() == 2 => Some(Ok(
+                ColonCommand::AppearanceManage(crate::action::AppearanceOp::Reset),
+            )),
+            Some("duplicate" | "dup" | "copy") => {
+                if let (Some(&src), Some(&new_name)) = (parts.get(2), parts.get(3))
+                    && parts.len() == 4
+                {
+                    Some(Ok(ColonCommand::AppearanceManage(
+                        crate::action::AppearanceOp::Duplicate {
+                            src: src.to_string(),
+                            new_name: new_name.to_string(),
+                        },
+                    )))
+                } else {
+                    Some(Err(
+                        "Usage: :appearance duplicate <src_profile> <new_name>".to_string(),
+                    ))
+                }
+            }
+            Some("modify" | "set") => {
+                if let (Some(&key), Some(val_parts)) = (parts.get(2), parts.get(3..))
+                    && !val_parts.is_empty()
+                {
+                    Some(Ok(ColonCommand::AppearanceManage(
+                        crate::action::AppearanceOp::Modify {
+                            key: key.to_string(),
+                            value: val_parts.join(" "),
+                        },
+                    )))
+                } else {
+                    Some(Err("Usage: :appearance modify <key> <value>".to_string()))
+                }
+            }
+            Some("import" | "load") => {
+                let path = parts.get(2..).map(|s| s.join(" ")).unwrap_or_default();
+                if path.trim().is_empty() {
+                    Some(Err("Usage: :appearance import <path>".to_string()))
+                } else {
+                    Some(Ok(ColonCommand::AppearanceManage(
+                        crate::action::AppearanceOp::Import(path),
+                    )))
+                }
+            }
+            Some("export") => {
+                let path = parts.get(2..).map(|s| s.join(" ")).unwrap_or_default();
+                if path.trim().is_empty() {
+                    Some(Err("Usage: :appearance export <path>".to_string()))
+                } else {
+                    Some(Ok(ColonCommand::AppearanceManage(
+                        crate::action::AppearanceOp::Export(path),
+                    )))
+                }
+            }
+            Some("select" | "switch" | "use") => match parts.get(2).copied() {
+                Some(name) if parts.len() == 3 => {
+                    if let Some(p) = crate::ui::design::AppearanceProfile::from_name(name) {
+                        Some(Ok(ColonCommand::Appearance(p)))
+                    } else {
+                        Some(Ok(ColonCommand::AppearanceManage(
+                            crate::action::AppearanceOp::SelectName(name.to_string()),
+                        )))
+                    }
+                }
+                _ => Some(Err("Usage: :appearance select <name>".to_string())),
+            },
+            Some(name) if parts.len() == 2 => {
+                if let Some(p) = crate::ui::design::AppearanceProfile::from_name(name) {
+                    Some(Ok(ColonCommand::Appearance(p)))
+                } else {
+                    Some(Ok(ColonCommand::AppearanceManage(
+                        crate::action::AppearanceOp::SelectName(name.to_string()),
+                    )))
+                }
+            }
+            _ => Some(Err(
+                "Usage: :appearance [legacy|obsidian|midnight|arctic|liquid|amber|synthwave|solarized|list|select <name>|duplicate <src> <new>|modify <k> <v>|reset|import <path>|export <path>|save]"
+                    .to_string(),
             )),
         },
         "glyphs" => match parts.get(1).and_then(|s| GlyphPack::from_name(s)) {

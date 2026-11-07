@@ -431,8 +431,51 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::Appearance(profile) => {
             wm.config_mut().appearance.profile = Some(profile);
+            wm.config_mut().appearance.active_custom = None;
             wm.active_pane_mut()
                 .set_status_message(Some(format!("Appearance: {}", profile.label())));
+            false
+        }
+        ColonCommand::AppearanceManage(op) => {
+            use crate::action::AppearanceOp;
+            let res = match op {
+                AppearanceOp::List => Ok(wm.config().appearance.list_profiles_text()),
+                AppearanceOp::SelectName(name) => wm
+                    .config_mut()
+                    .appearance
+                    .select_by_name(&name)
+                    .map(|label| format!("Appearance: {label}")),
+                AppearanceOp::Duplicate { src, new_name } => wm
+                    .config_mut()
+                    .appearance
+                    .duplicate_profile(&src, &new_name),
+                AppearanceOp::Modify { key, value } => wm
+                    .config_mut()
+                    .appearance
+                    .modify_setting(&key, &value),
+                AppearanceOp::Reset => {
+                    wm.config_mut().appearance.reset();
+                    Ok("Appearance reset to defaults".to_string())
+                }
+                AppearanceOp::Import(path) => {
+                    let expanded = crate::ui::file_browser::expand_user_path(&path);
+                    wm.config_mut()
+                        .appearance
+                        .import_file(&expanded)
+                        .map(|label| format!("Imported appearance profile '{label}' from {path}"))
+                }
+                AppearanceOp::Export(path) => {
+                    let expanded = crate::ui::file_browser::expand_user_path(&path);
+                    wm.config().appearance.export_file(&expanded)
+                }
+            };
+            match res {
+                Ok(msg) => wm.active_pane_mut().set_status_message(Some(msg)),
+                Err(err) => {
+                    wm.record_automation_error_msg(err.clone());
+                    wm.active_pane_mut().set_status_message(Some(err));
+                }
+            }
             false
         }
         ColonCommand::PanelScale(n) => {
@@ -447,6 +490,15 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.set_scale(target, n);
             let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
             let (name, shown) = (panel_name(target), wm.scale_setting(target));
+            wm.active_pane_mut()
+                .set_status_message(Some(format!("{name} scale: {shown}%{note}")));
+            false
+        }
+        ColonCommand::PanelScaleStepOf(target, step) => {
+            let delta = if step.abs() == 1 { step * 10 } else { step };
+            let shown = wm.step_scale(target, delta);
+            let note = if wm.gui_surface { "" } else { " (applies in the GUI only)" };
+            let name = panel_name(target);
             wm.active_pane_mut()
                 .set_status_message(Some(format!("{name} scale: {shown}%{note}")));
             false
@@ -733,6 +785,11 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::WindowResetGeometry => {
             wm.reset_window_geometries();
+            wm.maybe_autosave_layout();
+            false
+        }
+        ColonCommand::ArrangeGrid => {
+            wm.execute_layout_profile_command("arrange grid");
             wm.maybe_autosave_layout();
             false
         }

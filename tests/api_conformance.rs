@@ -409,9 +409,17 @@ fn catalog_commands_never_crash_over_wm_command() {
 fn rpc_methods_const_matches_dispatcher_and_ctl_parser() {
     let _ = temp_root();
     // Drift: every `"x.y" =>` arm in dispatch_method is in RPC_METHODS and vice versa.
-    let src = include_str!("../src/api/rpc.rs");
-    let body = src.split("pub fn dispatch_method").nth(1).unwrap();
-    let body = body.split("_ => Err(format!(\"Method not found").next().unwrap();
+    let rpc_src = include_str!("../src/api/rpc.rs");
+    let rpc_dispatch_src = include_str!("../src/api/rpc_dispatch.rs");
+    let combined_src = format!("{rpc_src}\n{rpc_dispatch_src}");
+    let body = combined_src
+        .split("pub fn dispatch_method")
+        .nth(1)
+        .expect("dispatch_method in rpc.rs or rpc_dispatch.rs");
+    let body = body
+        .split("_ => Err(format!(\"Method not found")
+        .next()
+        .unwrap();
     let mut arms: Vec<String> = Vec::new();
     for line in body.lines() {
         let t = line.trim_start();

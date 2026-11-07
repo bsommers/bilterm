@@ -284,13 +284,42 @@ impl WindowManager {
 
     fn execute_command_string(&mut self, raw: &str) -> Option<String> {
         let cmd_str = if raw.trim().starts_with(':') { raw.trim().to_string() } else { format!(":{}", raw.trim()) };
+        if raw.ends_with(' ') {
+            self.drawer.focused = false;
+            let p = self.active_pane_mut().prompt_mut();
+            p.manual_raw_override = false;
+            p.force_command_prompt = true;
+            p.set_text(&format!("{cmd_str} "));
+            match cmd_str.as_str() {
+                ":rename" | ":session rename" => self.open_session_rename_dialog(None),
+                ":window rename" | ":pane rename" | ":title" => self.open_window_rename_dialog(None),
+                _ => {}
+            }
+            if !self.command_window.pinned {
+                self.close_command_window();
+            } else {
+                self.command_window.blur();
+            }
+            return Some(format!("Prefilled {cmd_str} "));
+        }
         let (ok, status) = match crate::colon_command::parse_colon_command(&cmd_str) {
             Some(Ok(cmd)) => match self.apply(cmd) {
                 Ok(_) => (true, self.active_pane().status_message().unwrap_or("OK").to_string()),
-                Err(e) => (false, format!("ERR: {e}")),
+                Err(e) => {
+                    let msg = format!("ERR: {e}");
+                    self.active_pane_mut().set_status_message(Some(msg.clone()));
+                    (false, msg)
+                }
             },
-            Some(Err(err)) => (false, err),
-            None => (false, format!("Unknown command: {cmd_str}")),
+            Some(Err(err)) => {
+                self.active_pane_mut().set_status_message(Some(err.clone()));
+                (false, err)
+            }
+            None => {
+                let msg = format!("Unknown command: {cmd_str}");
+                self.active_pane_mut().set_status_message(Some(msg.clone()));
+                (false, msg)
+            }
         };
         self.command_window.push_log(cmd_str, status.clone(), ok);
         if !self.command_window.pinned { self.close_command_window(); } else { self.command_window.active = true; self.command_window.focused = true; }

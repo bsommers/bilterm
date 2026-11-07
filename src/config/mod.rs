@@ -269,7 +269,18 @@ impl BiltermConfig {
     /// `true` when `[appearance].profile` (or `:appearance`) explicitly selects a non-Legacy look.
     pub const fn explicit_new_look(&self) -> bool {
         use crate::ui::design::AppearanceProfile as P;
-        matches!(self.appearance.profile, Some(P::Obsidian | P::Midnight | P::Arctic | P::Liquid))
+        matches!(
+            self.appearance.profile,
+            Some(
+                P::Obsidian
+                    | P::Midnight
+                    | P::Arctic
+                    | P::Liquid
+                    | P::Amber
+                    | P::Synthwave
+                    | P::Solarized
+            )
+        )
     }
 
     /// Returns `true` when Frosted Glass or Liquid Glass optical mode is active.

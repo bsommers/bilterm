@@ -1,22 +1,39 @@
-# Session Checkpoint — 2026-11-06
+# Session Checkpoint — 2026-11-07
 
 ## Completed Work
-1. **Milestone Completion & Release (`v3.0.0`)**:
-   - Completed Phases 51.1, 51.2, 52, 53, 54, and 55 (`1 -> 55` all complete).
-   - Built, verified, and published GitHub Release `v3.0.0` with all 14 cross-platform archives + `SHA256SUMS`.
-2. **Linux `<F7>` & Function/Special Key Routing Fixes**:
-   - Fixed `<F7>` asymmetry in `ALT_SCREEN` / `RawPtyPassthrough` (`src/input/keymap.rs`) so plain `<F7>` both opens and closes the drawer under `RawFkeyMode::Auto` and `Bilterm`, and `Alt+F7` always toggles the drawer even during `BlockPage` hold.
-   - Fixed `WindowManager::toggle_drawer()` (`src/wm/drawer.rs`) and `apply_config` (`src/wm/session.rs`) so `<F7>` closes `DrawerVisibilityMode::Fixed` and `AutoHide` hovered drawers on the first press.
-   - Added `WindowManager::blur_utility_windows()` and bypassed `<F7>` / `Alt+F7` in `src/input/modal.rs` so focused utility windows (`Fonts`, `Commands`, `ScriptStudio`, `AgentsList`, `SessionMap`, `Agents`, `McpConsole`) never swallow `<F7>`.
-   - Fixed focused drawer (`Classic` and `Navigator`) in `src/input/modal.rs` so `F1..F12` and `Ctrl+` / `Alt+` global chords (`F1` Help, `F2` Split, `F3` Hints, `F4` Mode, `F6` Deck, `F8` Copy, `F9` Inspector, `F10` Quake, `F12` Raw, `Ctrl+P` Palette, `Alt+M` Layout, `Alt+1..9`, etc.) pass through instead of being swallowed or shadowed by single-letter drawer keys.
-   - Fixed Modern bottom F-key bar mouse click hit-testing (`src/input/mouse.rs`) for `F7 Drawer` (`34..=46`) and `F12 Raw` (`60..=68`), and ensured clicking top-bar pane pills blurs drawer focus.
-   - Fixed Linux X11 GUI key/mouse translation (`src/ui/gui_font/linux_x11.rs` & `src/app.rs`): preserved uppercase on `Alt+Shift+<letter>`, added keypad navigation keysyms (`0xFF80`, `0xFF89`, `0xFF95..=0xFF9F`), ignored `CapsLock`/`NumLock` on `F1..F12`, accepted `KeyEventKind::Repeat`, and deduplicated `MOTION_NOTIFY` per cell when not dragging.
-3. **Script Studio (`:script` / `:studio`) Window Controls Fixes**:
-   - Fixed title-bar badge rendering & hit-testing (`src/ui/script_studio_ui.rs`, `src/input/script_studio.rs`): moved `[•]` Pin badge to `r_edge - 11..-8` so it no longer overwrites `[□]` Dock (`r_edge - 8..-5`), and aligned `[X]` Close (`r_edge - 5..-1`) so clicking `X` closes instead of docking.
-   - Compacted `TOOLBAR_TEXT` (`63` cols, 1-cell glyphs) so all 6 buttons (`Run`, `Step`, `Reset`, `Rec`, `Edit`, `Save`) fit inside the default 66-col window and match exact click hitboxes and `[● Rec]` / `[✎ Edit]` highlight offsets.
-   - Fixed `FOOTER_TEXT` (`"F5:Run F10/n:Step r:Reset R:Rec i:Edit x:Del o:New s:Save *:Pin"`) and made footer items clickable.
-   - Made clicking an editor line position `cursor_col` and enter `[EDIT]` mode on second click, cleared `docked = false` on `ScriptStudioOp::SetRect` so dragging/resizing a docked Script Studio window works, and stripped `SHIFT` on `KeyCode::Char(_)` in nav mode (`src/input/script_studio_keys.rs`).
-4. **Verification**:
-   - Added `tests/linux_fkeys_and_key_routing.rs` (9 comprehensive integration tests).
-   - `bash scripts/verify.sh` -> `PASS 119/119`.
-   - `bash scripts/check_classic_goldens.sh` -> `GOLDENS OK 11`.
+
+1. **Multi-Mode Window/Session/Drawer Rename & TUI Rename Popup Dialog**:
+   - Implemented `RenameDialog` modal (`src/wm/rename_dialog.rs`, `src/ui/rename_dialog_ui.rs`) supporting in-place renaming of windows, sessions, and drawer entries with validation, Esc cancellation, and Enter submission.
+   - Wired `:rename-window [name]`, `:rename-session [name]`, and drawer rename actions across all entry points with full parity.
+2. **Right-Click Context Menus Across All UI Modes**:
+   - Added interactive right-click context menu handling (`src/input/mouse.rs`, `src/input/mouse_wm.rs`, `src/wm/drawer/menu.rs`) across Classic, Modern Minimal, and Liquid Glass UI modes.
+   - Context menus provide direct access to Window Rename, Split, Close, Zoom, Pin, and Theme/Profile switching.
+3. **Full Colon Command & Command Palette Parity**:
+   - Achieved 100% parity across `Action` enum, `:colon` parser, fuzzy Command Palette (`PALETTE_CATALOG`), tab completion, and JSON-RPC dispatch.
+   - Split large command handling into modular submodules (`src/api/rpc_dispatch.rs`, `src/input/keymap_tables.rs`, `src/input/modal_palette.rs`, `src/ui/help_catalog_data.rs`, `src/wm/window_manage_bulk.rs`).
+   - Verified by `tests/phase51_palette_parity.rs` and `tests/phase51_uniformity.rs`.
+4. **All 11 Phase 51 Follow-ups Resolved (`51-FOLLOWUPS.md`)**:
+   - Resolved all 11 items recorded during Phase 51:
+     - Effective area calculation for docked traffic windows (`src/wm/agents_geometry.rs`, `tests/panel_dock.rs`).
+     - Preserving dock notices during `:arrange` (`src/wm/layout_profile.rs`).
+     - Accurate runtime transport attribution for `:ssh-tmux` panes (`src/pane/capture.rs`).
+     - Palette Enter prefill for fill-in command entries (`src/input/modal_palette.rs`).
+     - Dedicated key chords and `Action` lowerings for `:arrange <pattern>`.
+     - Data-only split for `:agents status` / RPC query vs. window presentation.
+     - Module line ceiling splits: `src/wm/drawer.rs` + `src/wm/drawer/ops.rs`, `src/wm/agents_window.rs` + `src/wm/agents_window_ops.rs`.
+     - Test line ceiling split: `tests/phase51_uniformity.rs` + `tests/phase51_uniformity_support/`.
+     - 100% hermetic test execution with isolated RAII temporary state directories across drawer and state suites.
+     - Source tree map documentation updates in `AGENTS.md` and `CLAUDE.md`.
+     - Accurate persistent SSH+tmux bridge descriptions in `docs/architecture.md`.
+5. **Phase 45 8-Profile Design System & `:appearance` Lifecycle**:
+   - Completed token engine and profile persistence (`src/ui/design/config.rs`, `src/ui/design/profiles.rs`, `src/ui/design/tokens.rs`).
+   - Supports all 8 design profiles: `ClassicIBM`, `BorlandTurbo`, `ModernMinimal`, `LiquidGlass`, `CyberpunkNeon`, `SolarizedDark`, `NordFrost`, and `MonochromePhosphor`.
+   - Verified by `tests/design_system_coverage.rs`.
+6. **Documentation, Site Refresh & MCP Usecase Tracking**:
+   - Refreshed GitHub Pages documentation site (`pages/` branch / `v3.0.1`).
+   - Added comprehensive real-world MCP usage guides under `docs/mcp-usecases/` covering AI coding assistant multiplexing, terminal swarm orchestration, and automated incident triage.
+7. **`/swe-skills:test-coverage` & Composable Runner Upgrades (`scripts/verify.sh`)**:
+   - Upgraded `scripts/verify.sh` with composable tier filtering (`--tier <smoke|unit|integration|system|perf|stress|torture|security>`), `--match <pattern>`, `--coverage` (`cargo llvm-cov`), and `--xvfb` (headless X11).
+   - Added standardized verification artifact emission (`target/verify/report.md` and `target/verify/junit.xml`).
+   - Documented the new 4-mode `BiltermLiveDriver` architecture in `docs/TEST_COVERAGE.md`.
+   - Verified: 120/120 verification stages clean, 11/11 classic goldens matching.

@@ -24,6 +24,32 @@ pub fn parse_window_manage_command(parts: &[&str]) -> Option<Result<ColonCommand
                 Some(Ok(ColonCommand::WindowManage(WindowManageOp::Undo)))
             }
         }
+        "close" | "kill" => {
+            if parts.len() == 1 {
+                Some(Ok(ColonCommand::ClosePane))
+            } else if parts.len() == 2 {
+                match parts[1].parse::<PaneId>() {
+                    Ok(id) => Some(Ok(ColonCommand::WindowManage(WindowManageOp::Select(
+                        WindowSelectTarget::Explicit(vec![id]),
+                    )))),
+                    Err(_) => Some(Err("Usage: :window close [id]".to_string())),
+                }
+            } else {
+                Some(Err("Usage: :window close [id]".to_string()))
+            }
+        }
+        "split" => match parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+            Some("h" | "horizontal" | "horiz") => Some(Ok(ColonCommand::SplitHorizontal)),
+            Some("v" | "vertical" | "vert") | None => Some(Ok(ColonCommand::SplitVertical)),
+            _ => Some(Err("Usage: :window split [h|horizontal|v|vertical]".to_string())),
+        },
+        "cascade" | "reset-geometry" => {
+            if parts.len() == 1 {
+                Some(Ok(ColonCommand::WindowResetGeometry))
+            } else {
+                Some(Err("Usage: :window cascade | :window reset-geometry".to_string()))
+            }
+        }
         _ => None,
     }
 }
@@ -61,6 +87,11 @@ pub(crate) fn parse_window_move(args: &[&str]) -> Result<ColonCommand, String> {
     }
 
     match positional.len() {
+        0 => Ok(ColonCommand::WindowManage(WindowManageOp::Move {
+            window_id: None,
+            target_session: String::new(),
+            switch,
+        })),
         1 => Ok(ColonCommand::WindowManage(WindowManageOp::Move {
             window_id: None,
             target_session: positional[0].to_string(),
@@ -86,6 +117,10 @@ pub(crate) fn parse_window_move(args: &[&str]) -> Result<ColonCommand, String> {
 
 pub(crate) fn parse_window_rename(args: &[&str]) -> Result<ColonCommand, String> {
     match args.len() {
+        0 => Ok(ColonCommand::WindowManage(WindowManageOp::Rename {
+            window_id: None,
+            new_name: String::new(),
+        })),
         1 => Ok(ColonCommand::WindowManage(WindowManageOp::Rename {
             window_id: None,
             new_name: args[0].to_string(),
@@ -178,13 +213,9 @@ pub(crate) fn parse_window_bulk(args: &[&str]) -> Result<ColonCommand, String> {
     let sub = args.first().copied().unwrap_or("");
     match sub {
         "move" => {
-            let Some(&session) = args.get(1) else {
-                return Err("Usage: :window bulk move <target_session>".to_string());
-            };
+            let target_session = args.get(1).copied().unwrap_or("").to_string();
             Ok(ColonCommand::WindowManage(WindowManageOp::Bulk(
-                BulkWindowOp::Move {
-                    target_session: session.to_string(),
-                },
+                BulkWindowOp::Move { target_session },
             )))
         }
         "close" => {
@@ -197,13 +228,9 @@ pub(crate) fn parse_window_bulk(args: &[&str]) -> Result<ColonCommand, String> {
             Ok(ColonCommand::WindowManage(WindowManageOp::Bulk(op)))
         }
         "rename-prefix" | "prefix" => {
-            let Some(&prefix) = args.get(1) else {
-                return Err("Usage: :window bulk rename-prefix <prefix>".to_string());
-            };
+            let prefix = args.get(1).copied().unwrap_or("").to_string();
             Ok(ColonCommand::WindowManage(WindowManageOp::Bulk(
-                BulkWindowOp::RenamePrefix {
-                    prefix: prefix.to_string(),
-                },
+                BulkWindowOp::RenamePrefix { prefix },
             )))
         }
         "tile" => Ok(ColonCommand::WindowManage(WindowManageOp::Bulk(

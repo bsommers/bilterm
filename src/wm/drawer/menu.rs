@@ -98,11 +98,17 @@ impl NavigatorMenuEntry {
             Self::Rename => wm.apply_drawer_nav(DrawerNavOp::RenamePrompt),
             Self::Close => wm.apply_drawer_nav(DrawerNavOp::Close),
             Self::MoveWindow => {
+                let target_pane = wm.selected_drawer_pane_id();
                 wm.drawer_mut().focused = false;
+                let prefill = match target_pane {
+                    Some(id) => format!(":window move {id} "),
+                    None => ":window move ".to_string(),
+                };
                 let prompt = wm.active_pane_mut().prompt_mut();
                 prompt.manual_raw_override = false;
                 prompt.force_command_prompt = true;
-                prompt.set_text(":window move ");
+                prompt.set_text(&prefill);
+                wm.open_window_move_dialog(target_pane, false);
                 true
             }
             Self::BulkMove => {
@@ -111,6 +117,7 @@ impl NavigatorMenuEntry {
                 prompt.manual_raw_override = false;
                 prompt.force_command_prompt = true;
                 prompt.set_text(":window bulk move ");
+                wm.open_bulk_move_dialog();
                 true
             }
             Self::BulkClose => {

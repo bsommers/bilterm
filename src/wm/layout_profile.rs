@@ -913,11 +913,7 @@ impl WindowManager {
             "arrange" => {
                 let pat = parts.get(1).copied().unwrap_or("grid");
                 let count = self.auto_arrange_windows(pat);
-                let msg = format!(
-                    "Auto-arranged {count} window(s) as '{pat}' (mode={:?})",
-                    self.layout_mode
-                );
-                self.active_pane_mut().set_status_message(Some(msg));
+                self.set_arrange_status(count, pat);
             }
             pat @ ("grid"
             | "equal"
@@ -934,11 +930,7 @@ impl WindowManager {
             | "stack-grid"
             | "float-grid") => {
                 let count = self.auto_arrange_windows(pat);
-                let msg = format!(
-                    "Auto-arranged {count} window(s) as '{pat}' (mode={:?})",
-                    self.layout_mode
-                );
-                self.active_pane_mut().set_status_message(Some(msg));
+                self.set_arrange_status(count, pat);
             }
             "default" | "set-default" => {
                 let name = parts.get(1).copied();
@@ -1019,5 +1011,20 @@ impl WindowManager {
                 self.active_pane_mut().set_status_message(Some(msg));
             }
         }
+    }
+
+    fn set_arrange_status(&mut self, count: usize, pat: &str) {
+        let no_room = self
+            .active_pane()
+            .status_message()
+            .is_some_and(|s| s == "Not enough room to dock panels");
+        let mut msg = format!(
+            "Auto-arranged {count} window(s) as '{pat}' (mode={:?})",
+            self.layout_mode
+        );
+        if no_room {
+            msg.push_str(" (not enough room to dock panels)");
+        }
+        self.active_pane_mut().set_status_message(Some(msg));
     }
 }

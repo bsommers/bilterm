@@ -3,6 +3,7 @@ mod agent_mail_apply;
 pub mod agent_state;
 pub mod agents_topology;
 pub mod agents_window;
+pub mod agents_window_ops;
 pub mod agents_cmd;
 pub mod agents_demo;
 pub mod agents_list;
@@ -23,6 +24,7 @@ pub mod pane_hold;
 pub mod panel_dock;
 pub mod quick_terminal;
 pub mod registry;
+pub mod rename_dialog;
 pub mod session;
 pub mod session_manager;
 pub mod session_map;
@@ -42,6 +44,7 @@ pub use window_manage::{
     WindowBulkOp, WindowManageOp, WindowManageState, WindowSelectTarget,
     WorkspaceTopologyUndo,
 };
+pub use rename_dialog::{RenameDialogKind, RenameDialogState};
 pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
     WorkspaceDrawer,

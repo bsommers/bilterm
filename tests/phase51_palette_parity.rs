@@ -175,12 +175,9 @@ fn palette_filter_finds_new_entries_by_plain_words() {
 
 #[test]
 fn palette_enter_fill_in_entries_unchanged() {
-    // Outcomes recorded at the unmodified HEAD (D-02: the prefill UX change is a follow-up that
-    // needs sign-off): Enter runs the bare verb and a parse error is silently dropped.
-    for (text, want_status) in [
-        (":ssh ", Some("Fleet nodes: (local only) \u{2014} Connect via :ssh <user@host> [port]")),
-        (":rename ", None),
-    ] {
+    // 51-FOLLOWUPS item 4: pressing Enter on a trailing-space fill-in entry (like `:ssh ` or
+    // `:rename `) closes the palette and prefills the active pane's command prompt.
+    for text in [":ssh ", ":rename "] {
         let mut wm = WindowManager::new_headless(24, 80);
         wm.open_palette_with_query("");
         let idx = wm.filtered_palette_items().iter().position(|e| e.0 == text).expect("fill-in entry");
@@ -190,8 +187,16 @@ fn palette_enter_fill_in_entries_unchanged() {
         handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
         assert!(matches!(wm.modal(), Modal::None), "the palette closes on Enter for {text:?}");
         assert_eq!(wm.pane_count(), 1, "no pane change for {text:?}");
-        assert_eq!(wm.active_pane().status_message(), want_status, "status after Enter on {text:?}");
+        assert_eq!(wm.active_pane().prompt().text(), text, "prompt prefilled after Enter on {text:?}");
     }
+    let mut wm = WindowManager::new_headless(24, 80);
+    wm.open_palette_with_query("");
+    let idx = wm.filtered_palette_items().iter().position(|e| e.0 == ":rename ").expect("fill-in entry");
+    if let Modal::Palette { selected, .. } = wm.modal_mut() {
+        *selected = idx;
+    }
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert!(wm.rename_dialog_open(), ":rename opens the interactive rename dialog");
 }
 
 #[test]

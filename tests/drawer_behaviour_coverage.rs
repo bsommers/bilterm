@@ -1,6 +1,8 @@
 //! Behavioural coverage for the slide-out drawer: docking/size/layout/visibility actions,
 //! horizontal-scroll keys, wheel/drag mouse handling and session reordering controls.
 
+use std::sync::Once;
+
 use bilterm::action::Action;
 use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
 use bilterm::wm::drawer::DrawerRowKind;
@@ -9,10 +11,30 @@ use bilterm::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WindowMana
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
+static INIT: Once = Once::new();
+
+fn init_env() {
+    INIT.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("bilterm-drawer-cov-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", dir.join("config"));
+            std::env::set_var("XDG_STATE_HOME", dir.join("state"));
+            std::env::set_var("XDG_DATA_HOME", dir.join("data"));
+        }
+    });
+}
+
 const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 24 };
 
+fn wm_new(rows: u16, cols: u16) -> WindowManager {
+    init_env();
+    WindowManager::new_headless(rows, cols)
+}
+
 fn wm_in(tmp: &tempfile::TempDir) -> WindowManager {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.config_mut().session_dir = Some(tmp.path().to_string_lossy().into_owned());
     wm
 }
@@ -35,7 +57,7 @@ fn status(wm: &WindowManager) -> String {
 }
 
 fn three_pane_focused() -> WindowManager {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.split_focused(SplitDirection::Vertical).unwrap();
     wm.split_focused(SplitDirection::Horizontal).unwrap();
     wm.focus_drawer();
@@ -433,7 +455,7 @@ fn n_upper_creates_new_session_and_s_saves_selected_session() {
 
 #[test]
 fn execute_drawer_action_clamps_sizes_per_edge_and_rejects_foreign_actions() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     assert!(wm.execute_drawer_action(&Action::DrawerSize(5)));
     assert_eq!(wm.drawer_config().width_cols, 16, "vertical min clamp");
     assert_eq!(status(&wm), "Slide-Out Drawer Size: 5");
@@ -472,7 +494,7 @@ fn execute_drawer_action_clamps_sizes_per_edge_and_rejects_foreign_actions() {
 
 #[test]
 fn drawer_size_zero_and_max_actions_via_apply() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     let _ = wm.apply(Action::DrawerSize(u16::MAX));
     assert!(wm.drawer().maximized);
     assert!(wm.drawer().open);
@@ -489,7 +511,7 @@ fn drawer_size_zero_and_max_actions_via_apply() {
 
 #[test]
 fn visibility_toggle_pin_and_open_state_side_effects() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     assert_eq!(wm.set_drawer_visibility(None), DrawerVisibilityMode::Fixed);
     assert!(wm.drawer().open);
     assert_eq!(wm.set_drawer_visibility(None), DrawerVisibilityMode::AutoHide);
@@ -505,7 +527,7 @@ fn visibility_toggle_pin_and_open_state_side_effects() {
 
 #[test]
 fn drawer_rect_clamps_and_disappears_when_workspace_too_small() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.set_drawer_visibility(Some(DrawerVisibilityMode::Fixed));
     assert!(wm.drawer_rect(Rect::new(0, 0, 11, 24)).is_none(), "too narrow");
     assert!(wm.drawer_rect(Rect::new(0, 0, 100, 3)).is_none(), "too short");
@@ -532,7 +554,7 @@ fn drawer_rect_clamps_and_disappears_when_workspace_too_small() {
 
 #[test]
 fn effective_workspace_area_subtracts_dock_only_in_push_mode() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.set_drawer_visibility(Some(DrawerVisibilityMode::Fixed));
     let area = Rect::new(0, 0, 100, 24);
     wm.set_drawer_edge(Some(DrawerEdge::Left));
@@ -549,7 +571,7 @@ fn effective_workspace_area_subtracts_dock_only_in_push_mode() {
 
 #[test]
 fn push_mode_reflows_pty_overlay_does_not() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.resize_all(AREA).unwrap();
     let base = wm.active_pane().vt().size();
     wm.set_drawer_layout(Some(DrawerLayoutMode::Push));
@@ -564,7 +586,7 @@ fn push_mode_reflows_pty_overlay_does_not() {
 
 #[test]
 fn update_drawer_hover_triggers_on_each_edge_and_sticks_while_inside() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.set_drawer_visibility(Some(DrawerVisibilityMode::AutoHide));
     // Left edge
     assert!(wm.update_drawer_hover(0, 5, AREA));
@@ -592,7 +614,7 @@ fn update_drawer_hover_triggers_on_each_edge_and_sticks_while_inside() {
 
 #[test]
 fn autohide_hover_in_push_mode_reflows_workspace() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     wm.resize_all(AREA).unwrap();
     let base = wm.active_pane().vt().size();
     wm.set_drawer_visibility(Some(DrawerVisibilityMode::AutoHide));
@@ -642,7 +664,7 @@ fn effective_scroll_and_wheel_scroll_clamp_and_override() {
 
 #[test]
 fn sparkline_and_telemetry_track_output_buckets() {
-    let mut wm = WindowManager::new_headless(24, 100);
+    let mut wm = wm_new(24, 100);
     assert_eq!(wm.drawer().sparkline_for(1, 0), "▁▁▁▁▁▁");
     assert_eq!(wm.drawer().sparkline_for(1, 16), "▁▁▁▂▃▂");
     assert_eq!(wm.drawer().sparkline_for(1, 16 * 100), "▁▁▁▂▃▇", "level clamps at 5");
@@ -664,7 +686,7 @@ fn sparkline_and_telemetry_track_output_buckets() {
 
 #[test]
 fn mouse_wheel_in_vertical_drawer_scrolls_viewport_without_moving_selection() {
-    let mut wm = WindowManager::new_headless(30, 100);
+    let mut wm = wm_new(30, 100);
     for _ in 0..9 {
         wm.split_focused(SplitDirection::Vertical).unwrap();
     }

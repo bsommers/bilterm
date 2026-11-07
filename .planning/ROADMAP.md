@@ -43,7 +43,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 41: 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`v2.5.0`)** - First-class `:rect` / `:select` / `:copy rect` / `Alt+R` / `Alt+LeftDrag` 2D rectangular block selection, highlight, and copy plus full per-pane session persistence of layout, shell (`shell`, `shell_args`), running software/commands (`running_command`), and working directory (`cwd`) with auto-relaunch (`RECT-01`, `SESS-03`) (completed 2026-10-31)
 - [x] **Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment** - Read-only audit, roadmap realignment, `ARCH-R04` relaxed to a soft ~800–1000-line goal (`UIM-00`)
 - [x] **Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews** - Proposed redesign backed by real `--gui-dump` previews; user sign-off gate (`UIM-01`)
-- [ ] **Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config** - Design tokens, 5 materials, 8 theme profiles, backward-compatible `[appearance]` config, animation clock (`UIM-02`)
+- [x] **Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config** - Design tokens, 5 materials, 8 theme profiles, backward-compatible `[appearance]` config, animation clock (`UIM-02`) (completed 2026-11-07)
 - [ ] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
 - [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
 - [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
@@ -1067,7 +1067,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 42. `v2.5.1`–`v2.5.2` Non-Retro Modern Minimal & Liquid Glass Modes, Per-Window vs. Global Theme & Cursor Isolation, Drawer Controls & SSH Hardening (`MOD-01`, `LIQ-01`, `WIN-05`, `CUR-03`, `SSH-02`) | 3/3 | Complete | 2026-10-31 |
 | 43. UI Modernization Step 1 — Architecture Audit & Plan Realignment (`UIM-00`) | 0/1 | Planned | - |
 | 44. UI Modernization Step 2 — Visual Design Proposal with Working Previews (`UIM-01`) | 0/1 | Planned | - |
-| 45. UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config (`UIM-02`) | 0/3 | Planned | - |
+| 45. UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config (`UIM-02`) | 3/3 | Complete | 2026-11-07 |
 | 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
 | 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
 | 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |

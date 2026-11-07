@@ -2,6 +2,7 @@
 //! Headless only; saved and log rows are injected with `set_find_results` because the disk
 //! providers belong to plan 11.
 
+use std::sync::Once;
 use std::time::Instant;
 
 use bilterm::action::Action;
@@ -14,7 +15,23 @@ use bilterm::wm::registry::{
 use bilterm::wm::{SplitDirection, WindowManager};
 use ratatui::layout::Rect;
 
+static INIT: Once = Once::new();
+
+fn init_env() {
+    INIT.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("bilterm-p50-1-find-ops-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", dir.join("config"));
+            std::env::set_var("XDG_STATE_HOME", dir.join("state"));
+            std::env::set_var("XDG_DATA_HOME", dir.join("data"));
+        }
+    });
+}
+
 fn fixture(panes: usize) -> WindowManager {
+    init_env();
     let mut wm = WindowManager::new_headless(24, 80);
     for _ in 1..panes {
         wm.split_focused(SplitDirection::Vertical).unwrap();

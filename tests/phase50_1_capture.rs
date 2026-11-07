@@ -1,16 +1,38 @@
 //! Phase 50.1-10: command capture (pane outbox -> tick -> ring -> History rows), redaction,
 //! bounds, host/cwd rules and exit-code join. Headless only.
 
+use std::sync::Once;
+
 use bilterm::api::{AutomationControlPlane, JsonValue};
 use bilterm::pane::history_store::{HistoryStore, parse_history_line};
 use bilterm::wm::find_cmd::FindKind;
 use bilterm::wm::registry::{CMD_RING_CAP, Origin, PANE_OUTBOX_CAP, RowData};
 use bilterm::wm::WindowManager;
 
+static INIT: Once = Once::new();
+
+fn init_env() {
+    INIT.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("bilterm-p50-1-capture-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", dir.join("config"));
+            std::env::set_var("XDG_STATE_HOME", dir.join("state"));
+            std::env::set_var("XDG_DATA_HOME", dir.join("data"));
+        }
+    });
+}
+
+fn wm_new(rows: u16, cols: u16) -> WindowManager {
+    init_env();
+    WindowManager::new_headless(rows, cols)
+}
+
 /// A headless wm whose pane 1 records into a tempdir history.log.
 fn wm_with_history() -> (WindowManager, tempfile::TempDir) {
     let tmp = tempfile::tempdir().unwrap();
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     enable_history(&mut wm, 1, tmp.path());
     (wm, tmp)
 }
@@ -37,7 +59,7 @@ fn history_rows(wm: &mut WindowManager, query: &str) -> Vec<bilterm::wm::registr
 
 #[test]
 fn typed_command_reaches_history_candidates() {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     wm.pane_mut(1).unwrap().submit_command("echo hi").unwrap();
     wm.poll_all_ptys();
     let r = wm.run_find(FindKind::History, "echo", 50);
@@ -140,7 +162,7 @@ fn normal_command_is_unchanged_for_legacy_readers() {
 
 #[test]
 fn ring_is_bounded() {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     let total = CMD_RING_CAP + 100;
     for i in 0..total {
         wm.pane_mut(1).unwrap().submit_command(&format!("echo n{i}")).unwrap();
@@ -162,7 +184,7 @@ fn ring_is_bounded() {
 
 #[test]
 fn outbox_is_bounded_between_ticks() {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     for i in 0..200 {
         wm.pane_mut(1).unwrap().submit_command(&format!("echo b{i}")).unwrap();
     }
@@ -174,7 +196,7 @@ fn outbox_is_bounded_between_ticks() {
 
 #[test]
 fn command_text_is_sanitised_and_capped() {
-    let mut wm = WindowManager::new_headless(24, 80);
+    let mut wm = wm_new(24, 80);
     let nasty = format!("echo \u{1b}[31m{}\u{202e}end", "x".repeat(2000));
     wm.pane_mut(1).unwrap().submit_command(&nasty).unwrap();
     wm.poll_all_ptys();

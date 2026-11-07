@@ -856,6 +856,10 @@ pub(super) fn handle_drawer_mouse_event(
             }
             Some(AppAction::Handled)
         }
+        MouseEventKind::Down(MouseButton::Right) => {
+            wm.open_context_menu_at(mouse.column, mouse.row);
+            Some(AppAction::Handled)
+        }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let delta: isize = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
             if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {

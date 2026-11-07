@@ -5,65 +5,87 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.5.1-blue" alt="Version" />
-  <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust" />
-  <img src="https://img.shields.io/badge/tests-250%2B%20passing-brightgreen" alt="Tests" />
-  <img src="https://img.shields.io/badge/coverage-83.45%25-brightgreen" alt="Coverage" />
+  <a href="https://github.com/bsommers/bilterm/releases/tag/v3.0.1"><img src="https://img.shields.io/badge/version-v3.0.1-blue" alt="Version v3.0.1" /></a>
+  <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust 1.88+ Edition 2024" />
+  <img src="https://img.shields.io/badge/tests-31%2F31%20suites%20passing-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/coverage-84%2B%25-brightgreen" alt="Coverage" />
+  <a href="https://bsommers.github.io/bilterm/"><img src="https://img.shields.io/badge/website-live%20on%20GitHub%20Pages-00e5ff" alt="GitHub Pages" /></a>
   <img src="https://img.shields.io/badge/license-Apache--2.0-cyan" alt="License" />
 </p>
 
 ## About
 
-**Bilterm** is a retro-futuristic terminal multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, remote SSH/`tmux` fleet manager, and AI-automatable terminal emulator written in Rust with [Ratatui](https://ratatui.rs/). Inspired by **IBM 3270 Mainframe Terminals**, **DOS Borland Turbo Vision**, and **TRON's Master Control Program (`MCP`)**, Bilterm treats a **movable/resizable floating command prompt + underlying scrolling PTY output canvas + 3270 Operator Information Area (OIA) status bar as a single composite terminal pane**.
+**Bilterm** is a retro-futuristic terminal multiplexer, native desktop GUI terminal (`--gui`), composite-pane shell wrapper, resilient remote SSH/`tmux` fleet manager, and autonomous AI agent control plane written in Rust with [Ratatui](https://ratatui.rs/). Inspired by **IBM 3270 Mainframe Terminals**, **DOS Borland Turbo Vision**, and **TRON's Master Control Program (`MCP`)**, Bilterm treats a **movable/resizable floating command prompt + underlying scrolling PTY output canvas + 3270 Operator Information Area (OIA) status bar as a single composite terminal pane**.
 
 | Property | Details |
 |----------|---------|
-| **Category** | Terminal Multiplexer · Native Desktop GUI Terminal (`--gui`) · Shell Wrapper · SSH Fleet & AI Agent Control Plane |
+| **Category** | Terminal Multiplexer · Native Desktop GUI Terminal (`--gui`) · Shell Wrapper · Remote SSH/`tmux` Fleet & Autonomous AI Agent Swarm Workspace |
 | **Core Innovation** | Composite Terminal Panes (`FloatingCommandPrompt` + `OutputCanvas` + `3270-OIA Bar`) with zero `SIGWINCH` geometry thrashing |
-| **Windowing & Persistence** | Binary H/V splits, Borland Z-order cascade deck, 4-edge Slide-Out Drawer, full-layout `:detach` / `:attach`, and hierarchical `SessionTree` |
-| **Automation & AI** | Native MCP (`bilterm --mcp`), JSON-RPC 2.0 (`bilterm ctl`), TRON `:mcp` Root Console, and declarative TOML playbooks (`bilterm run`) |
+| **Windowing & Workspace** | Binary H/V splits, Borland Z-order cascade deck, Agent-Aware Navigator Sidebar (`F7`), Treemap Session Packing (`:sessions map`), full-layout `:detach` / `:attach`, and hierarchical `SessionTree` |
+| **Agent Swarms & Messaging** | Inter-agent messaging (`:agent send|inbox|wait`), bounded mailboxes, `mailbox`/`nudge`/`file` delivery modes, Agent Traffic Bus packet stream, and Snoop View |
+| **Design System & Modern UI** | 8 appearance profiles (`:appearance obsidian|legacy|midnight|arctic|liquid|amber|synthwave|solarized`), 3 display modes (`:mode standard|minimal|zen`), and First-Class Utility Windows (`:fonts`, `:commands`, `:script` / `:studio`) |
+| **Automation & APIs** | Native MCP (`bilterm --mcp`, 11+ tools & dynamic resources), JSON-RPC 2.0 (`bilterm ctl`), REST / HTTP+SSE (`--http`), TRON `:mcp` Root Console, and declarative TOML playbooks (`bilterm run`) |
 | **Platforms & Stack** | Linux, macOS, Windows · Rust `1.88+` (Edition 2024), `ratatui 0.30`, `crossterm`, `portable-pty`, `tokio` · License: `Apache-2.0` |
 
 <p align="center">
-  <img src="docs/assets/screenshot-workspace.svg" alt="Bilterm Multi-Pane Composite Workspace & SSH Fleet (Borland Turbo Blue)" width="920" />
+  <img src="docs/assets/screenshot-multi-agent-swarm.svg" alt="Bilterm Multi-Agent AI Swarm & Navigator Sidebar" width="920" />
 </p>
 
 <p align="center">
-  <em>See the <strong><a href="docs/VISUAL_GALLERY.md">Full Visual Gallery (5 SVG Workspace Renders)</a></strong> for Per-Pane Font Scaling, Multi-Agent AI Swarms, IBM 3278 Phosphor Green, and IBM 3279 Amber CRT screenshots.</em>
+  <em>Live interactive site &amp; visual showcase: <strong><a href="https://bsommers.github.io/bilterm/">https://bsommers.github.io/bilterm/</a></strong> &bull; See <strong><a href="docs/VISUAL_GALLERY.md">Full Visual Gallery (5 SVG Workspace Renders)</a></strong> for Turbo Blue, Font Zoom, IBM 3278 Phosphor Green, and IBM 3279 Amber CRT screenshots.</em>
 </p>
 
 ---
 
-## Key Capabilities
+## What's New in Bilterm v3.0
+
+- **Agent-Aware Workspace Navigator (`:drawer style navigator`, `F7`)**: An always-available slide-out/push-out left sidebar displaying workspace hierarchy, active sessions, and live agent status dots (`● Working`, `● Idle`, `● Blocked`, `● Done`, `● Errored`). Features attention badges, jump-to-next-blocked navigation (`Alt+]`), real-time packet telemetry on the Agent Traffic Bus, and Snoop View (`:agent snoop <id>`). → *[User Guide Ch. 11](docs/user-guide/11-navigator-sidebar-and-agent-traffic.md)*
+- **Agent-to-Agent Messaging & Coordination (`:agent`)**: Direct inter-agent communication across terminal panes without knowing terminal internals. Features stable per-pane agent addressing (`:agent name`), bounded mailboxes (`MAX_INBOX_DEPTH = 64`), and 3 delivery modes: `mailbox` (queued), `nudge` (injected only when idle/waiting; suppressed during password locks or `ALT_SCREEN`), and `file` (0600 payload files for large transfers). Includes hop-count loop guards (`MAX_HOPS = 8`) and rate limits. → *[User Guide Ch. 11](docs/user-guide/11-navigator-sidebar-and-agent-traffic.md)*
+- **Unified Registry & Fuzzy Finder (`:find`, `Ctrl+Alt+F`)**: Instant fuzzy search across agents, active and saved sessions, and command history (`:find agent|session|history <query>`). Features zero-trust secret masking and redaction to protect tokens and passwords in history logs. → *[User Guide Ch. 12](docs/user-guide/12-find-registry-and-history.md)*
+- **UI Modernization & 8 Design Profiles (`:appearance`, `:mode`)**: Switch between 8 built-in visual profiles (`Obsidian` dark slate default, `Legacy` Borland Blue, `Midnight`, `Arctic`, `Liquid`, `Amber`, `Synthwave`, `Solarized`) and 3 display modes (`:mode standard|minimal|zen`), with custom profile saving, export, and import. → *[User Guide Ch. 4](docs/user-guide/04-themes-glyphs-and-config.md)*
+- **Persistent SSH + Remote tmux Fleet (`:ssh-tmux`)**: Launch remote sessions via `:ssh-tmux <host> [session]` backed by remote `tmux -CC`. Resilient state machine automatically reconnects with exponential backoff on network drop, hydrates scrollback via `capture-pane`, and prevents accidental closure with exit hold banners. → *[User Guide Ch. 5](docs/user-guide/05-tmux-integration.md)*
+- **First-Class Utility Windows (`:fonts`, `:commands`, `:script` / `:studio`)**: Dedicated floating, pinnable (`*`), and dockable workbench windows. Live typography preview in `:fonts`, command palette execution history in `:commands`, and full Script Studio in `:script` / `:studio` featuring a multi-line `.bt` editor, live action recorder (`[● Rec]`), and single-step debugger (`[F10/n Step]`).
+- **Session Reorganization & Packing Viewer (`:sessions map`, `:window move`)**: Treemap-style container packing visualizer in Braille/UTF-8 box-drawing or native GUI vector rendering with mouse drag-and-drop. Migrate live windows across sessions (`:window move <session>`), perform multi-select bulk operations (`:window bulk move|close|tile|pin`), and safely revert topology with single-step undo (`:window undo`). → *[User Guide Ch. 3](docs/user-guide/03-window-manager-and-z-stack.md)*
+- **Daemon Supervisor & Multi-Daemon Architecture (`:daemon`)**: Auto-spawned singleton background daemon with stale-lock recovery. Manage named daemons (`--daemon --name <n>`) with cross-daemon discovery, RPC/MCP bridging, and headless HTTP+SSE transport (`--http 127.0.0.1:PORT`).
+- **Full Command Parity & Public APIs (`docs/API.md`)**: Strict RFC 8259 JSON-RPC 2.0 API, 11+ MCP tools (`bilterm_agent_mail`, `bilterm_find`, `bilterm_run_action`), dynamic MCP resources (`bilterm://state`, `bilterm://agent/<name>/inbox`), and dotted config get/set (`:get`, `:set`, `:config list|save`). → *[API Specification](docs/API.md)*
+
+---
+
+## Core Capabilities
 
 - **Composite Terminal Panes & Mainframe Paging**: Pin the command prompt to **Top** (`Alt+T`), **Bottom** (`Alt+B`), **Free-Float** (`Alt+Up`/`Down`), or **Fixed Split** (`Alt+S`) over a 60 FPS flood-immune PTY canvas with `DECSET 1049` auto-hide (`vim`, `htop`, `nmon`), 3-signal `!ECHO LOCK` password protection, and Mainframe Block/Page-Hold (`MORE...` / `HOLDING`) or Smooth Kinetic scrolling (`:scroll`). → *[User Guide Ch. 2](docs/user-guide/02-floating-command-prompt.md)*
-- **Full-Layout Detach/Re-Attach, Exit Guard & TRON `:mcp` Console (`v2.0`)**: Detach with `Ctrl+X D` or `:detach` while leaving the entire multi-pane `SplitTree`, `ZStack` window geometries, prompt state, and screen output intact; resume via `bilterm`, `bilterm attach [session]`, or `:attach`. Manage hierarchical `SessionTree` nodes and daemon state inside the floating or push-out **`:mcp` Root Console** (`:mcp status`, `:mcp tree`, `:mcp float`, `:mcp push`). → *[User Guide Ch. 3](docs/user-guide/03-window-manager-and-z-stack.md)*
-- **Native Desktop `--gui`, Per-Pane Font Scaling & All-Border Mouse Resize**: Run standalone (`bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16`) on Linux (X11/Xft), macOS (Cocoa), or Windows (Win32 GDI). Scale each pane's font independently (`50%..300%` via `Ctrl++`/`Ctrl+-`/`Ctrl+Wheel`) and drag any border or corner to resize splits or floating windows. → *[User Guide Ch. 8](docs/user-guide/08-extended-cli-and-gui-examples.md)*
-- **22 Open Color Themes, Per-Window Theme Browser & Element Colors, Cursor Customization & High-Res Canvas Graphics**: 14 built-in retro & modern presets (`turbo-blue`, `ibm-3278-green`, `ibm-3279-amber`, `tron-grid`, `dracula`, `catppuccin-mocha`, `tokyo-night`, etc.) plus smart `.itermcolors`/TOML directory & glob import (`:theme import <file|dir|glob>`), interactive Per-Window Theme Browser (`:window theme`, `:window theme browse`), per-window individual element color overrides (`:window`, `:window font-color`, `:window cursor-color`, `:window frame-color`, `:window controls-color`, `:window status-color`, `:window bg`, `:window title-color`), customizable cursors (`:cursor` popup, `block`/`hollow`/`underline`/`bar`/`custom <char>`, `blink`/`solid`/`rapid`, `#RRGGBB`/named colors), IBM 3270 cross-hairs (`Alt+X`), Focal Spotlight (`Alt+O`), Focal Zoom Lens (`Alt+Shift+O`), Tektronix 4010/4014 vector emulation, and Kitty/Sixel/iTerm2/Braille plotting (`bilterm plot`, `:canvas`). → *[User Guide Ch. 4](docs/user-guide/04-themes-glyphs-and-config.md)*
-- **SSH Fleet Management, Robot Playbooks & Zero-Trust Security**: Connect panes via `:ssh` or `:ssh-tmux`, fan out commands by `@tag` (`:remote exec`), and drive workspaces via `bilterm --mcp`, `bilterm ctl`, or `bilterm run <playbook.toml>` under private `0700`/`0600` filesystem & `SO_PEERCRED` confinement. → *[Use Cases (Ch. 9)](docs/user-guide/09-use-cases-and-workflows.md) · [Security (Ch. 10)](docs/user-guide/10-security-and-best-practices.md)*
+- **2D Rectangular Block Selection & Copy**: Drag-select 2D rectangular columns with `Alt+LeftDrag` or persistent `:rect mode` across terminal output, log columns, or tables. Pastes cleanly to system and OSC 52 clipboards (`Alt+R` / `r` in Copy Mode). → *[User Guide Ch. 6](docs/user-guide/06-keyboard-mouse-and-command-reference.md)*
+- **Full Session Persistence & Exit Guard**: Detach with `Ctrl+X D` or `:detach` leaving split tree ratios, Z-order stack, prompt anchors, active shells, running commands, and per-pane CWD intact; resume via `bilterm attach [session]`. Protects root shell exits via interactive Borland Exit Guard modals. → *[User Guide Ch. 3](docs/user-guide/03-window-manager-and-z-stack.md)*
+- **Native Desktop GUI (`--gui`) & Per-Pane Font Scaling**: Run standalone without a host terminal on Linux (X11), macOS (Cocoa), or Windows (GDI). Scale each pane's font independently (`50%..300%` via `Ctrl++`/`Ctrl+-`/`Ctrl+Wheel`), drag all borders to resize, and plot high-res Kitty/Sixel/Braille graphics (`bilterm plot`, `:canvas`). → *[User Guide Ch. 8](docs/user-guide/08-extended-cli-and-gui-examples.md)*
+- **Zero-Trust Confinement**: All runtime sockets, session TOMLs, command history exports, and `.cast` recordings reside in `0700` directories with `0600` atomic file permissions. Unix sockets enforce `SO_PEERCRED` UID checks; HTTP transports require local loopback and bearer token authentication. → *[Security & Best Practices (Ch. 10)](docs/user-guide/10-security-and-best-practices.md)*
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install binary, manpage & completions (Linux / macOS)
-./scripts/install.sh
-# Or build & install from source
+# One-line installer (Linux / macOS) — binary, manpage & completions
+curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash
+
+# Or build & install from source (Rust 1.88+, Edition 2024)
 cargo build --release && install -m 0755 target/release/bilterm ~/.local/bin/bilterm
 
-# Launch TUI multiplexer, detach (Ctrl+X D or :detach), and re-attach with full window layout intact
+# Launch TUI multiplexer, detach (Ctrl+X D or :detach), and re-attach
 bilterm
 bilterm attach                  # or: bilterm -a [session]
-bilterm new [session]           # or: bilterm -n [session] (start a new named/auto-named session)
-bilterm blank [session]         # or: bilterm -B [session] (start a clean 1-pane blank session)
+bilterm new [session]           # start a new named session
+bilterm blank [session]         # start a clean 1-pane blank session
 
-# Launch standalone native desktop GUI window with custom font & theme
-bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16 --theme ibm-3278-green
+# Launch standalone native desktop GUI window with custom font & modern profile
+bilterm --gui --gui-font "JetBrains Mono" --gui-font-size 16 --appearance obsidian
 
-# Run declarative robot playbook or query via JSON-RPC / MCP
-bilterm run starter-packs/01-multi-agent-swarm/playbook.toml
+# Connect to resilient remote SSH + tmux session
+bilterm -- ssh-tmux devbox.lan main
+
+# Run AI agent swarm or query via MCP / JSON-RPC
 bilterm --mcp
+bilterm ctl agent.send '{"to":"worker-1","body":"Run test suite","mode":"mailbox"}'
+bilterm run starter-packs/01-multi-agent-swarm/playbook.toml
 ```
 
 *(Full setup & CLI recipes: **[`docs/running.md`](docs/running.md)** and **[Chapter 8: Extended CLI & `--gui` Examples](docs/user-guide/08-extended-cli-and-gui-examples.md)**).*
@@ -72,34 +94,39 @@ bilterm --mcp
 
 ## Essential Shortcuts & `:colon` Commands
 
-> **Leader Prefix (`<L>` = `Ctrl+X` or `Ctrl+B`):** Press **`F1`** or run **`:help`** inside Bilterm to browse the full interactive command reference.
+> **Leader Prefix (`<L>` = `Ctrl+X` or `Ctrl+B`):** Press **`F1`** or run **`:help`** inside Bilterm to browse the complete interactive command reference. Every keybinding has a 1:1 `:colon` equivalent.
 
-| Action | Shortcut | `:colon` Command |
-|--------|----------|------------------|
-| **Help / Command Palette / 3270 Inspector** | `F1` (`<L> ?`) / `Ctrl+P` / `F9` (`<L> i`) | `:help` / `:palette` / `:inspector` |
-| **Detach & Preserve Window Layout / Re-Attach** | `Ctrl+X D` / Exit Guard `[d]` | `:detach [name]` / `:attach [name]` |
-| **TRON MCP Console (Float vs. Push-Out)** | `m` (Float↔Push), `d` (Edge), `Esc` | `:mcp [status \| tree \| float \| push [edge] \| ...]` |
-| **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> -`) / `Alt+V` (`<L> \|`) / `F5` (`<L> z`) | `:split h` / `:split v` / `:zoom` |
-| **Tiled Splits vs. Z-Stack / Shuffle Deck** | `Alt+M` (`<L> M`) / `F6` (`<L> o`) / `Alt+1..9` | `:layout tile\|stack` / `:deck next\|prev` / `:focus <N>` |
-| **Slide-Out Drawer / Guake Quick Terminal** | `F7` (`<L> d`) / `F10` (`Ctrl+\`) | `:drawer [toggle\|float\|push\|left\|right]` / `:quake` |
-| **Cycle Floating / Fixed / Raw Terminal** | `F4` (`<L> e`) / `F12` (`Ctrl+G`) / Click OIA | `:mode [float \| fixed \| terminal \| cycle]` / `:raw` |
-| **Per-Pane Font Zoom / Universal & Per-Window Theme** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset]` / `:theme <preset\|list\|import>` / `:window [theme\|<elem> <color>]` |
-| **File & Theme Browser / Cursor Customization** | — | `:browse [dir]` / `:cursor [block\|hollow\|underline\|bar\|custom <c>] [blink\|solid\|rapid] [color]` |
-| **Mainframe Page-Hold (`MORE...`) & Vi Copy** | `<L> PgDn` / `PF8` / `F8` (`Alt+C`) / `F3` (`<L> f`) | `:scroll [page\|smooth\|instant]` / `:copy` / `:hints` |
-| **2D Rectangular Select, Highlight & Copy** | `Alt+R` / `Alt+LeftDrag` / `r` (in Copy Mode) | `:rect [mode [on\|off] \| <r1> <c1> <r2> <c2> [copy] \| copy \| cut \| clear]` / `:select` |
-| **Session New / Blank / Rename / Reorder / Save (with Shell, Cmd & CWD)** | `N` / `Shift+Up`/`Down` (in `F7` Drawer) | `:session [new\|blank\|rename\|move\|reorder\|save\|restore\|processes\|cmd\|shell\|cwd\|relaunch\|info\|list\|tree]` |
+| Action / Capability | Keyboard Shortcut | `:colon` Command | Description |
+|---------------------|-------------------|------------------|-------------|
+| **Help / Palette / Inspector** | `F1` (`<L> ?`) / `Ctrl+P` / `F9` (`<L> i`) | `:help` / `:palette` / `:inspector` | Command catalog, search & 3270 state inspection |
+| **Workspace Navigator Drawer** | `F7` (`<L> d`) / Click OIA | `:drawer [toggle \| navigator \| classic]` | Slide-out sidebar with agent state dots & hierarchy |
+| **Global Fuzzy Finder** | `Ctrl+Alt+F` | `:find [agent \| session \| history] <q>` | Unified registry search with secret masking |
+| **Agent Messaging & Swarms** | `Alt+]` (next blocked) | `:agent [name \| send \| inbox \| list \| snoop]` | Inter-agent messaging, mailboxes & packet telemetry |
+| **Appearance & Display Modes** | `F11` / `F4` (`<L> e`) | `:appearance [obsidian \| legacy \| ...]` / `:mode [standard \| zen]` | 8 visual profiles & distraction-free Zen mode |
+| **Detach & Re-Attach Workspace** | `Ctrl+X D` / Exit Guard `[d]` | `:detach [name]` / `:attach [name]` | Leaves shells running in background daemon |
+| **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> -`) / `Alt+V` (`<L> \|`) / `F5` (`<L> z`) | `:split h` / `:split v` / `:zoom` | Binary space partitioning tiling |
+| **Tiled Splits vs. Z-Stack / Shuffle Deck** | `Alt+M` (`<L> M`) / `F6` (`<L> o`) / `Alt+1..9` | `:layout tile\|stack` / `:deck next\|prev` | Overlapping Borland window cascade & switching |
+| **Utility Windows (Fonts / Studio)** | `*` (pin) / `[` / `]` (scale) | `:fonts` / `:commands` / `:studio` | Workbench windows, live recorder & step debugger |
+| **2D Rectangular Select & Copy** | `Alt+R` / `Alt+LeftDrag` | `:rect [mode \| copy \| cut \| clear]` | Drag-select & copy 2D block columns across canvas |
+| **Persistent Remote SSH + tmux** | — | `:ssh-tmux <host> [session]` | Auto-reconnecting resilient remote sessions |
+| **Session Map & Window Migration** | `m` (in Map) | `:sessions map` / `:window move <session>` | Treemap packing viewer, drag-and-drop & migration |
+| **Undo Window Topology** | — | `:window undo` | Single-step session reorganization rollback |
+| **Mainframe Page-Hold & Vi Copy** | `<L> PgDn` / `F8` (`Alt+C`) / `F3` (`<L> f`) | `:scroll [page\|smooth]` / `:copy` / `:hints` | `MORE...` page pauses, Vi copy & QuickSelect hints |
 
 *(Exhaustive CLI, keyboard, mouse, and `:colon` tables: **[`docs/README.md`](docs/README.md)** and **[Chapter 6: Complete Reference](docs/user-guide/06-keyboard-mouse-and-command-reference.md)**).*
 
 ---
 
-## Documentation & Starter Packs
+## Documentation & Ecosystem
 
+- **[GitHub Pages Live Site](https://bsommers.github.io/bilterm/)** — Interactive landing page, screenshots & quick start
 - **[Documentation Hub (`docs/README.md`)](docs/README.md)** — Master index + complete CLI & `:colon` summary tables
+  - **[12-Chapter User Guide (`docs/user-guide/README.md`)](docs/user-guide/README.md)** — End-to-end interactive manual (including Navigator, Agent Traffic & Unified Find)
+  - **[API & JSON-RPC 2.0 Specification (`docs/API.md`)](docs/API.md)** — Methods, parameters, error codes, HTTP SSE streaming & MCP contracts
+  - **[MCP Use Cases & Agent Scenarios (`docs/mcp-usecases/`)](docs/mcp-usecases/)** — Automated test harnesses, AI code reviewers & swarm orchestration
   - **[Visual Gallery (`docs/VISUAL_GALLERY.md`)](docs/VISUAL_GALLERY.md)** — All 5 SVG workspace renders
-  - **[10-Chapter User Guide (`docs/user-guide/README.md`)](docs/user-guide/README.md)** — End-to-end interactive manual
   - **[Starter Packs (`starter-packs/README.md`)](starter-packs/README.md)** — 5 ready-to-run configs & playbooks (Multi-Agent Swarm, Remote Fleet, Robot QA, Incident War Room, Retro CRT)
-  - **[System Architecture (`docs/architecture.md`)](docs/architecture.md)** & **[Purpose / Threat Model (`docs/purpose.md`)](docs/purpose.md)**
+  - **[System Architecture (`docs/architecture.md`)](docs/architecture.md)** & **[Threat Model (`docs/purpose.md`)](docs/purpose.md)**
   - **[Developer & AI Agent Guide (`docs/DEVELOPER_AND_AGENT_GUIDE.md`)](docs/DEVELOPER_AND_AGENT_GUIDE.md)** & **[Compounded Lessons Learned (`docs/LESSONS_LEARNED_COMPOUNDED.md`)](docs/LESSONS_LEARNED_COMPOUNDED.md)**
   - **[Test Coverage Report (`docs/TEST_COVERAGE.md`)](docs/TEST_COVERAGE.md)** & **[Changelog (`CHANGELOG.md`)](CHANGELOG.md)**
 - **License**: [Apache License 2.0 (`LICENSE`)](LICENSE)

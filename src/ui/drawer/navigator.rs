@@ -478,8 +478,8 @@ fn navigator_title(is_modern: bool) -> &'static str {
 
 /// Columns (relative to the inner left edge) where the left text of a row ends and where its right-aligned
 /// rollup or state counts begin, mirroring exactly what [`render_navigator_drawer`] draws.
-fn row_extent(row: &DrawerRow, g: &NavigatorGlyphs, tick: usize, width: usize) -> (usize, usize) {
-    let (left, rollup) = row_parts(row, g);
+fn row_extent(wm: &WindowManager, row: &DrawerRow, g: &NavigatorGlyphs, tick: usize, width: usize) -> (usize, usize) {
+    let (left, rollup) = row_parts(wm, row, g);
     let avail = width.saturating_sub(1);
     let segments = row
         .navigator
@@ -520,7 +520,7 @@ fn plus_cells_in(wm: &WindowManager, lay: &NavigatorLayout) -> Vec<NavigatorCell
         if !is_session {
             continue;
         }
-        let (left_end, right_start) = row_extent(row, &g, tick, width);
+        let (left_end, right_start) = row_extent(wm, row, &g, tick, width);
         let col = left_end + 1;
         // Keep one blank column before right-aligned content (none needed when the row has none).
         let gap = usize::from(right_start < width);
@@ -564,12 +564,25 @@ pub struct NavigatorMenuLayout {
     pub entries: Vec<(NavigatorMenuEntry, u16)>,
 }
 
-fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout) -> Option<NavigatorMenuLayout> {
+fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout, workspace_area: Rect) -> Option<NavigatorMenuLayout> {
     let menu = wm.navigator_menu()?;
     let inner = lay.inner;
     let longest = NavigatorMenuEntry::ALL.iter().map(|e| e.label().width()).max().unwrap_or(0) as u16;
-    let w = (longest + 2).min(inner.width);
-    let h = (NavigatorMenuEntry::ALL.len() as u16 + 1).min(inner.height);
+    let needed_w = longest + 2;
+    let needed_h = NavigatorMenuEntry::ALL.len() as u16 + 1;
+    let anchor_outside = menu.anchor().is_some_and(|(ax, ay)| {
+        ax < inner.x.saturating_sub(1)
+            || ax > inner.x + inner.width
+            || ay < inner.y.saturating_sub(1)
+            || ay > inner.y + inner.height
+    });
+    let bounds = if anchor_outside || inner.height < needed_h {
+        workspace_area
+    } else {
+        inner
+    };
+    let w = needed_w.min(bounds.width);
+    let h = needed_h.min(bounds.height);
     if w < 4 || h < 2 {
         return None;
     }
@@ -577,10 +590,10 @@ fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout) -> Option<Navigator
         let at = lay.placed.iter().find(|p| p.row_index == lay.selected).or(lay.placed.last());
         (inner.x + 1, at.map_or(lay.list_y, |p| p.y))
     });
-    let x = ax.clamp(inner.x, inner.x + inner.width - w);
-    let bottom = inner.y + inner.height;
+    let x = ax.clamp(bounds.x, bounds.x + bounds.width - w);
+    let bottom = bounds.y + bounds.height;
     let below = ay.saturating_add(1);
-    let y = if below + h <= bottom { below.max(inner.y) } else { bottom.saturating_sub(h).max(inner.y) };
+    let y = if below + h <= bottom { below.max(bounds.y) } else { bottom.saturating_sub(h).max(bounds.y) };
     let entries = NavigatorMenuEntry::ALL
         .iter()
         .take(usize::from(h - 1))
@@ -594,7 +607,7 @@ fn menu_layout_in(wm: &WindowManager, lay: &NavigatorLayout) -> Option<Navigator
 pub fn navigator_menu_layout(wm: &WindowManager, workspace_area: Rect) -> Option<NavigatorMenuLayout> {
     let drawer_rect = wm.drawer_rect(workspace_area)?;
     let lay = navigator_layout(wm, drawer_rect)?;
-    menu_layout_in(wm, &lay)
+    menu_layout_in(wm, &lay, workspace_area)
 }
 
 /// Index into [`NavigatorMenuEntry::ALL`] of the menu entry under `(col, row)`.
@@ -604,6 +617,61 @@ pub fn navigator_menu_entry_at(wm: &WindowManager, workspace_area: Rect, col: u1
         return None;
     }
     menu.entries.iter().find(|&&(_, y)| y == row).and_then(|&(e, _)| NavigatorMenuEntry::ALL.iter().position(|&a| a == e))
+}
+
+/// Placement of the open context menu when triggered outside the Navigator drawer.
+pub fn standalone_context_menu_layout(wm: &WindowManager, area: Rect) -> Option<NavigatorMenuLayout> {
+    if !wm.drawer().navigator_menu_open() && wm.context_menu_anchor().is_none() {
+        return None;
+    }
+    let anchor = wm.navigator_menu().and_then(|m| m.anchor()).or_else(|| wm.context_menu_anchor());
+    if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator
+        && wm.is_drawer_effectively_visible()
+        && let Some(dr) = wm.drawer_rect(area)
+        && anchor.is_none_or(|(ax, ay)| crate::wm::rect_contains(dr, ax, ay))
+    {
+        return None;
+    }
+    let longest = NavigatorMenuEntry::ALL.iter().map(|e| e.label().width()).max().unwrap_or(0) as u16;
+    let (w, h) = ((longest + 2).min(area.width), (NavigatorMenuEntry::ALL.len() as u16 + 1).min(area.height));
+    if w < 4 || h < 2 {
+        return None;
+    }
+    let (ax, ay) = anchor.unwrap_or((area.x + 2, area.y + 2));
+    let x = ax.clamp(area.x, area.x + area.width - w);
+    let (bottom, below) = (area.y + area.height, ay.saturating_add(1));
+    let y = if below + h <= bottom { below.max(area.y) } else { bottom.saturating_sub(h).max(area.y) };
+    let entries = NavigatorMenuEntry::ALL.iter().take(usize::from(h - 1)).enumerate().map(|(i, &e)| (e, y + 1 + i as u16)).collect();
+    Some(NavigatorMenuLayout { rect: Rect::new(x, y, w, h), entries })
+}
+
+/// Index into [`NavigatorMenuEntry::ALL`] of the standalone context menu entry under `(col, row)`.
+pub fn standalone_context_menu_entry_at(wm: &WindowManager, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let menu = standalone_context_menu_layout(wm, area)?;
+    if col < menu.rect.x || col >= menu.rect.x + menu.rect.width {
+        return None;
+    }
+    menu.entries.iter().find(|&&(_, y)| y == row).and_then(|&(e, _)| NavigatorMenuEntry::ALL.iter().position(|&a| a == e))
+}
+
+/// Renders the standalone right-click context menu overlay when open outside the Navigator drawer.
+pub fn render_standalone_context_menu(wm: &WindowManager, area: Rect, buf: &mut Buffer) {
+    let Some(menu) = standalone_context_menu_layout(wm, area) else { return };
+    let cfg = wm.config();
+    let palette = cfg.palette();
+    let hg = NavigatorGlyphs::for_pack(cfg.glyphs);
+    let rows = wm.drawer_rows();
+    let selected = wm.drawer().selected_index.min(rows.len().saturating_sub(1));
+    let body = Style::default().fg(palette.window_frame_bg).bg(palette.title_fg);
+    fill_rect(buf, menu.rect, body);
+    let w = usize::from(menu.rect.width);
+    let name = rows.get(selected).map(|r| sanitize_display(&r.title, 64)).unwrap_or_default();
+    let head = fit_width(&format!(" {name}"), w, hg.ellipsis);
+    write_clipped_line(buf, menu.rect.x, menu.rect.y, menu.rect.width, &head, body.add_modifier(Modifier::BOLD));
+    for (entry, y) in &menu.entries {
+        let line = fit_width(&format!(" {}", entry.label()), w, hg.ellipsis);
+        write_clipped_line(buf, menu.rect.x, *y, menu.rect.width, &line, body);
+    }
 }
 
 /// Index into [`WindowManager::drawer_rows`] of the list row under screen cell `(col, row)`, `None` outside
@@ -640,11 +708,17 @@ fn fit_width(text: &str, max_w: usize, ellipsis: &str) -> String {
 }
 
 /// Left text (after the marker column) and optional right-aligned rollup of one navigator row.
-fn row_parts(row: &DrawerRow, g: &NavigatorGlyphs) -> (String, Option<String>) {
+fn row_parts(wm: &WindowManager, row: &DrawerRow, g: &NavigatorGlyphs) -> (String, Option<String>) {
     let meta = row.navigator.as_ref();
     let indent = "  ".repeat(meta.map_or(0, |m| usize::from(m.depth)));
     let label = match &row.kind {
-        DrawerRowKind::Pane(id) => format!("{}#{id} {}", " ".repeat(DOT_COLS), row.title),
+        DrawerRowKind::Pane(id) => {
+            let title_display = match wm.window_manage().inline_rename.as_ref() {
+                Some(ir) if ir.pane_id == *id => format!("[ {}█ ]", ir.current_input),
+                _ => row.title.clone(),
+            };
+            format!("{}#{id} {title_display}", " ".repeat(DOT_COLS))
+        }
         _ => row.title.clone(),
     };
     let fold = match meta {
@@ -708,7 +782,7 @@ pub fn render_navigator_drawer(
     };
     let buttons = footer_buttons_in(&lay);
     let plus_cells = plus_cells_in(wm, &lay);
-    let menu_layout = menu_layout_in(wm, &lay);
+    let menu_layout = menu_layout_in(wm, &lay, workspace_area);
     let NavigatorLayout { inner, rows, selected, placed, list_bottom, .. } = lay;
     let base_style = Style::default()
         .fg(palette.text_fg.unwrap_or(palette.inactive_border_fg))
@@ -749,7 +823,7 @@ pub fn render_navigator_drawer(
             fill_rect(buf, Rect::new(inner.x, y, inner.width, height), style);
         }
         let marker = if row.is_focused_pane { hg.current } else { " " };
-        let (left, rollup) = row_parts(row, &hg);
+        let (left, rollup) = row_parts(wm, row, &hg);
         let plus = plus_cells.iter().find(|c| c.row_index == row_idx);
         let width = usize::from(inner.width);
         let avail = width.saturating_sub(1);

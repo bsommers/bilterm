@@ -4,17 +4,17 @@ milestone: v3.0.1
 current_phase: 55
 current_phase_name: daemon-supervisor-and-multi-daemon-awareness
 status: complete
-stopped_at: Released v3.0.1 (Linux F7/function key routing & Script Studio window control fixes; 119/119 verify stages pass)
-last_updated: "2026-11-07T02:20:00Z"
-last_activity: 2026-11-06
-last_activity_desc: "Released v3.0.1 with Linux F7/function-key routing fixes, Script Studio window control fixes, and 119/119 verification stages passing"
+stopped_at: "Completed multi-mode window rename & context menus, 100% command parity, 8-profile design system, all 11 Phase 51 followups, and test-coverage runner upgrades; 120/120 verification stages clean"
+last_updated: "2026-11-07T13:25:00Z"
+last_activity: 2026-11-07
+last_activity_desc: "Completed multi-mode window rename & context menus, 100% command parity, 8-profile design system, all 11 Phase 51 followups, and test-coverage runner upgrades"
 state_head: a46f949
 progress:
   total_phases: 55
   completed_phases: 55
   total_plans: 130
   completed_plans: 130
-milestone_name: "Bilterm v3.0.0 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
+milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
 ---
 
 # Project State
@@ -24,62 +24,29 @@ milestone_name: "Bilterm v3.0.0 — Full GUI/TUI Agent & Session Multiplexer, Pe
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-05):** Phases 50.1 (Unified Registry & Find, 15/15) and 51 (UI Tweaks & Command Parity, 13/13) complete on `feat/navigator-rows-and-launch`; next is 51.1 (persistent SSH + tmux). Open follow-ups: `.planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md`. Earlier focus: Milestone `v2.6.0` UI Modernization — Phase 46 in progress (43, 44 done; 45 done except `:appearance` profile management, see `phases/45-design-system/GAPS.md`). Standing rule: add new looks, take NOTHING away from Legacy.
+**Current focus (2026-11-07):** All 55 core roadmap phases and follow-ups complete. All 11 items in `.planning/phases/51-ui-tweaks-and-command-parity/51-FOLLOWUPS.md` resolved. Multi-mode window/session rename popup dialog and right-click context menus wired across all UI surfaces. Phase 45 8-profile Design System fully active. Composable test runner `scripts/verify.sh` upgraded with 8-tier filtering, `--match`, `--coverage`, `--xvfb`, `report.md`, and `junit.xml`.
 
 ## Current Position
 
-Phase: 42 (modern-liquid-glass-per-window-theme-cursor-and-ssh-hardening) — COMPLETE
-Plan: All `v2.4.x`–`v2.5.2` plans (`39-01..02`, `40-01..03`, `41-01..03`, `42-01..03`) complete
-Status: Phases 1–42 complete (`42/42` Phases across `v1.0`–`v2.5.2`).
-Last activity: 2026-10-31 — Completed Phase 42 (`v2.5.2`): Non-Retro Modern Minimal (`--modern`, `:modern`) and Liquid Glass (`--liquid-glass`, `:liquid`) UI modes, per-window vs. global `:theme` and `:cursor` (`:cursor cursor-color`), and `:ssh` parsing, `<Tab>` completion (`~/.ssh/config` hosts), `<F1>` help, and SSH login `PROMPT_COMMAND` echo fix.
+Phase: 55 (daemon-supervisor-and-multi-daemon-awareness) — COMPLETE
+Plan: All plans across Phases 1–55 complete (130/130).
+Status: 55/55 Phases complete across `v1.0` through `v3.0.1`.
+Last activity: 2026-11-07 — Completed multi-mode window/session rename popup dialog, interactive right-click context menus across all UI surfaces, 100% command parity and modular file ceilings, all 11 Phase 51 follow-ups, and `/swe-skills:test-coverage` `BiltermLiveDriver` upgrades.
 
-Progress: [██████████] 100% (42/42 Phases)
+Progress: [██████████] 100% (55/55 Phases)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 15
+- Total plans completed: 130
 - Average duration: 0 min
 - Total execution time: 0.0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1 | 3 | - | - |
-| 2 | 3 | - | - |
-| 3 | 3 | - | - |
-| 4 | 3 | - | - |
-| 5 | 3 | - | - |
 
 **Recent Trend:**
 
 - Last 5 plans: none
 - Trend: Stable
-
-*Updated after each plan completion*
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 50 P01 | 40 min | 2 tasks | 13 files |
-| Phase 50 P02 | 5 min | 2 tasks | 6 files |
-| Phase 50 P03 | 15 min | 3 tasks | 14 files |
-| Phase 50 P04 | 10 min | 2 tasks | 12 files |
-| Phase 50 P05 | 25 min | 2 tasks | 9 files |
-| Phase 50 P06 | ~1h | 5 tasks | 13 files |
-| Phase 50 P07 | 25min | 2 tasks | 7 files |
-| Phase 50 P09 | 40m | 3 tasks | 15 files |
-| Phase 50 P15 | 60min | 4 tasks | 11 files |
-| Phase 50 P16 | 25min | 2 tasks | 15 files |
-| Phase 50 P10 | 60min | 3 tasks | 12 files |
-| Phase 50 P11 | 35min | 3 tasks | 8 files |
-| Phase 50 P13 | 20min | 3 tasks | 6 files |
-| Phase 50 P12 | 25min | 2 tasks | 12 files |
-| Phase 50 P14 | 20min | 2 tasks | 7 files |
-| Phase 50.1 P01 | ~1h | 3 tasks | 28 files |
-| Phase 51 P13 | 40min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -92,27 +59,25 @@ Recent decisions affecting current work:
 - [Init]: Child PTY dimensions stay fixed to full `OutputCanvas` rect so moving/resizing/hiding `FloatingPrompt` never triggers `SIGWINCH` reflow storms.
 - [Init]: Three-signal input routing (`OSC 133` + `tcgetpgrp` + `termios !ECHO` + `DECSET 1049`) prevents `sudo` password echo leaks and interactive REPL lockouts.
 - [Init]: Custom `occlude_rect` buffer pass sanitizes split 2-column wide graphemes at floating prompt, stacked pane, Guake drop-down overlay, and Turbo Vision drop-shadow boundaries.
-- [Phase 50]: Classic drawer goldens (50-01) generated on untouched tree; never regenerate in Phase 50
-- [Phase 50]: 50-02: navigator roots are explicit/active/saved tree roots (classic is_explicit rule); orphan active session listed first; sanitize_display caps total length incl. ellipsis
-- [Phase 50]: 50-03: first observation of a pane applies its agent state without dwell; later Working/Idle flips need 500 ms; finish detected from OSC 133 D transition or (last_exit_code,last_duration_ms) change
-- [Phase 50]: 50-03: unseen Done/Errored persist until pane focus or a new command; no built-in agent profiles, substring patterns capped 16x80, no regex dependency
-- [Phase 50]: 50-04: counts attach to the live session row at any depth and replace the Np rollup; attention tiers Blocked > Errored > Done; saved roots show '<n>p -'
-- [Phase 50]: 50-05: traffic bus lives in wm (api sits above wm); Phase 50 publishes nothing on /events, Phase 52-01 names external events; Agent endpoint and Message kind reserved (ADR-008)
-- [Phase 50]: 50-07: agents graph layout is Mutex-cached FR with 0.06 drift limit; active edge = success colour, selected = accent
-- [Phase 51]: 51-13: final gate green (verify.sh, 11 Legacy goldens, doc gates); UIT-01..04 and FND-R01..04 ticked; UNI-R01 stays open until 51.1+ ships its matrix
-- [Phase 50]: 50-13: fix-linux chosen - X11 fully wired (modifiers, Ctrl+wheel panel scale); Win32/macOS only set_gui_surface(true); Ctrl+wheel over panels still font-zooms there (known gap)
+- [Phase 50]: Classic drawer goldens generated on untouched tree; never regenerate in Phase 50
+- [Phase 51]: 51-13: final gate green (verify.sh, 11 Legacy goldens, doc gates); UIT-01..04 and FND-R01..04 ticked.
+- [Phase 51 Followups]: Resolved all 11 items; split `src/wm/drawer.rs` and `src/wm/agents_window.rs` into focused submodules to adhere to 800-1000 line ceilings (`ARCH-R04`).
+- [Phase 53]: Added in-place `RenameDialog` modal for keyboard/mouse renaming of windows, sessions, and drawer entries with Esc cancel and Enter confirm.
+- [Phase 53]: Added universal right-click context menu across Classic, Modern Minimal, and Liquid Glass modes for instant window management.
+- [Phase 45]: Design system profile engine verified across 8 profiles with persistent `:appearance` lifecycle.
+- [Verification]: Composable runner `scripts/verify.sh` supports 8 tiers (smoke, unit, integration, system, perf, stress, torture, security), `--match`, `--coverage` (`cargo-llvm-cov`), `--xvfb`, `report.md`, and `junit.xml`.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
@@ -120,15 +85,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-11-06T01:52:21.004Z
-Stopped at: Completed 51-13-PLAN.md (Phase 51 final gate)
+Last session: 2026-11-07T13:25:00Z
+Stopped at: Completed session verification and test-coverage runner upgrades
 Resume file: None
-
-## Quick Tasks Completed
-
-| Slug | Date | Status | Summary |
-|------|------|--------|---------|
-| `20261020-tab-completion-and-smooth-floating-prompt` | 2026-10-20 | complete ✓ | Tab completion (`Tab`/`Shift+Tab`) + smooth floating prompt over `tail -f /dev/random` |
-| `20261020-split-prompt-borders-shadows-vt-torture-coverage` | 2026-10-20 | complete ✓ | Non-overlapping split command/output panes (`SplitTop`/`SplitBottom`), 8 outline styles, 4 themeable DOS drop shadows, full VT control sequence compliance, and `cargo llvm-cov` (`81.83%` lines) + torture/stress suite |
-| `20261020-prompt-width-scroll-running-cmd-history-help-docs` | 2026-10-20 | complete ✓ | Resizable/scrollable prompt, running command banner, rich OIA status bar (`R:C` + `OUT:`), history popup & session file persistence/temp export, full-screen cross-hairs, `<F1>` help modal, and updated user manual |
-| `20261022-macos-keybindings-leader-and-option-normalization` | 2026-10-22 | complete ✓ | Universal `Ctrl+X` Leader prefix key, macOS `Option` Unicode symbol normalization (`˙`, `√`, `∫`, `ƒ`, etc.), Readline word navigation (`Alt+B`/`Alt+F`/`Alt+D`/`Alt+Backspace`), `Ctrl+\` Quake toggle, and `F1..F10`/`Alt+<key>` passthrough in `RawPtyPassthrough`/`ALT_SCREEN` |

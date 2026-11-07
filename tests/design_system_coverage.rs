@@ -2,11 +2,13 @@
 
 use bilterm::config::BiltermConfig;
 use bilterm::ui::design::{
-    Appearance, AppearanceConfig, AppearanceProfile, BorderWeight, ColorRole, Density, DesignTokens,
-    DisplayMode, Material, MaterialKind, Materials, TitlePolicy,
+    Appearance, AppearanceConfig, AppearanceProfile, BorderWeight, ColorRole,
+    CustomAppearanceProfile, Density, DesignTokens, DisplayMode, Material, MaterialKind, Materials,
+    TitlePolicy,
 };
 use bilterm::ui::design::tokens::blend;
 use bilterm::ui::theme::ThemePalette;
+use bilterm::ui::theme_import::contrast_ratio;
 use ratatui::style::Color;
 
 fn palette(text_fg: Option<Color>) -> ThemePalette {
@@ -151,14 +153,176 @@ fn sanitized_clamps_ranges() {
 #[test]
 fn profile_names_and_labels() {
     use AppearanceProfile::*;
-    for (n, p) in [("legacy", Legacy), ("classic", Legacy), ("obsidian", Obsidian), ("midnight", Midnight), ("arctic", Arctic), ("liquid", Liquid), (" LIQUID ", Liquid)] {
+    assert_eq!(AppearanceProfile::ALL.len(), 8);
+    for (n, p) in [
+        ("legacy", Legacy),
+        ("classic", Legacy),
+        ("obsidian", Obsidian),
+        ("midnight", Midnight),
+        ("arctic", Arctic),
+        ("liquid", Liquid),
+        (" LIQUID ", Liquid),
+        ("amber", Amber),
+        ("phosphor", Amber),
+        ("retro-amber", Amber),
+        ("synthwave", Synthwave),
+        ("outrun", Synthwave),
+        ("cyber", Synthwave),
+        ("solarized", Solarized),
+        ("paper", Solarized),
+    ] {
         assert_eq!(AppearanceProfile::from_name(n), Some(p), "{n}");
     }
     assert_eq!(AppearanceProfile::from_name("neon"), None);
-    for (p, l) in [(Legacy, "legacy"), (Obsidian, "obsidian"), (Midnight, "midnight"), (Arctic, "arctic"), (Liquid, "liquid")] {
+    for (p, l) in [
+        (Legacy, "legacy"),
+        (Obsidian, "obsidian"),
+        (Midnight, "midnight"),
+        (Arctic, "arctic"),
+        (Liquid, "liquid"),
+        (Amber, "amber"),
+        (Synthwave, "synthwave"),
+        (Solarized, "solarized"),
+    ] {
         assert_eq!(p.label(), l);
         assert_eq!(AppearanceProfile::from_name(l), Some(p));
     }
+}
+
+#[test]
+fn all_eight_profiles_tokens_materials_and_wcag_contrast() {
+    let cfg = AppearanceConfig::default();
+    let mut seen_tokens = Vec::new();
+    for p in AppearanceProfile::ALL {
+        let t = p.tokens();
+        assert_eq!(t, DesignTokens::for_profile(p));
+        let ratio = contrast_ratio(t.text_primary, t.canvas);
+        assert!(
+            ratio >= 4.5,
+            "profile {p:?} failed WCAG AA text_primary/canvas contrast: {ratio:.2}"
+        );
+        let raised_ratio = contrast_ratio(t.text_primary, t.surface_raised);
+        assert!(
+            raised_ratio >= 4.5,
+            "profile {p:?} failed WCAG AA text_primary/surface_raised contrast: {raised_ratio:.2}"
+        );
+        let mats = p.materials(&cfg);
+        if p == AppearanceProfile::Legacy {
+            assert_eq!(mats, Materials::opaque_fallback());
+        } else {
+            assert!(mats.pane.opacity_pct <= 100 && mats.pane.opacity_pct >= 60);
+        }
+        assert!(!seen_tokens.contains(&t), "duplicate token palette for {p:?}");
+        seen_tokens.push(t);
+    }
+
+    // Verify Amber, Synthwave, and Solarized exact signature tokens
+    let amber = AppearanceProfile::Amber.tokens();
+    assert_eq!(amber.canvas, Color::Rgb(0x12, 0x0C, 0x06));
+    assert_eq!(amber.accent, Color::Rgb(0xFF, 0xB0, 0x00));
+    assert_eq!(amber.text_primary, Color::Rgb(0xFF, 0xE8, 0xB8));
+
+    let synth = AppearanceProfile::Synthwave.tokens();
+    assert_eq!(synth.canvas, Color::Rgb(0x14, 0x0B, 0x24));
+    assert_eq!(synth.accent, Color::Rgb(0xFF, 0x2A, 0x85));
+    assert_eq!(synth.border_focus, Color::Rgb(0x05, 0xD9, 0xE8));
+
+    let sol = AppearanceProfile::Solarized.tokens();
+    assert_eq!(sol.canvas, Color::Rgb(0x00, 0x2B, 0x36));
+    assert_eq!(sol.accent, Color::Rgb(0x2A, 0xA1, 0x98));
+    assert_eq!(sol.border_focus, Color::Rgb(0xB5, 0x89, 0x00));
+}
+
+#[test]
+fn appearance_profile_lifecycle_select_duplicate_modify_reset_export_import() {
+    let mut cfg = AppearanceConfig::default();
+
+    // Select each of the 8 built-in profiles
+    for p in AppearanceProfile::ALL {
+        let msg = cfg.select_by_name(p.label()).unwrap();
+        assert!(msg.contains(p.label()));
+        assert_eq!(cfg.profile, Some(p));
+        assert_eq!(cfg.active_custom, None);
+    }
+    assert!(cfg.select_by_name("neon").is_err());
+
+    // Duplicate a built-in profile into a custom profile
+    let dup_msg = cfg.duplicate_profile("amber", "my-amber").unwrap();
+    assert!(dup_msg.contains("my-amber"));
+    assert_eq!(cfg.active_custom.as_deref(), Some("my-amber"));
+    assert_eq!(cfg.profile, Some(AppearanceProfile::Amber));
+    assert_eq!(
+        cfg.custom_profiles.get("my-amber").unwrap().base,
+        AppearanceProfile::Amber
+    );
+
+    // Reject unsafe custom profile names or overwriting built-in names
+    assert!(cfg.duplicate_profile("amber", "../bad").is_err());
+    assert!(cfg.duplicate_profile("amber", "obsidian").is_err());
+
+    // Modify settings while custom profile is active (updates both cfg and custom_profiles["my-amber"])
+    cfg.modify_setting("surface", "acrylic").unwrap();
+    assert_eq!(cfg.opacity_pct, Some(80));
+    cfg.modify_setting("density", "compact").unwrap();
+    assert_eq!(cfg.density, Density::Compact);
+    cfg.modify_setting("radius", "pill").unwrap();
+    assert_eq!(cfg.corner_radius_px, Some(16));
+    cfg.modify_setting("border", "double").unwrap();
+    assert_eq!(cfg.border, BorderWeight::Double);
+    cfg.modify_setting("shadow", "deep").unwrap();
+    assert_eq!(cfg.glow_pct, Some(35));
+    cfg.modify_setting("motion", "reduced").unwrap();
+    cfg.modify_setting("opacity", "85").unwrap();
+    assert_eq!(cfg.opacity_pct, Some(85));
+    cfg.modify_setting("blur", "40").unwrap();
+    assert_eq!(cfg.glow_pct, Some(40));
+
+    let custom: &CustomAppearanceProfile = cfg.custom_profiles.get("my-amber").unwrap();
+    assert_eq!(custom.surface.as_deref(), Some("acrylic"));
+    assert_eq!(custom.density, Some(Density::Compact));
+    assert_eq!(custom.radius.as_deref(), Some("pill"));
+    assert_eq!(custom.border, Some(BorderWeight::Double));
+    assert_eq!(custom.shadow.as_deref(), Some("deep"));
+    assert_eq!(custom.motion.as_deref(), Some("reduced"));
+    assert_eq!(custom.opacity_pct, Some(85));
+    assert_eq!(custom.blur_strength, Some(40));
+
+    // List profiles text includes all 8 built-in profiles and custom profile
+    let list_txt = cfg.list_profiles_text();
+    for p in AppearanceProfile::ALL {
+        assert!(list_txt.contains(p.label()), "missing {} in {list_txt}", p.label());
+    }
+    assert!(list_txt.contains("*my-amber (base: amber)"), "{list_txt}");
+
+    // Export and import round-trip via atomic 0600 file
+    let dir = tempfile::tempdir().unwrap();
+    let export_path = dir.path().join("appearance-test.toml");
+    cfg.export_file(&export_path).unwrap();
+
+    // Reset clears overrides and active_custom back to Obsidian defaults
+    let reset_msg = cfg.reset();
+    assert!(reset_msg.contains("obsidian"));
+    assert_eq!(cfg.profile, Some(AppearanceProfile::Obsidian));
+    assert_eq!(cfg.active_custom, None);
+    assert_eq!(cfg.opacity_pct, None);
+    assert_eq!(cfg.density, Density::Comfortable);
+
+    // Re-selecting the custom profile restores its overrides
+    cfg.select_by_name("my-amber").unwrap();
+    assert_eq!(cfg.active_custom.as_deref(), Some("my-amber"));
+    assert_eq!(cfg.profile, Some(AppearanceProfile::Amber));
+    assert_eq!(cfg.density, Density::Compact);
+    assert_eq!(cfg.opacity_pct, Some(85));
+
+    // Import into a fresh AppearanceConfig
+    let mut imported = AppearanceConfig::default();
+    imported.import_file(&export_path).unwrap();
+    assert_eq!(imported.active_custom.as_deref(), Some("my-amber"));
+    assert_eq!(imported.profile, Some(AppearanceProfile::Amber));
+    assert_eq!(imported.density, Density::Compact);
+    assert_eq!(imported.border, BorderWeight::Double);
+    assert_eq!(imported.opacity_pct, Some(85));
+    assert_eq!(imported.glow_pct, Some(40));
 }
 
 fn mat(op: u8, border: u8, bevel: bool, halo: u8, r: u8, shadow: bool) -> Material {

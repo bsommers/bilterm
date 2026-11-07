@@ -283,8 +283,22 @@ pub fn render_workspace_drawer(
                 break;
             }
             let is_sel = row_idx == selected;
+            let inline_override = match (&row.kind, wm.window_manage().inline_rename.as_ref()) {
+                (DrawerRowKind::Pane(pid), Some(ir)) if ir.pane_id == *pid => {
+                    Some(format!("[ {}█ ]", ir.current_input))
+                }
+                _ => None,
+            };
             if row_step == 2 {
-                let (line1, line2) = format_liquid_drawer_card(row, is_sel, wm.pane_count());
+                let mut row_cow;
+                let row_ref = if let Some(ref ov) = inline_override {
+                    row_cow = row.clone();
+                    row_cow.title = ov.clone();
+                    &row_cow
+                } else {
+                    row
+                };
+                let (line1, line2) = format_liquid_drawer_card(row_ref, is_sel, wm.pane_count());
                 let bg = if is_sel {
                     sel_card_bg
                 } else {
@@ -340,10 +354,17 @@ pub fn render_workspace_drawer(
                     }
                     fill_rect(buf, Rect::new(inner.x, y, row_text_w, 1), row_style);
                 }
-                let line = if is_modern && is_sel {
-                    format!("▎{}", row.formatted_line())
+                let base_line = if let Some(ref ov) = inline_override {
+                    let mut row_cow = row.clone();
+                    row_cow.title = ov.clone();
+                    row_cow.formatted_line()
                 } else {
                     row.formatted_line()
+                };
+                let line = if is_modern && is_sel {
+                    format!("▎{base_line}")
+                } else {
+                    base_line
                 };
                 write_clipped_line(buf, inner.x, y, row_text_w, &h_clip(&line, drawer.h_scroll), row_style);
             }

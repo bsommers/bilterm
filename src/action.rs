@@ -67,11 +67,15 @@ pub enum Action {
     Theme(ThemePreset),
     Glyphs(GlyphPack),
     Appearance(crate::ui::design::AppearanceProfile),
+    /// `:appearance [list|select|duplicate|modify|reset|import|export ...]` lifecycle operations (Phase 45).
+    AppearanceManage(AppearanceOp),
     Mode(crate::ui::design::DisplayMode),
     /// Drawer / `:mcp` console font scale in percent (`75..=200`), GUI only.
     PanelScale(u16),
     /// Font scale of just the drawer or just the `:mcp` console.
     PanelScaleOf(crate::ui::typography::PanelTarget, u16),
+    /// Relative step (`+` / `-`) of font scale for a single panel (`:mcp scale +|-`).
+    PanelScaleStepOf(crate::ui::typography::PanelTarget, i16),
     /// Pane title policy for non-Legacy looks (`None` = display-mode default).
     ChromeTitle(Option<crate::ui::design::TitlePolicy>),
     /// Accent border on the focused pane (non-Legacy looks).
@@ -209,6 +213,8 @@ pub enum Action {
         dy: i16,
     },
     WindowResetGeometry,
+    /// `Ctrl+X #`: Arrange windows into an automatic grid (`51-FOLLOWUPS.md` item 5).
+    ArrangeGrid,
     /// `:quit!` / `:q!`: Force immediate application exit bypassing Exit Guard (`SAFE-02`).
     ForceQuit,
     /// `:detach` / `:d`: Detach client while preserving background session (`SAFE-02`, `DAEM-02`).
@@ -242,6 +248,18 @@ pub enum Action {
     /// Alias for `DaemonSupervisor` matching contract shorthand (`DAEM-05..08`).
     Daemon(DaemonSupervisorOp),
     Quit,
+}
+
+/// Lifecycle operations for `:appearance` profiles (`DSN-01..03`, Phase 45).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AppearanceOp {
+    List,
+    SelectName(String),
+    Duplicate { src: String, new_name: String },
+    Modify { key: String, value: String },
+    Reset,
+    Import(String),
+    Export(String),
 }
 
 /// Operations supported by the background daemon supervisor (`DAEM-05..08`, Phase 55).
@@ -322,6 +340,30 @@ impl Action {
             Self::FontZoomOut => ":fontsize -".to_string(),
             Self::FontZoomReset => ":fontsize reset".to_string(),
             Self::FontSetSize(pt) => format!(":fontsize {pt}"),
+            Self::ArrangeGrid => ":arrange grid".to_string(),
+            Self::AppearanceManage(AppearanceOp::List) => ":appearance list".to_string(),
+            Self::AppearanceManage(AppearanceOp::Reset) => ":appearance reset".to_string(),
+            Self::AppearanceManage(AppearanceOp::SelectName(name)) => {
+                format!(":appearance select {name}")
+            }
+            Self::AppearanceManage(AppearanceOp::Duplicate { src, new_name }) => {
+                format!(":appearance duplicate {src} {new_name}")
+            }
+            Self::AppearanceManage(AppearanceOp::Modify { key, value }) => {
+                format!(":appearance modify {key} {value}")
+            }
+            Self::AppearanceManage(AppearanceOp::Import(path)) => {
+                format!(":appearance import {path}")
+            }
+            Self::AppearanceManage(AppearanceOp::Export(path)) => {
+                format!(":appearance export {path}")
+            }
+            Self::PanelScaleStepOf(crate::ui::typography::PanelTarget::Mcp, d) => {
+                format!(":mcp scale {}", if *d >= 0 { "+" } else { "-" })
+            }
+            Self::PanelScaleStepOf(crate::ui::typography::PanelTarget::Drawer, d) => {
+                format!(":drawer scale {}", if *d >= 0 { "110" } else { "90" })
+            }
             Self::HelpToggle => ":help".to_string(),
             other => format!("{other:?}"),
         }
@@ -402,9 +444,11 @@ mod tests {
             Action::Theme(_) => Some(":theme borland"),
             Action::Glyphs(_) => Some(":glyphs unicode"),
             Action::Appearance(_) => Some(":appearance obsidian"),
+            Action::AppearanceManage(_) => Some(":appearance list"),
             Action::Mode(_) => Some(":mode zen"),
             Action::PanelScale(_) => Some(":panel scale 125"),
             Action::PanelScaleOf(..) => Some(":drawer scale 125"),
+            Action::PanelScaleStepOf(..) => Some(":mcp scale +"),
             Action::ChromeTitle(_) => Some(":chrome title focused"),
             Action::ChromeRing(_) => Some(":chrome ring on"),
             Action::Cursor(_) => Some(":cursor block"),
@@ -480,6 +524,7 @@ mod tests {
             Action::PaneResize { .. } => Some(":resize +w"),
             Action::PaneMove { .. } => Some(":move right"),
             Action::WindowResetGeometry => Some(":cascade"),
+            Action::ArrangeGrid => Some(":arrange grid"),
             Action::ForceQuit => Some(":quit!"),
             Action::DetachClient => Some(":detach"),
             Action::ExitProtectionSet(_) => Some(":exit-guard guard"),
@@ -605,9 +650,11 @@ mod tests {
             Action::Theme(ThemePreset::default()),
             Action::Glyphs(GlyphPack::Unicode),
             Action::Appearance(crate::ui::design::AppearanceProfile::Obsidian),
+            Action::AppearanceManage(AppearanceOp::List),
             Action::Mode(crate::ui::design::DisplayMode::Zen),
             Action::PanelScale(125),
             Action::PanelScaleOf(crate::ui::typography::PanelTarget::Mcp, 125),
+            Action::PanelScaleStepOf(crate::ui::typography::PanelTarget::Mcp, 10),
             Action::ChromeTitle(Some(crate::ui::design::TitlePolicy::Focused)),
             Action::ChromeRing(true),
             Action::Cursor(CaretStyle::SolidBlock),
@@ -720,6 +767,7 @@ mod tests {
             Action::PaneResize { dw: 4, dh: 0 },
             Action::PaneMove { dx: 4, dy: 0 },
             Action::WindowResetGeometry,
+            Action::ArrangeGrid,
             Action::ForceQuit,
             Action::DetachClient,
             Action::ExitProtectionSet(ExitProtectionPolicy::Guard),

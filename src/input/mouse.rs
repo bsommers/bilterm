@@ -586,18 +586,63 @@ pub fn handle_wm_mouse_event(
     mouse: MouseEvent,
     screen_area: Rect,
 ) -> Result<AppAction> {
+    if wm.rename_dialog_open() {
+        wm.handle_rename_dialog_mouse(mouse, screen_area);
+        return Ok(AppAction::Handled);
+    }
+
+    if let Some(menu) = crate::ui::drawer::navigator::standalone_context_menu_layout(wm, screen_area)
+        && matches!(
+            mouse.kind,
+            MouseEventKind::Down(MouseButton::Left | MouseButton::Right)
+        )
+    {
+        if let Some(entry_idx) = crate::ui::drawer::navigator::standalone_context_menu_entry_at(
+            wm,
+            screen_area,
+            mouse.column,
+            mouse.row,
+        ) {
+            wm.close_context_menu();
+            wm.apply_drawer_nav(crate::wm::drawer::DrawerNavOp::MenuPick(entry_idx));
+            let shell = crate::ui::shell::ShellLayout::compute(screen_area, wm.config(), wm.pane_count());
+            wm.resize_all(shell.workspace)?;
+            return Ok(AppAction::Handled);
+        }
+        wm.close_context_menu();
+        if rect_contains(menu.rect, mouse.column, mouse.row) {
+            return Ok(AppAction::Handled);
+        }
+    }
+
     let shell = crate::ui::shell::ShellLayout::compute(screen_area, wm.config(), wm.pane_count());
     let top_off = shell.top_offset();
     let bot_off = u16::from(shell.bottom_bar.is_some());
     let workspace_area = shell.workspace;
 
     if shell.top_bar_kind == Some(crate::ui::shell::TopBarKind::Pills) && mouse.row == screen_area.y {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && let Some(bar) = shell.top_bar
+        if let Some(bar) = shell.top_bar
             && let Some(pid) = crate::ui::navigator::pill_at(wm, bar, mouse.column)
         {
-            wm.drawer_mut().focused = false;
-            wm.focus_and_raise(pid);
+            match mouse.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    wm.drawer_mut().focused = false;
+                    wm.focus_and_raise(pid);
+                }
+                MouseEventKind::Down(MouseButton::Right) => {
+                    wm.drawer_mut().focused = false;
+                    wm.focus_and_raise(pid);
+                    if let Some(idx) = wm
+                        .drawer_rows()
+                        .iter()
+                        .position(|r| r.kind == crate::wm::DrawerRowKind::Pane(pid))
+                    {
+                        wm.drawer_mut().selected_index = idx;
+                    }
+                    wm.open_context_menu_at(mouse.column, mouse.row);
+                }
+                _ => {}
+            }
         }
         return Ok(AppAction::Handled);
     }
@@ -807,22 +852,39 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Handled);
     }
 
-    if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-        && !rect_contains(inner, mouse.column, mouse.row)
-    {
-        match hit_focus {
-            Focus::Quick => {
-                if let Some(action) =
-                    handle_quick_terminal_border_mouse_down(wm, outer, mouse, workspace_area)?
-                {
-                    return Ok(action);
+    if !rect_contains(inner, mouse.column, mouse.row) {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => match hit_focus {
+                Focus::Quick => {
+                    if let Some(action) =
+                        handle_quick_terminal_border_mouse_down(wm, outer, mouse, workspace_area)?
+                    {
+                        return Ok(action);
+                    }
                 }
-            }
-            Focus::Pane(hit_id) if wm.is_framed() => {
-                if let Some(action) =
-                    handle_wm_frame_border_mouse_down(wm, hit_id, outer, mouse, workspace_area)?
+                Focus::Pane(hit_id) if wm.is_framed() => {
+                    if let Some(action) =
+                        handle_wm_frame_border_mouse_down(wm, hit_id, outer, mouse, workspace_area)?
+                    {
+                        return Ok(action);
+                    }
+                }
+                _ => {}
+            },
+            MouseEventKind::Down(MouseButton::Right) => {
+                if let Focus::Pane(hit_id) = hit_focus
+                    && wm.is_framed()
                 {
-                    return Ok(action);
+                    wm.focus_and_raise(hit_id);
+                    if let Some(idx) = wm
+                        .drawer_rows()
+                        .iter()
+                        .position(|r| r.kind == crate::wm::DrawerRowKind::Pane(hit_id))
+                    {
+                        wm.drawer_mut().selected_index = idx;
+                    }
+                    wm.open_context_menu_at(mouse.column, mouse.row);
+                    return Ok(AppAction::Handled);
                 }
             }
             _ => {}
