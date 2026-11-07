@@ -794,9 +794,35 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
     Ok(AppAction::Handled)
 }
 
+/// True while the active pane is a `BlockPage` pane paused at a page hold, where plain F7/F8 page
+/// back/advance through the held output instead of toggling the drawer / Copy Mode.
+fn block_page_holding(wm: &WindowManager) -> bool {
+    wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
+        && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected())
+}
+
+/// True when the drawer is open or effectively on screen (`Fixed` / hovered `AutoHide`), so F7 must close it.
+fn drawer_shown(wm: &WindowManager) -> bool {
+    wm.drawer_is_open() || wm.is_drawer_effectively_visible()
+}
+
+/// The `BlockPage` hold override for F7/F8: `ScrollPageBack` / `ScrollPageAdvance` while the active pane
+/// is holding a page. F7 yields to an on-screen drawer so the drawer can always be closed.
+fn block_page_fkey_action(wm: &WindowManager, n: u8) -> Option<Action> {
+    if !block_page_holding(wm) {
+        return None;
+    }
+    match n {
+        7 if !drawer_shown(wm) => Some(Action::ScrollPageBack),
+        8 => Some(Action::ScrollPageAdvance),
+        _ => None,
+    }
+}
+
 fn bilterm_action_for_fkey(wm: &WindowManager, n: u8) -> Option<Action> {
-    let block_holding = wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
-        && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected());
+    if let Some(action) = block_page_fkey_action(wm, n) {
+        return Some(action);
+    }
     match n {
         1 => Some(Action::HelpToggle),
         2 => Some(Action::SplitHorizontal),
@@ -804,24 +830,66 @@ fn bilterm_action_for_fkey(wm: &WindowManager, n: u8) -> Option<Action> {
         4 => Some(Action::PromptModeSet(None)),
         5 => Some(Action::ZoomToggle),
         6 => Some(Action::DeckNext),
-        7 => Some(
-            if block_holding && !wm.drawer_is_open() && !wm.is_drawer_effectively_visible() {
-                Action::ScrollPageBack
-            } else {
-                Action::DrawerToggle
-            },
-        ),
-        8 => Some(if block_holding {
-            Action::ScrollPageAdvance
-        } else {
-            Action::CopyModeToggle
-        }),
+        7 => Some(Action::DrawerToggle),
+        8 => Some(Action::CopyModeToggle),
         9 => Some(Action::InspectorToggle(None)),
         10 => Some(Action::QuakeToggle),
         11 => Some(Action::VisualStyleCommand(None)),
         12 => Some(Action::RawToggle),
         _ => None,
     }
+}
+
+/// Actions that are safe to auto-repeat while their chord is held (navigation, resizing, paging).
+/// Everything else bound at the WM level is a toggle or chrome action that must fire once per press.
+fn is_repeatable_wm_action(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::PasteClipboard
+            | Action::FontZoomIn
+            | Action::FontZoomOut
+            | Action::FontZoomReset
+            | Action::PaneResize { .. }
+            | Action::PaneMove { .. }
+            | Action::FocusPane(_)
+            | Action::PaneFocusDirection { .. }
+            | Action::DeckNext
+            | Action::DeckPrev
+            | Action::FocalRadiusResize(..)
+            | Action::SearchNext
+            | Action::SearchPrev
+            | Action::PromptMoveVertical(_)
+            | Action::PromptResizeHeight(_)
+            | Action::PromptResizeWidth(_)
+            | Action::BlockPrev
+            | Action::BlockNext
+            | Action::ScrollPageBack
+            | Action::ScrollPageAdvance
+    )
+}
+
+/// True when `key` is a WM toggle/chrome chord (F7 drawer, F5 zoom, `Ctrl+P` palette, the leader key,
+/// a user `[keybindings]` toggle, ...) whose `KeyEventKind::Repeat` auto-repeat must be dropped so holding
+/// the key fires once instead of flickering. Keys destined for the pane (arrows, Backspace, text, Shift+F1..F12)
+/// are not toggle chords and keep auto-repeating.
+pub(super) fn is_wm_toggle_chord(wm: &WindowManager, key: KeyEvent) -> bool {
+    if is_leader_key_with_tmux(key, &wm.config().leader_key, crate::tmux::TmuxEnv::detect().is_some()) {
+        return true;
+    }
+    if !wm.config().keybindings.is_empty()
+        && let Some(chord) = format_key_chord(key)
+        && let Some((_, bound)) = wm.config().keybindings.iter().find(|(k, _)| k.eq_ignore_ascii_case(&chord))
+    {
+        return !matches!(parse_colon_command(bound), Some(Ok(a)) if is_repeatable_wm_action(&a));
+    }
+    let action = match key.code {
+        KeyCode::F(7) if key.modifiers == KeyModifiers::ALT => Some(Action::DrawerToggle),
+        KeyCode::F(n @ 1..=12) if key.modifiers.is_empty() || key.modifiers == KeyModifiers::ALT => {
+            bilterm_action_for_fkey(wm, n)
+        }
+        _ => default_global_action(key, false).or_else(|| default_pane_action(key)),
+    };
+    action.is_some_and(|a| !is_repeatable_wm_action(&a))
 }
 
 /// Handles user-configured `[keybindings]` and Workspace Leader mode entry.
@@ -899,11 +967,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
             if n == 12 {
                 return Ok(Some(wm.apply(Action::RawToggle)?));
             }
-            if n == 7
-                && (wm.drawer_is_open()
-                    || wm.is_drawer_effectively_visible()
-                    || wm.config().raw_fkeys != crate::ui::RawFkeyMode::App)
-            {
+            if n == 7 && (drawer_shown(wm) || wm.config().raw_fkeys != crate::ui::RawFkeyMode::App) {
                 return Ok(Some(wm.apply(Action::DrawerToggle)?));
             }
             if wm
@@ -959,8 +1023,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
 
     if !wm.active_pane().vt().is_alternate_screen()
         && !wm.active_pane().is_active_canvas_password_prompt()
-        && !(wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
-            && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected()))
+        && !block_page_holding(wm)
         && let Some(action) = default_pane_action(key)
         && matches!(
             action,
@@ -978,17 +1041,11 @@ pub(super) fn handle_wm_shortcut_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    if wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
-        && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected())
-        && key.modifiers.is_empty()
+    if key.modifiers.is_empty()
+        && let KeyCode::F(n) = key.code
+        && let Some(action) = block_page_fkey_action(wm, n)
     {
-        match key.code {
-            KeyCode::F(7) if !wm.drawer_is_open() && !wm.is_drawer_effectively_visible() => {
-                return Ok(Some(wm.apply(Action::ScrollPageBack)?));
-            }
-            KeyCode::F(8) => return Ok(Some(wm.apply(Action::ScrollPageAdvance)?)),
-            _ => {}
-        }
+        return Ok(Some(wm.apply(action)?));
     }
     let fuzzy_active = wm.active_pane().prompt().fuzzy_search.active;
     if wm.pane_count() > 1
