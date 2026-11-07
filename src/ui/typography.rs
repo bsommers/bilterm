@@ -83,6 +83,8 @@ pub enum PanelTarget {
     Agents,
     /// The AGENTS list window (Phase 51).
     AgentsList,
+    /// The SESSION MAP packing viewer (Phase 54).
+    SessionMap,
 }
 
 /// Real workspace cells covered by a scaled panel whose rect `virtual_rect` lives in the panel's
@@ -237,6 +239,7 @@ impl WindowManager {
             PanelTarget::Mcp => self.mcp_scale_pct,
             PanelTarget::Agents => self.agents_scale_pct,
             PanelTarget::AgentsList => self.agents_list_scale_pct,
+            PanelTarget::SessionMap => self.session_map_scale_pct,
         }
         .clamp(75, 200)
     }
@@ -249,6 +252,7 @@ impl WindowManager {
             PanelTarget::Mcp => self.mcp_scale_pct = pct,
             PanelTarget::Agents => self.agents_scale_pct = pct,
             PanelTarget::AgentsList => self.agents_list_scale_pct = pct,
+            PanelTarget::SessionMap => self.session_map_scale_pct = pct,
         }
     }
 
@@ -258,6 +262,7 @@ impl WindowManager {
         self.set_scale(PanelTarget::Mcp, pct);
         self.set_scale(PanelTarget::Agents, pct);
         self.set_scale(PanelTarget::AgentsList, pct);
+        self.set_scale(PanelTarget::SessionMap, pct);
     }
 
     /// Steps one panel's scale by `delta` percent (clamped to `75..=200`); returns the new setting.

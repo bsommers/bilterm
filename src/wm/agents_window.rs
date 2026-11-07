@@ -589,6 +589,7 @@ impl WindowManager {
         self.fonts_window.blur();
         self.command_window.blur();
         self.script_studio.blur();
+        self.session_map.blur();
         if let Some(id) = focus
             && self.panes.contains_key(&id)
         {

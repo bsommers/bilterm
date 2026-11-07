@@ -37,6 +37,7 @@ pub const RPC_METHODS: &[&str] = &[
     "wm.command",
     "agents.list",
     "agents.demo",
+    "session.map",
     "events.poll",
     "playbook.run",
     "remote.connect_ssh",
@@ -737,6 +738,7 @@ impl AutomationControlPlane {
             }
             "agents.list" => self.rpc_agents_list(params),
             "agents.demo" => self.rpc_agents_demo(params),
+            "session.map" => self.rpc_session_map(params),
             "remote.link" => self.rpc_remote_link(params),
             "find.agents" => self.find_rpc(FindKind::Agent, params),
             "find.sessions" => self.find_rpc(FindKind::Session, params),

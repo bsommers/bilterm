@@ -18,6 +18,7 @@ mod parse_config;
 mod parse_find;
 mod parse_link;
 mod parse_script;
+pub mod parse_session_map;
 mod parse_visual;
 pub mod parse_window;
 

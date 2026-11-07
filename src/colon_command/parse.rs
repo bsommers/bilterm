@@ -360,6 +360,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 return Some(res);
             }
             match parts.get(1).copied() {
+                Some("map") => Some(super::parse_session_map::parse_session_map(&parts[2..])),
                 Some("save" | "save-as") => {
                     let name = parts.get(2).copied().unwrap_or("").to_string();
                     Some(Ok(ColonCommand::SessionSave(name)))
@@ -422,6 +423,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 )),
             }
         }
+        "packing" => Some(super::parse_session_map::parse_session_map(&parts[1..])),
         "new-session" | "newsession" => {
             let sub = if parts.len() > 1 {
                 format!("new {}", parts[1..].join(" "))

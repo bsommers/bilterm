@@ -122,6 +122,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.fonts_window.blur();
         self.command_window.blur();
+        self.session_map.blur();
     }
 
     pub fn close_script_studio(&mut self) {

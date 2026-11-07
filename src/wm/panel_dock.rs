@@ -19,6 +19,8 @@ pub enum DockPanel {
     AgentsList,
     /// The AGENT TRAFFIC window.
     AgentsTraffic,
+    /// The SESSION MAP packing viewer.
+    SessionMap,
 }
 
 /// Workspace width from which the strip sits on the right (narrower: at the bottom).
@@ -73,6 +75,9 @@ impl WindowManager {
         if self.agents_window.active && self.agents_window.docked {
             v.push(DockPanel::AgentsTraffic);
         }
+        if self.session_map.active && self.session_map.docked {
+            v.push(DockPanel::SessionMap);
+        }
         v
     }
 
@@ -80,6 +85,7 @@ impl WindowManager {
         match panel {
             DockPanel::AgentsList => PanelTarget::AgentsList,
             DockPanel::AgentsTraffic => PanelTarget::Agents,
+            DockPanel::SessionMap => PanelTarget::SessionMap,
         }
     }
 
@@ -227,6 +233,7 @@ impl WindowManager {
         let (active, flag) = match panel {
             DockPanel::AgentsList => (self.agents_list.active, &mut self.agents_list.docked),
             DockPanel::AgentsTraffic => (self.agents_window.active, &mut self.agents_window.docked),
+            DockPanel::SessionMap => (self.session_map.active, &mut self.session_map.docked),
         };
         let want = on && active;
         if *flag == want {
@@ -240,6 +247,7 @@ impl WindowManager {
             match panel {
                 DockPanel::AgentsList => self.agents_list.docked = false,
                 DockPanel::AgentsTraffic => self.agents_window.docked = false,
+                DockPanel::SessionMap => self.session_map.docked = false,
             }
             self.dock_status(NO_ROOM);
             return false;

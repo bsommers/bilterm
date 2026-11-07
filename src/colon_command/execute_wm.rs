@@ -844,6 +844,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::SessionMap(op) => {
+            if let Some(msg) = wm.apply_session_map_op(&op) {
+                wm.active_pane_mut().set_status_message(Some(msg));
+            }
+            false
+        }
         ColonCommand::AgentMail(op) => super::execute_agent_mail::execute_agent_mail_command(wm, op),
         ColonCommand::FontsWindow(op) => {
             let msg = wm.fonts_window_apply(&op);
@@ -898,5 +904,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
         PanelTarget::Mcp => "MCP",
         PanelTarget::Agents => "Agents",
         PanelTarget::AgentsList => "Agents list",
+        PanelTarget::SessionMap => "Session map",
     }
 }

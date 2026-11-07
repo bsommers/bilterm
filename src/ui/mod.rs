@@ -30,6 +30,8 @@ pub mod pixel_canvas;
 pub mod navigator;
 pub mod renderer;
 pub mod script_studio_ui;
+pub mod session_map_gui;
+pub mod session_map_ui;
 pub mod shell;
 pub mod status_bar;
 pub mod theme;
@@ -730,6 +732,9 @@ impl Widget for WorkspaceWidget<'_> {
         }
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::AgentsList) == 100 {
             agents_list_ui::render_agents_list(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::SessionMap) == 100 {
+            session_map_ui::render_session_map(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);

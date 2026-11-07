@@ -183,6 +183,8 @@ pub enum Action {
     Agents(crate::wm::agents_cmd::AgentsOp),
     /// `:agents list <verb>` - the AGENTS list window (Phase 51, UIT-03).
     AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
+    /// `:sessions map <verb>` / `:packing <verb>` - the SESSION MAP packing viewer (Phase 54, VIEW-02).
+    SessionMap(crate::wm::session_map::SessionMapOp),
     /// `:fonts <verb>` - the first-class FONTS utility window (`WIN-01`, Phase 51.2).
     FontsWindow(crate::wm::fonts_window::FontsWindowOp),
     /// `:commands [open|close|toggle|pin|...]` - Pinnable Command Palette window (WIN-02, Phase 51.2).
@@ -277,6 +279,7 @@ impl Action {
             Self::CommandWindow(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
+            Self::SessionMap(op) => op.colon_form(),
             Self::SplitHorizontal => ":split h".to_string(),
             Self::SplitVertical => ":split v".to_string(),
             Self::DeckNext => ":deck next".to_string(),
@@ -444,6 +447,7 @@ mod tests {
             Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
             Action::AgentsList(_) => Some(":agents list toggle"),
+            Action::SessionMap(_) => Some(":sessions map toggle"),
             Action::FontsWindow(_) => Some(":fonts toggle"),
             Action::CommandWindow(_) => Some(":commands toggle"),
             Action::ScriptStudio(_) => Some(":script toggle"),
@@ -669,6 +673,7 @@ mod tests {
             Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::AgentsList(crate::wm::agents_list_cmd::AgentsListOp::Toggle),
+            Action::SessionMap(crate::wm::session_map::SessionMapOp::Toggle),
             Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
             Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
             Action::ScriptStudio(crate::wm::script_studio::ScriptStudioOp::Toggle),

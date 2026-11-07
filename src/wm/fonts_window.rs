@@ -142,6 +142,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.command_window.blur();
         self.script_studio.blur();
+        self.session_map.blur();
         let rows = self.fonts_window_rows();
         if let Some(pos) = rows.iter().position(|r| r.active_on_focused) {
             self.fonts_window.selected = pos;

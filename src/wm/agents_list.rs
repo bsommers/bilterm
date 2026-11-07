@@ -127,6 +127,7 @@ impl WindowManager {
         self.fonts_window.blur();
         self.command_window.blur();
         self.script_studio.blur();
+        self.session_map.blur();
         if was_active {
             self.normalize_selection();
         } else {
