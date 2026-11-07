@@ -18,7 +18,7 @@
         {
           default = pkgs.rustPlatform.buildRustPackage {
             pname = "bilterm";
-            version = "1.11.1";
+            version = "3.0.1";
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
           };

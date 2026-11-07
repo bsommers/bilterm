@@ -1,4 +1,4 @@
-# Bilterm User Guide (`v1.12.0`)
+# Bilterm User Guide (`v3.0.1`)
 
 [← Back to Project README](../../README.md) | [Starter Packs (`starter-packs/`)](../../starter-packs/README.md)
 
