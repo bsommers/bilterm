@@ -62,7 +62,7 @@ crosshair_cursor = false
 show_top_menubar = true
 show_dos_fkey_bar = true
 ";
-        let _ = std::fs::write(&cfg_file, default_toml);
+        let _ = crate::secure_fs::write_private_file(&cfg_file, default_toml.as_bytes());
     }
     Some(cfg_dir)
 }
@@ -85,7 +85,7 @@ pub fn register_theme_source_dir(dir: &Path) {
     let line = canonical.to_string_lossy().to_string();
     if !existing.iter().any(|e| e == &line) {
         existing.push(line);
-        let _ = std::fs::write(&sources_file, format!("{}\n", existing.join("\n")));
+        let _ = crate::secure_fs::write_private_file(&sources_file, format!("{}\n", existing.join("\n")).as_bytes());
     }
 }
 

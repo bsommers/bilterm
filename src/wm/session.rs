@@ -515,12 +515,12 @@ impl WindowManager {
             &safe_name
         };
         let dir = self.resolve_session_dir()?;
-        std::fs::create_dir_all(&dir)?;
+        crate::secure_fs::create_private_dir_all(&dir)?;
         let path = dir.join(format!("{file_stem}.toml"));
         let snap = self.snapshot_session(file_stem);
         let toml_str = toml::to_string_pretty(&snap)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
-        std::fs::write(&path, toml_str)?;
+        crate::secure_fs::write_private_file(&path, toml_str.as_bytes())?;
         Ok(path)
     }
 
@@ -562,7 +562,7 @@ impl WindowManager {
         if was_detached {
             saved.detached = false;
             if let Ok(toml_str) = toml::to_string_pretty(&saved) {
-                let _ = std::fs::write(&path, toml_str);
+                let _ = crate::secure_fs::write_private_file(&path, toml_str.as_bytes());
             }
         }
         Ok(pane_count)
@@ -781,5 +781,38 @@ mod tests {
         let mut wm = WindowManager::new_headless(24, 80);
         wm.config.session_dir = Some(non_dir.to_str().unwrap().to_string());
         assert!(wm.list_sessions().is_empty());
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &std::path::Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saved_session_and_layout_files_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("state").join("sessions");
+        let mut wm = WindowManager::new_headless(24, 80);
+        wm.config.session_dir = Some(dir.to_str().unwrap().to_string());
+
+        let path = wm.save_session("work").unwrap();
+        assert_eq!(mode_of(&dir), 0o700);
+        assert_eq!(mode_of(&path), 0o600);
+
+        wm.save_session_order(vec!["work".to_string()]);
+        assert_eq!(mode_of(&dir.join("session_order.toml")), 0o600);
+        wm.persist_layout_profile_meta();
+        assert_eq!(mode_of(&dir.join("layout_profile_meta.toml")), 0o600);
+
+        wm.rename_session(Some("work"), "play").unwrap();
+        assert_eq!(mode_of(&dir.join("play.toml")), 0o600);
+
+        // A legacy 0644 session file is replaced by a fresh 0600 file on re-save.
+        std::fs::set_permissions(dir.join("play.toml"), std::fs::Permissions::from_mode(0o644)).unwrap();
+        wm.save_session("play").unwrap();
+        assert_eq!(mode_of(&dir.join("play.toml")), 0o600);
     }
 }

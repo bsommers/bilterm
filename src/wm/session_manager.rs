@@ -62,10 +62,10 @@ impl WindowManager {
         if self.should_persist_sessions_to_disk()
             && let Ok(dir) = self.resolve_session_dir()
         {
-            let _ = std::fs::create_dir_all(&dir);
+            let _ = crate::secure_fs::create_private_dir_all(&dir);
             let payload = PersistedSessionOrder { order: dedup };
             if let Ok(toml_str) = toml::to_string_pretty(&payload) {
-                let _ = std::fs::write(dir.join("session_order.toml"), toml_str);
+                let _ = crate::secure_fs::write_private_file(&dir.join("session_order.toml"), toml_str.as_bytes());
             }
         }
     }
@@ -303,7 +303,7 @@ impl WindowManager {
                 {
                     saved.name = new_name.clone();
                     if let Ok(toml_str) = toml::to_string_pretty(&saved) {
-                        let _ = std::fs::write(&new_path, toml_str);
+                        let _ = crate::secure_fs::write_private_file(&new_path, toml_str.as_bytes());
                     }
                 } else {
                     let _ = std::fs::rename(&old_path, &new_path);

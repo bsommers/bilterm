@@ -274,21 +274,6 @@ pub struct HistorySettings {
     pub session: String,
 }
 
-fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(dir)
-    }
-    #[cfg(not(unix))]
-    {
-        fs::create_dir_all(dir)
-    }
-}
-
 /// Returns `<base_dir>/sessions/<name>/history.log`.
 pub fn session_history_path(base_dir: &Path, session_name: &str) -> PathBuf {
     base_dir
@@ -568,7 +553,7 @@ impl HistoryStore {
     /// compacting past the 5% slack above `max_entries`.
     fn append_line(&mut self, line: &str) -> std::io::Result<()> {
         if let Some(parent) = self.session_file_path.parent() {
-            create_private_dir_all(parent)?;
+            crate::secure_fs::create_private_dir_all(parent)?;
         }
         let mut file = crate::secure_fs::private_open_options()
             .create(true)
@@ -721,7 +706,7 @@ impl HistoryStore {
             return Ok(None);
         }
         if let Some(parent) = self.clipboard_file_path.parent() {
-            create_private_dir_all(parent)?;
+            crate::secure_fs::create_private_dir_all(parent)?;
         }
         let record_line = format!(
             "[{} | session={} | run={} | pane={}] {}\n",
