@@ -186,7 +186,7 @@ cmd_for() {
 line() { # one-line result from summary.tsv
   [ -f "$OUT/summary.tsv" ] || { echo "NORUN"; return; }
   local n p f secs
-  n=$(wc -l <"$OUT/summary.tsv"); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv" || true); p=$((n-f))
+  n=$(($(wc -l <"$OUT/summary.tsv"))); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv" || true); p=$((n-f))
   secs=$(awk -F'\t' '{s+=$3} END{print s+0}' "$OUT/summary.tsv")
   if [ "$f" -eq 0 ]; then echo "PASS $p/$n ${secs}s"
   else echo "FAIL $f/$n: $(awk -F'\t' '$2=="FAIL"{printf "%s ",$1}' "$OUT/summary.tsv")-> $OUT/<stage>/fail.txt"; fi
@@ -342,9 +342,8 @@ while [[ $# -gt 0 ]]; do
       shift
       mode=only
       while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
-        expanded=()
-        mapfile -t expanded < <(expand_stages "$1") || { echo "unknown group in: $1 (try --groups)"; exit 2; }
-        stages+=("${expanded[@]}")
+        exp=$(expand_stages "$1") || { echo "unknown group in: $1 (try --groups)"; exit 2; }
+        while IFS= read -r l; do [ -n "$l" ] && stages+=("$l"); done <<<"$exp"
         shift
       done
       if [ ${#stages[@]} -eq 0 ]; then
@@ -371,17 +370,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# bash 3.2 (macOS /bin/bash) has no mapfile: read stdin lines into stages[].
+read_stages() { stages=(); local l; while IFS= read -r l; do [ -n "$l" ] && stages+=("$l"); done; }
+
 case $mode in
-  full)   mapfile -t stages < <(all_stages) ;;
-  quick)  mapfile -t stages < <(quick_stages) ;;
-  failed) mapfile -t stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
+  full)   read_stages < <(all_stages) ;;
+  quick)  read_stages < <(quick_stages) ;;
+  failed) read_stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
           [ ${#stages[@]} -eq 0 ] && { echo "PASS nothing-failed"; exit 0; } ;;
-  tier)   mapfile -t stages < <(tier_stages "$tier_name") || {
+  tier)   exp=$(tier_stages "$tier_name") || {
             echo "unknown tier: $tier_name (expected: smoke|unit|integration|system|perf|stress|torture|security)" >&2
             exit 2
-          } ;;
+          }
+          read_stages <<<"$exp" ;;
   only)   ;;
 esac
+[ ${#stages[@]} -eq 0 ] && { echo "no stages selected (try --list)"; exit 2; }
 
 # OS-aware headless display detection:
 # - Linux: Use xvfb-run -a when available and requested via --xvfb.
@@ -400,7 +404,7 @@ case "$OS_NAME" in
 esac
 
 new=$(mktemp)
-for s in "${stages[@]}"; do
+for s in ${stages[@]+"${stages[@]}"}; do
   c=$(cmd_for "$s") || { echo "unknown stage: $s (try --list)"; exit 2; }
   d="$OUT/${s//:/_}"; rm -rf "$d"; mkdir -p "$d"
   t0=$SECONDS
@@ -424,7 +428,7 @@ elif [ "$mode" = quick ]; then
   grep -vE '^(clippy|unit)'$'\t' "$OUT/summary.tsv" >>"$new" 2>/dev/null || true
   sort -u -k1,1 "$new" >"$OUT/summary.tsv"
 else
-  { grep -vFf <(printf '%s\t\n' "${stages[@]}") "$OUT/summary.tsv" 2>/dev/null || true; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
+  { grep -vFf <(printf '%s\t\n' ${stages[@]+"${stages[@]}"}) "$OUT/summary.tsv" 2>/dev/null || true; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
   mv "$OUT/summary.tsv.tmp" "$OUT/summary.tsv"
 fi
 rm -f "$new"
@@ -439,7 +443,7 @@ r=$(line)
 st_overall="${r%% *}"
 echo "$st_overall" >"$OUT/STATUS"
 
-n_total=$(wc -l <"$OUT/summary.tsv")
+n_total=$(($(wc -l <"$OUT/summary.tsv")))
 n_fail=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv" || true)
 n_pass=$((n_total - n_fail))
 s_secs=$(awk -F'\t' '{s+=$3} END{print s+0}' "$OUT/summary.tsv")
