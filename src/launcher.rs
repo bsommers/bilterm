@@ -58,13 +58,13 @@ pub fn normalize_desktop_working_dir() -> Option<PathBuf> {
 pub fn resolve_log_directory() -> PathBuf {
     if let Some(state_home) = std::env::var_os("XDG_STATE_HOME") {
         let dir = PathBuf::from(state_home).join("bilterm");
-        if std::fs::create_dir_all(&dir).is_ok() {
+        if crate::secure_fs::create_private_dir_all(&dir).is_ok() {
             return dir;
         }
     }
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
         let dir = PathBuf::from(local_app_data).join("bilterm").join("logs");
-        if std::fs::create_dir_all(&dir).is_ok() {
+        if crate::secure_fs::create_private_dir_all(&dir).is_ok() {
             return dir;
         }
     }
@@ -73,7 +73,7 @@ pub fn resolve_log_directory() -> PathBuf {
             .join(".local")
             .join("state")
             .join("bilterm");
-        if std::fs::create_dir_all(&dir).is_ok() {
+        if crate::secure_fs::create_private_dir_all(&dir).is_ok() {
             return dir;
         }
     }

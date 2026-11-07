@@ -88,6 +88,21 @@ pub fn ensure_private_dir(path: &Path) -> io::Result<()> {
     }
 }
 
+/// Recursively creates `dir`, giving every newly created component 0700 permissions.
+///
+/// Pre-existing components are left untouched (no chmod), so state directories created by
+/// older versions keep their mode; files written inside should use [`write_private_file`].
+pub fn create_private_dir_all(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir_all(dir)
+    }
+}
+
 /// Creates or verifies a private 0700 subdirectory named `name` inside pre-existing `base`.
 pub fn private_dir_in(base: &Path, name: &str) -> io::Result<PathBuf> {
     if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\\') || name.contains('\0') {

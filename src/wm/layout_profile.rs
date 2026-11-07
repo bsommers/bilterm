@@ -93,14 +93,14 @@ impl WindowManager {
         let Ok(dir) = self.resolve_session_dir() else {
             return;
         };
-        let _ = std::fs::create_dir_all(&dir);
+        let _ = crate::secure_fs::create_private_dir_all(&dir);
         let meta = LayoutProfileMeta {
             default_profile: self.config.default_layout_profile.clone(),
             active_profile: self.config.active_layout_profile.clone(),
             autosave: self.config.layout_autosave,
         };
         if let Ok(toml_str) = toml::to_string_pretty(&meta) {
-            let _ = std::fs::write(dir.join("layout_profile_meta.toml"), toml_str);
+            let _ = crate::secure_fs::write_private_file(&dir.join("layout_profile_meta.toml"), toml_str.as_bytes());
         }
     }
 
