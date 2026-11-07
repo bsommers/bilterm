@@ -299,9 +299,16 @@ impl WalkCtx<'_> {
                 Some((c, a)) => (Some(c), a),
                 None => (None, false),
             };
+            let is_selected = self.wm.is_window_selected(id);
+            let raw_title = sanitize_display(pane.title(), TITLE_MAX_CHARS);
+            let title = if is_selected {
+                format!("[✓] {raw_title}")
+            } else {
+                raw_title
+            };
             rows.push(navigator_row(
                 DrawerRowKind::Pane(id),
-                sanitize_display(pane.title(), TITLE_MAX_CHARS),
+                title,
                 !qt_visible && top_id == Some(id),
                 NavigatorRowMeta {
                     depth: depth.min(usize::from(u8::MAX)) as u8,

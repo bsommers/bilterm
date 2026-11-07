@@ -341,6 +341,14 @@ impl WindowManager {
     /// Switches to an existing session `name`, or creates a new session named `name` if it does not exist yet.
     pub fn switch_or_create_session(&mut self, name: &str) -> Result<(String, usize, bool)> {
         let target = sanitize_profile_name(name);
+        if self.window_manage.background_sessions.contains_key(name)
+            || self.window_manage.background_sessions.contains_key(&target)
+        {
+            let count = self
+                .switch_to_session_preserving_panes(if self.window_manage.background_sessions.contains_key(name) { name } else { &target })
+                .map_err(crate::error::BiltermError::Config)?;
+            return Ok((self.config.history_session.clone(), count, false));
+        }
         let exists_on_disk = self
             .resolve_session_dir()
             .map(|d| d.join(format!("{target}.toml")).is_file())

@@ -31,9 +31,15 @@ pub mod tmux_io;
 pub mod tmux_link;
 pub mod traffic;
 pub mod v2_runtime;
+pub mod window_manage;
 pub mod window_style;
 pub mod z_stack;
 
+pub use window_manage::{
+    BulkWindowOp, InlineRenameState, SelectSpec, SessionManageOp, TopologyUndoEntry,
+    WindowBulkOp, WindowManageOp, WindowManageState, WindowSelectTarget,
+    WorkspaceTopologyUndo,
+};
 pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
     WorkspaceDrawer,
@@ -198,6 +204,8 @@ pub struct WindowManager {
     /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
     pub(crate) last_blink_toggle: Instant,
     pane_chrome: BTreeMap<PaneId, chrome_style::PaneChromeStyle>,
+    /// Window and session management state (`SES-01..05`).
+    pub(crate) window_manage: window_manage::WindowManageState,
     /// When `true` (host terminal TUI mode), disables per-pane pixel font scaling so `vt` and `Buffer` stay 1:1.
     pub(crate) tui_cell_grid_mode: bool,
     /// Sub-cell mouse pixel hint `(px, py, cell_width_px, cell_height_px)` from native GUI windows (`--gui`).
@@ -277,6 +285,7 @@ impl WindowManager {
             layout_profiles_mem: BTreeMap::new(),
             last_blink_toggle: Instant::now(),
             pane_chrome: BTreeMap::new(),
+            window_manage: window_manage::WindowManageState::default(),
             tui_cell_grid_mode: false,
             mouse_pixel_hint: None,
         }

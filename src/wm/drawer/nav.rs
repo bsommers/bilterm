@@ -84,6 +84,15 @@ impl WindowManager {
     /// only closed by a second close on the same pane within [`CLOSE_CONFIRM_TICKS`]; the first one
     /// arms it and says so in the status bar (WR-06). Idle, done, blocked and errored panes close at once.
     fn drawer_nav_close(&mut self) -> bool {
+        if !self.selected_windows().is_empty() {
+            let res = self.window_manage_apply(&crate::wm::window_manage::WindowManageOp::Bulk(
+                crate::wm::window_manage::BulkWindowOp::Close,
+            ));
+            if let Err(e) = res {
+                self.active_pane_mut().set_status_message(Some(e));
+            }
+            return true;
+        }
         let Some(id) = self.selected_drawer_pane_id() else {
             return self.drawer_close_selected_pane();
         };

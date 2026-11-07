@@ -749,6 +749,143 @@ Restores a previously saved workspace session.
   }
   ```
 
+#### `window.move`
+Moves a window (composite pane) to a target session preserving its live PTY, scrollback, running command, and prompt (`SES-01`).
+- **Parameters**:
+  - `target_session` (string, required): Destination session name or nested path.
+  - `window_id` (integer, optional): Window/pane ID to move (defaults to active window).
+  - `switch` (boolean, optional, default `false`): Switch active session to `target_session` after move.
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 22, "method": "window.move", "params": {"target_session": "dev", "switch": true}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 22,
+    "result": {
+      "status": "ok",
+      "window_id": 1,
+      "source_session": "default",
+      "target_session": "dev"
+    }
+  }
+  ```
+
+#### `window.rename`
+Renames a window (composite pane) with safe validation and deterministic deduplication (`SES-02`).
+- **Parameters**:
+  - `new_name` (string, required): New title for the window.
+  - `window_id` (integer, optional): Target window ID (defaults to active window).
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 23, "method": "window.rename", "params": {"new_name": "editor"}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 23,
+    "result": {
+      "status": "ok",
+      "window_id": 1,
+      "name": "editor"
+    }
+  }
+  ```
+
+#### `session.rename`
+Renames an existing session, updating active configuration and session hierarchy (`SES-02`).
+- **Parameters**:
+  - `new_name` (string, required): New session name.
+  - `old_name` (string, optional): Target session name (defaults to active session).
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 24, "method": "session.rename", "params": {"new_name": "prod"}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 24,
+    "result": {
+      "status": "ok",
+      "old_name": "default",
+      "new_name": "prod"
+    }
+  }
+  ```
+
+#### `window.select`
+Updates multi-selection state for windows in the active session (`SES-03`).
+- **Parameters**:
+  - `action` (string, required): Selection operation (`"toggle"`, `"range"`, `"all"`, `"none"`, `"invert"`, `"explicit"`).
+  - `window_id` (integer, optional): Target window ID for `"toggle"`.
+  - `from` (integer, optional): Start window ID for `"range"`.
+  - `to` (integer, optional): End window ID for `"range"`.
+  - `windows` (array of integers, optional): Explicit list of window IDs for `"explicit"`.
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 25, "method": "window.select", "params": {"action": "all"}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "result": {
+      "status": "ok",
+      "selected": [1, 2],
+      "count": 2
+    }
+  }
+  ```
+
+#### `window.bulk`
+Executes an atomic all-or-nothing operation across all multi-selected windows (`SES-03`).
+- **Parameters**:
+  - `action` (string, required): Bulk action (`"move"`, `"close"`, `"rename_prefix"`, `"tile"`, `"pin"`).
+  - `target_session` (string, optional): Target session for `"move"`.
+  - `prefix` (string, optional): Name prefix for `"rename_prefix"`.
+  - `force` (boolean, optional, default `false`): Force close bypassing exit guard.
+  - `pinned` (boolean, optional): Set pinned status for `"pin"`.
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 26, "method": "window.bulk", "params": {"action": "tile"}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 26,
+    "result": {
+      "status": "ok",
+      "action": "tile",
+      "affected_windows": [1, 2],
+      "count": 2
+    }
+  }
+  ```
+
+#### `window.undo`
+Reverts the last window or session mutation (`SES-04`).
+- **Request**:
+  ```json
+  {"jsonrpc": "2.0", "id": 27, "method": "window.undo", "params": {}}
+  ```
+- **Response**:
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 27,
+    "result": {
+      "status": "ok",
+      "reverted": "Move window #2 to 'dev'"
+    }
+  }
+  ```
+
 ---
 
 ## 4. Model Context Protocol (MCP) Server Reference
@@ -778,6 +915,7 @@ The server exposes **14 tools** (the `tools/list` result).
 | `bilterm_find` | `kind` (string, req: `agent`, `session` or `history`), `query` (string), `limit` (integer, default 50, max 200) | Search the unified registry (agents, sessions, command history). Every row carries `source`; the response carries `masked`. | `find.agents` / `find.sessions` / `find.history` |
 | `bilterm_agents_list` | `op` (string, optional: `open`, `close`, `toggle`, `dismiss`, `blur`, `select`, `jump`, `zoom`, `pin`, `unpin`, `scale`, `filter`, `dock`, `float`, `move`, `resize`, `rect`, `size` or `scroll`; absent reads the state), `args` (string, space-separated) | Open, close, pin, select, jump, zoom, scale, filter, dock or position the AGENTS list window, or read the agent state. Returns the `agents_list` object (see "Agents list and demo"). | `agents.list` |
 | `bilterm_agents_demo` | `stop` (boolean, optional; `true` stops the demo and closes the panes it spawned) | Start the agent traffic demo, or stop it. No write gate. | `agents.demo` |
+| `bilterm_window_manage` | `action` (string, req: `move`, `rename`, `rename_session`, `select`, `bulk`, `undo`), plus action-specific parameters | Move, rename, multi-select, bulk mutate, and undo window and session topology (`SES-01..05`). | `window.move`, `window.rename`, `session.rename`, `window.select`, `window.bulk`, `window.undo` |
 
 ### MCP Tool Calling Format
 

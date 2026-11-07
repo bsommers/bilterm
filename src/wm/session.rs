@@ -53,6 +53,9 @@ pub struct SavedPaneState {
     /// Per-session cut-and-paste yank buffer history ring when `clipboard_history_persist` is enabled.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub yank_history: Vec<String>,
+    /// Custom window name (`SES-02`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_name: Option<String>,
     /// Per-window theme name (re-resolved via `resolve_named_palette`); `None` = global.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
@@ -80,6 +83,9 @@ pub struct SavedWorkspaceSession {
     #[serde(default)]
     pub detached: bool,
     pub panes: Vec<SavedPaneState>,
+    /// Multi-selected window IDs (`SES-03`).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub selected_windows: BTreeSet<PaneId>,
 }
 
 impl WindowManager {
@@ -401,6 +407,7 @@ impl WindowManager {
                     } else {
                         Vec::new()
                     },
+                    custom_name: Some(p.title().to_string()),
                     theme: chrome.theme_name,
                     outline: chrome.outline,
                     bold: chrome.bold,
@@ -422,6 +429,7 @@ impl WindowManager {
             zoomed_pane: self.zoomed_pane,
             detached: self.client_detached,
             panes,
+            selected_windows: self.selected_windows().clone(),
         }
     }
 

@@ -5,7 +5,7 @@
 //! [`Action`](crate::action::Action) through `WindowManager::apply`. It never changes drawer, pane or
 //! prompt state itself (`ARCH-R01`).
 
-use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use super::AppAction;
@@ -21,13 +21,76 @@ use crate::wm::drawer::DrawerNavOp;
 use crate::wm::{DrawerEdge, DrawerRowKind, DrawerVisibilityMode, WindowManager};
 
 /// Looks `key` up in the navigator key table; `None` lets the classic drawer handler run.
-pub(super) fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
+pub fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
     // An open context menu is dismissed by any key; Esc is consumed by the dismissal.
     if wm.drawer().navigator_menu_open() {
         let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
         if key.code == KeyCode::Esc {
             return Some(AppAction::Handled);
         }
+    }
+    // If multi-selection is active, Esc clears selection instead of falling through to unfocus.
+    if key.code == KeyCode::Esc && !wm.selected_windows().is_empty() {
+        let _ = wm.apply(Action::WindowManage(
+            crate::wm::window_manage::WindowManageOp::Select(
+                crate::wm::window_manage::WindowSelectTarget::None,
+            ),
+        ));
+        return Some(AppAction::Handled);
+    }
+    // Space on a window row toggles selection (SES-03).
+    if key.code == KeyCode::Char(' ')
+        && key.modifiers.is_empty()
+        && let Some(id) = wm.selected_drawer_pane_id()
+    {
+        let _ = wm.apply(Action::WindowManage(
+            crate::wm::window_manage::WindowManageOp::Select(
+                crate::wm::window_manage::WindowSelectTarget::Toggle(id),
+            ),
+        ));
+        return Some(AppAction::Handled);
+    }
+    // Shift+Down / Shift+Up extends range selection on window rows (SES-03).
+    if key.modifiers.contains(KeyModifiers::SHIFT)
+        && matches!(key.code, KeyCode::Down | KeyCode::Up)
+        && let Some(from) = wm.selected_drawer_pane_id()
+    {
+        if key.code == KeyCode::Down {
+            wm.drawer_select_next();
+        } else {
+            wm.drawer_select_prev();
+        }
+        if let Some(to) = wm.selected_drawer_pane_id() {
+            let _ = wm.apply(Action::WindowManage(
+                crate::wm::window_manage::WindowManageOp::Select(
+                    crate::wm::window_manage::WindowSelectTarget::Range { from, to },
+                ),
+            ));
+        }
+        return Some(AppAction::Handled);
+    }
+    // Ctrl+A selects all windows in current session (SES-03).
+    if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('a') | KeyCode::Char('A')) {
+        let _ = wm.apply(Action::WindowManage(
+            crate::wm::window_manage::WindowManageOp::Select(
+                crate::wm::window_manage::WindowSelectTarget::All,
+            ),
+        ));
+        return Some(AppAction::Handled);
+    }
+    // m / M opens move prompt (SES-01).
+    if key.modifiers.is_empty() && matches!(key.code, KeyCode::Char('m') | KeyCode::Char('M')) {
+        wm.drawer_mut().focused = false;
+        let prompt = wm.active_pane_mut().prompt_mut();
+        prompt.manual_raw_override = false;
+        prompt.force_command_prompt = true;
+        prompt.set_text(":window move ");
+        return Some(AppAction::Handled);
+    }
+    // u / U undoes last window/session mutation (SES-04).
+    if key.modifiers.is_empty() && matches!(key.code, KeyCode::Char('u') | KeyCode::Char('U')) {
+        let _ = wm.apply(Action::WindowManage(crate::wm::window_manage::WindowManageOp::Undo));
+        return Some(AppAction::Handled);
     }
     let comms = wm.navigator_comms_focused();
     let scopes = [DrawerKeyScope::NavigatorComms, DrawerKeyScope::Navigator];
@@ -80,7 +143,7 @@ pub(super) fn navigator_button_action(wm: &WindowManager, kind: NavigatorButtonK
 /// Every visible effect lowers to an [`Action`] applied with `WindowManager::apply` (`ARCH-R01`), so the
 /// keyboard, the colon prompt and the mouse share one code path. Events no gesture claims are swallowed so
 /// the classic absolute-column zones are never reached in navigator style.
-pub(super) fn handle_navigator_drawer_mouse(
+pub fn handle_navigator_drawer_mouse(
     wm: &mut WindowManager,
     mouse: MouseEvent,
     dr: Rect,
@@ -188,7 +251,17 @@ pub(super) fn handle_navigator_drawer_mouse(
         } else if let Some(i) = navigator_row_at(wm, workspace_area, col, row) {
             let _ = wm.apply(Action::DrawerFocus);
             let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Row(i)));
-            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Activate));
+            if mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                if let Some(pid) = wm.selected_drawer_pane_id() {
+                    let _ = wm.apply(Action::WindowManage(
+                        crate::wm::window_manage::WindowManageOp::Select(
+                            crate::wm::window_manage::WindowSelectTarget::Toggle(pid),
+                        ),
+                    ));
+                }
+            } else {
+                let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Activate));
+            }
         }
     }
     Some(AppAction::Handled)

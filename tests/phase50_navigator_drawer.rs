@@ -662,7 +662,7 @@ fn keys_enter_and_space_focus_selected_pane() {
         press(&mut wm, KeyCode::Enter);
         assert_eq!(wm.active_pane_id(), 3);
         wm.drawer_mut().selected_index = 2;
-        ch(&mut wm, ' ');
+        press(&mut wm, KeyCode::Enter);
         assert_eq!(wm.active_pane_id(), 2);
     });
 }
@@ -1824,7 +1824,7 @@ fn rclick_row_opens_menu_and_entries_match_key_twins() {
         right_click_at(&mut wm, area, x, y);
         let menu = navigator_menu_layout(&wm, area).expect("right-click opens the menu");
         assert_eq!(wm.selected_drawer_pane_id(), Some(2), "right-click selects the row");
-        assert_eq!(menu.entries.len(), 6);
+        assert_eq!(menu.entries.len(), NavigatorMenuEntry::ALL.len());
         let dr = wm.drawer_rect(area).unwrap();
         assert!(menu.rect.x > dr.x && menu.rect.x + menu.rect.width < dr.x + dr.width);
         assert!(menu.rect.y > dr.y && menu.rect.y + menu.rect.height < dr.y + dr.height);

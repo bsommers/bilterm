@@ -765,6 +765,16 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":script open", "—", "Open the SCRIPT STUDIO window with debugger and action recorder"),
     (":script close", "—", "Close the SCRIPT STUDIO window"),
     (":script toggle", "—", "Open or close the SCRIPT STUDIO window"),
+    (":window select all", "Ctrl+A", "Select all windows in current session"),
+    (":window select none", "Esc", "Clear window selection"),
+    (":window select clear", "—", "Clear window selection"),
+    (":window select invert", "—", "Invert window selection in current session"),
+    (":window bulk close", "x", "Bulk close selected windows (honors exit guard)"),
+    (":window bulk close --force", "—", "Force bulk close selected windows bypassing exit guard"),
+    (":window bulk tile", "—", "Tile selected windows into binary split layout"),
+    (":window bulk pin", "—", "Toggle pinned status for selected windows"),
+    (":window undo", "u", "Undo last window or session management operation"),
+    (":session undo", "—", "Undo last session or window management operation"),
 ];
 
 #[cfg(test)]

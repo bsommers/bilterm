@@ -15,6 +15,7 @@ pub mod rpc;
 pub mod rpc_agents;
 pub mod rpc_handlers;
 pub mod rpc_link;
+pub mod rpc_window;
 pub mod server;
 #[cfg(test)]
 mod tests;

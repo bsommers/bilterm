@@ -732,6 +732,11 @@ pub fn render_navigator_drawer(
         } else {
             base_style
         };
+        if let DrawerRowKind::Pane(pid) = row.kind
+            && wm.is_window_selected(pid)
+        {
+            style = style.fg(tokens.accent).add_modifier(Modifier::BOLD);
+        }
         if row_idx == selected {
             style = if is_modern {
                 Style::default()

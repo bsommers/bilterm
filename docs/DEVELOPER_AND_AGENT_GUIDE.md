@@ -405,6 +405,28 @@ The entire subsystem is designed to be fully testable without network access, re
 
 ---
 
+## 6e. Session & Window Management (Phase 53, `SES-01..05`, `UNI-R01`)
+
+Session and window topology mutations dispatch through typed actions lowering to `WindowManager::apply`:
+- `Action::WindowManage(WindowManageOp)`:
+  - `Move { window_id, target_session, switch }`: Moves a window (composite pane) preserving live PTY, scrollback, prompt, and running commands (`SES-01`).
+  - `Rename { window_id, new_name }`: Renames window with deterministic deduplication and validation (`SES-02`).
+  - `Select(WindowSelectTarget)`: Non-modal window multi-selection (`Toggle`, `Range`, `All`, `None`, `Invert`, `Explicit`) (`SES-03`).
+  - `Bulk(BulkWindowOp)`: Atomic all-or-nothing operations across selection (`Move`, `Close` honoring exit guards, `RenamePrefix`, `Tile`, `Pin`) (`SES-03`).
+  - `Undo`: Single-step topology undo restoring layout, names, and selections (`SES-04`).
+- `Action::SessionManage(SessionManageOp)`:
+  - `Rename { old_name, new_name }`: Renames active or named session, updating SessionTree hierarchy (`SES-02`).
+  - `MoveOrder { name, target_pos }`: User-defined session ordering (`SES-02`).
+  - `Undo`: Session-level topology undo (`SES-04`).
+
+Surface Uniformity (`UNI-R01`):
+- **Keyboard**: Leader chords (`Ctrl+X m`, `Ctrl+X r`), Navigator keys (`Space` toggle selection, `Shift+Up/Down` range, `Ctrl+A` select all, `m` move, `r` rename, `x` close / bulk close, `u` undo).
+- **Mouse**: Navigator `Ctrl+Click` multi-select toggle, right-click context menu (`Move to session...`, `Rename`, `Bulk move...`, `Bulk close`, `Bulk tile`).
+- **Colon**: Full `:window <move|rename|select|bulk|undo>` and `:session <rename|move|undo>` grammar.
+- **Control Plane**: JSON-RPC endpoints (`window.move`, `window.rename`, `session.rename`, `window.select`, `window.bulk`, `window.undo`), MCP tool `bilterm_window_manage`, and `bilterm ctl` CLI forwarding.
+
+---
+
 ## 7. Verification & CI Conservation Gates
 
 Always run these 4 checks locally before committing or pushing:

@@ -513,7 +513,7 @@ impl WindowManager {
 
     /// Restores a `SavedWorkspaceSession` directly in-place inside `self`, including per-pane
     /// shell, working directory (`cwd`), running software/commands, scrollback, history, and chrome.
-    pub(super) fn apply_saved_session_snapshot(&mut self, saved: &SavedWorkspaceSession) -> usize {
+    pub fn apply_saved_session_snapshot(&mut self, saved: &SavedWorkspaceSession) -> usize {
         let (rows, cols) = self.default_size;
         let default_pty = PtyConfig::default();
         let mut new_panes = BTreeMap::new();
@@ -622,6 +622,9 @@ impl WindowManager {
                     let _ = pane.write_to_pty(payload.as_bytes());
                 }
             }
+            if let Some(name) = &sp.custom_name {
+                pane.set_title(name.clone());
+            }
             new_panes.insert(sp.id, pane);
         }
 
@@ -641,6 +644,7 @@ impl WindowManager {
         self.z_stack = ZStack::from_order_and_geometries(saved.z_order.clone(), geom_map);
         self.layout_mode = saved.layout_mode;
         self.zoomed_pane = saved.zoomed_pane;
+        self.window_manage.selected_windows = saved.selected_windows.clone();
         self.next_pane_id = max_id + 1;
         self.clear_agents_demo();
         let vp = ratatui::layout::Rect::new(0, 0, self.default_size.1, self.default_size.0);

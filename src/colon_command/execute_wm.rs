@@ -864,6 +864,8 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.respawn_active_pane();
             false
         }
+        ColonCommand::WindowManage(op) => super::execute_window::execute_window_manage(wm, op),
+        ColonCommand::SessionManage(op) => super::execute_window::execute_session_manage(wm, op),
         ColonCommand::RemoteLink(op) => super::execute_link::execute_link_command(wm, op),
         other => {
             let is_prompt_layout = matches!(

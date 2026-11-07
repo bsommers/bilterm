@@ -555,7 +555,11 @@ impl WindowManager {
                 cmd_badge: pane_cmd_badge(pane),
                 mode_badges,
                 transport_badges,
-                title: pane.title().to_string(),
+                title: if self.is_window_selected(id) {
+                    format!("[✓] {}", pane.title())
+                } else {
+                    pane.title().to_string()
+                },
                 is_focused_pane: is_focused,
                 navigator: None,
             });

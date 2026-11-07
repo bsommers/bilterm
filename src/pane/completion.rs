@@ -186,6 +186,23 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (
         ":window",
         &[
+            "move ",
+            "rename ",
+            "select ",
+            "select toggle ",
+            "select all",
+            "select none",
+            "select clear",
+            "select invert",
+            "select range ",
+            "bulk ",
+            "bulk move ",
+            "bulk close",
+            "bulk close --force",
+            "bulk rename-prefix ",
+            "bulk tile",
+            "bulk pin ",
+            "undo",
             "menu",
             "show",
             "reset",
@@ -439,6 +456,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (
         ":session",
         &[
+            "undo",
             "new ",
             "blank ",
             "rename ",

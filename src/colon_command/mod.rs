@@ -7,6 +7,7 @@ mod execute_command_window;
 mod execute_config;
 pub mod execute_find;
 pub mod execute_link;
+pub mod execute_window;
 pub mod execute_wm;
 pub mod parse;
 mod parse_agent_mail;
@@ -18,11 +19,14 @@ mod parse_find;
 mod parse_link;
 mod parse_script;
 mod parse_visual;
+pub mod parse_window;
 
 pub use crate::action::Action;
 pub use execute::execute_colon_command;
+pub use execute_window::{execute_session_manage, execute_window_manage};
 pub use execute_wm::execute_wm_colon_command;
 pub use parse::parse_colon_command;
+pub use parse_window::{parse_session_manage_command, parse_window_manage_command};
 
 /// Type alias preserving `ColonCommand` compatibility while unifying on [`crate::action::Action`] (`ARCH-R01`).
 pub type ColonCommand = crate::action::Action;

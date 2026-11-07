@@ -91,17 +91,21 @@ impl AutomationControlPlane {
                     "bilterm_agents_demo" => Some("agents.demo"),
                     "bilterm_remote_link" => Some("remote.link"),
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
+                    "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
                     Some(rpc_method) => match if rpc_method.is_empty() {
                         if tool_name == "bilterm_agent_mail" {
                             Err("missing or invalid 'action' parameter: send, broadcast, inbox, ack, list, name or wait".to_string())
+                        } else if tool_name == "bilterm_window_manage" {
+                            Err("missing or invalid 'action' parameter: move, rename, rename_session, select, bulk, or undo".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
                     } else {
-                        self.dispatch_method(rpc_method, &args)
+                        let normalized_args = Self::normalize_window_manage_args(rpc_method, args);
+                        self.dispatch_method(rpc_method, &normalized_args)
                     } {
                         Ok(val) => Ok(JsonValue::obj([
                             (
@@ -256,6 +260,22 @@ impl AutomationControlPlane {
                     ("timeout_ms", "integer", "Timeout in milliseconds (for wait, default 5000)"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_window_manage",
+                "Manage Bilterm windows and sessions: move, rename, select, bulk operations (close, move, rename-prefix, tile, pin), and undo.",
+                &[
+                    ("action", "string", "Operation: move | rename | rename_session | select | bulk | undo (required)"),
+                    ("window_id", "integer", "Optional window (pane) ID (defaults to active window)"),
+                    ("target_session", "string", "Target session for move or bulk move"),
+                    ("new_name", "string", "New window or session name"),
+                    ("old_name", "string", "Old session name for rename_session"),
+                    ("switch", "boolean", "Switch active session after window move"),
+                    ("select_action", "string", "Selection action for select: toggle | range | all | none | invert | explicit"),
+                    ("bulk_action", "string", "Bulk action: move | close | rename_prefix | tile | pin"),
+                    ("prefix", "string", "Prefix string for bulk rename_prefix"),
+                    ("force", "boolean", "Force bulk close bypassing exit guard"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
     }
@@ -273,6 +293,46 @@ impl AutomationControlPlane {
             "wait" => Some("agent.wait"),
             _ => None,
         }
+    }
+
+    /// `bilterm_window_manage` `action` argument -> the `window.*` / `session.rename` RPC method.
+    fn window_manage_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str)?;
+        match action {
+            "move" => Some("window.move"),
+            "rename" => Some("window.rename"),
+            "rename_session" => Some("session.rename"),
+            "select" | "toggle" | "range" | "all" | "none" | "invert" | "explicit" => {
+                Some("window.select")
+            }
+            "bulk" | "close" | "tile" | "pin" | "rename_prefix" => Some("window.bulk"),
+            "undo" => Some("window.undo"),
+            _ => None,
+        }
+    }
+
+    /// Normalizes arguments from `bilterm_window_manage` to match the target RPC method schema.
+    fn normalize_window_manage_args(method: &str, mut args: JsonValue) -> JsonValue {
+        if let JsonValue::Object(ref mut map) = args {
+            if method == "window.select" {
+                if let Some(sub) = map.get("select_action").cloned() {
+                    map.insert("action".to_string(), sub);
+                } else if map.get("action").and_then(JsonValue::as_str) == Some("select")
+                    && let Some(sub) = map.get("subaction").cloned()
+                {
+                    map.insert("action".to_string(), sub);
+                }
+            } else if method == "window.bulk" {
+                if let Some(sub) = map.get("bulk_action").cloned() {
+                    map.insert("action".to_string(), sub);
+                } else if map.get("action").and_then(JsonValue::as_str) == Some("bulk")
+                    && let Some(sub) = map.get("subaction").cloned()
+                {
+                    map.insert("action".to_string(), sub);
+                }
+            }
+        }
+        args
     }
 
     /// `bilterm_find` `kind` argument -> the `find.*` RPC method; `None` when missing or unknown.

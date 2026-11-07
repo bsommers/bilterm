@@ -29,6 +29,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_script::parse_script_colon_command(head, &parts, rest) {
         return Some(res);
     }
+    if (head == "window" || head == "win")
+        && let Some(res) = super::parse_window::parse_window_manage_command(&parts[1..])
+    {
+        return Some(res);
+    }
     if let Some(res) = parse_visual_colon_command(head, &parts) {
         return Some(res);
     }
@@ -347,75 +352,76 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             if parts.len() < 2 {
                 Some(Err("Usage: :rename [old_name] <new_name>".to_string()))
             } else {
-                let sub = format!("rename {}", parts[1..].join(" "));
-                Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+                Some(super::parse_window::parse_session_rename(&parts[1..]))
             }
         }
-        "session" | "workspace" | "sessions" => match parts.get(1).copied() {
-            Some("save" | "save-as") => {
-                let name = parts.get(2).copied().unwrap_or("").to_string();
-                Some(Ok(ColonCommand::SessionSave(name)))
+        "session" | "workspace" | "sessions" => {
+            if let Some(res) = super::parse_window::parse_session_manage_command(&parts[1..]) {
+                return Some(res);
             }
-            Some("restore" | "load") => {
-                let name = parts.get(2).copied().unwrap_or("").to_string();
-                Some(Ok(ColonCommand::SessionRestore(name)))
+            match parts.get(1).copied() {
+                Some("save" | "save-as") => {
+                    let name = parts.get(2).copied().unwrap_or("").to_string();
+                    Some(Ok(ColonCommand::SessionSave(name)))
+                }
+                Some("restore" | "load") => {
+                    let name = parts.get(2).copied().unwrap_or("").to_string();
+                    Some(Ok(ColonCommand::SessionRestore(name)))
+                }
+                Some(
+                    "new"
+                    | "create"
+                    | "blank"
+                    | "clean"
+                    | "switch"
+                    | "open"
+                    | "reorder"
+                    | "order"
+                    | "swap"
+                    | "up"
+                    | "down"
+                    | "top"
+                    | "bottom"
+                    | "delete"
+                    | "rm"
+                    | "remove"
+                    | "processes"
+                    | "apps"
+                    | "restore-processes"
+                    | "save-apps"
+                    | "cmd"
+                    | "command"
+                    | "app"
+                    | "program"
+                    | "shell"
+                    | "cwd"
+                    | "dir"
+                    | "workdir"
+                    | "relaunch"
+                    | "restart-apps"
+                    | "info"
+                    | "inspect"
+                    | "status"
+                    | "panes"
+                    | "branch"
+                    | "spawn"
+                    | "graft"
+                    | "detach-subtree"
+                    | "promote"
+                    | "tree"
+                    | "checkpoint"
+                    | "journal",
+                ) => {
+                    let sub = parts[1..].join(" ");
+                    Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+                }
+                None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
+                _ => Some(Err(
+                    "Usage: :session new [name] | blank [name] | rename [old] <new> | switch <name> | move [name] <up|down|top|bottom|idx> | reorder <s1> <s2>... | save [name] | restore [name] | processes [on|off] | cmd <command|clear> | shell <prog> [args...] | cwd <path> | relaunch | info | delete <name> | list | tree"
+                        .to_string(),
+                )),
             }
-            Some(
-                "new"
-                | "create"
-                | "blank"
-                | "clean"
-                | "rename"
-                | "name"
-                | "switch"
-                | "open"
-                | "move"
-                | "reorder"
-                | "order"
-                | "swap"
-                | "up"
-                | "down"
-                | "top"
-                | "bottom"
-                | "delete"
-                | "rm"
-                | "remove"
-                | "processes"
-                | "apps"
-                | "restore-processes"
-                | "save-apps"
-                | "cmd"
-                | "command"
-                | "app"
-                | "program"
-                | "shell"
-                | "cwd"
-                | "dir"
-                | "workdir"
-                | "relaunch"
-                | "restart-apps"
-                | "info"
-                | "inspect"
-                | "status"
-                | "panes"
-                | "branch"
-                | "spawn"
-                | "graft"
-                | "detach-subtree"
-                | "promote"
-                | "tree"
-                | "checkpoint"
-                | "journal",
-            ) => {
-                let sub = parts[1..].join(" ");
-                Some(Ok(ColonCommand::SessionTreeCommand(sub)))
-            }
-            None | Some("list" | "ls") => Some(Ok(ColonCommand::SessionList)),
-            _ => Some(Err(
-                "Usage: :session new [name] | blank [name] | rename [old] <new> | switch <name> | move [name] <up|down|top|bottom|idx> | reorder <s1> <s2>... | save [name] | restore [name] | processes [on|off] | cmd <command|clear> | shell <prog> [args...] | cwd <path> | relaunch | info | delete <name> | list | tree"
-                    .to_string(),
-            )),
-        },
+        }
         "new-session" | "newsession" => {
             let sub = if parts.len() > 1 {
                 format!("new {}", parts[1..].join(" "))
@@ -425,12 +431,11 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             Some(Ok(ColonCommand::SessionTreeCommand(sub)))
         }
         "rename-session" | "renamesession" => {
-            let sub = if parts.len() > 1 {
-                format!("rename {}", parts[1..].join(" "))
+            if parts.len() < 2 {
+                Some(Err("Usage: :rename-session [old_name] <new_name>".to_string()))
             } else {
-                "rename".to_string()
-            };
-            Some(Ok(ColonCommand::SessionTreeCommand(sub)))
+                Some(super::parse_window::parse_session_rename(&parts[1..]))
+            }
         }
         "commands" | "cmd" => Some(super::parse_command_window::parse(&parts[1..])),
         "palette" => {

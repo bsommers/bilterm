@@ -40,12 +40,26 @@ pub enum NavigatorMenuEntry {
     SplitVertical,
     Rename,
     Close,
+    MoveWindow,
+    BulkMove,
+    BulkClose,
+    BulkTile,
 }
 
 impl NavigatorMenuEntry {
     /// Entries in display order; `:drawer menu pick <n>` counts from 1 in this order.
-    pub const ALL: [Self; 6] =
-        [Self::NewSession, Self::NewWindow, Self::SplitHorizontal, Self::SplitVertical, Self::Rename, Self::Close];
+    pub const ALL: [Self; 10] = [
+        Self::NewSession,
+        Self::NewWindow,
+        Self::SplitHorizontal,
+        Self::SplitVertical,
+        Self::Rename,
+        Self::Close,
+        Self::MoveWindow,
+        Self::BulkMove,
+        Self::BulkClose,
+        Self::BulkTile,
+    ];
 
     pub const fn label(self) -> &'static str {
         match self {
@@ -55,18 +69,68 @@ impl NavigatorMenuEntry {
             Self::SplitVertical => "Split vertical",
             Self::Rename => "Rename",
             Self::Close => "Close",
+            Self::MoveWindow => "Move to session...",
+            Self::BulkMove => "Bulk move...",
+            Self::BulkClose => "Bulk close",
+            Self::BulkTile => "Bulk tile",
         }
     }
 
     /// The operation the entry applies (its key twin: `N`, `a`, `A`, `r`, `x`).
-    pub fn op(self) -> DrawerNavOp {
+    pub fn op(self) -> Option<DrawerNavOp> {
         match self {
-            Self::NewSession => DrawerNavOp::NewSession,
-            Self::NewWindow => DrawerNavOp::AddWindow(None),
-            Self::SplitHorizontal => DrawerNavOp::AddPane(SplitDirection::Horizontal),
-            Self::SplitVertical => DrawerNavOp::AddPane(SplitDirection::Vertical),
-            Self::Rename => DrawerNavOp::RenamePrompt,
-            Self::Close => DrawerNavOp::Close,
+            Self::NewSession => Some(DrawerNavOp::NewSession),
+            Self::NewWindow => Some(DrawerNavOp::AddWindow(None)),
+            Self::SplitHorizontal => Some(DrawerNavOp::AddPane(SplitDirection::Horizontal)),
+            Self::SplitVertical => Some(DrawerNavOp::AddPane(SplitDirection::Vertical)),
+            Self::Rename => Some(DrawerNavOp::RenamePrompt),
+            Self::Close => Some(DrawerNavOp::Close),
+            _ => None,
+        }
+    }
+
+    pub fn apply(self, wm: &mut WindowManager) -> bool {
+        match self {
+            Self::NewSession => wm.apply_drawer_nav(DrawerNavOp::NewSession),
+            Self::NewWindow => wm.apply_drawer_nav(DrawerNavOp::AddWindow(None)),
+            Self::SplitHorizontal => wm.apply_drawer_nav(DrawerNavOp::AddPane(SplitDirection::Horizontal)),
+            Self::SplitVertical => wm.apply_drawer_nav(DrawerNavOp::AddPane(SplitDirection::Vertical)),
+            Self::Rename => wm.apply_drawer_nav(DrawerNavOp::RenamePrompt),
+            Self::Close => wm.apply_drawer_nav(DrawerNavOp::Close),
+            Self::MoveWindow => {
+                wm.drawer_mut().focused = false;
+                let prompt = wm.active_pane_mut().prompt_mut();
+                prompt.manual_raw_override = false;
+                prompt.force_command_prompt = true;
+                prompt.set_text(":window move ");
+                true
+            }
+            Self::BulkMove => {
+                wm.drawer_mut().focused = false;
+                let prompt = wm.active_pane_mut().prompt_mut();
+                prompt.manual_raw_override = false;
+                prompt.force_command_prompt = true;
+                prompt.set_text(":window bulk move ");
+                true
+            }
+            Self::BulkClose => {
+                let res = wm.window_manage_apply(&crate::wm::window_manage::WindowManageOp::Bulk(
+                    crate::wm::window_manage::BulkWindowOp::Close,
+                ));
+                if let Err(e) = res {
+                    wm.active_pane_mut().set_status_message(Some(e));
+                }
+                true
+            }
+            Self::BulkTile => {
+                let res = wm.window_manage_apply(&crate::wm::window_manage::WindowManageOp::Bulk(
+                    crate::wm::window_manage::BulkWindowOp::Tile,
+                ));
+                if let Err(e) = res {
+                    wm.active_pane_mut().set_status_message(Some(e));
+                }
+                true
+            }
         }
     }
 }
@@ -90,7 +154,7 @@ impl WindowManager {
             DrawerNavOp::MenuPick(i) => {
                 self.drawer.nav_menu = None;
                 match NavigatorMenuEntry::ALL.get(i) {
-                    Some(entry) => self.apply_drawer_nav(entry.op()),
+                    Some(entry) => entry.apply(self),
                     None => false,
                 }
             }

@@ -230,6 +230,10 @@ pub enum Action {
     VisualStyleCommand(Option<String>),
     /// `:agent [name|send|broadcast|inbox|ack|list|enable]` (`AGT-01..03`, Phase 52).
     AgentMail(crate::wm::agent_mail::AgentMailOp),
+    /// `:window <move|rename|select|bulk|undo>` (`SES-01..05`).
+    WindowManage(crate::wm::window_manage::WindowManageOp),
+    /// `:session <rename|move|undo>` (`SES-02`, `SES-04`).
+    SessionManage(crate::wm::window_manage::SessionManageOp),
     Quit,
 }
 
@@ -266,6 +270,8 @@ impl Action {
     pub fn colon_form_or_summary(&self) -> String {
         match self {
             Self::AgentMail(op) => op.colon_form(),
+            Self::WindowManage(_) => ":window undo".to_string(),
+            Self::SessionManage(_) => ":session undo".to_string(),
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
@@ -463,6 +469,8 @@ mod tests {
             Action::FkeyModeCommand(_) => Some(":fkeys bilterm"),
             Action::VisualStyleCommand(_) => Some(":style snazzy"),
             Action::AgentMail(_) => Some(":agent list"),
+            Action::WindowManage(_) => Some(":window undo"),
+            Action::SessionManage(_) => Some(":session undo"),
             Action::Quit => Some(":quit"),
         };
 
@@ -699,6 +707,8 @@ mod tests {
             Action::FkeyModeCommand(None),
             Action::VisualStyleCommand(None),
             Action::AgentMail(crate::wm::agent_mail::AgentMailOp::List),
+            Action::WindowManage(crate::wm::window_manage::WindowManageOp::Undo),
+            Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
             Action::Quit,
         ];
 
