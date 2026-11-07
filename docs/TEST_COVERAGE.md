@@ -1,4 +1,4 @@
-# Test Suite & Coverage Report — `bilterm` (`v3.0.1`)
+# Test Suite & Coverage Report — `bilterm` (`v3.0.3`)
 
 **Date:** `2026-11-07`  
 **Tooling used:** `cargo llvm-cov 0.9.1`, `cargo test 1.90`, `insta 1.42`, `ratatui::backend::TestBackend`, `tokio::test`, `xvfb-run -a` (Linux X11 Headless Driver), `scripts/verify.sh` cross-platform composable runner.
@@ -109,7 +109,7 @@ Bilterm incorporates a unified 4-mode live test driver architecture (`tests/live
 
 | Priority | Area | Previous Gap | Resolution Status | Verified By |
 |---|---|---|---|---|
-| **P0** | Security Confinement | Unverified token file permissions and symlink dereference. | **CLOSED** | `tests/phase19_security_cli.rs`, `src/util/secure_fs.rs` (0600 file & 0700 dir permissions). |
+| **P0** | Security Confinement | Unverified token file permissions and symlink dereference. | **CLOSED** | `tests/phase19_security_cli.rs`, `src/secure_fs.rs` (0600 file & 0700 dir permissions). |
 | **P0** | PTY Passwords & Signals | Password echo leaks during `sudo`/SSH prompt. | **CLOSED** | 3-signal line discipline (`!ECHO` + `tcgetpgrp` + `OSC 133`) in `src/pane/discipline.rs`. |
 | **P1** | Window & Session Rename | Rename command lacked parity across TUI popup, menu, and CLI. | **CLOSED** | Added TUI `RenameDialog` modal, right-click context menu, and `:rename` action lowerings. |
 | **P1** | Design System Profiles | `:appearance` profile commands lacked full lifecycle persistence. | **CLOSED** | Phase 45 token engine & `design_system_coverage.rs` verifying all 8 profiles. |

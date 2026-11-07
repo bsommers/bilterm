@@ -1,4 +1,4 @@
-# Purpose, Motivation & Threat Model (`v1.12.0`)
+# Purpose, Motivation & Threat Model (`v3.0.3`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md) | [Chapter 10: Security & Best Practices →](user-guide/10-security-and-best-practices.md)
 
@@ -54,7 +54,7 @@ Because a terminal emulator, remote SSH fleet manager, and AI automation server 
 
 ### 2.7 Filesystem Confinement, Private `0700`/`0600` Permissions & Zero-Trust RPC (`SEC-R01..04`)
 - **Threat**: Shared multi-user systems, path-traversal payloads (`../../`), symlink attacks, or unauthenticated localhost/LAN sockets could expose terminal sessions.
-- **Mitigation (`src/util/secure_fs.rs`, `src/api/rpc.rs`, `src/remote/mod.rs`)**:
+- **Mitigation (`src/secure_fs.rs`, `src/api/rpc.rs`, `src/remote/mod.rs`)**:
   1. All runtime directories (`$XDG_RUNTIME_DIR/bilterm`) are created with mode `0700`, and all history logs, session TOMLs, `.cast` recordings, and `.ppm` snapshots are written atomically with mode `0600` (`O_NOFOLLOW`) and validated with `validate_safe_name` (rejecting `..`, `/`, `\`, NUL).
   2. `bilterm --headless` defaults to a private `0600` Unix domain socket with kernel `SO_PEERCRED` UID verification. Non-loopback TCP requires `--allow-remote` and a mode `0600` `--token-file` (`auth.login` constant-time handshake; secrets are never accepted on CLI `argv`).
   3. Remote `:ssh` destinations reject leading `-` characters and separate arguments with `--` to prevent OpenSSH `ProxyCommand` argument injection.
