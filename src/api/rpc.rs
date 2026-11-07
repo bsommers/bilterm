@@ -275,14 +275,18 @@ impl AutomationControlPlane {
             .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
 
         match self.dispatch_method(method, &params) {
-            Ok(result) => JsonValue::obj([
-                ("jsonrpc", JsonValue::String("2.0".to_string())),
-                ("id", id),
-                ("result", result),
-            ])
-            .to_json_string(),
+            Ok(result) => Self::result_response(id, result).to_json_string(),
             Err(msg) => Self::error_response(id, -32000, &msg).to_json_string(),
         }
+    }
+
+    /// JSON-RPC 2.0 success envelope `{"jsonrpc":"2.0","id":..,"result":..}`.
+    pub(crate) fn result_response(id: JsonValue, result: JsonValue) -> JsonValue {
+        JsonValue::obj([
+            ("jsonrpc", JsonValue::String("2.0".to_string())),
+            ("id", id),
+            ("result", result),
+        ])
     }
 
     pub fn workspace_status_json(&self) -> JsonValue {
