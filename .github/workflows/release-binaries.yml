@@ -11,48 +11,56 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   GH_TOKEN: ${{ github.token }}
+  # Pass the dispatch input via env (never interpolate it into run: scripts).
+  TAG: ${{ inputs.tag }}
 
 jobs:
   macos:
     runs-on: macos-latest
+    permissions:
+      contents: write # uploads release assets
     steps:
       # Run the script from the default branch (so script fixes apply to old
       # tags); it builds the tag itself in a clean worktree.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --upload
+      - run: ./scripts/build-release-mac-win.sh "$TAG" --upload
 
   windows:
     # Sequential: both jobs merge and re-upload SHA256SUMS.
     needs: macos
     runs-on: windows-latest
+    permissions:
+      contents: write # uploads release assets
     defaults:
       run:
         shell: bash
     steps:
       # Run the script from the default branch (so script fixes apply to old
       # tags); it builds the tag itself in a clean worktree.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows
-      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/${{ inputs.tag }}/bilterm-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip" -ExpectArch x86_64
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows --no-build --upload
+      - run: ./scripts/build-release-mac-win.sh "$TAG" --windows
+      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/$TAG/bilterm-$TAG-x86_64-pc-windows-msvc.zip" -ExpectArch x86_64
+      - run: ./scripts/build-release-mac-win.sh "$TAG" --windows --no-build --upload
 
   windows-arm64:
     # Native Windows 11 ARM64 runner (free for public repos). Sequential for SHA256SUMS.
     needs: windows
     runs-on: windows-11-arm
+    permissions:
+      contents: write # uploads release assets
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Ensure native ARM64 Rust toolchain
@@ -62,6 +70,6 @@ jobs:
             /tmp/rustup-init.exe -y --profile minimal --default-host aarch64-pc-windows-msvc
             echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
           fi
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows-arm64
-      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/${{ inputs.tag }}/bilterm-${{ inputs.tag }}-aarch64-pc-windows-msvc.zip" -ExpectArch aarch64
-      - run: ./scripts/build-release-mac-win.sh "${{ inputs.tag }}" --windows-arm64 --no-build --upload
+      - run: ./scripts/build-release-mac-win.sh "$TAG" --windows-arm64
+      - run: powershell -ExecutionPolicy Bypass -File scripts/windows-smoke-test.ps1 -Archive "target/release-dist/$TAG/bilterm-$TAG-aarch64-pc-windows-msvc.zip" -ExpectArch aarch64
+      - run: ./scripts/build-release-mac-win.sh "$TAG" --windows-arm64 --no-build --upload
