@@ -242,8 +242,38 @@ Start a fresh session (`New Chat` in Antigravity or `/exit`) and paste:
 - Primary checkout: `/home/bill/src/ai/bilterm` on `main`.
 
 ### 4. Next Steps
-- **Phases 53, 54, and 55 are now fully planned**:
-  - `.planning/phases/53-session-and-window-management/` (`53-CONTRACT.md`, `53-01..03-PLAN.md`)
-  - `.planning/phases/54-session-packing-viewer/` (`54-CONTRACT.md`, `54-01..03-PLAN.md`)
-  - `.planning/phases/55-daemon-supervisor/` (`55-RESEARCH.md`, `55-CONTRACT.md`, `55-01..03-PLAN.md`)
-- Ready to execute **Phase 53 (`Session & Window Management`, `SES-01..05`)** and **Phase 55 (`Daemon Supervisor & Multi-Daemon Awareness`, `DAEM-05..08`)** in parallel worktrees (since Phase 53 touches `src/wm/window_manage.rs` / Navigator while Phase 55 touches `src/daemon/`), followed by **Phase 54 (`Session Packing Viewer`, `VIEW-01..04`)**!
+- Execute next roadmap phases (Milestone v2.10 complete with Phases 53, 54, 55 landed).
+
+---
+
+## Checkpoint 2026-11-06 (Phases 53, 54, 55 Integration Complete)
+
+**Status:** COMPLETE (Phase 53: Session & Window Management `SES-01..05`, Phase 54: Session Packing Viewer & Drag-and-Drop `VIEW-01..04`, Phase 55: Daemon Supervisor & Multi-Daemon Awareness `DAEM-05..08` merged, verified, and closed).
+
+### 1. Goals & Delivered Scope
+- **Phase 53: Session & Window Management (`SES-01..05`)**:
+  - `SES-01`: Window movement between sessions via `:window move <target>`, key sequence, Navigator menu, and `window.move` RPC/MCP with PTY preservation.
+  - `SES-02`: Renaming sessions and windows via `:session rename`, `:window rename`, and inline Navigator actions with validation and deduplication.
+  - `SES-03`: Multi-window selection and bulk operations (move, close, rename-prefix, tile, pin) with exit guard honoring.
+  - `SES-04`: Undo-safe single-unit operations and journal persistence across save/restore.
+  - `SES-05`: Full surface parity (`Action::WindowManage`, `Action::SessionManage`) across CLI, RPC (`window.*`, `session.rename`), MCP (`bilterm_window_manage`), and tests (`tests/phase53_*`).
+- **Phase 54: Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`)**:
+  - `VIEW-01`: Deterministic treemap layout packing multiple sessions and windows cleanly.
+  - `VIEW-02`: Non-modal utility window in TUI (braille/box drawing) and GUI vector graphics (`:sessions map` / `:packing`).
+  - `VIEW-03`: Mouse drag-and-drop between session containers and Navigator tree.
+  - `VIEW-04`: Complete keyboard navigation, pickup/drop, blur chaining, and parity tests (`tests/phase54_*`).
+- **Phase 55: Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`)**:
+  - `DAEM-05`: Singleton background daemon auto-dispatch with exclusive lock and stale-lock recovery.
+  - `DAEM-06`: Opt-in named multi-daemon isolation (`--daemon --name <n>`, socket isolation).
+  - `DAEM-07`: Peer awareness registry (`DaemonRegistry`), `daemon.list/status/start/stop/switch` RPC/MCP, and cross-daemon `:find`.
+  - `DAEM-08`: Lifecycle safety, graceful shutdown, crash cleanup, surface parity (`tests/phase55_*`), and Top Menubar "Tools" category.
+
+### 2. Verification Gates
+- `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
+- `scripts/verify.sh`: `PASS 118/118 76s` (including clippy, unit, and all test suites)
+- Clean line count ceilings: all files under 1200 lines (`src/wm/agents_window.rs` 1181, `src/api/rpc.rs` 1115), `handle_wm_key_event` at 53 lines (<= 80).
+
+### 3. Clean-up & Working Tree State
+- Temporary worktrees removed: `bilterm-53`, `bilterm-54`, `bilterm-55`.
+- Temporary branches deleted: `worktree-phase53`, `worktree-phase54`, `worktree-phase55`.
+- Active integration worktree: `/home/bill/src/ai/bilterm/.claude/worktrees/integ` on branch `feat/navigator-rows-and-launch`.

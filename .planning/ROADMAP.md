@@ -53,10 +53,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
 - [ ] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
 - [x] **Phase 51.2: First-Class Utility Windows & Script Studio (INSERTED)** - Floating, pinnable, dockable utility windows (`FONTS` window with live preview, workbench-style pinned `COMMAND PALETTE` with execution history, and `SCRIPT STUDIO` with live recorder and single-step debugger) (`WIN-01..WIN-03`)
-- [ ] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
-- [ ] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
-- [ ] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
-- [ ] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
+- [x] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
+- [x] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
+- [x] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
+- [x] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
 
 ## Phase Details
 
@@ -951,12 +951,12 @@ Sequencing: Phase 49 (Command Parity & Full Public API) should precede any scrip
   4. Undo-safe and persistent (`SES-04`): each move, rename and bulk action is a single undoable unit (undo restores placement, name, order and selection), cannot orphan a pane or drop the last window silently, and survives session save/restore and daemon re-attach (TOML and journal round trip, older session files still load).
   5. API and parity (`SES-05`): all new actions are reachable via `bilterm ctl`, RPC and MCP (`window.move`, `window.rename`, `session.rename`, `window.select`, bulk variants) with the existing `[api]` gating; names from RPC are sanitised; exit-guard interplay is tested (closing the last window of a session, moving a window with a running foreground process); key, mouse and colon parity tests exist for every action.
 
-**Plans**: 0/3 plans complete
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 53-01-PLAN.md — Spec: Action set, selection model, undo model, persistence schema, naming rules; user sign-off before code (wave 1)
-- [ ] 53-02-PLAN.md — Core: move and rename actions in `wm` with `apply`, `:` commands, persistence, undo, tests (wave 2)
-- [ ] 53-03-PLAN.md — Multi-select and bulk actions, Navigator menu and keys, RPC/MCP/ctl, docs and parity tests (wave 3)
+- [x] 53-01-PLAN.md — Spec: Action set, selection model, undo model, persistence schema, naming rules; user sign-off before code (wave 1)
+- [x] 53-02-PLAN.md — Core: move and rename actions in `wm` with `apply`, `:` commands, persistence, undo, tests (wave 2)
+- [x] 53-03-PLAN.md — Multi-select and bulk actions, Navigator menu and keys, RPC/MCP/ctl, docs and parity tests (wave 3)
 
 ### Phase 54: Session Packing Viewer & Drag-and-Drop
 
@@ -972,12 +972,12 @@ Plans:
   4. Keyboard equivalents (`VIEW-04`): every drag gesture has a keyboard path (pick up, move target, drop, cancel) and a `:` command, listed in `src/input/keymap.rs` with drift tests; parity tests prove mouse, key and colon give identical results.
   5. Tests: layout golden/property tests (no overlap, full containment, determinism), TUI snapshot and GUI-dump previews, drag/drop and keyboard parity tests in the style of `tests/phase50_*`.
 
-**Plans**: 0/3 plans complete
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 54-01-PLAN.md — Spec and pure treemap packing layout with property tests; user sign-off on look before rendering (wave 1)
-- [ ] 54-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
-- [ ] 54-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
+- [x] 54-01-PLAN.md — Spec and pure treemap packing layout with property tests; user sign-off on look before rendering (wave 1)
+- [x] 54-02-PLAN.md — Non-modal viewer window: text-mode and GUI vector rendering, window chrome, `:` commands and keys (wave 2)
+- [x] 54-03-PLAN.md — Drag-and-drop in viewer and Navigator (mouse), keyboard equivalents, parity tests, docs (wave 3)
 
 ### Phase 55: Daemon Supervisor & Multi-Daemon Awareness
 
@@ -993,12 +993,12 @@ Plans:
   3. `DAEM-07`: peer awareness: a registry of live daemons (id, name, pid, uptime, panes, sessions, agents) that every daemon and client can read; `daemon.list` RPC/MCP, `:daemon list|status|stop|start`, drawer/palette entries, and `:find` can search across daemons.
   4. `DAEM-08`: lifecycle safety: graceful stop, crash cleanup, version-mismatch handling, no cross-daemon PTY/input leakage unless explicitly allowed.
 
-**Plans**: 0/3 plans complete
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 55-01-PLAN.md — Singleton lock, stale-lock recovery, `DaemonRegistry`, and `--daemon --name <n>` multi-daemon isolation (wave 1)
-- [ ] 55-02-PLAN.md — Auto-spawn on `:detach` / `bilterm ctl`, `:daemon list|status|start|stop|switch`, JSON-RPC `daemon.*` & MCP `bilterm_daemon`, version-handshake safety (wave 2)
-- [ ] 55-03-PLAN.md — Cross-daemon `:find` integration, Navigator/Palette/Menu surface parity (`UNI-R01`), documentation, and uniformity test suite (wave 3)
+- [x] 55-01-PLAN.md — Singleton lock, stale-lock recovery, `DaemonRegistry`, and `--daemon --name <n>` multi-daemon isolation (wave 1)
+- [x] 55-02-PLAN.md — Auto-spawn on `:detach` / `bilterm ctl`, `:daemon list|status|start|stop|switch`, JSON-RPC `daemon.*` & MCP `bilterm_daemon`, version-handshake safety (wave 2)
+- [x] 55-03-PLAN.md — Cross-daemon `:find` integration, Navigator/Palette/Menu surface parity (`UNI-R01`), documentation, and uniformity test suite (wave 3)
 
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
@@ -1077,6 +1077,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 16/16 | Complete | 2026-11-06 |
 | 51.2. First-Class Utility Windows & Script Studio (INSERTED) (`WIN-01..WIN-03`) | 4/4 | Complete | 2026-11-06 |
 | 52. Agent-to-Agent Messaging & Coordination (`AGT-01..03`) | 3/3 | Complete | 2026-11-06 |
-| 53. Session & Window Management (`SES-01..05`) | 0/3 | Planned | - |
-| 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 0/3 | Planned | - |
-| 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 0/3 | Planned | - |
+| 53. Session & Window Management (`SES-01..05`) | 3/3 | Complete | 2026-11-06 |
+| 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 3/3 | Complete | 2026-11-06 |
+| 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 3/3 | Complete | 2026-11-06 |

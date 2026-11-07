@@ -270,7 +270,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":daemon status", "Ctrl+X D S", "Show status and telemetry of background daemon"),
     (":daemon start", "Ctrl+X D N", "Auto-spawn background daemon if not already running"),
     (":daemon stop", "Ctrl+X D Q", "Gracefully stop background daemon and release resources"),
-    (":daemon switch", "Ctrl+X D W", "Switch active client context to a named background daemon"),
+    (":daemon switch <name>", "Ctrl+X D W", "Switch active client context to a named background daemon"),
     (":daemon prune", "—", "Prune dead background daemon locks and socket records"),
     (":detach", "Ctrl+X D", "Detach client & save full multi-pane window layout intact"),
     (":attach", "bilterm -a", "Re-attach & restore saved/detached multi-pane window layout"),

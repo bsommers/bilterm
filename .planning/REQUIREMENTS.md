@@ -217,29 +217,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Daemon (Phase 55)
 
-- [ ] **DAEM-05**: Singleton daemon auto-dispatched under an exclusive lock.
-- [ ] **DAEM-06**: Opt-in named multi-daemon mode with isolated sockets and locks.
-- [ ] **DAEM-07**: Daemons discover each other; `daemon.list` RPC/MCP and `:daemon` verbs.
-- [ ] **DAEM-08**: Safe lifecycle: graceful stop, crash cleanup, version mismatch, no cross-daemon leakage.
+- [x] **DAEM-05**: Singleton daemon auto-dispatched under an exclusive lock.
+- [x] **DAEM-06**: Opt-in named multi-daemon mode with isolated sockets and locks.
+- [x] **DAEM-07**: Daemons discover each other; `daemon.list` RPC/MCP and `:daemon` verbs.
+- [x] **DAEM-08**: Safe lifecycle: graceful stop, crash cleanup, version mismatch, no cross-daemon leakage.
 
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
-- [ ] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
-- [ ] **SES-02**: Sessions and windows can be renamed by right-click, key sequence and `:` command, with sanitised, deterministic duplicate handling.
-- [ ] **SES-03**: Windows in a session can be multi-selected and acted on in bulk (move, close, rename-prefix, tile, pin) by key, `:` command and menu; bulk close honours the exit guard.
-- [ ] **SES-04**: Move, rename and bulk actions are undo-safe single units and persist across session save/restore and daemon re-attach.
-- [ ] **SES-05**: All session/window management actions lower to `Action` via `WindowManager::apply`, are reachable via RPC/MCP/`bilterm ctl` with existing gating, and have key/mouse/colon parity tests.
-- [ ] **VIEW-01**: A deterministic treemap-style layout packs several sessions as rectangular containers, each with its windows packed inside, scaled to the available area.
-- [ ] **VIEW-02**: The packing is shown in a non-modal window in text mode (braille/box) and as GUI vector graphics, reusing Phase 50 rendering with no new dependency.
-- [ ] **VIEW-03**: Windows can be dragged between sessions in the viewer and in the Navigator tree by mouse (TUI and GUI), lowering to Phase 53's move action.
-- [ ] **VIEW-04**: Every drag gesture has a keyboard equivalent and a `:` command, with parity tests and keymap drift tests.
+- [x] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
+- [x] **SES-02**: Sessions and windows can be renamed by right-click, key sequence and `:` command, with sanitised, deterministic duplicate handling.
+- [x] **SES-03**: Windows in a session can be multi-selected and acted on in bulk (move, close, rename-prefix, tile, pin) by key, `:` command and menu; bulk close honours the exit guard.
+- [x] **SES-04**: Move, rename and bulk actions are undo-safe single units and persist across session save/restore and daemon re-attach.
+- [x] **SES-05**: All session/window management actions lower to `Action` via `WindowManager::apply`, are reachable via RPC/MCP/`bilterm ctl` with existing gating, and have key/mouse/colon parity tests.
+- [x] **VIEW-01**: A deterministic treemap-style layout packs several sessions as rectangular containers, each with its windows packed inside, scaled to the available area.
+- [x] **VIEW-02**: The packing is shown in a non-modal window in text mode (braille/box) and as GUI vector graphics, reusing Phase 50 rendering with no new dependency.
+- [x] **VIEW-03**: Windows can be dragged between sessions in the viewer and in the Navigator tree by mouse (TUI and GUI), lowering to Phase 53's move action.
+- [x] **VIEW-04**: Every drag gesture has a keyboard equivalent and a `:` command, with parity tests and keymap drift tests.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FLT-01 | Phase 50 | Complete |
 | FLT-02 | Phase 50 | Complete |
 | FLT-03 | Phase 50 | Complete |
-| UNI-R01 | Phases 50.1+ (cross-cutting) | In progress (50.1 and 51 parity matrices delivered; 51.1+ pending) |
+| UNI-R01 | Phases 50.1+ (cross-cutting) | In progress (50.1, 51, 55 parity matrices delivered) |
 | FND-R01 | Phase 50.1 | Complete |
 | FND-R02 | Phase 50.1 | Complete |
 | FND-R03 | Phase 50.1 | Complete |
@@ -258,26 +258,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGT-01 | Phase 52 | Complete |
 | AGT-02 | Phase 52 | Complete |
 | AGT-03 | Phase 52 | Complete |
-| SES-01 | Phase 53 | Planned |
-| SES-02 | Phase 53 | Planned |
-| SES-03 | Phase 53 | Planned |
-| SES-04 | Phase 53 | Planned |
-| SES-05 | Phase 53 | Planned |
-| VIEW-01 | Phase 54 | Planned |
-| VIEW-02 | Phase 54 | Planned |
-| VIEW-03 | Phase 54 | Planned |
-| VIEW-04 | Phase 54 | Planned |
+| SES-01 | Phase 53 | Complete |
+| SES-02 | Phase 53 | Complete |
+| SES-03 | Phase 53 | Complete |
+| SES-04 | Phase 53 | Complete |
+| SES-05 | Phase 53 | Complete |
+| VIEW-01 | Phase 54 | Complete |
+| VIEW-02 | Phase 54 | Complete |
+| VIEW-03 | Phase 54 | Complete |
+| VIEW-04 | Phase 54 | Complete |
+| DAEM-05 | Phase 55 | Complete |
+| DAEM-06 | Phase 55 | Complete |
+| DAEM-07 | Phase 55 | Complete |
+| DAEM-08 | Phase 55 | Complete |
 
 **Coverage:**
 
 - Total tracked requirements: 65 total (traceability table rows)
-- Mapped to phases: 65 (41 Complete, 24 Planned)
+- Mapped to phases: 65 (54 Complete, 11 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-10-27 for Milestone v2.0 Phases 29–34 (Smooth/Block-Page Scrolling, Exit Guard, iTerm2 Color Schemes, Herdr Background Daemon, Session Trees & Crash Recovery, and TRON Master Control Program Root Console)*
-| DAEM-05 | Phase 55 | Planned |
-| DAEM-06 | Phase 55 | Planned |
-| DAEM-07 | Phase 55 | Planned |
-| DAEM-08 | Phase 55 | Planned |
+*Last updated: 2026-11-06 for Phases 53, 54, 55*

@@ -676,21 +676,21 @@ mod tests {
         wm.config_mut().show_top_menubar = true;
         let screen = Rect::new(0, 0, 80, 24);
 
-        // " Help " sits at category 6 (columns 46..52)
-        assert_eq!(crate::ui::modals::menubar_category_at_col(47), Some(6));
+        // " Help " sits at category 7 (columns 52..58)
+        assert_eq!(crate::ui::modals::menubar_category_at_col(54), Some(7));
 
-        // 1. Click " Help " on the top menu bar -> opens category 6 dropdown
+        // 1. Click " Help " on the top menu bar -> opens category 7 dropdown
         let click_help_bar = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: 47,
+            column: 54,
             row: 0,
             modifiers: KeyModifiers::NONE,
         };
         handle_wm_mouse_event(&mut wm, click_help_bar, screen).unwrap();
-        assert_eq!(wm.menubar_open_category(), Some(6));
+        assert_eq!(wm.menubar_open_category(), Some(7));
 
         // 2. Click item 0 ("Help Reference (F1)") inside the Help dropdown (row = workspace_area.y + 1 = 2)
-        let dropdown = crate::ui::modals::menubar_dropdown_rect(6, Rect::new(0, 1, 80, 22));
+        let dropdown = crate::ui::modals::menubar_dropdown_rect(7, Rect::new(0, 1, 80, 22));
         let click_dropdown_item0 = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: dropdown.x + 2,
