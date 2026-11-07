@@ -135,6 +135,9 @@ fn tools_list_only_gains_find() {
             "bilterm_agents_demo",
             "bilterm_remote_link",
             "bilterm_agent_mail",
+            "bilterm_window_manage",
+            "bilterm_session_map",
+            "bilterm_daemon",
         ]
     );
 }

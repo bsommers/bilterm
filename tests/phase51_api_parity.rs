@@ -264,7 +264,7 @@ fn is_error(r: &JsonValue) -> Option<bool> {
 fn mcp_lists_agents_tools() {
     let mut p = plane();
     let t = tools(&mut p);
-    assert_eq!(t.len(), 14);
+    assert_eq!(t.len(), 18);
     let names: Vec<&str> = t.iter().filter_map(|x| x.get("name").and_then(JsonValue::as_str)).collect();
     assert_eq!(&names[10..13], ["bilterm_find", "bilterm_agents_list", "bilterm_agents_demo"]);
     for (tool, props) in [("bilterm_agents_list", &["op", "args"][..]), ("bilterm_agents_demo", &["stop"][..])] {

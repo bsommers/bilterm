@@ -581,32 +581,45 @@ impl Drop for X11GuiCanvas<'_> {
     }
 }
 
-fn translate_x11_key_event(api: &X11Api, kev: &mut XKeyEvent) -> Option<KeyEvent> {
-    let mut buf = [0 as c_char; 32];
-    let mut keysym: c_ulong = 0;
-    let n = unsafe { (api.x_lookup_string)(kev, buf.as_mut_ptr(), buf.len() as c_int - 1, &mut keysym, null_mut()) };
-    let (ctrl, alt, shift) = ((kev.state & CONTROL_MASK) != 0, (kev.state & MOD1_MASK) != 0, (kev.state & SHIFT_MASK) != 0);
+/// Pure X11 `KeySym` + modifier bitmask + `XLookupString` byte slice translator (`GPU-02`).
+pub fn translate_x11_keysym_and_bytes(keysym: u32, state: u32, bytes: &[u8]) -> Option<KeyEvent> {
+    let (ctrl, alt, shift) = (
+        (state & CONTROL_MASK) != 0,
+        (state & MOD1_MASK) != 0,
+        (state & SHIFT_MASK) != 0,
+    );
     let mut mods = KeyModifiers::empty();
-    if ctrl { mods |= KeyModifiers::CONTROL; }
-    if alt { mods |= KeyModifiers::ALT; }
-    if shift { mods |= KeyModifiers::SHIFT; }
+    if ctrl {
+        mods |= KeyModifiers::CONTROL;
+    }
+    if alt {
+        mods |= KeyModifiers::ALT;
+    }
+    if shift {
+        mods |= KeyModifiers::SHIFT;
+    }
 
-    let code = match keysym as u32 {
+    let code = match keysym {
         0xFF08 => Some(KeyCode::Backspace),
-        0xFF09 => Some(if shift { KeyCode::BackTab } else { KeyCode::Tab }),
+        0xFF09 | 0xFF89 => Some(if shift { KeyCode::BackTab } else { KeyCode::Tab }),
         0xFE20 => Some(KeyCode::BackTab),
         0xFF0D | 0xFF8D => Some(KeyCode::Enter),
         0xFF1B => Some(KeyCode::Esc),
-        0xFF50 => Some(KeyCode::Home),
-        0xFF51 => Some(KeyCode::Left),
-        0xFF52 => Some(KeyCode::Up),
-        0xFF53 => Some(KeyCode::Right),
-        0xFF54 => Some(KeyCode::Down),
-        0xFF55 => Some(KeyCode::PageUp),
-        0xFF56 => Some(KeyCode::PageDown),
-        0xFF57 => Some(KeyCode::End),
-        0xFF63 => Some(KeyCode::Insert),
-        0xFFFF => Some(KeyCode::Delete),
+        0xFF80 => Some(KeyCode::Char(' ')),
+        0xFF50 | 0xFF95 => Some(KeyCode::Home),
+        0xFF51 | 0xFF96 => Some(KeyCode::Left),
+        0xFF52 | 0xFF97 => Some(KeyCode::Up),
+        0xFF53 | 0xFF98 => Some(KeyCode::Right),
+        0xFF54 | 0xFF99 => Some(KeyCode::Down),
+        0xFF55 | 0xFF9A => Some(KeyCode::PageUp),
+        0xFF56 | 0xFF9B => Some(KeyCode::PageDown),
+        0xFF57 | 0xFF9C => Some(KeyCode::End),
+        0xFF63 | 0xFF9E => Some(if ctrl && keysym == 0xFF9E {
+            return Some(KeyEvent::new(KeyCode::Char('0'), KeyModifiers::CONTROL));
+        } else {
+            KeyCode::Insert
+        }),
+        0xFFFF | 0xFF9F => Some(KeyCode::Delete),
         ks @ 0xFFBE..=0xFFC9 => Some(KeyCode::F((ks - 0xFFBE + 1) as u8)),
         ks if ctrl && (ks == b'+' as u32 || ks == b'=' as u32 || ks == 0xFFAB) => {
             return Some(KeyEvent::new(KeyCode::Char('+'), KeyModifiers::CONTROL));
@@ -614,25 +627,50 @@ fn translate_x11_key_event(api: &X11Api, kev: &mut XKeyEvent) -> Option<KeyEvent
         ks if ctrl && (ks == b'-' as u32 || ks == b'_' as u32 || ks == 0xFFAD) => {
             return Some(KeyEvent::new(KeyCode::Char('-'), KeyModifiers::CONTROL));
         }
-        ks if ctrl && (ks == b'0' as u32 || ks == b')' as u32 || ks == 0xFFB0 || ks == 0xFF9E) => {
+        ks if ctrl && (ks == b'0' as u32 || ks == b')' as u32 || ks == 0xFFB0) => {
             return Some(KeyEvent::new(KeyCode::Char('0'), KeyModifiers::CONTROL));
         }
-        ks @ 0x20..=0x7E if ctrl || alt => Some(KeyEvent::new(KeyCode::Char((ks as u8 as char).to_ascii_lowercase()), mods).code),
+        ks @ 0x20..=0x7E if ctrl || alt => {
+            let raw = ks as u8 as char;
+            let ch = if shift && !ctrl {
+                raw.to_ascii_uppercase()
+            } else {
+                raw.to_ascii_lowercase()
+            };
+            Some(KeyCode::Char(ch))
+        }
         _ => None,
     };
     if let Some(c) = code {
         return Some(KeyEvent::new(c, mods));
     }
-    if n > 0 {
-        let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), n as usize) };
+    if !bytes.is_empty() {
         if ctrl && bytes.len() == 1 && (1..=26).contains(&bytes[0]) {
             return Some(KeyEvent::new(KeyCode::Char((b'a' + bytes[0] - 1) as char), mods));
         }
-        if let Ok(s) = std::str::from_utf8(bytes) && let Some(ch) = s.chars().next() && !ch.is_control() {
-            return Some(KeyEvent::new(KeyCode::Char(ch), if alt { KeyModifiers::ALT } else { KeyModifiers::NONE }));
+        if let Ok(s) = std::str::from_utf8(bytes)
+            && let Some(ch) = s.chars().next()
+            && !ch.is_control()
+        {
+            return Some(KeyEvent::new(
+                KeyCode::Char(ch),
+                if alt { KeyModifiers::ALT } else { KeyModifiers::NONE },
+            ));
         }
     }
     None
+}
+
+fn translate_x11_key_event(api: &X11Api, kev: &mut XKeyEvent) -> Option<KeyEvent> {
+    let mut buf = [0 as c_char; 32];
+    let mut keysym: c_ulong = 0;
+    let n = unsafe { (api.x_lookup_string)(kev, buf.as_mut_ptr(), buf.len() as c_int - 1, &mut keysym, null_mut()) };
+    let bytes = if n > 0 {
+        unsafe { std::slice::from_raw_parts(buf.as_ptr().cast::<u8>(), n as usize) }
+    } else {
+        &[]
+    };
+    translate_x11_keysym_and_bytes(keysym as u32, kev.state, bytes)
 }
 
 /// Runs Bilterm in a native X11 + Xft/Fontconfig desktop GUI window on Linux/Unix (`GPU-02`).
@@ -685,6 +723,7 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
     }
     app.needs_redraw = true;
     let mut left_down = false;
+    let mut last_motion_cell: Option<(u16, u16)> = None;
     app.wm.set_gui_surface(true);
 
     loop {
@@ -749,9 +788,12 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
                     let (cw_px, ch_px) = (x11_canvas.cell_width_px, x11_canvas.cell_height_px);
                     app.wm.set_mouse_pixel_hint(Some((mev.x.max(0) as u32, mev.y.max(0) as u32, cw_px, ch_px)));
                     let (col, row) = pixel_to_cell_coords(mev.x, mev.y, cw_px, ch_px, app.last_viewport);
-                    let kind = if left_down { MouseEventKind::Drag(MouseButton::Left) } else { MouseEventKind::Moved };
-                    app.handle_crossterm_event(Event::Mouse(MouseEvent { kind, column: col, row, modifiers: modifiers_from_x11_state(mev.state) }))?;
-                    app.needs_redraw = true;
+                    if left_down || last_motion_cell != Some((col, row)) {
+                        last_motion_cell = Some((col, row));
+                        let kind = if left_down { MouseEventKind::Drag(MouseButton::Left) } else { MouseEventKind::Moved };
+                        app.handle_crossterm_event(Event::Mouse(MouseEvent { kind, column: col, row, modifiers: modifiers_from_x11_state(mev.state) }))?;
+                        app.needs_redraw = true;
+                    }
                 }
                 CONFIGURE_NOTIFY => {
                     let cev = unsafe { xev.configure };

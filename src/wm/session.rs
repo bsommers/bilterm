@@ -158,6 +158,9 @@ impl WindowManager {
     pub fn apply_config(&mut self, config: BiltermConfig) {
         let scroll_mode = config.scroll_mode;
         self.config = config;
+        if self.config.drawer.visibility == crate::wm::DrawerVisibilityMode::Fixed {
+            self.drawer.open = true;
+        }
         for pane in self.panes.values_mut() {
             pane.set_scroll_mode_from_config(scroll_mode);
         }
@@ -407,7 +410,8 @@ impl WindowManager {
                     } else {
                         Vec::new()
                     },
-                    custom_name: Some(p.title().to_string()),
+                    custom_name: (p.title() != format!("PANE #{}", p.id()))
+                        .then(|| p.title().to_string()),
                     theme: chrome.theme_name,
                     outline: chrome.outline,
                     bold: chrome.bold,

@@ -333,47 +333,46 @@ pub(super) fn handle_wm_modal_key(
 ) -> Result<Option<AppAction>> {
     // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
     // first: floating utility windows must not answer a modal they cannot even show on top of.
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.command_window().captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)
-    {
-        return Ok(Some(action));
-    }
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.fonts_window().captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
-    {
-        return Ok(Some(action));
-    }
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.script_studio().captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)
-    {
-        return Ok(Some(action));
-    }
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.agents_list().captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
-    {
-        return Ok(Some(action));
-    }
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.session_map().captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::session_map_keys::handle_session_map_key(wm, key)
-    {
-        return Ok(Some(action));
-    }
-    if matches!(wm.modal(), crate::wm::Modal::None)
-        && wm.agents_window_captures_input()
-        && !wm.is_leader_pending()
-        && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
-    {
-        return Ok(Some(action));
+    // Plain F7 / Alt+F7 always reaches DrawerToggle so utility windows never lock out the drawer.
+    let is_drawer_toggle_fkey = key.code == KeyCode::F(7)
+        && (key.modifiers.is_empty() || key.modifiers == KeyModifiers::ALT);
+    if matches!(wm.modal(), crate::wm::Modal::None) && !is_drawer_toggle_fkey {
+        if wm.command_window().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
+        if wm.fonts_window().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
+        if wm.script_studio().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
+        if wm.agents_list().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
+        if wm.session_map().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::session_map_keys::handle_session_map_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
+        if wm.agents_window_captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
     }
 
     if wm.drawer().focused {
@@ -388,6 +387,16 @@ pub(super) fn handle_wm_modal_key(
             && let Some(action) = super::drawer_navigator::handle_navigator_drawer_key(wm, key)
         {
             return Ok(Some(action));
+        }
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && !matches!(
+                key.code,
+                KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down | KeyCode::F(7)
+            )
+        {
+            return Ok(None);
         }
         match key.code {
             KeyCode::F(7) | KeyCode::Char('q') => wm.toggle_drawer(),
@@ -538,12 +547,18 @@ pub(super) fn handle_wm_modal_key(
                 wm.execute_layout_profile_command(pat);
             }
             KeyCode::Char('L') => { wm.execute_layout_profile_command("save-pos"); }
-            _ => {}
+            _ => {
+                if matches!(key.code, KeyCode::F(_))
+                    || key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                {
+                    return Ok(None);
+                }
+            }
         }
         return Ok(Some(AppAction::Handled));
     }
 
-    if wm.mcp_console().captures_input() && !wm.is_leader_pending() {
+    if wm.mcp_console().captures_input() && !wm.is_leader_pending() && !is_drawer_toggle_fkey {
         // Pinned window: Esc hands the keyboard back to the panes without closing it.
         if wm.mcp_console().pinned && key.code == KeyCode::Esc {
             wm.mcp_console_mut().focused = false;

@@ -232,6 +232,7 @@ fn saved_pane_row(saved: &Saved, pane: &SavedPaneState) -> FindRow {
     row.label = if title.is_empty() { format!("pane #{}", pane.id) } else { title.clone() };
     row.detail = parts.join(" ");
     row.haystack = [
+        name.as_str(),
         row.label.as_str(),
         row.host.as_deref().unwrap_or(""),
         row.tmux_session.as_deref().unwrap_or(""),

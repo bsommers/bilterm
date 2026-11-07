@@ -92,8 +92,14 @@ fn get_returns_toml_text_for_each_value_kind() {
     assert!(s_of(&data(&mut wm).unwrap(), "value").starts_with('"'));
     // A table key renders as a TOML block containing its leaf keys.
     run(&mut wm, ":get api");
-    assert_eq!(s_of(&data(&mut wm).unwrap(), "value"), "allow_config_write = false");
-    assert_eq!(status(&wm), "api = allow_config_write = false");
+    assert_eq!(
+        s_of(&data(&mut wm).unwrap(), "value"),
+        "allow_agent_messaging = false\nallow_config_write = false"
+    );
+    assert_eq!(
+        status(&wm),
+        "api = allow_agent_messaging = false\nallow_config_write = false"
+    );
 }
 
 // ---------------------------------------------------------------- :set

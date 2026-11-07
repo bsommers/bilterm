@@ -647,7 +647,12 @@ impl WindowManager {
     }
 
     pub fn toggle_drawer(&mut self) {
-        if self.is_drawer_effectively_visible() && (self.drawer.open || self.drawer.focused) {
+        if self.is_drawer_effectively_visible()
+            && (self.drawer.open
+                || self.drawer.focused
+                || self.config.drawer.visibility == DrawerVisibilityMode::Fixed
+                || self.drawer.hover_active)
+        {
             self.drawer.open = false;
             self.drawer.focused = false;
             self.drawer.nav_menu = None;
@@ -659,6 +664,7 @@ impl WindowManager {
         } else {
             self.drawer.open = true;
             self.drawer.focused = true;
+            self.blur_utility_windows();
             self.sync_drawer_selection_to_active_pane();
         }
         self.reflow_default_viewport();
@@ -667,8 +673,21 @@ impl WindowManager {
     pub fn focus_drawer(&mut self) {
         self.drawer.open = true;
         self.drawer.focused = true;
+        self.blur_utility_windows();
         self.sync_drawer_selection_to_active_pane();
         self.reflow_default_viewport();
+    }
+
+    pub(crate) fn blur_utility_windows(&mut self) {
+        self.agents_window.blur();
+        self.agents_list.blur();
+        self.fonts_window.blur();
+        self.command_window.blur();
+        self.script_studio.blur();
+        self.session_map.blur();
+        if self.mcp_console.pinned {
+            self.mcp_console.focused = false;
+        }
     }
 
     pub fn close_drawer(&mut self) {

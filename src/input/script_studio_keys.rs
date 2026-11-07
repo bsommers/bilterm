@@ -28,16 +28,22 @@ pub fn handle_script_studio_key(wm: &mut WindowManager, key: KeyEvent) -> Option
     }
 
     let edit_mode = wm.script_studio().edit_mode;
-    if edit_mode {
-        handle_edit_mode_key(wm, key);
+    let handled = if edit_mode {
+        handle_edit_mode_key(wm, key)
     } else {
-        handle_nav_mode_key(wm, key);
+        handle_nav_mode_key(wm, key)
+    };
+    if !handled
+        && (matches!(key.code, KeyCode::F(_))
+            || key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT))
+    {
+        return None;
     }
 
     Some(AppAction::Handled)
 }
 
-fn handle_edit_mode_key(wm: &mut WindowManager, key: KeyEvent) {
+fn handle_edit_mode_key(wm: &mut WindowManager, key: KeyEvent) -> bool {
     let mods = key.modifiers;
     match key.code {
         KeyCode::Esc => {
@@ -48,6 +54,20 @@ fn handle_edit_mode_key(wm: &mut WindowManager, key: KeyEvent) {
         }
         KeyCode::Backspace => {
             let _ = wm.apply(act(ScriptStudioOp::Backspace));
+        }
+        KeyCode::Delete => {
+            let _ = wm.apply(act(ScriptStudioOp::DeleteLine));
+        }
+        KeyCode::Home => {
+            wm.script_studio_mut().cursor_col = 0;
+        }
+        KeyCode::End => {
+            let len = wm
+                .script_studio()
+                .lines
+                .get(wm.script_studio().cursor_line)
+                .map_or(0, |l| l.chars().count());
+            wm.script_studio_mut().cursor_col = len;
         }
         KeyCode::Left => {
             let _ = wm.apply(act(ScriptStudioOp::CursorLeft));
@@ -67,63 +87,74 @@ fn handle_edit_mode_key(wm: &mut WindowManager, key: KeyEvent) {
         KeyCode::F(10) => {
             let _ = wm.apply(act(ScriptStudioOp::StepNext));
         }
+        KeyCode::Char('s' | 'S') if mods == KeyModifiers::CONTROL => {
+            let _ = wm.apply(act(ScriptStudioOp::Save(None)));
+        }
         KeyCode::Char(c) if !mods.contains(KeyModifiers::CONTROL) && !mods.contains(KeyModifiers::ALT) => {
             let _ = wm.apply(act(ScriptStudioOp::InsertChar(c)));
         }
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
-fn handle_nav_mode_key(wm: &mut WindowManager, key: KeyEvent) {
-    let mods = key.modifiers;
+fn handle_nav_mode_key(wm: &mut WindowManager, key: KeyEvent) -> bool {
+    let mods = match key.code {
+        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
+        _ => key.modifiers,
+    };
     match (mods, key.code) {
         // Run & Step
         (KeyModifiers::NONE, KeyCode::F(5)) | (KeyModifiers::NONE, KeyCode::Enter) => {
             let _ = wm.apply(act(ScriptStudioOp::RunAll));
         }
         (KeyModifiers::NONE, KeyCode::F(10))
-        | (KeyModifiers::NONE, KeyCode::Char('n'))
+        | (KeyModifiers::NONE, KeyCode::Char('n' | 'N'))
         | (KeyModifiers::NONE, KeyCode::Char(' ')) => {
             let _ = wm.apply(act(ScriptStudioOp::StepNext));
         }
         (KeyModifiers::NONE, KeyCode::Char('r')) => {
             let _ = wm.apply(act(ScriptStudioOp::ResetStep));
         }
-        (KeyModifiers::SHIFT, KeyCode::Char('R')) | (KeyModifiers::NONE, KeyCode::Char('R')) => {
+        (KeyModifiers::NONE, KeyCode::Char('R')) => {
             let _ = wm.apply(act(ScriptStudioOp::Record(None)));
         }
-        (KeyModifiers::NONE, KeyCode::Char('s')) => {
+        (KeyModifiers::NONE, KeyCode::Char('s' | 'S'))
+        | (KeyModifiers::CONTROL, KeyCode::Char('s' | 'S')) => {
             let _ = wm.apply(act(ScriptStudioOp::Save(None)));
         }
         // Mode switching & editing
-        (KeyModifiers::NONE, KeyCode::Char('i')) | (KeyModifiers::NONE, KeyCode::Char('e')) => {
+        (KeyModifiers::NONE, KeyCode::Char('i' | 'I' | 'e' | 'E')) => {
             let _ = wm.apply(act(ScriptStudioOp::EditMode(Some(true))));
         }
-        (KeyModifiers::NONE, KeyCode::Char('o')) => {
+        (KeyModifiers::NONE, KeyCode::Char('o' | 'O')) => {
             let _ = wm.apply(act(ScriptStudioOp::NewLine));
             let _ = wm.apply(act(ScriptStudioOp::EditMode(Some(true))));
         }
-        (KeyModifiers::NONE, KeyCode::Char('x')) | (KeyModifiers::NONE, KeyCode::Delete) => {
+        (KeyModifiers::NONE, KeyCode::Char('x' | 'X')) | (KeyModifiers::NONE, KeyCode::Delete) => {
             let _ = wm.apply(act(ScriptStudioOp::DeleteLine));
         }
+        (KeyModifiers::NONE, KeyCode::Char('c' | 'C')) => {
+            let _ = wm.apply(act(ScriptStudioOp::ClearLog));
+        }
         // Navigation
-        (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k')) => {
+        (KeyModifiers::NONE, KeyCode::Up) | (KeyModifiers::NONE, KeyCode::Char('k' | 'K')) => {
             let _ = wm.apply(act(ScriptStudioOp::CursorUp));
         }
-        (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j')) => {
+        (KeyModifiers::NONE, KeyCode::Down) | (KeyModifiers::NONE, KeyCode::Char('j' | 'J')) => {
             let _ = wm.apply(act(ScriptStudioOp::CursorDown));
         }
-        (KeyModifiers::NONE, KeyCode::Left) | (KeyModifiers::NONE, KeyCode::Char('h')) => {
+        (KeyModifiers::NONE, KeyCode::Left) | (KeyModifiers::NONE, KeyCode::Char('h' | 'H')) => {
             let _ = wm.apply(act(ScriptStudioOp::CursorLeft));
         }
-        (KeyModifiers::NONE, KeyCode::Right) | (KeyModifiers::NONE, KeyCode::Char('l')) => {
+        (KeyModifiers::NONE, KeyCode::Right) | (KeyModifiers::NONE, KeyCode::Char('l' | 'L')) => {
             let _ = wm.apply(act(ScriptStudioOp::CursorRight));
         }
         // Window options
-        (KeyModifiers::NONE, KeyCode::Char('*')) | (KeyModifiers::NONE, KeyCode::Char('p')) => {
+        (KeyModifiers::NONE, KeyCode::Char('*' | 'p' | 'P')) => {
             let _ = wm.apply(act(ScriptStudioOp::Pin(None)));
         }
-        (KeyModifiers::NONE, KeyCode::Char('d')) => {
+        (KeyModifiers::NONE, KeyCode::Char('d' | 'D')) => {
             let _ = wm.apply(act(ScriptStudioOp::Dock(None)));
         }
         // Moving (Shift + Arrows)
@@ -153,9 +184,10 @@ fn handle_nav_mode_key(wm: &mut WindowManager, key: KeyEvent) {
             let _ = wm.apply(act(ScriptStudioOp::Resize { dw: 0, dh: 1 }));
         }
         // Dismiss
-        (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Char('q')) => {
+        (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Char('q' | 'Q')) => {
             let _ = wm.apply(act(ScriptStudioOp::Dismiss));
         }
-        _ => {}
+        _ => return false,
     }
+    true
 }

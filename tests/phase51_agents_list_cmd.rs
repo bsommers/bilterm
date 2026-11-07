@@ -367,7 +367,7 @@ fn menu_existing_entries_unchanged() {
         &[":broadcast", ":lock", ":quake", ":raw"],
         &[":help", ":inspector", ":session list", ":help"],
     ];
-    let appended = [0usize, 1, 0, 3, 0, 4, 0];
+    let appended = [0usize, 1, 0, 6, 0, 4, 0];
     for (cat, cmds) in table.iter().enumerate() {
         assert_eq!(menubar_category_item_count(cat), cmds.len() + appended[cat], "category {cat} count");
         for (i, cmd) in cmds.iter().enumerate() {

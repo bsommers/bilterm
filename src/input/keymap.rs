@@ -113,7 +113,6 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('b'), Action::PromptBottom),
     (KeyCode::Char('B'), Action::PromptBottom),
     (KeyCode::Char('s'), Action::PromptSplitToggle),
-    (KeyCode::Char('S'), Action::PromptSplitToggle),
     (KeyCode::Char('e'), Action::PromptModeSet(None)),
     (KeyCode::Char('E'), Action::PromptModeSet(None)),
     (KeyCode::Char('m'), Action::PromptModeSet(None)),
@@ -805,11 +804,13 @@ fn bilterm_action_for_fkey(wm: &WindowManager, n: u8) -> Option<Action> {
         4 => Some(Action::PromptModeSet(None)),
         5 => Some(Action::ZoomToggle),
         6 => Some(Action::DeckNext),
-        7 => Some(if block_holding {
-            Action::ScrollPageBack
-        } else {
-            Action::DrawerToggle
-        }),
+        7 => Some(
+            if block_holding && !wm.drawer_is_open() && !wm.is_drawer_effectively_visible() {
+                Action::ScrollPageBack
+            } else {
+                Action::DrawerToggle
+            },
+        ),
         8 => Some(if block_holding {
             Action::ScrollPageAdvance
         } else {
@@ -863,6 +864,9 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
     // Function key routing across CommandPrompt and RawPtyPassthrough modes (F1..F12, Shift+F1..F12, Alt+F1..F12)
     if let KeyCode::F(n @ 1..=12) = key.code {
         if key.modifiers == KeyModifiers::ALT {
+            if n == 7 {
+                return Ok(Some(wm.apply(Action::DrawerToggle)?));
+            }
             if n == 12 {
                 return Ok(Some(wm.apply(Action::FkeyModeCommand(None))?));
             }
@@ -895,7 +899,11 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
             if n == 12 {
                 return Ok(Some(wm.apply(Action::RawToggle)?));
             }
-            if n == 7 && wm.drawer_is_open() {
+            if n == 7
+                && (wm.drawer_is_open()
+                    || wm.is_drawer_effectively_visible()
+                    || wm.config().raw_fkeys != crate::ui::RawFkeyMode::App)
+            {
                 return Ok(Some(wm.apply(Action::DrawerToggle)?));
             }
             if wm
@@ -975,7 +983,9 @@ pub(super) fn handle_wm_shortcut_key(
         && key.modifiers.is_empty()
     {
         match key.code {
-            KeyCode::F(7) => return Ok(Some(wm.apply(Action::ScrollPageBack)?)),
+            KeyCode::F(7) if !wm.drawer_is_open() && !wm.is_drawer_effectively_visible() => {
+                return Ok(Some(wm.apply(Action::ScrollPageBack)?));
+            }
             KeyCode::F(8) => return Ok(Some(wm.apply(Action::ScrollPageAdvance)?)),
             _ => {}
         }

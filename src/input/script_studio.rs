@@ -113,9 +113,28 @@ pub fn handle_script_studio_mouse(
             ScriptStudioButton::Save => {
                 let _ = wm.apply(act(ScriptStudioOp::Save(None)));
             }
+            ScriptStudioButton::DeleteLine => {
+                let _ = wm.apply(act(ScriptStudioOp::DeleteLine));
+            }
+            ScriptStudioButton::NewLine => {
+                let _ = wm.apply(act(ScriptStudioOp::NewLine));
+                let _ = wm.apply(act(ScriptStudioOp::EditMode(Some(true))));
+            }
         },
         (MouseEventKind::Down(MouseButton::Left), ScriptStudioHit::Line(idx)) => {
+            let was_selected = wm.script_studio().cursor_line == idx;
             let _ = wm.apply(act(ScriptStudioOp::SelectLine(idx)));
+            let content_x = outer.x.saturating_add(7);
+            let col_off = mouse.column.saturating_sub(content_x) as usize;
+            let max_col = wm
+                .script_studio()
+                .lines
+                .get(idx)
+                .map_or(0, |l| l.chars().count());
+            wm.script_studio_mut().cursor_col = col_off.min(max_col);
+            if was_selected && !wm.script_studio().edit_mode {
+                let _ = wm.apply(act(ScriptStudioOp::EditMode(Some(true))));
+            }
         }
         (MouseEventKind::ScrollUp, _) => {
             let cur = wm.script_studio().scroll;

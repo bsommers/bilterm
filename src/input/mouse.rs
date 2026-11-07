@@ -596,6 +596,7 @@ pub fn handle_wm_mouse_event(
             && let Some(bar) = shell.top_bar
             && let Some(pid) = crate::ui::navigator::pill_at(wm, bar, mouse.column)
         {
+            wm.drawer_mut().focused = false;
             wm.focus_and_raise(pid);
         }
         return Ok(AppAction::Handled);
@@ -684,22 +685,47 @@ pub fn handle_wm_mouse_event(
     if bot_off > 0 && mouse.row == screen_area.y + screen_area.height.saturating_sub(1) {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let rel_col = mouse.column.saturating_sub(screen_area.x);
-            match rel_col {
-                0..=8 => wm.toggle_help(),
-                9..=18 => {
-                    let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+            let is_modern = matches!(
+                wm.config().palette().name.as_str(),
+                "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC"
+            );
+            if is_modern {
+                match rel_col {
+                    0..=10 => wm.toggle_help(),
+                    11..=22 => {
+                        let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+                    }
+                    23..=33 => wm.toggle_zoom(),
+                    34..=46 => wm.toggle_drawer(),
+                    47..=59 => {
+                        let _ = wm.apply(crate::action::Action::VisualStyleCommand(None));
+                    }
+                    60..=68 => wm.active_pane_mut().toggle_manual_raw_override(),
+                    _ => {
+                        let all = crate::ui::theme::ThemePreset::all();
+                        let cur = wm.config().theme;
+                        let idx = all.iter().position(|&t| t == cur).unwrap_or(0);
+                        wm.config_mut().theme = all[(idx + 1) % all.len()];
+                    }
                 }
-                19..=27 => wm.toggle_zoom(),
-                28..=36 => {
-                    let _ = wm.shuffle_deck_next();
-                }
-                37..=47 => wm.toggle_quick_terminal(),
-                48..=56 => wm.active_pane_mut().toggle_manual_raw_override(),
-                _ => {
-                    let all = crate::ui::theme::ThemePreset::all();
-                    let cur = wm.config().theme;
-                    let idx = all.iter().position(|&t| t == cur).unwrap_or(0);
-                    wm.config_mut().theme = all[(idx + 1) % all.len()];
+            } else {
+                match rel_col {
+                    0..=8 => wm.toggle_help(),
+                    9..=18 => {
+                        let _ = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal);
+                    }
+                    19..=27 => wm.toggle_zoom(),
+                    28..=36 => {
+                        let _ = wm.shuffle_deck_next();
+                    }
+                    37..=47 => wm.toggle_quick_terminal(),
+                    48..=56 => wm.active_pane_mut().toggle_manual_raw_override(),
+                    _ => {
+                        let all = crate::ui::theme::ThemePreset::all();
+                        let cur = wm.config().theme;
+                        let idx = all.iter().position(|&t| t == cur).unwrap_or(0);
+                        wm.config_mut().theme = all[(idx + 1) % all.len()];
+                    }
                 }
             }
             wm.resize_all(workspace_area)?;

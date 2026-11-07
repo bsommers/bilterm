@@ -622,8 +622,14 @@ impl WindowManager {
                     let _ = pane.write_to_pty(payload.as_bytes());
                 }
             }
-            if let Some(name) = &sp.custom_name {
-                pane.set_title(name.clone());
+            if let Some(name) = &sp.custom_name
+                && sp.title == format!("PANE #{}", sp.id)
+            {
+                if !keep_remote_badge(&program, spawned_requested) && sp.remote_target.is_some() {
+                    pane.set_title(format!("{name} (not connected)"));
+                } else {
+                    pane.set_title(name.clone());
+                }
             }
             new_panes.insert(sp.id, pane);
         }

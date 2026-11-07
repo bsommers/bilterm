@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-06
+
+### Fixed
+- **Linux `<F7>` & Function/Special Key Routing (`src/input/{keymap,modal,mouse}.rs`, `src/wm/{drawer,session}.rs`, `src/ui/gui_font/linux_x11.rs`, `src/app.rs`)**:
+  - Allowed plain `<F7>` in `ALT_SCREEN` / `RawPtyPassthrough` to both open and close the slide-out drawer under default `RawFkeyMode::Auto` and `Bilterm`, and ensured `Alt+F7` always toggles the drawer even during `BlockPage` hold.
+  - Updated `WindowManager::toggle_drawer()` and `apply_config()` so `<F7>` closes `DrawerVisibilityMode::Fixed` and `AutoHide` hovered drawers on the first press.
+  - Bypassed focused utility windows (`Fonts`, `Commands`, `ScriptStudio`, `AgentsList`, `SessionMap`, `Agents`, `McpConsole`) on `<F7>` / `Alt+F7` and blurred utility windows when focusing/opening the drawer.
+  - Allowed unhandled `F1..F12` (`F1` Help, `F2` Split, `F3` Hints, `F4` Mode, `F6` Deck, `F8` Copy, `F9` Inspector, `F10` Quake, `F12` Raw) and global `Ctrl+` / `Alt+` chords (`Ctrl+P` Palette, `Alt+M` Layout, `Alt+1..9`, etc.) to pass through while the drawer (`Classic` or `Navigator`) is focused.
+  - Added Modern bottom F-key bar mouse click hit-testing (`F1 Help`, `F2 Split`, `F5 Zoom`, `F7 Drawer`, `F11 Style`, `F12 Raw`) and blurred drawer focus when clicking top-bar pane pills.
+  - Preserved uppercase on `Alt+Shift+<letter>` (`Alt+Shift+H/J/K/L` pane resize), added X11 keypad navigation keysyms (`0xFF80`, `0xFF89`, `0xFF95..=0xFF9F`), ignored `CapsLock`/`NumLock` state bits on `F1..F12`, accepted `KeyEventKind::Repeat`, and deduplicated X11 `MOTION_NOTIFY` events per cell when not dragging.
+- **Script Studio (`:script` / `:studio`) Window Controls (`src/ui/script_studio_ui.rs`, `src/input/{script_studio,script_studio_keys}.rs`, `src/wm/script_studio.rs`)**:
+  - Fixed title-bar badge layout (`[•]` at `r_edge - 11..-8`, `[□]` at `r_edge - 8..-5`, `[X]` at `r_edge - 5..-1`) so `[•]` no longer overwrites `[□]` and clicking `[X]` closes the window instead of docking it.
+  - Compacted `TOOLBAR_TEXT` (`63` cols, 1-cell glyphs) so all 6 buttons (`Run`, `Step`, `Reset`, `Rec`, `Edit`, `Save`) fit inside the default 66-col window and match exact click hitboxes and `[● Rec]` / `[✎ Edit]` highlight offsets.
+  - Updated `FOOTER_TEXT` (`"F5:Run F10/n:Step r:Reset R:Rec i:Edit x:Del o:New s:Save *:Pin"`), made footer hotkeys clickable, enabled clicking an editor line to position `cursor_col` and enter `[EDIT]` mode on second click, cleared `docked = false` on `ScriptStudioOp::SetRect` when dragging/resizing a docked window, and stripped `KeyModifiers::SHIFT` on `KeyCode::Char(_)` in nav mode.
+
 ## [3.0.0] - 2026-11-06
 
 ### Added

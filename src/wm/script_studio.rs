@@ -465,6 +465,7 @@ impl WindowManager {
                 None
             }
             ScriptStudioOp::SetRect { x, y, w, h } => {
+                self.script_studio.docked = false;
                 self.script_studio.float_pos = Some((*x, *y));
                 self.script_studio.float_size = Some((*w, *h));
                 None

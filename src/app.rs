@@ -131,7 +131,7 @@ impl App {
 
     pub fn handle_crossterm_event(&mut self, event: Event) -> Result<()> {
         match event {
-            Event::Key(key) if key.kind == KeyEventKind::Press => {
+            Event::Key(key) if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) => {
                 if handle_wm_key_event(&mut self.wm, key)? == AppAction::Quit {
                     self.should_quit = true;
                 }

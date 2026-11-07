@@ -238,15 +238,6 @@ impl AutomationControlPlane {
                 ],
             ),
             Self::mcp_tool_schema(
-                "bilterm_session_map",
-                "Inspect or manage the session packing viewer, pick up windows, and drag-and-drop between sessions.",
-                &[
-                    ("op", "string", "Optional operation: open, close, toggle, pin, dock, pickup, target, drop, cancel, scale"),
-                    ("pane_id", "integer", "Pane ID for pickup or drop"),
-                    ("session", "string", "Target session name"),
-                ],
-            ),
-            Self::mcp_tool_schema(
                 "bilterm_agents_demo",
                 "Start the agent traffic demo (default) or stop it and close the panes it spawned.",
                 &[("stop", "boolean", "true stops the demo")],
@@ -287,6 +278,15 @@ impl AutomationControlPlane {
                     ("bulk_action", "string", "Bulk action: move | close | rename_prefix | tile | pin"),
                     ("prefix", "string", "Prefix string for bulk rename_prefix"),
                     ("force", "boolean", "Force bulk close bypassing exit guard"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_session_map",
+                "Inspect or manage the session packing viewer, pick up windows, and drag-and-drop between sessions.",
+                &[
+                    ("op", "string", "Optional operation: open, close, toggle, pin, dock, pickup, target, drop, cancel, scale"),
+                    ("pane_id", "integer", "Pane ID for pickup or drop"),
+                    ("session", "string", "Target session name"),
                 ],
             ),
             Self::mcp_tool_schema(

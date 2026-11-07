@@ -1,13 +1,13 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.0.0
+milestone: v3.0.1
 current_phase: 55
 current_phase_name: daemon-supervisor-and-multi-daemon-awareness
 status: complete
-stopped_at: Completed Phase 55 (all Phases 1-55 complete; released v3.0.0)
-last_updated: "2026-11-07T00:45:00Z"
+stopped_at: Released v3.0.1 (Linux F7/function key routing & Script Studio window control fixes; 119/119 verify stages pass)
+last_updated: "2026-11-07T02:20:00Z"
 last_activity: 2026-11-06
-last_activity_desc: "Completed Phases 51.1, 51.2, 52, 53, 54, and 55 (118/118 verify stages pass, GOLDENS OK 11); bumped to v3.0.0"
+last_activity_desc: "Released v3.0.1 with Linux F7/function-key routing fixes, Script Studio window control fixes, and 119/119 verification stages passing"
 state_head: a46f949
 progress:
   total_phases: 55

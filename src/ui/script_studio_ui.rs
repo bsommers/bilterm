@@ -19,8 +19,10 @@ use crate::ui::visual_style::{apply_frosted_glass_surface, render_liquid_ambient
 use crate::wm::WindowManager;
 use crate::wm::WindowResizeEdge;
 
-pub const TOOLBAR_TEXT: &str = " [▶ Run(F5)] [⏭ Step(F10)] [↺ Reset(r)] [● Rec(R)] [✎ Edit(i)] [💾 Save(s)] ";
-pub const FOOTER_TEXT: &str = "F5/r:Run  F10/n:Step  R:Rec  i:Edit  dd:DelLine  o:NewLine  *:Pin  Esc:Nav/Close";
+pub const TOOLBAR_TEXT: &str =
+    " [▶ Run(F5)] [» Step(F10)] [↺ Reset] [● Rec] [✎ Edit] [↓ Save] ";
+pub const FOOTER_TEXT: &str =
+    "F5:Run F10/n:Step r:Reset R:Rec i:Edit x:Del o:New s:Save *:Pin";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScriptStudioButton {
@@ -30,6 +32,8 @@ pub enum ScriptStudioButton {
     Record,
     Edit,
     Save,
+    DeleteLine,
+    NewLine,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,15 +58,23 @@ pub fn script_studio_hit(wm: &WindowManager, ws: Rect, col: u16, row: u16) -> Sc
         return ScriptStudioHit::Outside;
     }
 
-    // Top title bar
+    let r_edge = outer.x + outer.width;
+
+    // Top title bar: badges sit at [•] (r_edge-11..r_edge-8), [□] (r_edge-8..r_edge-5), [X] (r_edge-5..r_edge-2)
     if row == outer.y {
-        if col >= outer.x + outer.width.saturating_sub(3) {
+        if col == outer.x {
+            return ScriptStudioHit::Border(WindowResizeEdge::TopLeft);
+        }
+        if col == r_edge.saturating_sub(1) {
+            return ScriptStudioHit::Border(WindowResizeEdge::TopRight);
+        }
+        if col >= r_edge.saturating_sub(5) && col < r_edge.saturating_sub(1) {
             return ScriptStudioHit::CloseBadge;
         }
-        if col >= outer.x + outer.width.saturating_sub(6) {
+        if col >= r_edge.saturating_sub(8) && col < r_edge.saturating_sub(5) {
             return ScriptStudioHit::DockBadge;
         }
-        if col >= outer.x + outer.width.saturating_sub(9) {
+        if col >= r_edge.saturating_sub(11) && col < r_edge.saturating_sub(8) {
             return ScriptStudioHit::PinBadge;
         }
         return ScriptStudioHit::Title;
@@ -87,25 +99,26 @@ pub fn script_studio_hit(wm: &WindowManager, ws: Rect, col: u16, row: u16) -> Sc
         return ScriptStudioHit::Border(WindowResizeEdge::Right);
     }
 
-    // Toolbar row (row == outer.y + 1)
+    // Toolbar row (row == outer.y + 1):
+    // " [▶ Run(F5)] [» Step(F10)] [↺ Reset] [● Rec] [✎ Edit] [↓ Save] "
     if row == outer.y + 1 {
         let rel_x = col.saturating_sub(outer.x + 1);
-        if (1..12).contains(&rel_x) {
+        if (1..=11).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Run);
         }
-        if (13..26).contains(&rel_x) {
+        if (13..=25).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Step);
         }
-        if (27..39).contains(&rel_x) {
+        if (27..=35).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Reset);
         }
-        if (40..50).contains(&rel_x) {
+        if (37..=43).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Record);
         }
-        if (51..62).contains(&rel_x) {
+        if (45..=52).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Edit);
         }
-        if (63..74).contains(&rel_x) {
+        if (54..=61).contains(&rel_x) {
             return ScriptStudioHit::Button(ScriptStudioButton::Save);
         }
         return ScriptStudioHit::Interior;
@@ -127,6 +140,41 @@ pub fn script_studio_hit(wm: &WindowManager, ws: Rect, col: u16, row: u16) -> Sc
         let line_idx = wm.script_studio().scroll + line_offset;
         if line_idx < wm.script_studio().lines.len() {
             return ScriptStudioHit::Line(line_idx);
+        } else if !wm.script_studio().lines.is_empty() {
+            return ScriptStudioHit::Line(wm.script_studio().lines.len() - 1);
+        }
+    }
+
+    // Footer hotkey bar (row == footer_row):
+    // "F5:Run F10/n:Step r:Reset R:Rec i:Edit x:Del o:New s:Save *:Pin"
+    if row == footer_row {
+        let f_rel = col.saturating_sub(outer.x + 2);
+        if (0..=5).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Run);
+        }
+        if (7..=16).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Step);
+        }
+        if (18..=24).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Reset);
+        }
+        if (26..=30).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Record);
+        }
+        if (32..=37).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Edit);
+        }
+        if (39..=43).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::DeleteLine);
+        }
+        if (45..=49).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::NewLine);
+        }
+        if (51..=56).contains(&f_rel) {
+            return ScriptStudioHit::Button(ScriptStudioButton::Save);
+        }
+        if (58..=62).contains(&f_rel) {
+            return ScriptStudioHit::PinBadge;
         }
     }
 
@@ -213,8 +261,8 @@ pub fn render_script_studio(
         buf,
     );
 
-    // Pin indicator before top-right window buttons
-    let pin_x = rect.x + rect.width.saturating_sub(8);
+    // Top-right badges: [•]/[o] (pin at r_edge-11), [□] (dock at r_edge-8), [X] (close at r_edge-5)
+    let pin_x = rect.x + rect.width.saturating_sub(11);
     let pin_glyph = if state.pinned { "[•]" } else { "[o]" };
     let pin_style = if state.pinned {
         Style::default().fg(palette.title_fg).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD)
@@ -223,19 +271,26 @@ pub fn render_script_studio(
     };
     put(buf, rect, pin_x, rect.y, pin_glyph, pin_style);
 
+    let inner = Rect::new(
+        rect.x.saturating_add(1),
+        rect.y.saturating_add(1),
+        rect.width.saturating_sub(2),
+        rect.height.saturating_sub(2),
+    );
+
     // Row 1: Interactive Toolbar row
     let toolbar_y = rect.y + 1;
     let tb_style = Style::default().fg(tokens.text_primary).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD);
-    put(buf, rect, rect.x + 1, toolbar_y, TOOLBAR_TEXT, tb_style);
+    put(buf, inner, rect.x + 1, toolbar_y, TOOLBAR_TEXT, tb_style);
 
-    // Colorize specific toolbar items
+    // Colorize specific toolbar items (aligned with TOOLBAR_TEXT offsets)
     if state.recording {
-        let rec_pos = rect.x + 41; // "[● Rec(R)]"
-        put(buf, rect, rec_pos, toolbar_y, "[● Rec(R)]", Style::default().fg(Color::LightRed).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
+        let rec_pos = rect.x + 1 + 37; // "[● Rec]"
+        put(buf, inner, rec_pos, toolbar_y, "[● Rec]", Style::default().fg(Color::LightRed).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
     }
     if state.edit_mode {
-        let edit_pos = rect.x + 52; // "[✎ Edit(i)]"
-        put(buf, rect, edit_pos, toolbar_y, "[✎ Edit(i)]", Style::default().fg(Color::LightGreen).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
+        let edit_pos = rect.x + 1 + 45; // "[✎ Edit]"
+        put(buf, inner, edit_pos, toolbar_y, "[✎ Edit]", Style::default().fg(Color::LightGreen).bg(palette.window_frame_bg).add_modifier(Modifier::BOLD));
     }
 
     // Row 2: Separator
@@ -273,14 +328,14 @@ pub fn render_script_studio(
 
             // Full line background fill for cursor row
             if is_cursor {
-                fill(buf, rect, Rect::new(rect.x + 1, line_y, rect.width.saturating_sub(2), 1), row_style);
+                fill(buf, inner, Rect::new(rect.x + 1, line_y, rect.width.saturating_sub(2), 1), row_style);
             }
 
             let num_prefix = format!("{:02} {} ", line_idx + 1, pc_marker);
-            put(buf, rect, rect.x + 2, line_y, &num_prefix, row_style.add_modifier(Modifier::BOLD));
+            put(buf, inner, rect.x + 2, line_y, &num_prefix, row_style.add_modifier(Modifier::BOLD));
 
-            let content_x = rect.x + 2 + num_prefix.len() as u16;
-            put(buf, rect, content_x, line_y, line, row_style);
+            let content_x = rect.x + 2 + num_prefix.chars().count() as u16;
+            put(buf, inner, content_x, line_y, line, row_style);
 
             // Draw edit cursor if in edit mode
             if is_cursor && state.edit_mode {
@@ -296,9 +351,9 @@ pub fn render_script_studio(
 
     // Run Log Separator
     let log_sep_title = "─ RUN LOG ";
-    let fill_len = (rect.width.saturating_sub(2) as usize).saturating_sub(log_sep_title.len());
+    let fill_len = (rect.width.saturating_sub(2) as usize).saturating_sub(log_sep_title.chars().count());
     let log_sep = format!("{}{}", log_sep_title, "─".repeat(fill_len));
-    put(buf, rect, rect.x + 1, log_sep_y, &log_sep, Style::default().fg(palette.inactive_border_fg).bg(palette.window_frame_bg));
+    put(buf, inner, rect.x + 1, log_sep_y, &log_sep, Style::default().fg(palette.inactive_border_fg).bg(palette.window_frame_bg));
 
     // Bottom 4 rows: Run log lines
     let log_rows = 4usize;
@@ -310,13 +365,13 @@ pub fn render_script_studio(
         }
         let status_mark = if log.ok { "✓" } else { "✗" };
         let mark_color = if log.ok { Color::LightGreen } else { Color::LightRed };
-        put(buf, rect, rect.x + 2, ly, status_mark, Style::default().fg(mark_color).bg(palette.window_frame_bg));
+        put(buf, inner, rect.x + 2, ly, status_mark, Style::default().fg(mark_color).bg(palette.window_frame_bg));
 
         let log_text = format!(" L{:02} {} -> {}", log.line_no, log.source, log.output);
-        put(buf, rect, rect.x + 3, ly, &log_text, Style::default().fg(tokens.text_primary).bg(palette.window_frame_bg));
+        put(buf, inner, rect.x + 3, ly, &log_text, Style::default().fg(tokens.text_primary).bg(palette.window_frame_bg));
     }
 
     // Footer bar
     let footer_style = Style::default().fg(tokens.text_muted).bg(palette.window_frame_bg);
-    put(buf, rect, rect.x + 2, footer_y, FOOTER_TEXT, footer_style);
+    put(buf, inner, rect.x + 2, footer_y, FOOTER_TEXT, footer_style);
 }
