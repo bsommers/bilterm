@@ -561,6 +561,94 @@ fn app_handles_both_key_press_and_key_repeat_events() {
     assert_eq!(app.wm.active_pane().prompt().text(), "a");
 }
 
+fn repeat(mut key: KeyEvent) -> KeyEvent {
+    key.kind = KeyEventKind::Repeat;
+    key
+}
+
+fn headless_app(cols: u16, rows: u16) -> App {
+    App {
+        wm: WindowManager::new_headless(rows, cols),
+        should_quit: false,
+        needs_redraw: false,
+        last_viewport: Rect::new(0, 0, cols, rows),
+    }
+}
+
+#[test]
+fn holding_f7_press_then_repeat_toggles_drawer_exactly_once() {
+    let mut app = headless_app(80, 25);
+    assert!(!app.wm.drawer_is_open());
+    app.handle_crossterm_event(Event::Key(fkey(7))).unwrap();
+    assert!(app.wm.drawer_is_open(), "F7 press opens the drawer");
+    for _ in 0..5 {
+        app.handle_crossterm_event(Event::Key(repeat(fkey(7)))).unwrap();
+        assert!(app.wm.drawer_is_open(), "F7 auto-repeat must not flicker the drawer closed");
+    }
+    // Alt+F7 auto-repeat is ignored too; the next real press closes the drawer.
+    app.handle_crossterm_event(Event::Key(repeat(alt_fkey(7)))).unwrap();
+    assert!(app.wm.drawer_is_open());
+    app.handle_crossterm_event(Event::Key(fkey(7))).unwrap();
+    assert!(!app.wm.drawer_is_open(), "a fresh F7 press still closes the drawer");
+
+    // Other WM toggles behave the same: F5 zoom and Ctrl+P palette fire once per press.
+    handle_wm_key_event(&mut app.wm, KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE)).unwrap();
+    assert_eq!(app.wm.pane_count(), 2);
+    app.handle_crossterm_event(Event::Key(repeat(fkey(2)))).unwrap();
+    assert_eq!(app.wm.pane_count(), 2, "holding F2 must not keep splitting");
+    app.handle_crossterm_event(Event::Key(fkey(5))).unwrap();
+    let zoomed = app.wm.zoomed_pane();
+    assert!(zoomed.is_some());
+    app.handle_crossterm_event(Event::Key(repeat(fkey(5)))).unwrap();
+    assert_eq!(app.wm.zoomed_pane(), zoomed, "holding F5 must not unzoom");
+    let ctrl_p = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
+    app.handle_crossterm_event(Event::Key(ctrl_p)).unwrap();
+    assert!(matches!(app.wm.modal(), Modal::Palette { .. }));
+    app.handle_crossterm_event(Event::Key(repeat(ctrl_p))).unwrap();
+    assert!(matches!(app.wm.modal(), Modal::Palette { .. }), "holding Ctrl+P must not close the palette");
+}
+
+#[test]
+fn pane_bound_keys_keep_auto_repeating() {
+    let mut app = headless_app(80, 25);
+    for c in "abcd".chars() {
+        app.handle_crossterm_event(Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)))
+            .unwrap();
+    }
+    let backspace = KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE);
+    app.handle_crossterm_event(Event::Key(backspace)).unwrap();
+    app.handle_crossterm_event(Event::Key(repeat(backspace))).unwrap();
+    assert_eq!(app.wm.active_pane().prompt().text(), "ab", "Backspace auto-repeat is forwarded");
+
+    let left = KeyEvent::new(KeyCode::Left, KeyModifiers::NONE);
+    app.handle_crossterm_event(Event::Key(left)).unwrap();
+    app.handle_crossterm_event(Event::Key(repeat(left))).unwrap();
+    app.handle_crossterm_event(Event::Key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE)))
+        .unwrap();
+    assert_eq!(app.wm.active_pane().prompt().text(), "Xab", "Left-arrow auto-repeat is forwarded");
+}
+
+#[test]
+fn block_page_hold_f7_f8_repeat_keeps_paging_and_f7_still_closes_open_drawer() {
+    let mut wm = WindowManager::new_headless(20, 80);
+    wm.active_pane_mut().set_scroll_mode(PaneScrollMode::BlockPage);
+    for i in 0..40 {
+        wm.active_pane_mut()
+            .process_pty_output(format!("line {i}\r\n").as_bytes());
+    }
+    assert!(wm.active_pane().is_page_holding());
+    // F8 auto-repeat while holding is paging (not a toggle): it must not open Copy Mode.
+    handle_wm_key_event(&mut wm, repeat(fkey(8))).unwrap();
+    assert!(!wm.active_pane().copy_mode().active);
+    // Alt+F7 opens the drawer; its auto-repeat is dropped; plain F7 closes it.
+    handle_wm_key_event(&mut wm, alt_fkey(7)).unwrap();
+    handle_wm_key_event(&mut wm, repeat(alt_fkey(7))).unwrap();
+    assert!(wm.drawer_is_open());
+    wm.drawer_mut().focused = false;
+    handle_wm_key_event(&mut wm, fkey(7)).unwrap();
+    assert!(!wm.drawer_is_open());
+}
+
 #[cfg(not(any(windows, target_os = "macos")))]
 #[test]
 fn linux_x11_keysym_translator_handles_all_fkeys_locks_keypad_and_alt_shift() {
