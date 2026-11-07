@@ -873,6 +873,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::WindowManage(op) => super::execute_window::execute_window_manage(wm, op),
         ColonCommand::SessionManage(op) => super::execute_window::execute_session_manage(wm, op),
         ColonCommand::RemoteLink(op) => super::execute_link::execute_link_command(wm, op),
+        ColonCommand::DaemonSupervisor(ref op) | ColonCommand::Daemon(ref op) => {
+            super::execute_daemon::execute_daemon_command(wm, op)
+        }
         other => {
             let is_prompt_layout = matches!(
                 other,

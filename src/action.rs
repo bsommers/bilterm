@@ -9,6 +9,7 @@ use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
+use serde::{Deserialize, Serialize};
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -236,8 +237,25 @@ pub enum Action {
     WindowManage(crate::wm::window_manage::WindowManageOp),
     /// `:session <rename|move|undo>` (`SES-02`, `SES-04`).
     SessionManage(crate::wm::window_manage::SessionManageOp),
+    /// `:daemon [list|status|start|stop|switch|prune]` (`DAEM-05..08`, Phase 55).
+    DaemonSupervisor(DaemonSupervisorOp),
+    /// Alias for `DaemonSupervisor` matching contract shorthand (`DAEM-05..08`).
+    Daemon(DaemonSupervisorOp),
     Quit,
 }
+
+/// Operations supported by the background daemon supervisor (`DAEM-05..08`, Phase 55).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DaemonSupervisorOp {
+    List,
+    Status { name: Option<String> },
+    Start { name: Option<String> },
+    Stop { name: Option<String>, force: bool },
+    Switch { name: String },
+    Prune,
+}
+
+pub type DaemonOp = DaemonSupervisorOp;
 
 impl Action {
     /// Default spotlight cycle action (`Alt+O` / `Ctrl+X L` / `:spotlight`).
@@ -274,6 +292,7 @@ impl Action {
             Self::AgentMail(op) => op.colon_form(),
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(_) => ":session undo".to_string(),
+            Self::DaemonSupervisor(_) | Self::Daemon(_) => ":daemon list".to_string(),
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
@@ -475,6 +494,7 @@ mod tests {
             Action::AgentMail(_) => Some(":agent list"),
             Action::WindowManage(_) => Some(":window undo"),
             Action::SessionManage(_) => Some(":session undo"),
+            Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
             Action::Quit => Some(":quit"),
         };
 
@@ -714,6 +734,8 @@ mod tests {
             Action::AgentMail(crate::wm::agent_mail::AgentMailOp::List),
             Action::WindowManage(crate::wm::window_manage::WindowManageOp::Undo),
             Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
+            Action::DaemonSupervisor(DaemonSupervisorOp::List),
+            Action::Daemon(DaemonSupervisorOp::List),
             Action::Quit,
         ];
 

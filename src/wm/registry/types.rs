@@ -43,24 +43,28 @@ pub enum Origin {
     SavedSession,
     /// A `history.log` on disk.
     HistoryLog,
+    /// A background daemon instance (`DAEM-07`).
+    Daemon,
 }
 
 impl Origin {
-    /// Wire name: `live`, `saved-session` or `history-log`.
+    /// Wire name: `live`, `saved-session`, `history-log` or `daemon`.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Live => "live",
             Self::SavedSession => "saved-session",
             Self::HistoryLog => "history-log",
+            Self::Daemon => "daemon",
         }
     }
 
-    /// Sort priority; lower sorts first (`Live` < `SavedSession` < `HistoryLog`, P-05).
+    /// Sort priority; lower sorts first (`Live` < `Daemon` < `SavedSession` < `HistoryLog`, P-05).
     pub fn priority(self) -> u8 {
         match self {
             Self::Live => 0,
-            Self::SavedSession => 1,
-            Self::HistoryLog => 2,
+            Self::Daemon => 1,
+            Self::SavedSession => 2,
+            Self::HistoryLog => 3,
         }
     }
 }
@@ -81,10 +85,16 @@ impl ResultSource {
         Self { origin: Origin::Live, name: name.into(), path: None }
     }
 
-    /// UI tag: `live`, `saved:<name>` or `log:<name>`.
+    /// A daemon source for daemon `name`.
+    pub fn daemon(name: impl Into<String>) -> Self {
+        Self { origin: Origin::Daemon, name: name.into(), path: None }
+    }
+
+    /// UI tag: `live`, `daemon:<name>`, `saved:<name>` or `log:<name>`.
     pub fn label(&self) -> String {
         match self.origin {
             Origin::Live => "live".to_string(),
+            Origin::Daemon => format!("daemon:{}", self.name),
             Origin::SavedSession => format!("saved:{}", self.name),
             Origin::HistoryLog => format!("log:{}", self.name),
         }

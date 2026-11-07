@@ -303,6 +303,10 @@ fn activate(wm: &mut WindowManager) {
             Origin::HistoryLog => {
                 status(wm, format!("session {} has history only (no saved layout)", safe(&s.name)));
             }
+            Origin::Daemon => {
+                close(wm);
+                status(wm, format!("Daemon session {} ({tag})", safe(&s.name)));
+            }
         },
         RowData::History(h) => {
             let live_pane = h.pane.filter(|id| live && wm.pane(*id).is_some());

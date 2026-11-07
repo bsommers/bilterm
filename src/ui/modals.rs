@@ -425,6 +425,14 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Disconnect link (Ctrl+X Q)", ":ssh-tmux disconnect"),
         ("Link info", ":ssh-tmux info"),
     ]),
+    ("Tools", &[
+        ("List Daemons (Ctrl+X D L)", ":daemon list"),
+        ("Daemon Status (Ctrl+X D S)", ":daemon status"),
+        ("Start Daemon (Ctrl+X D N)", ":daemon start"),
+        ("Stop Daemon (Ctrl+X D Q)", ":daemon stop"),
+        ("Switch Daemon (Ctrl+X D W)", ":daemon switch default"),
+        ("Prune Daemons", ":daemon prune"),
+    ]),
     ("Help", &[
         ("Help Reference (F1)", ":help"), ("3270 Inspector (F9)", ":inspector"),
         ("List Sessions", ":session list"), ("Close Help", ":help"),

@@ -67,6 +67,11 @@ pub const RPC_METHODS: &[&str] = &[
     "agent.ack",
     "agent.list",
     "agent.wait",
+    "daemon.list",
+    "daemon.status",
+    "daemon.start",
+    "daemon.stop",
+    "daemon.switch",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
@@ -760,6 +765,11 @@ impl AutomationControlPlane {
             "agent.ack" => self.rpc_agent_ack(params),
             "agent.list" => self.rpc_agent_list(params),
             "agent.wait" => self.rpc_agent_wait(params),
+            "daemon.list" => super::rpc_daemon::handle_daemon_list(),
+            "daemon.status" => super::rpc_daemon::handle_daemon_status(params),
+            "daemon.start" => super::rpc_daemon::handle_daemon_start(params),
+            "daemon.stop" => super::rpc_daemon::handle_daemon_stop(params),
+            "daemon.switch" => super::rpc_daemon::handle_daemon_switch(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

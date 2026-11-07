@@ -93,6 +93,7 @@ impl AutomationControlPlane {
                     "bilterm_remote_link" => Some("remote.link"),
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
+                    "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -101,6 +102,8 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: send, broadcast, inbox, ack, list, name or wait".to_string())
                         } else if tool_name == "bilterm_window_manage" {
                             Err("missing or invalid 'action' parameter: move, rename, rename_session, select, bulk, or undo".to_string())
+                        } else if tool_name == "bilterm_daemon" {
+                            Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
@@ -286,8 +289,30 @@ impl AutomationControlPlane {
                     ("force", "boolean", "Force bulk close bypassing exit guard"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_daemon",
+                "Supervise and inspect Bilterm background daemons (list, status, start, stop, switch).",
+                &[
+                    ("action", "string", "Operation: list | status | start | stop | switch"),
+                    ("name", "string", "Optional daemon name (defaults to 'default')"),
+                    ("force", "boolean", "Optional flag to force stop without graceful shutdown"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_daemon` `action` argument -> the `daemon.*` RPC method; `None` when missing or unknown.
+    fn daemon_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str)?;
+        match action {
+            "list" => Some("daemon.list"),
+            "status" => Some("daemon.status"),
+            "start" => Some("daemon.start"),
+            "stop" => Some("daemon.stop"),
+            "switch" => Some("daemon.switch"),
+            _ => None,
+        }
     }
 
     /// `bilterm_agent_mail` `action` argument -> the `agent.*` RPC method; `None` when missing or unknown.
