@@ -68,11 +68,14 @@ cmd_for() {
 line() { # one-line result from summary.tsv
   [ -f "$OUT/summary.tsv" ] || { echo "NORUN"; return; }
   local n p f secs
-  n=$(wc -l <"$OUT/summary.tsv"); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv"); p=$((n-f))
+  n=$(($(wc -l <"$OUT/summary.tsv"))); f=$(grep -c $'\tFAIL\t' "$OUT/summary.tsv"); p=$((n-f))
   secs=$(awk -F'\t' '{s+=$3} END{print s+0}' "$OUT/summary.tsv")
   if [ "$f" -eq 0 ]; then echo "PASS $p/$n ${secs}s"
   else echo "FAIL $f/$n: $(awk -F'\t' '$2=="FAIL"{printf "%s ",$1}' "$OUT/summary.tsv")-> $OUT/<stage>/fail.txt"; fi
 }
+
+# bash 3.2 (macOS /bin/bash) has no mapfile: read stdin lines into stages[].
+read_stages() { stages=(); local l; while IFS= read -r l; do [ -n "$l" ] && stages+=("$l"); done; }
 
 mode=full; stages=()
 case "${1:-}" in
@@ -82,18 +85,21 @@ case "${1:-}" in
   --list)   all_stages; exit 0 ;;
   --groups) list_groups; exit 0 ;;
   --status) cat "$OUT/STATUS" 2>/dev/null >/dev/null; line; exit 0 ;;
-  --only)   shift; mode=only; mapfile -t stages < <(expand_stages "$@") || { echo "unknown group in: $* (try --groups)"; exit 2; } ;;
+  --only)   shift; mode=only
+            exp=$(expand_stages "$@") || { echo "unknown group in: $* (try --groups)"; exit 2; }
+            read_stages <<<"$exp" ;;
   *)        sed -n '2,10p' "$0"; exit 2 ;;
 esac
 case $mode in
-  full)   mapfile -t stages < <(all_stages) ;;
-  quick)  mapfile -t stages < <(quick_stages) ;;
-  failed) mapfile -t stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
+  full)   read_stages < <(all_stages) ;;
+  quick)  read_stages < <(quick_stages) ;;
+  failed) read_stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
           [ ${#stages[@]} -eq 0 ] && { echo "PASS nothing-failed"; exit 0; } ;;
 esac
+[ ${#stages[@]} -eq 0 ] && { echo "no stages selected (try --list)"; exit 2; }
 
 new=$(mktemp)
-for s in "${stages[@]}"; do
+for s in ${stages[@]+"${stages[@]}"}; do
   c=$(cmd_for "$s") || { echo "unknown stage: $s (try --list)"; exit 2; }
   d="$OUT/${s//:/_}"; rm -rf "$d"; mkdir -p "$d"
   t0=$SECONDS
@@ -111,7 +117,7 @@ if [ "$mode" = full ] || [ "$mode" = quick ] || [ ! -f "$OUT/summary.tsv" ]; the
   [ "$mode" = quick ] && [ -f "$OUT/summary.tsv" ] && grep -vE '^(clippy|unit)'$'\t' "$OUT/summary.tsv" >>"$new"
   sort -u -k1,1 "$new" >"$OUT/summary.tsv"
 else
-  { grep -vFf <(printf '%s\t\n' "${stages[@]}") "$OUT/summary.tsv"; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
+  { grep -vFf <(printf '%s\t\n' ${stages[@]+"${stages[@]}"}) "$OUT/summary.tsv"; cat "$new"; } | sort -u -k1,1 >"$OUT/summary.tsv.tmp"
   mv "$OUT/summary.tsv.tmp" "$OUT/summary.tsv"
 fi
 rm -f "$new"
