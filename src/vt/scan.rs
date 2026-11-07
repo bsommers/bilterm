@@ -27,7 +27,7 @@ impl VtParser {
             let payload_rest = &after_esc[1..];
             match kind {
                 b'[' => self.scan_csi_sequence(payload_rest),
-                b']' => self.scan_osc_sequence(&text[idx..], payload_rest),
+                b']' => self.scan_osc_sequence(payload_rest),
                 b'P' => self.scan_dcs_sequence(payload_rest),
                 b'_' => self.scan_apc_sequence(payload_rest),
                 _ => {}

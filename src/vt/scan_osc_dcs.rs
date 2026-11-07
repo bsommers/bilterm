@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use super::codec::{base64_decode, hex_decode_ascii, hex_encode_ascii};
+use super::codec::{
+    base64_decode, hex_decode_ascii, hex_encode_ascii, is_forwardable_osc52_write,
+};
 use super::detect::Osc8Hyperlink;
 use super::graphics::{
     GraphicProtocol, TerminalGraphicPlacement, decode_sixel_placement, expand_kitty_payload_to_rgba,
@@ -12,7 +14,7 @@ use super::{Osc9Progress, Osc133Phase, TerminalNotification, VtParser};
 
 impl VtParser {
     /// Dispatches a single `OSC` (`\x1b]...`) sequence starting at `osc_rest` (`&text[idx + 2..]`).
-    pub(super) fn scan_osc_sequence(&mut self, full_from_esc: &str, osc_rest: &str) {
+    pub(super) fn scan_osc_sequence(&mut self, osc_rest: &str) {
         if let Some(rest) = osc_rest
             .strip_prefix("0;")
             .or_else(|| osc_rest.strip_prefix("2;"))
@@ -147,12 +149,18 @@ impl VtParser {
         }
 
         if osc_rest.starts_with("52;") {
-            if let Some(end_bel) = full_from_esc.find('\x07') {
-                self.pending_osc52
-                    .push(full_from_esc[..=end_bel].to_string());
-            } else if let Some(end_st) = full_from_esc.find("\x1b\\") {
-                self.pending_osc52
-                    .push(full_from_esc[..end_st + 2].to_string());
+            // Terminate at the first BEL or ESC of *this* OSC; an ESC that does not begin ST
+            // aborts the sequence so no foreign escapes can ride along to the host terminal.
+            if let Some(end) = osc_rest.find(['\x07', '\x1b']) {
+                let terminator = match &osc_rest[end..] {
+                    t if t.starts_with('\x07') => "\x07",
+                    t if t.starts_with("\x1b\\") => "\x1b\\",
+                    _ => return,
+                };
+                let body = &osc_rest[..end];
+                if is_forwardable_osc52_write(body) {
+                    self.pending_osc52.push(format!("\x1b]{body}{terminator}"));
+                }
             }
             return;
         }
