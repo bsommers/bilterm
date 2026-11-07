@@ -302,6 +302,86 @@ fn bilterm_action_for_fkey(wm: &WindowManager, n: u8) -> Option<Action> {
     }
 }
 
+/// Actions that are safe to auto-repeat while their chord is held (navigation, resizing, paging).
+/// Everything else bound at the WM level is a toggle or chrome action that must fire once per press.
+fn is_repeatable_wm_action(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::PasteClipboard
+            | Action::FontZoomIn
+            | Action::FontZoomOut
+            | Action::FontZoomReset
+            | Action::PaneResize { .. }
+            | Action::PaneMove { .. }
+            | Action::FocusPane(_)
+            | Action::PaneFocusDirection { .. }
+            | Action::DeckNext
+            | Action::DeckPrev
+            | Action::ScrollPageBack
+            | Action::ScrollPageAdvance
+    )
+}
+
+/// True when the WM itself will consume `key` as a toggle/chrome chord (F7 drawer, Ctrl+P palette, the leader
+/// key, a user `[keybindings]` toggle, ...), so a `KeyEventKind::Repeat` of it must be dropped.
+///
+/// This mirrors the routing order of `handle_wm_key_event`: chords the WM intercepts even over raw PTY
+/// passthrough are checked first; once the active pane is in raw passthrough, every other key (Alt+h/t/c/l/x,
+/// Ctrl+Space, plain F2/F5 in an alt-screen app, ...) is forwarded to the child and keeps auto-repeating.
+pub(super) fn is_wm_toggle_chord(wm: &mut WindowManager, key: KeyEvent) -> bool {
+    let toggle = |a: &Action| !is_repeatable_wm_action(a);
+    // 1. Intercepted before the passthrough decision.
+    if !wm.config().keybindings.is_empty()
+        && let Some(chord) = format_key_chord(key)
+        && let Some((_, bound)) = wm.config().keybindings.iter().find(|(k, _)| k.eq_ignore_ascii_case(&chord))
+    {
+        return !matches!(parse_colon_command(bound), Some(Ok(a)) if !toggle(&a));
+    }
+    if is_leader_key_with_tmux(key, &wm.config().leader_key, crate::tmux::TmuxEnv::detect().is_some()) {
+        return true;
+    }
+    if let KeyCode::F(n @ 1..=12) = key.code
+        && key.modifiers == KeyModifiers::ALT
+        && (n == 7 || n == 12 || bilterm_action_for_fkey(wm, n).is_some_and(|a| toggle(&a)))
+    {
+        return true;
+    }
+    if reserved_global_action(key).is_some_and(|a| toggle(&a)) {
+        return true;
+    }
+    // 2. Passthrough-dependent routing.
+    wm.active_pane_mut().refresh_line_discipline();
+    let raw = wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+        && wm.active_pane().pending_unsafe_paste().is_none()
+        && !wm.active_pane().copy_mode().active
+        && !wm.active_pane().hints_mode().active;
+    if raw {
+        if let KeyCode::F(n @ 1..=12) = key.code
+            && key.modifiers.is_empty()
+        {
+            if n == 12 {
+                return true;
+            }
+            if n == 7
+                && (wm.drawer_is_open()
+                    || wm.is_drawer_effectively_visible()
+                    || wm.config().raw_fkeys != crate::ui::RawFkeyMode::App)
+            {
+                return true;
+            }
+            if wm.config().raw_fkeys.intercept_plain_fkeys_in_raw(wm.active_pane().vt().is_alternate_screen())
+                && !wm.active_pane().is_active_canvas_password_prompt()
+                && bilterm_action_for_fkey(wm, n).is_some_and(|a| toggle(&a))
+            {
+                return true;
+            }
+        }
+        return default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
+            .is_some_and(|a| matches!(a, Action::PaletteToggle));
+    }
+    default_global_action(key, wm.active_pane().prompt().fuzzy_search.active).is_some_and(|a| toggle(&a))
+}
+
 /// Handles user-configured `[keybindings]` and Workspace Leader mode entry.
 pub(super) fn handle_wm_user_binding_or_leader_entry(
     wm: &mut WindowManager,
