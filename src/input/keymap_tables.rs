@@ -9,6 +9,7 @@ use crate::wm::drawer::DrawerNavOp;
 use crate::wm::find_cmd::{FindKind, FindOp};
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
+use crate::wm::clipboard_window::ClipboardWindowOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -48,6 +49,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('p'), Action::PasteClipboard),
     (KeyCode::Char('v'), Action::PasteClipboard),
     (KeyCode::Char(']'), Action::PasteClipboard),
+    // Filterable CLIPBOARD viewer window toggle (`Ctrl+X ;`, Phase 57)
+    (KeyCode::Char(';'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     (KeyCode::Char('1'), Action::FocusPane(1)),
     (KeyCode::Char('2'), Action::FocusPane(2)),
     (KeyCode::Char('3'), Action::FocusPane(3)),
@@ -221,6 +224,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // SESSION MAP toggle: Ctrl+Alt+M (Phase 54, VIEW-02)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('m'), Action::SessionMap(SessionMapOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('M'), Action::SessionMap(SessionMapOp::Toggle)),
+    // CLIPBOARD viewer window toggle: Ctrl+Alt+V (Phase 57, CLIP-04)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('v'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('V'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),

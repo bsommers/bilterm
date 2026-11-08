@@ -167,6 +167,9 @@ impl VtParser {
                 let body = &osc_rest[..end];
                 if is_forwardable_osc52_write(body) {
                     self.pending_osc52.push(format!("\x1b]{body}{terminator}"));
+                    if let Some(decoded) = decode_osc52_payload(body) {
+                        self.pending_osc52_decoded.push(decoded);
+                    }
                 }
             }
             return;
@@ -450,4 +453,18 @@ fn xtgettcap_lookup(cap: &str) -> Option<&'static str> {
         "Ms" => Some("\x1b]52;%p1%s;%p2%s\x07"),
         _ => None,
     }
+}
+
+fn decode_osc52_payload(body: &str) -> Option<String> {
+    let rest = body.strip_prefix("52;")?;
+    let (_, payload) = rest.split_once(';')?;
+    if payload.is_empty() || payload == "?" || payload.len() > 1_048_576 {
+        return None;
+    }
+    let bytes = super::codec::base64_decode(payload);
+    if bytes.is_empty() || bytes.len() > 1_048_576 {
+        return None;
+    }
+    let text = String::from_utf8(bytes).ok()?;
+    (!text.is_empty()).then_some(text)
 }

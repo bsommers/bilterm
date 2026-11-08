@@ -492,6 +492,14 @@ impl AutomationControlPlane {
             "daemon.start" => super::rpc_daemon::handle_daemon_start(params),
             "daemon.stop" => super::rpc_daemon::handle_daemon_stop(params),
             "daemon.switch" => super::rpc_daemon::handle_daemon_switch(params),
+            "clipboard.list" => self.rpc_clipboard_list(params),
+            "clipboard.get" => self.rpc_clipboard_get(params),
+            "clipboard.copy" => self.rpc_clipboard_copy(params),
+            "clipboard.paste" => self.rpc_clipboard_paste(params),
+            "clipboard.pin" => self.rpc_clipboard_pin(params),
+            "clipboard.delete" => self.rpc_clipboard_delete(params),
+            "clipboard.clear" => self.rpc_clipboard_clear(params),
+            "clipboard.window" => self.rpc_clipboard_window(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

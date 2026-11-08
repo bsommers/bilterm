@@ -341,6 +341,12 @@ pub(super) fn handle_wm_modal_key(
         {
             return Ok(Some(action));
         }
+        if wm.clipboard_window().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::clipboard_window_keys::handle_clipboard_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
         if wm.fonts_window().captures_input()
             && !wm.is_leader_pending()
             && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)

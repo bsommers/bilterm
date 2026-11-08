@@ -170,6 +170,8 @@ pub struct BiltermConfig {
     pub copy_on_select: bool,
     /// Persists the cut-and-paste yank buffer history uniquely per Bilterm session (`true` by default, `:clipboard persist [on|off]`).
     pub clipboard_history_persist: bool,
+    /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text via bracketed paste unless image/video media is on the system clipboard (`true` by default, `CLIP-01`).
+    pub smart_ctrl_v_paste: bool,
     /// Optional custom INI/TOML hex overrides for `ThemePalette`.
     #[serde(skip)]
     pub custom_palette_override: Option<ThemePalette>,
@@ -254,6 +256,7 @@ impl Default for BiltermConfig {
             api: ApiConfig::default(),
             copy_on_select: false,
             clipboard_history_persist: true,
+            smart_ctrl_v_paste: true,
             custom_palette_override: None,
             cursor_blink_hidden: false,
         }

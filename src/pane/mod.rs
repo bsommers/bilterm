@@ -103,6 +103,12 @@ pub struct CompositePane {
     link_banner: Option<LinkBanner>,
     /// Exit code of the PTY child once known (hold path).
     exit_code: Option<i32>,
+    /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text unless media is on the clipboard (`CLIP-01`).
+    smart_ctrl_v_paste: bool,
+    /// Pending clipboard/yank events waiting to be drained into [`crate::wm::clipboard_registry::ClipboardRegistry`].
+    pending_clipboard_records: Vec<(crate::wm::clipboard_registry::ClipboardSource, String)>,
+    /// Pending media passthrough events waiting to be drained into [`crate::wm::clipboard_registry::ClipboardRegistry`].
+    pending_media_records: Vec<(String, usize)>,
 }
 
 impl CompositePane {
@@ -150,6 +156,9 @@ impl CompositePane {
             remote_input: Vec::new(),
             link_banner: None,
             exit_code: None,
+            smart_ctrl_v_paste: true,
+            pending_clipboard_records: Vec::new(),
+            pending_media_records: Vec::new(),
         }
     }
 
@@ -695,6 +704,7 @@ impl CompositePane {
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
         self.vt.process(bytes);
+        self.drain_osc52_decoded();
         self.canvas_scene
             .scan_osc_canvas_sequences(self.vt.tektronix_mut(), bytes);
         if let Some(wt) = self.vt.window_title() {
@@ -747,6 +757,7 @@ impl CompositePane {
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
             self.vt.process(&coalesced);
+            self.drain_osc52_decoded();
             self.canvas_scene
                 .scan_osc_canvas_sequences(self.vt.tektronix_mut(), &coalesced);
             if let Some(wt) = self.vt.window_title() {
@@ -781,6 +792,56 @@ impl CompositePane {
     /// Convenience wrapper for writing input bytes into the pane's PTY.
     pub fn write_input(&mut self, bytes: &[u8]) -> Result<()> {
         self.write_to_pty(bytes)
+    }
+
+    /// Alias for writing raw bytes directly to the pane's PTY (`CLIP-01`).
+    pub fn write_raw_pty(&mut self, bytes: &[u8]) -> Result<()> {
+        self.write_to_pty(bytes)
+    }
+
+    pub fn smart_ctrl_v_paste(&self) -> bool {
+        self.smart_ctrl_v_paste
+    }
+
+    pub fn set_smart_ctrl_v_paste(&mut self, enabled: bool) {
+        self.smart_ctrl_v_paste = enabled;
+    }
+
+    pub fn record_clipboard_event(
+        &mut self,
+        source: crate::wm::clipboard_registry::ClipboardSource,
+        text: impl Into<String>,
+    ) {
+        let text = text.into();
+        if !text.is_empty() {
+            self.pending_clipboard_records.push((source, text));
+        }
+    }
+
+    pub fn record_media_passthrough(&mut self, mime: impl Into<String>, bytes_len: usize) {
+        self.pending_media_records.push((mime.into(), bytes_len));
+    }
+
+    pub fn take_pending_clipboard_records(
+        &mut self,
+    ) -> Vec<(crate::wm::clipboard_registry::ClipboardSource, String)> {
+        std::mem::take(&mut self.pending_clipboard_records)
+    }
+
+    pub fn take_pending_media_records(&mut self) -> Vec<(String, usize)> {
+        std::mem::take(&mut self.pending_media_records)
+    }
+
+    fn drain_osc52_decoded(&mut self) {
+        for decoded in self.vt.take_osc52_decoded() {
+            crate::clipboard::set_system_clipboard(&decoded);
+            self.prompt.push_yank_entry(&decoded);
+            let _ = self.history_store.record_clipboard_entry(&decoded);
+            self.pending_clipboard_records.push((
+                crate::wm::clipboard_registry::ClipboardSource::Osc52,
+                decoded,
+            ));
+        }
     }
 
     /// Returns the most recent byte payload passed to [`Self::write_to_pty`].

@@ -194,6 +194,8 @@ pub enum Action {
     FontsWindow(crate::wm::fonts_window::FontsWindowOp),
     /// `:commands [open|close|toggle|pin|...]` - Pinnable Command Palette window (WIN-02, Phase 51.2).
     CommandWindow(crate::wm::command_window::CommandWindowOp),
+    /// `:clipboard [open|close|toggle|pin|dock|...]` - Filterable Clipboard Viewer window (`CLIP-03..04`, Phase 57).
+    ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
     ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
@@ -314,6 +316,7 @@ impl Action {
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
+            Self::ClipboardWindow(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
             Self::SessionMap(op) => op.colon_form(),
@@ -513,6 +516,7 @@ mod tests {
             Action::SessionMap(_) => Some(":sessions map toggle"),
             Action::FontsWindow(_) => Some(":fonts toggle"),
             Action::CommandWindow(_) => Some(":commands toggle"),
+            Action::ClipboardWindow(_) => Some(":clipboard toggle"),
             Action::ScriptStudio(_) => Some(":script toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
@@ -743,6 +747,7 @@ mod tests {
             Action::SessionMap(crate::wm::session_map::SessionMapOp::Toggle),
             Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
             Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
+            Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::Toggle),
             Action::ScriptStudio(crate::wm::script_studio::ScriptStudioOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),

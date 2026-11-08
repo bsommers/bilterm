@@ -11,6 +11,7 @@ use crate::wm::agents_list_cmd::AgentsListOp;
 use crate::wm::find_cmd::FindOp;
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
+use crate::wm::clipboard_window::ClipboardWindowOp;
 
 #[path = "keymap_tables.rs"]
 mod keymap_tables;
@@ -57,7 +58,7 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// while an agent or a remote ssh prompt owns the pane.
 pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
     match default_global_action(key, false) {
-        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
+        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
         _ => None,
     }
 }
@@ -566,7 +567,7 @@ pub(super) fn handle_wm_shortcut_key(
         }
     }
     if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
-        return Ok(Some(wm.apply(Action::SelectCommand(Some("clipboard pop".to_string())))?));
+        return Ok(Some(wm.apply(Action::ClipboardWindow(ClipboardWindowOp::PopYankRing))?));
     }
     if let Some(action) = default_global_action(key, fuzzy_active) {
         return Ok(Some(wm.apply(action)?));

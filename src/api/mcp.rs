@@ -94,6 +94,7 @@ impl AutomationControlPlane {
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
                     "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
+                    "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -104,6 +105,8 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: move, rename, rename_session, select, bulk, or undo".to_string())
                         } else if tool_name == "bilterm_daemon" {
                             Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
+                        } else if tool_name == "bilterm_clipboard" {
+                            Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
@@ -298,8 +301,40 @@ impl AutomationControlPlane {
                     ("force", "boolean", "Optional flag to force stop without graceful shutdown"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_clipboard",
+                "Inspect, filter, copy, paste, pin, delete, clear, or manage the Bilterm CLIPBOARD viewer and registry.",
+                &[
+                    ("action", "string", "Operation: list | get | copy | paste | pin | delete | clear | window (default 'list')"),
+                    ("scope", "string", "Optional filter scope for list: all | session | window | pinned | media"),
+                    ("session", "string", "Optional session name filter for list"),
+                    ("window", "integer", "Optional pane/window ID filter for list"),
+                    ("query", "string", "Optional substring filter for list or window search"),
+                    ("id", "integer", "Optional entry ID for get, paste, pin, or delete"),
+                    ("index", "integer", "Optional 1-based entry index for paste"),
+                    ("text", "string", "Text to copy into the clipboard registry (for copy)"),
+                    ("pinned", "boolean", "Pin state for pin"),
+                    ("op", "string", "Window operation for action='window': open | close | toggle | pin | dock | float | all | session | window | pinned | media"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_clipboard` `action` argument -> the `clipboard.*` RPC method; `None` when unknown.
+    fn clipboard_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("list");
+        match action {
+            "list" => Some("clipboard.list"),
+            "get" => Some("clipboard.get"),
+            "copy" => Some("clipboard.copy"),
+            "paste" => Some("clipboard.paste"),
+            "pin" => Some("clipboard.pin"),
+            "delete" => Some("clipboard.delete"),
+            "clear" => Some("clipboard.clear"),
+            "window" => Some("clipboard.window"),
+            _ => None,
+        }
     }
 
     /// `bilterm_daemon` `action` argument -> the `daemon.*` RPC method; `None` when missing or unknown.

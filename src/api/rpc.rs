@@ -63,6 +63,14 @@ pub const RPC_METHODS: &[&str] = &[
     "daemon.start",
     "daemon.stop",
     "daemon.switch",
+    "clipboard.list",
+    "clipboard.get",
+    "clipboard.copy",
+    "clipboard.paste",
+    "clipboard.pin",
+    "clipboard.delete",
+    "clipboard.clear",
+    "clipboard.window",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
