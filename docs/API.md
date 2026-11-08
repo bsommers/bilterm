@@ -1028,7 +1028,7 @@ Returns daemon status and version.
   ```
 - **Response** (`200 OK`):
   ```json
-  {"ok": true, "version": "3.0.5"}
+  {"ok": true, "version": "3.1.0"}
   ```
 
 #### 2. `POST /rpc`

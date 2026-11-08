@@ -1,10 +1,12 @@
 # Session Checkpoint — 2026-11-08
 
-**Status:** COMPLETE — Phases 58, 59, and 60 integrated on `feat/phases-58-59-60` (`PASS 135/135 71s`, `GOLDENS OK 11`)
+**Status:** IN PROGRESS — Cutting Release `v3.1.0` (`PASS 135/135 135s`, `GOLDENS OK 11`)
 
 ## 1. Goal & User Decisions (Verbatim)
 - **User Request (Verbatim):**
-  `"Integrate feat/phase-58 (a31d0cf), feat/phase-59 (7304993), and feat/phase-60 (ea0aea3) onto a unified branch feat/phases-58-59-60 in /home/bill/src/ai/bilterm, verify all tests and architectural ceilings, and update the planning/checkpoint documents."`
+  - `"what's next?"`
+  - `"1 - v 3.1.0 seems more fitting than 3.0.6. do you agree?"`
+  - `"yes"` (proceed with cutting `v3.1.0`: branch `release/v3.1.0`, bump version `3.0.5` -> `3.1.0`, update `CHANGELOG.md`, verify `scripts/verify.sh` + `scripts/check_classic_goldens.sh`, push PR, merge, tag `v3.1.0`, and build/upload release assets).
 
 ## 2. Integrated Phases & Accomplishments
 - **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`)**:

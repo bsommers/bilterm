@@ -44,14 +44,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 43: UI Modernization Step 1 — Architecture Audit & Plan Realignment** - Read-only audit, roadmap realignment, `ARCH-R04` relaxed to a soft ~800–1000-line goal (`UIM-00`)
 - [x] **Phase 44: UI Modernization Step 2 — Visual Design Proposal with Working Previews** - Proposed redesign backed by real `--gui-dump` previews; user sign-off gate (`UIM-01`)
 - [x] **Phase 45: UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config** - Design tokens, 5 materials, 8 theme profiles, backward-compatible `[appearance]` config, animation clock (`UIM-02`) (completed 2026-11-07)
-- [ ] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
-- [ ] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
-- [ ] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
-- [ ] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
+- [x] **Phase 46: UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome** - Standard/Minimal/Zen modes, navigator, pane chrome and contextual actions (`UIM-03`)
+- [x] **Phase 47: UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings** - Remaining UI on the design system plus live-preview settings modal (`UIM-04`)
+- [x] **Phase 48: UI Modernization Step 6 — Regression, Performance & Polish** - Full regression, perf, accessibility, visual-consistency review, release (`UIM-05`)
+- [x] **Phase 49: Command Parity & Full Public API** - Every capability a `:colon` command, reachable from MCP, exposed by a versioned documented API (`API-01`)
 - [x] **Phase 50: Agent-Aware Workspace Navigator (Left Sidebar)** - Persistent left-side navigator in the slide-out drawer: workspaces > sessions > panes tree with per-pane agent-state dots, attention counts, jump-to-next-blocked, keyboard-first, plus the agent traffic bus, zoom window and snoop view and their GUI vector rendering (`FLT-01`, `FLT-02`, `FLT-03`)
 - [x] **Phase 50.1: Unified Registry & Find (INSERTED)** - Searchable registry of agents, terminal sessions/panes and per-session command history, extended to SSH and tmux sessions, with `:find` command verbs (`FND-R01..04`)
 - [x] **Phase 51: UI Tweaks & Command Parity** - `:agents demo stop`; every colon verb reachable from the command palette (incl. `:drawer style navigator`); `:agents list` as a floating, pinnable, tileable agents-list window (`UIT-01..04`)
-- [ ] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
+- [x] **Phase 51.1: Persistent SSH + tmux Sessions (INSERTED)** - Real `ssh -tt` + `tmux -CC new -A` transport with keepalive, honest status, reconnect with backoff, exited-pane hold banner, no fake remote badge on restore (`PST-01..04`)
 - [x] **Phase 51.2: First-Class Utility Windows & Script Studio (INSERTED)** - Floating, pinnable, dockable utility windows (`FONTS` window with live preview, workbench-style pinned `COMMAND PALETTE` with execution history, and `SCRIPT STUDIO` with live recorder and single-step debugger) (`WIN-01..WIN-03`)
 - [x] **Phase 52: Agent-to-Agent Messaging & Coordination** - Structured mailbox and addressing so agents running in panes can message, wait on, and coordinate with each other via RPC/MCP/`:agent`, with delivery modes, safety gates and a coordinator view (`AGT-01..03`)
 - [x] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
@@ -1181,13 +1181,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 40. `v2.4.1` Interactive Per-Window Theme Browser & Per-Window Element Color Overrides (`WIN-03`, `WIN-04`) | 3/3 | Complete | 2026-10-31 |
 | 41. `v2.5.0` 2D Rectangular Block Select/Highlight/Copy & Full Per-Pane Session Shell, Running Command & CWD Persistence (`RECT-01`, `SESS-03`) | 3/3 | Complete | 2026-10-31 |
 | 42. `v2.5.1`–`v2.5.2` Non-Retro Modern Minimal & Liquid Glass Modes, Per-Window vs. Global Theme & Cursor Isolation, Drawer Controls & SSH Hardening (`MOD-01`, `LIQ-01`, `WIN-05`, `CUR-03`, `SSH-02`) | 3/3 | Complete | 2026-10-31 |
-| 43. UI Modernization Step 1 — Architecture Audit & Plan Realignment (`UIM-00`) | 0/1 | Planned | - |
-| 44. UI Modernization Step 2 — Visual Design Proposal with Working Previews (`UIM-01`) | 0/1 | Planned | - |
+| 43. UI Modernization Step 1 — Architecture Audit & Plan Realignment (`UIM-00`) | 1/1 | Complete | 2026-11-02 |
+| 44. UI Modernization Step 2 — Visual Design Proposal with Working Previews (`UIM-01`) | 1/1 | Complete | 2026-11-02 |
 | 45. UI Modernization Step 3 — Design System: Tokens, Materials, Themes & `[appearance]` Config (`UIM-02`) | 3/3 | Complete | 2026-11-07 |
-| 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 0/3 | Planned | - |
-| 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 0/3 | Planned | - |
-| 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 0/2 | Planned | - |
-| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | In Progress | - |
+| 46. UI Modernization Step 4 — Main Interface: Shell, Display Modes, Workspace Navigation & Pane Chrome (`UIM-03`) | 4/4 | Complete | 2026-11-07 |
+| 47. UI Modernization Step 5 — Drawers, Floating Panels, Command Palette, Context Menus & Live-Preview Appearance Settings (`UIM-04`) | 3/3 | Complete | 2026-11-07 |
+| 48. UI Modernization Step 6 — Regression, Performance & Polish (`UIM-05`) | 2/2 | Complete | 2026-11-07 |
+| 49. Command Parity & Full Public API (`API-01`) | 7/7 | Complete | 2026-11-07 |
+| 50. Agent-Aware Workspace Navigator (Left Sidebar) (`FLT-01`) | 16/16 | Complete | 2026-11-05 |
 | 50.1. Unified Registry & Find (INSERTED) (`FND-R01..04`) | 15/15 | Complete | 2026-11-05 |
 | 51. UI Tweaks & Command Parity (`UIT-01..04`) | 13/13 | Complete | 2026-11-05 |
 | 51.1. Persistent SSH + tmux Sessions (INSERTED) (`PST-01..04`) | 16/16 | Complete | 2026-11-06 |
