@@ -72,6 +72,12 @@ pub const RPC_METHODS: &[&str] = &[
     "clipboard.delete",
     "clipboard.clear",
     "clipboard.window",
+    "browser.open",
+    "browser.control",
+    "browser.state",
+    "video.open",
+    "video.control",
+    "video.state",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.

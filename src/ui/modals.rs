@@ -415,6 +415,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Script Studio", ":script toggle"),
         ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
         ("Voice Dictation Toggle (Ctrl+Alt+S)", ":voice toggle"),
+        ("Browser Canvas (Ctrl+Alt+B)", ":browser"),
+        ("Video Canvas (Ctrl+Alt+Y)", ":video"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),

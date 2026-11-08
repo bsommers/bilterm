@@ -1,3 +1,4 @@
+pub mod browser_canvas;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -11,7 +12,9 @@ pub mod prompt_selection;
 pub mod redact;
 pub mod scroll;
 pub mod typography;
+pub mod video_canvas;
 
+pub use browser_canvas::{BrowserCanvasState, BrowserOp};
 pub use canvas_scene::{
     CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
     PaneCanvasScene, PlotKind, Sprite2D, VectorPrimitive,
@@ -26,6 +29,7 @@ pub use typography::{
     CanvasResolution, FontFamilyPreset, PaneFontOptions, probe_terminal_pixel_size,
     refresh_terminal_pixel_size,
 };
+pub use video_canvas::{VideoCanvasState, VideoOp, VideoPlaybackSnapshot};
 
 use std::path::PathBuf;
 
@@ -111,6 +115,8 @@ pub struct CompositePane {
     pending_media_records: Vec<(String, usize)>,
     /// Live STT status badge rendered in the 3270 OIA status bar (`STT-02`, `STT-03`).
     stt_badge: Option<String>,
+    pub(crate) browser_canvas: Option<browser_canvas::BrowserCanvasState>,
+    pub(crate) video_canvas: Option<video_canvas::VideoCanvasState>,
 }
 
 impl CompositePane {
@@ -162,6 +168,8 @@ impl CompositePane {
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
             stt_badge: None,
+            browser_canvas: None,
+            video_canvas: None,
         }
     }
 
@@ -991,6 +999,64 @@ impl CompositePane {
             self.prompt.insert_char(' ');
         }
         self.prompt.insert_str(text);
+    }
+
+    pub fn browser_canvas(&self) -> Option<&browser_canvas::BrowserCanvasState> {
+        self.browser_canvas.as_ref()
+    }
+
+    pub fn browser_canvas_mut(&mut self) -> Option<&mut browser_canvas::BrowserCanvasState> {
+        self.browser_canvas.as_mut()
+    }
+
+    pub fn video_canvas(&self) -> Option<&video_canvas::VideoCanvasState> {
+        self.video_canvas.as_ref()
+    }
+
+    pub fn video_canvas_mut(&mut self) -> Option<&mut video_canvas::VideoCanvasState> {
+        self.video_canvas.as_mut()
+    }
+
+    pub fn open_browser(&mut self, url: &str) {
+        let (cols, rows) = self.vt.size();
+        let width_px = cols.saturating_mul(10).max(320);
+        let height_px = rows.saturating_mul(18).max(240);
+        self.browser_canvas = Some(browser_canvas::BrowserCanvasState::new_cdp_or_synthetic(
+            url, width_px, height_px, self.id,
+        ));
+    }
+
+    pub fn close_browser(&mut self) {
+        self.browser_canvas = None;
+    }
+
+    pub fn open_video(&mut self, source: &str) {
+        let (cols, rows) = self.vt.size();
+        let width_px = cols.saturating_mul(10).max(320);
+        let height_px = rows.saturating_mul(18).max(240);
+        self.video_canvas = Some(video_canvas::VideoCanvasState::new(
+            source, width_px, height_px,
+        ));
+    }
+
+    pub fn close_video(&mut self) {
+        self.video_canvas = None;
+    }
+
+    pub fn tick_media_canvases(&mut self, now_ms: u64) -> bool {
+        let mut changed = false;
+        if let Some(v) = self.video_canvas_mut()
+            && v.tick(now_ms)
+        {
+            changed = true;
+        }
+        if let Some(b) = self.browser_canvas_mut()
+            && b.poll_screencast_frame()
+        {
+            changed = true;
+        }
+        changed
+    }
     }
 }
 

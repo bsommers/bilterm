@@ -188,6 +188,12 @@ pub fn handle_mouse_event(
         && row >= prompt_rect.y
         && row < prompt_rect.y + prompt_rect.height;
 
+    if in_canvas
+        && let Some(act) = super::mouse_media::handle_media_canvas_mouse(pane, mouse, canvas_rect, in_prompt)
+    {
+        return Ok(act);
+    }
+
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             // Ctrl+LeftClick on OutputCanvas: check for URL at clicked cell and yank via OSC 52 (VAL-03)

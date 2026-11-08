@@ -3,6 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
+pub use crate::pane::{BrowserOp, VideoOp};
 use crate::pane::{ExitProtectionPolicy, PaneId, PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
@@ -255,6 +256,10 @@ pub enum Action {
     DrawerPreview(DrawerPreviewOp),
     /// Speech-to-text dictation operations (`STT-01..03`).
     Voice(VoiceOp),
+    /// `:browser [open|back|forward|reload|stop|focus|zoom|close]` - Chrome Engine Web Browser Canvas (`WEB-01..02`).
+    Browser(BrowserOp),
+    /// `:video [open|play|pause|toggle|seek|volume|mute|loop|speed|close]` - Video Player Canvas (`VID-01..02`).
+    Video(VideoOp),
     Quit,
 }
 
@@ -601,6 +606,8 @@ mod tests {
             Action::Voice(VoiceOp::ApplyTranscript { .. }) => None,
             Action::Voice(VoiceOp::UpdateTelemetry { .. }) => None,
             Action::Voice(VoiceOp::InjectWav { .. }) => None,
+            Action::Browser(_) => Some(":browser"),
+            Action::Video(_) => Some(":video"),
             Action::Quit => Some(":quit"),
         };
 
@@ -855,6 +862,30 @@ mod tests {
             Action::DrawerPreview(DrawerPreviewOp::Pane(1)),
             Action::DrawerPreview(DrawerPreviewOp::Session("default".to_string())),
             Action::Voice(VoiceOp::Toggle),
+            Action::Browser(BrowserOp::Toggle),
+            Action::Browser(BrowserOp::Open { url: "https://example.com".to_string(), pane_id: None }),
+            Action::Browser(BrowserOp::Back { pane_id: None }),
+            Action::Browser(BrowserOp::Forward { pane_id: None }),
+            Action::Browser(BrowserOp::Reload { pane_id: None }),
+            Action::Browser(BrowserOp::Stop { pane_id: None }),
+            Action::Browser(BrowserOp::FocusViewport { pane_id: None, focused: Some(true) }),
+            Action::Browser(BrowserOp::Zoom { delta_pct: 10, pane_id: None }),
+            Action::Browser(BrowserOp::Click { x_px: 10, y_px: 10, button: 0, pane_id: None }),
+            Action::Browser(BrowserOp::Scroll { delta_x: 0, delta_y: 10, pane_id: None }),
+            Action::Browser(BrowserOp::Close { pane_id: None }),
+            Action::Video(VideoOp::Toggle),
+            Action::Video(VideoOp::Open { source: "demo://smpte".to_string(), pane_id: None }),
+            Action::Video(VideoOp::Play { pane_id: None }),
+            Action::Video(VideoOp::Pause { pane_id: None }),
+            Action::Video(VideoOp::TogglePlayPause { pane_id: None }),
+            Action::Video(VideoOp::SeekRelative { delta_ms: 5000, pane_id: None }),
+            Action::Video(VideoOp::SeekPercent { pct: 50, pane_id: None }),
+            Action::Video(VideoOp::SeekAbsolute { position_ms: 10000, pane_id: None }),
+            Action::Video(VideoOp::VolumeDelta { delta_pct: 5, pane_id: None }),
+            Action::Video(VideoOp::ToggleMute { pane_id: None }),
+            Action::Video(VideoOp::ToggleLoop { pane_id: None }),
+            Action::Video(VideoOp::SetSpeed { speed_x100: 100, pane_id: None }),
+            Action::Video(VideoOp::Close { pane_id: None }),
             Action::Quit,
         ];
 

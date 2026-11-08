@@ -25,6 +25,7 @@ pub mod glyphs;
 pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
+pub mod media_canvas_gui;
 pub mod modals;
 pub mod occlusion;
 pub mod pane_actions;
@@ -134,6 +135,23 @@ impl Widget for CompositePaneWidget<'_> {
 
         // Pass 1: Render full-height OutputCanvas from VtParser screen
         render_output_canvas(self.pane, canvas, cfg, &palette, self.active, buf);
+
+        if let Some(browser) = self.pane.browser_canvas() {
+            crate::pane::browser_canvas::render_browser_nav_bar(
+                buf,
+                Rect::new(canvas.x, canvas.y, canvas.width, 1),
+                browser,
+                self.active,
+            );
+        }
+        if let Some(video) = self.pane.video_canvas() {
+            crate::pane::video_canvas::render_video_osd_bar(
+                buf,
+                Rect::new(canvas.x, canvas.bottom().saturating_sub(1), canvas.width, 1),
+                video,
+                self.active,
+            );
+        }
 
         // Pass 2: Render overlaid or split FloatingCommandPrompt if visible
         if self.pane.is_prompt_visible() && canvas.height >= 2 {

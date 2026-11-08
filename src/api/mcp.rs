@@ -97,6 +97,8 @@ impl AutomationControlPlane {
                     "bilterm_drawer_preview" => Some("drawer.preview"),
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
                     "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
+                    "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
+                    "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -342,6 +344,30 @@ impl AutomationControlPlane {
                     ("wav_hex", "string", "Hex-encoded WAV audio data for action='inject_wav'"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_browser",
+                "Open, navigate, or control the Chrome Engine Web Browser Canvas in the active or target pane.",
+                &[
+                    ("action", "string", "Operation: open | back | forward | reload | stop | focus | zoom | close | state | toggle (default 'state')"),
+                    ("url", "string", "URL to navigate to for action='open'"),
+                    ("pane_id", "integer", "Optional target pane ID (defaults to active pane)"),
+                    ("delta_pct", "integer", "Zoom delta percentage for action='zoom' (default 10)"),
+                    ("focused", "boolean", "Focus state for action='focus'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_video",
+                "Open, play, pause, seek, adjust volume, or inspect the Video Player Canvas in the active or target pane.",
+                &[
+                    ("action", "string", "Operation: open | play | pause | toggle | seek | seek_pct | volume | mute | loop | speed | close | state (default 'state')"),
+                    ("source", "string", "Video file path, URL, or demo URI (e.g. 'demo://smpte', 'demo://plasma') for action='open'"),
+                    ("pane_id", "integer", "Optional target pane ID (defaults to active pane)"),
+                    ("delta_secs", "number", "Seek relative delta in seconds for action='seek' (default 5.0)"),
+                    ("pct", "integer", "Seek absolute percentage (0..=100) for action='seek_pct'"),
+                    ("volume_delta", "integer", "Volume delta percent (+/-5) for action='volume'"),
+                    ("speed", "integer", "Speed percentage (100 = 1.0x, 150 = 1.5x) for action='speed'"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
     }
@@ -358,6 +384,26 @@ impl AutomationControlPlane {
             "provider" => Some("voice.provider"),
             "inject_wav" => Some("voice.inject_wav"),
             _ => None,
+        }
+    }
+
+    /// `bilterm_browser` `action` argument -> the `browser.*` RPC method.
+    fn browser_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("state");
+        match action {
+            "open" => Some("browser.open"),
+            "state" => Some("browser.state"),
+            _ => Some("browser.control"),
+        }
+    }
+
+    /// `bilterm_video` `action` argument -> the `video.*` RPC method.
+    fn video_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("state");
+        match action {
+            "open" => Some("video.open"),
+            "state" => Some("video.state"),
+            _ => Some("video.control"),
         }
     }
 
