@@ -886,7 +886,7 @@ impl WindowManager {
             self.script_studio.blur();
             self.session_map.blur();
             let changed = self.z_stack.raise(pane_id);
-            self.clear_inactive_transient_copy_cursors();
+            // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
             self.sync_config_scale_from_active_pane();
             if self.zoomed_pane.is_some() {
                 self.reflow_default_viewport();
@@ -908,7 +908,7 @@ impl WindowManager {
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
         if self.zoomed_pane.is_some() {
             self.reflow_default_viewport();
@@ -927,7 +927,7 @@ impl WindowManager {
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
         if self.zoomed_pane.is_some() {
             self.reflow_default_viewport();

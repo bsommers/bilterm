@@ -835,6 +835,8 @@ pub fn handle_wm_mouse_event(
         hit
     };
 
+    let was_active = matches!(hit_focus, Focus::Pane(id) if id == wm.active_pane_id())
+        || matches!(hit_focus, Focus::Quick);
     if matches!(mouse.kind, MouseEventKind::Down(_))
         && let Focus::Pane(hit_id) = hit_focus
     {
@@ -902,6 +904,19 @@ pub fn handle_wm_mouse_event(
         && pane_mouse.row == pane_inner.y + pane_inner.height.saturating_sub(1)
         && pane_mouse.column >= pane_inner.x
         && pane_mouse.column < pane_inner.x + pane_inner.width;
+    let on_prompt_chrome_row = wm.pane_by_focus(hit_focus).is_some_and(|p| {
+        if !p.is_prompt_visible() {
+            return false;
+        }
+        let pr = p.prompt_rect(pane_inner);
+        pane_mouse.row == pr.y && pane_mouse.column >= pr.x && pane_mouse.column < pr.x + pr.width
+    });
+    if !was_active
+        && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left))
+        && (on_pane_status_bar || on_prompt_chrome_row)
+    {
+        return Ok(AppAction::Handled);
+    }
 
     if on_pane_status_bar && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
         let status_rect = Rect::new(

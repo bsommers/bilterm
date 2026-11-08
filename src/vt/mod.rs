@@ -304,6 +304,11 @@ impl VtParser {
         let clamped_cols = cols.max(MIN_GRID_DIM);
         if (self.rows, self.cols) != (clamped_rows, clamped_cols) {
             let cols_changed = self.cols != clamped_cols;
+            let prev_offset = if self.is_alternate_screen() {
+                0
+            } else {
+                self.scrollback_offset()
+            };
             self.rows = clamped_rows;
             self.cols = clamped_cols;
             self.generation = self.generation.wrapping_add(1);
@@ -322,6 +327,9 @@ impl VtParser {
                 self.parser
                     .screen_mut()
                     .set_size(clamped_rows, clamped_cols);
+            }
+            if prev_offset > 0 && !self.is_alternate_screen() {
+                self.set_scrollback_offset(prev_offset);
             }
             if self.in_band_size_2048 {
                 self.pending_query_responses.push(

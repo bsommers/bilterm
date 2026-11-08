@@ -576,6 +576,8 @@ impl WindowManager {
                 }
             }
             pane.prompt_mut().anchor = sp.prompt_anchor;
+            pane.prompt_mut().manual_raw_override = sp.raw_passthrough;
+            pane.prompt_mut().force_command_prompt = !sp.raw_passthrough;
             pane.prompt_mut().height = sp.prompt_height.clamp(3, 12);
             pane.prompt_mut().width_cols = sp.prompt_width_cols;
             pane.prompt_mut().x_offset = sp.prompt_x_offset;
