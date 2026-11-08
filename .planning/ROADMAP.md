@@ -57,10 +57,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [x] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
 - [x] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
-- [x] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`) (completed 2026-11-07)
-- [x] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`) (completed 2026-11-07)
+- [x] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`) (completed 2026-11-07, `80994fb`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
+- [x] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`) (completed 2026-11-07, `2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
 - [ ] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
 - [ ] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
+- [ ] **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1, atomic `workspace.view_model` RPC & REST endpoints with CSS design tokens export, multi-client `ClientViewState` registry, static SPA serving, and full `UNI-R01` surface parity (`WEB-FE-01..04`)
 
 ## Phase Details
 
@@ -1024,6 +1025,7 @@ Plans:
   - [x] 56-01-PLAN.md — Peek State, Config, Zero-SIGWINCH Live & Snapshot Preview Renderer, and Drawer Row Layout Geometry (wave 1)
   - [x] 56-02-PLAN.md — Transient Peek Activation, Keyboard/Mouse Wheel Triggers, Click-to-Focus, and Esc/Dismissal Transitions (wave 2)
   - [x] 56-03-PLAN.md — Background Session Navigator Window Hierarchy, Drawer Style Parity, and End-to-End Verification (wave 3)
+- Status: **COMPLETE** (`80994fb`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
 
 ### Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window
 
@@ -1046,6 +1048,7 @@ Plans:
   - [x] 57-01-PLAN.md — Smart Clipboard Paste & Bracketed Paste Fix for Herdr / Claude Code / TUIs (wave 1)
   - [x] 57-02-PLAN.md — Multi-Session Clipboard History Registry, Metadata Tagging & Secret Redaction (wave 2)
   - [x] 57-03-PLAN.md — First-Class Filterable `CLIPBOARD` Viewer Window, Surface Parity & Test Suite (wave 3)
+- Status: **COMPLETE** (`2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
 
 ### Phase 58: Local AI Speech-to-Text (`STT`) Optional Module
 
@@ -1088,6 +1091,28 @@ Plans:
   - [ ] 59-01-PLAN.md — Chrome Engine (CDP Screencast + CEF Off-Screen) Web Browser Canvas Pipeline (wave 1)
   - [ ] 59-02-PLAN.md — 60fps RGBA Video Player Canvas Engine, Surface Parity & Test Suite (wave 2)
 
+### Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge
+
+**Goal**: Deliver a high-performance, multi-surface web frontend backend and RFC 6455 WebSocket bridge implementing `@agent-manager/protocol` v1, decoupling web client viewports via a `ClientViewState` registry, exposing atomic `workspace.view_model` REST/RPC endpoints with Phase 45 CSS design token exports, and serving static SPA assets under `SEC-R01` confinement with full `UNI-R01` surface parity.
+**Depends on**: Phase 19 (`SEC-R01..04`), Phase 22 (`Action`), Phase 45 (`DesignTokens`), Phase 49 (`API-01`), Phase 50 (`Navigator`), Phase 52 (`AgentCoordination`).
+**Requirements**: WEB-FE-01, WEB-FE-02, WEB-FE-03, WEB-FE-04
+**Today (baseline)**: Bilterm provides JSON-RPC 2.0 over Unix domain socket / TCP and an MCP server, but lacks an RFC 6455 WebSocket transport for web browsers, has no protocol bridge for `@agent-manager/protocol` v1, cannot serve static SPA web assets, and couples viewport/focus state directly to the local TUI/GUI window manager.
+**Uniformity (`UNI-R01`)**: `:web [status|open|port|stop]` colon commands, Command Palette (`Web: Open Web UI`, `Web: Server Status`), Top Menu (`Tools -> Web UI...`), JSON-RPC (`workspace.view_model`, `web.*`), and MCP (`bilterm_web_surface`).
+**Success Criteria** (what must be TRUE):
+
+  1. `WEB-FE-01`: RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
+  2. `WEB-FE-02`: Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
+  3. `WEB-FE-03`: Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
+  4. `WEB-FE-04`: `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers, and full `UNI-R01` surface parity (`:web` command, RPC `workspace.view_model`, MCP `bilterm_web_surface`).
+
+**Artifacts**:
+- Research Spike: `.planning/phases/60-web-frontend-surface-and-protocol-bridge/60-RESEARCH-SPIKE.md`
+- Architecture ADR: `.planning/phases/60-web-frontend-surface-and-protocol-bridge/60-ARCHITECTURE-ADR.md`
+- Plans:
+  - [ ] 60-01-PLAN.md — RFC 6455 WebSocket Server & `@agent-manager/protocol` v1 Streaming Engine (wave 1)
+  - [ ] 60-02-PLAN.md — Atomic `workspace.view_model` RPC & REST Endpoints, CSS Design Tokens & Static SPA Server (wave 2)
+  - [ ] 60-03-PLAN.md — Multi-Client `ClientViewState` Registry, Surface Parity & Test Suite (wave 3)
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -1106,7 +1131,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1168,7 +1193,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 53. Session & Window Management (`SES-01..05`) | 3/3 | Complete | 2026-11-06 |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 3/3 | Complete | 2026-11-06 |
 | 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 3/3 | Complete | 2026-11-06 |
-| 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 3/3 | Complete | 2026-11-07 |
-| 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 3/3 | Complete | 2026-11-07 |
+| 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 3/3 | Complete (`80994fb`, `PASS 129/129`, `GOLDENS OK 11`, PR #31) | 2026-11-07 |
+| 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 3/3 | Complete (`2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31) | 2026-11-07 |
 | 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 0/2 | Planned (Spike Complete) | - |
 | 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 0/2 | Planned (Spike Complete) | - |
+| 60. Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`) | 0/3 | Planned | - |

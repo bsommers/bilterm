@@ -4,15 +4,15 @@ milestone: v3.0.1
 current_phase: 58
 current_phase_name: speech-to-text-spike-and-plan
 status: ready_to_execute
-stopped_at: "Completed Phase 56 (Drawer Window Peek & Live Preview Pane) and Phase 57 (Smart Clipboard Paste Fix & Filterable Clipboard Viewer Window) in parallel subagent trees"
-last_updated: "2026-11-08T00:25:00Z"
-last_activity: 2026-11-07
-last_activity_desc: "Completed Phase 56 (DRW-PEEK-01..03) and Phase 57 (CLIP-01..04); all verification suites green"
-state_head: 31cd42c
+stopped_at: "Completed Phase 56 (DRW-PEEK-01..03) and Phase 57 (CLIP-01..04) (80994fb / 2f069bf, PASS 129/129, GOLDENS OK 11, PR #31)"
+last_updated: "2026-11-08T01:10:00Z"
+last_activity: 2026-11-08
+last_activity_desc: "Completed Phase 56 (DRW-PEEK-01..03) and Phase 57 (CLIP-01..04) (80994fb / 2f069bf, PASS 129/129, GOLDENS OK 11, PR #31); added Phase 60 (WEB-FE-01..04)"
+state_head: 2f069bf
 progress:
-  total_phases: 59
+  total_phases: 60
   completed_phases: 57
-  total_plans: 140
+  total_plans: 143
   completed_plans: 136
 milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
 ---
@@ -24,16 +24,16 @@ milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Pe
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-07):** Phases 56 and 57 complete and verified (`tests/phase56_drawer_preview_{state,render,uniformity}.rs`, `tests/phase57_clipboard_paste_and_viewer.rs`, `tests/bilterm_live_driver_suite.rs`). Next up: Phase 58 (Local AI STT Optional Module) and Phase 59 (GUI Chrome Engine Browser & Video Player Canvas).
+**Current focus (2026-11-08):** Phases 56 (`DRW-PEEK-01..03`, `80994fb`) and 57 (`CLIP-01..04`, `2f069bf`) complete and verified (`PASS 129/129`, `GOLDENS OK 11`, PR #31). Next up: Phase 58 (Local AI STT Optional Module), Phase 59 (GUI Chrome Engine Browser & Video Player Canvas), and Phase 60 (Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge).
 
 ## Current Position
 
 Phase: 58 (speech-to-text-spike-and-plan) — READY TO EXECUTE
-Plan: Phases 1–57 complete (136/140 plans). Phases 58–59 planned (4 plans ready).
-Status: 57/59 Phases complete.
-Last activity: 2026-11-07 — Completed Phase 56 (`DRW-PEEK-01..03`) and Phase 57 (`CLIP-01..04`) in parallel subagent trees and merged to `main`.
+Plan: Phases 1–57 complete (136/143 plans). Phases 58–60 planned (7 plans ready/scoped).
+Status: 57/60 Phases complete.
+Last activity: 2026-11-08 — Completed Phase 56 (`DRW-PEEK-01..03`) and Phase 57 (`CLIP-01..04`) (`80994fb` / `2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31) and merged to `main`; added Phase 60 (`WEB-FE-01..04`).
 
-Progress: [██████████] 97% (57/59 Phases)
+Progress: [█████████░] 95% (57/60 Phases)
 
 ## Performance Metrics
 
@@ -68,8 +68,10 @@ Recent decisions affecting current work:
 - [Verification]: Composable runner `scripts/verify.sh` supports 8 tiers (smoke, unit, integration, system, perf, stress, torture, security), `--match`, `--coverage` (`cargo-llvm-cov`), `--xvfb`, `report.md`, and `junit.xml`.
 - [Phase 56]: Live and snapshot drawer peek preview pane designed with zero-copy, zero-`SIGWINCH` compositing and transient Esc/click-to-focus semantics (`56-RESEARCH.md`, `56-CONTRACT.md`).
 - [Phase 57]: Smart MIME-aware clipboard paste fix for Herdr/Claude Code in `RawPtyPassthrough` wrapping text in `DECSET 2004` bracketed paste; multi-session tagged `ClipboardRegistry` and first-class `CLIPBOARD` viewer window designed (`57-RESEARCH.md`, `57-CONTRACT.md`).
+- [Phase 56 & 57]: Marked COMPLETE (`80994fb` / `2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31).
 - [Phase 58]: Local AI STT optional module (`src/stt/`) spike complete: zero-bloat two-tier audio capture, OpenAI-compatible Whisper + Ollama + CLI protocols, prompt buffer staging, and OIA status bar telemetry (`58-RESEARCH-SPIKE.md`, `58-ARCHITECTURE-ADR.md`).
 - [Phase 59]: Embedded Chrome engine browser canvas (CDP Screencast frame-sink) and 60fps RGBA video player canvas (`ffmpeg` pipe + audio sync) spike complete across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`59-RESEARCH-SPIKE.md`, `59-ARCHITECTURE-ADR.md`).
+- [Phase 60]: Scoped Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`).
 
 ### Pending Todos
 
