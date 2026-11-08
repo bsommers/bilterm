@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bsommers/bilterm/releases/tag/v3.0.5"><img src="https://img.shields.io/badge/version-v3.0.5-blue" alt="Version v3.0.5" /></a>
+  <a href="https://github.com/bsommers/bilterm/releases/tag/v3.1.0"><img src="https://img.shields.io/badge/version-v3.1.0-blue" alt="Version v3.1.0" /></a>
   <img src="https://img.shields.io/badge/rust-1.88%2B%20(2024)-orange" alt="Rust 1.88+ Edition 2024" />
   <img src="https://img.shields.io/badge/tests-31%2F31%20suites%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/coverage-84%2B%25-brightgreen" alt="Coverage" />

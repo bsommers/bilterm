@@ -48,7 +48,7 @@
 | `--gui-dump` | `-g` | `<PATH.ppm\|.svg>` | Render workspace via `GuiWorkspaceRenderer` to a standalone `.ppm` or `.svg` file and exit |
 | `--completions` | `-C` | `<bash\|zsh\|fish>` | Print shell completion script to `stdout` |
 | `--man` | `-M` | *(none)* | Print standalone `roff(7)` manual page (`docs/bilterm.1`) |
-| `--version` | `-v`, `-V` | *(none)* | Print version string (`bilterm 3.0.5`) |
+| `--version` | `-v`, `-V` | *(none)* | Print version string (`bilterm 3.1.0`) |
 | `--help` | `-h` | *(none)* | Print CLI usage summary |
 
 ---

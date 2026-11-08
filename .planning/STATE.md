@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.0.1
+milestone: v3.1.0
 current_phase: 60
 current_phase_name: web-frontend-surface-and-protocol-bridge
 status: complete
-stopped_at: "Completed Phases 58, 59, 60 (PASS 134/134, GOLDENS OK 11)"
-last_updated: "2026-11-08T02:45:00Z"
+stopped_at: "Release v3.1.0 — Phases 56-60 complete (PASS 135/135, GOLDENS OK 11)"
+last_updated: "2026-11-08T18:20:00Z"
 last_activity: 2026-11-08
-last_activity_desc: "Completed Phases 58 (STT-01..03), 59 (WEB-01..02, VID-01..02), and 60 (WEB-FE-01..04) (PASS 134/134, GOLDENS OK 11)"
-state_head: feat/phases-58-59-60
+last_activity_desc: "Cut release v3.1.0 covering Phases 56-60 (Drawer Peek, Smart Clipboard & Viewer, Local AI STT, Chrome CDP Browser & 60fps Video Canvas, Multi-Surface Web Frontend Backend)"
+state_head: release/v3.1.0
 progress:
   total_phases: 60
   completed_phases: 60
   total_plans: 143
   completed_plans: 143
-milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
+milestone_name: "Bilterm v3.1.0 — Drawer Peek, Smart Clipboard & Viewer, Local AI STT, Chrome Browser & Video Canvases, and Multi-Surface Web Frontend Backend"
 ---
 
 # Project State
