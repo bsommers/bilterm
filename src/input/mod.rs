@@ -1,6 +1,7 @@
 pub mod agents_list;
 pub mod agents_list_keys;
 mod agents_window;
+pub mod chord;
 pub mod clipboard_window;
 pub mod clipboard_window_keys;
 pub mod command_window;
@@ -11,6 +12,7 @@ pub mod find_modal;
 pub mod fonts_window;
 pub mod fonts_window_keys;
 pub mod gui_route;
+pub mod keyenv;
 pub mod keymap;
 pub mod link_mouse;
 pub mod modal;
