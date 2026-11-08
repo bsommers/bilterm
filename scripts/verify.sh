@@ -124,7 +124,7 @@ tier_stages() {
       done
       ;;
     perf)
-      for s in t:full_suite_battle_and_perf; do
+      for s in t:full_suite_battle_and_perf t:phase64_traffic_core; do
         if [ -f "tests/${s#t:}.rs" ]; then echo "$s"; fi
       done
       ;;

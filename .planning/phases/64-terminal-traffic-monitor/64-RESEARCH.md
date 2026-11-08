@@ -380,7 +380,7 @@ Not a rename/refactor/migration phase: omitted.
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Perf budgets (disabled <= 1 ns, enabled <= 5 ns/op, classify >= 300 MB/s worst case, sampler <= 50 us @ 256 ch, snapshot+group <= 200 us) are achievable | Perf table (Validation Architecture) | Budgets recalibrated by Plan 64-01 Task 5 before gating; no user impact |
+| A1 (MEASURED, Plan 64-01 Task 5; see ADR section 7) | Perf budgets (disabled <= 1 ns, enabled <= 5 ns/op, classify >= 300 MB/s worst case, sampler <= 50 us @ 256 ch, snapshot+group <= 200 us) are achievable | Perf table (Validation Architecture) | Budgets recalibrated by Plan 64-01 Task 5 before gating; no user impact |
 | A2 | `990_000` is a free GUI texture id | Project Structure | Collision caught at compile/const-uniqueness test; trivial renumber |
 | A3 | Ctrl+Alt+T and Leader `#` are unused global/leader chords | Surfaces | Verified against `keymap_tables.rs` lists of Ctrl+Alt chars (a A b B f F h k l m M n N p P r R s S v V w W y Y; Left/Right/Up/Down) and leader chars shown by grep this session, but `keymap.rs` reserved-chord handling (`keymap.rs:61`) and raw-passthrough reservations were not re-read; confirm in Plan 64-03 Task 1 |
 | A4 | Counting render output via a `Write` newtype is feasible without changing GUI paths | Hook H29 | Falls back to counting H28 only (documented limitation) |

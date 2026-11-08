@@ -37,6 +37,9 @@ pub mod stt_ops;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod traffic;
+pub mod traffic_monitor;
+pub mod traffic_monitor_geometry;
+mod traffic_view;
 pub mod v2_runtime;
 pub mod window_manage;
 pub mod window_style;
@@ -200,6 +203,10 @@ pub struct WindowManager {
     pub(crate) clipboard_registry: clipboard_registry::ClipboardRegistry,
     /// Floating, pinnable, dockable `CLIPBOARD` viewer window (`CLIP-03`, Phase 57).
     pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
+    /// Terminal traffic meter (`TMON-01`, Phase 64); one per window manager, no globals.
+    traffic_meter: crate::traffic::TrafficMeter,
+    /// Floating TRAFFIC MONITOR window state (`TMON-03`, Plan 64-03 fills the body).
+    pub(crate) traffic_monitor: traffic_monitor::TrafficMonitorState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
     pub(crate) script_studio: script_studio::ScriptStudioState,
     /// In-memory agent mailbox & coordination registry (`AGT-01..03`, Phase 52).
@@ -221,6 +228,9 @@ pub struct WindowManager {
     pub(crate) session_map_scale_pct: u16,
     /// Same for the CLIPBOARD viewer window (Phase 57).
     pub(crate) clipboard_scale_pct: u16,
+    /// Same for the TRAFFIC MONITOR window (Phase 64).
+    #[allow(dead_code)] // read by the Plan 64-03 GUI renderer
+    pub(crate) traffic_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -308,6 +318,8 @@ impl WindowManager {
             command_window: command_window::CommandWindowState::default(),
             clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
+            traffic_meter: crate::traffic::TrafficMeter::new(),
+            traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
             agents_demo: agents_demo::AgentsDemoState::default(),
@@ -319,6 +331,7 @@ impl WindowManager {
             agents_list_scale_pct: 100,
             session_map_scale_pct: 100,
             clipboard_scale_pct: 100,
+            traffic_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             web_surface: crate::api::web_surface::WebSurfaceState::new(),
@@ -855,6 +868,10 @@ impl WindowManager {
             changed = true;
         }
         self.update_drawer_telemetry();
+        let tm_ms = self.link_now_ms();
+        if self.traffic_tick(tm_ms) {
+            changed = true;
+        }
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
@@ -878,6 +895,7 @@ impl WindowManager {
             self.fonts_window.blur();
             self.command_window.blur();
             self.clipboard_window.blur();
+            self.traffic_monitor.blur();
             self.script_studio.blur();
             self.session_map.blur();
             let changed = self.z_stack.raise(pane_id);
@@ -897,6 +915,7 @@ impl WindowManager {
         self.fonts_window.blur();
         self.command_window.blur();
         self.clipboard_window.blur();
+        self.traffic_monitor.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
@@ -913,6 +932,7 @@ impl WindowManager {
         self.fonts_window.blur();
         self.command_window.blur();
         self.clipboard_window.blur();
+        self.traffic_monitor.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
