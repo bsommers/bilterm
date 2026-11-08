@@ -1063,7 +1063,6 @@ impl CompositePane {
         }
         changed
     }
-    }
 }
 
 #[cfg(test)]

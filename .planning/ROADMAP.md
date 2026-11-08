@@ -59,9 +59,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
 - [x] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`) (completed 2026-11-07, `80994fb`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
 - [x] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`) (completed 2026-11-07, `2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31)
-- [ ] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
-- [ ] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
-- [ ] **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1, atomic `workspace.view_model` RPC & REST endpoints with CSS design tokens export, multi-client `ClientViewState` registry, static SPA serving, and full `UNI-R01` surface parity (`WEB-FE-01..04`)
+- [x] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
+- [x] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
+- [x] **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1, atomic `workspace.view_model` RPC & REST endpoints with CSS design tokens export, multi-client `ClientViewState` registry, static SPA serving, and full `UNI-R01` surface parity (`WEB-FE-01..04`)
 
 ## Phase Details
 
@@ -1067,8 +1067,9 @@ Plans:
 - Research Spike: `.planning/phases/58-speech-to-text-spike-and-plan/58-RESEARCH-SPIKE.md`
 - Architecture ADR: `.planning/phases/58-speech-to-text-spike-and-plan/58-ARCHITECTURE-ADR.md`
 - Plans:
-  - [ ] 58-01-PLAN.md — Pluggable Local AI STT Engine & Wire Protocols (OpenAI/Whisper, Ollama, CLI) (wave 1)
-  - [ ] 58-02-PLAN.md — Audio Capture Pipeline, Push-to-Talk / VAD, UI Telemetry & Surface Parity (wave 2)
+  - [x] 58-01-PLAN.md — Pluggable Local AI STT Engine & Wire Protocols (OpenAI/Whisper, Ollama, CLI) (wave 1)
+  - [x] 58-02-PLAN.md — Audio Capture Pipeline, Push-to-Talk / VAD, UI Telemetry & Surface Parity (wave 2)
+- Status: **COMPLETE** (`a31d0cf`, `PASS 134/134`, `GOLDENS OK 11`)
 
 ### Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas
 
@@ -1088,8 +1089,9 @@ Plans:
 - Research Spike: `.planning/phases/59-browser-and-video-canvas-spike/59-RESEARCH-SPIKE.md`
 - Architecture ADR: `.planning/phases/59-browser-and-video-canvas-spike/59-ARCHITECTURE-ADR.md`
 - Plans:
-  - [ ] 59-01-PLAN.md — Chrome Engine (CDP Screencast + CEF Off-Screen) Web Browser Canvas Pipeline (wave 1)
-  - [ ] 59-02-PLAN.md — 60fps RGBA Video Player Canvas Engine, Surface Parity & Test Suite (wave 2)
+  - [x] 59-01-PLAN.md — Chrome Engine (CDP Screencast + CEF Off-Screen) Web Browser Canvas Pipeline (wave 1)
+  - [x] 59-02-PLAN.md — 60fps RGBA Video Player Canvas Engine, Surface Parity & Test Suite (wave 2)
+- Status: **COMPLETE** (`7304993`, `PASS 134/134`, `GOLDENS OK 11`)
 
 ### Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge
 
@@ -1109,9 +1111,10 @@ Plans:
 - Research Spike: `.planning/phases/60-web-frontend-surface-and-protocol-bridge/60-RESEARCH-SPIKE.md`
 - Architecture ADR: `.planning/phases/60-web-frontend-surface-and-protocol-bridge/60-ARCHITECTURE-ADR.md`
 - Plans:
-  - [ ] 60-01-PLAN.md — RFC 6455 WebSocket Server & `@agent-manager/protocol` v1 Streaming Engine (wave 1)
-  - [ ] 60-02-PLAN.md — Atomic `workspace.view_model` RPC & REST Endpoints, CSS Design Tokens & Static SPA Server (wave 2)
-  - [ ] 60-03-PLAN.md — Multi-Client `ClientViewState` Registry, Surface Parity & Test Suite (wave 3)
+  - [x] 60-01-PLAN.md — RFC 6455 WebSocket Server & `@agent-manager/protocol` v1 Streaming Engine (wave 1)
+  - [x] 60-02-PLAN.md — Atomic `workspace.view_model` RPC & REST Endpoints, CSS Design Tokens & Static SPA Server (wave 2)
+  - [x] 60-03-PLAN.md — Multi-Client `ClientViewState` Registry, Surface Parity & Test Suite (wave 3)
+- Status: **COMPLETE** (`ea0aea3`, `PASS 134/134`, `GOLDENS OK 11`)
 
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
@@ -1195,6 +1198,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 3/3 | Complete | 2026-11-06 |
 | 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 3/3 | Complete (`80994fb`, `PASS 129/129`, `GOLDENS OK 11`, PR #31) | 2026-11-07 |
 | 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 3/3 | Complete (`2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31) | 2026-11-07 |
-| 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 0/2 | Planned (Spike Complete) | - |
-| 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 0/2 | Planned (Spike Complete) | - |
-| 60. Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`) | 0/3 | Planned | - |
+| 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 2/2 | Complete | 2026-11-08 |
+| 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 2/2 | Complete | 2026-11-08 |
+| 60. Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`) | 3/3 | Complete | 2026-11-08 |

@@ -237,23 +237,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Local AI Speech-to-Text Module (Phase 58)
 
-- [ ] **STT-01**: Pluggable Local AI STT backends: OpenAI-compatible `POST /v1/audio/transcriptions` (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama multimodal/audio, and local CLI subprocess.
-- [ ] **STT-02**: Two-tier zero-bloat cross-platform audio capture (subprocess pipe default, opt-in `cpal` feature) with push-to-talk, VAD, and OIA `[🎙 REC]` status bar telemetry.
-- [ ] **STT-03**: Isolated subsystem seam (`src/stt/`), prompt buffer staging, voice-to-shell translation hook, security confinement (`SEC-R01..04`), and surface parity (`UNI-R01`).
+- [x] **STT-01**: Pluggable Local AI STT backends: OpenAI-compatible `POST /v1/audio/transcriptions` (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama multimodal/audio, and local CLI subprocess.
+- [x] **STT-02**: Two-tier zero-bloat cross-platform audio capture (subprocess pipe default, opt-in `cpal` feature) with push-to-talk, VAD, and OIA `[🎙 REC]` status bar telemetry.
+- [x] **STT-03**: Isolated subsystem seam (`src/stt/`), prompt buffer staging, voice-to-shell translation hook, security confinement (`SEC-R01..04`), and surface parity (`UNI-R01`).
 
 ## GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (Phase 59)
 
-- [ ] **WEB-01**: Embedded Chromium engine web browser canvas via CDP Screencast frame-sink (and optional CEF off-screen renderer) rendering 60fps RGBA frames into composite pane canvases under private profile isolation (`0700`).
-- [ ] **WEB-02**: Full interactive browser navigation (URL bar, mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, TUI sub-cell fallback).
-- [ ] **VID-01**: Embedded 60fps RGBA hardware-accelerated video player canvas powered by `ffmpeg` pipe / libavcodec with monotonic audio sync.
-- [ ] **VID-02**: On-screen transport controls (play/pause, seek, volume, loop, speed), Borland/OIA status bar integration, TUI sub-cell fallback (Kitty/Sixel/HalfBlock), and surface parity (`UNI-R01`).
+- [x] **WEB-01**: Embedded Chromium engine web browser canvas via CDP Screencast frame-sink (and optional CEF off-screen renderer) rendering 60fps RGBA frames into composite pane canvases under private profile isolation (`0700`).
+- [x] **WEB-02**: Full interactive browser navigation (URL bar, mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, TUI sub-cell fallback).
+- [x] **VID-01**: Embedded 60fps RGBA hardware-accelerated video player canvas powered by `ffmpeg` pipe / libavcodec with monotonic audio sync.
+- [x] **VID-02**: On-screen transport controls (play/pause, seek, volume, loop, speed), Borland/OIA status bar integration, TUI sub-cell fallback (Kitty/Sixel/HalfBlock), and surface parity (`UNI-R01`).
 
 ## Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (Phase 60)
 
-- [ ] **WEB-FE-01**: RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
-- [ ] **WEB-FE-02**: Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
-- [ ] **WEB-FE-03**: Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
-- [ ] **WEB-FE-04**: `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers, and full `UNI-R01` surface parity (`:web` command, RPC `workspace.view_model`, MCP `bilterm_web_surface`).
+- [x] **WEB-FE-01**: RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
+- [x] **WEB-FE-02**: Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
+- [x] **WEB-FE-03**: Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
+- [x] **WEB-FE-04**: `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers, and full `UNI-R01` surface parity (`:web` command, RPC `workspace.view_model`, MCP `bilterm_web_surface`).
 
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
@@ -311,24 +311,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLIP-02 | Phase 57 | Complete (`2f069bf`, PR #31) |
 | CLIP-03 | Phase 57 | Complete (`2f069bf`, PR #31) |
 | CLIP-04 | Phase 57 | Complete (`2f069bf`, PR #31) |
-| STT-01 | Phase 58 | Planned (Spike Complete) |
-| STT-02 | Phase 58 | Planned (Spike Complete) |
-| STT-03 | Phase 58 | Planned (Spike Complete) |
-| WEB-01 | Phase 59 | Planned (Spike Complete) |
-| WEB-02 | Phase 59 | Planned (Spike Complete) |
-| VID-01 | Phase 59 | Planned (Spike Complete) |
-| VID-02 | Phase 59 | Planned (Spike Complete) |
-| WEB-FE-01 | Phase 60 | Planned |
-| WEB-FE-02 | Phase 60 | Planned |
-| WEB-FE-03 | Phase 60 | Planned |
-| WEB-FE-04 | Phase 60 | Planned |
+| STT-01 | Phase 58 | Complete (Phase 58) |
+| STT-02 | Phase 58 | Complete (Phase 58) |
+| STT-03 | Phase 58 | Complete (Phase 58) |
+| WEB-01 | Phase 59 | Complete (Phase 59) |
+| WEB-02 | Phase 59 | Complete (Phase 59) |
+| VID-01 | Phase 59 | Complete (Phase 59) |
+| VID-02 | Phase 59 | Complete (Phase 59) |
+| WEB-FE-01 | Phase 60 | Complete (Phase 60) |
+| WEB-FE-02 | Phase 60 | Complete (Phase 60) |
+| WEB-FE-03 | Phase 60 | Complete (Phase 60) |
+| WEB-FE-04 | Phase 60 | Complete (Phase 60) |
 
 **Coverage:**
 
 - Total tracked requirements: 83 total (traceability table rows)
-- Mapped to phases: 83 (54 Complete, 29 Planned)
+- Mapped to phases: 83 (65 Complete, 18 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-08 for Phases 56, 57 (`80994fb` / `2f069bf`, `PASS 129/129`, `GOLDENS OK 11`, PR #31), 58, 59, 60*
+*Last updated: 2026-11-08 for Phases 58, 59, 60*

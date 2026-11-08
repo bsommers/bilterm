@@ -1,15 +1,46 @@
 # Session Checkpoint — 2026-11-08
 
-**Status:** IN PROGRESS — stable boundary reached after PR #31 merge (`0f11522`) & Phase 60 planning
+**Status:** COMPLETE — Phases 58, 59, and 60 integrated on `feat/phases-58-59-60` (`PASS 135/135 71s`, `GOLDENS OK 11`)
 
 ## 1. Goal & User Decisions (Verbatim)
-- **User Requests (Verbatim):**
-  1. `"plan this in parallel sub-agents as much as possible. run autonomous researchers and execute this planning autonomously. update roadmap: drawer preview pane, Herder paste bug, clipboard viewer window, speech-to-text spike, Chrome engine + video player spike"`
-  2. `"commit and begin phases 56 and 57 in paralell subagent trees"`
-  3. `"Back to the architecture question from agent-manager-fe repo in the .planning/ plans - about giving bilterm a web front end is the architecture here clean or does it need to be improved to better support multiple surfaces?"`
-  4. `"what's next? should we do the next steps in claude, agy or both?"` -> `"3 first. then 2"` (i.e. Push/Merge PR for Phases 56–57 first, then plan Phase 60 Web Surface backend).
-  5. `"when the time comes - to get to claude you can message the other session here in herdr that is running Claude Code in this dir and repo"`
-  6. `"in a subagent, merge PR # 31"`
+- **User Request (Verbatim):**
+  `"Integrate feat/phase-58 (a31d0cf), feat/phase-59 (7304993), and feat/phase-60 (ea0aea3) onto a unified branch feat/phases-58-59-60 in /home/bill/src/ai/bilterm, verify all tests and architectural ceilings, and update the planning/checkpoint documents."`
+
+## 2. Integrated Phases & Accomplishments
+- **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`)**:
+  - Independent zero-bloat `src/stt/` module supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama multimodal/audio, and local CLI subprocess pipes.
+  - Two-tier cross-platform audio capture (subprocess pipe default, opt-in `cpal`), push-to-talk, VAD, prompt buffer staging, and OIA `[🎙 REC]` status bar telemetry.
+  - Surface uniformity (`UNI-R01`): leader `','`, `Ctrl+Alt+S`, `:voice` commands, JSON-RPC `voice.*`, MCP `bilterm_voice`.
+- **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`)**:
+  - Embedded Chromium engine canvas via CDP Screencast frame-sink under private `0700` profile sandboxing.
+  - Interactive browser navigation: mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, and adaptive TUI fallback.
+  - Embedded 60fps RGBA hardware-accelerated video player canvas driven by `ffmpeg` subprocess pipe with monotonic audio sync.
+  - On-screen transport controls (play/pause, seek bar, volume, speed, loop), Borland OIA status bar integration.
+  - Surface uniformity (`UNI-R01`): leader `'.'` (browser) and leader `'\''` (video), `Ctrl+Alt+B` / `Ctrl+Alt+Y`, `:browser` and `:video` commands, JSON-RPC `browser.*` and `video.*`, MCP `bilterm_browser` and `bilterm_video`.
+- **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)**:
+  - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
+  - Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
+  - Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
+  - `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers.
+  - Surface uniformity (`UNI-R01`): leader `'@'`, `Ctrl+Alt+W`, `:web` commands, JSON-RPC `web.*` / `workspace.view_model`, MCP `bilterm_web_surface`.
+
+## 3. Working-Tree & Verification State
+- **Branch:** `feat/phases-58-59-60` (unified merge of `feat/phase-58`, `feat/phase-59`, `feat/phase-60`).
+- **Verification:** `bash scripts/verify.sh` -> `PASS 135/135 71s`; `bash scripts/check_classic_goldens.sh` -> `GOLDENS OK 11`.
+- **Architectural Ceilings (`ARCH-R04`)**:
+  - Top file line counts: `src/action.rs` (1133), `src/pane/mod.rs` (1069), `src/wm/mod.rs` (1048), `src/colon_command/parse_visual.rs` (1038), `src/wm/layout_profile.rs` (1030), `src/colon_command/execute_wm.rs` (1014).
+  - All files in `src/**/*.rs` strictly under 1180 lines (backstop: 1200 lines).
+  - `handle_wm_key_event` is 8 lines (limit <= 80 lines).
+  - Total MCP tools: 24 tools.
+  - TopMenu item counts updated and verified.
+
+## 4. Exact Next Steps
+- Fast-forward local `main` to `feat/phases-58-59-60`.
+- Open unified PR for Phases 58, 59, and 60.
+
+## Latest: Phase 58, 59, 60 Integration Complete, 2026-11-08
+- Merged `feat/phase-58`, `feat/phase-59`, `feat/phase-60` into `feat/phases-58-59-60`.
+- Verified `PASS 135/135 71s` and `GOLDENS OK 11`.
 
 ## 2. Dead Ends & Lessons Recorded
 - **`src/clipboard.rs::classify_mime_targets` macOS/Windows dead-code error in CI:**
