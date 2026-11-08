@@ -528,7 +528,7 @@ fn os_get_clipboard() -> Option<String> {
     None
 }
 
-#[cfg(not(test))]
+#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
 fn classify_mime_targets(targets_output: &str) -> Option<ClipboardMimeProbe> {
     let mut has_text = false;
     let mut media_mime: Option<String> = None;
