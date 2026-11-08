@@ -38,6 +38,21 @@ pub fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Opt
         ));
         return Some(AppAction::Handled);
     }
+    // If the live Peek Preview Pane is open, Esc closes the preview first while keeping the drawer focused.
+    if key.code == KeyCode::Esc && wm.drawer().preview.active {
+        let _ = wm.apply(Action::DrawerPreview(crate::action::DrawerPreviewOp::Off));
+        return Some(AppAction::Handled);
+    }
+    // Enter while Peek Preview is open commits focus to the previewed window/session and closes the preview.
+    if key.code == KeyCode::Enter && key.modifiers.is_empty() && wm.drawer().preview.active {
+        let _ = wm.apply(Action::DrawerPreview(crate::action::DrawerPreviewOp::Commit));
+        return Some(AppAction::Handled);
+    }
+    // 'v' toggles the live Peek Preview Pane for the highlighted drawer row (DRW-PEEK-01).
+    if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
+        let _ = wm.apply(Action::DrawerPreview(crate::action::DrawerPreviewOp::Toggle));
+        return Some(AppAction::Handled);
+    }
     // Space on a window row toggles selection (SES-03).
     if key.code == KeyCode::Char(' ')
         && key.modifiers.is_empty()
@@ -151,9 +166,18 @@ pub fn handle_navigator_drawer_mouse(
 ) -> Option<AppAction> {
     if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
         let _ = wm.apply(Action::DrawerNav(DrawerNavOp::MenuClose));
-        // Navigator rows truncate instead of scrolling sideways, so Shift scrolls like the plain wheel.
-        let step = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
-        let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Scroll(step)));
+        if wm.drawer().preview.active || wm.drawer().preview.auto_preview_on_scroll {
+            let op = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
+                DrawerNavOp::Prev
+            } else {
+                DrawerNavOp::Next
+            };
+            let _ = wm.apply(Action::DrawerNav(op));
+        } else {
+            // Navigator rows truncate instead of scrolling sideways, so Shift scrolls like the plain wheel.
+            let step = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
+            let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Scroll(step)));
+        }
         return Some(AppAction::Handled);
     }
     if let MouseEventKind::Down(MouseButton::Right) = mouse.kind {

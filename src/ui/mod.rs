@@ -18,6 +18,7 @@ pub mod cursor;
 pub mod cursor_cmd;
 pub mod design;
 pub mod drawer;
+pub mod drawer_preview;
 pub mod glyphs;
 pub mod graph_raster;
 pub mod hires_subcell;
@@ -677,6 +678,14 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Drawer) == 100 {
             render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+        drawer_preview::render_drawer_preview_overlay(
+            self.wm,
+            workspace_area,
+            cfg,
+            &palette,
+            &glyphs,
+            buf,
+        );
 
         if qt_visible {
             let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);

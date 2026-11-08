@@ -59,6 +59,7 @@ fn meta(level: NavigatorLevel, detail: Option<&str>) -> crate::wm::drawer::Navig
         comms: None,
         comms_active: false,
         detail: detail.map(str::to_string),
+        session_name: None,
     }
 }
 

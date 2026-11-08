@@ -396,6 +396,7 @@ pub(super) fn parse_visual_colon_command(
             Some(Ok(ColonCommand::CrtToggle(arg)))
         }
         "drawer" | "sidebar" | "panels" | "navigator" => parse_drawer_command(parts),
+        "peek" => parse_drawer_preview_args(&parts[1..]),
         "fkeys" | "fkey" | "function-keys" => parse_fkeys_command(parts),
         "snazzy" | "herdr-style" => match parts.get(1).copied() {
             None | Some("toggle" | "cycle") => Some(Ok(ColonCommand::VisualStyleCommand(Some(
@@ -936,6 +937,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
         Some("attention" | "next-blocked" | "next-attention") => Some(Ok(ColonCommand::DrawerNav(
             crate::wm::drawer::DrawerNavOp::NextAttention,
         ))),
+        Some("preview" | "peek") => parse_drawer_preview_args(&parts[2..]),
         Some("minimize" | "min" | "hide" | "close") => Some(Ok(ColonCommand::DrawerSize(0))),
         Some("maximize" | "max" | "expand") => Some(Ok(ColonCommand::DrawerSize(u16::MAX))),
         Some("size" | "width" | "height") => {
@@ -946,7 +948,54 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|preview|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|minimize|maximize|size <n>]"
+                .to_string(),
+        )),
+    }
+}
+
+fn parse_drawer_preview_args(args: &[&str]) -> Option<Result<ColonCommand, String>> {
+    use crate::action::DrawerPreviewOp;
+    match args.first().copied() {
+        None => Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Toggle))),
+        Some("toggle") if args.len() == 1 => {
+            Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Toggle)))
+        }
+        Some("on" | "open" | "show" | "true") if args.len() == 1 => {
+            Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::On)))
+        }
+        Some("off" | "close" | "hide" | "dismiss" | "false") if args.len() == 1 => {
+            Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Off)))
+        }
+        Some("commit" | "focus" | "enter" | "activate" | "select") if args.len() == 1 => {
+            Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Commit)))
+        }
+        Some("auto" | "auto-scroll") if args.len() == 1 => {
+            Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::AutoToggle)))
+        }
+        Some("row") => match args.get(1).and_then(|s| s.parse::<usize>().ok()) {
+            Some(idx) if args.len() == 2 => {
+                Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Row(idx))))
+            }
+            _ => Some(Err("Usage: :drawer preview row <index>".to_string())),
+        },
+        Some("pane" | "window" | "win") => match args
+            .get(1)
+            .and_then(|s| s.trim_start_matches('#').parse::<usize>().ok())
+        {
+            Some(id) if args.len() == 2 => {
+                Some(Ok(ColonCommand::DrawerPreview(DrawerPreviewOp::Pane(id))))
+            }
+            _ => Some(Err("Usage: :drawer preview pane <id>".to_string())),
+        },
+        Some("session") => match args.get(1).copied() {
+            Some(name) if args.len() == 2 && !name.trim().is_empty() => Some(Ok(
+                ColonCommand::DrawerPreview(DrawerPreviewOp::Session(name.to_string())),
+            )),
+            _ => Some(Err("Usage: :drawer preview session <name>".to_string())),
+        },
+        _ => Some(Err(
+            "Usage: :drawer preview [on|off|toggle|commit|auto|row <n>|pane <id>|session <name>]"
                 .to_string(),
         )),
     }

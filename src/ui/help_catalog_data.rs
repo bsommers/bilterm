@@ -246,4 +246,5 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":commands [open|close|toggle|pin|clear]", "Interactive Pinnable Command Palette & Workbench window with execution history"),
     (":script [open|run|step|reset|record|save|load]", "Interactive SCRIPT STUDIO window with debugger and live action recorder"),
     (":studio [open|run|step|reset|record|save|load]", "Alias of :script"),
+    (":drawer preview [on|off|toggle|commit|auto] / :peek", "Floating Live Window Peek & Preview Pane beside the drawer (Alt+P / Ctrl+X P / v in drawer)"),
 ];

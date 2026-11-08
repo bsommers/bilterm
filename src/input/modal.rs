@@ -431,7 +431,16 @@ pub(super) fn handle_wm_modal_key(
                 wm.drawer_hscroll_by(-6);
             }
             KeyCode::Right if wm.drawer_hscroll_by(6) => {}
-            KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
+            KeyCode::Esc => {
+                if wm.drawer().preview.active {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Off,
+                    ));
+                } else {
+                    wm.drawer_mut().focused = false;
+                }
+            }
+            KeyCode::Tab | KeyCode::Right => {
                 wm.drawer_mut().focused = false;
             }
             KeyCode::Down
@@ -521,9 +530,21 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('l') => { wm.drawer_hscroll_by(6); }
             KeyCode::PageDown => wm.drawer_scroll_by(5),
             KeyCode::PageUp => wm.drawer_scroll_by(-5),
-            KeyCode::Home | KeyCode::Char('g') => wm.drawer_mut().selected_index = 0,
+            KeyCode::Home | KeyCode::Char('g') => {
+                wm.drawer_mut().selected_index = 0;
+                wm.on_drawer_selection_changed(true);
+            }
             KeyCode::End | KeyCode::Char('G') => wm.drawer_scroll_by(10_000),
-            KeyCode::Enter | KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Enter => {
+                if wm.drawer().preview.active {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Commit,
+                    ));
+                } else {
+                    wm.drawer_activate_selected(false);
+                }
+            }
+            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
             KeyCode::Char('n') | KeyCode::Char('+') | KeyCode::Char('c') | KeyCode::Char('w') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
                     wm.sync_drawer_selection_to_active_pane();
@@ -531,7 +552,27 @@ pub(super) fn handle_wm_modal_key(
                         .set_status_message(Some(format!("Created new window #{id}")));
                 }
             }
-            KeyCode::Char('v') | KeyCode::Char('|') | KeyCode::Char('%') => {
+            KeyCode::Char('v') => {
+                if !wm.drawer().preview.active
+                    && wm
+                        .active_pane()
+                        .status_message()
+                        .is_some_and(|m| m.starts_with("Created new window #"))
+                {
+                    if let Ok(id) =
+                        wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical)
+                    {
+                        wm.sync_drawer_selection_to_active_pane();
+                        wm.active_pane_mut()
+                            .set_status_message(Some(format!("Created new vertical window #{id}")));
+                    }
+                } else {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Toggle,
+                    ));
+                }
+            }
+            KeyCode::Char('|') | KeyCode::Char('%') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical) {
                     wm.sync_drawer_selection_to_active_pane();
                     wm.active_pane_mut()

@@ -3,7 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
-use crate::pane::{ExitProtectionPolicy, PaneScrollMode, PromptMode};
+use crate::pane::{ExitProtectionPolicy, PaneId, PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
@@ -247,7 +247,30 @@ pub enum Action {
     DaemonSupervisor(DaemonSupervisorOp),
     /// Alias for `DaemonSupervisor` matching contract shorthand (`DAEM-05..08`).
     Daemon(DaemonSupervisorOp),
+    /// `:drawer preview ...` / `:peek ...`: Live window peek & preview pane (`DRW-PEEK-01..03`, Phase 56).
+    DrawerPreview(DrawerPreviewOp),
     Quit,
+}
+
+/// Operations for the Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`, Phase 56).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DrawerPreviewOp {
+    /// Open the live preview pane for the currently highlighted drawer row.
+    On,
+    /// Close the live preview pane without changing active workspace focus.
+    Off,
+    /// Toggle the live preview pane on/off for the currently highlighted drawer row.
+    Toggle,
+    /// Commit focus/restore/switch to the currently previewed window or session and close the preview.
+    Commit,
+    /// Toggle automatic preview when scrolling through drawer rows (`auto_preview_on_scroll`).
+    AutoToggle,
+    /// Select row `idx` in the drawer and open its live preview.
+    Row(usize),
+    /// Open live preview directly for pane `id`.
+    Pane(PaneId),
+    /// Open live preview directly for session `name` (background or saved session).
+    Session(String),
 }
 
 /// Lifecycle operations for `:appearance` profiles (`DSN-01..03`, Phase 45).
@@ -311,6 +334,16 @@ impl Action {
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(_) => ":session undo".to_string(),
             Self::DaemonSupervisor(_) | Self::Daemon(_) => ":daemon list".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::On) => ":drawer preview on".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Off) => ":drawer preview off".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Toggle) => ":drawer preview toggle".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Commit) => ":drawer preview commit".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::AutoToggle) => ":drawer preview auto".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Row(idx)) => format!(":drawer preview row {idx}"),
+            Self::DrawerPreview(DrawerPreviewOp::Pane(id)) => format!(":drawer preview pane {id}"),
+            Self::DrawerPreview(DrawerPreviewOp::Session(name)) => {
+                format!(":drawer preview session {name}")
+            }
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
@@ -540,6 +573,16 @@ mod tests {
             Action::WindowManage(_) => Some(":window undo"),
             Action::SessionManage(_) => Some(":session undo"),
             Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
+            Action::DrawerPreview(DrawerPreviewOp::On) => Some(":drawer preview on"),
+            Action::DrawerPreview(DrawerPreviewOp::Off) => Some(":drawer preview off"),
+            Action::DrawerPreview(DrawerPreviewOp::Toggle) => Some(":drawer preview toggle"),
+            Action::DrawerPreview(DrawerPreviewOp::Commit) => Some(":drawer preview commit"),
+            Action::DrawerPreview(DrawerPreviewOp::AutoToggle) => Some(":drawer preview auto"),
+            Action::DrawerPreview(DrawerPreviewOp::Row(_)) => Some(":drawer preview row 0"),
+            Action::DrawerPreview(DrawerPreviewOp::Pane(_)) => Some(":drawer preview pane 1"),
+            Action::DrawerPreview(DrawerPreviewOp::Session(_)) => {
+                Some(":drawer preview session default")
+            }
             Action::Quit => Some(":quit"),
         };
 
@@ -784,6 +827,14 @@ mod tests {
             Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
             Action::DaemonSupervisor(DaemonSupervisorOp::List),
             Action::Daemon(DaemonSupervisorOp::List),
+            Action::DrawerPreview(DrawerPreviewOp::On),
+            Action::DrawerPreview(DrawerPreviewOp::Off),
+            Action::DrawerPreview(DrawerPreviewOp::Toggle),
+            Action::DrawerPreview(DrawerPreviewOp::Commit),
+            Action::DrawerPreview(DrawerPreviewOp::AutoToggle),
+            Action::DrawerPreview(DrawerPreviewOp::Row(0)),
+            Action::DrawerPreview(DrawerPreviewOp::Pane(1)),
+            Action::DrawerPreview(DrawerPreviewOp::Session("default".to_string())),
             Action::Quit,
         ];
 

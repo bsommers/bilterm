@@ -779,6 +779,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.apply_drawer_nav(op);
             false
         }
+        ColonCommand::DrawerPreview(op) => {
+            wm.execute_drawer_preview_op(op);
+            false
+        }
         ref font_act @ (ColonCommand::FontZoomIn
         | ColonCommand::FontZoomOut
         | ColonCommand::FontZoomReset

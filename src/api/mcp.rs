@@ -94,6 +94,7 @@ impl AutomationControlPlane {
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
                     "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
+                    "bilterm_drawer_preview" => Some("drawer.preview"),
                     _ => None,
                 };
                 match mapped_method {
@@ -296,6 +297,16 @@ impl AutomationControlPlane {
                     ("action", "string", "Operation: list | status | start | stop | switch"),
                     ("name", "string", "Optional daemon name (defaults to 'default')"),
                     ("force", "boolean", "Optional flag to force stop without graceful shutdown"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_drawer_preview",
+                "Open, close, toggle, commit, or inspect the floating Drawer Window Peek & Live Preview Pane for active, occluded, minimized, background-session, or saved-session windows.",
+                &[
+                    ("op", "string", "Operation: status | on | off | toggle | commit | auto | row | pane | session (default 'status')"),
+                    ("row", "integer", "0-based drawer row index when op='row'"),
+                    ("pane_id", "integer", "Target window/pane ID when op='pane'"),
+                    ("session", "string", "Target session name when op='session'"),
                 ],
             ),
         ];

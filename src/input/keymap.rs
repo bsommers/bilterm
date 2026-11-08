@@ -568,6 +568,15 @@ pub(super) fn handle_wm_shortcut_key(
     if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
         return Ok(Some(wm.apply(Action::SelectCommand(Some("clipboard pop".to_string())))?));
     }
+    if (wm.drawer_is_open() || wm.is_drawer_effectively_visible())
+        && key.modifiers.contains(KeyModifiers::ALT)
+        && !key.modifiers.contains(KeyModifiers::CONTROL)
+        && matches!(key.code, KeyCode::Char('p') | KeyCode::Char('P'))
+    {
+        return Ok(Some(
+            wm.apply(Action::DrawerPreview(crate::action::DrawerPreviewOp::Toggle))?,
+        ));
+    }
     if let Some(action) = default_global_action(key, fuzzy_active) {
         return Ok(Some(wm.apply(action)?));
     }

@@ -46,8 +46,8 @@ pub use window_manage::{
 };
 pub use rename_dialog::{RenameDialogKind, RenameDialogState};
 pub use drawer::{
-    DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerRow, DrawerRowKind, DrawerVisibilityMode,
-    WorkspaceDrawer,
+    DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerPreviewState, DrawerPreviewTarget, DrawerRow,
+    DrawerRowKind, DrawerVisibilityMode, WorkspaceDrawer,
 };
 pub use journal::{PaneJournalRecord, SessionJournalRecord, WorkspaceJournal};
 pub use layout_profile::{BUILTIN_LAYOUT_PROFILES, LayoutProfileMeta, sanitize_profile_name};

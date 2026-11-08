@@ -63,6 +63,7 @@ pub const RPC_METHODS: &[&str] = &[
     "daemon.start",
     "daemon.stop",
     "daemon.switch",
+    "drawer.preview",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.

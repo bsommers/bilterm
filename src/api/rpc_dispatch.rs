@@ -492,6 +492,7 @@ impl AutomationControlPlane {
             "daemon.start" => super::rpc_daemon::handle_daemon_start(params),
             "daemon.stop" => super::rpc_daemon::handle_daemon_stop(params),
             "daemon.switch" => super::rpc_daemon::handle_daemon_switch(params),
+            "drawer.preview" => self.handle_rpc_drawer_preview(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }
@@ -691,5 +692,104 @@ impl AutomationControlPlane {
             .and_then(|d| JsonValue::parse(&d))
             .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
         Ok(data)
+    }
+
+    fn handle_rpc_drawer_preview(
+        &mut self,
+        params: &JsonValue,
+    ) -> std::result::Result<JsonValue, String> {
+        use crate::action::{Action, DrawerPreviewOp};
+        use crate::wm::DrawerPreviewTarget;
+
+        let op_str = params
+            .get("op")
+            .or_else(|| params.get("action"))
+            .and_then(JsonValue::as_str)
+            .unwrap_or("status");
+
+        if op_str != "status" {
+            let op = match op_str {
+                "on" | "open" | "show" => DrawerPreviewOp::On,
+                "off" | "close" | "hide" => DrawerPreviewOp::Off,
+                "toggle" => DrawerPreviewOp::Toggle,
+                "commit" | "focus" | "enter" => DrawerPreviewOp::Commit,
+                "auto" | "auto-scroll" => DrawerPreviewOp::AutoToggle,
+                "row" => {
+                    let idx = params
+                        .get("row")
+                        .or_else(|| params.get("index"))
+                        .and_then(JsonValue::as_usize)
+                        .ok_or_else(|| "missing 'row' parameter for drawer.preview".to_string())?;
+                    DrawerPreviewOp::Row(idx)
+                }
+                "pane" | "window" => {
+                    let pid = params
+                        .get("pane_id")
+                        .or_else(|| params.get("window_id"))
+                        .and_then(JsonValue::as_usize)
+                        .ok_or_else(|| {
+                            "missing 'pane_id' parameter for drawer.preview".to_string()
+                        })?;
+                    DrawerPreviewOp::Pane(pid)
+                }
+                "session" => {
+                    let name = params
+                        .get("session")
+                        .or_else(|| params.get("name"))
+                        .and_then(JsonValue::as_str)
+                        .filter(|s| !s.trim().is_empty())
+                        .ok_or_else(|| {
+                            "missing 'session' parameter for drawer.preview".to_string()
+                        })?;
+                    DrawerPreviewOp::Session(name.to_string())
+                }
+                other => {
+                    return Err(format!(
+                        "invalid 'op' parameter: {other} (expected status, on, off, toggle, commit, auto, row, pane, or session)"
+                    ));
+                }
+            };
+            self.wm
+                .apply(Action::DrawerPreview(op))
+                .map_err(|e| e.to_string())?;
+        }
+
+        let target_json = match self.wm.resolve_drawer_preview_target() {
+            Some(DrawerPreviewTarget::ActivePane(id)) => JsonValue::obj([
+                ("kind", JsonValue::String("active_pane".to_string())),
+                ("pane_id", JsonValue::Number(id as i64)),
+            ]),
+            Some(DrawerPreviewTarget::QuickTerminal) => JsonValue::obj([(
+                "kind",
+                JsonValue::String("quick_terminal".to_string()),
+            )]),
+            Some(DrawerPreviewTarget::BackgroundPane { session, pane_id }) => JsonValue::obj([
+                ("kind", JsonValue::String("background_pane".to_string())),
+                ("session", JsonValue::String(session)),
+                ("pane_id", JsonValue::Number(pane_id as i64)),
+            ]),
+            Some(DrawerPreviewTarget::SavedSession { name }) => JsonValue::obj([
+                ("kind", JsonValue::String("saved_session".to_string())),
+                ("name", JsonValue::String(name)),
+            ]),
+            None => JsonValue::Null,
+        };
+
+        Ok(JsonValue::obj([
+            ("active", JsonValue::Bool(self.wm.drawer().preview.active)),
+            (
+                "auto_preview_on_scroll",
+                JsonValue::Bool(self.wm.drawer().preview.auto_preview_on_scroll),
+            ),
+            (
+                "selected_index",
+                JsonValue::Number(self.wm.drawer().selected_index as i64),
+            ),
+            (
+                "active_pane_id",
+                JsonValue::Number(self.wm.active_pane_id() as i64),
+            ),
+            ("target", target_json),
+        ]))
     }
 }

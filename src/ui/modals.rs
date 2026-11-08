@@ -412,6 +412,7 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Fonts Window", ":fonts toggle"),
         ("Command Palette Window", ":commands toggle"),
         ("Script Studio", ":script toggle"),
+        ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),

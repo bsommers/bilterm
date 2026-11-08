@@ -560,6 +560,7 @@ impl GuiWorkspaceRenderer {
         let fonts_overlay_rect = wm.fonts_window_rect(ws_area);
         let cmd_overlay_rect = wm.command_window_rect(ws_area);
         let script_overlay_rect = wm.script_studio_rect(ws_area);
+        let drawer_preview_overlay_rect = wm.drawer_preview_rect(ws_area);
 
         // GUI-only textures (agents graph, Navigator icons): they clear the cells they cover, so they
         // run before cells become quads and glyphs.
@@ -569,6 +570,7 @@ impl GuiWorkspaceRenderer {
         let is_overlay_cell = |abs_c: u16, abs_r: u16| -> bool {
             !crate::wm::rect_contains(ws_area, abs_c, abs_r)
                 || drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || drawer_preview_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
