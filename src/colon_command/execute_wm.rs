@@ -970,6 +970,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::DaemonSupervisor(ref op) | ColonCommand::Daemon(ref op) => {
             super::execute_daemon::execute_daemon_command(wm, op)
         }
+        ColonCommand::Web(ref op) => super::execute_web::execute_web_action(wm, op),
         other => {
             let is_prompt_layout = matches!(
                 other,

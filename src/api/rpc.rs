@@ -72,6 +72,20 @@ pub const RPC_METHODS: &[&str] = &[
     "clipboard.delete",
     "clipboard.clear",
     "clipboard.window",
+    "workspace.view_model",
+    "web.status",
+    "web.open",
+    "web.port",
+    "web.stop",
+    "web.pump",
+    "web.agents",
+    "web.agent",
+    "web.logs",
+    "web.search",
+    "web.input",
+    "web.create",
+    "web.kill",
+    "web.update",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.
@@ -80,6 +94,8 @@ pub struct AutomationControlPlane {
     pub events: VecDeque<AutomationEvent>,
     pub viewport: Rect,
     pub snapshot_dir: Option<PathBuf>,
+    /// Per-pane output rings streamed to WebSocket clients (`WEB-FE-01`, Phase 60).
+    pub output_hub: super::output_ring::OutputHub,
 }
 
 /// Execution policy determining whether snapshot exports are confined to the designated snapshot dir.
@@ -127,6 +143,7 @@ impl AutomationControlPlane {
             events: VecDeque::with_capacity(256),
             viewport,
             snapshot_dir: None,
+            output_hub: super::output_ring::OutputHub::new(),
         }
     }
 

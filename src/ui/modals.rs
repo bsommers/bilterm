@@ -439,6 +439,11 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Switch Daemon (Ctrl+X D W)", ":daemon switch default"),
         ("Prune Daemons", ":daemon prune"),
     ]),
+    ("Web", &[
+        ("Web Server Status (Ctrl+X @)", ":web status"),
+        ("Open Web UI", ":web open"),
+        ("Stop Web Server", ":web stop"),
+    ]),
 ];
 
 /// Returns the menu bar category index (`0..MENUBAR_CATEGORIES.len()`) at `rel_col`

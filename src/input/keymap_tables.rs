@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::action::{Action, DrawerPreviewOp};
+use crate::action::{Action, DrawerPreviewOp, WebOp};
 use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_list_cmd::AgentsListOp;
@@ -74,6 +74,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char(' '), Action::PaletteToggle),
     (KeyCode::Char(':'), Action::PaletteToggle),
     (KeyCode::Char('?'), Action::HelpToggle),
+    (KeyCode::Char('@'), Action::Web(WebOp::Status)),
     (KeyCode::F(1), Action::HelpToggle),
     (KeyCode::Char('i'), Action::InspectorToggle(None)),
     (KeyCode::Char('I'), Action::InspectorToggle(None)),
@@ -222,6 +223,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
+    // Web UI surface status: Ctrl+Alt+W (leader w/W stay ClosePane; Phase 60 UNI-R01)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('w'), Action::Web(WebOp::Status)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('W'), Action::Web(WebOp::Status)),
     // AGENTS list toggle: Ctrl+Alt+N (verified free; D-03).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('n'), Action::AgentsList(AgentsListOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('N'), Action::AgentsList(AgentsListOp::Toggle)),

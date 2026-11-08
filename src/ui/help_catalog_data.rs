@@ -41,6 +41,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":mcp freeze <node> / thaw <node>", "Freeze (read-only lock) or thaw a session subtree"),
     (":mcp derez <node> --confirm", "Terminate a session subtree (requires --confirm)"),
     (":mcp checkpoint", "Persist atomic WorkspaceJournal checkpoint to disk"),
+    (":web [status|open|port <N>|stop]", "Web UI surface: status, open in browser, set port, stop server"),
     (":mcp shutdown --confirm", "Shut down background multiplexer daemon (requires --confirm)"),
     (":exit-guard [guard|respawn|detach|off]", "Configure final/root shell exit protection policy"),
     (":respawn-pane / :respawn", "Respawn exited shell in-place inside held pane"),

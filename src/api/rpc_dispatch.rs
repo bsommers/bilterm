@@ -493,6 +493,7 @@ impl AutomationControlPlane {
             "daemon.stop" => super::rpc_daemon::handle_daemon_stop(params),
             "daemon.switch" => super::rpc_daemon::handle_daemon_switch(params),
             "drawer.preview" => self.handle_rpc_drawer_preview(params),
+            "workspace.view_model" | "web.status" | "web.open" | "web.port" | "web.stop" | "web.pump" | "web.agents" | "web.agent" | "web.logs" | "web.search" | "web.input" | "web.create" | "web.kill" | "web.update" => self.dispatch_web(method, params),
             "clipboard.list" => self.rpc_clipboard_list(params),
             "clipboard.get" => self.rpc_clipboard_get(params),
             "clipboard.copy" => self.rpc_clipboard_copy(params),

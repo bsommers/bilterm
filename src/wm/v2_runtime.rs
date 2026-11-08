@@ -236,6 +236,21 @@ impl WindowManager {
         &mut self.daemon_state
     }
 
+    /// Shared web surface handle (`WEB-FE-01..04`, Phase 60).
+    pub fn web_surface(&self) -> &crate::api::web_surface::WebSurfaceState {
+        &self.web_surface
+    }
+
+    /// `true` for a headless (daemon / test) workspace with no attached display.
+    pub fn is_headless(&self) -> bool {
+        self.headless_mode
+    }
+
+    /// Attaches the HTTP/WS server's shared web surface handle (status then reflects that server).
+    pub fn set_web_surface(&mut self, surface: crate::api::web_surface::WebSurfaceState) {
+        self.web_surface = surface;
+    }
+
     /// Access to the hierarchical `SessionTree` (`TREE-01`).
     pub fn session_tree(&self) -> &SessionTree {
         &self.daemon_state.session_tree

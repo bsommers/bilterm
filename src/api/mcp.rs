@@ -94,6 +94,7 @@ impl AutomationControlPlane {
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
                     "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
+                    "bilterm_web_surface" => Some(Self::web_surface_method(&args).unwrap_or("")),
                     "bilterm_drawer_preview" => Some("drawer.preview"),
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
                     _ => None,
@@ -106,6 +107,8 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: move, rename, rename_session, select, bulk, or undo".to_string())
                         } else if tool_name == "bilterm_daemon" {
                             Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
+                        } else if tool_name == "bilterm_web_surface" {
+                            Err("invalid 'action' parameter: status, open, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
                         } else {
@@ -303,6 +306,14 @@ impl AutomationControlPlane {
                 ],
             ),
             Self::mcp_tool_schema(
+                "bilterm_web_surface",
+                "Inspect or control the Web UI surface server (status, open browser, set port, stop). Returns enabled, port, url, active_clients, web_dir.",
+                &[
+                    ("action", "string", "Operation: status | open | port | stop (default 'status')"),
+                    ("port", "integer", "TCP port when action='port'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
                 "bilterm_drawer_preview",
                 "Open, close, toggle, commit, or inspect the floating Drawer Window Peek & Live Preview Pane for active, occluded, minimized, background-session, or saved-session windows.",
                 &[
@@ -344,6 +355,17 @@ impl AutomationControlPlane {
             "delete" => Some("clipboard.delete"),
             "clear" => Some("clipboard.clear"),
             "window" => Some("clipboard.window"),
+            _ => None,
+        }
+    }
+
+    /// `bilterm_web_surface` `action` argument -> the `web.*` RPC method; `None` when unknown.
+    fn web_surface_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("status") {
+            "status" => Some("web.status"),
+            "open" => Some("web.open"),
+            "port" => Some("web.port"),
+            "stop" => Some("web.stop"),
             _ => None,
         }
     }

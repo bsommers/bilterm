@@ -8,6 +8,7 @@ mod execute_config;
 pub mod execute_daemon;
 pub mod execute_find;
 pub mod execute_link;
+pub mod execute_web;
 pub mod execute_window;
 pub mod execute_wm;
 pub mod parse;
@@ -23,6 +24,7 @@ mod parse_link;
 mod parse_script;
 pub mod parse_session_map;
 mod parse_visual;
+pub mod parse_web;
 pub mod parse_window;
 
 pub use crate::action::Action;
