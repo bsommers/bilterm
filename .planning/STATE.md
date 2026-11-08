@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v3.0.1
-current_phase: 56
-current_phase_name: drawer-window-peek-preview
+current_phase: 58
+current_phase_name: speech-to-text-spike-and-plan
 status: ready_to_execute
-stopped_at: "Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md)"
-last_updated: "2026-11-07T21:35:00Z"
+stopped_at: "Completed Phase 56 (Drawer Window Peek & Live Preview Pane) and Phase 57 (Smart Clipboard Paste Fix & Filterable Clipboard Viewer Window) in parallel subagent trees"
+last_updated: "2026-11-08T00:25:00Z"
 last_activity: 2026-11-07
-last_activity_desc: "Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md)"
-state_head: a46f949
+last_activity_desc: "Completed Phase 56 (DRW-PEEK-01..03) and Phase 57 (CLIP-01..04); all verification suites green"
+state_head: 31cd42c
 progress:
   total_phases: 59
-  completed_phases: 55
+  completed_phases: 57
   total_plans: 140
-  completed_plans: 130
+  completed_plans: 136
 milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Persistent SSH+tmux, Utility Windows, Script Studio, Packing Viewer & Daemon Supervisor"
 ---
 
@@ -24,16 +24,16 @@ milestone_name: "Bilterm v3.0.1 — Full GUI/TUI Agent & Session Multiplexer, Pe
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-07):** All 55 core roadmap phases complete. Phases 56–59 research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into `ROADMAP.md` (Phase 56: Drawer Window Peek Preview, Phase 57: Smart Clipboard Paste Fix & Viewer Window, Phase 58: Local AI STT Optional Module, Phase 59: GUI Chrome Engine Browser & Video Player Canvas).
+**Current focus (2026-11-07):** Phases 56 and 57 complete and verified (`tests/phase56_drawer_preview_{state,render,uniformity}.rs`, `tests/phase57_clipboard_paste_and_viewer.rs`, `tests/bilterm_live_driver_suite.rs`). Next up: Phase 58 (Local AI STT Optional Module) and Phase 59 (GUI Chrome Engine Browser & Video Player Canvas).
 
 ## Current Position
 
-Phase: 56 (drawer-window-peek-preview) — READY TO EXECUTE
-Plan: All plans across Phases 1–55 complete (130/130). Phases 56–59 planned (10 plans created).
-Status: 55/59 Phases complete.
-Last activity: 2026-11-07 — Planned Phases 56–59 (research spikes, ADRs, contracts, and wave-by-wave execution plans complete and integrated into ROADMAP.md).
+Phase: 58 (speech-to-text-spike-and-plan) — READY TO EXECUTE
+Plan: Phases 1–57 complete (136/140 plans). Phases 58–59 planned (4 plans ready).
+Status: 57/59 Phases complete.
+Last activity: 2026-11-07 — Completed Phase 56 (`DRW-PEEK-01..03`) and Phase 57 (`CLIP-01..04`) in parallel subagent trees and merged to `main`.
 
-Progress: [█████████░] 93% (55/59 Phases)
+Progress: [██████████] 97% (57/59 Phases)
 
 ## Performance Metrics
 

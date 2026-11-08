@@ -12,6 +12,7 @@ use bilterm::wm::{SplitDirection, WindowManager};
 fn make_wm() -> WindowManager {
     let mut wm = WindowManager::new_headless(24, 80);
     wm.config_mut().history_session = format!("p56_uni_{}", std::process::id());
+    wm.config_mut().drawer.style = bilterm::wm::drawer::DrawerStyle::Navigator;
     wm
 }
 

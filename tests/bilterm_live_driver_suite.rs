@@ -749,3 +749,56 @@ fn live_gui_framebuffer_and_cli_smoke_driver() {
     );
     assert!(!ls_combined.is_empty() || ls_out.status.code().is_some());
 }
+
+#[test]
+fn live_phase56_drawer_peek_and_phase57_clipboard_driver() {
+    let mut driver = BiltermLiveDriver::new_tui(110, 32);
+
+    // --- Phase 56: Drawer Window Peek & Live Preview Pane ---
+    let p1 = driver.wm.active_pane_id();
+    driver
+        .wm
+        .pane_mut(p1)
+        .unwrap()
+        .process_pty_output(b"PHASE56_PANE1_CANVAS\r\n");
+    driver.run_colon(":split v").expect("split v");
+    let p2 = driver.wm.active_pane_id();
+    assert_ne!(p1, p2);
+    driver
+        .wm
+        .pane_mut(p2)
+        .unwrap()
+        .process_pty_output(b"PHASE56_PANE2_CANVAS\r\n");
+
+    // Open drawer and preview p1 without stealing focus from p2
+    driver.run_colon(":drawer open").expect(":drawer open");
+    driver
+        .run_colon(&format!(":drawer preview pane {p1}"))
+        .expect(":drawer preview pane p1");
+    assert!(driver.wm.drawer().preview.active);
+    assert_eq!(driver.wm.active_pane_id(), p2, "peek must not steal focus");
+    driver.assert_screen_contains("PEEK");
+    driver.assert_screen_contains("PHASE56_PANE1_CANVAS");
+
+    // Commit preview via `:drawer preview commit` -> focuses p1 and closes preview
+    driver
+        .run_colon(":drawer preview commit")
+        .expect(":drawer preview commit");
+    assert_eq!(driver.wm.active_pane_id(), p1);
+    assert!(!driver.wm.drawer().preview.active);
+
+    // --- Phase 57: Smart Clipboard Paste & Filterable Clipboard Viewer Window ---
+    driver
+        .run_colon(":clipboard copy live_driver_clip_entry")
+        .expect(":clipboard copy");
+    driver.run_colon(":clipboard open").expect(":clipboard open");
+    assert!(driver.wm.clipboard_window().active);
+    driver.assert_screen_contains("CLIPBOARD");
+    driver.assert_screen_contains("live_driver_clip_entry");
+
+    // Verify GUI framebuffer also renders the CLIPBOARD utility window cleanly
+    let gui_surface = driver.render_gui_surface(8, 16);
+    assert!(!gui_surface.quads.is_empty());
+    driver.run_colon(":clipboard close").expect(":clipboard close");
+    assert!(!driver.wm.clipboard_window().active);
+}

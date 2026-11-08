@@ -1,6 +1,12 @@
 # Session Checkpoint — 2026-11-07
 
-## Latest: Phases 56–59 Architecture & Execution Planning Integration, 2026-11-07
+## Latest: Phases 56 & 57 Executed and Verified in Parallel Subagent Trees, 2026-11-07
+- Completed and merged **Phase 56 (`DRW-PEEK-01..03`: Drawer Window Peek & Live Preview Pane)** and **Phase 57 (`CLIP-01..04`: Smart Clipboard Paste Fix & Filterable Clipboard Viewer Window)**:
+  - **Phase 56 Implementation & Tests**: `src/wm/drawer/preview.rs`, `src/ui/drawer_preview.rs`, `:drawer preview` / `:peek`, JSON-RPC `drawer.preview`, MCP `bilterm_drawer_preview`, `tests/phase56_drawer_preview_state.rs`, `tests/phase56_drawer_preview_render.rs`, `tests/phase56_drawer_preview_uniformity.rs`.
+  - **Phase 57 Implementation & Tests**: MIME-aware `Ctrl+V` paste in `RawPtyPassthrough` / `ALT_SCREEN` (fixes Herdr / Claude Code `"No image or video found in clipboard"`), `Shift+RightClick`/`Shift+MiddleClick` SGR mouse bypass, inbound `OSC 52` decoding, `src/wm/clipboard_registry.rs`, `src/wm/clipboard_window.rs`, `src/ui/clipboard_window_{ui,gui}.rs`, `:clipboard`/`:clips`, JSON-RPC `clipboard.*`, MCP `bilterm_clipboard`, `tests/phase57_clipboard_paste_and_viewer.rs`.
+  - **Live Driver Coverage**: Added `live_phase56_drawer_peek_and_phase57_clipboard_driver` in `tests/bilterm_live_driver_suite.rs`.
+
+## Previous: Phases 56–59 Architecture & Execution Planning Integration, 2026-11-07
 - Completed comprehensive research spikes, architecture ADRs, interface contracts, and wave-by-wave execution plans for Phases 56, 57, 58, and 59:
   - **Phase 56 (Drawer Window Peek & Live Preview Pane)**: `56-RESEARCH.md`, `56-CONTRACT.md`, `56-01-PLAN.md` .. `56-03-PLAN.md`. Zero-copy, zero-`SIGWINCH` live and snapshot drawer preview with click-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`).
   - **Phase 57 (Smart Clipboard Paste Fix & Multi-Session Clipboard Viewer Window)**: `57-RESEARCH.md`, `57-CONTRACT.md`, `57-01-PLAN.md` .. `57-03-PLAN.md`. Fixes `"No image or video found in clipboard"` in Herdr/Claude Code via MIME-aware bracketed paste; provides floating/dockable `CLIPBOARD` viewer window (`CLIP-01..04`).

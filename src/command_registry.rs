@@ -44,6 +44,7 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":clear", "", "Clear the focused pane's screen and scrollback and reset the page anchor."),
     (":clipboard", "", "List clipboard history, or run a clipboard subcommand."),
     (":clip", ":clipboard", "Alias of :clipboard."),
+    (":clips", ":clipboard", "Alias of :clipboard."),
     (":cmd", ":commands", "Alias of :commands."),
     (":exit!", ":quit!", "Alias of :quit! (force quit)."),
     (":exit-protection", ":exit-guard", "Alias of :exit-guard."),
@@ -326,6 +327,16 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":script left", "reachable-via-picker"),
     (":script right", "reachable-via-picker"),
     (":script select", "entity-id"),
+    (":clipboard dismiss", "reachable-via-picker"),
+    (":clipboard blur", "reachable-via-picker"),
+    (":clipboard pin", "reachable-via-picker"),
+    (":clipboard unpin", "reachable-via-picker"),
+    (":clipboard dock", "reachable-via-picker"),
+    (":clipboard float", "reachable-via-picker"),
+    (":clipboard filter", "free-text"),
+    (":clipboard copy", "free-text"),
+    (":clipboard pin-entry", "reachable-via-picker"),
+    (":clipboard delete", "reachable-via-picker"),
 ];
 
 fn head(s: &str) -> &str {

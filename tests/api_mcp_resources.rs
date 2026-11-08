@@ -139,6 +139,7 @@ fn tools_list_only_gains_find() {
             "bilterm_session_map",
             "bilterm_daemon",
             "bilterm_drawer_preview",
+            "bilterm_clipboard",
         ]
     );
 }

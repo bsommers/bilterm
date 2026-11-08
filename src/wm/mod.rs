@@ -11,6 +11,8 @@ pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
 pub mod command_window;
+pub mod clipboard_registry;
+pub mod clipboard_window;
 pub mod fonts_window;
 pub mod script_studio;
 pub mod script_studio_cmd;
@@ -63,6 +65,13 @@ pub use z_stack::{FloatingWindowGeometry, WindowResizeEdge, WmMouseDrag};
 pub use command_window::{
     CommandLogEntry, CommandWindowBadge, CommandWindowHit, CommandWindowOp, CommandWindowState,
     PaletteCommandItem, PALETTE_ITEMS,
+};
+pub use clipboard_registry::{
+    ClipboardEntry, ClipboardFilterScope, ClipboardMime, ClipboardRegistry, ClipboardSource,
+};
+pub use clipboard_window::{
+    ClipboardActionChip, ClipboardWindowBadge, ClipboardWindowHit, ClipboardWindowOp,
+    ClipboardWindowState,
 };
 
 use std::collections::BTreeMap;
@@ -186,6 +195,10 @@ pub struct WindowManager {
     pub(crate) fonts_window_dirty: bool,
     /// Pinnable COMMAND PALETTE first-class window (`WIN-02`, Phase 51.2).
     pub(crate) command_window: command_window::CommandWindowState,
+    /// First-class workspace clipboard registry (`CLIP-02`, Phase 57).
+    pub(crate) clipboard_registry: clipboard_registry::ClipboardRegistry,
+    /// Floating, pinnable, dockable `CLIPBOARD` viewer window (`CLIP-03`, Phase 57).
+    pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
     pub(crate) script_studio: script_studio::ScriptStudioState,
     /// In-memory agent mailbox & coordination registry (`AGT-01..03`, Phase 52).
@@ -205,6 +218,8 @@ pub struct WindowManager {
     pub(crate) agents_list_scale_pct: u16,
     /// Same for the SESSION MAP packing viewer (Phase 54).
     pub(crate) session_map_scale_pct: u16,
+    /// Same for the CLIPBOARD viewer window (Phase 57).
+    pub(crate) clipboard_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -284,6 +299,8 @@ impl WindowManager {
             fonts_window: fonts_window::FontsWindowState::default(),
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
+            clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
+            clipboard_window: clipboard_window::ClipboardWindowState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
             agents_demo: agents_demo::AgentsDemoState::default(),
@@ -294,6 +311,7 @@ impl WindowManager {
             agents_scale_pct: 100,
             agents_list_scale_pct: 100,
             session_map_scale_pct: 100,
+            clipboard_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
@@ -826,6 +844,7 @@ impl WindowManager {
             changed = true;
         }
         registry::capture::tick(self, Instant::now());
+        self.sync_clipboard_records();
         self.maybe_rebalance_scrollback(Instant::now());
         changed
     }
@@ -843,6 +862,7 @@ impl WindowManager {
             self.agents_list.blur();
             self.fonts_window.blur();
             self.command_window.blur();
+            self.clipboard_window.blur();
             self.script_studio.blur();
             self.session_map.blur();
             let changed = self.z_stack.raise(pane_id);
@@ -861,6 +881,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.fonts_window.blur();
         self.command_window.blur();
+        self.clipboard_window.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
@@ -876,6 +897,7 @@ impl WindowManager {
         self.agents_list.blur();
         self.fonts_window.blur();
         self.command_window.blur();
+        self.clipboard_window.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_bottom_to_top();

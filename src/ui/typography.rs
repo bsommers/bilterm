@@ -85,6 +85,8 @@ pub enum PanelTarget {
     AgentsList,
     /// The SESSION MAP packing viewer (Phase 54).
     SessionMap,
+    /// The CLIPBOARD viewer window (Phase 57).
+    Clipboard,
 }
 
 /// Real workspace cells covered by a scaled panel whose rect `virtual_rect` lives in the panel's
@@ -240,6 +242,7 @@ impl WindowManager {
             PanelTarget::Agents => self.agents_scale_pct,
             PanelTarget::AgentsList => self.agents_list_scale_pct,
             PanelTarget::SessionMap => self.session_map_scale_pct,
+            PanelTarget::Clipboard => self.clipboard_scale_pct,
         }
         .clamp(75, 200)
     }
@@ -253,6 +256,7 @@ impl WindowManager {
             PanelTarget::Agents => self.agents_scale_pct = pct,
             PanelTarget::AgentsList => self.agents_list_scale_pct = pct,
             PanelTarget::SessionMap => self.session_map_scale_pct = pct,
+            PanelTarget::Clipboard => self.clipboard_scale_pct = pct,
         }
     }
 
@@ -263,6 +267,7 @@ impl WindowManager {
         self.set_scale(PanelTarget::Agents, pct);
         self.set_scale(PanelTarget::AgentsList, pct);
         self.set_scale(PanelTarget::SessionMap, pct);
+        self.set_scale(PanelTarget::Clipboard, pct);
     }
 
     /// Steps one panel's scale by `delta` percent (clamped to `75..=200`); returns the new setting.

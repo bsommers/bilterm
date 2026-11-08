@@ -614,24 +614,16 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
             }
         }
-        "clipboard" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
-            let sub = if parts.len() > 1 {
-                format!("clipboard {}", parts[1..].join(" "))
-            } else {
-                "clipboard list".to_string()
-            };
-            Some(Ok(ColonCommand::SelectCommand(Some(sub))))
+        "clipboard" | "clips" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
+            Some(super::parse_clipboard::parse(&parts[1..]))
         }
-        "paste" | "p" => {
-            if parts.len() <= 1 {
-                Some(Ok(ColonCommand::PasteClipboard))
-            } else {
-                Some(Ok(ColonCommand::SelectCommand(Some(format!(
-                    "clipboard {}",
-                    parts[1..].join(" ")
-                )))))
-            }
-        }
+        "paste" | "p" => match parts.get(1).copied() {
+            None => Some(Ok(ColonCommand::PasteClipboard)),
+            Some("raw-ctrl-v" | "raw") => Some(Ok(ColonCommand::SelectCommand(Some(
+                "clipboard raw-ctrl-v".to_string(),
+            )))),
+            Some(_) => Some(super::parse_clipboard::parse(&parts[1..])),
+        },
         "clear" => Some(Ok(ColonCommand::Clear)),
         "scrollback" | "sb" => match parts.get(1).copied() {
             None | Some("info" | "status") => Some(Ok(ColonCommand::Scrollback { clear: false })),

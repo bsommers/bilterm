@@ -57,8 +57,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 53: Session & Window Management** - Move windows between sessions, rename sessions and windows, and multi-select windows for bulk actions, by key sequence, `:` command, Navigator right-click menu and RPC/MCP, with undo-safe semantics and persistence (`SES-01..05`)
 - [x] **Phase 54: Session Packing Viewer & Drag-and-Drop** - Non-modal text-mode and GUI viewer drawing several sessions at once as rectangular containers with their windows packed inside (treemap-style), plus drag-and-drop of windows between sessions and within the Navigator tree, with a keyboard equivalent for every gesture (`VIEW-01..04`)
 - [x] **Phase 55: Daemon Supervisor & Multi-Daemon Awareness** - Auto-dispatched background daemon that is a singleton by default, optional named multi-daemon mode, daemons discover and report on each other, with `:daemon` verbs, mouse/key paths and RPC/MCP (`DAEM-05..08`)
-- [ ] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`)
-- [ ] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`)
+- [x] **Phase 56: Drawer Window Peek & Live Preview Pane** - Transient non-destructive floating preview pane when scrolling/highlighting windows or sessions in the Classic or Navigator drawer, with click/Enter-to-focus and Esc-to-dismiss (`DRW-PEEK-01..03`) (completed 2026-11-07)
+- [x] **Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window** - Smart MIME-aware `Ctrl+V` / `DECSET 2004` bracketed paste fixing `"No image or video found in clipboard"` in Herdr/Claude Code, plus a floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, and fuzzy query (`CLIP-01..04`) (completed 2026-11-07)
 - [ ] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
 - [ ] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
 
@@ -1021,9 +1021,9 @@ Plans:
 - Research: `.planning/phases/56-drawer-window-peek-preview/56-RESEARCH.md`
 - Contract: `.planning/phases/56-drawer-window-peek-preview/56-CONTRACT.md`
 - Plans:
-  - [ ] 56-01-PLAN.md — Peek State, Config, Zero-SIGWINCH Live & Snapshot Preview Renderer, and Drawer Row Layout Geometry (wave 1)
-  - [ ] 56-02-PLAN.md — Transient Peek Activation, Keyboard/Mouse Wheel Triggers, Click-to-Focus, and Esc/Dismissal Transitions (wave 2)
-  - [ ] 56-03-PLAN.md — Background Session Navigator Window Hierarchy, Drawer Style Parity, and End-to-End Verification (wave 3)
+  - [x] 56-01-PLAN.md — Peek State, Config, Zero-SIGWINCH Live & Snapshot Preview Renderer, and Drawer Row Layout Geometry (wave 1)
+  - [x] 56-02-PLAN.md — Transient Peek Activation, Keyboard/Mouse Wheel Triggers, Click-to-Focus, and Esc/Dismissal Transitions (wave 2)
+  - [x] 56-03-PLAN.md — Background Session Navigator Window Hierarchy, Drawer Style Parity, and End-to-End Verification (wave 3)
 
 ### Phase 57: Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window
 
@@ -1043,9 +1043,9 @@ Plans:
 - Research: `.planning/phases/57-clipboard-fix-and-viewer-window/57-RESEARCH.md`
 - Contract: `.planning/phases/57-clipboard-fix-and-viewer-window/57-CONTRACT.md`
 - Plans:
-  - [ ] 57-01-PLAN.md — Smart Clipboard Paste & Bracketed Paste Fix for Herdr / Claude Code / TUIs (wave 1)
-  - [ ] 57-02-PLAN.md — Multi-Session Clipboard History Registry, Metadata Tagging & Secret Redaction (wave 2)
-  - [ ] 57-03-PLAN.md — First-Class Filterable `CLIPBOARD` Viewer Window, Surface Parity & Test Suite (wave 3)
+  - [x] 57-01-PLAN.md — Smart Clipboard Paste & Bracketed Paste Fix for Herdr / Claude Code / TUIs (wave 1)
+  - [x] 57-02-PLAN.md — Multi-Session Clipboard History Registry, Metadata Tagging & Secret Redaction (wave 2)
+  - [x] 57-03-PLAN.md — First-Class Filterable `CLIPBOARD` Viewer Window, Surface Parity & Test Suite (wave 3)
 
 ### Phase 58: Local AI Speech-to-Text (`STT`) Optional Module
 
@@ -1168,7 +1168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 53. Session & Window Management (`SES-01..05`) | 3/3 | Complete | 2026-11-06 |
 | 54. Session Packing Viewer & Drag-and-Drop (`VIEW-01..04`) | 3/3 | Complete | 2026-11-06 |
 | 55. Daemon Supervisor & Multi-Daemon Awareness (`DAEM-05..08`) | 3/3 | Complete | 2026-11-06 |
-| 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 0/3 | Planned | - |
-| 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 0/3 | Planned | - |
+| 56. Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`) | 3/3 | Complete | 2026-11-07 |
+| 57. Smart Clipboard Paste Fix (`Herdr`/TUI `Ctrl+V`) & Filterable Clipboard Viewer Window (`CLIP-01..04`) | 3/3 | Complete | 2026-11-07 |
 | 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 0/2 | Planned (Spike Complete) | - |
 | 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 0/2 | Planned (Spike Complete) | - |

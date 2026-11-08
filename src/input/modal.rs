@@ -341,6 +341,12 @@ pub(super) fn handle_wm_modal_key(
         {
             return Ok(Some(action));
         }
+        if wm.clipboard_window().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::clipboard_window_keys::handle_clipboard_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
         if wm.fonts_window().captures_input()
             && !wm.is_leader_pending()
             && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
@@ -552,27 +558,7 @@ pub(super) fn handle_wm_modal_key(
                         .set_status_message(Some(format!("Created new window #{id}")));
                 }
             }
-            KeyCode::Char('v') => {
-                if !wm.drawer().preview.active
-                    && wm
-                        .active_pane()
-                        .status_message()
-                        .is_some_and(|m| m.starts_with("Created new window #"))
-                {
-                    if let Ok(id) =
-                        wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical)
-                    {
-                        wm.sync_drawer_selection_to_active_pane();
-                        wm.active_pane_mut()
-                            .set_status_message(Some(format!("Created new vertical window #{id}")));
-                    }
-                } else {
-                    let _ = wm.apply(crate::action::Action::DrawerPreview(
-                        crate::action::DrawerPreviewOp::Toggle,
-                    ));
-                }
-            }
-            KeyCode::Char('|') | KeyCode::Char('%') => {
+            KeyCode::Char('v') | KeyCode::Char('|') | KeyCode::Char('%') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Vertical) {
                     wm.sync_drawer_selection_to_active_pane();
                     wm.active_pane_mut()

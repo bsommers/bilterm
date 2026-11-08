@@ -224,16 +224,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Drawer Window Peek & Live Preview Pane (Phase 56)
 
-- [ ] **DRW-PEEK-01**: Transient non-destructive floating preview pane when scrolling or highlighting rows in the Classic or Navigator drawer, displaying live `CompositePane` output or saved-session snapshot.
-- [ ] **DRW-PEEK-02**: Keyboard navigation (`j`/`k`, `Up`/`Down`, `PageUp`/`PageDown`) and mouse wheel scrolling in drawer update preview; `Enter` commits focus/switch; `Esc` or clicking away dismisses peek.
-- [ ] **DRW-PEEK-03**: Surface uniformity (`UNI-R01`), configuration toggles (`[drawer] peek_preview = true`, delay, dimensions), and zero-`SIGWINCH` compositing across live, minimized, stacked, and background session panes.
+- [x] **DRW-PEEK-01**: Transient non-destructive floating preview pane when scrolling or highlighting rows in the Classic or Navigator drawer, displaying live `CompositePane` output or saved-session snapshot.
+- [x] **DRW-PEEK-02**: Keyboard navigation (`j`/`k`, `Up`/`Down`, `PageUp`/`PageDown`) and mouse wheel scrolling in drawer update preview; `Enter` commits focus/switch; `Esc` or clicking away dismisses peek.
+- [x] **DRW-PEEK-03**: Surface uniformity (`UNI-R01`), configuration toggles (`[drawer] peek_preview = true`, delay, dimensions), and zero-`SIGWINCH` compositing across live, minimized, stacked, and background session panes.
 
 ## Smart Clipboard Paste Fix & Multi-Session Clipboard Viewer Window (Phase 57)
 
-- [ ] **CLIP-01**: Smart MIME-aware clipboard paste in `RawPtyPassthrough` / `ALT_SCREEN` mode wrapping text in `DECSET 2004` bracketed paste and passing media through, fixing `"No image or video found in clipboard"` in Herdr/Claude Code; `Shift+RightClick` pastes text over SGR mouse tracking; inbound `OSC 52` updates system clipboard and registry.
-- [ ] **CLIP-02**: Multi-session, multi-window tagged `ClipboardRegistry` capturing copy/cut/yank/kill/OSC-52/OS-sync events with secret redaction (`SEC-R01..04`).
-- [ ] **CLIP-03**: First-class floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, media, and fuzzy query.
-- [ ] **CLIP-04**: Full surface uniformity (`UNI-R01`) across Mouse, Keyboard (`Ctrl+Alt+V` / Leader `;`), `:clipboard` colon commands, palette, top menu, JSON-RPC, and MCP.
+- [x] **CLIP-01**: Smart MIME-aware clipboard paste in `RawPtyPassthrough` / `ALT_SCREEN` mode wrapping text in `DECSET 2004` bracketed paste and passing media through, fixing `"No image or video found in clipboard"` in Herdr/Claude Code; `Shift+RightClick` pastes text over SGR mouse tracking; inbound `OSC 52` updates system clipboard and registry.
+- [x] **CLIP-02**: Multi-session, multi-window tagged `ClipboardRegistry` capturing copy/cut/yank/kill/OSC-52/OS-sync events with secret redaction (`SEC-R01..04`).
+- [x] **CLIP-03**: First-class floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, media, and fuzzy query.
+- [x] **CLIP-04**: Full surface uniformity (`UNI-R01`) across Mouse, Keyboard (`Ctrl+Alt+V` / Leader `;`), `:clipboard` colon commands, palette, top menu, JSON-RPC, and MCP.
 
 ## Local AI Speech-to-Text Module (Phase 58)
 
@@ -297,13 +297,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEM-06 | Phase 55 | Complete |
 | DAEM-07 | Phase 55 | Complete |
 | DAEM-08 | Phase 55 | Complete |
-| DRW-PEEK-01 | Phase 56 | Planned |
-| DRW-PEEK-02 | Phase 56 | Planned |
-| DRW-PEEK-03 | Phase 56 | Planned |
-| CLIP-01 | Phase 57 | Planned |
-| CLIP-02 | Phase 57 | Planned |
-| CLIP-03 | Phase 57 | Planned |
-| CLIP-04 | Phase 57 | Planned |
+| DRW-PEEK-01 | Phase 56 | Complete |
+| DRW-PEEK-02 | Phase 56 | Complete |
+| DRW-PEEK-03 | Phase 56 | Complete |
+| CLIP-01 | Phase 57 | Complete |
+| CLIP-02 | Phase 57 | Complete |
+| CLIP-03 | Phase 57 | Complete |
+| CLIP-04 | Phase 57 | Complete |
 | STT-01 | Phase 58 | Planned (Spike Complete) |
 | STT-02 | Phase 58 | Planned (Spike Complete) |
 | STT-03 | Phase 58 | Planned (Spike Complete) |

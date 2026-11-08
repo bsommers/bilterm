@@ -949,6 +949,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             false
         }
         ColonCommand::CommandWindow(op) => super::execute_command_window::execute_command_window(wm, op),
+        ColonCommand::ClipboardWindow(op) => {
+            wm.clipboard_window_apply(op);
+            false
+        }
         ColonCommand::ScriptStudio(op) => {
             if let Some(msg) = wm.script_studio_apply(&op) {
                 wm.active_pane_mut().set_status_message(Some(msg));
@@ -998,5 +1002,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
         PanelTarget::Agents => "Agents",
         PanelTarget::AgentsList => "Agents list",
         PanelTarget::SessionMap => "Session map",
+        PanelTarget::Clipboard => "Clipboard",
     }
 }

@@ -1,6 +1,8 @@
 pub mod agents_list;
 pub mod agents_list_keys;
 mod agents_window;
+pub mod clipboard_window;
+pub mod clipboard_window_keys;
 pub mod command_window;
 pub mod command_window_keys;
 pub mod drawer_navigator;
@@ -177,6 +179,25 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
         if is_ctrl_shift_v || is_shift_insert {
             return paste_clipboard_into_pane(pane);
         }
+        let is_plain_ctrl_v = key.modifiers == KeyModifiers::CONTROL
+            && matches!(key.code, KeyCode::Char('v') | KeyCode::Char('V') | KeyCode::Char('\x16'));
+        if is_plain_ctrl_v && pane.smart_ctrl_v_paste() {
+            match crate::clipboard::probe_system_clipboard_mime() {
+                crate::clipboard::ClipboardMimeProbe::Media { mime, bytes_len } => {
+                    pane.record_media_passthrough(mime, bytes_len);
+                }
+                crate::clipboard::ClipboardMimeProbe::Text => {
+                    return paste_clipboard_into_pane(pane);
+                }
+                crate::clipboard::ClipboardMimeProbe::Empty => {
+                    if !pane.prompt().yank_buffer.is_empty()
+                        || !pane.prompt().yank_history.is_empty()
+                    {
+                        return paste_clipboard_into_pane(pane);
+                    }
+                }
+            }
+        }
         if pane.is_read_only() {
             pane.set_status_message(Some(
                 "🔒 PROTECTED: Pane is locked read-only (:lock off or Ctrl+X l to unlock)"
@@ -266,7 +287,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             }
             KeyCode::Delete => {
                 if let Some(cut) = pane.prompt_mut().cut_selection_or_line() {
-                    pane.record_yank(&cut);
+                    pane.record_yank_with_source(
+                        crate::wm::clipboard_registry::ClipboardSource::PromptCut,
+                        &cut,
+                    );
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
                         cut.chars().count()
@@ -299,7 +323,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 if pane.prompt().has_selection() {
                     if let Some(copied) = pane.prompt_mut().copy_selection() {
-                        pane.record_yank(&copied);
+                        pane.record_yank_with_source(
+                            crate::wm::clipboard_registry::ClipboardSource::PromptCopy,
+                            &copied,
+                        );
                         pane.prompt_mut().clear_selection();
                         pane.set_status_message(Some(format!(
                             "Copied {} chars to clipboard",
@@ -320,7 +347,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 if !prompt_was_empty {
                     pane.prompt_mut().clear_line();
                     let y = pane.prompt().yank_buffer.clone();
-                    pane.record_yank(&y);
+                    pane.record_yank_with_source(
+                        crate::wm::clipboard_registry::ClipboardSource::PromptCut,
+                        &y,
+                    );
                 }
                 if prompt_was_empty || has_fg_sub {
                     pane.write_to_pty(&[0x03])?;
@@ -333,14 +363,20 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
             KeyCode::Char('u') => {
                 pane.prompt_mut().clear_line();
                 let y = pane.prompt().yank_buffer.clone();
-                pane.record_yank(&y);
+                pane.record_yank_with_source(
+                    crate::wm::clipboard_registry::ClipboardSource::PromptCut,
+                    &y,
+                );
                 return Ok(AppAction::Handled);
             }
             KeyCode::Char('k') => {
                 let had_sel = pane.prompt().has_selection();
                 pane.prompt_mut().kill_to_end_of_line();
                 let y = pane.prompt().yank_buffer.clone();
-                pane.record_yank(&y);
+                pane.record_yank_with_source(
+                    crate::wm::clipboard_registry::ClipboardSource::PromptCut,
+                    &y,
+                );
                 if had_sel {
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
@@ -353,7 +389,10 @@ fn handle_command_prompt_key(pane: &mut CompositePane, key: KeyEvent) -> Result<
                 let had_sel = pane.prompt().has_selection();
                 pane.prompt_mut().kill_prev_word();
                 let y = pane.prompt().yank_buffer.clone();
-                pane.record_yank(&y);
+                pane.record_yank_with_source(
+                    crate::wm::clipboard_registry::ClipboardSource::PromptCut,
+                    &y,
+                );
                 if had_sel {
                     pane.set_status_message(Some(format!(
                         "Cut {} chars to clipboard",
@@ -528,19 +567,44 @@ pub fn handle_wm_paste_event(wm: &mut WindowManager, pasted_text: &str) -> Resul
     if let Some(action) = agents_window::handle_agents_window_paste(wm, pasted_text) {
         return Ok(action);
     }
-    handle_paste_event(wm.active_pane_mut(), pasted_text)
+    if !pasted_text.is_empty() {
+        wm.active_pane_mut().record_clipboard_event(
+            crate::wm::clipboard_registry::ClipboardSource::SystemPaste,
+            pasted_text.to_string(),
+        );
+    }
+    let res = handle_paste_event(wm.active_pane_mut(), pasted_text);
+    wm.sync_clipboard_records();
+    res
 }
 
 /// Reads the OS clipboard via [`crate::clipboard::get_system_clipboard`] (falling back to the
 /// pane's internal `yank_buffer`) and routes it through [`handle_paste_event`] (`PTY-04`, `DECSET 2004`).
 pub fn paste_clipboard_into_pane(pane: &mut CompositePane) -> Result<AppAction> {
-    let clip = crate::clipboard::get_system_clipboard()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| pane.prompt().yank_buffer.clone());
+    let sys_clip = crate::clipboard::get_system_clipboard().filter(|s| !s.is_empty());
+    let used_fallback = sys_clip.is_none();
+    let clip = sys_clip.unwrap_or_else(|| {
+        if !pane.prompt().yank_buffer.is_empty() {
+            pane.prompt().yank_buffer.clone()
+        } else {
+            pane.prompt()
+                .yank_history
+                .first()
+                .cloned()
+                .unwrap_or_default()
+        }
+    });
     if clip.is_empty() {
         pane.set_status_message(Some("Clipboard is empty".to_string()));
         return Ok(AppAction::Handled);
     }
+    if used_fallback {
+        crate::clipboard::set_system_clipboard(&clip);
+    }
+    pane.record_clipboard_event(
+        crate::wm::clipboard_registry::ClipboardSource::SystemPaste,
+        clip.clone(),
+    );
     handle_paste_event(pane, &clip)
 }
 
@@ -571,7 +635,7 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
             }
             let bracketed = pane.vt().is_bracketed_paste();
             if bracketed {
-                let clean = sanitized.replace("\x1b[201~", "");
+                let clean = sanitized.replace("\x1b[200~", "").replace("\x1b[201~", "");
                 let mut framed = Vec::with_capacity(clean.len() + 12);
                 framed.extend_from_slice(b"\x1b[200~");
                 framed.extend_from_slice(clean.as_bytes());
@@ -638,7 +702,7 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         && !wm.active_pane().hints_mode().active;
 
     if in_raw_passthrough {
-        return handle_key_event(wm.active_pane_mut(), raw_key);
+        return dispatch_pane_key(wm, raw_key);
     }
 
     // Global WM shortcuts (Palette, Quake, F1..F10, Alt-chords)
@@ -650,7 +714,15 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(action);
     }
 
-    handle_key_event(wm.active_pane_mut(), key)
+    dispatch_pane_key(wm, key)
+}
+
+fn dispatch_pane_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
+    let smart = wm.config().smart_ctrl_v_paste;
+    wm.active_pane_mut().set_smart_ctrl_v_paste(smart);
+    let res = handle_key_event(wm.active_pane_mut(), key);
+    wm.sync_clipboard_records();
+    res
 }
 
 /// Handles `Enter` submissions on the active `WindowManager` pane (in-prompt `:colon` commands and broadcast mode).

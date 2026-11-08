@@ -14,6 +14,7 @@ pub mod parse;
 mod parse_agent_mail;
 mod parse_agents;
 mod parse_agents_list;
+mod parse_clipboard;
 mod parse_command_window;
 mod parse_config;
 mod parse_daemon;
