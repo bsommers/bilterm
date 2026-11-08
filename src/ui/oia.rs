@@ -275,6 +275,36 @@ pub fn render_oia_status_bar_themed(
         ));
     }
 
+    if let Some(badge) = pane.stt_badge() {
+        spans.push(Span::styled(
+            format!(" {sep}"),
+            Style::default().fg(Color::White).bg(oia_bg),
+        ));
+        let (badge_fg, badge_bg) = if badge.contains("REC") {
+            (
+                Color::White,
+                role_color(&tokens, is_legacy, ColorRole::Danger, Color::Rgb(220, 0, 0)),
+            )
+        } else if badge.contains("STT") {
+            (
+                Color::Black,
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 200, 0)),
+            )
+        } else {
+            (
+                Color::Black,
+                role_color(&tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)),
+            )
+        };
+        spans.push(Span::styled(
+            format!(" {badge} "),
+            Style::default()
+                .fg(badge_fg)
+                .bg(badge_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     if pane.vt().tektronix().active || pane.vt().tektronix().has_visible_content() {
         spans.push(Span::styled(
             format!(" {sep}"),
@@ -462,4 +492,49 @@ fn format_osc9_gauge(
             role_color(tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)),
         ),
     }
+}
+
+/// Computes the exact `Rect` of the OIA microphone/STT badge inside `status_rect`, if present.
+pub fn oia_mic_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rect> {
+    let badge = pane.stt_badge()?;
+    if status_rect.width == 0 || status_rect.height == 0 {
+        return None;
+    }
+    let title_w = if pane.show_version_badge() {
+        concat!("3270-OIA v", env!("CARGO_PKG_VERSION")).chars().count()
+    } else {
+        "3270-OIA".chars().count()
+    };
+    let state_w = if pane.is_password_prompt() {
+        15
+    } else if pane.vt().is_alternate_screen()
+        || pane.is_holding_inspected()
+        || pane.is_page_holding()
+        || pane.has_foreground_subcommand()
+    {
+        11
+    } else if pane.vt().scrollback_offset() > 0 {
+        10
+    } else {
+        9
+    };
+    let routing_w = if pane.copy_mode().active { 28 } else { 16 };
+    let anchor_w = match pane.prompt().anchor {
+        PromptAnchor::SplitTop | PromptAnchor::SplitBottom => 9,
+        _ => 7,
+    };
+    let mut offset = title_w + 1 + state_w + 1 + routing_w + 2 + anchor_w;
+    if pane.is_read_only() {
+        offset += 2 + 8;
+    }
+    if let Some(remote) = pane.remote_target() {
+        offset += 2 + format!(" 🌐 SSH:{remote} ").chars().count();
+    }
+    if pane.vt().is_recording() {
+        offset += 2 + 7;
+    }
+    offset += 2;
+    let badge_text_w = format!(" {badge} ").chars().count();
+    let badge_x = status_rect.x.saturating_add(offset as u16);
+    Some(Rect::new(badge_x, status_rect.y, badge_text_w as u16, 1))
 }

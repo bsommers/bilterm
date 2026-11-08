@@ -894,6 +894,17 @@ impl GuiWorkspaceRenderer {
                     rgba_bytes: pix.rgba,
                 });
             }
+            if let Some(pane) = pane_ref {
+                super::media_canvas_gui::render_media_canvas_textures(
+                    pane,
+                    pane_snap.canvas_rect,
+                    pane_snap.prompt_rect,
+                    pane_snap.id,
+                    eff_cw,
+                    eff_ch,
+                    &mut surface.images,
+                );
+            }
             for gfx in &pane_snap.graphics {
                 let x_cell = pane_snap.canvas_rect.x.saturating_add(gfx.col);
                 let y_cell = pane_snap.canvas_rect.y.saturating_add(gfx.row);

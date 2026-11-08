@@ -79,6 +79,8 @@ async fn main() -> color_eyre::Result<()> {
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT -t PATH)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH); TCP requires -t/--token-file\n  \
                --http <ADDR>                    With --headless: also serve loopback-only HTTP+SSE (POST /rpc, GET /events, GET /health); random bearer token written 0600 to the private runtime dir\n  \
+               --web-dir <DIR>                  With --http: serve a built SPA (index.html fallback) from DIR, confined under DIR\n  \
+               --cors-origin <ORIGIN>           With --http: allow exactly ORIGIN (scheme://host[:port]) cross-origin (e.g. a Vite dev server)\n  \
                -r, --allow-remote               Allow listening on non-loopback TCP addresses (requires -t/--token-file)\n  \
                -t, --token-file <PATH>          Path to 0600 file containing bearer token (or BILTERM_TOKEN_FILE)\n  \
                -S, --snapshot-dir <PATH>        Directory for confined workspace snapshots (default: XDG state dir)\n  \
@@ -277,7 +279,19 @@ async fn main() -> color_eyre::Result<()> {
                     listener.local_addr()?,
                     tok_path.display()
                 );
-                Some(HttpListen { listener, token: tok.into() })
+                let mut web = bilterm::api::WebServeOptions::default();
+                if let Some(dir) = switch_value(&args, &["--web-dir"]) {
+                    let root = bilterm::api::static_serve::StaticRoot::new(std::path::Path::new(dir))
+                        .map_err(bilterm::error::BiltermError::Config)?;
+                    eprintln!("bilterm: serving web UI from {}", root.path().display());
+                    web.static_root = Some(root);
+                }
+                if let Some(origin) = switch_value(&args, &["--cors-origin"]) {
+                    let o = bilterm::api::static_serve::validate_cors_origin(origin)
+                        .map_err(bilterm::error::BiltermError::Config)?;
+                    web.cors_origin = Some(o);
+                }
+                Some(HttpListen { listener, token: tok.into(), web })
             }
             None => None,
         };
@@ -287,13 +301,13 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
         match shell {
             "bash" => println!(
-                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen --http -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
+                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen --http --web-dir --cors-origin -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
+                "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '--web-dir[Serve SPA from dir (with --http)]:dir:_files -/' '--cors-origin[Allowed CORS origin (with --http)]:origin:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
             ),
             "fish" => println!(
-                "complete -c bilterm -s G -l gui -d 'Launch standalone native GUI window'\ncomplete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -l desktop-file -d 'Print .desktop launcher entry'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
+                "complete -c bilterm -s G -l gui -d 'Launch standalone native GUI window'\ncomplete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -l web-dir -r -d 'Serve SPA from dir (with --http)'\ncomplete -c bilterm -l cors-origin -r -d 'Allowed CORS origin (with --http)'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -l desktop-file -d 'Print .desktop launcher entry'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }

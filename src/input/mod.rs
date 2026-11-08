@@ -15,6 +15,7 @@ pub mod keymap;
 pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
+pub mod mouse_media;
 mod mouse_wm;
 pub mod script_studio;
 pub mod script_studio_keys;

@@ -414,6 +414,9 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Clipboard Viewer (Ctrl+Alt+V)", ":clipboard toggle"),
         ("Script Studio", ":script toggle"),
         ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
+        ("Voice Dictation Toggle (Ctrl+Alt+S)", ":voice toggle"),
+        ("Browser Canvas (Ctrl+Alt+B)", ":browser"),
+        ("Video Canvas (Ctrl+Alt+Y)", ":video"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),
@@ -438,6 +441,11 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Stop Daemon (Ctrl+X D Q)", ":daemon stop"),
         ("Switch Daemon (Ctrl+X D W)", ":daemon switch default"),
         ("Prune Daemons", ":daemon prune"),
+    ]),
+    ("Web", &[
+        ("Web Server Status (Ctrl+X @)", ":web status"),
+        ("Open Web UI", ":web open"),
+        ("Stop Web Server", ":web stop"),
     ]),
 ];
 

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::action::{Action, DrawerPreviewOp};
+use crate::action::{Action, BrowserOp, DrawerPreviewOp, VideoOp, VoiceOp, WebOp};
 use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_list_cmd::AgentsListOp;
@@ -49,8 +49,13 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('p'), Action::PasteClipboard),
     (KeyCode::Char('v'), Action::PasteClipboard),
     (KeyCode::Char(']'), Action::PasteClipboard),
+    // Speech-to-Text Voice Dictation toggle (`Ctrl+X ,`, STT-03)
+    (KeyCode::Char(','), Action::Voice(VoiceOp::Toggle)),
     // Filterable CLIPBOARD viewer window toggle (`Ctrl+X ;`, Phase 57)
     (KeyCode::Char(';'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    // Browser Canvas (leader .) & Video Player Canvas (leader ')
+    (KeyCode::Char('.'), Action::Browser(BrowserOp::Toggle)),
+    (KeyCode::Char('\''), Action::Video(VideoOp::Toggle)),
     (KeyCode::Char('1'), Action::FocusPane(1)),
     (KeyCode::Char('2'), Action::FocusPane(2)),
     (KeyCode::Char('3'), Action::FocusPane(3)),
@@ -74,6 +79,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char(' '), Action::PaletteToggle),
     (KeyCode::Char(':'), Action::PaletteToggle),
     (KeyCode::Char('?'), Action::HelpToggle),
+    (KeyCode::Char('@'), Action::Web(WebOp::Status)),
     (KeyCode::F(1), Action::HelpToggle),
     (KeyCode::Char('i'), Action::InspectorToggle(None)),
     (KeyCode::Char('I'), Action::InspectorToggle(None)),
@@ -222,6 +228,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
+    // Web UI surface status: Ctrl+Alt+W (leader w/W stay ClosePane; Phase 60 UNI-R01)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('w'), Action::Web(WebOp::Status)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('W'), Action::Web(WebOp::Status)),
     // AGENTS list toggle: Ctrl+Alt+N (verified free; D-03).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('n'), Action::AgentsList(AgentsListOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('N'), Action::AgentsList(AgentsListOp::Toggle)),
@@ -231,6 +240,14 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // CLIPBOARD viewer window toggle: Ctrl+Alt+V (Phase 57, CLIP-04)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('v'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('V'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    // Speech-to-Text Voice Dictation toggle: Ctrl+Alt+S (STT-03)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('s'), Action::Voice(VoiceOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('S'), Action::Voice(VoiceOp::Toggle)),
+    // Browser Canvas (Ctrl+Alt+B) & Video Player Canvas (Ctrl+Alt+Y)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('b'), Action::Browser(BrowserOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('B'), Action::Browser(BrowserOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('y'), Action::Video(VideoOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('Y'), Action::Video(VideoOp::Toggle)),
     // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),

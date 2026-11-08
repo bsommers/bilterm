@@ -85,6 +85,7 @@ impl App {
                     }
                 }
                 _ = tick.tick() => {
+                    self.wm.drain_stt_events();
                     if self.poll_all_ptys() {
                         self.needs_redraw = true;
                     }

@@ -44,6 +44,8 @@ export CARGO_BUILD_JOBS="$(detect_cpus)"
 # Covers Linux/POSIX (XDG_*), macOS ($HOME, XDG_*), and Windows/MSYS ($USERPROFILE, $APPDATA, $LOCALAPPDATA).
 VERIFY_STATE="$(mktemp -d "${TMPDIR:-/tmp}/bilterm-verify-state.XXXXXX")"
 trap 'rm -rf "$VERIFY_STATE"' EXIT
+export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
 export XDG_STATE_HOME="$VERIFY_STATE/state"
 export XDG_CONFIG_HOME="$VERIFY_STATE/config"
 export XDG_DATA_HOME="$VERIFY_STATE/data"

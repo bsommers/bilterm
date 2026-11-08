@@ -233,6 +233,11 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:drawer unpin` | | | On-demand visibility: the drawer hides when it is not needed |
 | `:drawer mode float` / `push` | | | Overlay (drawn over the panes) or Push (reflows the panes); `mode` with no argument toggles |
 | `:drawer edge left` / `right` / `top` / `bottom` | | | Dock the drawer to an edge, the same as `:drawer left`, `right`, `top`, `bottom` |
+| `:drawer preview` / `:drawer preview toggle` | `v` (Navigator), `P` (Classic), `Alt+P`, `Ctrl+Alt+P`, `<L> P` | hover row (120 ms), middle-click row, footer `[peek]` | Toggle non-destructive window peek preview |
+| `:drawer preview on` / `:drawer preview off` | `Esc` (off) | mouse-leave drawer (off) | Enable or dismiss the active peek preview |
+| `:drawer preview commit` | `Enter` | left-click row | Commit the previewed pane or session as the active focus |
+| `:drawer preview auto` | | | Toggle hover-to-preview auto mode (`drawer.preview_on_hover`) |
+| `:drawer preview row` / `:drawer preview pane` / `:drawer preview session` | | | Preview a specific 1-based drawer row, pane id (`:drawer preview pane <id>`), or session name (`:drawer preview session <name>`) |
 
 `:drawer size`, `toggle`, `focus`, the dock edges and the pinning modes are unchanged; see [Chapter 3](03-window-manager-and-z-stack.md).
 

@@ -3,6 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
+pub use crate::pane::{BrowserOp, VideoOp};
 use crate::pane::{ExitProtectionPolicy, PaneId, PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
@@ -10,6 +11,8 @@ use crate::ui::glyphs::GlyphPack;
 use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
 use serde::{Deserialize, Serialize};
+
+pub use crate::stt::VoiceOp;
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -251,7 +254,40 @@ pub enum Action {
     Daemon(DaemonSupervisorOp),
     /// `:drawer preview ...` / `:peek ...`: Live window peek & preview pane (`DRW-PEEK-01..03`, Phase 56).
     DrawerPreview(DrawerPreviewOp),
+    /// Speech-to-text dictation operations (`STT-01..03`).
+    Voice(VoiceOp),
+    /// `:browser [open|back|forward|reload|stop|focus|zoom|close]` - Chrome Engine Web Browser Canvas (`WEB-01..02`).
+    Browser(BrowserOp),
+    /// `:video [open|play|pause|toggle|seek|volume|mute|loop|speed|close]` - Video Player Canvas (`VID-01..02`).
+    Video(VideoOp),
+    /// `:web [status|open|port <N>|stop]`: Web UI surface control (`WEB-FE-01..04`, Phase 60).
+    Web(WebOp),
     Quit,
+}
+
+/// Web UI surface operations (`WEB-FE-01..04`, `UNI-R01`, Phase 60).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WebOp {
+    /// Report enabled / port / url / connected clients.
+    Status,
+    /// Open the web UI URL in the system browser (reports the URL when headless or API-driven).
+    OpenBrowser,
+    /// Set the port used by the next start (refused while running).
+    SetPort(u16),
+    /// Stop the running web server from accepting new connections.
+    Stop,
+}
+
+impl WebOp {
+    /// Canonical `:web` colon form.
+    pub fn colon_form(&self) -> String {
+        match self {
+            Self::Status => ":web status".to_string(),
+            Self::OpenBrowser => ":web open".to_string(),
+            Self::SetPort(p) => format!(":web port {p}"),
+            Self::Stop => ":web stop".to_string(),
+        }
+    }
 }
 
 /// Operations for the Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`, Phase 56).
@@ -347,6 +383,7 @@ impl Action {
                 format!(":drawer preview session {name}")
             }
             Self::ScriptStudio(op) => op.colon_form(),
+            Self::Web(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
             Self::ClipboardWindow(op) => op.colon_form(),
@@ -577,6 +614,10 @@ mod tests {
             Action::WindowManage(_) => Some(":window undo"),
             Action::SessionManage(_) => Some(":session undo"),
             Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
+            Action::Web(WebOp::Status) => Some(":web status"),
+            Action::Web(WebOp::OpenBrowser) => Some(":web open"),
+            Action::Web(WebOp::SetPort(_)) => Some(":web port 9000"),
+            Action::Web(WebOp::Stop) => Some(":web stop"),
             Action::DrawerPreview(DrawerPreviewOp::On) => Some(":drawer preview on"),
             Action::DrawerPreview(DrawerPreviewOp::Off) => Some(":drawer preview off"),
             Action::DrawerPreview(DrawerPreviewOp::Toggle) => Some(":drawer preview toggle"),
@@ -587,6 +628,18 @@ mod tests {
             Action::DrawerPreview(DrawerPreviewOp::Session(_)) => {
                 Some(":drawer preview session default")
             }
+            Action::Voice(VoiceOp::Toggle) => Some(":voice toggle"),
+            Action::Voice(VoiceOp::Start { pane_id: None }) => Some(":voice start"),
+            Action::Voice(VoiceOp::Start { pane_id: Some(_) }) => None,
+            Action::Voice(VoiceOp::Stop) => Some(":voice stop"),
+            Action::Voice(VoiceOp::Cancel) => Some(":voice cancel"),
+            Action::Voice(VoiceOp::Status) => Some(":voice status"),
+            Action::Voice(VoiceOp::SetProvider { .. }) => Some(":voice provider openai"),
+            Action::Voice(VoiceOp::ApplyTranscript { .. }) => None,
+            Action::Voice(VoiceOp::UpdateTelemetry { .. }) => None,
+            Action::Voice(VoiceOp::InjectWav { .. }) => None,
+            Action::Browser(_) => Some(":browser"),
+            Action::Video(_) => Some(":video"),
             Action::Quit => Some(":quit"),
         };
 
@@ -832,6 +885,10 @@ mod tests {
             Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
             Action::DaemonSupervisor(DaemonSupervisorOp::List),
             Action::Daemon(DaemonSupervisorOp::List),
+            Action::Web(WebOp::Status),
+            Action::Web(WebOp::OpenBrowser),
+            Action::Web(WebOp::SetPort(9000)),
+            Action::Web(WebOp::Stop),
             Action::DrawerPreview(DrawerPreviewOp::On),
             Action::DrawerPreview(DrawerPreviewOp::Off),
             Action::DrawerPreview(DrawerPreviewOp::Toggle),
@@ -840,6 +897,31 @@ mod tests {
             Action::DrawerPreview(DrawerPreviewOp::Row(0)),
             Action::DrawerPreview(DrawerPreviewOp::Pane(1)),
             Action::DrawerPreview(DrawerPreviewOp::Session("default".to_string())),
+            Action::Voice(VoiceOp::Toggle),
+            Action::Browser(BrowserOp::Toggle),
+            Action::Browser(BrowserOp::Open { url: "https://example.com".to_string(), pane_id: None }),
+            Action::Browser(BrowserOp::Back { pane_id: None }),
+            Action::Browser(BrowserOp::Forward { pane_id: None }),
+            Action::Browser(BrowserOp::Reload { pane_id: None }),
+            Action::Browser(BrowserOp::Stop { pane_id: None }),
+            Action::Browser(BrowserOp::FocusViewport { pane_id: None, focused: Some(true) }),
+            Action::Browser(BrowserOp::Zoom { delta_pct: 10, pane_id: None }),
+            Action::Browser(BrowserOp::Click { x_px: 10, y_px: 10, button: 0, pane_id: None }),
+            Action::Browser(BrowserOp::Scroll { delta_x: 0, delta_y: 10, pane_id: None }),
+            Action::Browser(BrowserOp::Close { pane_id: None }),
+            Action::Video(VideoOp::Toggle),
+            Action::Video(VideoOp::Open { source: "demo://smpte".to_string(), pane_id: None }),
+            Action::Video(VideoOp::Play { pane_id: None }),
+            Action::Video(VideoOp::Pause { pane_id: None }),
+            Action::Video(VideoOp::TogglePlayPause { pane_id: None }),
+            Action::Video(VideoOp::SeekRelative { delta_ms: 5000, pane_id: None }),
+            Action::Video(VideoOp::SeekPercent { pct: 50, pane_id: None }),
+            Action::Video(VideoOp::SeekAbsolute { position_ms: 10000, pane_id: None }),
+            Action::Video(VideoOp::VolumeDelta { delta_pct: 5, pane_id: None }),
+            Action::Video(VideoOp::ToggleMute { pane_id: None }),
+            Action::Video(VideoOp::ToggleLoop { pane_id: None }),
+            Action::Video(VideoOp::SetSpeed { speed_x100: 100, pane_id: None }),
+            Action::Video(VideoOp::Close { pane_id: None }),
             Action::Quit,
         ];
 

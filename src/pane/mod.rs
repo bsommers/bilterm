@@ -1,3 +1,5 @@
+pub mod browser_canvas;
+mod output_tap;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -11,7 +13,9 @@ pub mod prompt_selection;
 pub mod redact;
 pub mod scroll;
 pub mod typography;
+pub mod video_canvas;
 
+pub use browser_canvas::{BrowserCanvasState, BrowserOp};
 pub use canvas_scene::{
     CandlestickBar, CanvasRenderBackend, CanvasSubcellMode, DeclarativePlot, InteractiveImageView,
     PaneCanvasScene, PlotKind, Sprite2D, VectorPrimitive,
@@ -26,6 +30,7 @@ pub use typography::{
     CanvasResolution, FontFamilyPreset, PaneFontOptions, probe_terminal_pixel_size,
     refresh_terminal_pixel_size,
 };
+pub use video_canvas::{VideoCanvasState, VideoOp, VideoPlaybackSnapshot};
 
 use std::path::PathBuf;
 
@@ -97,6 +102,8 @@ pub struct CompositePane {
     captured_masked: u32,
     /// Bytes typed into this pane are mirrored to `remote_input` for the tmux link (Phase 51.1).
     remote_input_tap: bool,
+    /// Opt-in raw output mirror for web clients (`WEB-FE-01`); bounded by `OUTPUT_TAP_CAP`.
+    output_tap: Option<Vec<u8>>,
     /// Tap buffer, bounded by `REMOTE_INPUT_CAP`; drained once per link tick.
     remote_input: Vec<u8>,
     /// Link state banner drawn on the pane's bottom row (Phase 51.1).
@@ -109,6 +116,10 @@ pub struct CompositePane {
     pending_clipboard_records: Vec<(crate::clipboard::ClipboardSource, String)>,
     /// Pending media passthrough events waiting to be drained into `ClipboardRegistry`.
     pending_media_records: Vec<(String, usize)>,
+    /// Live STT status badge rendered in the 3270 OIA status bar (`STT-02`, `STT-03`).
+    stt_badge: Option<String>,
+    pub(crate) browser_canvas: Option<browser_canvas::BrowserCanvasState>,
+    pub(crate) video_canvas: Option<video_canvas::VideoCanvasState>,
 }
 
 impl CompositePane {
@@ -153,12 +164,16 @@ impl CompositePane {
             captured: Vec::new(),
             captured_masked: 0,
             remote_input_tap: false,
+            output_tap: None,
             remote_input: Vec::new(),
             link_banner: None,
             exit_code: None,
             smart_ctrl_v_paste: true,
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
+            stt_badge: None,
+            browser_canvas: None,
+            video_canvas: None,
         }
     }
 
@@ -703,6 +718,7 @@ impl CompositePane {
 
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
+        self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
         self.canvas_scene
@@ -756,6 +772,7 @@ impl CompositePane {
             // Every byte must reach the parser in order: truncating the stream splits escape
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
             self.canvas_scene
@@ -962,6 +979,89 @@ impl CompositePane {
     /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).
     pub fn is_headless(&self) -> bool {
         self.pty.is_none()
+    }
+
+    /// Returns the live STT badge string if active or enabled on this pane.
+    pub fn stt_badge(&self) -> Option<&str> {
+        self.stt_badge.as_deref()
+    }
+
+    /// Sets the live STT badge string displayed on the OIA status bar.
+    pub fn set_stt_badge(&mut self, badge: Option<String>) {
+        self.stt_badge = badge;
+    }
+
+    /// Stages dictated speech text into the FloatingCommandPrompt without executing it.
+    pub fn insert_dictated_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if !self.vt.is_alternate_screen() {
+            self.prompt.force_command_prompt = true;
+            self.prompt.manual_raw_override = false;
+        }
+        let current = self.prompt.text();
+        if !current.is_empty() && !current.ends_with(' ') && !text.starts_with(' ') {
+            self.prompt.insert_char(' ');
+        }
+        self.prompt.insert_str(text);
+    }
+
+    pub fn browser_canvas(&self) -> Option<&browser_canvas::BrowserCanvasState> {
+        self.browser_canvas.as_ref()
+    }
+
+    pub fn browser_canvas_mut(&mut self) -> Option<&mut browser_canvas::BrowserCanvasState> {
+        self.browser_canvas.as_mut()
+    }
+
+    pub fn video_canvas(&self) -> Option<&video_canvas::VideoCanvasState> {
+        self.video_canvas.as_ref()
+    }
+
+    pub fn video_canvas_mut(&mut self) -> Option<&mut video_canvas::VideoCanvasState> {
+        self.video_canvas.as_mut()
+    }
+
+    pub fn open_browser(&mut self, url: &str) {
+        let (cols, rows) = self.vt.size();
+        let width_px = cols.saturating_mul(10).max(320);
+        let height_px = rows.saturating_mul(18).max(240);
+        self.browser_canvas = Some(browser_canvas::BrowserCanvasState::new_cdp_or_synthetic(
+            url, width_px, height_px, self.id,
+        ));
+    }
+
+    pub fn close_browser(&mut self) {
+        self.browser_canvas = None;
+    }
+
+    pub fn open_video(&mut self, source: &str) {
+        let (cols, rows) = self.vt.size();
+        let width_px = cols.saturating_mul(10).max(320);
+        let height_px = rows.saturating_mul(18).max(240);
+        self.video_canvas = Some(video_canvas::VideoCanvasState::new(
+            source, width_px, height_px,
+        ));
+    }
+
+    pub fn close_video(&mut self) {
+        self.video_canvas = None;
+    }
+
+    pub fn tick_media_canvases(&mut self, now_ms: u64) -> bool {
+        let mut changed = false;
+        if let Some(v) = self.video_canvas_mut()
+            && v.tick(now_ms)
+        {
+            changed = true;
+        }
+        if let Some(b) = self.browser_canvas_mut()
+            && b.poll_screencast_frame()
+        {
+            changed = true;
+        }
+        changed
     }
 }
 

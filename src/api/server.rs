@@ -484,10 +484,11 @@ async fn serve_loop<A: RpcAcceptor>(
     http: Option<HttpListen>,
 ) -> Result<()> {
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<RpcRequest>(64);
-    if let Some(h) = http {
+    if let Some(mut h) = http {
+        h.web.bind_plane(&mut plane);
         let tx = req_tx.clone();
         tokio::spawn(async move {
-            if let Err(e) = super::http::serve_http(h.listener, tx, h.token).await {
+            if let Err(e) = super::http::serve_http_with(h.listener, tx, h.token, h.web).await {
                 tracing::warn!(error = %e, "HTTP transport stopped");
             }
         });

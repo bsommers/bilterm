@@ -138,8 +138,12 @@ fn tools_list_only_gains_find() {
             "bilterm_window_manage",
             "bilterm_session_map",
             "bilterm_daemon",
+            "bilterm_web_surface",
             "bilterm_drawer_preview",
             "bilterm_clipboard",
+            "bilterm_voice",
+            "bilterm_browser",
+            "bilterm_video",
         ]
     );
 }

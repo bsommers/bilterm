@@ -94,8 +94,12 @@ impl AutomationControlPlane {
                     "bilterm_agent_mail" => Some(Self::agent_mail_method(&args).unwrap_or("")),
                     "bilterm_window_manage" => Some(Self::window_manage_method(&args).unwrap_or("")),
                     "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
+                    "bilterm_web_surface" => Some(Self::web_surface_method(&args).unwrap_or("")),
                     "bilterm_drawer_preview" => Some("drawer.preview"),
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
+                    "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
+                    "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
+                    "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -106,8 +110,12 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: move, rename, rename_session, select, bulk, or undo".to_string())
                         } else if tool_name == "bilterm_daemon" {
                             Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
+                        } else if tool_name == "bilterm_web_surface" {
+                            Err("invalid 'action' parameter: status, open, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
+                        } else if tool_name == "bilterm_voice" {
+                            Err("missing or invalid 'action' parameter: toggle, start, stop, cancel, status, provider, or inject_wav".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
@@ -303,6 +311,14 @@ impl AutomationControlPlane {
                 ],
             ),
             Self::mcp_tool_schema(
+                "bilterm_web_surface",
+                "Inspect or control the Web UI surface server (status, open browser, set port, stop). Returns enabled, port, url, active_clients, web_dir.",
+                &[
+                    ("action", "string", "Operation: status | open | port | stop (default 'status')"),
+                    ("port", "integer", "TCP port when action='port'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
                 "bilterm_drawer_preview",
                 "Open, close, toggle, commit, or inspect the floating Drawer Window Peek & Live Preview Pane for active, occluded, minimized, background-session, or saved-session windows.",
                 &[
@@ -328,8 +344,78 @@ impl AutomationControlPlane {
                     ("op", "string", "Window operation for action='window': open | close | toggle | pin | dock | float | all | session | window | pinned | media"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_voice",
+                "Control the Speech-to-Text (STT) voice dictation subsystem: toggle, start recording, stop and transcribe, cancel, check status, switch provider, or inject audio.",
+                &[
+                    ("action", "string", "Operation: toggle | start | stop | cancel | status | provider | inject_wav (default 'status')"),
+                    ("pane_id", "integer", "Optional target pane ID"),
+                    ("provider", "string", "Optional provider name for action='provider': openai | ollama | cli | mock"),
+                    ("wav_base64", "string", "Base64-encoded WAV audio data for action='inject_wav'"),
+                    ("wav_hex", "string", "Hex-encoded WAV audio data for action='inject_wav'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_browser",
+                "Open, navigate, or control the Chrome Engine Web Browser Canvas in the active or target pane.",
+                &[
+                    ("action", "string", "Operation: open | back | forward | reload | stop | focus | zoom | close | state | toggle (default 'state')"),
+                    ("url", "string", "URL to navigate to for action='open'"),
+                    ("pane_id", "integer", "Optional target pane ID (defaults to active pane)"),
+                    ("delta_pct", "integer", "Zoom delta percentage for action='zoom' (default 10)"),
+                    ("focused", "boolean", "Focus state for action='focus'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_video",
+                "Open, play, pause, seek, adjust volume, or inspect the Video Player Canvas in the active or target pane.",
+                &[
+                    ("action", "string", "Operation: open | play | pause | toggle | seek | seek_pct | volume | mute | loop | speed | close | state (default 'state')"),
+                    ("source", "string", "Video file path, URL, or demo URI (e.g. 'demo://smpte', 'demo://plasma') for action='open'"),
+                    ("pane_id", "integer", "Optional target pane ID (defaults to active pane)"),
+                    ("delta_secs", "number", "Seek relative delta in seconds for action='seek' (default 5.0)"),
+                    ("pct", "integer", "Seek absolute percentage (0..=100) for action='seek_pct'"),
+                    ("volume_delta", "integer", "Volume delta percent (+/-5) for action='volume'"),
+                    ("speed", "integer", "Speed percentage (100 = 1.0x, 150 = 1.5x) for action='speed'"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_voice` `action` argument -> the `voice.*` RPC method; `None` when unknown.
+    fn voice_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("status");
+        match action {
+            "toggle" => Some("voice.toggle"),
+            "start" => Some("voice.start"),
+            "stop" => Some("voice.stop"),
+            "cancel" => Some("voice.cancel"),
+            "status" => Some("voice.status"),
+            "provider" => Some("voice.provider"),
+            "inject_wav" => Some("voice.inject_wav"),
+            _ => None,
+        }
+    }
+
+    /// `bilterm_browser` `action` argument -> the `browser.*` RPC method.
+    fn browser_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("state");
+        match action {
+            "open" => Some("browser.open"),
+            "state" => Some("browser.state"),
+            _ => Some("browser.control"),
+        }
+    }
+
+    /// `bilterm_video` `action` argument -> the `video.*` RPC method.
+    fn video_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("state");
+        match action {
+            "open" => Some("video.open"),
+            "state" => Some("video.state"),
+            _ => Some("video.control"),
+        }
     }
 
     /// `bilterm_clipboard` `action` argument -> the `clipboard.*` RPC method; `None` when unknown.
@@ -344,6 +430,17 @@ impl AutomationControlPlane {
             "delete" => Some("clipboard.delete"),
             "clear" => Some("clipboard.clear"),
             "window" => Some("clipboard.window"),
+            _ => None,
+        }
+    }
+
+    /// `bilterm_web_surface` `action` argument -> the `web.*` RPC method; `None` when unknown.
+    fn web_surface_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("status") {
+            "status" => Some("web.status"),
+            "open" => Some("web.open"),
+            "port" => Some("web.port"),
+            "stop" => Some("web.stop"),
             _ => None,
         }
     }

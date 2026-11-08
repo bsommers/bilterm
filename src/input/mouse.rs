@@ -188,6 +188,12 @@ pub fn handle_mouse_event(
         && row >= prompt_rect.y
         && row < prompt_rect.y + prompt_rect.height;
 
+    if in_canvas
+        && let Some(act) = super::mouse_media::handle_media_canvas_mouse(pane, mouse, canvas_rect, in_prompt)
+    {
+        return Ok(act);
+    }
+
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             // Ctrl+LeftClick on OutputCanvas: check for URL at clicked cell and yank via OSC 52 (VAL-03)
@@ -896,6 +902,23 @@ pub fn handle_wm_mouse_event(
         && pane_mouse.row == pane_inner.y + pane_inner.height.saturating_sub(1)
         && pane_mouse.column >= pane_inner.x
         && pane_mouse.column < pane_inner.x + pane_inner.width;
+
+    if on_pane_status_bar && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+        let status_rect = Rect::new(
+            pane_inner.x,
+            pane_inner.y + pane_inner.height.saturating_sub(1),
+            pane_inner.width,
+            1,
+        );
+        if let Some(pane) = wm.pane_by_focus(hit_focus)
+            && let Some(mic_rect) = crate::ui::oia::oia_mic_badge_rect(pane, status_rect)
+            && pane_mouse.column >= mic_rect.x
+            && pane_mouse.column < mic_rect.x + mic_rect.width
+        {
+            let _ = wm.apply(crate::action::Action::Voice(crate::action::VoiceOp::Toggle));
+            return Ok(AppAction::Handled);
+        }
+    }
 
     let auto_copy = wm.config().copy_on_select;
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {

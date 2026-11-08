@@ -1,6 +1,90 @@
-# Session Checkpoint — 2026-11-07
+# Session Checkpoint — 2026-11-08
 
-## Latest: Phases 56 & 57 Executed and Verified in Parallel Subagent Trees, 2026-11-07
+**Status:** COMPLETE — Phases 58, 59, and 60 integrated on `feat/phases-58-59-60` (`PASS 135/135 71s`, `GOLDENS OK 11`)
+
+## 1. Goal & User Decisions (Verbatim)
+- **User Request (Verbatim):**
+  `"Integrate feat/phase-58 (a31d0cf), feat/phase-59 (7304993), and feat/phase-60 (ea0aea3) onto a unified branch feat/phases-58-59-60 in /home/bill/src/ai/bilterm, verify all tests and architectural ceilings, and update the planning/checkpoint documents."`
+
+## 2. Integrated Phases & Accomplishments
+- **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`)**:
+  - Independent zero-bloat `src/stt/` module supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama multimodal/audio, and local CLI subprocess pipes.
+  - Two-tier cross-platform audio capture (subprocess pipe default, opt-in `cpal`), push-to-talk, VAD, prompt buffer staging, and OIA `[🎙 REC]` status bar telemetry.
+  - Surface uniformity (`UNI-R01`): leader `','`, `Ctrl+Alt+S`, `:voice` commands, JSON-RPC `voice.*`, MCP `bilterm_voice`.
+- **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`)**:
+  - Embedded Chromium engine canvas via CDP Screencast frame-sink under private `0700` profile sandboxing.
+  - Interactive browser navigation: mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, and adaptive TUI fallback.
+  - Embedded 60fps RGBA hardware-accelerated video player canvas driven by `ffmpeg` subprocess pipe with monotonic audio sync.
+  - On-screen transport controls (play/pause, seek bar, volume, speed, loop), Borland OIA status bar integration.
+  - Surface uniformity (`UNI-R01`): leader `'.'` (browser) and leader `'\''` (video), `Ctrl+Alt+B` / `Ctrl+Alt+Y`, `:browser` and `:video` commands, JSON-RPC `browser.*` and `video.*`, MCP `bilterm_browser` and `bilterm_video`.
+- **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)**:
+  - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
+  - Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
+  - Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
+  - `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers.
+  - Surface uniformity (`UNI-R01`): leader `'@'`, `Ctrl+Alt+W`, `:web` commands, JSON-RPC `web.*` / `workspace.view_model`, MCP `bilterm_web_surface`.
+
+## 3. Working-Tree & Verification State
+- **Branch:** `feat/phases-58-59-60` (unified merge of `feat/phase-58`, `feat/phase-59`, `feat/phase-60`).
+- **Verification:** `bash scripts/verify.sh` -> `PASS 135/135 71s`; `bash scripts/check_classic_goldens.sh` -> `GOLDENS OK 11`.
+- **Architectural Ceilings (`ARCH-R04`)**:
+  - Top file line counts: `src/action.rs` (1133), `src/pane/mod.rs` (1069), `src/wm/mod.rs` (1048), `src/colon_command/parse_visual.rs` (1038), `src/wm/layout_profile.rs` (1030), `src/colon_command/execute_wm.rs` (1014).
+  - All files in `src/**/*.rs` strictly under 1180 lines (backstop: 1200 lines).
+  - `handle_wm_key_event` is 8 lines (limit <= 80 lines).
+  - Total MCP tools: 24 tools.
+  - TopMenu item counts updated and verified.
+
+## 4. Exact Next Steps
+- Fast-forward local `main` to `feat/phases-58-59-60`.
+- Open unified PR for Phases 58, 59, and 60.
+
+## Latest: Phase 58, 59, 60 Integration Complete, 2026-11-08
+- Merged `feat/phase-58`, `feat/phase-59`, `feat/phase-60` into `feat/phases-58-59-60`.
+- Verified `PASS 135/135 71s` and `GOLDENS OK 11`.
+
+## 2. Dead Ends & Lessons Recorded
+- **`src/clipboard.rs::classify_mime_targets` macOS/Windows dead-code error in CI:**
+  - *What failed:* `classify_mime_targets` had `#[cfg(not(test))]` while its caller `os_probe_clipboard_mime` was `#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]`, causing `macos-latest` clippy (`-D warnings`) to fail on PR #31.
+  - *Resolution:* Updated `classify_mime_targets` attribute to `#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]` in `2f069bf`; all Ubuntu & macOS CI checks passed and PR #31 merged as `0f11522`.
+- **Classic Drawer `v` Key Conflict (Phase 56):**
+  - *What failed:* Binding `v` to `DrawerPreviewOp::Toggle` in `Classic` drawer broke `drawer_split_keys_create_windows_and_report_ids` (`tests/input_modal_wm_coverage.rs`), which tests `v`, `|`, `%` as vertical split keys in Classic drawer.
+  - *Resolution:* Kept `v` as vertical split in Classic drawer (`src/input/modal.rs`), bound `P` in Classic drawer and `v` in Navigator drawer (`src/input/drawer_navigator.rs`) to `DrawerPreviewOp::Toggle`.
+- **`pane` Layer DAG Violation (Phase 57):**
+  - *What failed:* `src/pane/mod.rs` imported `crate::wm::clipboard_registry::ClipboardSource`, failing `tests/vt_worker_and_snapshot_seam.rs`.
+  - *Resolution:* Defined `ClipboardSource` in `src/clipboard.rs` and re-exported it in `src/wm/clipboard_registry.rs`.
+
+## 3. Working-Tree & Background-Process State
+- **Branch:** `main` (fast-forwarded to `origin/main` `0f11522` + Phase 60 planning commit).
+- **Subagents / Background Processes:** 0 running subagents; 0 background tasks; all temporary `/tmp/bilterm-phase56` and `/tmp/bilterm-phase57` worktrees removed.
+- **Verification Baseline:** `bash scripts/verify.sh` -> `PASS 129/129`; `bash scripts/check_classic_goldens.sh` -> `GOLDENS OK 11`.
+- **Planning Artifacts Ready to Execute:**
+  - **Phase 58 (`STT-01..03`):** `.planning/phases/58-speech-to-text-spike-and-plan/{58-RESEARCH-SPIKE.md,58-ARCHITECTURE-ADR.md,58-01-PLAN.md,58-02-PLAN.md}`
+  - **Phase 59 (`WEB-01..02`, `VID-01..02`):** `.planning/phases/59-browser-and-video-canvas-spike/{59-RESEARCH-SPIKE.md,59-ARCHITECTURE-ADR.md,59-01-PLAN.md,59-02-PLAN.md}`
+  - **Phase 60 (`WEB-FE-01..04`):** `.planning/phases/60-web-frontend-surface-and-protocol-bridge/{60-RESEARCH-SPIKE.md,60-ARCHITECTURE-ADR.md,60-01-PLAN.md,60-02-PLAN.md}`
+
+## 4. Authorizations & Coordination Notes
+- `origin/main` has GitHub branch protection enabled; all changes to `origin/main` go through PRs (`gh pr create` -> CI pass -> `gh pr merge`).
+- When coordinating with the Claude Code session running in Herdr on this repo (or `/home/bill/src/ui/agent-manager-fe`), use isolated `git worktree` directories with separate `CARGO_TARGET_DIR` paths so neither agent contends on `.git/index.lock` or `target/`.
+
+## 5. Exact Next Step / Command
+- Resume from `.planning/CHECKPOINT.md` (and `docs/CHECKPOINT.md`) and execute **Phases 58, 59, and 60** in parallel subagent worktrees (and/or coordinate with the Claude Code session in Herdr for `agent-manager-fe` frontend integration):
+  ```bash
+  bash scripts/verify.sh --status
+  ```
+
+## Latest: Phase 56 & 57 Complete (`80994fb` / `2f069bf`, PR #31 `0f11522`) & Phase 60 Planned, 2026-11-08
+- Marked **Phase 56 (`DRW-PEEK-01..03`)** and **Phase 57 (`CLIP-01..04`)** as **COMPLETE**:
+  - Commits: `80994fb` / `2f069bf` merged via PR #31 (`0f11522`) on `origin/main`.
+  - Verification: `PASS 129/129`, `GOLDENS OK 11`, PR #31 merged.
+  - Phase 56: Transient non-destructive floating drawer preview pane across Classic and Navigator drawer styles with zero `SIGWINCH`.
+  - Phase 57: MIME-aware `Ctrl+V` bracketed paste fix for Herdr/Claude Code, multi-session tagged `ClipboardRegistry` with secret redaction, and filterable floating `CLIPBOARD` viewer window.
+- Planned **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** in `.planning/phases/60-web-frontend-surface-and-protocol-bridge/`:
+  - `WEB-FE-01`: RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1 (`hello`/`hello_ack`, `agent:init_list`, `agent:output` delta streaming with `seq`/`resumeFrom`, `agent:input`/`resize`/`create`/`kill`/`update`/`broadcast`/`history`/`approve`).
+  - `WEB-FE-02`: Atomic `workspace.view_model` RPC & REST endpoints (`GET /agents`, `GET /agents/:id`, `GET /logs/:id`, `POST /search`, `GET /tokens.css` exporting Phase 45 `DesignTokens` as CSS custom properties).
+  - `WEB-FE-03`: Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
+  - `WEB-FE-04`: `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers, and full `UNI-R01` surface parity (`:web` command, RPC `workspace.view_model`, MCP `bilterm_web_surface`).
+
+## Previous: Phases 56 & 57 Executed and Verified in Parallel Subagent Trees, 2026-11-07
 - Completed and merged **Phase 56 (`DRW-PEEK-01..03`: Drawer Window Peek & Live Preview Pane)** and **Phase 57 (`CLIP-01..04`: Smart Clipboard Paste Fix & Filterable Clipboard Viewer Window)**:
   - **Phase 56 Implementation & Tests**: `src/wm/drawer/preview.rs`, `src/ui/drawer_preview.rs`, `:drawer preview` / `:peek`, JSON-RPC `drawer.preview`, MCP `bilterm_drawer_preview`, `tests/phase56_drawer_preview_state.rs`, `tests/phase56_drawer_preview_render.rs`, `tests/phase56_drawer_preview_uniformity.rs`.
   - **Phase 57 Implementation & Tests**: MIME-aware `Ctrl+V` paste in `RawPtyPassthrough` / `ALT_SCREEN` (fixes Herdr / Claude Code `"No image or video found in clipboard"`), `Shift+RightClick`/`Shift+MiddleClick` SGR mouse bypass, inbound `OSC 52` decoding, `src/wm/clipboard_registry.rs`, `src/wm/clipboard_window.rs`, `src/ui/clipboard_window_{ui,gui}.rs`, `:clipboard`/`:clips`, JSON-RPC `clipboard.*`, MCP `bilterm_clipboard`, `tests/phase57_clipboard_paste_and_viewer.rs`.

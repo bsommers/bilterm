@@ -29,6 +29,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_daemon::parse_daemon_colon_command(head, &parts) {
         return Some(res);
     }
+    if let Some(res) = super::parse_web::parse_web_command(head, &parts) {
+        return Some(res);
+    }
     if let Some(res) = super::parse_script::parse_script_colon_command(head, &parts, rest) {
         return Some(res);
     }
@@ -37,11 +40,15 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     {
         return Some(res);
     }
+    if let Some(res) = super::parse_media::parse_media_colon_command(head, &parts, rest) {
+        return Some(res);
+    }
     if let Some(res) = parse_visual_colon_command(head, &parts) {
         return Some(res);
     }
 
     match head {
+        "voice" | "stt" => super::parse_voice::parse_voice_colon_command(head, &parts),
         "prompt" => match parts.get(1).copied() {
             Some("top") => Some(Ok(ColonCommand::PromptTop)),
             Some("bottom") => Some(Ok(ColonCommand::PromptBottom)),

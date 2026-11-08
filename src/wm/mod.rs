@@ -33,6 +33,7 @@ pub mod session_map;
 pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
+pub mod stt_ops;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod traffic;
@@ -224,6 +225,8 @@ pub struct WindowManager {
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
     pub(crate) daemon_state: crate::daemon::DaemonServerState,
+    /// Shared web surface handle (`WEB-FE-01..04`, Phase 60); clones share state with the HTTP/WS server.
+    pub(crate) web_surface: crate::api::web_surface::WebSurfaceState,
     /// TRON Master Control Program (`MCP`) root terminal state (`MCP-01..02`).
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
@@ -239,6 +242,10 @@ pub struct WindowManager {
     pub(crate) tui_cell_grid_mode: bool,
     /// Sub-cell mouse pixel hint `(px, py, cell_width_px, cell_height_px)` from native GUI windows (`--gui`).
     pub(crate) mouse_pixel_hint: Option<(u32, u32, u16, u16)>,
+    /// Live speech-to-text status and recording telemetry (`STT-02`, `STT-03`).
+    pub(crate) stt_status: crate::stt::SttUiStatus,
+    /// Handle to the background speech-to-text worker thread.
+    pub(crate) stt_handle: Option<crate::stt::worker::SttHandle>,
 }
 
 impl WindowManager {
@@ -314,6 +321,7 @@ impl WindowManager {
             clipboard_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
+            web_surface: crate::api::web_surface::WebSurfaceState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
             layout_profiles_mem: BTreeMap::new(),
@@ -322,6 +330,8 @@ impl WindowManager {
             window_manage: window_manage::WindowManageState::default(),
             tui_cell_grid_mode: false,
             mouse_pixel_hint: None,
+            stt_status: crate::stt::SttUiStatus::default(),
+            stt_handle: None,
         }
     }
 
@@ -489,6 +499,11 @@ impl WindowManager {
     pub fn pane_mut(&mut self, id: PaneId) -> Option<&mut CompositePane> { self.panes.get_mut(&id) }
     pub fn panes(&self) -> &BTreeMap<PaneId, CompositePane> { &self.panes }
     pub fn panes_mut(&mut self) -> &mut BTreeMap<PaneId, CompositePane> { &mut self.panes }
+    pub fn stt_status(&self) -> &crate::stt::SttUiStatus { &self.stt_status }
+    pub fn stt_status_mut(&mut self) -> &mut crate::stt::SttUiStatus { &mut self.stt_status }
+    pub fn drain_stt_events(&mut self) { stt_ops::drain_stt_events(self); }
+    pub fn sync_stt_badges(&mut self) { stt_ops::sync_stt_badges(self); }
+    pub fn ensure_stt_worker(&mut self) -> Option<&mut crate::stt::worker::SttHandle> { stt_ops::ensure_stt_worker(self) }
     pub fn layout_mode(&self) -> WorkspaceLayoutMode { self.layout_mode }
     pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) {
         self.layout_mode = mode;

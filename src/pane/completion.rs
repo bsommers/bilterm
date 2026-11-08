@@ -79,6 +79,22 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":deck", &["next", "prev"]),
     (":arrange", &["grid", "columns", "rows", "main-side", "main-top", "stack-grid", "float-grid"]),
     (":auto-arrange", &[]),
+    (
+        ":browser",
+        &["open ", "back", "forward", "reload", "stop", "focus", "zoom ", "close", "toggle"],
+    ),
+    (
+        ":bcanvas",
+        &["open ", "back", "forward", "reload", "stop", "focus", "zoom ", "close", "toggle"],
+    ),
+    (
+        ":video",
+        &["open ", "play", "pause", "toggle", "seek ", "volume ", "mute", "loop", "speed ", "close"],
+    ),
+    (
+        ":vcanvas",
+        &["open ", "play", "pause", "toggle", "seek ", "volume ", "mute", "loop", "speed ", "close"],
+    ),
     (":focus", &["1", "2", "3", "4"]),
     (":zoom", &[]),
     (":close", &[]),
@@ -666,7 +682,10 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":more", &[]),
     (":trigger", &["add ", "clear"]),
     (":notifications", &["clear"]),
+    (":web", &["status", "open", "port ", "stop"]),
     (":daemon", &["list", "status", "start", "stop", "switch", "prune"]),
+    (":voice", &["toggle", "start", "stop", "cancel", "status", "provider "]),
+    (":stt", &["toggle", "start", "stop", "cancel", "status", "provider "]),
     (":quit", &[]),
     (":quit!", &[]),
     (":q", &[]),

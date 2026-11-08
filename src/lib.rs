@@ -14,6 +14,7 @@ pub mod pane;
 pub mod pty;
 pub mod remote;
 pub mod secure_fs;
+pub mod stt;
 pub mod tmux;
 pub mod ui;
 pub mod vt;

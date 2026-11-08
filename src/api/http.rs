@@ -1,13 +1,19 @@
 //! Opt-in loopback HTTP/1.1 + SSE transport mirroring the JSON-RPC control plane (`bilterm --http 127.0.0.1:PORT`).
 //!
-//! Routes (every route requires `Authorization: Bearer <token>`):
-//! - `GET /health`  -> `{"ok":true,"version":".."}`
+//! Bearer-authenticated routes (`Authorization: Bearer <token>`):
+//! - `GET /health`  -> `{ok,version,contract,epoch,backends,agents}` (`@agent-manager/protocol` health)
 //! - `POST /rpc`    -> body is a JSON-RPC 2.0 request; reply is the same JSON-RPC response
 //!   (dispatched through the SAME `AutomationControlPlane` handler as the Unix/TCP server).
 //! - `GET /events`  -> `text/event-stream`, fed by `events.poll` (drain) on the same plane.
+//! - `/api/*`       -> protocol REST adapters (`http_web::api_route`).
+//!
+//! Browser-facing routes (Phase 60, no bearer header; Host/Origin checks still apply):
+//! - `GET /ws` (token via header, `?token=` or `hello.token`), `GET /tokens.css`,
+//!   and static `--web-dir` files with SPA fallback.
 //!
 //! Security: loopback-only bind, constant-time token compare, Host/Origin checks (DNS-rebinding defence),
-//! no CORS headers, 1 MiB body cap, 16 KiB header cap, 64 header lines, read timeout, connection cap.
+//! CORS only for the single `--cors-origin`, 1 MiB body cap, 16 KiB header cap, 64 header lines,
+//! read timeout, connection cap.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,8 +23,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot};
 
 use super::agent_wait::{AgentWaiters, WAIT_TICK};
+pub use super::http_web::WebServeOptions;
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
+use super::static_serve::{cors_headers, serve_static_asset};
 use crate::error::{BiltermError, Result};
 
 /// One queued JSON-RPC request line plus its reply channel (shared with the Unix/TCP server loop).
@@ -28,7 +36,11 @@ pub type RpcRequest = (String, oneshot::Sender<String>);
 pub struct HttpListen {
     pub listener: tokio::net::TcpListener,
     pub token: Arc<str>,
+    /// Web-surface options (`--web-dir`, `--cors-origin`, shared surface state).
+    pub web: WebServeOptions,
 }
+
+const STOP_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub const MAX_HTTP_BODY_BYTES: usize = 1024 * 1024;
 pub const MAX_HTTP_HEAD_BYTES: usize = 16 * 1024;
@@ -91,14 +103,38 @@ pub async fn serve_http(
     rpc_tx: mpsc::Sender<RpcRequest>,
     token: Arc<str>,
 ) -> Result<()> {
-    if !listener.local_addr()?.ip().is_loopback() {
+    serve_http_with(listener, rpc_tx, token, WebServeOptions::default()).await
+}
+
+/// [`serve_http`] with web-surface options. Returns `Ok(())` after `:web stop` / `web.stop`.
+pub async fn serve_http_with(
+    listener: tokio::net::TcpListener,
+    rpc_tx: mpsc::Sender<RpcRequest>,
+    token: Arc<str>,
+    opts: WebServeOptions,
+) -> Result<()> {
+    let local = listener.local_addr()?;
+    if !local.ip().is_loopback() {
         return Err(BiltermError::Config(
             "refusing to serve HTTP on a non-loopback listener".to_string(),
         ));
     }
+    let opts = Arc::new(opts);
+    opts.surface.mark_listening(local.port());
     let permits = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
+    let mut stop_tick = tokio::time::interval(STOP_POLL_INTERVAL);
     loop {
-        let (stream, peer) = match listener.accept().await {
+        let accepted = tokio::select! {
+            a = listener.accept() => a,
+            _ = stop_tick.tick() => {
+                if opts.surface.is_stop_requested() {
+                    opts.surface.mark_stopped();
+                    return Ok(());
+                }
+                continue;
+            }
+        };
+        let (stream, peer) = match accepted {
             Ok(x) => x,
             Err(e) => {
                 tracing::warn!(error = %e, "HTTP accept failed");
@@ -109,10 +145,10 @@ pub async fn serve_http(
             drop(stream);
             continue;
         };
-        let (tx, token) = (rpc_tx.clone(), token.clone());
+        let (tx, token, opts) = (rpc_tx.clone(), token.clone(), opts.clone());
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(e) = handle_connection(stream, tx, token).await {
+            if let Err(e) = handle_connection(stream, tx, token, opts).await {
                 tracing::debug!(%peer, error = %e, "HTTP connection closed");
             }
         });
@@ -122,11 +158,22 @@ pub async fn serve_http(
 /// Serves HTTP with a dedicated plane (standalone / tests); the plane is owned by this loop.
 pub async fn serve_http_standalone(
     listener: tokio::net::TcpListener,
-    mut plane: AutomationControlPlane,
+    plane: AutomationControlPlane,
     token: Arc<str>,
 ) -> Result<()> {
+    serve_http_standalone_with(listener, plane, token, WebServeOptions::default()).await
+}
+
+/// [`serve_http_standalone`] with web-surface options bound to `plane`.
+pub async fn serve_http_standalone_with(
+    listener: tokio::net::TcpListener,
+    mut plane: AutomationControlPlane,
+    token: Arc<str>,
+    mut opts: WebServeOptions,
+) -> Result<()> {
+    opts.bind_plane(&mut plane);
     let (tx, mut rx) = mpsc::channel::<RpcRequest>(64);
-    let server = serve_http(listener, tx, token);
+    let server = serve_http_with(listener, tx, token, opts);
     tokio::pin!(server);
     let mut waiters = AgentWaiters::default();
     let mut wait_tick = tokio::time::interval(WAIT_TICK);
@@ -160,6 +207,7 @@ struct HttpError(u16, &'static str);
 fn reason(code: u16) -> &'static str {
     match code {
         200 => "OK",
+        204 => "No Content",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
@@ -179,13 +227,33 @@ async fn write_response<W: AsyncWriteExt + Unpin>(
     extra: &str,
     body: &str,
 ) -> std::io::Result<()> {
+    let r = Reply { code, content_type: "application/json", cache_control: "no-store", extra, head_only: false };
+    write_typed(w, &r, body.as_bytes()).await
+}
+
+/// Response metadata for [`write_typed`].
+struct Reply<'a> {
+    code: u16,
+    content_type: &'a str,
+    cache_control: &'a str,
+    extra: &'a str,
+    head_only: bool,
+}
+
+async fn write_typed<W: AsyncWriteExt + Unpin>(w: &mut W, r: &Reply<'_>, body: &[u8]) -> std::io::Result<()> {
     let head = format!(
-        "HTTP/1.1 {code} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n{extra}\r\n",
-        reason(code),
-        body.len()
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: {}\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n{}\r\n",
+        r.code,
+        reason(r.code),
+        r.content_type,
+        body.len(),
+        r.cache_control,
+        r.extra
     );
     w.write_all(head.as_bytes()).await?;
-    w.write_all(body.as_bytes()).await?;
+    if !r.head_only {
+        w.write_all(body).await?;
+    }
     w.flush().await
 }
 
@@ -306,8 +374,9 @@ fn is_loopback_host(h: &str) -> bool {
             .is_ok_and(|ip| ip.is_loopback())
 }
 
-/// DNS-rebinding / cross-origin defence: Host must be loopback; any Origin must be same-origin.
-fn check_origin(req: &Request) -> std::result::Result<(), HttpError> {
+/// DNS-rebinding / cross-origin defence: Host must be loopback; any Origin must be same-origin
+/// or exactly the configured `--cors-origin`.
+fn check_origin(req: &Request, cors_origin: Option<&str>) -> std::result::Result<(), HttpError> {
     let host = req
         .header("host")
         .ok_or(HttpError(403, "missing Host header"))?;
@@ -317,7 +386,8 @@ fn check_origin(req: &Request) -> std::result::Result<(), HttpError> {
     if let Some(origin) = req.header("origin") {
         let ok = origin
             .strip_prefix("http://")
-            .is_some_and(|o| o.eq_ignore_ascii_case(host));
+            .is_some_and(|o| o.eq_ignore_ascii_case(host))
+            || cors_origin.is_some_and(|c| c.eq_ignore_ascii_case(origin));
         if !ok {
             return Err(HttpError(403, "cross-origin request refused"));
         }
@@ -343,10 +413,57 @@ async fn rpc_call(tx: &mpsc::Sender<RpcRequest>, line: String) -> Option<String>
     r_rx.await.ok()
 }
 
+fn is_api_path(path: &str) -> bool {
+    matches!(path, "/health" | "/rpc" | "/events") || path == "/api" || path.starts_with("/api/")
+}
+
+/// Browser-facing routes served before bearer auth. Returns the stream back when not handled.
+async fn serve_pre_auth(
+    mut stream: tokio::net::TcpStream,
+    req: &Request,
+    rpc_tx: &mpsc::Sender<RpcRequest>,
+    token: &Arc<str>,
+    opts: &WebServeOptions,
+    cors: &str,
+) -> std::io::Result<Option<tokio::net::TcpStream>> {
+    let path = req.path.split('?').next().unwrap_or("");
+    let (method, head_only) = (req.method.as_str(), req.method == "HEAD");
+    if method == "OPTIONS" {
+        let code = if cors.is_empty() { 405 } else { 204 };
+        let r = Reply { code, content_type: "text/plain", cache_control: "no-store", extra: cors, head_only: false };
+        write_typed(&mut stream, &r, b"").await?;
+        return Ok(None);
+    }
+    if method == "GET" && path == "/ws" {
+        let header_authed = check_auth(req, token).is_ok();
+        let header = |n: &str| req.header(n).map(str::to_string);
+        super::http_web::upgrade(stream, header, &req.path, header_authed, rpc_tx.clone(), token.clone(), opts)
+            .await?;
+        return Ok(None);
+    }
+    if matches!(method, "GET" | "HEAD") && path == "/tokens.css" {
+        let Some(css) = super::http_web::tokens_css(rpc_tx).await else {
+            write_response(&mut stream, 503, cors, &err_body("control plane unavailable")).await?;
+            return Ok(None);
+        };
+        let r = Reply { code: 200, content_type: "text/css; charset=utf-8", cache_control: "no-cache", extra: cors, head_only };
+        write_typed(&mut stream, &r, css.as_bytes()).await?;
+        return Ok(None);
+    }
+    if let Some(root) = opts.static_root.as_ref().filter(|_| matches!(method, "GET" | "HEAD") && !is_api_path(path)) {
+        let a = serve_static_asset(root, &req.path);
+        let r = Reply { code: a.status, content_type: a.content_type, cache_control: a.cache_control, extra: cors, head_only };
+        write_typed(&mut stream, &r, &a.body).await?;
+        return Ok(None);
+    }
+    Ok(Some(stream))
+}
+
 async fn handle_connection(
     mut stream: tokio::net::TcpStream,
     rpc_tx: mpsc::Sender<RpcRequest>,
     token: Arc<str>,
+    opts: Arc<WebServeOptions>,
 ) -> std::io::Result<()> {
     let req = match tokio::time::timeout(READ_TIMEOUT, read_request(&mut stream)).await {
         Err(_) => return write_response(&mut stream, 408, "", &err_body("request timeout")).await,
@@ -355,26 +472,26 @@ async fn handle_connection(
         }
         Ok(Ok(r)) => r,
     };
-    if let Err(HttpError(code, msg)) = check_origin(&req).and_then(|()| check_auth(&req, &token)) {
-        let extra = if code == 401 {
-            "WWW-Authenticate: Bearer\r\n"
-        } else {
-            ""
-        };
-        return write_response(&mut stream, code, extra, &err_body(msg)).await;
+    if let Err(HttpError(code, msg)) = check_origin(&req, opts.cors_origin.as_deref()) {
+        return write_response(&mut stream, code, "", &err_body(msg)).await;
+    }
+    let cors = cors_headers(opts.cors_origin.as_deref());
+    let Some(mut stream) = serve_pre_auth(stream, &req, &rpc_tx, &token, &opts, &cors).await? else {
+        return Ok(());
+    };
+    if let Err(HttpError(code, msg)) = check_auth(&req, &token) {
+        let extra = format!("WWW-Authenticate: Bearer\r\n{cors}");
+        return write_response(&mut stream, code, &extra, &err_body(msg)).await;
     }
     let path = req.path.split('?').next().unwrap_or("");
+    if path == "/api" || path.starts_with("/api/") {
+        let (code, body) = super::http_web::api_route(&rpc_tx, &req.method, &req.path, &req.body).await;
+        return write_response(&mut stream, code, &cors, &body).await;
+    }
     match (req.method.as_str(), path) {
         ("GET", "/health") => {
-            let body = JsonValue::obj([
-                ("ok", JsonValue::Bool(true)),
-                (
-                    "version",
-                    JsonValue::String(env!("CARGO_PKG_VERSION").to_string()),
-                ),
-            ])
-            .to_json_string();
-            write_response(&mut stream, 200, "", &body).await
+            let (code, body) = super::http_web::api_route(&rpc_tx, "GET", "/api/health", &[]).await;
+            write_response(&mut stream, code, &cors, &body).await
         }
         ("POST", "/rpc") => {
             let Ok(text) = std::str::from_utf8(&req.body) else {
@@ -385,7 +502,7 @@ async fn handle_connection(
                 return write_response(&mut stream, 400, "", &err_body("empty body")).await;
             }
             match rpc_call(&rpc_tx, line.to_string()).await {
-                Some(resp) => write_response(&mut stream, 200, "", resp.trim_end()).await,
+                Some(resp) => write_response(&mut stream, 200, &cors, resp.trim_end()).await,
                 None => {
                     write_response(&mut stream, 503, "", &err_body("control plane unavailable"))
                         .await
