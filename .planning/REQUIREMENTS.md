@@ -255,6 +255,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [x] **WEB-FE-03**: Multi-client `ClientViewState` registry (`src/api/client_view.rs`) decoupling Web client viewport, focus, scrollback offset, and overlays from local TUI/GUI `WindowManager` state.
 - [x] **WEB-FE-04**: `SEC-R01`-confined static SPA serving (`--web-dir` for `agent-manager-fe/dist` with SPA `index.html` fallback), opt-in `--cors-origin` for local Vite dev servers, and full `UNI-R01` surface parity (`:web` command, RPC `workspace.view_model`, MCP `bilterm_web_surface`).
 
+## Window & Drawer Regression Fixes (Phase 61)
+
+- [ ] **FIX-01**: In Classic (legacy) drawer mode, `:drawer rows 2` renders two-line rows again (regression from ~2026-11-05), and the current row-lines setting is discoverable/toggleable from the drawer itself.
+- [ ] **FIX-02**: Menu `Window -> Zoom` toggles zoom correctly; while zoomed, mouse and key input route only to the zoomed pane and never fall through to panes/windows beneath.
+- [ ] **FIX-03**: Switching or toggling between stacked windows preserves each window/pane's prompt type, input mode, and current UI state (no cross-window state leakage or reset).
+
+## Copy Mode Ergonomics & Nested-TUI Copy Fix (Phase 62)
+
+- [ ] **COPY-01**: Copying text from panes running nested TUIs with alt-screen + mouse tracking (e.g. `herdr`, Claude Code) works reliably via mouse (modifier override) and keyboard copy mode.
+- [ ] **COPY-02**: Copy mode is easy to discover and use: one-key entry/exit, on-screen key hints, arrow/vi/emacs selection, word/line/block modes, search, copy-on-release, and visual confirmation.
+
+## Keyboard-First Navigation & Cross-OS Hotkey Harmonization (Phase 63)
+
+- [ ] **KEY-01**: Pure-keyboard navigation of windows, panes, drawers, and menus in both TUI and GUI without typing long colon commands (modal window mode + leader key with which-key hints).
+- [ ] **KEY-02**: Per-OS default keymap profiles (macOS, Windows, Linux) with a platform-aware modifier abstraction, platform-correct menu accelerator labels, and load-time conflict detection against OS/desktop, shell, editor, and nested-multiplexer bindings.
+- [ ] **KEY-03**: `Window -> Stack windows` (currently `Alt+M`, which conflicts with macOS Option-compose) and other conflicting defaults are rebound to harmonized, conflict-free bindings that work uniformly on all target OSes.
+
+## First-Class Terminal Traffic Monitor (Phase 64)
+
+- [ ] **TRAF-01**: Zero-cost-when-disabled instrumentation seam at every terminal byte boundary (PTY, SSH, RPC/MCP/WebSocket clients, OSC/clipboard) feeding a `traffic` metrics layer placed correctly in the layer DAG.
+- [ ] **TRAF-02**: Bounded-memory traffic aggregation by connection (local vs each remote), session, window, pane, and direction with rolling rates, totals, and peaks.
+- [ ] **TRAF-03**: TRAFFIC monitor utility window (TUI + GUI) with group-by, sort, filter, and sparklines, plus optional OIA rate indicator.
+- [ ] **TRAF-04**: Full `UNI-R01` surface parity (`:traffic`, palette, menu, RPC `traffic.*`, MCP `bilterm_traffic`) with synthetic-traffic headless test fixtures and a perf budget.
+
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
 - [x] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
@@ -322,13 +346,25 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WEB-FE-02 | Phase 60 | Complete (Phase 60) |
 | WEB-FE-03 | Phase 60 | Complete (Phase 60) |
 | WEB-FE-04 | Phase 60 | Complete (Phase 60) |
+| FIX-01 | Phase 61 | Planned |
+| FIX-02 | Phase 61 | Planned |
+| FIX-03 | Phase 61 | Planned |
+| COPY-01 | Phase 62 | Planned |
+| COPY-02 | Phase 62 | Planned |
+| KEY-01 | Phase 63 | Planned |
+| KEY-02 | Phase 63 | Planned |
+| KEY-03 | Phase 63 | Planned |
+| TRAF-01 | Phase 64 | Planned |
+| TRAF-02 | Phase 64 | Planned |
+| TRAF-03 | Phase 64 | Planned |
+| TRAF-04 | Phase 64 | Planned |
 
 **Coverage:**
 
-- Total tracked requirements: 83 total (traceability table rows)
-- Mapped to phases: 83 (65 Complete, 18 Planned)
+- Total tracked requirements: 95 total (traceability table rows)
+- Mapped to phases: 95 (65 Complete, 30 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-08 for Phases 58, 59, 60*
+*Last updated: 2026-11-08 for Phases 58–64*

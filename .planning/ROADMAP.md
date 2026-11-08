@@ -1116,6 +1116,88 @@ Plans:
   - [x] 60-03-PLAN.md — Multi-Client `ClientViewState` Registry, Surface Parity & Test Suite (wave 3)
 - Status: **COMPLETE** (`ea0aea3`, `PASS 134/134`, `GOLDENS OK 11`)
 
+### Phase 61: Window & Drawer Regression Fixes
+
+**Goal**: Fix three user-reported regressions: Classic-mode `:drawer rows 2`, Window -> Zoom input fall-through, and loss of per-window/pane state when switching stacked windows.
+**Depends on**: Phase 53 (`z_stack`), Phase 56 (Drawer Peek), Phase 22 (`Action`).
+**Requirements**: FIX-01, FIX-02, FIX-03
+**Today (baseline)**: Classic drawer ignores `row_lines` (only Navigator honors it) and Liquid Glass silently falls back to one-line rows when rows overflow; zoom is pinned to a stored pane id while input targets `z_stack.top()`, so after a deck shuffle keys/mouse hit a hidden pane and `toggle_zoom` re-zooms instead of un-zooming; the focusing click on an inactive window also fires its status-bar action (cycling prompt mode), copy mode is cleared on every focus change, raw mode is not in `SavedPaneState`, and scroll offset resets on reflow.
+**Success Criteria** (what must be TRUE):
+
+  1. `FIX-01`: `:drawer rows 1|2` works in Classic and Navigator styles (Classic `classic_row_lines`, 0 = auto), the active value is visible (`[R:n]` header chip) and toggleable from the drawer key, View menu, and colon command.
+  2. `FIX-02`: Zoom is derived from the focused pane; `Window -> Zoom` / keybinding / `:zoom` are a true toggle; while zoomed, no key or mouse event reaches a hidden pane.
+  3. `FIX-03`: A focusing click never triggers in-window actions; prompt type, raw mode, copy mode, and scroll offset survive stacked-window switches and layout reflow (headless regression tests).
+
+**Artifacts**:
+- Research: `.planning/phases/61-window-and-drawer-regression-fixes/61-RESEARCH.md`
+- Plans:
+  - [ ] 61-01-PLAN.md — Classic drawer row-lines & discoverability (wave 1)
+  - [ ] 61-02-PLAN.md — Zoom follows focus, true toggle, no input fall-through (wave 1)
+  - [ ] 61-03-PLAN.md — Per-window/pane state preservation across stack switches (wave 2, after 61-02: shares `src/wm/mod.rs`)
+- Status: **PLANNED**
+
+### Phase 62: Copy Mode Ergonomics & Nested-TUI Copy Fix
+
+**Goal**: Make copying from panes running nested TUIs (`herdr`, Claude Code) reliable and make copy mode easy to discover and drive.
+**Depends on**: Phase 41 (block select), Phase 57 (`ClipboardRegistry`, OSC 52), Phase 63 (copy-mode entry key contract).
+**Requirements**: COPY-01, COPY-02
+**Today (baseline)**: Plain and Shift drag are forwarded to the child as SGR reports (modifier bits dropped); only Alt-drag selects (rectangular, not auto-copied) and then captures all keys; OSC 52 payloads split across 8 KiB PTY reads are dropped; on the alt screen `Alt+C`/`F8`/`Ctrl+Up` are forwarded to the child and `Ctrl+B [` collides with herdr's prefix; selections are viewport-relative so scrolled selections copy the wrong text.
+**Success Criteria** (what must be TRUE):
+
+  1. `COPY-01`: Shift/Alt drag selects locally over mouse-tracking apps, SGR reports carry modifiers, selections copy on release with toast feedback, OSC 52 is reassembled across reads (bounded carry), and the OIA shows mouse-capture / `[COPY]` badges.
+  2. `COPY-02`: Scrollback-absolute selections; `w b e`, `gg G`, `H M L`, `/ ? n N`; vi/emacs/arrow tables; double/triple click; state-driven hint line; UNI-R01 parity test.
+
+**Artifacts**:
+- Research: `.planning/phases/62-copy-mode-ergonomics/62-RESEARCH.md`
+- Plans:
+  - [ ] 62-01-PLAN.md — Nested-TUI copy fix (wave 1)
+  - [ ] 62-02-PLAN.md — Copy mode ergonomics & parity (wave 2)
+- Open decision: `copy_on_select` default-on.
+- Status: **PLANNED**
+
+### Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization
+
+**Goal**: Pure-keyboard navigation in TUI and GUI without long colon commands, with per-OS keymaps that avoid OS/desktop/shell/editor/nested-multiplexer conflicts (incl. replacing `Alt+M` for Stack windows).
+**Depends on**: Phase 22 (`Action`), Phase 47 (menus/palette), Phase 51 (command parity).
+**Requirements**: KEY-01, KEY-02, KEY-03
+**Today (baseline)**: Navigation relies on `Ctrl+X` + colon commands; `Alt+M` (Stack) is Option-compose `µ` on macOS; the Option normalizer runs on every OS (and in raw passthrough), macOS GUI chords every Option+key (breaking `[ ] | { }` on DE/Nordic layouts), Win32 GUI treats AltGr as Ctrl+Alt; menu bar wraps at 7 of 9 categories (Daemon/Web unreachable by key); four Alt-chord collisions (`Alt+Shift+W/H/D/O`).
+**Success Criteria** (what must be TRUE):
+
+  1. `KEY-01`: Sticky Window mode (leader `w` / `Primary+O`), keyboard-openable menu bar (leader `m`) with mnemonics, and which-key hint overlay; all lower to `Action`.
+  2. `KEY-02`: `Primary` modifier abstraction (Cmd on macOS GUI, Ctrl+Shift elsewhere / kitty-protocol TUIs), per-OS default profiles, platform-correct accelerator labels, and `:keys check` + load-time conflict detection.
+  3. `KEY-03`: Stack windows rebound to `Cmd+L` (macOS GUI) / `Ctrl+Shift+L` (Win/Linux GUI) / `Ctrl+X M` (TUI) / Window-mode `s`; no `Alt+<printable>` WM chords on macOS; listed collisions and layout bugs fixed.
+
+**Artifacts**:
+- Research: `.planning/phases/63-keyboard-first-navigation-and-hotkeys/63-RESEARCH.md`
+- Plans:
+  - [ ] 63-01-PLAN.md — Key model, per-OS profiles, Alt+M replacement, layout fixes, new Actions/colon verbs (wave 1)
+  - [ ] 63-02-PLAN.md — Window mode, which-key overlay, keyboard menu & computed accelerator labels (wave 2)
+  - [ ] 63-03-PLAN.md — Conflict engine, reserved-chord data, `:keys`/RPC/MCP surfaces, parity tests & docs (wave 2)
+- Open decisions: leader `w` = Window mode (`W` closes pane); keep `legacy_alt` one release on Win/Linux; restrict `Ctrl+G` / drop `Ctrl+_` font-zoom.
+- Status: **PLANNED**
+
+### Phase 64: First-Class Terminal Traffic Monitor
+
+**Goal**: Measure and display aggregate terminal traffic — local vs network, by connection (local vs each remote), session, window, pane, and direction — via a zero-cost-when-disabled instrumentation layer and a TRAFFIC MONITOR window.
+**Depends on**: Phase 49 (`API-01`), Phase 51.1 (SSH), Phase 51.2 (utility windows), Phase 55 (daemon), Phase 60 (WebSocket).
+**Requirements**: TRAF-01, TRAF-02, TRAF-03, TRAF-04
+**Today (baseline)**: No byte-level accounting exists at any boundary. Note: "traffic" already names Phase 50 Agent Traffic (`src/wm/traffic.rs`); this phase uses `crate::traffic` / `TRAFFIC MONITOR` / `:traffic` / `traffic.*` and cross-references it.
+**Success Criteria** (what must be TRUE):
+
+  1. `TRAF-01`: Leaf module `src/traffic/` (no crate imports) with atomic per-boundary counters at 33 hook sites (PTY read/write, RPC, HTTP/SSE, WebSocket, SSH, OSC/clipboard, daemon IPC); layer-DAG and byte-boundary audit tests.
+  2. `TRAF-02`: Bounded rolling 1s/10s/1m rates, totals, and peaks; session/window attribution resolved at snapshot time.
+  3. `TRAF-03`: TRAFFIC MONITOR window (TUI + GUI) with group-by/sort/filter/sparklines; opt-in OIA rate indicator.
+  4. `TRAF-04`: `:traffic`, palette, View menu, RPC `traffic.*` (write-gated reset/config), MCP `bilterm_traffic`; synthetic-traffic fixtures and calibrated perf budget.
+
+**Artifacts**:
+- Research: `.planning/phases/64-terminal-traffic-monitor/64-RESEARCH.md`
+- ADR: `.planning/phases/64-terminal-traffic-monitor/64-ARCHITECTURE-ADR.md`
+- Plans:
+  - [ ] 64-01-PLAN.md — `traffic` layer, fixtures, audit tests, perf budgets (wave 1)
+  - [ ] 64-02-PLAN.md — Instrument 33 boundaries, attribution, OIA indicator (wave 2)
+  - [ ] 64-03-PLAN.md — TRAFFIC MONITOR window & UNI-R01 surfaces (wave 2)
+- Status: **PLANNED**
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -1134,7 +1216,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1202,3 +1284,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 2/2 | Complete | 2026-11-08 |
 | 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 2/2 | Complete | 2026-11-08 |
 | 60. Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`) | 3/3 | Complete | 2026-11-08 |
+| 61. Window & Drawer Regression Fixes (`FIX-01..03`) | 0/3 | Planned | - |
+| 62. Copy Mode Ergonomics & Nested-TUI Copy Fix (`COPY-01..02`) | 0/2 | Planned | - |
+| 63. Keyboard-First Navigation & Cross-OS Hotkey Harmonization (`KEY-01..03`) | 0/3 | Planned | - |
+| 64. First-Class Terminal Traffic Monitor (`TRAF-01..04`) | 0/3 | Planned | - |
