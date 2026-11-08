@@ -42,6 +42,9 @@ pub struct SavedPaneState {
     pub prompt_x_offset: Option<u16>,
     #[serde(default)]
     pub prompt_input: String,
+    /// Pane was in Regular Terminal mode (`prompt().manual_raw_override`, `FIX-03`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub raw_passthrough: bool,
     #[serde(default)]
     pub font_scale_pct: Option<u16>,
     #[serde(default)]
@@ -403,6 +406,7 @@ impl WindowManager {
                     prompt_width_cols: p.prompt().width_cols,
                     prompt_x_offset: p.prompt().x_offset,
                     prompt_input: p.prompt().text(),
+                    raw_passthrough: p.prompt().manual_raw_override,
                     font_scale_pct: p.font_options().scale_pct,
                     scroll_mode: Some(p.scroll_mode()),
                     scrollback_lines,

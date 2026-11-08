@@ -331,6 +331,7 @@ impl WindowManager {
                                 prompt_width_cols: p.prompt().width_cols,
                                 prompt_x_offset: p.prompt().x_offset,
                                 prompt_input: p.prompt().text(),
+                                raw_passthrough: p.prompt().manual_raw_override,
                                 font_scale_pct: p.font_options().scale_pct,
                                 scroll_mode: Some(p.scroll_mode()),
                                 scrollback_lines: Vec::new(),

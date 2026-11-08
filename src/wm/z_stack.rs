@@ -646,20 +646,6 @@ impl WindowManager {
         ));
     }
 
-    /// Clears transient (unselected, non-rect-locked) canvas cursors on non-focused panes.
-    pub(crate) fn clear_inactive_transient_copy_cursors(&mut self) {
-        let active_id = self.active_pane_id();
-        for (&id, pane) in self.panes.iter_mut() {
-            if id != active_id
-                && pane.copy_mode().active
-                && !pane.copy_mode().has_selection()
-                && !pane.copy_mode().rect_mode
-            {
-                pane.copy_mode_mut().active = false;
-            }
-        }
-    }
-
     /// Switches focus to the adjacent window/pane in direction `(dx, dy)` (Arrow / VIM `hjkl` / WASD `wasd`),
     /// wrapping around the deck when at the edge of the layout or in overlapping Z-Stack mode.
     pub fn focus_direction(&mut self, dx: i16, dy: i16) -> Option<PaneId> {

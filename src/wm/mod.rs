@@ -512,7 +512,12 @@ impl WindowManager {
     }
     pub fn split_tree(&self) -> &SplitTree { &self.split_tree }
     pub fn z_stack(&self) -> &ZStack { &self.z_stack }
-    pub fn zoomed_pane(&self) -> Option<PaneId> { self.zoomed_pane }
+    fn effective_zoomed(&self) -> Option<PaneId> {
+        self.zoomed_pane
+            .and(self.z_stack.top())
+            .filter(|id| self.panes.contains_key(id))
+    }
+    pub fn zoomed_pane(&self) -> Option<PaneId> { self.effective_zoomed() }
     pub fn quick_terminal(&self) -> &QuickTerminal { &self.quick_terminal }
     pub fn quick_terminal_mut(&mut self) -> &mut QuickTerminal { &mut self.quick_terminal }
     pub fn is_quick_terminal_visible(&self) -> bool { self.quick_terminal.visible }
@@ -881,8 +886,11 @@ impl WindowManager {
             self.script_studio.blur();
             self.session_map.blur();
             let changed = self.z_stack.raise(pane_id);
-            self.clear_inactive_transient_copy_cursors();
+            // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
             self.sync_config_scale_from_active_pane();
+            if self.zoomed_pane.is_some() {
+                self.reflow_default_viewport();
+            }
             changed
         } else {
             false
@@ -900,8 +908,11 @@ impl WindowManager {
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
+        if self.zoomed_pane.is_some() {
+            self.reflow_default_viewport();
+        }
         top
     }
 
@@ -916,8 +927,11 @@ impl WindowManager {
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
+        if self.zoomed_pane.is_some() {
+            self.reflow_default_viewport();
+        }
         top
     }
 
@@ -926,11 +940,11 @@ impl WindowManager {
         let Some(top_id) = self.z_stack.top() else {
             return;
         };
-        if self.zoomed_pane == Some(top_id) {
-            self.zoomed_pane = None;
+        self.zoomed_pane = if self.zoomed_pane.is_some() {
+            None
         } else {
-            self.zoomed_pane = Some(top_id);
-        }
+            Some(top_id)
+        };
         self.reflow_default_viewport();
         self.maybe_autosave_layout();
     }
@@ -958,9 +972,7 @@ impl WindowManager {
         if crate::ui::shell::effective_display_mode(&self.config) == crate::ui::design::DisplayMode::Zen {
             return vec![(self.active_pane_id(), area)];
         }
-        if let Some(zoomed_id) = self.zoomed_pane
-            && self.panes.contains_key(&zoomed_id)
-        {
+        if let Some(zoomed_id) = self.effective_zoomed() {
             return vec![(zoomed_id, area)];
         }
         match self.layout_mode {
