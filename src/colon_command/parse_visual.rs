@@ -948,7 +948,7 @@ fn parse_drawer_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> 
             }
         }
         _ => Some(Err(
-            "Usage: :drawer [toggle|focus|preview|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|minimize|maximize|size <n>]"
+            "Usage: :drawer [toggle|focus|preview|left|right|top|bottom|fixed|autohide|ondemand|float|push|attention|fold|enter|next|prev|row|scroll|widen|new-session|new-pane|rename|close-pane|expand all|collapse all|add window|add pane|comms|comms-focus|style|rows [1|2]|minimize|maximize|size <n>]"
                 .to_string(),
         )),
     }

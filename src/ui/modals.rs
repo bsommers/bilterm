@@ -414,6 +414,8 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Clipboard Viewer (Ctrl+Alt+V)", ":clipboard toggle"),
         ("Script Studio", ":script toggle"),
         ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
+        ("Drawer Rows: 1 line", ":drawer rows 1"),
+        ("Drawer Rows: 2 lines", ":drawer rows 2"),
         ("Voice Dictation Toggle (Ctrl+Alt+S)", ":voice toggle"),
         ("Browser Canvas (Ctrl+Alt+B)", ":browser"),
         ("Video Canvas (Ctrl+Alt+Y)", ":video"),

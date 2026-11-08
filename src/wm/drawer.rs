@@ -111,8 +111,13 @@ pub struct DrawerConfig {
     pub navigator_width_cols: u16,
     /// Navigator style only: `2` (default) draws pane rows over two lines (state/title, then a
     /// shell-prompt style `user@host  path`); `1` restores the single-line layout. Other values are
-    /// treated as `2`; read it through [`DrawerConfig::navigator_row_lines`].
+    /// treated as `2`; read it through [`DrawerConfig::navigator_row_lines`]. Classic style uses
+    /// [`Self::classic_row_lines`].
     pub row_lines: u8,
+    /// Classic style only: `0` (default) = automatic (two-line cards only in the Liquid Glass look,
+    /// as before), `1` = always one line, `2` = always two lines (title, then telemetry). Navigator
+    /// uses [`Self::row_lines`].
+    pub classic_row_lines: u8,
 }
 
 impl Default for DrawerConfig {
@@ -126,6 +131,18 @@ impl Default for DrawerConfig {
             style: DrawerStyle::Classic,
             navigator_width_cols: 28,
             row_lines: 2,
+            classic_row_lines: 0,
+        }
+    }
+}
+
+impl DrawerConfig {
+    /// Effective Classic-style row-lines mode: `0` (auto), `1` (one line), or `2` (two lines).
+    pub const fn classic_row_lines_mode(&self) -> u8 {
+        match self.classic_row_lines {
+            1 => 1,
+            2 => 2,
+            _ => 0,
         }
     }
 }

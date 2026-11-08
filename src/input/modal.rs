@@ -426,6 +426,23 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('M') | KeyCode::F(5) => {
                 let _ = wm.apply(crate::action::Action::DrawerSize(u16::MAX));
             }
+            KeyCode::Char('1') => {
+                let _ = wm.apply(crate::action::Action::DrawerRows(1));
+            }
+            KeyCode::Char('2') => {
+                let cur = if wm.drawer_config().style == crate::wm::drawer::DrawerStyle::Navigator {
+                    wm.drawer_config().navigator_row_lines()
+                } else {
+                    match wm.drawer_config().classic_row_lines_mode() {
+                        2 => 2,
+                        1 => 1,
+                        _ if wm.config().liquid_glass => 2,
+                        _ => 1,
+                    }
+                };
+                let next = if cur == 2 { 1 } else { 2 };
+                let _ = wm.apply(crate::action::Action::DrawerRows(next));
+            }
             KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => {
                 wm.drawer_reparent_selected_session(false);
             }

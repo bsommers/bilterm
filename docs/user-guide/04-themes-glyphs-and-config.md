@@ -216,9 +216,10 @@ default_prompt_height = 3
 style = "navigator"          # "classic" (default) or "navigator" (agent-aware workspace > session > pane tree)
 navigator_width_cols = 28    # Navigator drawer width, 16-100, default 28 (legacy key: herdr_width_cols)
 row_lines = 2                # Navigator pane rows: 2 (default, title + user@host path) or 1 (compact)
+classic_row_lines = 0        # Classic style: 0 auto, 1, 2
 ```
 
-`drawer.style`, `drawer.navigator_width_cols` and `drawer.row_lines` are also settable at runtime with `:set drawer.style navigator`, `:drawer style navigator|classic|toggle`, `:drawer widen <+-n>` and `:drawer rows 1|2`. With the default `classic` style the drawer is unchanged. The Navigator, its state dots, keys and mouse gestures are documented in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). Dock edge, pinning and push/float modes remain as described in [Chapter 3](03-window-manager-and-z-stack.md).
+`drawer.style`, `drawer.navigator_width_cols`, `drawer.row_lines`, and `drawer.classic_row_lines` are also settable at runtime with `:set drawer.style navigator`, `:drawer style navigator|classic|toggle`, `:drawer widen <+-n>`, and `:drawer rows 1|2` (which writes `row_lines` in Navigator or `classic_row_lines` in Classic and names the active style in the status message). With the default `classic` style (`classic_row_lines = 0`) the drawer is unchanged. The Navigator, its state dots, keys and mouse gestures are documented in [Chapter 11](11-navigator-sidebar-and-agent-traffic.md). Dock edge, pinning and push/float modes remain as described in [Chapter 3](03-window-manager-and-z-stack.md).
 
 ### Agent Recognition Profiles (`[agents.<name>]`)
 

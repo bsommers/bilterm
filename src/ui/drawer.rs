@@ -19,27 +19,105 @@ use crate::wm::{
     inset_window_frame,
 };
 
+/// Click target kind in the Classic drawer title/header row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClassicHeaderChipKind {
+    DockEdge,
+    LayoutMode,
+    Visibility,
+    NewWindow,
+    NewSession,
+    RowLines(u8),
+}
+
 /// Computes `(header_rows, footer_rows, rows_per_item)` for vertical drawer layout and mouse hit-testing.
 pub fn drawer_vertical_layout_metrics(
     cfg: &BiltermConfig,
     inner_height: u16,
     item_count: usize,
 ) -> (u16, u16, usize) {
-    if cfg.is_modern() && inner_height >= 10 {
+    let (header_h, footer_h, auto_two) = if cfg.is_modern() && inner_height >= 10 {
         let header_h = 2u16;
         let footer_h = 2u16;
         let avail = usize::from(inner_height.saturating_sub(header_h + footer_h)).max(1);
-        let step = if cfg.liquid_glass && inner_height >= 14 && item_count.saturating_mul(2) <= avail
-        {
-            2
-        } else {
-            1
-        };
-        (header_h, footer_h, step)
+        let auto =
+            cfg.liquid_glass && inner_height >= 14 && item_count.saturating_mul(2) <= avail;
+        (header_h, footer_h, auto)
     } else {
         let footer_h = u16::from(inner_height >= 3);
-        (1, footer_h, 1)
+        (1, footer_h, false)
+    };
+    let avail = usize::from(inner_height.saturating_sub(header_h + footer_h));
+    let step = match cfg.drawer.classic_row_lines_mode() {
+        2 if avail >= 2 => 2,
+        1 => 1,
+        0 if auto_two => 2,
+        _ => 1,
+    };
+    (header_h, footer_h, step)
+}
+
+/// Computes the clickable header chips `(label, rel_x_range, kind)` for the Classic drawer
+/// (`rel_x` is relative to `drawer_rect.x`; `title_row = true` for `dr.y`, `false` for `dr.y + 1`).
+/// When `drawer_width` is too narrow for the `[R:n]` chip, `[R:n]` is dropped first so `[+Win]`
+/// and `[+Sess]` keep their existing column regions.
+pub fn classic_header_chips(
+    wm: &WindowManager,
+    drawer_width: u16,
+    inner_height: u16,
+    title_row: bool,
+) -> Vec<(String, std::ops::Range<u16>, ClassicHeaderChipKind)> {
+    let dcfg = wm.drawer_config();
+    let is_modern = wm.config().is_modern();
+    let (_, _, row_step) =
+        drawer_vertical_layout_metrics(wm.config(), inner_height, wm.drawer_rows().len());
+    let step_u8 = row_step as u8;
+    let r_label = format!("[R:{step_u8}]");
+
+    if title_row {
+        let mut chips = vec![
+            (format!("[D:{}]", dcfg.edge.label()), 0..16, ClassicHeaderChipKind::DockEdge),
+            (format!("[M:{}]", dcfg.layout.label()), 16..26, ClassicHeaderChipKind::LayoutMode),
+            (format!("[P:{}]", dcfg.visibility.label()), 26..42, ClassicHeaderChipKind::Visibility),
+        ];
+        if !is_modern && dcfg.edge.is_vertical() && drawer_width >= 58 {
+            chips.push((r_label, 42..48, ClassicHeaderChipKind::RowLines(step_u8)));
+        } else if let Some(last) = chips.last_mut() {
+            last.1.end = drawer_width;
+        }
+        return chips;
     }
+
+    let win_start = 31.min(drawer_width.saturating_sub(8));
+    let mut chips = vec![
+        (format!("[D:{}]", dcfg.edge.label()), 0..10, ClassicHeaderChipKind::DockEdge),
+        (format!("[M:{}]", dcfg.layout.label()), 10..20, ClassicHeaderChipKind::LayoutMode),
+        (format!("[P:{}]", dcfg.visibility.label()), 20..win_start, ClassicHeaderChipKind::Visibility),
+        ("[+Win]".to_string(), win_start..38.min(drawer_width), ClassicHeaderChipKind::NewWindow),
+    ];
+    if drawer_width > 38 {
+        let r_min_width = if is_modern { 64 } else { 48 };
+        if dcfg.edge.is_vertical() && drawer_width >= r_min_width {
+            let r_start = if is_modern { 56 } else { 46 };
+            chips.push((
+                "[+Sess]".to_string(),
+                38..r_start,
+                ClassicHeaderChipKind::NewSession,
+            ));
+            chips.push((
+                r_label,
+                r_start..drawer_width,
+                ClassicHeaderChipKind::RowLines(step_u8),
+            ));
+        } else {
+            chips.push((
+                "[+Sess]".to_string(),
+                38..drawer_width,
+                ClassicHeaderChipKind::NewSession,
+            ));
+        }
+    }
+    chips
 }
 
 /// Writes a single-line string into `buf` at `(x, y)` clipped to `max_cols` display columns.
@@ -186,8 +264,22 @@ pub fn render_workspace_drawer(
     } else {
         "SESSIONS"
     };
+    let inner_h = drawer_rect.height.saturating_sub(2);
+    let show_auto_chip = !(drawer.maximized && dcfg.classic_row_lines_mode() == 0);
+    let title_chips = classic_header_chips(wm, drawer_rect.width, inner_h, true);
+    let title_r_chip = title_chips.iter().find_map(|(lbl, _, kind)| match kind {
+        ClassicHeaderChipKind::RowLines(_) if show_auto_chip => Some(lbl.as_str()),
+        _ => None,
+    });
     let title = if is_modern {
         format!("● ● ●  {drawer_prefix}")
+    } else if let Some(r_lbl) = title_r_chip {
+        format!(
+            "{drawer_prefix} [D:{}] [M:{}] [P:{}] {r_lbl}",
+            dcfg.edge.label(),
+            dcfg.layout.label(),
+            dcfg.visibility.label()
+        )
     } else {
         format!(
             "{drawer_prefix} [D:{}] [M:{}] [P:{}]",
@@ -229,9 +321,30 @@ pub fn render_workspace_drawer(
             .bg(palette.oia_bg)
             .add_modifier(Modifier::BOLD);
         fill_rect(buf, Rect::new(inner.x, inner.y, inner.width, 1), header_style);
+        let hdr_chips = classic_header_chips(wm, drawer_rect.width, inner.height, false);
+        let hdr_r_chip = hdr_chips.iter().find_map(|(lbl, _, kind)| match kind {
+            ClassicHeaderChipKind::RowLines(_) if show_auto_chip => Some(lbl.as_str()),
+            _ => None,
+        });
         let header_line = if is_modern {
+            if let Some(r_lbl) = hdr_r_chip {
+                format!(
+                    " ◧ {}  ·  ⧉ {}  ·  ◈ {}  ·  +Win  ·  +Sess  ·  {r_lbl}",
+                    dcfg.edge.label(),
+                    dcfg.layout.label(),
+                    dcfg.visibility.label()
+                )
+            } else {
+                format!(
+                    " ◧ {}  ·  ⧉ {}  ·  ◈ {}  ·  +Win  ·  +Sess",
+                    dcfg.edge.label(),
+                    dcfg.layout.label(),
+                    dcfg.visibility.label()
+                )
+            }
+        } else if let Some(r_lbl) = hdr_r_chip {
             format!(
-                " ◧ {}  ·  ⧉ {}  ·  ◈ {}  ·  +Win  ·  +Sess",
+                "[D:{}] [M:{}] [P:{}] [+Win] [+Sess] {r_lbl}",
                 dcfg.edge.label(),
                 dcfg.layout.label(),
                 dcfg.visibility.label()

@@ -66,7 +66,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":drawer [toggle|focus|float|push]", "Control Slide-Out Drawer (n/c/+=NewWin, N=NewSess, J/K=Move, </>=Parent, b=Branch)"),
     (":drawer [left|right|top|bottom|size <n>]", "Dock Slide-Out Drawer on any screen edge or set size"),
     (":drawer [fixed|autohide|ondemand]", "Set Slide-Out Drawer visibility behavior"),
-    (":drawer rows [1|2]", "Navigator drawer: lines per pane row (2 = title plus user@host path line, 1 = compact; config drawer.row_lines)"),
+    (":drawer rows [1|2]", "Drawer: lines per row (Navigator row_lines, Classic classic_row_lines; key 2, header chip [R:n])"),
     (":drawer attention", "Focus the next pane needing attention (blocked, then errored, then done)"),
     (":drawer fold", "Navigator drawer: fold or unfold the selected session (key e)"),
     (":drawer enter", "Navigator drawer: focus the selected row (keys Enter / Space)"),
