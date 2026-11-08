@@ -13,7 +13,11 @@ pub mod fonts_window;
 pub mod fonts_window_keys;
 pub mod gui_route;
 pub mod keyenv;
+pub mod keyhint_window;
 pub mod keymap;
+pub mod keyprofile;
+pub(crate) mod keyprofile_ops;
+pub mod keyprofile_tables;
 pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
@@ -66,7 +70,7 @@ pub enum AppAction {
 /// Routes a `crossterm::event::KeyEvent` for the active `CompositePane` (`PTY-02..04`, `PANE-01..05`).
 pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<AppAction> {
     pane.refresh_line_discipline();
-    let key = normalize_macos_option_key(raw_key, true);
+    let key = normalize_macos_option_key(raw_key, true, &pane.keymap().env());
 
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
@@ -99,7 +103,11 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     }
 
     // Global manual toggle between CommandPrompt and RawPtyPassthrough: Ctrl+G or F12 (without Shift)
-    if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
+    // Outside the `legacy` profile Ctrl+G is the raw toggle only at the command prompt: in raw
+    // passthrough it reaches the child (emacs `C-g`, readline abort); F12 / leader `g` still leave raw.
+    let ctrl_g_toggles = pane.keymap().profile() == crate::config::keys::KeyProfileName::Legacy
+        || pane.effective_routing_mode() == InputRoutingMode::CommandPrompt;
+    if (ctrl_g_toggles && key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g'))
         || (key.code == KeyCode::F(12) && !key.modifiers.contains(KeyModifiers::SHIFT))
     {
         pane.toggle_manual_raw_override();
@@ -130,7 +138,8 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
     if !pane.vt().is_alternate_screen()
         && !pane.is_active_canvas_password_prompt()
         && ((key.code == KeyCode::F(4) && key.modifiers.is_empty())
-            || (key.modifiers.contains(KeyModifiers::ALT)
+            || (pane.keymap().alt_layer()
+                && key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('e') | KeyCode::Char('E'))))
     {
         pane.cycle_prompt_mode();
@@ -152,13 +161,15 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
             return handle_copy_mode_key(pane, key);
         }
         if !pane.vt().is_alternate_screen() && !pane.is_active_canvas_password_prompt() {
-            if key.modifiers.contains(KeyModifiers::ALT)
+            if pane.keymap().alt_layer()
+                && key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
             {
                 pane.enter_rect_copy_mode();
                 return Ok(AppAction::Handled);
             }
-            if (key.modifiers.contains(KeyModifiers::ALT)
+            if (pane.keymap().alt_layer()
+                && key.modifiers.contains(KeyModifiers::ALT)
                 && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')))
                 || (key.code == KeyCode::F(8) && key.modifiers.is_empty())
                 || (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Up)
@@ -663,7 +674,7 @@ pub fn handle_paste_event(pane: &mut CompositePane, pasted_text: &str) -> Result
 /// Routes a `KeyEvent` across the multi-pane `WindowManager` (`WM-01..05`, `ARCH-R01.2`).
 pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<AppAction> {
     wm.reset_cursor_blink();
-    let key = normalize_macos_option_key(raw_key, wm.config().macos_option_as_alt);
+    let key = normalize_macos_option_key(raw_key, wm.config().macos_option_as_alt, &wm.key_env());
 
     // Global emergency quit: Ctrl+Q
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
@@ -691,8 +702,9 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(action);
     }
 
-    // Reserved chords (Ctrl+Alt+A) win even over raw PTY passthrough (agent TUIs, vim, less).
-    if let Some(action) = keymap::reserved_global_action(key) {
+    // Reserved chords (Ctrl+Alt+A) and `Primary` chords win even over raw PTY passthrough.
+    let km = wm.keymap();
+    if let Some(action) = keymap::reserved_global_action(&km, key).or_else(|| km.primary_action(key)) {
         return wm.apply(action);
     }
 
@@ -722,7 +734,9 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
 
 fn dispatch_pane_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
     let smart = wm.config().smart_ctrl_v_paste;
+    let km = wm.keymap();
     wm.active_pane_mut().set_smart_ctrl_v_paste(smart);
+    wm.active_pane_mut().set_keymap(km);
     let res = handle_key_event(wm.active_pane_mut(), key);
     wm.sync_clipboard_records();
     res
@@ -851,7 +865,7 @@ fn handle_pane_alt_or_fkey_shortcut(
         }
     }
 
-    if let Some(action) = default_pane_action(key) {
+    if let Some(action) = pane.keymap().pane_action(key) {
         let _ = execute_colon_command(pane, action);
         return Ok(Some(AppAction::Handled));
     }

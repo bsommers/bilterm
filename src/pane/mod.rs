@@ -112,6 +112,8 @@ pub struct CompositePane {
     exit_code: Option<i32>,
     /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text unless media is on the clipboard (`CLIP-01`).
     smart_ctrl_v_paste: bool,
+    /// Effective key bindings pushed by the owning workspace before each key (Phase 63); `legacy` standalone.
+    keymap: crate::input::keyprofile::EffectiveKeymap,
     /// Pending clipboard/yank events waiting to be drained into `ClipboardRegistry`.
     pending_clipboard_records: Vec<(crate::clipboard::ClipboardSource, String)>,
     /// Pending media passthrough events waiting to be drained into `ClipboardRegistry`.
@@ -169,6 +171,7 @@ impl CompositePane {
             link_banner: None,
             exit_code: None,
             smart_ctrl_v_paste: true,
+            keymap: crate::input::keyprofile::EffectiveKeymap::legacy_default(),
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
             stt_badge: None,
@@ -822,6 +825,15 @@ impl CompositePane {
 
     pub fn set_smart_ctrl_v_paste(&mut self, enabled: bool) {
         self.smart_ctrl_v_paste = enabled;
+    }
+
+    /// The key bindings this pane routes with (`legacy` until its workspace pushes the active profile).
+    pub fn keymap(&self) -> &crate::input::keyprofile::EffectiveKeymap {
+        &self.keymap
+    }
+
+    pub fn set_keymap(&mut self, keymap: crate::input::keyprofile::EffectiveKeymap) {
+        self.keymap = keymap;
     }
 
     pub fn record_clipboard_event(

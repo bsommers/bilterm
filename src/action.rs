@@ -13,6 +13,7 @@ use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLay
 use serde::{Deserialize, Serialize};
 
 pub use crate::stt::VoiceOp;
+pub use crate::action_keys::{KeysOp, WinSub, WindowModeOp};
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -262,6 +263,12 @@ pub enum Action {
     Video(VideoOp),
     /// `:web [status|open|port <N>|stop]`: Web UI surface control (`WEB-FE-01..04`, Phase 60).
     Web(WebOp),
+    /// `:wmode [on|off|focus|resize|move]`: sticky Window mode (`KEY-01`, Phase 63).
+    WindowMode(WindowModeOp),
+    /// `:menu open [category]`: open the menu bar from the keyboard (`KEY-01`, Phase 63).
+    MenuOpen { category: Option<usize> },
+    /// `:keys [list|check|explain <chord>|profile [name]]`: key profile inspection (`KEY-02`, Phase 63).
+    Keys(KeysOp),
     Quit,
 }
 
@@ -384,6 +391,10 @@ impl Action {
             }
             Self::ScriptStudio(op) => op.colon_form(),
             Self::Web(op) => op.colon_form(),
+            Self::WindowMode(op) => op.colon_form(),
+            Self::MenuOpen { category: None } => ":menu open".to_string(),
+            Self::MenuOpen { category: Some(c) } => format!(":menu open {c}"),
+            Self::Keys(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
             Self::ClipboardWindow(op) => op.colon_form(),
@@ -618,6 +629,9 @@ mod tests {
             Action::Web(WebOp::OpenBrowser) => Some(":web open"),
             Action::Web(WebOp::SetPort(_)) => Some(":web port 9000"),
             Action::Web(WebOp::Stop) => Some(":web stop"),
+            Action::WindowMode(_) => Some(":wmode"),
+            Action::MenuOpen { .. } => Some(":menu open"),
+            Action::Keys(_) => Some(":keys check"),
             Action::DrawerPreview(DrawerPreviewOp::On) => Some(":drawer preview on"),
             Action::DrawerPreview(DrawerPreviewOp::Off) => Some(":drawer preview off"),
             Action::DrawerPreview(DrawerPreviewOp::Toggle) => Some(":drawer preview toggle"),
@@ -889,6 +903,17 @@ mod tests {
             Action::Web(WebOp::OpenBrowser),
             Action::Web(WebOp::SetPort(9000)),
             Action::Web(WebOp::Stop),
+            Action::WindowMode(WindowModeOp::Enter),
+            Action::WindowMode(WindowModeOp::Exit),
+            Action::WindowMode(WindowModeOp::Toggle),
+            Action::WindowMode(WindowModeOp::Sub(WinSub::Resize)),
+            Action::MenuOpen { category: None },
+            Action::MenuOpen { category: Some(2) },
+            Action::Keys(KeysOp::List),
+            Action::Keys(KeysOp::Check),
+            Action::Keys(KeysOp::Explain("Ctrl+X".to_string())),
+            Action::Keys(KeysOp::Profile(None)),
+            Action::Keys(KeysOp::Profile(Some("mac".to_string()))),
             Action::DrawerPreview(DrawerPreviewOp::On),
             Action::DrawerPreview(DrawerPreviewOp::Off),
             Action::DrawerPreview(DrawerPreviewOp::Toggle),

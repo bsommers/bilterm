@@ -20,6 +20,7 @@ pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
+pub mod key_mode;
 pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
@@ -47,6 +48,7 @@ pub use window_manage::{
     WindowBulkOp, WindowManageOp, WindowManageState, WindowSelectTarget,
     WorkspaceTopologyUndo,
 };
+pub use key_mode::KeyMode;
 pub use rename_dialog::{RenameDialogKind, RenameDialogState};
 pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerPreviewState, DrawerPreviewTarget, DrawerRow,
@@ -152,8 +154,10 @@ pub struct WindowManager {
     modal: Modal,
     /// Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
     broadcast_input: bool,
-    /// Whether the Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord (`v1.5.0`).
-    leader_pending: bool,
+    /// Leader-pending / sticky Window mode state (`v1.5.0`, Phase 63); see `key_mode.rs`.
+    key_mode: key_mode::KeyMode,
+    /// Keyboard environment (OS, surface, kitty protocol) driving `Primary` and the key profile.
+    key_env: crate::input::keyenv::KeyEnv,
     /// Central `herdr`-style fleet registry managing local and remote SSH / `tmux -CC` sessions (`v1.4.0`).
     fleet: FleetRegistry,
     next_pane_id: PaneId,
@@ -275,10 +279,22 @@ impl WindowManager {
             layout_mode: WorkspaceLayoutMode::Tiled,
             zoomed_pane: None,
             quick_terminal,
-            config: BiltermConfig::default(),
+            config: {
+                let mut cfg = BiltermConfig::default();
+                if headless_mode {
+                    // Headless workspaces (tests, daemons) keep the pre-Phase-63 tables bit-for-bit.
+                    cfg.keys.profile = crate::config::keys::KeyProfileName::Legacy;
+                }
+                cfg
+            },
             modal: Modal::None,
             broadcast_input: false,
-            leader_pending: false,
+            key_mode: key_mode::KeyMode::Normal,
+            key_env: if headless_mode {
+                crate::input::keyenv::KeyEnv::headless()
+            } else {
+                crate::input::keyenv::KeyEnv::detect()
+            },
             fleet: FleetRegistry::new(),
             next_pane_id: initial_id + 1,
             headless_mode,
@@ -599,14 +615,6 @@ impl WindowManager {
 
     pub fn is_broadcast_input(&self) -> bool {
         self.broadcast_input
-    }
-
-    pub fn is_leader_pending(&self) -> bool {
-        self.leader_pending
-    }
-
-    pub fn set_leader_pending(&mut self, pending: bool) {
-        self.leader_pending = pending;
     }
 
     pub fn fleet(&self) -> &FleetRegistry {

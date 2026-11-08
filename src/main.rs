@@ -511,7 +511,7 @@ async fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let host_guard = TerminalRestoreGuard::enter_host_tui()?;
+    let host_guard = TerminalRestoreGuard::enter_host_tui_with(app.wm.config().keys.kitty_protocol)?;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 

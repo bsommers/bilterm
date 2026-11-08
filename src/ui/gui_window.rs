@@ -52,6 +52,13 @@ pub fn pixel_to_cell_coords(
     )
 }
 
+/// `true` when the Win32 modifier state is AltGr: the keyboard driver reports right Alt as a
+/// synthesized left Ctrl plus right Alt. AltGr produces text (`@ { [ ] } \\ € ~` on many layouts)
+/// through `WM_CHAR`, so it must never form a hotkey chord (`KEY-02`, Phase 63).
+pub fn is_altgr(ctrl: bool, lalt: bool, ralt: bool) -> bool {
+    ctrl && ralt && !lalt
+}
+
 /// Translates a Win32 Virtual-Key code (`VK_*`) and modifier state `(ctrl, alt, shift)` into a
 /// non-printable/navigation [`KeyEvent`] when applicable (`WM_KEYDOWN` / `WM_SYSKEYDOWN`).
 /// Printable ASCII/Unicode characters without `Ctrl`/`Alt` are handled by `WM_CHAR`.
@@ -104,6 +111,7 @@ pub fn translate_vk_to_key_event(
                 base
             })
         }
+        0xBA if ctrl || alt => KeyCode::Char(if shift { ':' } else { ';' }),
         0xBB if ctrl || alt => KeyCode::Char(if shift { '+' } else { '=' }),
         0xBD if ctrl || alt => KeyCode::Char(if shift { '_' } else { '-' }),
         0xC0 if ctrl || alt => KeyCode::Char(if shift { '~' } else { '`' }),
@@ -218,6 +226,8 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     const VK_SHIFT: i32 = 0x10;
     const VK_CONTROL: i32 = 0x11;
     const VK_MENU: i32 = 0x12;
+    const VK_LMENU: i32 = 0xA4;
+    const VK_RMENU: i32 = 0xA5;
     const IDC_ARROW: *const u16 = 32512 as *const u16;
 
     #[link(name = "kernel32")]
@@ -278,9 +288,16 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     }
 
     fn current_modifiers() -> (bool, bool, bool, KeyModifiers) {
-        let ctrl = unsafe { (GetKeyState(VK_CONTROL) as u16 & 0x8000) != 0 };
-        let alt = unsafe { (GetKeyState(VK_MENU) as u16 & 0x8000) != 0 };
+        let mut ctrl = unsafe { (GetKeyState(VK_CONTROL) as u16 & 0x8000) != 0 };
+        let mut alt = unsafe { (GetKeyState(VK_MENU) as u16 & 0x8000) != 0 };
+        let lalt = unsafe { (GetKeyState(VK_LMENU) as u16 & 0x8000) != 0 };
+        let ralt = unsafe { (GetKeyState(VK_RMENU) as u16 & 0x8000) != 0 };
         let shift = unsafe { (GetKeyState(VK_SHIFT) as u16 & 0x8000) != 0 };
+        if is_altgr(ctrl, lalt, ralt) {
+            // AltGr delivers text through WM_CHAR; it is not Ctrl+Alt.
+            ctrl = false;
+            alt = false;
+        }
         let mut mods = KeyModifiers::empty();
         if ctrl {
             mods |= KeyModifiers::CONTROL;
@@ -649,5 +666,20 @@ mod tests {
 
         // Plain printable letter without Ctrl/Alt defers to WM_CHAR
         assert!(translate_vk_to_key_event(0x41, false, false, false).is_none());
+
+        // Ctrl+Shift+; (Primary+;) maps through VK_OEM_1
+        let semi = translate_vk_to_key_event(0xBA, true, false, true).expect("Ctrl+Shift+;");
+        assert_eq!(semi.code, KeyCode::Char(':'));
+    }
+
+    #[test]
+    fn altgr_is_right_alt_with_synthesized_ctrl_and_never_a_chord() {
+        assert!(is_altgr(true, false, true));
+        assert!(!is_altgr(true, true, false), "Ctrl+LeftAlt is a real chord");
+        assert!(!is_altgr(true, true, true), "both Alts down is a real chord");
+        assert!(!is_altgr(false, false, true), "RightAlt alone is Alt");
+        assert!(!is_altgr(true, false, false));
+        // With AltGr folded to no modifiers a letter defers to WM_CHAR instead of becoming a chord.
+        assert!(translate_vk_to_key_event(0x51, false, false, false).is_none());
     }
 }
