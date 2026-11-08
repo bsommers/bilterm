@@ -22,6 +22,7 @@ mod parse_command_window;
 mod parse_config;
 mod parse_daemon;
 mod parse_find;
+pub mod parse_keys;
 mod parse_link;
 pub mod parse_media;
 mod parse_script;
