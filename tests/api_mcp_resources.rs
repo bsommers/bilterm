@@ -140,6 +140,7 @@ fn tools_list_only_gains_find() {
             "bilterm_daemon",
             "bilterm_drawer_preview",
             "bilterm_clipboard",
+            "bilterm_voice",
         ]
     );
 }

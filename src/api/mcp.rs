@@ -96,6 +96,7 @@ impl AutomationControlPlane {
                     "bilterm_daemon" => Some(Self::daemon_method(&args).unwrap_or("")),
                     "bilterm_drawer_preview" => Some("drawer.preview"),
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
+                    "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -108,6 +109,8 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: list, status, start, stop, switch".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
+                        } else if tool_name == "bilterm_voice" {
+                            Err("missing or invalid 'action' parameter: toggle, start, stop, cancel, status, provider, or inject_wav".to_string())
                         } else {
                             Err("missing 'kind' parameter: agent, session or history".to_string())
                         }
@@ -328,8 +331,34 @@ impl AutomationControlPlane {
                     ("op", "string", "Window operation for action='window': open | close | toggle | pin | dock | float | all | session | window | pinned | media"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_voice",
+                "Control the Speech-to-Text (STT) voice dictation subsystem: toggle, start recording, stop and transcribe, cancel, check status, switch provider, or inject audio.",
+                &[
+                    ("action", "string", "Operation: toggle | start | stop | cancel | status | provider | inject_wav (default 'status')"),
+                    ("pane_id", "integer", "Optional target pane ID"),
+                    ("provider", "string", "Optional provider name for action='provider': openai | ollama | cli | mock"),
+                    ("wav_base64", "string", "Base64-encoded WAV audio data for action='inject_wav'"),
+                    ("wav_hex", "string", "Hex-encoded WAV audio data for action='inject_wav'"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
+    }
+
+    /// `bilterm_voice` `action` argument -> the `voice.*` RPC method; `None` when unknown.
+    fn voice_method(args: &JsonValue) -> Option<&'static str> {
+        let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("status");
+        match action {
+            "toggle" => Some("voice.toggle"),
+            "start" => Some("voice.start"),
+            "stop" => Some("voice.stop"),
+            "cancel" => Some("voice.cancel"),
+            "status" => Some("voice.status"),
+            "provider" => Some("voice.provider"),
+            "inject_wav" => Some("voice.inject_wav"),
+            _ => None,
+        }
     }
 
     /// `bilterm_clipboard` `action` argument -> the `clipboard.*` RPC method; `None` when unknown.

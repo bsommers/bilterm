@@ -109,6 +109,8 @@ pub struct CompositePane {
     pending_clipboard_records: Vec<(crate::clipboard::ClipboardSource, String)>,
     /// Pending media passthrough events waiting to be drained into `ClipboardRegistry`.
     pending_media_records: Vec<(String, usize)>,
+    /// Live STT status badge rendered in the 3270 OIA status bar (`STT-02`, `STT-03`).
+    stt_badge: Option<String>,
 }
 
 impl CompositePane {
@@ -159,6 +161,7 @@ impl CompositePane {
             smart_ctrl_v_paste: true,
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
+            stt_badge: None,
         }
     }
 
@@ -962,6 +965,32 @@ impl CompositePane {
     /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).
     pub fn is_headless(&self) -> bool {
         self.pty.is_none()
+    }
+
+    /// Returns the live STT badge string if active or enabled on this pane.
+    pub fn stt_badge(&self) -> Option<&str> {
+        self.stt_badge.as_deref()
+    }
+
+    /// Sets the live STT badge string displayed on the OIA status bar.
+    pub fn set_stt_badge(&mut self, badge: Option<String>) {
+        self.stt_badge = badge;
+    }
+
+    /// Stages dictated speech text into the FloatingCommandPrompt without executing it.
+    pub fn insert_dictated_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if !self.vt.is_alternate_screen() {
+            self.prompt.force_command_prompt = true;
+            self.prompt.manual_raw_override = false;
+        }
+        let current = self.prompt.text();
+        if !current.is_empty() && !current.ends_with(' ') && !text.starts_with(' ') {
+            self.prompt.insert_char(' ');
+        }
+        self.prompt.insert_str(text);
     }
 }
 

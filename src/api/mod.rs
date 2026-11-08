@@ -21,6 +21,7 @@ pub mod rpc_handlers;
 pub mod rpc_link;
 pub mod rpc_window;
 pub mod rpc_session_map;
+pub mod rpc_voice;
 pub mod server;
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod dotted;
 pub use dotted::ApiConfig;
+pub use crate::stt::SttConfig;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -178,6 +179,8 @@ pub struct BiltermConfig {
     /// Runtime software blink phase (`true` when the cursor is in the hidden `OFF` blink phase).
     #[serde(skip)]
     pub cursor_blink_hidden: bool,
+    /// Speech-to-Text subsystem configuration (`[stt]` in `config.toml`).
+    pub stt: SttConfig,
 }
 
 impl Default for BiltermConfig {
@@ -259,6 +262,7 @@ impl Default for BiltermConfig {
             smart_ctrl_v_paste: true,
             custom_palette_override: None,
             cursor_blink_hidden: false,
+            stt: SttConfig::default(),
         }
     }
 }

@@ -11,6 +11,8 @@ use crate::ui::theme::ThemePreset;
 use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLayoutMode};
 use serde::{Deserialize, Serialize};
 
+pub use crate::stt::VoiceOp;
+
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -251,6 +253,8 @@ pub enum Action {
     Daemon(DaemonSupervisorOp),
     /// `:drawer preview ...` / `:peek ...`: Live window peek & preview pane (`DRW-PEEK-01..03`, Phase 56).
     DrawerPreview(DrawerPreviewOp),
+    /// Speech-to-text dictation operations (`STT-01..03`).
+    Voice(VoiceOp),
     Quit,
 }
 
@@ -587,6 +591,16 @@ mod tests {
             Action::DrawerPreview(DrawerPreviewOp::Session(_)) => {
                 Some(":drawer preview session default")
             }
+            Action::Voice(VoiceOp::Toggle) => Some(":voice toggle"),
+            Action::Voice(VoiceOp::Start { pane_id: None }) => Some(":voice start"),
+            Action::Voice(VoiceOp::Start { pane_id: Some(_) }) => None,
+            Action::Voice(VoiceOp::Stop) => Some(":voice stop"),
+            Action::Voice(VoiceOp::Cancel) => Some(":voice cancel"),
+            Action::Voice(VoiceOp::Status) => Some(":voice status"),
+            Action::Voice(VoiceOp::SetProvider { .. }) => Some(":voice provider openai"),
+            Action::Voice(VoiceOp::ApplyTranscript { .. }) => None,
+            Action::Voice(VoiceOp::UpdateTelemetry { .. }) => None,
+            Action::Voice(VoiceOp::InjectWav { .. }) => None,
             Action::Quit => Some(":quit"),
         };
 
@@ -840,6 +854,7 @@ mod tests {
             Action::DrawerPreview(DrawerPreviewOp::Row(0)),
             Action::DrawerPreview(DrawerPreviewOp::Pane(1)),
             Action::DrawerPreview(DrawerPreviewOp::Session("default".to_string())),
+            Action::Voice(VoiceOp::Toggle),
             Action::Quit,
         ];
 

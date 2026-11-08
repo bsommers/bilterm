@@ -897,6 +897,23 @@ pub fn handle_wm_mouse_event(
         && pane_mouse.column >= pane_inner.x
         && pane_mouse.column < pane_inner.x + pane_inner.width;
 
+    if on_pane_status_bar && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+        let status_rect = Rect::new(
+            pane_inner.x,
+            pane_inner.y + pane_inner.height.saturating_sub(1),
+            pane_inner.width,
+            1,
+        );
+        if let Some(pane) = wm.pane_by_focus(hit_focus)
+            && let Some(mic_rect) = crate::ui::oia::oia_mic_badge_rect(pane, status_rect)
+            && pane_mouse.column >= mic_rect.x
+            && pane_mouse.column < mic_rect.x + mic_rect.width
+        {
+            let _ = wm.apply(crate::action::Action::Voice(crate::action::VoiceOp::Toggle));
+            return Ok(AppAction::Handled);
+        }
+    }
+
     let auto_copy = wm.config().copy_on_select;
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
         return Ok(AppAction::Continue);

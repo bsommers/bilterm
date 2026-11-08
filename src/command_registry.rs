@@ -126,6 +126,8 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":tabnext", ":tab", "Alias of :tab next (focus next terminal window)."),
     (":tabprev", ":tab", "Alias of :tab prev (focus previous terminal window)."),
     (":tabclose", ":tab", "Alias of :tab close (close active terminal window)."),
+    (":voice", "", "Speech-to-text dictation control (:voice toggle|start|stop|cancel|status|provider <kind>)."),
+    (":stt", ":voice", "Alias of :voice."),
 ];
 
 /// Reason for the `:finder` rows (Phase 50.1 exception E1): they drive the open Find modal.
@@ -337,6 +339,11 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":clipboard copy", "free-text"),
     (":clipboard pin-entry", "reachable-via-picker"),
     (":clipboard delete", "reachable-via-picker"),
+    (":voice start", "entity-id"),
+    (":voice stop", "reachable-via-picker"),
+    (":voice cancel", "reachable-via-picker"),
+    (":voice status", "reachable-via-picker"),
+    (":voice provider", "reachable-via-picker"),
 ];
 
 fn head(s: &str) -> &str {

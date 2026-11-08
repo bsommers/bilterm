@@ -125,6 +125,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":agents filter remove agent", "A / P / T (conversation)", "Remove one conversation filter"),
     (":inspector", "Ctrl+X i / F9", "Open Live 3270 Terminal Inspector modal"),
     (":hints", "Ctrl+X f / F3", "Activate QuickSelect 3270 Field Hints ([a]..[z])"),
+    (":voice toggle", "Ctrl+Alt+S / Ctrl+X ,", "Toggle voice dictation recording into active pane"),
     (":copy", "F8 / Alt+C / Ctrl+Up", "Focus OutputCanvas to move cursor & select text"),
     (":rect", "Alt+R / Alt+Drag", "Start 2D Rectangular Block Selection & Highlight on OutputCanvas"),
     (":rect mode", "—", "Toggle persistent Rectangular Mouse Drag mode (LeftDrag selects rectangle)"),

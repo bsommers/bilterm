@@ -501,6 +501,13 @@ impl AutomationControlPlane {
             "clipboard.delete" => self.rpc_clipboard_delete(params),
             "clipboard.clear" => self.rpc_clipboard_clear(params),
             "clipboard.window" => self.rpc_clipboard_window(params),
+            "voice.toggle" => self.rpc_voice_toggle(params),
+            "voice.start" => self.rpc_voice_start(params),
+            "voice.stop" => self.rpc_voice_stop(params),
+            "voice.cancel" => self.rpc_voice_cancel(params),
+            "voice.status" => self.rpc_voice_status(params),
+            "voice.provider" => self.rpc_voice_provider(params),
+            "voice.inject_wav" => self.rpc_voice_inject_wav(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

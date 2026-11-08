@@ -42,6 +42,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     }
 
     match head {
+        "voice" | "stt" => super::parse_voice::parse_voice_colon_command(head, &parts),
         "prompt" => match parts.get(1).copied() {
             Some("top") => Some(Ok(ColonCommand::PromptTop)),
             Some("bottom") => Some(Ok(ColonCommand::PromptBottom)),
