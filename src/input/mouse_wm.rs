@@ -683,6 +683,34 @@ pub(super) fn handle_drawer_mouse_event(
     mouse: MouseEvent,
     workspace_area: Rect,
 ) -> Option<AppAction> {
+    if let Some(pr) = wm.drawer_preview_rect(workspace_area)
+        && rect_contains(pr, mouse.column, mouse.row)
+    {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if wm.drawer_preview_close_hit(workspace_area, mouse.column, mouse.row) {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Off,
+                    ));
+                } else {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Commit,
+                    ));
+                }
+                return Some(AppAction::Handled);
+            }
+            MouseEventKind::ScrollUp => {
+                wm.drawer_select_prev();
+                return Some(AppAction::Handled);
+            }
+            MouseEventKind::ScrollDown => {
+                wm.drawer_select_next();
+                return Some(AppAction::Handled);
+            }
+            MouseEventKind::Moved => return None,
+            _ => return Some(AppAction::Handled),
+        }
+    }
     // GUI panel scale (46-04d): work in the panel's own coordinate space; identity at 100%.
     let (mouse, workspace_area) = wm.panel_space(mouse, workspace_area, PanelTarget::Drawer);
     if let Some(delta) = ctrl_wheel_scale_delta(&mouse)
@@ -728,8 +756,15 @@ pub(super) fn handle_drawer_mouse_event(
     let dr = wm.drawer_rect(workspace_area)?;
     super::drawer_navigator::navigator_menu_click_away(wm, &mouse, dr);
     if !rect_contains(dr, mouse.column, mouse.row) {
-        if matches!(mouse.kind, MouseEventKind::Down(_)) && wm.drawer().focused {
-            wm.drawer_mut().focused = false;
+        if matches!(mouse.kind, MouseEventKind::Down(_)) {
+            if wm.drawer().preview.active {
+                let _ = wm.apply(crate::action::Action::DrawerPreview(
+                    crate::action::DrawerPreviewOp::Off,
+                ));
+            }
+            if wm.drawer().focused {
+                wm.drawer_mut().focused = false;
+            }
         }
         return None;
     }
@@ -864,6 +899,12 @@ pub(super) fn handle_drawer_mouse_event(
             let delta: isize = if matches!(mouse.kind, MouseEventKind::ScrollUp) { -3 } else { 3 };
             if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {
                 wm.drawer_hscroll_by(delta * 2);
+            } else if wm.drawer().preview.active || wm.drawer().preview.auto_preview_on_scroll {
+                if delta < 0 {
+                    wm.drawer_select_prev();
+                } else {
+                    wm.drawer_select_next();
+                }
             } else if wm.drawer_config().edge.is_vertical() {
                 let inner_h = dr.height.saturating_sub(2);
                 let rows_len = wm.drawer_rows().len();

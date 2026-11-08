@@ -341,6 +341,12 @@ pub(super) fn handle_wm_modal_key(
         {
             return Ok(Some(action));
         }
+        if wm.clipboard_window().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::clipboard_window_keys::handle_clipboard_window_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
         if wm.fonts_window().captures_input()
             && !wm.is_leader_pending()
             && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
@@ -431,7 +437,16 @@ pub(super) fn handle_wm_modal_key(
                 wm.drawer_hscroll_by(-6);
             }
             KeyCode::Right if wm.drawer_hscroll_by(6) => {}
-            KeyCode::Esc | KeyCode::Tab | KeyCode::Right => {
+            KeyCode::Esc => {
+                if wm.drawer().preview.active {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Off,
+                    ));
+                } else {
+                    wm.drawer_mut().focused = false;
+                }
+            }
+            KeyCode::Tab | KeyCode::Right => {
                 wm.drawer_mut().focused = false;
             }
             KeyCode::Down
@@ -521,9 +536,21 @@ pub(super) fn handle_wm_modal_key(
             KeyCode::Char('l') => { wm.drawer_hscroll_by(6); }
             KeyCode::PageDown => wm.drawer_scroll_by(5),
             KeyCode::PageUp => wm.drawer_scroll_by(-5),
-            KeyCode::Home | KeyCode::Char('g') => wm.drawer_mut().selected_index = 0,
+            KeyCode::Home | KeyCode::Char('g') => {
+                wm.drawer_mut().selected_index = 0;
+                wm.on_drawer_selection_changed(true);
+            }
             KeyCode::End | KeyCode::Char('G') => wm.drawer_scroll_by(10_000),
-            KeyCode::Enter | KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Enter => {
+                if wm.drawer().preview.active {
+                    let _ = wm.apply(crate::action::Action::DrawerPreview(
+                        crate::action::DrawerPreviewOp::Commit,
+                    ));
+                } else {
+                    wm.drawer_activate_selected(false);
+                }
+            }
+            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
             KeyCode::Char('n') | KeyCode::Char('+') | KeyCode::Char('c') | KeyCode::Char('w') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
                     wm.sync_drawer_selection_to_active_pane();

@@ -177,6 +177,8 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":history max-files <N>", "Set maximum retained session history files"),
     (":block prev | :block next", "Jump between prior commands in scrollback (OSC 133)"),
     (":yank / :paste / :clear", "Yank via OSC 52, paste OS clipboard into PTY, or clear OutputCanvas"),
+    (":clipboard [open|close|toggle|all|session|window|pinned|media]", "Open/filter the Pinnable & Dockable CLIPBOARD Viewer window (Ctrl+Alt+V / Ctrl+X ;)"),
+    (":paste raw-ctrl-v", "Forward raw Ctrl+V (0x16) byte directly to the active pane PTY"),
     ("Ctrl+Shift+V / Shift+Ins / Ctrl+X p/v", "Paste OS clipboard directly into active PTY (even in RAW PTY)"),
     ("Shift+Arrows / Ctrl+C/V / Alt+B/F", "Select text, Copy/Paste, or move/delete by word in Prompt"),
     ("Tab / Shift+Tab / Ctrl+R", "Tab-complete paths/commands/:colon or Ctrl+R fuzzy history"),
@@ -246,4 +248,5 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":commands [open|close|toggle|pin|clear]", "Interactive Pinnable Command Palette & Workbench window with execution history"),
     (":script [open|run|step|reset|record|save|load]", "Interactive SCRIPT STUDIO window with debugger and live action recorder"),
     (":studio [open|run|step|reset|record|save|load]", "Alias of :script"),
+    (":drawer preview [on|off|toggle|commit|auto] / :peek", "Floating Live Window Peek & Preview Pane beside the drawer (Alt+P / Ctrl+X P / v in drawer)"),
 ];

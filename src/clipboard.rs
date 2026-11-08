@@ -7,7 +7,108 @@
 
 use std::sync::Mutex;
 
+/// Origin of a clipboard or yank entry (`CLIP-02`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ClipboardSource {
+    /// Copied from the floating command prompt (`Ctrl+C`, `Alt+W`, `:copy`).
+    PromptCopy,
+    /// Cut or killed from the floating command prompt (`Ctrl+X`, `Ctrl+K`, `Ctrl+U`, `Ctrl+W`).
+    PromptCut,
+    /// Yanked in Vi Copy Mode (`y`, `Enter`, `:copy yank`).
+    CopyModeYank,
+    /// Yanked or cut from 2D rectangular block selection (`:rect copy`, `:rect cut`).
+    RectBlock,
+    /// Written by a child TUI or remote session via `OSC 52` (`\x1b]52;c;<base64>\x07`).
+    Osc52,
+    /// Pasted from the host OS clipboard (`Ctrl+V`, `Ctrl+Shift+V`, `:paste`, bracketed paste).
+    SystemPaste,
+    /// Forwarded raw `Ctrl+V` (`0x16`) when image/video media was detected on the OS clipboard.
+    MediaPassthrough,
+    /// Pushed explicitly via `:clipboard copy <text>`, JSON-RPC, or MCP.
+    ExplicitCopy,
+}
+
+impl ClipboardSource {
+    /// Short badge label for the `CLIPBOARD` window row.
+    pub fn badge(self) -> &'static str {
+        match self {
+            Self::PromptCopy => "PromptCopy",
+            Self::PromptCut => "PromptCut",
+            Self::CopyModeYank => "CopyMode",
+            Self::RectBlock => "RectSelect",
+            Self::Osc52 => "OSC52",
+            Self::SystemPaste => "SysPaste",
+            Self::MediaPassthrough => "Media^V",
+            Self::ExplicitCopy => "Explicit",
+        }
+    }
+
+    /// Canonical lowercase identifier for JSON-RPC / MCP serialization.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PromptCopy => "prompt_copy",
+            Self::PromptCut => "prompt_cut",
+            Self::CopyModeYank => "copy_mode",
+            Self::RectBlock => "rect_block",
+            Self::Osc52 => "osc52",
+            Self::SystemPaste => "system_paste",
+            Self::MediaPassthrough => "media_passthrough",
+            Self::ExplicitCopy => "explicit_copy",
+        }
+    }
+}
+
+/// Detected MIME category of the system clipboard (`CLIP-01`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClipboardMimeProbe {
+    /// Text content is available in the system or in-process clipboard.
+    Text,
+    /// Image or video media is available in the system clipboard (`image/*`, `video/*`).
+    Media { mime: String, bytes_len: usize },
+    /// Clipboard is empty.
+    Empty,
+}
+
 static PROCESS_CLIPBOARD: Mutex<String> = Mutex::new(String::new());
+static TEST_MIME_OVERRIDE: Mutex<Option<ClipboardMimeProbe>> = Mutex::new(None);
+
+/// Test hook to simulate media or empty clipboard state in unit/integration tests (`CLIP-01`).
+pub fn set_test_clipboard_mime_override(probe: Option<ClipboardMimeProbe>) {
+    if let Ok(mut guard) = TEST_MIME_OVERRIDE.lock() {
+        *guard = probe;
+    }
+}
+
+/// Clears the in-process clipboard buffer (for deterministic test isolation).
+pub fn clear_process_clipboard() {
+    if let Ok(mut guard) = PROCESS_CLIPBOARD.lock() {
+        guard.clear();
+    }
+}
+
+/// Probes the current system clipboard MIME type (`CLIP-01`).
+///
+/// Used when `Ctrl+V` is pressed in `RawPtyPassthrough` / `ALT_SCREEN` so Bilterm only forwards
+/// raw `0x16` (`\x16`) to child TUIs (`herdr`, `Claude Code`) when an image/video is actually on
+/// the clipboard, and otherwise injects text via bracketed paste (`\x1b[200~...\x1b[201~`).
+pub fn probe_system_clipboard_mime() -> ClipboardMimeProbe {
+    if let Ok(guard) = TEST_MIME_OVERRIDE.lock()
+        && let Some(ref probe) = *guard
+    {
+        return probe.clone();
+    }
+    #[cfg(not(test))]
+    if !is_automated_test_process()
+        && let Some(probe) = os_probe_clipboard_mime()
+    {
+        return probe;
+    }
+    if get_system_clipboard().is_some_and(|s| !s.is_empty()) {
+        ClipboardMimeProbe::Text
+    } else {
+        ClipboardMimeProbe::Empty
+    }
+}
 
 #[cfg(not(test))]
 fn is_automated_test_process() -> bool {
@@ -425,6 +526,106 @@ fn os_get_clipboard() -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
+fn classify_mime_targets(targets_output: &str) -> Option<ClipboardMimeProbe> {
+    let mut has_text = false;
+    let mut media_mime: Option<String> = None;
+    for raw in targets_output.lines() {
+        let token = raw.trim().to_ascii_lowercase();
+        if token.is_empty() {
+            continue;
+        }
+        if token.starts_with("image/") || token.starts_with("video/") {
+            media_mime.get_or_insert(token);
+        } else if token == "png" || token == "image/png" || token.contains("public.png") || token.contains("tiff") {
+            media_mime.get_or_insert_with(|| "image/png".to_string());
+        } else if token.starts_with("text/")
+            || token == "utf8_string"
+            || token == "string"
+            || token == "text"
+            || token.contains("utf8-plain-text")
+        {
+            has_text = true;
+        }
+    }
+    if let Some(mime) = media_mime
+        && !has_text
+    {
+        return Some(ClipboardMimeProbe::Media { mime, bytes_len: 0 });
+    }
+    if has_text {
+        return Some(ClipboardMimeProbe::Text);
+    }
+    None
+}
+
+#[cfg(all(not(any(windows, target_os = "macos")), not(test)))]
+fn os_probe_clipboard_mime() -> Option<ClipboardMimeProbe> {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && let Some(out) = run_read_command_bounded("wl-paste", &["--list-types"], 120)
+        && let Some(probe) = classify_mime_targets(&out)
+    {
+        return Some(probe);
+    }
+    if std::env::var_os("DISPLAY").is_some()
+        && let Some(out) =
+            run_read_command_bounded("xclip", &["-selection", "clipboard", "-t", "TARGETS", "-o"], 120)
+        && let Some(probe) = classify_mime_targets(&out)
+    {
+        return Some(probe);
+    }
+    os_get_clipboard().map(|s| {
+        if s.is_empty() {
+            ClipboardMimeProbe::Empty
+        } else {
+            ClipboardMimeProbe::Text
+        }
+    })
+}
+
+#[cfg(all(target_os = "macos", not(test)))]
+fn os_probe_clipboard_mime() -> Option<ClipboardMimeProbe> {
+    use std::process::{Command, Stdio};
+    if let Ok(out) = Command::new("osascript")
+        .args(["-e", "clipboard info"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        && out.status.success()
+    {
+        let info = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
+        let has_image = info.contains("picture") || info.contains("tiff") || info.contains("pngf");
+        let has_text = info.contains("utf8") || info.contains("ut16") || info.contains("string");
+        if has_image && !has_text {
+            return Some(ClipboardMimeProbe::Media {
+                mime: "image/png".to_string(),
+                bytes_len: 0,
+            });
+        }
+        if has_text {
+            return Some(ClipboardMimeProbe::Text);
+        }
+    }
+    os_get_clipboard().map(|s| {
+        if s.is_empty() {
+            ClipboardMimeProbe::Empty
+        } else {
+            ClipboardMimeProbe::Text
+        }
+    })
+}
+
+#[cfg(all(windows, not(test)))]
+fn os_probe_clipboard_mime() -> Option<ClipboardMimeProbe> {
+    os_get_clipboard().map(|s| {
+        if s.is_empty() {
+            ClipboardMimeProbe::Empty
+        } else {
+            ClipboardMimeProbe::Text
+        }
+    })
 }
 
 #[cfg(test)]

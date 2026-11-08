@@ -139,6 +139,7 @@ impl WindowManager {
             DrawerNavOp::Row(i) => {
                 let len = self.drawer_rows().len();
                 self.drawer.selected_index = i.min(len.saturating_sub(1));
+                self.on_drawer_selection_changed(false);
                 len > 0
             }
             DrawerNavOp::Scroll(n) => {

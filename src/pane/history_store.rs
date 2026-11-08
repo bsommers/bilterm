@@ -702,6 +702,10 @@ impl HistoryStore {
             || self.base_dir.as_os_str().is_empty()
             || self.clipboard_file_path.as_os_str().is_empty()
             || text.is_empty()
+            || matches!(
+                crate::pane::redact::classify(text),
+                Some(crate::pane::redact::Exclusion::Secret)
+            )
         {
             return Ok(None);
         }

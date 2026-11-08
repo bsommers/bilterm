@@ -110,6 +110,7 @@ pub struct VtParser {
     recording_events: Vec<(f64, String)>,
     recent_escape_sequences: Vec<String>,
     pending_osc52: Vec<String>,
+    pending_osc52_decoded: Vec<String>,
     pending_query_responses: Vec<Vec<u8>>,
     total_lines_scrolled: usize,
     total_bytes_processed: usize,
@@ -182,6 +183,7 @@ impl VtParser {
             recording_events: Vec::new(),
             recent_escape_sequences: Vec::new(),
             pending_osc52: Vec::new(),
+            pending_osc52_decoded: Vec::new(),
             pending_query_responses: Vec::new(),
             total_lines_scrolled: 0,
             total_bytes_processed: 0,
@@ -769,6 +771,10 @@ impl VtParser {
 
     pub fn take_outbound_osc52(&mut self) -> Vec<String> {
         std::mem::take(&mut self.pending_osc52)
+    }
+
+    pub fn take_osc52_decoded(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_osc52_decoded)
     }
 
     pub fn scrollback_offset(&self) -> usize {

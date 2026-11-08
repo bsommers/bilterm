@@ -21,6 +21,8 @@ pub enum DockPanel {
     AgentsTraffic,
     /// The SESSION MAP packing viewer.
     SessionMap,
+    /// The CLIPBOARD viewer window (Phase 57).
+    Clipboard,
 }
 
 /// Workspace width from which the strip sits on the right (narrower: at the bottom).
@@ -78,6 +80,9 @@ impl WindowManager {
         if self.session_map.active && self.session_map.docked {
             v.push(DockPanel::SessionMap);
         }
+        if self.clipboard_window.active && self.clipboard_window.docked {
+            v.push(DockPanel::Clipboard);
+        }
         v
     }
 
@@ -86,6 +91,7 @@ impl WindowManager {
             DockPanel::AgentsList => PanelTarget::AgentsList,
             DockPanel::AgentsTraffic => PanelTarget::Agents,
             DockPanel::SessionMap => PanelTarget::SessionMap,
+            DockPanel::Clipboard => PanelTarget::Clipboard,
         }
     }
 
@@ -234,6 +240,7 @@ impl WindowManager {
             DockPanel::AgentsList => (self.agents_list.active, &mut self.agents_list.docked),
             DockPanel::AgentsTraffic => (self.agents_window.active, &mut self.agents_window.docked),
             DockPanel::SessionMap => (self.session_map.active, &mut self.session_map.docked),
+            DockPanel::Clipboard => (self.clipboard_window.active, &mut self.clipboard_window.docked),
         };
         let want = on && active;
         if *flag == want {
@@ -248,6 +255,7 @@ impl WindowManager {
                 DockPanel::AgentsList => self.agents_list.docked = false,
                 DockPanel::AgentsTraffic => self.agents_window.docked = false,
                 DockPanel::SessionMap => self.session_map.docked = false,
+                DockPanel::Clipboard => self.clipboard_window.docked = false,
             }
             self.dock_status(NO_ROOM);
             return false;

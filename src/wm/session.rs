@@ -174,10 +174,13 @@ impl WindowManager {
     /// panes whose session file location (dir / session name) changed.
     pub fn sync_history_config(&mut self) {
         let settings = self.config.history_settings();
+        let smart_ctrl_v = self.config.smart_ctrl_v_paste;
         for pane in self.panes.values_mut() {
             Self::attach_history(pane, &settings);
+            pane.set_smart_ctrl_v_paste(smart_ctrl_v);
         }
         Self::attach_history(&mut self.quick_terminal.pane, &settings);
+        self.quick_terminal.pane.set_smart_ctrl_v_paste(smart_ctrl_v);
     }
 
     pub(super) fn attach_history(pane: &mut CompositePane, settings: &HistorySettings) {

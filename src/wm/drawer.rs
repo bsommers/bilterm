@@ -19,11 +19,13 @@ use crate::wm::{WindowManager, WorkspaceLayoutMode};
 pub mod navigator;
 pub mod nav;
 pub mod menu;
+pub mod preview;
 mod ops;
 pub(crate) mod navigator_detail;
 pub use navigator::{CommsIndicator, DrawerStyle, NavigatorLevel, NavigatorRowMeta};
 pub use nav::DrawerNavOp;
 pub use menu::{NavigatorMenu, NavigatorMenuEntry};
+pub use preview::{DrawerPreviewState, DrawerPreviewTarget};
 
 /// 10-frame Braille activity spinner glyphs (`DRW-02`).
 pub const BRAILLE_SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -221,6 +223,8 @@ pub struct WorkspaceDrawer {
     /// Open navigator right-click menu (Phase 50-15); changed only through `DrawerNavOp::Menu*`.
     nav_menu: Option<NavigatorMenu>,
     pub navigator: navigator::NavigatorDrawerState,
+    /// Live window peek & preview pane state (`DRW-PEEK-01..03`, Phase 56).
+    pub preview: DrawerPreviewState,
     pane_prev_bytes: BTreeMap<PaneId, usize>,
     pane_sparklines: BTreeMap<PaneId, [u8; 6]>,
     tick_counter: usize,
@@ -611,6 +615,13 @@ impl WindowManager {
                 || (node.name != "main" && node.name != self.config.history_session);
             if is_explicit && !extra_sessions.iter().any(|s| s == &node.name) {
                 extra_sessions.push(node.name.clone());
+            }
+        }
+        for bg_name in self.window_manage.background_sessions.keys() {
+            if bg_name != &self.config.history_session
+                && !extra_sessions.iter().any(|s| s == bg_name)
+            {
+                extra_sessions.push(bg_name.clone());
             }
         }
         for saved in extra_sessions {

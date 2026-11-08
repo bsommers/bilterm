@@ -27,6 +27,7 @@ impl WindowManager {
             self.drawer.nav_menu = None;
             self.drawer.hover_active = false;
             self.drawer.maximized = false;
+            self.drawer.preview.close();
             if self.config.drawer.visibility == DrawerVisibilityMode::Fixed {
                 self.config.drawer.visibility = DrawerVisibilityMode::OnDemand;
             }
@@ -63,6 +64,7 @@ impl WindowManager {
         self.drawer.focused = false;
         self.drawer.nav_menu = None;
         self.drawer.maximized = false;
+        self.drawer.preview.close();
         if self.config.drawer.visibility != DrawerVisibilityMode::Fixed {
             self.drawer.open = false;
             self.drawer.hover_active = false;
@@ -84,6 +86,7 @@ impl WindowManager {
         } else if self.drawer.selected_index >= rows.len() {
             self.drawer.selected_index = rows.len().saturating_sub(1);
         }
+        self.on_drawer_selection_changed(false);
     }
 
     pub fn drawer_select_next(&mut self) {
@@ -91,6 +94,7 @@ impl WindowManager {
         if len > 0 {
             self.drawer.selected_index = (self.drawer.selected_index + 1) % len;
         }
+        self.on_drawer_selection_changed(true);
     }
 
     pub fn drawer_select_prev(&mut self) {
@@ -98,6 +102,7 @@ impl WindowManager {
         if len > 0 {
             self.drawer.selected_index = (self.drawer.selected_index + len - 1) % len;
         }
+        self.on_drawer_selection_changed(true);
     }
 
     /// Scrolls drawer row text horizontally; clamped so the longest row's tail stays reachable.
@@ -121,6 +126,7 @@ impl WindowManager {
             let max_idx = (len - 1) as isize;
             self.drawer.selected_index = (cur.saturating_add(delta)).clamp(0, max_idx) as usize;
         }
+        self.on_drawer_selection_changed(true);
     }
 
     pub fn selected_drawer_pane_id(&self) -> Option<PaneId> {
@@ -142,9 +148,19 @@ impl WindowManager {
         if let Some(row) = rows.get(self.drawer.selected_index) {
             match &row.kind {
                 DrawerRowKind::Pane(id) => {
-                    self.focus_and_raise(*id);
+                    let target_id = *id;
+                    if let Some(sess) = row
+                        .navigator
+                        .as_ref()
+                        .and_then(|m| m.session_name.as_deref())
+                        && sess != self.config.history_session
+                    {
+                        let sess_owned = sess.to_string();
+                        let _ = self.switch_to_session_preserving_panes(&sess_owned);
+                    }
+                    self.focus_and_raise(target_id);
                     self.active_pane_mut().set_status_message(Some(format!(
-                        "Selected Pane #{id} (Tab/Esc to type in pane, ↑/↓ to keep browsing drawer)"
+                        "Selected Pane #{target_id} (Tab/Esc to type in pane, ↑/↓ to keep browsing drawer)"
                     )));
                 }
                 DrawerRowKind::QuickTerminal => {

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::action::Action;
+use crate::action::{Action, DrawerPreviewOp};
 use crate::wm::SplitDirection;
 use crate::wm::agents_cmd::{AgentsOp, KeywordEdit, SnoopFilterKind, SnoopFilterOp};
 use crate::wm::agents_list_cmd::AgentsListOp;
@@ -9,6 +9,7 @@ use crate::wm::drawer::DrawerNavOp;
 use crate::wm::find_cmd::{FindKind, FindOp};
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
+use crate::wm::clipboard_window::ClipboardWindowOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -48,6 +49,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('p'), Action::PasteClipboard),
     (KeyCode::Char('v'), Action::PasteClipboard),
     (KeyCode::Char(']'), Action::PasteClipboard),
+    // Filterable CLIPBOARD viewer window toggle (`Ctrl+X ;`, Phase 57)
+    (KeyCode::Char(';'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     (KeyCode::Char('1'), Action::FocusPane(1)),
     (KeyCode::Char('2'), Action::FocusPane(2)),
     (KeyCode::Char('3'), Action::FocusPane(3)),
@@ -126,7 +129,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('l'), Action::LockToggle(None)),
     (KeyCode::Char('/'), Action::SearchPromptPrefill),
     (KeyCode::Char('N'), Action::SearchPrev),
-    (KeyCode::Char('P'), Action::HistoryPopupToggle),
+    (KeyCode::Char('P'), Action::DrawerPreview(DrawerPreviewOp::Toggle)),
     (KeyCode::Char('H'), Action::HistoryPopupToggle),
     (KeyCode::Char('R'), Action::RecordWorkspaceStart(None)),
     (KeyCode::Left, Action::PaneFocusDirection { dx: -1, dy: 0 }),
@@ -212,6 +215,10 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char('m'), Action::LayoutCycle),
     (KeyModifiers::ALT, KeyCode::Char('M'), Action::LayoutCycle),
     (KeyModifiers::ALT, KeyCode::Char('D'), Action::DrawerToggle),
+    (KeyModifiers::ALT, KeyCode::Char('P'), Action::DrawerPreview(DrawerPreviewOp::Toggle)),
+    (KeyModifiers::ALT.union(KeyModifiers::SHIFT), KeyCode::Char('P'), Action::DrawerPreview(DrawerPreviewOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('p'), Action::DrawerPreview(DrawerPreviewOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('P'), Action::DrawerPreview(DrawerPreviewOp::Toggle)),
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
@@ -221,6 +228,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // SESSION MAP toggle: Ctrl+Alt+M (Phase 54, VIEW-02)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('m'), Action::SessionMap(SessionMapOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('M'), Action::SessionMap(SessionMapOp::Toggle)),
+    // CLIPBOARD viewer window toggle: Ctrl+Alt+V (Phase 57, CLIP-04)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('v'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('V'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     // Find window (`:find agent`): Ctrl+Alt+F. Leader `?` is HelpToggle, so Find has no leader chord (P-06).
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('f'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('F'), Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() })),
@@ -310,7 +320,6 @@ pub const DEFAULT_PANE_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     (KeyModifiers::ALT, KeyCode::Char(']'), Action::PromptResizeWidth(4)),
     (KeyModifiers::ALT, KeyCode::Char('['), Action::PromptResizeWidth(-4)),
     (KeyModifiers::ALT, KeyCode::Char('p'), Action::HistoryPopupToggle),
-    (KeyModifiers::ALT, KeyCode::Char('P'), Action::HistoryPopupToggle),
     (KeyModifiers::ALT, KeyCode::PageUp, Action::BlockPrev),
     (KeyModifiers::ALT, KeyCode::PageDown, Action::BlockNext),
 ];

@@ -3,7 +3,7 @@
 //! Every key chord, `:colon` command, playbook step, and JSON-RPC/MCP workspace command lowers
 //! into a typed [`Action`] executed by [`crate::wm::WindowManager::apply`].
 
-use crate::pane::{ExitProtectionPolicy, PaneScrollMode, PromptMode};
+use crate::pane::{ExitProtectionPolicy, PaneId, PaneScrollMode, PromptMode};
 use crate::ui::chrome::{OutlineStyle, ShadowStyle};
 use crate::ui::cursor::{CaretStyle, SpotlightMode};
 use crate::ui::glyphs::GlyphPack;
@@ -194,6 +194,8 @@ pub enum Action {
     FontsWindow(crate::wm::fonts_window::FontsWindowOp),
     /// `:commands [open|close|toggle|pin|...]` - Pinnable Command Palette window (WIN-02, Phase 51.2).
     CommandWindow(crate::wm::command_window::CommandWindowOp),
+    /// `:clipboard [open|close|toggle|pin|dock|...]` - Filterable Clipboard Viewer window (`CLIP-03..04`, Phase 57).
+    ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
     ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
@@ -247,7 +249,30 @@ pub enum Action {
     DaemonSupervisor(DaemonSupervisorOp),
     /// Alias for `DaemonSupervisor` matching contract shorthand (`DAEM-05..08`).
     Daemon(DaemonSupervisorOp),
+    /// `:drawer preview ...` / `:peek ...`: Live window peek & preview pane (`DRW-PEEK-01..03`, Phase 56).
+    DrawerPreview(DrawerPreviewOp),
     Quit,
+}
+
+/// Operations for the Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`, Phase 56).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DrawerPreviewOp {
+    /// Open the live preview pane for the currently highlighted drawer row.
+    On,
+    /// Close the live preview pane without changing active workspace focus.
+    Off,
+    /// Toggle the live preview pane on/off for the currently highlighted drawer row.
+    Toggle,
+    /// Commit focus/restore/switch to the currently previewed window or session and close the preview.
+    Commit,
+    /// Toggle automatic preview when scrolling through drawer rows (`auto_preview_on_scroll`).
+    AutoToggle,
+    /// Select row `idx` in the drawer and open its live preview.
+    Row(usize),
+    /// Open live preview directly for pane `id`.
+    Pane(PaneId),
+    /// Open live preview directly for session `name` (background or saved session).
+    Session(String),
 }
 
 /// Lifecycle operations for `:appearance` profiles (`DSN-01..03`, Phase 45).
@@ -311,9 +336,20 @@ impl Action {
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(_) => ":session undo".to_string(),
             Self::DaemonSupervisor(_) | Self::Daemon(_) => ":daemon list".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::On) => ":drawer preview on".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Off) => ":drawer preview off".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Toggle) => ":drawer preview toggle".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Commit) => ":drawer preview commit".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::AutoToggle) => ":drawer preview auto".to_string(),
+            Self::DrawerPreview(DrawerPreviewOp::Row(idx)) => format!(":drawer preview row {idx}"),
+            Self::DrawerPreview(DrawerPreviewOp::Pane(id)) => format!(":drawer preview pane {id}"),
+            Self::DrawerPreview(DrawerPreviewOp::Session(name)) => {
+                format!(":drawer preview session {name}")
+            }
             Self::ScriptStudio(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
+            Self::ClipboardWindow(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
             Self::SessionMap(op) => op.colon_form(),
@@ -513,6 +549,7 @@ mod tests {
             Action::SessionMap(_) => Some(":sessions map toggle"),
             Action::FontsWindow(_) => Some(":fonts toggle"),
             Action::CommandWindow(_) => Some(":commands toggle"),
+            Action::ClipboardWindow(_) => Some(":clipboard toggle"),
             Action::ScriptStudio(_) => Some(":script toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
@@ -540,6 +577,16 @@ mod tests {
             Action::WindowManage(_) => Some(":window undo"),
             Action::SessionManage(_) => Some(":session undo"),
             Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
+            Action::DrawerPreview(DrawerPreviewOp::On) => Some(":drawer preview on"),
+            Action::DrawerPreview(DrawerPreviewOp::Off) => Some(":drawer preview off"),
+            Action::DrawerPreview(DrawerPreviewOp::Toggle) => Some(":drawer preview toggle"),
+            Action::DrawerPreview(DrawerPreviewOp::Commit) => Some(":drawer preview commit"),
+            Action::DrawerPreview(DrawerPreviewOp::AutoToggle) => Some(":drawer preview auto"),
+            Action::DrawerPreview(DrawerPreviewOp::Row(_)) => Some(":drawer preview row 0"),
+            Action::DrawerPreview(DrawerPreviewOp::Pane(_)) => Some(":drawer preview pane 1"),
+            Action::DrawerPreview(DrawerPreviewOp::Session(_)) => {
+                Some(":drawer preview session default")
+            }
             Action::Quit => Some(":quit"),
         };
 
@@ -743,6 +790,7 @@ mod tests {
             Action::SessionMap(crate::wm::session_map::SessionMapOp::Toggle),
             Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
             Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
+            Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::Toggle),
             Action::ScriptStudio(crate::wm::script_studio::ScriptStudioOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
@@ -784,6 +832,14 @@ mod tests {
             Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
             Action::DaemonSupervisor(DaemonSupervisorOp::List),
             Action::Daemon(DaemonSupervisorOp::List),
+            Action::DrawerPreview(DrawerPreviewOp::On),
+            Action::DrawerPreview(DrawerPreviewOp::Off),
+            Action::DrawerPreview(DrawerPreviewOp::Toggle),
+            Action::DrawerPreview(DrawerPreviewOp::Commit),
+            Action::DrawerPreview(DrawerPreviewOp::AutoToggle),
+            Action::DrawerPreview(DrawerPreviewOp::Row(0)),
+            Action::DrawerPreview(DrawerPreviewOp::Pane(1)),
+            Action::DrawerPreview(DrawerPreviewOp::Session("default".to_string())),
             Action::Quit,
         ];
 

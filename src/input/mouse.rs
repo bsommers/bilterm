@@ -163,12 +163,7 @@ pub fn handle_mouse_event(
         mouse.kind,
         MouseEventKind::Down(MouseButton::Right | MouseButton::Middle)
     ) {
-        let clip = crate::clipboard::get_system_clipboard()
-            .unwrap_or_else(|| pane.prompt().yank_buffer.clone());
-        if !clip.is_empty() {
-            return crate::input::handle_paste_event(pane, &clip);
-        }
-        return Ok(AppAction::Handled);
+        return crate::input::paste_clipboard_into_pane(pane);
     }
 
     let canvas_rect = pane.canvas_rect(viewport);
@@ -660,6 +655,9 @@ pub fn handle_wm_mouse_event(
         if let Some(action) = super::command_window::handle_command_window_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
+        if let Some(action) = super::clipboard_window::handle_clipboard_window_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
         if let Some(action) = super::script_studio::handle_script_studio_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
@@ -904,7 +902,13 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Continue);
     };
 
+    let shift_mouse_paste = pane_mouse.modifiers.contains(KeyModifiers::SHIFT)
+        && matches!(
+            pane_mouse.kind,
+            MouseEventKind::Down(MouseButton::Right | MouseButton::Middle)
+        );
     let force_local_select = pane_mouse.modifiers.contains(KeyModifiers::ALT)
+        || shift_mouse_paste
         || pane.copy_mode().active
         || pane.copy_mode().rect_mode
         || pane.mouse_drag().is_some();
@@ -933,9 +937,13 @@ pub fn handle_wm_mouse_event(
         if p.copy_mode().has_selection() {
             let _ = p.yank_mouse_canvas_selection();
         } else if let Some(copied) = p.prompt_mut().copy_selection() {
-            p.record_yank(&copied);
+            p.record_yank_with_source(
+                crate::wm::clipboard_registry::ClipboardSource::PromptCopy,
+                &copied,
+            );
         }
     }
+    wm.sync_clipboard_records();
     wm.set_mouse_pixel_hint(None);
     res
 }

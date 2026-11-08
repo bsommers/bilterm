@@ -1,6 +1,8 @@
 pub mod agents_gui;
 pub mod agents_list_ui;
 pub mod agents_ui;
+pub mod clipboard_window_gui;
+pub mod clipboard_window_ui;
 pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
@@ -18,6 +20,7 @@ pub mod cursor;
 pub mod cursor_cmd;
 pub mod design;
 pub mod drawer;
+pub mod drawer_preview;
 pub mod glyphs;
 pub mod graph_raster;
 pub mod hires_subcell;
@@ -677,6 +680,14 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Drawer) == 100 {
             render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+        drawer_preview::render_drawer_preview_overlay(
+            self.wm,
+            workspace_area,
+            cfg,
+            &palette,
+            &glyphs,
+            buf,
+        );
 
         if qt_visible {
             let qt_outer = self.wm.quick_terminal().overlay_rect(workspace_area);
@@ -739,6 +750,9 @@ impl Widget for WorkspaceWidget<'_> {
         }
         fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Clipboard) == 100 {
+            clipboard_window_ui::render_clipboard_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
         script_studio_ui::render_script_studio(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {

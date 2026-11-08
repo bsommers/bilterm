@@ -382,6 +382,12 @@ impl crate::wm::WindowManager {
         if first == "clipboard" {
             let sub = parts.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
             match sub.as_str() {
+                "raw-ctrl-v" | "raw" => {
+                    let _ = self.active_pane_mut().write_raw_pty(&[0x16]);
+                    self.active_pane_mut().set_status_message(Some(
+                        "Forwarded raw Ctrl+V (0x16) to PTY".to_string(),
+                    ));
+                }
                 "persist" | "save" => {
                     let next = match parts.get(2).map(|s| s.to_ascii_lowercase()).as_deref() {
                         Some("on" | "true" | "enable") => true,

@@ -411,7 +411,9 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Stop Agent Demo (Ctrl+X Y)", ":agents demo stop"),
         ("Fonts Window", ":fonts toggle"),
         ("Command Palette Window", ":commands toggle"),
+        ("Clipboard Viewer (Ctrl+Alt+V)", ":clipboard toggle"),
         ("Script Studio", ":script toggle"),
+        ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
     ]),
     ("Theme", &[
         ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),

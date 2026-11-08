@@ -556,6 +556,18 @@ impl CompositePane {
     /// Records `text` into the pane's yank buffer, yank history ring, session `clipboard.log`
     /// (when enabled), OS system clipboard, and `OSC 52` sequence.
     pub fn record_yank(&mut self, text: &str) {
+        self.record_yank_with_source(
+            crate::clipboard::ClipboardSource::CopyModeYank,
+            text,
+        );
+    }
+
+    /// Records `text` with an explicit [`crate::clipboard::ClipboardSource`] (`CLIP-02`).
+    pub fn record_yank_with_source(
+        &mut self,
+        source: crate::clipboard::ClipboardSource,
+        text: &str,
+    ) {
         if text.is_empty() {
             return;
         }
@@ -563,6 +575,7 @@ impl CompositePane {
         let _ = self.history_store.record_clipboard_entry(text);
         crate::clipboard::set_system_clipboard(text);
         self.last_osc52_sequence = Some(encode_osc52_clipboard(text));
+        self.record_clipboard_event(source, text.to_string());
     }
 
     /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer,
@@ -580,7 +593,14 @@ impl CompositePane {
             self.status_message = Some("Copy Mode: empty selection".to_string());
             return None;
         }
-        self.record_yank(&text);
+        self.record_yank_with_source(
+            if was_block {
+                crate::clipboard::ClipboardSource::RectBlock
+            } else {
+                crate::clipboard::ClipboardSource::CopyModeYank
+            },
+            &text,
+        );
         if was_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
@@ -632,7 +652,14 @@ impl CompositePane {
             self.copy_mode.visual_lock = false;
             return None;
         }
-        self.record_yank(&text);
+        self.record_yank_with_source(
+            if is_block {
+                crate::clipboard::ClipboardSource::RectBlock
+            } else {
+                crate::clipboard::ClipboardSource::CopyModeYank
+            },
+            &text,
+        );
         if is_block && let Some((h, w)) = dims {
             self.status_message = Some(format!(
                 "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",

@@ -222,6 +222,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [x] **DAEM-07**: Daemons discover each other; `daemon.list` RPC/MCP and `:daemon` verbs.
 - [x] **DAEM-08**: Safe lifecycle: graceful stop, crash cleanup, version mismatch, no cross-daemon leakage.
 
+## Drawer Window Peek & Live Preview Pane (Phase 56)
+
+- [x] **DRW-PEEK-01**: Transient non-destructive floating preview pane when scrolling or highlighting rows in the Classic or Navigator drawer, displaying live `CompositePane` output or saved-session snapshot.
+- [x] **DRW-PEEK-02**: Keyboard navigation (`j`/`k`, `Up`/`Down`, `PageUp`/`PageDown`) and mouse wheel scrolling in drawer update preview; `Enter` commits focus/switch; `Esc` or clicking away dismisses peek.
+- [x] **DRW-PEEK-03**: Surface uniformity (`UNI-R01`), configuration toggles (`[drawer] peek_preview = true`, delay, dimensions), and zero-`SIGWINCH` compositing across live, minimized, stacked, and background session panes.
+
+## Smart Clipboard Paste Fix & Multi-Session Clipboard Viewer Window (Phase 57)
+
+- [x] **CLIP-01**: Smart MIME-aware clipboard paste in `RawPtyPassthrough` / `ALT_SCREEN` mode wrapping text in `DECSET 2004` bracketed paste and passing media through, fixing `"No image or video found in clipboard"` in Herdr/Claude Code; `Shift+RightClick` pastes text over SGR mouse tracking; inbound `OSC 52` updates system clipboard and registry.
+- [x] **CLIP-02**: Multi-session, multi-window tagged `ClipboardRegistry` capturing copy/cut/yank/kill/OSC-52/OS-sync events with secret redaction (`SEC-R01..04`).
+- [x] **CLIP-03**: First-class floating, pinnable, dockable `CLIPBOARD` viewer window filterable by session, window, pin state, media, and fuzzy query.
+- [x] **CLIP-04**: Full surface uniformity (`UNI-R01`) across Mouse, Keyboard (`Ctrl+Alt+V` / Leader `;`), `:clipboard` colon commands, palette, top menu, JSON-RPC, and MCP.
+
+## Local AI Speech-to-Text Module (Phase 58)
+
+- [ ] **STT-01**: Pluggable Local AI STT backends: OpenAI-compatible `POST /v1/audio/transcriptions` (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama multimodal/audio, and local CLI subprocess.
+- [ ] **STT-02**: Two-tier zero-bloat cross-platform audio capture (subprocess pipe default, opt-in `cpal` feature) with push-to-talk, VAD, and OIA `[🎙 REC]` status bar telemetry.
+- [ ] **STT-03**: Isolated subsystem seam (`src/stt/`), prompt buffer staging, voice-to-shell translation hook, security confinement (`SEC-R01..04`), and surface parity (`UNI-R01`).
+
+## GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (Phase 59)
+
+- [ ] **WEB-01**: Embedded Chromium engine web browser canvas via CDP Screencast frame-sink (and optional CEF off-screen renderer) rendering 60fps RGBA frames into composite pane canvases under private profile isolation (`0700`).
+- [ ] **WEB-02**: Full interactive browser navigation (URL bar, mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, TUI sub-cell fallback).
+- [ ] **VID-01**: Embedded 60fps RGBA hardware-accelerated video player canvas powered by `ffmpeg` pipe / libavcodec with monotonic audio sync.
+- [ ] **VID-02**: On-screen transport controls (play/pause, seek, volume, loop, speed), Borland/OIA status bar integration, TUI sub-cell fallback (Kitty/Sixel/HalfBlock), and surface parity (`UNI-R01`).
+
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
 - [x] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
@@ -271,13 +297,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEM-06 | Phase 55 | Complete |
 | DAEM-07 | Phase 55 | Complete |
 | DAEM-08 | Phase 55 | Complete |
+| DRW-PEEK-01 | Phase 56 | Complete |
+| DRW-PEEK-02 | Phase 56 | Complete |
+| DRW-PEEK-03 | Phase 56 | Complete |
+| CLIP-01 | Phase 57 | Complete |
+| CLIP-02 | Phase 57 | Complete |
+| CLIP-03 | Phase 57 | Complete |
+| CLIP-04 | Phase 57 | Complete |
+| STT-01 | Phase 58 | Planned (Spike Complete) |
+| STT-02 | Phase 58 | Planned (Spike Complete) |
+| STT-03 | Phase 58 | Planned (Spike Complete) |
+| WEB-01 | Phase 59 | Planned (Spike Complete) |
+| WEB-02 | Phase 59 | Planned (Spike Complete) |
+| VID-01 | Phase 59 | Planned (Spike Complete) |
+| VID-02 | Phase 59 | Planned (Spike Complete) |
 
 **Coverage:**
 
-- Total tracked requirements: 65 total (traceability table rows)
-- Mapped to phases: 65 (54 Complete, 11 Planned)
+- Total tracked requirements: 79 total (traceability table rows)
+- Mapped to phases: 79 (54 Complete, 25 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-06 for Phases 53, 54, 55*
+*Last updated: 2026-11-07 for Phases 56, 57, 58, 59*

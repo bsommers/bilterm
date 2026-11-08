@@ -75,6 +75,8 @@ pub struct NavigatorRowMeta {
     /// Second-line text of a pane row (`user@host  path`); `None` for every other row, when
     /// `drawer.row_lines = 1`, or when the pane exposes neither identity nor path.
     pub detail: Option<String>,
+    /// Enclosing session name for a pane row (`Some(name)` for active or background session panes, `None` otherwise).
+    pub session_name: Option<String>,
 }
 
 /// Partners considered for the comms indicator: events newer than this.
@@ -201,6 +203,17 @@ impl WindowManager {
                 ctx.walk(&node, 0, &mut visited, &mut rows);
             }
         }
+        for name in self.window_manage.background_sessions.keys() {
+            if !visited.contains(name) && tree.node(name).is_none() && name != active {
+                let mut node = SessionTreeNode::new(name.clone(), SessionNodeKind::Independent, None);
+                node.pane_count = self
+                    .window_manage
+                    .background_sessions
+                    .get(name)
+                    .map_or(0, |bg| bg.panes.len());
+                ctx.walk(&node, 0, &mut visited, &mut rows);
+            }
+        }
 
         if self.quick_terminal.visible {
             rows.push(navigator_row(
@@ -240,6 +253,7 @@ fn other_meta() -> NavigatorRowMeta {
         comms: None,
         comms_active: false,
         detail: None,
+        session_name: None,
     }
 }
 
@@ -257,9 +271,21 @@ impl WalkCtx<'_> {
         }
         let tree = &self.wm.daemon_state.session_tree;
         let live = node.name == self.active;
+        let bg_sess = (!live)
+            .then(|| self.wm.window_manage.background_sessions.get(&node.name))
+            .flatten();
         let children: Vec<&SessionTreeNode> = node.children.iter().filter_map(|c| tree.node(c)).collect();
-        let has_children = !children.is_empty() || (live && !self.pane_ids.is_empty());
+        let has_children = !children.is_empty()
+            || (live && !self.pane_ids.is_empty())
+            || bg_sess.is_some_and(|bg| !bg.panes.is_empty());
         let collapsed = node.collapsed && has_children;
+        let pane_count = if live {
+            self.pane_ids.len()
+        } else if let Some(bg) = bg_sess {
+            bg.panes.len()
+        } else {
+            node.pane_count
+        };
         rows.push(navigator_row(
             DrawerRowKind::SessionHeader(node.name.clone()),
             sanitize_display(&node.name, TITLE_MAX_CHARS),
@@ -269,13 +295,14 @@ impl WalkCtx<'_> {
                 level: if depth == 0 { NavigatorLevel::Workspace } else { NavigatorLevel::Session },
                 collapsed,
                 has_children,
-                live,
-                pane_count: if live { self.pane_ids.len() } else { node.pane_count },
+                live: live || bg_sess.is_some(),
+                pane_count,
                 agent: None,
                 counts: live.then(|| self.wm.agent_counts()),
                 comms: None,
                 comms_active: false,
                 detail: None,
+                session_name: None,
             },
         ));
         if collapsed {
@@ -283,6 +310,8 @@ impl WalkCtx<'_> {
         }
         if live {
             self.push_panes(depth + 1, rows);
+        } else if let Some(bg) = bg_sess {
+            self.push_bg_panes(&node.name, bg, depth + 1, rows);
         }
         for child in children {
             self.walk(child, depth + 1, visited, rows);
@@ -322,6 +351,42 @@ impl WalkCtx<'_> {
                     comms,
                     comms_active,
                     detail: two_line.then(|| super::navigator_detail::pane_detail_line(pane)).flatten(),
+                    session_name: Some(self.active.to_string()),
+                },
+            ));
+        }
+    }
+
+    fn push_bg_panes(
+        &self,
+        session_name: &str,
+        bg: &crate::wm::window_manage::BackgroundSessionState,
+        depth: usize,
+        rows: &mut Vec<DrawerRow>,
+    ) {
+        let two_line = self.wm.config.drawer.navigator_row_lines() == 2;
+        let mut ids: Vec<PaneId> = bg.panes.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let Some(pane) = bg.panes.get(&id) else { continue };
+            let raw_title = sanitize_display(pane.title(), TITLE_MAX_CHARS);
+            rows.push(navigator_row(
+                DrawerRowKind::Pane(id),
+                raw_title,
+                false,
+                NavigatorRowMeta {
+                    depth: depth.min(usize::from(u8::MAX)) as u8,
+                    level: NavigatorLevel::Pane,
+                    collapsed: false,
+                    has_children: false,
+                    live: true,
+                    pane_count: 0,
+                    agent: self.wm.agent_state(id),
+                    counts: None,
+                    comms: None,
+                    comms_active: false,
+                    detail: two_line.then(|| super::navigator_detail::pane_detail_line(pane)).flatten(),
+                    session_name: Some(session_name.to_string()),
                 },
             ));
         }
