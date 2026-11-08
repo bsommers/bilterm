@@ -37,6 +37,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     {
         return Some(res);
     }
+    if let Some(res) = super::parse_media::parse_media_colon_command(head, &parts, rest) {
+        return Some(res);
+    }
     if let Some(res) = parse_visual_colon_command(head, &parts) {
         return Some(res);
     }

@@ -501,6 +501,12 @@ impl AutomationControlPlane {
             "clipboard.delete" => self.rpc_clipboard_delete(params),
             "clipboard.clear" => self.rpc_clipboard_clear(params),
             "clipboard.window" => self.rpc_clipboard_window(params),
+            "browser.open" => self.rpc_browser_open(params),
+            "browser.control" => self.rpc_browser_control(params),
+            "browser.state" => self.rpc_browser_state(params),
+            "video.open" => self.rpc_video_open(params),
+            "video.control" => self.rpc_video_control(params),
+            "video.state" => self.rpc_video_state(params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

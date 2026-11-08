@@ -18,6 +18,8 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     ("Ctrl+X z / F5 / Alt+Z", "Toggle maximize/zoom on focused pane"),
     ("Ctrl+X o / F6 / Alt+Tab", "Shuffle pane deck top-to-bottom (cycle focus)"),
     ("Ctrl+X 1..9 / Alt+1..9", "Selectively raise & focus pane #1..#9"),
+    ("Ctrl+Alt+B / Leader . / :browser", "Toggle Chrome Engine Web Browser Canvas in active pane"),
+    ("Ctrl+Alt+Y / Leader ' / :video", "Toggle Video Player Canvas in active pane"),
     ("Ctrl+X M / Alt+M", "Toggle Tiled Splits vs Z-Order Stacked Windows"),
     ("Ctrl+X d / Alt+D / F7 / :drawer", "Toggle Slide-Out Sessions / Windows / Panes Drawer (Push by default)"),
     ("Ctrl+X q / Ctrl+\\ / F10", "Toggle persistent Guake Quick Terminal (macOS-safe)"),

@@ -260,6 +260,8 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":autosave", "—", "Layout profile autosave: :autosave on|off (restore your layout on next launch)"),
     (":bell", "—", "Clear notifications / bell indicators (alias of :notifications)"),
     (":buffers", "—", "List the clipboard / yank history buffers (alias of :clipboard list)"),
+    (":browser", "Ctrl+Alt+B", "Toggle Chrome Engine Web Browser Canvas in active pane (Leader .)"),
+    (":video", "Ctrl+Alt+Y", "Toggle Video Player Canvas in active pane (Leader ')"),
     (":commands", "—", "Open this command palette (alias of :palette)"),
     (":equalize", "—", "Reset window geometry: equalize sizes / re-cascade (alias of :cascade)"),
     (":find agent", "Ctrl+Alt+F", "Find agents / sessions / command history: fuzzy, ranked, Enter jumps; other \":find <text>\" still searches scrollback"),
