@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.planning/**'
+      - 'docs/**'
 
 permissions:
   contents: read
@@ -14,6 +18,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   test:
@@ -34,8 +39,6 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
       - name: Quick verify (clippy + unit tests)
         run: |
           status=0
