@@ -260,7 +260,34 @@ pub enum Action {
     Browser(BrowserOp),
     /// `:video [open|play|pause|toggle|seek|volume|mute|loop|speed|close]` - Video Player Canvas (`VID-01..02`).
     Video(VideoOp),
+    /// `:web [status|open|port <N>|stop]`: Web UI surface control (`WEB-FE-01..04`, Phase 60).
+    Web(WebOp),
     Quit,
+}
+
+/// Web UI surface operations (`WEB-FE-01..04`, `UNI-R01`, Phase 60).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WebOp {
+    /// Report enabled / port / url / connected clients.
+    Status,
+    /// Open the web UI URL in the system browser (reports the URL when headless or API-driven).
+    OpenBrowser,
+    /// Set the port used by the next start (refused while running).
+    SetPort(u16),
+    /// Stop the running web server from accepting new connections.
+    Stop,
+}
+
+impl WebOp {
+    /// Canonical `:web` colon form.
+    pub fn colon_form(&self) -> String {
+        match self {
+            Self::Status => ":web status".to_string(),
+            Self::OpenBrowser => ":web open".to_string(),
+            Self::SetPort(p) => format!(":web port {p}"),
+            Self::Stop => ":web stop".to_string(),
+        }
+    }
 }
 
 /// Operations for the Drawer Window Peek & Live Preview Pane (`DRW-PEEK-01..03`, Phase 56).
@@ -356,6 +383,7 @@ impl Action {
                 format!(":drawer preview session {name}")
             }
             Self::ScriptStudio(op) => op.colon_form(),
+            Self::Web(op) => op.colon_form(),
             Self::FontsWindow(op) => op.colon_form(),
             Self::CommandWindow(op) => op.colon_form(),
             Self::ClipboardWindow(op) => op.colon_form(),
@@ -586,6 +614,10 @@ mod tests {
             Action::WindowManage(_) => Some(":window undo"),
             Action::SessionManage(_) => Some(":session undo"),
             Action::DaemonSupervisor(_) | Action::Daemon(_) => Some(":daemon list"),
+            Action::Web(WebOp::Status) => Some(":web status"),
+            Action::Web(WebOp::OpenBrowser) => Some(":web open"),
+            Action::Web(WebOp::SetPort(_)) => Some(":web port 9000"),
+            Action::Web(WebOp::Stop) => Some(":web stop"),
             Action::DrawerPreview(DrawerPreviewOp::On) => Some(":drawer preview on"),
             Action::DrawerPreview(DrawerPreviewOp::Off) => Some(":drawer preview off"),
             Action::DrawerPreview(DrawerPreviewOp::Toggle) => Some(":drawer preview toggle"),
@@ -853,6 +885,10 @@ mod tests {
             Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
             Action::DaemonSupervisor(DaemonSupervisorOp::List),
             Action::Daemon(DaemonSupervisorOp::List),
+            Action::Web(WebOp::Status),
+            Action::Web(WebOp::OpenBrowser),
+            Action::Web(WebOp::SetPort(9000)),
+            Action::Web(WebOp::Stop),
             Action::DrawerPreview(DrawerPreviewOp::On),
             Action::DrawerPreview(DrawerPreviewOp::Off),
             Action::DrawerPreview(DrawerPreviewOp::Toggle),

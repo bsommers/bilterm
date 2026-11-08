@@ -282,7 +282,7 @@ fn is_error(r: &JsonValue) -> Option<bool> {
 fn mcp_lists_remote_link_tool() {
     let mut p = plane();
     let t = tools(&mut p);
-    assert_eq!(t.len(), 23, "13 before Phase 51.1 plus bilterm_remote_link and Phases 52-59 tools");
+    assert_eq!(t.len(), 24, "13 before Phase 51.1 plus bilterm_remote_link and Phases 52-60 tools");
     let last = &t[13];
     assert_eq!(s(last, "name").as_deref(), Some("bilterm_remote_link"));
     let schema = last.get("inputSchema").unwrap();

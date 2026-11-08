@@ -10,6 +10,7 @@ pub mod execute_find;
 pub mod execute_link;
 pub mod execute_voice;
 pub mod execute_media;
+pub mod execute_web;
 pub mod execute_window;
 pub mod execute_wm;
 pub mod parse;
@@ -27,6 +28,7 @@ mod parse_script;
 pub mod parse_session_map;
 pub mod parse_voice;
 mod parse_visual;
+pub mod parse_web;
 pub mod parse_window;
 
 pub use crate::action::Action;

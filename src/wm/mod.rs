@@ -225,6 +225,8 @@ pub struct WindowManager {
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
     pub(crate) daemon_state: crate::daemon::DaemonServerState,
+    /// Shared web surface handle (`WEB-FE-01..04`, Phase 60); clones share state with the HTTP/WS server.
+    pub(crate) web_surface: crate::api::web_surface::WebSurfaceState,
     /// TRON Master Control Program (`MCP`) root terminal state (`MCP-01..02`).
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
@@ -319,6 +321,7 @@ impl WindowManager {
             clipboard_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
+            web_surface: crate::api::web_surface::WebSurfaceState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
             layout_profiles_mem: BTreeMap::new(),

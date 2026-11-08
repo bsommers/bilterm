@@ -1,4 +1,5 @@
 pub mod browser_canvas;
+mod output_tap;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -101,6 +102,8 @@ pub struct CompositePane {
     captured_masked: u32,
     /// Bytes typed into this pane are mirrored to `remote_input` for the tmux link (Phase 51.1).
     remote_input_tap: bool,
+    /// Opt-in raw output mirror for web clients (`WEB-FE-01`); bounded by `OUTPUT_TAP_CAP`.
+    output_tap: Option<Vec<u8>>,
     /// Tap buffer, bounded by `REMOTE_INPUT_CAP`; drained once per link tick.
     remote_input: Vec<u8>,
     /// Link state banner drawn on the pane's bottom row (Phase 51.1).
@@ -161,6 +164,7 @@ impl CompositePane {
             captured: Vec::new(),
             captured_masked: 0,
             remote_input_tap: false,
+            output_tap: None,
             remote_input: Vec::new(),
             link_banner: None,
             exit_code: None,
@@ -714,6 +718,7 @@ impl CompositePane {
 
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
+        self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
         self.canvas_scene
@@ -767,6 +772,7 @@ impl CompositePane {
             // Every byte must reach the parser in order: truncating the stream splits escape
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
             self.canvas_scene

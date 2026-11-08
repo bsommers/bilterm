@@ -110,4 +110,94 @@ impl DesignTokens {
             ColorRole::Scrim => self.scrim,
         }
     }
+
+    /// All 14 roles as `(css-name, color)` pairs in declaration order.
+    pub fn css_roles(&self) -> [(&'static str, Color); 14] {
+        [
+            ("canvas", self.canvas),
+            ("surface", self.surface),
+            ("surface-raised", self.surface_raised),
+            ("overlay", self.overlay),
+            ("border-idle", self.border_idle),
+            ("border-focus", self.border_focus),
+            ("text-primary", self.text_primary),
+            ("text-muted", self.text_muted),
+            ("accent", self.accent),
+            ("accent-on", self.accent_on),
+            ("success", self.success),
+            ("warning", self.warning),
+            ("danger", self.danger),
+            ("scrim", self.scrim),
+        ]
+    }
+
+    /// CSS custom properties (`:root { --color-canvas: #rrggbb; ... }`) for web surfaces (`WEB-FE-02`).
+    /// `scrim` is emitted as translucent `rgba(...)`; non-RGB colours map to their nearest CSS value.
+    pub fn to_css_variables(&self) -> String {
+        let mut out = String::from(":root {\n");
+        for (name, color) in self.css_roles() {
+            let value = if name == "scrim" {
+                let (r, g, b) = css_rgb(color);
+                format!("rgba({r}, {g}, {b}, 0.55)")
+            } else {
+                css_hex(color)
+            };
+            out.push_str(&format!("  --color-{name}: {value};\n"));
+        }
+        out.push_str("}\n");
+        out
+    }
 }
+
+/// `(r, g, b)` for any colour: RGB as-is, named ANSI colours via the xterm default palette.
+fn css_rgb(c: Color) -> (u8, u8, u8) {
+    match c {
+        Color::Rgb(r, g, b) => (r, g, b),
+        Color::Black | Color::Reset => (0, 0, 0),
+        Color::Red => (205, 0, 0),
+        Color::Green => (0, 205, 0),
+        Color::Yellow => (205, 205, 0),
+        Color::Blue => (0, 0, 238),
+        Color::Magenta => (205, 0, 205),
+        Color::Cyan => (0, 205, 205),
+        Color::Gray => (229, 229, 229),
+        Color::DarkGray => (127, 127, 127),
+        Color::LightRed => (255, 0, 0),
+        Color::LightGreen => (0, 255, 0),
+        Color::LightYellow => (255, 255, 0),
+        Color::LightBlue => (92, 92, 255),
+        Color::LightMagenta => (255, 0, 255),
+        Color::LightCyan => (0, 255, 255),
+        Color::White => (255, 255, 255),
+        Color::Indexed(i) => indexed_rgb(i),
+    }
+}
+
+/// xterm 256-colour palette entry `i`.
+fn indexed_rgb(i: u8) -> (u8, u8, u8) {
+    match i {
+        0..=15 => {
+            const BASE: [(u8, u8, u8); 16] = [
+                (0, 0, 0), (205, 0, 0), (0, 205, 0), (205, 205, 0), (0, 0, 238), (205, 0, 205),
+                (0, 205, 205), (229, 229, 229), (127, 127, 127), (255, 0, 0), (0, 255, 0),
+                (255, 255, 0), (92, 92, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+            ];
+            BASE[usize::from(i)]
+        }
+        16..=231 => {
+            let n = i - 16;
+            let lvl = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
+            (lvl(n / 36), lvl((n / 6) % 6), lvl(n % 6))
+        }
+        _ => {
+            let v = 8 + (i - 232) * 10;
+            (v, v, v)
+        }
+    }
+}
+
+fn css_hex(c: Color) -> String {
+    let (r, g, b) = css_rgb(c);
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
