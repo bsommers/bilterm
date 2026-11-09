@@ -109,7 +109,7 @@ impl WindowManager {
             }
         }
 
-        let new_id = self.split_focused(SplitDirection::Vertical)?;
+        let new_id = self.split_focused_remote_pane(SplitDirection::Vertical)?;
         let badge = format!("{dest}/{session_name}");
         let shown_dest = sanitize_display(&dest, NAME_CAP);
         let shown_session = sanitize_display(session_name, NAME_CAP);
@@ -563,8 +563,11 @@ impl WindowManager {
 
         // 3. I/O pumps (plan 13):
         self.pump_tmux_input(now_ms);
+        self.discover_idle_panes();
         self.pump_tmux_outbound();
         self.pump_tmux_replies(now_ms);
+        // Greeting progress (and replies) can unblock commands queued earlier in this tick.
+        self.pump_tmux_outbound();
 
         // 4. Machine tick (backoff deadline -> Spawn):
         let cmds = self.tmux_link.machine.tick(now_ms);

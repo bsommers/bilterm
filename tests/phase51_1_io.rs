@@ -309,7 +309,11 @@ mod input {
         send(&tx, &["%begin 1 1 0", "%end 1 1 0"]);
         wm.tick_tmux_link(10);
         assert!(matches!(wm.tmux_link_state(), LinkState::Connected { .. }));
-        assert!(drain_cmds(&mut cmd_rx).is_empty());
+        // An idle session (greeting only) now triggers pane discovery; nothing else is sent.
+        assert_eq!(
+            drain_cmds(&mut cmd_rx),
+            vec!["list-panes -s -F \"#{window_id} #{pane_id} #{window_name}\"\n".to_string()]
+        );
         assert!(drv_state.lock().unwrap().resizes.is_empty());
 
         // Changing default_size twice with the same value queues one refresh-client and one resize.

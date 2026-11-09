@@ -88,7 +88,7 @@
 | `Alt+P` | `<L> P` / `<L> H` | `:history` / `:hist` | Toggle Borland Command History Pop-up Window |
 | — | `<L> R` | `:record workspace` | Start or stop whole-workspace Asciicast v2 (`.cast`) recording (`⏺ REC`) |
 | `Ctrl+Alt+R` | `<L> U` | `:ssh-tmux reconnect` | Reconnect persistent remote tmux link now (skips retry timer; reserved in raw passthrough; menu Tmux > Reconnect link) |
-| — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (menu Tmux > SSH tmux link...) |
+| — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter`. Works from any state: closes open modals, leaves copy mode, and works while a link waits for a password (menu Tmux > SSH tmux link...) |
 | — | `<L> Q` | `:ssh-tmux disconnect` | Stop persistent remote tmux link; remote tmux session keeps running (menu Tmux > Disconnect link) |
 | `Alt+X` | `<L> x` | `:crosshair` | Cycle IBM 3270 Cross-Hair Cursor (`Pane-Local` -> `Full-Screen` -> `Off`) |
 | `Alt+O` | `<L> L` | `:spotlight` | Cycle Focal Spotlight shader around active cursor (`Circle` -> `Ellipse` -> `Pixel` -> `Off`) |
@@ -129,7 +129,7 @@ When an active pane shows an interactive link banner (`Backoff`, `Failed`, `Deta
 | `x` / `X` | `:ssh-tmux disconnect` | Stop remote tmux link; remote tmux session keeps running |
 | `d` / `D` | `:detach` | Detach Bilterm client |
 
-Non-interactive banners (`Connecting`) pass keystrokes directly to the PTY raw so password and SSH prompts are never swallowed.
+Non-interactive banners (`Connecting`) pass keystrokes directly to the remote `ssh` process raw, so password and SSH prompts are never swallowed. While connecting, the command prompt is hidden and typed characters are not echoed on screen.
 
 ### Menu bar entries added in Phase 51 & Phase 51.1
 
@@ -431,7 +431,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | `:ssh-tmux reconnect` | — | *(none)* | Reconnect the persistent remote tmux link immediately (skips backoff timer; `Ctrl+Alt+R` / `Ctrl+X U`) |
 | `:ssh-tmux disconnect` | — | *(none)* | Stop the remote tmux link; remote tmux session keeps running on the host (`Ctrl+X Q`) |
 | `:ssh-tmux info` | — | *(none)* | Show tmux link state, retry timer, last exit reason and mapped panes |
-| `:ssh-tmux prefill` | — | *(none)* | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (`Ctrl+X u`) |
+| `:ssh-tmux prefill` | — | *(none)* | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter` (`Ctrl+X u`). Works from normal, raw passthrough, copy mode, a waiting-for-password link, or with a menu/modal open (closes modals, leaves copy mode) |
 | `:remote` | `:fleet`, `:herdr` | `list \| add <name> <user@host> [@tag1,@tag2] \| exec <all\|local\|remote\|@tag\|node> <cmd> \| disconnect <name>` | Register remote fleet nodes, inspect fleet status, fan out commands by `@tag`, or disconnect nodes |
 
 ### 6.8 Workspace Sessions, Master Control Program (`:mcp`), Exit Guard, Recording & Inspection

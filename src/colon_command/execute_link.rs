@@ -13,9 +13,7 @@ use crate::wm::link_cmd::RemoteLinkOp;
 pub(super) fn execute_link_command(wm: &mut WindowManager, op: RemoteLinkOp) -> bool {
     match op {
         RemoteLinkOp::Prefill => {
-            if wm.active_pane().is_prompt_visible() {
-                wm.active_pane_mut().prompt_mut().set_text(":ssh-tmux ");
-            }
+            wm.prefill_ssh_tmux_prompt();
         }
         RemoteLinkOp::Reconnect => {
             wm.link_reconnect();
