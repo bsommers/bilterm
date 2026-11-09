@@ -502,11 +502,11 @@ pub(super) fn handle_active_modal_overlay_key(
             match key.code {
                 KeyCode::Esc => wm.close_modal(),
                 KeyCode::Left => {
-                    *category = (cat + 6) % 7;
+                    *category = (cat + crate::ui::modals::menubar_category_count() - 1) % crate::ui::modals::menubar_category_count();
                     *item = 0;
                 }
                 KeyCode::Right => {
-                    *category = (cat + 1) % 7;
+                    *category = (cat + 1) % crate::ui::modals::menubar_category_count();
                     *item = 0;
                 }
                 KeyCode::Up => *item = sel.saturating_sub(1),

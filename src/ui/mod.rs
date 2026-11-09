@@ -7,6 +7,7 @@ pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
+pub mod daemon_window_ui;
 pub mod exit_guard_ui;
 pub mod file_browser;
 pub mod find_ui;
@@ -741,12 +742,12 @@ impl Widget for WorkspaceWidget<'_> {
             navigator::render_navigator(self.wm, bar, &palette, buf);
         } else if let Some(menubar_rect) = shell.top_bar {
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
-            if let Some((cat, sel_item)) = self.wm.menubar_state()
-                && workspace_area.height >= 6
-                && workspace_area.width >= 24
-            {
-                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
-            }
+        }
+        if let Some((cat, sel_item)) = self.wm.menubar_state()
+            && workspace_area.height >= 6
+            && workspace_area.width >= 24
+        {
+            render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
         }
 
         if let Some(fkey_rect) = shell.bottom_bar {
@@ -767,6 +768,7 @@ impl Widget for WorkspaceWidget<'_> {
             session_map_ui::render_session_map(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        daemon_window_ui::render_daemon_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Clipboard) == 100 {
             clipboard_window_ui::render_clipboard_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);

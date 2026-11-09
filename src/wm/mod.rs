@@ -879,6 +879,7 @@ impl WindowManager {
             self.agents_window.blur();
             self.agents_list.blur();
             self.fonts_window.blur();
+            self.daemon_window.focused = false;
             self.command_window.blur();
             self.clipboard_window.blur();
             self.script_studio.blur();
@@ -898,6 +899,7 @@ impl WindowManager {
         self.agents_window.blur();
         self.agents_list.blur();
         self.fonts_window.blur();
+        self.daemon_window.focused = false;
         self.command_window.blur();
         self.clipboard_window.blur();
         self.script_studio.blur();
@@ -914,6 +916,7 @@ impl WindowManager {
         self.agents_window.blur();
         self.agents_list.blur();
         self.fonts_window.blur();
+        self.daemon_window.focused = false;
         self.command_window.blur();
         self.clipboard_window.blur();
         self.script_studio.blur();

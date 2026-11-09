@@ -469,7 +469,8 @@ fn menubar_left_right_wrap_and_reset_item() {
     press(&mut w, k(KeyCode::Down));
     assert_eq!(w.menubar_state(), Some((0, 1)));
     press(&mut w, k(KeyCode::Left));
-    assert_eq!(w.menubar_state(), Some((6, 0)), "Left wraps to the last category and resets item");
+    let last = bilterm::ui::modals::menubar_category_count() - 1;
+    assert_eq!(w.menubar_state(), Some((last, 0)), "Left wraps to the last category (all 9, not a literal 7) and resets item");
     press(&mut w, k(KeyCode::Right));
     assert_eq!(w.menubar_state(), Some((0, 0)), "Right wraps to the first category");
     press(&mut w, k(KeyCode::Right));
