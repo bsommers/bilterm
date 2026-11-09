@@ -105,16 +105,29 @@ pub fn render_oia_status_bar_themed(
     };
 
     let routing_badge = if pane.copy_mode().active {
-        if pane.copy_mode().selection_kind == crate::pane::CopySelectionKind::Block
+        if pane.copy_mode().origin == crate::pane::CopyOrigin::Mouse {
+            (
+                " INPUT: SELECT [y/Enter copy | Esc] ",
+                role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 215, 0)),
+            )
+        } else if pane.copy_mode().selection_kind == crate::pane::CopySelectionKind::Block
             || pane.copy_mode().rect_mode
         {
             (
-                " INPUT: RECT [F8/Enter/Esc] ",
+                if pane.vt().is_alternate_screen() {
+                    " INPUT: RECT [Enter/Esc] "
+                } else {
+                    " INPUT: RECT [F8/Enter/Esc] "
+                },
                 role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 215, 0)),
             )
         } else {
             (
-                " INPUT: CANVAS [F8/Tab/Esc] ",
+                if pane.vt().is_alternate_screen() {
+                    " INPUT: CANVAS [Esc] "
+                } else {
+                    " INPUT: CANVAS [F8/Tab/Esc] "
+                },
                 role_color(&tokens, is_legacy, ColorRole::Accent, Color::Rgb(85, 255, 255)),
             )
         }
@@ -428,14 +441,91 @@ pub fn render_oia_status_bar_themed(
             .bg(oia_bg),
     ));
 
-    if let Some(msg) = pane.status_message() {
+    // Mouse tracking indicator and Copy mode badge
+    let is_child_tracking = pane.vt().is_mouse_sgr_or_tracking()
+        && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough;
+    if is_child_tracking && !pane.mouse_select_sticky() {
+        let used: usize = spans.iter().map(Span::width).sum();
+        let avail = usize::from(status_rect.width).saturating_sub(used);
+        if avail >= 34 {
+            spans.push(Span::styled(format!(" {sep}"), Style::default().fg(Color::White).bg(oia_bg)));
+            spans.push(Span::styled(
+                " MOUSE->APP (Shift/Alt+drag select) ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 200, 0)))
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else if avail >= 16 {
+            spans.push(Span::styled(format!(" {sep}"), Style::default().fg(Color::White).bg(oia_bg)));
+            spans.push(Span::styled(
+                " MOUSE->APP ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 200, 0)))
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    } else if pane.mouse_select_sticky() {
+        let used: usize = spans.iter().map(Span::width).sum();
+        let avail = usize::from(status_rect.width).saturating_sub(used);
+        if avail >= 18 {
+            spans.push(Span::styled(format!(" {sep}"), Style::default().fg(Color::White).bg(oia_bg)));
+            spans.push(Span::styled(
+                " MOUSE: SELECT ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(role_color(&tokens, is_legacy, ColorRole::Accent, Color::Cyan))
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+
+    // Clickable [COPY] badge
+    {
+        let used: usize = spans.iter().map(Span::width).sum();
+        let avail = usize::from(status_rect.width).saturating_sub(used);
+        if avail >= 12 {
+            spans.push(Span::styled(format!(" {sep}"), Style::default().fg(Color::White).bg(oia_bg)));
+            spans.push(Span::styled(
+                if pane.copy_mode().active { " [COPY:ON] " } else { " [COPY] " },
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(role_color(&tokens, is_legacy, ColorRole::Success, Color::Rgb(0, 255, 102)))
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+
+    let leader_hint = if std::env::var("TMUX").is_ok() { "Ctrl+X" } else { "Ctrl+B" };
+    let alt_hint = if pane.vt().is_alternate_screen() && !pane.copy_mode().active {
+        Some(format!("Copy: {leader_hint} ["))
+    } else {
+        None
+    };
+    let display_msg = if pane.copy_mode().active {
+        let scope = if pane.vt().is_alternate_screen() {
+            "screen only"
+        } else {
+            "history"
+        };
+        Some(crate::ui::copy_hints::copy_hint_line(
+            pane.copy_mode(),
+            scope,
+            status_rect.width,
+        ))
+    } else {
+        pane.status_message().map(str::to_string).or(alt_hint)
+    };
+    if let Some(msg) = display_msg {
         // The message is feedback for the command just run (`:agents list`, ...). Appended last it is
         // pushed off the row on a normal-width window, so when the detail segments leave no room for
         // it, keep only the brand + state head and let the message have the rest of the row.
         let used: usize = spans.iter().map(Span::width).sum();
         let needed = Span::raw(format!(" {sep} {msg}")).width();
-        // Legacy keeps its historical layout byte-for-byte (Classic parity goldens).
-        if !is_legacy && used + needed > usize::from(status_rect.width) {
+        // Legacy keeps its historical layout byte-for-byte (Classic parity goldens)
+        // unless Copy Mode is active and needs the row for the hint line.
+        if (!is_legacy || pane.copy_mode().active) && used + needed > usize::from(status_rect.width) {
             spans.truncate(3);
         }
         spans.push(Span::styled(
@@ -443,7 +533,7 @@ pub fn render_oia_status_bar_themed(
             Style::default().fg(Color::White).bg(oia_bg),
         ));
         spans.push(Span::styled(
-            msg.to_string(),
+            msg,
             Style::default()
                 .fg(role_color(&tokens, is_legacy, ColorRole::Warning, Color::Rgb(255, 255, 85)))
                 .bg(oia_bg)
@@ -494,12 +584,16 @@ fn format_osc9_gauge(
     }
 }
 
-/// Computes the exact `Rect` of the OIA microphone/STT badge inside `status_rect`, if present.
-pub fn oia_mic_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rect> {
-    let badge = pane.stt_badge()?;
-    if status_rect.width == 0 || status_rect.height == 0 {
-        return None;
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OiaLayout {
+    pub title_end: usize,
+    pub state_end: usize,
+    pub routing_end: usize,
+    pub pin_end: usize,
+    pub prot_end: usize,
+}
+
+pub fn oia_layout(pane: &CompositePane) -> OiaLayout {
     let title_w = if pane.show_version_badge() {
         concat!("3270-OIA v", env!("CARGO_PKG_VERSION")).chars().count()
     } else {
@@ -523,9 +617,30 @@ pub fn oia_mic_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rec
         PromptAnchor::SplitTop | PromptAnchor::SplitBottom => 9,
         _ => 7,
     };
-    let mut offset = title_w + 1 + state_w + 1 + routing_w + 2 + anchor_w;
+    let title_end = title_w;
+    let state_end = title_end + 1 + state_w;
+    let routing_end = state_end + 1 + routing_w;
+    let pin_end = routing_end + 2 + anchor_w;
+    let prot_end = if pane.is_read_only() { pin_end + 11 } else { pin_end };
+    OiaLayout {
+        title_end,
+        state_end,
+        routing_end,
+        pin_end,
+        prot_end,
+    }
+}
+
+/// Computes the exact `Rect` of the OIA microphone/STT badge inside `status_rect`, if present.
+pub fn oia_mic_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rect> {
+    let badge = pane.stt_badge()?;
+    if status_rect.width == 0 || status_rect.height == 0 {
+        return None;
+    }
+    let layout = oia_layout(pane);
+    let mut offset = layout.pin_end;
     if pane.is_read_only() {
-        offset += 2 + 8;
+        offset = layout.prot_end;
     }
     if let Some(remote) = pane.remote_target() {
         offset += 2 + format!(" 🌐 SSH:{remote} ").chars().count();
@@ -535,6 +650,70 @@ pub fn oia_mic_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rec
     }
     offset += 2;
     let badge_text_w = format!(" {badge} ").chars().count();
+    let badge_x = status_rect.x.saturating_add(offset as u16);
+    Some(Rect::new(badge_x, status_rect.y, badge_text_w as u16, 1))
+}
+
+/// Computes the exact `Rect` of the OIA `MOUSE->APP` / `MOUSE: SELECT` badge.
+pub fn oia_mouse_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rect> {
+    if status_rect.width == 0 || status_rect.height == 0 {
+        return None;
+    }
+    let is_child_tracking = pane.vt().is_mouse_sgr_or_tracking()
+        && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough;
+    if !is_child_tracking && !pane.mouse_select_sticky() {
+        return None;
+    }
+    let layout = oia_layout(pane);
+    let mut offset = layout.pin_end;
+    if pane.is_read_only() {
+        offset = layout.prot_end;
+    }
+    if let Some(remote) = pane.remote_target() {
+        offset += 2 + format!(" 🌐 SSH:{remote} ").chars().count();
+    }
+    if pane.vt().is_recording() {
+        offset += 2 + 7;
+    }
+    offset += 2;
+    if let Some(badge) = pane.stt_badge() {
+        offset += format!(" {badge} ").chars().count() + 2;
+    }
+    offset += 28;
+    let badge_text_w = if pane.mouse_select_sticky() {
+        " MOUSE: SELECT ".chars().count()
+    } else {
+        " MOUSE->APP ".chars().count()
+    };
+    let badge_x = status_rect.x.saturating_add(offset as u16);
+    Some(Rect::new(badge_x, status_rect.y, badge_text_w as u16, 1))
+}
+
+/// Computes the exact `Rect` of the OIA `[COPY]` badge.
+pub fn oia_copy_badge_rect(pane: &CompositePane, status_rect: Rect) -> Option<Rect> {
+    if status_rect.width == 0 || status_rect.height == 0 {
+        return None;
+    }
+    let layout = oia_layout(pane);
+    let mut offset = layout.pin_end;
+    if pane.is_read_only() {
+        offset = layout.prot_end;
+    }
+    if let Some(remote) = pane.remote_target() {
+        offset += 2 + format!(" 🌐 SSH:{remote} ").chars().count();
+    }
+    if pane.vt().is_recording() {
+        offset += 2 + 7;
+    }
+    offset += 2;
+    if let Some(badge) = pane.stt_badge() {
+        offset += format!(" {badge} ").chars().count() + 2;
+    }
+    offset += 28;
+    if pane.vt().is_mouse_sgr_or_tracking() || pane.mouse_select_sticky() {
+        offset += 16;
+    }
+    let badge_text_w = 8;
     let badge_x = status_rect.x.saturating_add(offset as u16);
     Some(Rect::new(badge_x, status_rect.y, badge_text_w as u16, 1))
 }

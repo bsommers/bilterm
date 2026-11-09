@@ -5,6 +5,7 @@ pub mod clipboard_window;
 pub mod clipboard_window_keys;
 pub mod command_window;
 pub mod command_window_keys;
+pub mod copy_mode_keys;
 pub mod drawer_navigator;
 pub mod encode;
 pub mod find_modal;
@@ -16,6 +17,7 @@ pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
 pub mod mouse_media;
+pub mod mouse_select;
 mod mouse_wm;
 pub mod script_studio;
 pub mod script_studio_keys;
@@ -170,6 +172,17 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
             && pane.copy_mode().has_selection()
         {
             let _ = pane.yank_copy_selection();
+            return Ok(AppAction::Handled);
+        }
+        if crate::input::keymap::COPY_ENTRY_CHORDS
+            .iter()
+            .any(|(m, c, _)| *m == key.modifiers && *c == key.code)
+        {
+            if pane.copy_mode().has_selection() {
+                let _ = pane.yank_copy_selection();
+            } else {
+                pane.enter_copy_mode();
+            }
             return Ok(AppAction::Handled);
         }
         let is_ctrl_shift_v = key.modifiers.contains(KeyModifiers::CONTROL)
@@ -696,11 +709,15 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
 
     // Refresh active pane line discipline before deciding whether F1..F10 / Alt+<key> should pass through to Raw PTY
     wm.active_pane_mut().refresh_line_discipline();
+    if wm.active_pane().copy_mode().active
+        || wm.active_pane().hints_mode().active
+        || wm.active_pane().pending_unsafe_paste().is_some()
+    {
+        return dispatch_pane_key(wm, key);
+    }
+
     let in_raw_passthrough = wm.active_pane().effective_routing_mode()
-        == InputRoutingMode::RawPtyPassthrough
-        && wm.active_pane().pending_unsafe_paste().is_none()
-        && !wm.active_pane().copy_mode().active
-        && !wm.active_pane().hints_mode().active;
+        == InputRoutingMode::RawPtyPassthrough;
 
     if in_raw_passthrough {
         return dispatch_pane_key(wm, raw_key);

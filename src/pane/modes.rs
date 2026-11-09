@@ -45,6 +45,54 @@ pub enum CopySelectionKind {
     Block,
 }
 
+/// Indicates whether Copy Mode was initiated by keyboard navigation or a mouse drag gesture (`COPY-01`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CopyOrigin {
+    #[default]
+    Keyboard,
+    Mouse,
+}
+
+/// View of an active or flashed selection in absolute coordinates (`COPY-02`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectionView {
+    pub start_abs: (usize, u16),
+    pub end_abs: (usize, u16),
+    pub kind: CopySelectionKind,
+}
+
+impl SelectionView {
+    pub fn contains(&self, abs_row: usize, col: u16) -> bool {
+        let ((sr, sc), (er, ec)) = if self.start_abs <= self.end_abs {
+            (self.start_abs, self.end_abs)
+        } else {
+            (self.end_abs, self.start_abs)
+        };
+        match self.kind {
+            CopySelectionKind::None => false,
+            CopySelectionKind::Line => abs_row >= sr && abs_row <= er,
+            CopySelectionKind::Block => {
+                let min_c = sc.min(ec);
+                let max_c = sc.max(ec);
+                abs_row >= sr && abs_row <= er && col >= min_c && col <= max_c
+            }
+            CopySelectionKind::Char => {
+                if abs_row < sr || abs_row > er {
+                    false
+                } else if sr == er {
+                    col >= sc && col <= ec
+                } else if abs_row == sr {
+                    col >= sc
+                } else if abs_row == er {
+                    col <= ec
+                } else {
+                    true
+                }
+            }
+        }
+    }
+}
+
 /// Keyboard-driven Vi Copy Mode & rectangular block selection state for the `OutputCanvas` (`VAL-04`).
 #[derive(Clone, Debug, Default)]
 pub struct CopyModeState {
@@ -52,11 +100,21 @@ pub struct CopyModeState {
     pub cursor_row: u16,
     pub cursor_col: u16,
     pub anchor: Option<(u16, u16)>,
+    pub anchor_abs: Option<(usize, u16)>,
+    pub viewport_top_abs: usize,
     pub selection_kind: CopySelectionKind,
     /// When `true`, selection was anchored via `v`/`V`/`b`/`r`/`Space` so plain arrow/`hjkl` keys extend it.
     pub visual_lock: bool,
     /// When `true`, plain mouse drag (`LeftDrag`) and `Shift+Arrows` default to rectangular (`Block`) selection.
     pub rect_mode: bool,
+    /// Origin of this Copy Mode session (`Keyboard` vs `Mouse`, `COPY-01`).
+    pub origin: CopyOrigin,
+    /// State when `g` is pressed once in Vi mode waiting for a second `g` (`COPY-02`).
+    pub pending_g: bool,
+    /// Active interactive scrollback search state (`COPY-02`).
+    pub search_state: Option<crate::pane::copy_search::CopySearchState>,
+    /// Visual flash highlighting of recently copied cells until toast expires (`COPY-02`).
+    pub flash_region: Option<SelectionView>,
 }
 
 impl CopyModeState {
@@ -76,53 +134,66 @@ impl CopyModeState {
         Some((h, w))
     }
 
+    /// Begins a visual selection anchored at `(row, col)` with known viewport scroll offset (`COPY-02`).
+    pub fn begin_selection(
+        &mut self,
+        row: u16,
+        col: u16,
+        kind: CopySelectionKind,
+        top_abs: usize,
+    ) {
+        self.anchor = Some((row, col));
+        self.anchor_abs = Some((top_abs + usize::from(row), col));
+        self.cursor_row = row;
+        self.cursor_col = col;
+        self.viewport_top_abs = top_abs;
+        self.selection_kind = kind;
+        self.visual_lock = true;
+    }
+
+    /// Returns the active selection bounded by `anchor_abs` and current cursor position (`COPY-02`).
+    pub fn current_selection_view(&self) -> Option<SelectionView> {
+        if !self.has_selection() {
+            return None;
+        }
+        let anchor = self.anchor_abs.unwrap_or_else(|| {
+            let (ar, ac) = self.anchor.unwrap();
+            (self.viewport_top_abs + usize::from(ar), ac)
+        });
+        let cursor = (self.viewport_top_abs + usize::from(self.cursor_row), self.cursor_col);
+        Some(SelectionView {
+            start_abs: anchor,
+            end_abs: cursor,
+            kind: self.selection_kind,
+        })
+    }
+
     /// Clears any active selection and exits Copy Mode (while preserving persistent `rect_mode`).
     pub fn clear_selection(&mut self) {
         self.active = false;
         self.anchor = None;
+        self.anchor_abs = None;
         self.selection_kind = CopySelectionKind::None;
         self.visual_lock = false;
+        self.origin = CopyOrigin::Keyboard;
+        self.pending_g = false;
+        self.search_state = None;
     }
 
     /// Returns `true` if cell `(row, col)` lies inside the current selection (`Char`, `Line`, or `Block`).
     pub fn is_cell_selected(&self, row: u16, col: u16) -> bool {
-        let Some((ar, ac)) = self.anchor else {
-            return false;
-        };
-        let (cr, cc) = (self.cursor_row, self.cursor_col);
-        match self.selection_kind {
-            CopySelectionKind::None => false,
-            CopySelectionKind::Line => {
-                let min_r = ar.min(cr);
-                let max_r = ar.max(cr);
-                row >= min_r && row <= max_r
-            }
-            CopySelectionKind::Block => {
-                let min_r = ar.min(cr);
-                let max_r = ar.max(cr);
-                let min_c = ac.min(cc);
-                let max_c = ac.max(cc);
-                row >= min_r && row <= max_r && col >= min_c && col <= max_c
-            }
-            CopySelectionKind::Char => {
-                let ((sr, sc), (er, ec)) = if (ar, ac) <= (cr, cc) {
-                    ((ar, ac), (cr, cc))
-                } else {
-                    ((cr, cc), (ar, ac))
-                };
-                if row < sr || row > er {
-                    false
-                } else if sr == er {
-                    col >= sc && col <= ec
-                } else if row == sr {
-                    col >= sc
-                } else if row == er {
-                    col <= ec
-                } else {
-                    true
-                }
-            }
+        let abs_r = self.viewport_top_abs + usize::from(row);
+        if let Some(ref view) = self.current_selection_view()
+            && view.contains(abs_r, col)
+        {
+            return true;
         }
+        if let Some(ref flash) = self.flash_region
+            && flash.contains(abs_r, col)
+        {
+            return true;
+        }
+        false
     }
 
     /// Appends the text of the selected cell `(r, c)` to `line`.
@@ -289,6 +360,7 @@ impl CompositePane {
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
+        self.copy_mode.origin = CopyOrigin::Keyboard;
         self.status_message = Some(
             "CANVAS SELECT: Arrows/hjkl move | r/b/Ctrl+V=Rect | v/Space=Char | V=Line | Enter/y copy | x to prompt | Esc exit"
                 .to_string(),
@@ -442,6 +514,45 @@ impl CompositePane {
         }
 
         match first_lower.as_str() {
+            "word" => {
+                let top_abs = self.vt.viewport_top_abs();
+                self.enter_copy_mode();
+                let r = self.copy_mode.cursor_row;
+                let c = self.copy_mode.cursor_col;
+                let text = self.vt.abs_row_text(top_abs + usize::from(r)).unwrap_or_default();
+                let (sc, ec) = crate::pane::copy_motion::word_bounds_at(&text, c);
+                self.copy_mode.begin_selection(r, sc, CopySelectionKind::Char, top_abs);
+                self.copy_mode.cursor_col = ec;
+            }
+            "line" => {
+                let top_abs = self.vt.viewport_top_abs();
+                self.enter_copy_mode();
+                let r = self.copy_mode.cursor_row;
+                self.copy_mode.begin_selection(r, 0, CopySelectionKind::Line, top_abs);
+            }
+            "search" | "find" => {
+                let query = parts[1..].join(" ");
+                if !query.is_empty() {
+                    self.enter_copy_mode();
+                    let _ = crate::input::copy_mode_keys::execute_search_jump(
+                        self,
+                        &query,
+                        crate::pane::copy_search::SearchDir::Forward,
+                    );
+                }
+            }
+            "top" => {
+                self.enter_copy_mode();
+                self.vt.set_scrollback_offset(usize::MAX);
+                self.copy_mode.cursor_row = 0;
+                self.copy_mode.cursor_col = 0;
+            }
+            "bottom" => {
+                self.enter_copy_mode();
+                self.vt.reset_scrollback();
+                let (rows, _) = self.vt.size();
+                self.copy_mode.cursor_row = rows.saturating_sub(1);
+            }
             "" | "rect" | "block" | "box" | "rectangular" => {
                 if parts.len() == 1
                     && matches!(
@@ -513,7 +624,7 @@ impl CompositePane {
                         .to_string(),
                 );
             }
-            "line" | "lines" => {
+            "lines" => {
                 self.enter_copy_mode();
                 let cur = (self.copy_mode.cursor_row, self.copy_mode.cursor_col);
                 self.copy_mode.anchor = Some(cur);
@@ -546,6 +657,7 @@ impl CompositePane {
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
+        self.copy_mode.origin = CopyOrigin::Keyboard;
         self.status_message = Some(if self.is_prompt_visible() {
             "Returned focus to Command Prompt".to_string()
         } else {
@@ -578,15 +690,79 @@ impl CompositePane {
         self.record_clipboard_event(source, text.to_string());
     }
 
+    /// Extracts the text for the currently active copy mode selection using scrollback-absolute rows (`COPY-02`).
+    pub fn extract_copy_selection_text(&mut self) -> String {
+        self.copy_mode.viewport_top_abs = self.vt.viewport_top_abs();
+        let Some(view) = self.copy_mode.current_selection_view() else {
+            return String::new();
+        };
+        let ((sr, sc), (er, ec)) = if view.start_abs <= view.end_abs {
+            (view.start_abs, view.end_abs)
+        } else {
+            (view.end_abs, view.start_abs)
+        };
+        let mut out = Vec::new();
+        for r in sr..=er {
+            let row_text = self.vt.abs_row_text(r).unwrap_or_default();
+            let row_chars: Vec<char> = row_text.chars().collect();
+            match view.kind {
+                CopySelectionKind::None => {}
+                CopySelectionKind::Line => {
+                    let s: String = row_chars.iter().collect();
+                    out.push(s.trim_end().to_string());
+                }
+                CopySelectionKind::Block => {
+                    let min_c = sc.min(ec) as usize;
+                    let max_c = sc.max(ec) as usize;
+                    let s: String = row_chars
+                        .iter()
+                        .skip(min_c)
+                        .take(max_c.saturating_sub(min_c) + 1)
+                        .collect();
+                    out.push(s.trim_end().to_string());
+                }
+                CopySelectionKind::Char => {
+                    if sr == er {
+                        let min_c = sc.min(ec) as usize;
+                        let max_c = sc.max(ec) as usize;
+                        let s: String = row_chars
+                            .iter()
+                            .skip(min_c)
+                            .take(max_c.saturating_sub(min_c) + 1)
+                            .collect();
+                        out.push(s);
+                    } else if r == sr {
+                        let s: String = row_chars.iter().skip(sc as usize).collect();
+                        out.push(s.trim_end().to_string());
+                    } else if r == er {
+                        let s: String = row_chars.iter().take(ec as usize + 1).collect();
+                        out.push(s);
+                    } else {
+                        let s: String = row_chars.iter().collect();
+                        out.push(s.trim_end().to_string());
+                    }
+                }
+            }
+        }
+        out.join("\n")
+    }
+
     /// Yanks the active `CopyModeState` selection (or current line) into the prompt yank buffer,
     /// yank history ring, OS system clipboard, and `OSC 52` (`VAL-04`).
     pub fn yank_copy_selection(&mut self) -> Option<String> {
-        let snap = self.vt.snapshot();
         let was_block = self.copy_mode.selection_kind == CopySelectionKind::Block;
         let dims = self.copy_mode.selection_dimensions();
-        let text = self.copy_mode.extract_selected_text(&snap);
+        self.copy_mode.viewport_top_abs = self.vt.viewport_top_abs();
+        let flash = self.copy_mode.current_selection_view();
+        let mut text = self.extract_copy_selection_text();
+        if text.is_empty() {
+            let snap = self.vt.snapshot();
+            text = self.copy_mode.extract_selected_text(&snap);
+        }
+        self.copy_mode.flash_region = flash;
         self.copy_mode.active = false;
         self.copy_mode.anchor = None;
+        self.copy_mode.anchor_abs = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
         if text.is_empty() {
@@ -602,12 +778,18 @@ impl CompositePane {
             &text,
         );
         if was_block && let Some((h, w)) = dims {
-            self.status_message = Some(format!(
-                "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
-                text.chars().count()
-            ));
+            self.set_status_toast(
+                format!(
+                    "Yanked rectangular block [{h}×{w}] ({} chars) to clipboard",
+                    text.chars().count()
+                ),
+                3000,
+            );
         } else {
-            self.status_message = Some(format!("Yanked {} chars to clipboard", text.chars().count()));
+            self.set_status_toast(
+                format!("Copied {} chars -> clipboard (OSC52 sent)", text.chars().count()),
+                3000,
+            );
         }
         Some(text)
     }
@@ -661,15 +843,21 @@ impl CompositePane {
             &text,
         );
         if is_block && let Some((h, w)) = dims {
-            self.status_message = Some(format!(
-                "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
-                text.chars().count()
-            ));
+            self.set_status_toast(
+                format!(
+                    "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
+                    text.chars().count()
+                ),
+                3000,
+            );
         } else {
-            self.status_message = Some(format!(
-                "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
-                text.chars().count()
-            ));
+            self.set_status_toast(
+                format!(
+                    "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
+                    text.chars().count()
+                ),
+                3000,
+            );
         }
         Some(text)
     }

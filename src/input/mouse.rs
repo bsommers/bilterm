@@ -10,7 +10,7 @@ use crate::input::mouse_wm::{
 };
 use crate::pane::{CompositePane, CopySelectionKind, PromptAnchor, PromptMouseDrag};
 use crate::pty::line_discipline::InputRoutingMode;
-use crate::wm::{Focus, WindowManager, encode_sgr_mouse_local, rect_contains};
+use crate::wm::{Focus, WindowManager, rect_contains};
 
 fn prompt_editor_coords_from_mouse(
     pane: &CompositePane,
@@ -63,34 +63,12 @@ fn handle_oia_status_bar_mouse(
 ) -> Result<AppAction> {
     if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
         let rel_col = usize::from(mouse.column.saturating_sub(status_rect.x));
-        let title_w = if pane.show_version_badge() {
-            concat!("3270-OIA v", env!("CARGO_PKG_VERSION")).chars().count()
-        } else {
-            "3270-OIA".chars().count()
-        };
-        let state_w = if pane.is_password_prompt() {
-            15
-        } else if pane.vt().is_alternate_screen()
-            || pane.is_holding_inspected()
-            || pane.is_page_holding()
-            || pane.has_foreground_subcommand()
-        {
-            11
-        } else if pane.vt().scrollback_offset() > 0 {
-            10
-        } else {
-            9
-        };
-        let routing_w = if pane.copy_mode().active { 28 } else { 16 };
-        let anchor_w = match pane.prompt().anchor {
-            PromptAnchor::SplitTop | PromptAnchor::SplitBottom => 9,
-            _ => 7,
-        };
-        let title_end = title_w;
-        let state_end = title_end + 1 + state_w;
-        let routing_end = state_end + 1 + routing_w;
-        let pin_end = routing_end + 2 + anchor_w;
-        let prot_end = if pane.is_read_only() { pin_end + 11 } else { pin_end };
+        let layout = crate::ui::oia::oia_layout(pane);
+        let title_end = layout.title_end;
+        let state_end = layout.state_end;
+        let routing_end = layout.routing_end;
+        let pin_end = layout.pin_end;
+        let prot_end = layout.prot_end;
 
         if pane.is_page_holding() && rel_col <= state_end.max(21) {
             pane.scroll_page_advance();
@@ -925,34 +903,43 @@ pub fn handle_wm_mouse_event(
             pane_inner.width,
             1,
         );
-        if let Some(pane) = wm.pane_by_focus(hit_focus)
-            && let Some(mic_rect) = crate::ui::oia::oia_mic_badge_rect(pane, status_rect)
-            && pane_mouse.column >= mic_rect.x
-            && pane_mouse.column < mic_rect.x + mic_rect.width
-        {
-            let _ = wm.apply(crate::action::Action::Voice(crate::action::VoiceOp::Toggle));
-            return Ok(AppAction::Handled);
+        if let Some(p) = wm.pane_by_focus(hit_focus) {
+            let col = pane_mouse.column;
+            if let Some(r) = crate::ui::oia::oia_mic_badge_rect(p, status_rect) && col >= r.x && col < r.x + r.width {
+                let _ = wm.apply(crate::action::Action::Voice(crate::action::VoiceOp::Toggle));
+                return Ok(AppAction::Handled);
+            }
+            if let Some(r) = crate::ui::oia::oia_mouse_badge_rect(p, status_rect) && col >= r.x && col < r.x + r.width {
+                let _ = wm.apply(crate::action::Action::SelectCommand(Some("mouse toggle".to_string())));
+                return Ok(AppAction::Handled);
+            }
+            if let Some(r) = crate::ui::oia::oia_copy_badge_rect(p, status_rect) && col >= r.x && col < r.x + r.width {
+                let _ = wm.apply(crate::action::Action::CopyModeToggle);
+                return Ok(AppAction::Handled);
+            }
         }
     }
 
     let auto_copy = wm.config().copy_on_select;
+    let override_policy =
+        crate::input::mouse_select::OverridePolicy::parse(&wm.config().mouse_select_override);
     let Some(pane) = wm.pane_by_focus_mut(hit_focus) else {
         return Ok(AppAction::Continue);
     };
-
-    let shift_mouse_paste = pane_mouse.modifiers.contains(KeyModifiers::SHIFT)
-        && matches!(
-            pane_mouse.kind,
-            MouseEventKind::Down(MouseButton::Right | MouseButton::Middle)
-        );
-    let force_local_select = pane_mouse.modifiers.contains(KeyModifiers::ALT)
-        || shift_mouse_paste
-        || pane.copy_mode().active
-        || pane.copy_mode().rect_mode
-        || pane.mouse_drag().is_some();
+    let route = crate::input::mouse_select::route(
+        pane_mouse.modifiers,
+        pane_mouse.kind,
+        pane.vt().is_mouse_sgr_or_tracking(),
+        pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough,
+        pane.copy_mode().active,
+        pane.copy_mode().rect_mode,
+        pane.mouse_drag().is_some(),
+        pane.mouse_select_sticky(),
+        override_policy,
+    );
 
     if !on_pane_status_bar
-        && !force_local_select
+        && route == crate::input::mouse_select::MouseRoute::ToChild
         && pane.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
     {
         // If the child app has not enabled mouse tracking (?1000..1006), check DECSET ?1007 Alternate Scroll first
@@ -961,20 +948,72 @@ pub fn handle_wm_mouse_event(
                 pane.write_to_pty(&scroll_bytes)?;
                 return Ok(AppAction::Handled);
             }
-        } else if let Some(sgr_bytes) = encode_sgr_mouse_local(pane_mouse, pane_inner) {
+        } else if let Some(sgr_bytes) = crate::wm::quick_terminal::encode_sgr_mouse_with_mode(
+            pane_mouse,
+            pane_inner,
+            pane.vt().mouse_report_level(),
+        ) {
             pane.write_to_pty(&sgr_bytes)?;
             return Ok(AppAction::Handled);
         }
     }
 
+    if let crate::input::mouse_select::MouseRoute::Local(_) = route
+        && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left))
+    {
+        let canvas_rect = pane.canvas_rect(pane_inner);
+        if pane_mouse.column >= canvas_rect.x
+            && pane_mouse.column < canvas_rect.x + canvas_rect.width
+            && pane_mouse.row >= canvas_rect.y
+            && pane_mouse.row < canvas_rect.y + canvas_rect.height
+        {
+            let rel_r = pane_mouse.row.saturating_sub(canvas_rect.y).min(canvas_rect.height.saturating_sub(1));
+            let rel_c = pane_mouse.column.saturating_sub(canvas_rect.x).min(canvas_rect.width.saturating_sub(1));
+            let top_abs = pane.vt_mut().viewport_top_abs();
+            let count = pane.record_click(pane.last_tick_ms(), rel_c, rel_r);
+            if count == 2 {
+                let text = pane.vt_mut().abs_row_text(top_abs + usize::from(rel_r)).unwrap_or_default();
+                let (sc, ec) = crate::pane::copy_motion::word_bounds_at(&text, rel_c);
+                let copy = pane.copy_mode_mut();
+                copy.begin_selection(rel_r, sc, crate::pane::CopySelectionKind::Char, top_abs);
+                copy.cursor_col = ec;
+                copy.active = true;
+                copy.origin = crate::pane::CopyOrigin::Mouse;
+                return Ok(AppAction::Handled);
+            } else if count == 3 {
+                let copy = pane.copy_mode_mut();
+                copy.begin_selection(rel_r, 0, crate::pane::CopySelectionKind::Line, top_abs);
+                copy.active = true;
+                copy.origin = crate::pane::CopyOrigin::Mouse;
+                return Ok(AppAction::Handled);
+            }
+            let copy = pane.copy_mode_mut();
+            copy.begin_selection(rel_r, rel_c, crate::pane::CopySelectionKind::Char, top_abs);
+            copy.active = true;
+            copy.visual_lock = false;
+            copy.origin = crate::pane::CopyOrigin::Mouse;
+            pane.set_mouse_drag(Some(PromptMouseDrag::CanvasCharSelect));
+            return Ok(AppAction::Handled);
+        }
+    }
+
     let res = handle_mouse_event(pane, pane_mouse, pane_inner);
-    if auto_copy
-        && matches!(pane_mouse.kind, MouseEventKind::Up(MouseButton::Left))
+    if matches!(pane_mouse.kind, MouseEventKind::Up(MouseButton::Left))
         && let Some(p) = wm.pane_by_focus_mut(hit_focus)
     {
-        if p.copy_mode().has_selection() {
+        let is_mouse_origin = p.copy_mode().origin == crate::pane::CopyOrigin::Mouse;
+        let no_extent = p.copy_mode().anchor == Some((p.copy_mode().cursor_row, p.copy_mode().cursor_col));
+        if is_mouse_origin && no_extent {
+            p.copy_mode_mut().clear_selection();
+        } else if auto_copy && p.copy_mode().has_selection() {
             let _ = p.yank_mouse_canvas_selection();
-        } else if let Some(copied) = p.prompt_mut().copy_selection() {
+            if is_mouse_origin
+                && (p.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
+                    || p.vt().is_alternate_screen())
+            {
+                p.copy_mode_mut().active = false;
+            }
+        } else if auto_copy && let Some(copied) = p.prompt_mut().copy_selection() {
             p.record_yank_with_source(
                 crate::wm::clipboard_registry::ClipboardSource::PromptCopy,
                 &copied,

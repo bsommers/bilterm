@@ -1,0 +1,32 @@
+# Phase 62-02 Summary: Copy Mode Ergonomics, Motions, Search, and Parity
+
+## Delivered Scope
+- **Scrollback-Absolute Selection Model**:
+  - Replaced viewport-relative selection coordinates with absolute row indexing (`anchor_abs`, `viewport_top_abs`, `SelectionView`).
+  - Implemented `abs_row_text` and `total_available_rows` on `vt::VtParser` ensuring scrolling or live child output during active copy mode does not drift or corrupt selected text.
+  - Multi-screen scroll selections copy exact lines from start to end without off-by-one or duplicate line artifacts.
+- **Word Motions & Semantic Change**:
+  - Created `src/pane/copy_motion.rs` implementing real alphanumeric word motions (`w`, `b`, `e`) and word boundary detection (`word_bounds_at`), replacing legacy +/- 5-column jumps.
+  - Full support for CJK ideographs and punctuation boundaries.
+- **Declarative Vi + Emacs + Arrow Key Dispatch**:
+  - Created `src/input/copy_mode_keys.rs` implementing unified key tables for Vi (`h j k l`, `w b e`, `0 ^ $`, `gg G`, `H M L`, `Ctrl+u/d`, `v V Ctrl+v`, `y`, `Y`, `o/O`), Emacs (`Ctrl+f/b/n/p`, `Alt+f/b`, `Ctrl+a/e`, `Alt+< >`, `Ctrl+Space`, `Alt+w`), and standard Arrows/Home/End/PageUp/PageDown.
+  - Shift+Arrow navigation starts and extends selection.
+  - Intercepted copy mode keys ahead of global WM shortcuts (`Ctrl+Space` for QuakeToggle, `Alt+w` for ClosePane) so copy mode retains key precedence.
+- **Scrollback Search & Match Navigation**:
+  - Created `src/pane/copy_search.rs` and added `search_history` to `vt::VtParser`.
+  - Added interactive `/` (forward) and `?` (backward) incremental search prompt with `n` and `N` match jumping.
+  - Colon commands: `:copy search <query>`, `:copy top`, `:copy bottom`.
+- **Selection Kinds & Multi-Click Mouse Ergonomics**:
+  - Supported `Char`, `Line`, and `Block` (rectangular) selection modes (`v`, `V`, `Ctrl+v`).
+  - Colon commands: `:select word|line|block`.
+  - Double-click selects word; triple-click selects full row (`record_click` in `src/input/mouse.rs`).
+- **State-Driven Copy Hint Line & Visual Flash**:
+  - Created `src/ui/copy_hints.rs` formatting context-sensitive hints in OIA status bar.
+  - Copied selection flashes via reverse style before clearing, accompanied by a 3000ms status toast.
+- **Full Discoverability & Help Parity**:
+  - Updated `src/ui/help_catalog_data.rs`, `src/ui/help_catalog.rs`, and `src/pane/completion.rs` with copy mode motions, search, and selection modes.
+- **Verification**:
+  - 15/15 tests passing in `tests/phase62_copy_mode_ergonomics.rs`.
+  - 15/15 tests passing in `tests/phase62_nested_tui_copy.rs`.
+  - `CARGO_TARGET_DIR=/tmp/bilterm-target-62 cargo clippy -q --all-targets -- -D warnings`: 0 warnings, 0 errors.
+  - `scripts/check_classic_goldens.sh`: GOLDENS OK 11.

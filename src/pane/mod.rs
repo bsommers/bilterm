@@ -1,4 +1,6 @@
 pub mod browser_canvas;
+pub mod copy_motion;
+pub mod copy_search;
 mod output_tap;
 pub mod canvas_scene;
 pub mod capture;
@@ -23,7 +25,7 @@ pub use canvas_scene::{
 pub use exit_guard::{
     ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, HeldExitedShellState, LinkBanner,
 };
-pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
+pub use modes::{CanvasSearchState, CopyModeState, CopyOrigin, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
 pub use scroll::{PaneScrollMode, PaneScrollState};
 pub use typography::{
@@ -118,6 +120,10 @@ pub struct CompositePane {
     pending_media_records: Vec<(String, usize)>,
     /// Live STT status badge rendered in the 3270 OIA status bar (`STT-02`, `STT-03`).
     stt_badge: Option<String>,
+    mouse_select_sticky: bool,
+    toast_expires_at: Option<u64>,
+    last_tick_ms: u64,
+    last_click: Option<(u64, u16, u16, u8)>,
     pub(crate) browser_canvas: Option<browser_canvas::BrowserCanvasState>,
     pub(crate) video_canvas: Option<video_canvas::VideoCanvasState>,
 }
@@ -172,6 +178,10 @@ impl CompositePane {
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
             stt_badge: None,
+            mouse_select_sticky: false,
+            toast_expires_at: None,
+            last_tick_ms: 0,
+            last_click: None,
             browser_canvas: None,
             video_canvas: None,
         }

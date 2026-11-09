@@ -167,8 +167,10 @@ pub struct BiltermConfig {
     pub appearance: crate::ui::design::AppearanceConfig,
     /// Automation-plane policy (`[api]`, Phase 49-04); config writes over the API are off by default.
     pub api: ApiConfig,
-    /// When `false` (default), mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`).
+    /// When `false`, mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`). Default `true`.
     pub copy_on_select: bool,
+    /// Modifier override policy for mouse selection over child applications with mouse tracking (`shift_alt`, `shift`, `alt`, `off`).
+    pub mouse_select_override: String,
     /// Persists the cut-and-paste yank buffer history uniquely per Bilterm session (`true` by default, `:clipboard persist [on|off]`).
     pub clipboard_history_persist: bool,
     /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text via bracketed paste unless image/video media is on the system clipboard (`true` by default, `CLIP-01`).
@@ -257,7 +259,8 @@ impl Default for BiltermConfig {
             liquid_glass: false,
             appearance: crate::ui::design::AppearanceConfig::default(),
             api: ApiConfig::default(),
-            copy_on_select: false,
+            copy_on_select: true,
+            mouse_select_override: "shift_alt".to_string(),
             clipboard_history_persist: true,
             smart_ctrl_v_paste: true,
             custom_palette_override: None,
