@@ -269,10 +269,10 @@ fn draw_body(lay: &TrafficLayout, wm: &WindowManager, res: &crate::traffic::Grou
         let rx_area = Rect::new(sx, lay.detail_y, half, 1);
         let max = r.series_rx.iter().chain(r.series_tx.iter()).copied().max().unwrap_or(0).max(1);
         let tail = |v: &[u64], n: u16| v[v.len().saturating_sub(usize::from(n))..].to_vec();
-        Sparkline::default().data(&tail(&r.series_rx, half)).max(max).style(bg.fg(tokens.success)).render(rx_area, buf);
+        Sparkline::default().data(tail(&r.series_rx, half)).max(max).style(bg.fg(tokens.success)).render(rx_area, buf);
         put(buf, inner, sx + half, lay.detail_y, " TX ", muted);
         let tx_area = Rect::new(sx + half + 4, lay.detail_y, half, 1);
-        Sparkline::default().data(&tail(&r.series_tx, half)).max(max).style(bg.fg(tokens.warning)).render(tx_area, buf);
+        Sparkline::default().data(tail(&r.series_tx, half)).max(max).style(bg.fg(tokens.warning)).render(tx_area, buf);
     }
 
     for (chip, x, _) in &lay.footer {

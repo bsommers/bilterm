@@ -125,7 +125,7 @@ fn rect_defaults_clamps_and_minimums() {
     let mut tiny = wm(60, 14);
     apply(&mut tiny, Op::Open);
     let r = tiny.traffic_monitor_rect(tiny.dock_base_area()).unwrap();
-    assert!(r.width >= 52.min(60) && r.height >= 1);
+    assert!(r.width >= 52 && r.height >= 1);
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn direction_and_locality_row_counts_and_sparkline_levels() {
     // 8-level sparkline for a known series
     let mut buf = Buffer::empty(Rect::new(0, 0, 8, 1));
     use ratatui::widgets::{Sparkline, Widget};
-    Sparkline::default().data(&[0u64, 1, 2, 3, 4, 5, 6, 7]).max(7).render(Rect::new(0, 0, 8, 1), &mut buf);
+    Sparkline::default().data([0u64, 1, 2, 3, 4, 5, 6, 7]).max(7).render(Rect::new(0, 0, 8, 1), &mut buf);
     let s: String = (0..8).map(|x| buf[(x, 0)].symbol().to_string()).collect();
     assert_eq!(s.chars().nth(7), Some('█'));
     assert_eq!(bilterm::ui::traffic_monitor_gui::bar_heights(&[0, 1, 2, 3, 4, 5, 6, 7], 7), vec![0, 1, 2, 3, 4, 5, 6, 7]);
