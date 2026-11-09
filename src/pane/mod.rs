@@ -799,6 +799,8 @@ impl CompositePane {
         if self.remote_input_tap {
             let room = crate::tmux::link::REMOTE_INPUT_CAP.saturating_sub(self.remote_input.len());
             self.remote_input.extend_from_slice(&bytes[..bytes.len().min(room)]);
+            // Remote-tapped panes deliver through the link only; never also to a local PTY.
+            return Ok(());
         }
         if let Some(pty) = &self.pty {
             pty.write_all(bytes)?;

@@ -113,7 +113,8 @@ Bilterm's persistent remote `tmux -CC` integration (`:ssh-tmux`, `src/tmux/link.
    - Each reconnect attempt initiates a clean TCP handshake from scratch. Stale, hung, or corrupted OpenSSH master control sockets cannot deadlock auto-reconnect loops or poison subsequent sessions.
 4. **Typed Passwords Bypass Prompt & History Buffers**:
    - During the initial connection phase before the `tmux -CC` control sentinel (`ESC P 1000 p`) is detected, the pane operates in raw PTY passthrough mode (`set_link_raw_input`).
-   - Keystrokes typed in response to password or MFA prompts are sent straight to the PTY stdin and bypass Bilterm's prompt editor buffer, undo/redo history, command blocks, `history.log`, and the unified Find index.
+   - While the link is `Connecting` and waiting for a password or MFA response, every keystroke goes only to the remote `ssh` process. The command prompt is hidden and nothing is echoed on screen, so a password cannot be seen on the display, typed into the command line, or recorded in the prompt buffer, `history.log`, or the unified Find index.
+   - **Recommendation**: Prefer key-based authentication with `ssh-agent` (and a hardware-backed or passphrase-protected key) for `:ssh-tmux` links. With a loaded agent, no password is typed at all, which also keeps the reconnect loop from stalling on a prompt.
 5. **Strict Shell Wrapper Sanitization**:
    - Remote execution commands are wrapped in `exec $SHELL -lc 'exec env PATH="..." tmux -CC new-session -A -s NAME'`, where the session `NAME` is strictly validated against `[A-Za-z0-9_-]`. The argument contains exactly two single quotes and prohibits user-controlled quote escaping, preventing remote command injection across the SSH domain.
 

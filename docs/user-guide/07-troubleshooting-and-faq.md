@@ -13,6 +13,9 @@
   - [Wide Characters (CJK / Emoji / Nerd Fonts) Near Window Borders](#wide-characters-cjk--emoji--nerd-fonts-near-window-borders)
   - [Clipboard Copy (`:yank`) Not Reaching Host Clipboard Inside `tmux`](#clipboard-copy-yank-not-reaching-host-clipboard-inside-tmux)
   - [Remote tmux over SSH Quits Early or Reconnect is Odd](#remote-tmux-over-ssh-quits-early-or-reconnect-is-odd)
+  - [Characters Appear Twice in an ssh-tmux Pane](#characters-appear-twice-in-an-ssh-tmux-pane)
+  - [My SSH Password Was Visible](#my-ssh-password-was-visible)
+  - [Commands Typed into an Idle Remote tmux Session Are Dropped](#commands-typed-into-an-idle-remote-tmux-session-are-dropped)
 - [2. Diagnostics & Logging](#2-diagnostics--logging)
 - [3. Terminal State Recovery After Forced Kill (`SIGKILL`)](#3-terminal-state-recovery-after-forced-kill-sigkill)
 - [4. Frequently Asked Questions (FAQ)](#4-frequently-asked-questions-faq)
@@ -127,7 +130,36 @@
      - If stateful NAT gateways or firewalls drop idle connections faster than 15 seconds, adjust your local `~/.ssh/config` or remote `sshd_config` `ClientAliveInterval`.
   7. **Restored Workspace Shows `(not connected)`**:
      - When restoring a saved workspace session, Bilterm honestly labels previously remote panes as `(not connected)` if they are running a local shell rather than a live remote transport.
-     - Run `:ssh-tmux <dest> [session]` (or `Ctrl+X u`) to reconnect to the remote session.
+     - Run `:ssh-tmux <dest> [session]` to reconnect to the remote session (`Ctrl+X u` opens the prompt prefilled with `:ssh-tmux `).
+
+### Characters Appear Twice in an ssh-tmux Pane
+
+- **Symptom**: Each key you type in a `:ssh-tmux` pane shows up twice (for example `llss` for `ls`), or a command appears to run locally as well as remotely.
+- **Cause (fixed in this release)**: Earlier builds spawned a local shell in `:ssh-tmux` panes in addition to the remote session, so each keystroke was echoed locally and also delivered remotely. `:ssh-tmux` panes are now remote-only: no local shell is spawned, and each keystroke is delivered exactly once.
+- **If it still happens**:
+  1. Update Bilterm to this release or later and restart it. Panes restored from an older saved workspace should be reconnected with `:ssh-tmux <dest> [session]`.
+  2. Check `:ssh-tmux info`. The pane should show a live link (`connected`) and the mapped remote panes.
+  3. Capture a debug trace with `RUST_LOG=bilterm=debug bilterm` and inspect `bilterm.log` for `link.up` and `pane.exit` events. Report the trace if the duplication persists.
+
+### My SSH Password Was Visible
+
+- **Symptom**: While connecting with `:ssh-tmux`, a password or passphrase appeared on screen, or it showed up in the command prompt or in `history.log`.
+- **Cause (fixed in this release)**: Earlier builds could route keystrokes typed at the SSH password prompt through the local command prompt and echo them on screen. Now, while the link is `Connecting`, keystrokes go only to the remote `ssh` process, the command prompt is hidden, and nothing is echoed.
+- **If it still happens**:
+  1. Update Bilterm to this release or later.
+  2. Confirm the remote side has turned off echo: a password prompt should show no typed characters. If characters are visible, the problem is on the remote host's `sshd` or PAM configuration, not Bilterm; check with a plain `ssh user@host` outside Bilterm.
+  3. Avoid typing passwords altogether: set up key-based authentication with `ssh-agent` (`ssh-add`) so the link connects without a prompt.
+  4. Check `history.log` and the Find index for the password. If present, it is a regression; report it, and attach only the `RUST_LOG=bilterm=debug` trace with any secret removed.
+
+### Commands Typed into an Idle Remote tmux Session Are Dropped
+
+- **Symptom**: You attach with `:ssh-tmux <user@host> <session>` to a remote session that is idle (no output yet), type a command, and nothing happens. The status line or banner shows `Link down: input not delivered`.
+- **Cause (fixed in this release)**: Earlier builds did not deliver input until the remote session produced output, so typed input to an idle session was dropped. Now the first remote pane is mapped immediately, the other panes are discovered with `list-panes`, and typed commands are delivered right away.
+- **If it still happens**:
+  1. Update Bilterm to this release or later.
+  2. Run `:ssh-tmux info` and confirm the link is `connected` and that a primary pane is mapped. If the state is `connecting` or `reconnecting`, wait for it to settle or press `Enter` / `r` to reconnect.
+  3. Run `tmux ls` on the remote host to confirm the session still exists and is not `destroy-unattached`.
+  4. Capture a trace with `RUST_LOG=bilterm=debug bilterm` and look for `link.up` followed by `link.hydrate`. If `link.up` is missing, the link never reached control mode; check the banner and `:ssh-tmux info` `last_exit` reason.
 
 ---
 

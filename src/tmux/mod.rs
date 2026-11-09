@@ -1,6 +1,7 @@
 pub mod hydrate;
 pub mod link;
 pub mod reconnect;
+pub mod list_panes;
 pub mod splitter;
 pub mod transport;
 
@@ -281,6 +282,8 @@ pub struct TmuxControlBridge {
     pub exited: bool,
     /// Link primary pane waiting to adopt the first discovered tmux pane (Phase 51.1, P-08).
     primary: Option<PaneId>,
+    /// Pane bound to a guessed tmux id by `map_provisional_primary`, until `list-panes` confirms.
+    provisional: Option<PaneId>,
     /// `dest/session` badge used to title adopted panes.
     badge: Option<String>,
     /// Panes mapped before the last `reset_for_attach` and not yet re-adopted, by old tmux id.
@@ -319,6 +322,7 @@ impl TmuxControlBridge {
         self.tmux_to_bilterm.clear();
         self.bilterm_to_tmux.clear();
         self.window_of_pane.clear();
+        self.provisional = None;
         self.exited = false;
         self.exit_reason = None;
         self.held.clear();
@@ -490,6 +494,7 @@ impl TmuxControlBridge {
             }
             return None;
         }
+        self.rebind_provisional(tmux_pane_id);
         let id = match self.take_adoptable(wm, tmux_pane_id) {
             Some(id) => {
                 if let Some(pane) = wm.pane_mut(id) {
@@ -500,6 +505,7 @@ impl TmuxControlBridge {
                     };
                     pane.set_title(title);
                 }
+                self.stale.retain(|_, p| *p != id);
                 id
             }
             None => {

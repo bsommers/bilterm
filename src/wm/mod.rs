@@ -36,6 +36,7 @@ pub mod split_tree;
 pub mod stt_ops;
 pub mod tmux_io;
 pub mod tmux_link;
+pub mod tmux_remote;
 pub mod traffic;
 pub mod v2_runtime;
 pub mod window_manage;

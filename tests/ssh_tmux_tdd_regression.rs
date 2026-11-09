@@ -115,11 +115,11 @@ fn type_str(wm: &mut WindowManager, s: &str) {
 fn sent_bytes(cmds: &[String]) -> Vec<u8> {
     let mut out = Vec::new();
     for c in cmds {
-        if c.starts_with("send-keys") {
-            if let Some((_, hex)) = c.split_once(" -H") {
-                for h in hex.split_whitespace() {
-                    out.push(u8::from_str_radix(h, 16).unwrap());
-                }
+        if c.starts_with("send-keys")
+            && let Some((_, hex)) = c.split_once(" -H")
+        {
+            for h in hex.split_whitespace() {
+                out.push(u8::from_str_radix(h, 16).unwrap());
             }
         }
     }
@@ -343,4 +343,21 @@ fn list_panes_reconciles_non_zero_first_pane_id_and_multi_pane_without_local_pty
     assert_ne!(extra, id);
     assert!(!wm.pane(extra).unwrap().has_pty(), "extra remote pane has no local PTY");
     assert!(!wm.pane(id).unwrap().has_pty(), "primary has no local PTY");
+}
+
+#[test]
+fn late_layout_after_idle_greeting_rebinds_provisional_primary_without_extra_pane() {
+    let mut wm = WindowManager::new_headless(24, 80);
+    let conn = Conn::default();
+    wm.set_link_connector(Box::new(conn.clone()));
+    let id = wm.connect_ssh_tmux("me@box", "bilterm", vec![]).unwrap();
+    let sp = conn.take();
+    feed(&sp.line_tx, &idle_greeting());
+    wm.tick_tmux_link(100);
+    assert_eq!(tmux_id_of(&wm, id), Some(0));
+    let before = wm.pane_count();
+    feed(&sp.line_tx, &["%layout-change @2 b25d,80x24,0,0,7"]);
+    wm.tick_tmux_link(200);
+    assert_eq!(tmux_id_of(&wm, id), Some(7), "primary adopts the discovered pane");
+    assert_eq!(wm.pane_count(), before, "no duplicate pane created");
 }

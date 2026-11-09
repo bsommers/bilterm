@@ -80,9 +80,10 @@ Before `tmux -CC` starts, the SSH connection stream contains raw terminal text: 
 
 Bilterm handles this phase seamlessly:
 1. **Primary Pane Display**: Before the DCS control sentinel (`ESC P 1000 p`) arrives, raw output lines from `ssh -tt` are rendered directly into the primary pane.
-2. **Raw Keystroke Pass-Through**: Keystrokes typed into the primary pane are sent directly to the PTY stdin (`set_link_raw_input`).
-3. **Password Security**: Typed passwords and passphrase responses never enter Bilterm's floating prompt buffer, undo/redo buffers, command blocks, history store (`history.log`), or Find search index.
+2. **Raw Keystroke Pass-Through**: While the link is `Connecting` and waiting for a password, host-key answer, or 2FA response, every keystroke goes only to the remote `ssh` process's PTY stdin (`set_link_raw_input`). The floating command prompt is hidden and nothing is echoed on screen.
+3. **Password Security**: Typed passwords and passphrase responses never enter Bilterm's floating prompt buffer, undo/redo buffers, command blocks, history store (`history.log`), or Find search index. For unattended use, prefer key-based authentication with `ssh-agent` so no password is typed at all.
 4. **Transition to Control Mode**: Once `ESC P 1000 p` is encountered (or fallback `%begin` / `%output`), Bilterm's `ControlLineSplitter` switches the stream to control lines and adopts the primary pane into the `tmux` layout.
+5. **Remote-Only Panes**: A `:ssh-tmux` pane never spawns a local shell. Each keystroke is delivered to the remote host exactly once, so characters are not doubled and nothing runs locally.
 
 ### 4.4 Link States and Banners
 
@@ -126,12 +127,15 @@ When a network blip or SSH disconnect occurs:
 
 ### 4.6 Topology Hydration with `capture-pane`
 
-When reconnecting to an existing session:
-1. Bilterm waits 300 ms after attach greeting for pane layouts to settle.
-2. It sends `refresh-client -C <cols>x<rows>` followed by `capture-pane -p -e -J -S -2000 -t %N` for each mapped pane.
-3. Live `%output` lines are held during capture to prevent interleaved text corruption.
-4. Screen lines and scrollback are parsed via `render_capture` and fed into each pane's `VtParser`.
-5. Normal output is released. Stale panes that no longer exist on the remote host are flagged with orphan banners rather than being abruptly removed.
+This applies both to a first `:ssh-tmux <user@host> <session>` that attaches to an existing session (`tmux -CC new-session -A -s <session>`) and to reconnects:
+1. **First pane immediately**: Bilterm maps the first remote pane to the local pane as soon as the control stream is up.
+2. **Pane discovery**: It discovers the remaining panes with `list-panes`.
+3. Bilterm waits 300 ms after attach greeting for pane layouts to settle.
+4. It sends `refresh-client -C <cols>x<rows>` followed by `capture-pane -p -e -J -S -2000 -t %N` for each mapped pane.
+5. Live `%output` lines are held during capture to prevent interleaved text corruption.
+6. Screen lines and scrollback are parsed via `render_capture` and fed into each pane's `VtParser`.
+7. Normal output is released. Stale panes that no longer exist on the remote host are flagged with orphan banners rather than being abruptly removed.
+8. **Idle sessions**: Typed commands are delivered right away, even if the remote session has not produced any output yet (for example, an idle shell).
 
 ### 4.7 Single Link Guard and Fresh TCP Policy
 
@@ -162,7 +166,7 @@ If your remote session terminates immediately upon disconnect, verify your remot
 | `:ssh-tmux reconnect` | `Ctrl+Alt+R` / `Ctrl+X U` | `Reconnect link (Ctrl+Alt+R)` | Reconnect persistent remote tmux link immediately (skips backoff timer) |
 | `:ssh-tmux disconnect` | `Ctrl+X Q` | `Disconnect link (Ctrl+X Q)` | Disconnect link; remote `tmux` session keeps running |
 | `:ssh-tmux info` | — | `Link info` | Show link state, retry timer, last exit reason and mapped panes |
-| `:ssh-tmux prefill` | `Ctrl+X u` | `SSH tmux link... (Ctrl+X u)` | Open prompt prefilled with `:ssh-tmux ` |
+| `:ssh-tmux prefill` | `Ctrl+X u` | `SSH tmux link... (Ctrl+X u)` | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter`. Works from any state: closes modals, leaves copy mode, and works while a link is waiting for a password |
 
 ---
 
