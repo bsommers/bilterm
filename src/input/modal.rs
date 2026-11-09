@@ -329,6 +329,11 @@ pub(super) fn handle_wm_modal_key(
         }
     }
 
+    // Sticky Window mode owns every key until it ends, even over raw PTY passthrough (`KEY-01`).
+    if wm.key_mode().is_window() && matches!(wm.modal(), crate::wm::Modal::None) {
+        return super::window_mode::handle_window_mode_key(wm, key);
+    }
+
     // A workspace modal (Exit Guard, Help, Palette, Menu bar, Inspector) always has the keyboard
     // first: floating utility windows must not answer a modal they cannot even show on top of.
     // Plain F7 / Alt+F7 always reaches DrawerToggle so utility windows never lock out the drawer.
