@@ -370,6 +370,13 @@ async fn main() -> color_eyre::Result<()> {
             }
         }
     }
+    let key_env = bilterm::input::keyenv::KeyEnv::new(
+        bilterm::input::keyenv::HostOs::detect(),
+        if gui_mode { bilterm::input::keyenv::Surface::Gui } else { bilterm::input::keyenv::Surface::Tui },
+    );
+    if let Some(err) = bilterm::input::keyconflict::enforce_load_policy(&mut cfg, &key_env) {
+        cfg_error = Some(err);
+    }
     let new_subcmd = matches!(args.first().map(String::as_str), Some("new" | "new-session"));
     let blank_subcmd = matches!(
         args.first().map(String::as_str),
@@ -501,6 +508,9 @@ async fn main() -> color_eyre::Result<()> {
         app.wm.active_pane_mut().set_status_message(Some(format!(
             "Loaded layout profile '{prof}' ({count} pane(s), autosave={autosave_lbl})"
         )));
+    }
+    if cfg_error.is_none() {
+        cfg_error = bilterm::input::keyconflict::load_time_status(app.wm.config(), &key_env);
     }
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);

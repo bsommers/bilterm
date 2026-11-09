@@ -1,9 +1,7 @@
 //! Bodies of `Action::Keys(KeysOp)` (`:keys list|check|explain|profile`, Phase 63).
 //!
-//! 63-01 reports from the profile table only (internal duplicates). Plan 63-03 replaces the
-//! `Check` arm with the full host/consumer conflict engine; the surface stays this one function.
-
-use crossterm::event::KeyEvent;
+//! `Check` and `Explain` delegate to `colon_command::execute_keys` (the `keyconflict` engine, 63-03);
+//! the surface stays this one function.
 
 use crate::action::{Action, KeysOp};
 use crate::api::JsonValue;
@@ -57,81 +55,16 @@ pub fn run_keys_op(wm: &mut WindowManager, op: &KeysOp) -> String {
             wm.set_command_data(json.to_json_string());
             format!("Keys [{}]: {} bindings (Primary {})", km.profile().as_str(), rows.len(), primary_label(wm))
         }
-        KeysOp::Check => {
-            let dups = km.unexpected_duplicates();
-            let json = JsonValue::obj([
-                ("profile", JsonValue::String(km.profile().as_str().to_string())),
-                (
-                    "findings",
-                    JsonValue::Array(
-                        dups.iter()
-                            .map(|d| {
-                                JsonValue::obj([
-                                    ("chord", JsonValue::String(d.chord.clone())),
-                                    ("class", JsonValue::String("internal".to_string())),
-                                    ("table", JsonValue::String(d.table.to_string())),
-                                    (
-                                        "actions",
-                                        JsonValue::Array(d.actions.iter().map(|a| JsonValue::String(action_label(a))).collect()),
-                                    ),
-                                ])
-                            })
-                            .collect(),
-                    ),
-                ),
-            ]);
-            wm.set_command_data(json.to_json_string());
-            if dups.is_empty() {
-                format!("Keys [{}]: no internal conflicts", km.profile().as_str())
-            } else {
-                let first = &dups[0];
-                format!("Keys [{}]: {} internal conflict(s), first: {} ({})", km.profile().as_str(), dups.len(), first.chord, first.table)
-            }
-        }
-        KeysOp::Explain(raw) => match KeyChord::parse(raw) {
-            Err(e) => {
-                wm.record_automation_error(e.clone());
-                e
-            }
-            Ok(chord) => {
-                let mods = if chord.primary { primary_mods(&env).unwrap_or(crossterm::event::KeyModifiers::NONE) | chord.mods } else { chord.mods };
-                let key = KeyEvent::new(chord.code, mods);
-                let found = km
-                    .primary_action(key)
-                    .map(|a| (a, "primary"))
-                    .or_else(|| km.global_action(key, false).map(|a| (a, "global")))
-                    .or_else(|| km.pane_action(key).map(|a| (a, "pane")));
-                let msg = match &found {
-                    Some((a, table)) => {
-                        format!("{} -> {} ({table}, profile {})", chord.display(&env), action_label(a), km.profile().as_str())
-                    }
-                    None => format!("{} is not bound in profile {}", chord.display(&env), km.profile().as_str()),
-                };
-                wm.set_command_data(
-                    JsonValue::obj([
-                        ("chord", JsonValue::String(chord.format(&env))),
-                        ("bound", JsonValue::Bool(found.is_some())),
-                        ("action", found.map_or(JsonValue::Null, |(a, _)| JsonValue::String(action_label(&a)))),
-                    ])
-                    .to_json_string(),
-                );
-                msg
-            }
-        },
+        KeysOp::Check => crate::colon_command::execute_keys::check_op(wm),
+        KeysOp::Explain(raw) => crate::colon_command::execute_keys::explain_op(wm, raw),
         KeysOp::Profile(None) => {
-            wm.set_command_data(
-                JsonValue::obj([
-                    ("profile", JsonValue::String(km.profile().as_str().to_string())),
-                    ("configured", JsonValue::String(wm.config().keys.profile.as_str().to_string())),
-                    ("available", JsonValue::Array(KeyProfileName::ALL.iter().map(|n| JsonValue::String(n.as_str().to_string())).collect())),
-                ])
-                .to_json_string(),
-            );
+            set_profile_data(wm);
             format!("Key profile: {} (configured {})", km.profile().as_str(), wm.config().keys.profile.as_str())
         }
         KeysOp::Profile(Some(name)) => match KeyProfileName::parse(name) {
             Some(p) => {
                 wm.set_key_profile(p);
+                set_profile_data(wm);
                 let now = wm.keymap().profile();
                 format!("Key profile set to {} (this session; :config save to persist)", now.as_str())
             }
@@ -143,6 +76,16 @@ pub fn run_keys_op(wm: &mut WindowManager, op: &KeysOp) -> String {
             }
         },
     }
+}
+
+/// Stores `{profile, configured, available}` for `:keys profile` and the `keys.profile` RPC.
+fn set_profile_data(wm: &mut WindowManager) {
+    let json = JsonValue::obj([
+        ("profile", JsonValue::String(wm.keymap().profile().as_str().to_string())),
+        ("configured", JsonValue::String(wm.config().keys.profile.as_str().to_string())),
+        ("available", JsonValue::Array(KeyProfileName::ALL.iter().map(|n| JsonValue::String(n.as_str().to_string())).collect())),
+    ]);
+    wm.set_command_data(json.to_json_string());
 }
 
 fn primary_label(wm: &WindowManager) -> &'static str {

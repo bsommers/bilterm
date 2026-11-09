@@ -12,6 +12,8 @@ pub mod find_modal;
 pub mod fonts_window;
 pub mod fonts_window_keys;
 pub mod gui_route;
+pub mod keyconflict;
+pub mod keyconflict_data;
 pub mod keyenv;
 pub mod keyhint_window;
 pub mod keymap;

@@ -86,7 +86,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
 
-use crate::action::Action;
+use crate::action::{Action, KeysOp};
 use crate::colon_command::execute_wm_colon_command;
 use crate::config::BiltermConfig;
 use crate::error::Result;
@@ -412,6 +412,12 @@ impl WindowManager {
     /// Why `action` must be refused for an API-originated caller (config write gate, `[api]`).
     /// Returns `None` when the action is allowed. Local (non-API) callers are never gated.
     pub fn config_write_denied(&self, action: &Action) -> Option<String> {
+        // Phase 63: key-profile switches and keyboard-mode changes are mutations too (`keys.profile`,
+        // `keys.window_mode`, `menu.open` RPC and the same colon forms over `wm.command`).
+        if matches!(action, Action::Keys(KeysOp::Profile(Some(_))) | Action::WindowMode(_) | Action::MenuOpen { .. }) {
+            return (!self.config.api.allow_config_write)
+                .then(|| "key and mode changes over the API are disabled; set [api] allow_config_write = true in config.toml".to_string());
+        }
         let writes = matches!(action, Action::ConfigSet(..) | Action::ConfigSave | Action::AppearanceSave);
         if !writes {
             return None;
