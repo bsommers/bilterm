@@ -232,6 +232,11 @@ impl VideoCanvasState {
     pub fn snapshot(&self) -> VideoPlaybackSnapshot {
         self.engine.state_snapshot()
     }
+
+    /// Name of the active playback backend (`"ffmpeg-pipe"` or `"synthetic"`).
+    pub fn backend_name(&self) -> &'static str {
+        self.engine.state_snapshot().backend_name
+    }
 }
 
 /// Built-in procedural/synthetic video generator (`demo://smpte`, `demo://plasma`).
