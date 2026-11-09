@@ -121,6 +121,9 @@ src/
 │   ├── agents_list_cmd.rs      # `AgentsListOp` and `ListFilter`: the list's colon/RPC/key vocabulary (Phase 51)
 │   ├── agents_list_geometry.rs # AGENTS list rect, layout and hit-test; the one source for render and mouse (Phase 51)
 │   ├── agents_demo.rs          # `:agents demo` / `:agents demo stop`: spawned-pane record and demo event purge (Phase 51, UIT-01)
+│   ├── traffic_monitor.rs      # TRAFFIC MONITOR window state, `TrafficMonitorOp`, apply (Phase 64-03)
+│   ├── traffic_monitor/data.rs # group/sort/locality names, `TrafficQuery`, the one snapshot JSON builder (Phase 64-03)
+│   ├── traffic_monitor_geometry.rs # TRAFFIC MONITOR rect, layout, hit-test; single source for render and mouse (Phase 64-03)
 │   ├── panel_dock.rs           # Dock strip for `:arrange`: docked panels, slots and `set_panel_docked` (Phase 51, UIT-04)
 │   ├── tmux_link.rs            # Persistent link lifecycle, supervisor, connect/reconnect/disconnect (Phase 51.1)
 │   ├── tmux_io.rs              # I/O pumps: input send-keys, outbound greeting gate, hydrate capture, resize (Phase 51.1)
@@ -173,7 +176,7 @@ src/
     ├── rpc_handlers.rs         # JSON-RPC 2.0 workspace/pane/session.save/session.restore/fleet handlers
     ├── rpc_agents.rs           # `agents.list` and `agents.demo` RPC methods; both lower to `:agents ...` colon commands (Phase 51)
     ├── rpc_link.rs             # remote.link RPC handler and honest connect result (Phase 51.1)
-    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (14 agent tools)
+    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (25 tools)
     ├── playbook.rs             # AutomationEvent bus & declarative TOML Playbook runner
     ├── server.rs               # Async Unix domain socket (0600 + peer UID) & TCP bearer-token RPC server/client
     └── tests.rs                # Security & RPC unit tests
@@ -424,6 +427,26 @@ Surface Uniformity (`UNI-R01`):
 - **Mouse**: Navigator `Ctrl+Click` multi-select toggle, right-click context menu (`Move to session...`, `Rename`, `Bulk move...`, `Bulk close`, `Bulk tile`).
 - **Colon**: Full `:window <move|rename|select|bulk|undo>` and `:session <rename|move|undo>` grammar.
 - **Control Plane**: JSON-RPC endpoints (`window.move`, `window.rename`, `session.rename`, `window.select`, `window.bulk`, `window.undo`), MCP tool `bilterm_window_manage`, and `bilterm ctl` CLI forwarding.
+
+---
+
+## 6f. The Traffic Monitor window (Phase 64-03)
+
+`src/traffic/**` is the std-only metrics leaf (64-01); `src/wm/traffic_monitor*.rs`, `src/ui/traffic_monitor_{ui,gui}.rs`,
+`src/input/traffic_monitor{,_keys}.rs`, `src/colon_command/parse_traffic.rs` and `src/api/rpc_traffic.rs` are the window
+and its surfaces, cloned from the CLIPBOARD window structure (6c). Every operation is a `TrafficMonitorOp` executed through
+`WindowManager::apply(Action::TrafficMonitor(op))`; `colon_form()` is the exact inverse of the parser (round-trip test).
+Rect, layout and hit-testing live only in `traffic_monitor_geometry.rs` (`TrafficLayout::compute`), used by both renderers and
+the mouse planner. `WindowManager::traffic_group_json` is the single JSON builder behind `:traffic show`, `traffic.snapshot`
+and MCP `bilterm_traffic`. Toggle chords: `Ctrl+Alt+T` (reserved global, works in raw passthrough) and Leader `$` (`#` is
+ArrangeGrid). API callers are refused `reset|enable|classify|oia` unless `[api] allow_config_write = true`.
+`scripts/check_phase64_doc_coverage.sh` (run by `tests/phase64_traffic_surfaces.rs`) keeps chapter 13 in sync with the
+`:traffic` completion row.
+
+Adding a metered boundary (Plan 64-02 hooks): open a `TrafficTap` cell with the right `Origin` and `Role`
+(`Wire` for physical links, `Payload` for decoded pane streams, `Both` only for a local PTY), count with `rx`/`tx` at the
+single byte boundary, register the hook in `HOOK_MANIFEST` in `tests/phase64_layer_dag.rs`, and never count the same bytes
+on both a Wire and a Payload cell of the same view.
 
 ---
 

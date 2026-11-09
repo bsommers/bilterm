@@ -412,6 +412,7 @@ const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
         ("Fonts Window", ":fonts toggle"),
         ("Command Palette Window", ":commands toggle"),
         ("Clipboard Viewer (Ctrl+Alt+V)", ":clipboard toggle"),
+        ("Traffic Monitor (Ctrl+Alt+T)", ":traffic toggle"),
         ("Script Studio", ":script toggle"),
         ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
         ("Voice Dictation Toggle (Ctrl+Alt+S)", ":voice toggle"),

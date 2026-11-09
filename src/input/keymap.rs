@@ -12,6 +12,7 @@ use crate::wm::find_cmd::FindOp;
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
 use crate::wm::clipboard_window::ClipboardWindowOp;
+use crate::wm::traffic_monitor::TrafficMonitorOp;
 
 #[path = "keymap_tables.rs"]
 mod keymap_tables;
@@ -58,7 +59,7 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// while an agent or a remote ssh prompt owns the pane.
 pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
     match default_global_action(key, false) {
-        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
+        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::TrafficMonitor(TrafficMonitorOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
         _ => None,
     }
 }
