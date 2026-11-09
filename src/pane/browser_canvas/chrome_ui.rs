@@ -72,9 +72,27 @@ pub fn render_browser_nav_bar(
     // Center/URL Bar
     let max_url_w = nav_rect.right().saturating_sub(cur_x).saturating_sub(right_reserve) as usize;
     if max_url_w > 6 {
-        let display_url = format!("🔒 {}", state.current_url());
-        let truncated: String = display_url.chars().take(max_url_w).collect();
-        buf.set_string(cur_x, y, &truncated, text_style);
+        if let Some(edit) = state.url_edit() {
+            let edit_bg = Color::Rgb(250, 250, 250);
+            let edit_style = Style::default().fg(Color::Black).bg(edit_bg);
+            for col in cur_x..cur_x + max_url_w as u16 {
+                buf[(col, y)].set_char(' ').set_style(edit_style);
+            }
+            // Scroll so the cursor stays visible.
+            let start = (edit.cursor + 1).saturating_sub(max_url_w);
+            let visible: String = edit.text.chars().skip(start).take(max_url_w).collect();
+            buf.set_string(cur_x, y, &visible, edit_style);
+            let cx = cur_x + (edit.cursor - start) as u16;
+            if cx < cur_x + max_url_w as u16 {
+                buf[(cx, y)].set_style(
+                    Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::REVERSED),
+                );
+            }
+        } else {
+            let display_url = format!("🔒 {}", state.current_url());
+            let truncated: String = display_url.chars().take(max_url_w).collect();
+            buf.set_string(cur_x, y, &truncated, text_style);
+        }
     }
 
     // Right buttons

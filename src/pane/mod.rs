@@ -439,6 +439,13 @@ impl CompositePane {
             .map(|x| x.min(max_x_off))
             .unwrap_or_else(|| default_margin_x.min(max_x_off));
         let mut y = canvas.y + y_offset;
+        // Keep the 1-row browser nav bar visible beneath a Top-anchored prompt.
+        if self.browser_canvas.is_some()
+            && matches!(self.prompt.anchor, PromptAnchor::Top)
+            && canvas.height > height
+        {
+            y = canvas.y + 1;
+        }
         if self.copy_mode.active {
             let cr = canvas.y + self.copy_mode.cursor_row;
             if cr >= y && cr < y + height {

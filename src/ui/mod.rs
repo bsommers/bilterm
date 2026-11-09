@@ -142,6 +142,18 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 1: Render full-height OutputCanvas from VtParser screen
         render_output_canvas(self.pane, canvas, cfg, &palette, self.active, buf);
 
+        if let Some(browser) = self.pane.browser_canvas()
+            && canvas.height > 1
+        {
+            let body = Rect::new(canvas.x, canvas.y + 1, canvas.width, canvas.height - 1);
+            rasterize_frame_halfblocks(buf, body, browser.cached_frame());
+        }
+        if let Some(video) = self.pane.video_canvas()
+            && canvas.height > 1
+        {
+            let body = Rect::new(canvas.x, canvas.y, canvas.width, canvas.height - 1);
+            rasterize_frame_halfblocks(buf, body, video.cached_frame());
+        }
         if let Some(browser) = self.pane.browser_canvas() {
             crate::pane::browser_canvas::render_browser_nav_bar(
                 buf,
@@ -234,6 +246,32 @@ fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: 
         }
     }
     true
+}
+
+/// Rasterizes an RGBA frame into `area` using TrueColor `▀` half-blocks (2 pixel rows per cell).
+fn rasterize_frame_halfblocks(
+    buf: &mut Buffer,
+    area: Rect,
+    frame: Option<&crate::pane::browser_canvas::MediaRgbaFrame>,
+) {
+    let Some(f) = frame else { return };
+    let (fw, fh) = (f.width_px as usize, f.height_px as usize);
+    if fw == 0 || fh == 0 || area.width == 0 || area.height == 0 || f.rgba.len() < fw * fh * 4 {
+        return;
+    }
+    let (cols, prows) = (area.width as usize, area.height as usize * 2);
+    let px = |cx: usize, py: usize| {
+        let x = (cx * fw / cols).min(fw - 1);
+        let y = (py * fh / prows).min(fh - 1);
+        let i = (y * fw + x) * 4;
+        Color::Rgb(f.rgba[i], f.rgba[i + 1], f.rgba[i + 2])
+    };
+    for r in 0..area.height as usize {
+        for c in 0..cols {
+            let cell = &mut buf[(area.x + c as u16, area.y + r as u16)];
+            cell.set_char('▀').set_fg(px(c, r * 2)).set_bg(px(c, r * 2 + 1));
+        }
+    }
 }
 
 fn render_output_canvas(

@@ -123,6 +123,14 @@ pub struct BrowserCanvasState {
     pub history: Vec<String>,
     pub history_idx: usize,
     cached_frame: Option<MediaRgbaFrame>,
+    url_edit: Option<UrlEditState>,
+}
+
+/// In-progress URL bar edit: text buffer plus cursor (in chars).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UrlEditState {
+    pub text: String,
+    pub cursor: usize,
 }
 
 impl BrowserCanvasState {
@@ -136,6 +144,7 @@ impl BrowserCanvasState {
             history: vec![initial_url],
             history_idx: 0,
             cached_frame,
+            url_edit: None,
         }
     }
 
@@ -254,6 +263,83 @@ impl BrowserCanvasState {
         } else {
             false
         }
+    }
+
+    pub fn is_editing_url(&self) -> bool {
+        self.url_edit.is_some()
+    }
+
+    pub fn url_edit(&self) -> Option<&UrlEditState> {
+        self.url_edit.as_ref()
+    }
+
+    /// Enters URL edit mode prefilled with the current URL (cursor at end).
+    pub fn begin_url_edit(&mut self) {
+        let text = self.engine.current_url().to_string();
+        let cursor = text.chars().count();
+        self.url_edit = Some(UrlEditState { text, cursor });
+    }
+
+    pub fn cancel_url_edit(&mut self) {
+        self.url_edit = None;
+    }
+
+    /// Commits the edit, navigating to the buffer (prefixing `https://` when no scheme).
+    pub fn commit_url_edit(&mut self) -> Result<()> {
+        let Some(edit) = self.url_edit.take() else {
+            return Ok(());
+        };
+        let t = edit.text.trim();
+        if t.is_empty() {
+            return Ok(());
+        }
+        let url = if t.contains("://") || t.starts_with("about:") {
+            t.to_string()
+        } else {
+            format!("https://{t}")
+        };
+        self.navigate(&url)
+    }
+
+    /// Routes a key to the URL editor. Returns `true` when consumed (always while editing).
+    pub fn handle_url_edit_key(&mut self, key: KeyEvent) -> bool {
+        use crossterm::event::KeyCode;
+        let Some(edit) = self.url_edit.as_mut() else {
+            return false;
+        };
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let len = edit.text.chars().count();
+        let byte_at = |t: &str, i: usize| t.char_indices().nth(i).map_or(t.len(), |(b, _)| b);
+        match key.code {
+            KeyCode::Enter => {
+                let _ = self.commit_url_edit();
+            }
+            KeyCode::Esc => self.url_edit = None,
+            KeyCode::Char('u') if ctrl => {
+                edit.text.clear();
+                edit.cursor = 0;
+            }
+            KeyCode::Char(c) if !ctrl => {
+                let b = byte_at(&edit.text, edit.cursor);
+                edit.text.insert(b, c);
+                edit.cursor += 1;
+            }
+            KeyCode::Backspace if edit.cursor > 0 => {
+                let b = byte_at(&edit.text, edit.cursor - 1);
+                edit.text.remove(b);
+                edit.cursor -= 1;
+            }
+            KeyCode::Delete if edit.cursor < len => {
+                let b = byte_at(&edit.text, edit.cursor);
+                edit.text.remove(b);
+            }
+            KeyCode::Left => edit.cursor = edit.cursor.saturating_sub(1),
+            KeyCode::Right => edit.cursor = (edit.cursor + 1).min(len),
+            KeyCode::Home => edit.cursor = 0,
+            KeyCode::End => edit.cursor = len,
+            _ => {}
+        }
+        true
     }
 
     pub fn cached_frame(&self) -> Option<&MediaRgbaFrame> {
