@@ -288,11 +288,11 @@ fn leader_m_opens_menubar_and_colon_key_apply_agree() {
     let mut wm3 = wm_with(KeyProfileName::Linux, KeyEnv::headless());
     wm3.apply(Action::MenuOpen { category: Some(3) }).unwrap();
     assert_eq!(wm3.menubar_open_category(), Some(3));
-    // Legacy leader m stays PromptModeSet.
+    // Legacy leader m also opens the menubar.
     let mut wm4 = wm_with(KeyProfileName::Legacy, KeyEnv::headless());
     handle_wm_key_event(&mut wm4, leader).unwrap();
     handle_wm_key_event(&mut wm4, ch('m', KeyModifiers::NONE)).unwrap();
-    assert_eq!(wm4.menubar_state(), None);
+    assert_eq!(wm4.menubar_state(), Some((0, 0)));
 }
 
 #[test]
