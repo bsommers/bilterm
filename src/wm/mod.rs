@@ -13,6 +13,7 @@ pub mod agents_list_geometry;
 pub mod command_window;
 pub mod clipboard_registry;
 pub mod clipboard_window;
+pub mod daemon_window;
 pub mod fonts_window;
 pub mod script_studio;
 pub mod script_studio_cmd;
@@ -192,6 +193,7 @@ pub struct WindowManager {
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
+    daemon_window: daemon_window::DaemonWindowState,
     pub(crate) fonts_window: fonts_window::FontsWindowState,
     pub(crate) fonts_window_dirty: bool,
     /// Pinnable COMMAND PALETTE first-class window (`WIN-02`, Phase 51.2).
@@ -303,6 +305,7 @@ impl WindowManager {
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
             session_map: session_map::SessionMapState::default(),
+            daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
