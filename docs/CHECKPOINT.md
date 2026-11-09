@@ -1,9 +1,6 @@
-# Session Checkpoint — 2026-11-08 (Phases 61–64 + Daemon Supervisor & Floating UI + `:ssh-tmux` TDD Complete)
+# Session Checkpoint — `bilterm`
 
-See [`.planning/CHECKPOINT.md`](../.planning/CHECKPOINT.md) for full details.
+See [`.planning/CHECKPOINT.md`](../.planning/CHECKPOINT.md) for the full checkpoint state.
 
-- **Unified Branch Ready**: `feat/phases-61-64` at `6ab91c0` (in `/tmp/bilterm-integ`) integrates:
-  1. **Phases 61–64** (`8ffea50` — all 11 plans: `61-01..03`, `62-01..02`, `63-01..03`, `64-01..03`).
-  2. **Daemon Supervisor PID/Lockfile/Registry + Floating `DAEMON SUPERVISOR` Window in TUI & GUI** (`50a020b` -> `6ab91c0`).
-  3. **`:ssh-tmux` TDD Regression Suite (`e48bd27`) + Complete Fix (`c098821` -> `69c603c`)** (prefill across all modes/surfaces, no local PTY in remote panes, no double characters, no plaintext SSH password echo, idle `tmux -CC` session pane mapping/reconciliation, and same-tick outbound command flushing).
-- **Next Step**: Merge `feat/phases-61-64` (`6ab91c0`) into `main`, push to `origin/main`, and remove `/tmp/bilterm-{integ,ssh-tmux,daemon-merged}`.
+- **Status:** COMPLETE (`PASS 135/135`, `GOLDENS OK 11`)
+- **Latest Increment:** Browser canvas TUI half-block rendering + editable URL bar (`Ctrl+L` / click URL bar), Video canvas real `ffmpeg` frame reader, OIA `[TUI]`/`[GUI]` surface badge, `:voice` pre-flight diagnostics, `Leader m` + menubar dropdown click fix, and Phase 65 `GUARD-01` (`SignalablePid`).

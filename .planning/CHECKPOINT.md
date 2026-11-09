@@ -1,46 +1,39 @@
-# Session Checkpoint — 2026-11-08 (Phases 61–64 + Daemon Supervisor & Floating UI + `:ssh-tmux` TDD Complete)
+# Session Checkpoint — `bilterm`
 
-## Current State
+**Updated:** 2026-11-09T19:00:00-05:00  
+**Status:** COMPLETE — all media/browser/video/voice TUI & URL bar enhancements, menu fixes, Phase 65 GUARD-01 (`SignalablePid`), and v3.2.0 verified and merged to `main`.
 
-- **Active Unified Branch**: `feat/phases-61-64` at `6ab91c0` (in `/tmp/bilterm-integ`, ready to fast-forward/merge into `main`).
-- **Base `main`**: `17a0ae3` (`Merge pull request #35 from bsommers/plan/phases-61-64`).
+## 1. Goal & User Decisions (Verbatim)
 
-## Completed Work Summary
+1. *"looking at all of the bugs and bug fixes, let's write a report of bugs. Find those that were introduced by poor specification others that could otherwise be corrected by better skills or design things"* -> Committed `docs/BUG_AUDIT_REPORT.md` (PR #42).
+2. *"let's do a /release"* -> Released `v3.2.0` (`ec942fb`, PR #41, GitHub Release `v3.2.0`).
+3. *"let's take those Actionable Recommendations & Guardrails and turn them into a plan - improved skills, improved planning skills, bug fixing behavior during agent builds and in skills, and write a report. save that report, put it into the milestones on the plan. start executing the plan in parallel subagents using the cheapest model suited to the tasks"* -> Updated `AGENTS.md`, `swe-skills-2` (`93accf7`), registered Phase 65 in `.planning/ROADMAP.md`, and implemented `GUARD-01` (`SignalablePid` in `src/daemon/types.rs` + `tests/signalable_pid_invariants.rs`, PR #43).
+4. *"these aren't right on Linux. double check and fix as needed: ... Leader m ... Window Menu doesn't grab the mouse clicks, they go below the window to the drawer window or other window below."* -> Fixed `Leader m` (`Action::MenuOpen`) across all profiles in `src/input/keymap_tables.rs` and reordered `handle_modal_mouse_event` before `handle_drawer_mouse_event` in `src/input/mouse.rs` (`tests/menubar_mouse_and_leader_m.rs`, PR #44).
+5. *"in subagents: find out and fix: - is the \":browser\" canvas supposed to work? I see that it says i toggled it on, but I don't see a web browser inside of bilterm. same with video canvas. don't see that. am I in tui mode? also what about the voice mode>"*
+6. *"dispatch the subagents, one into each the three claude sessions through herdr here in this same repos on the windows on the right. make sure the webbrowser mode lets us edit the URL bar."*
 
-### 1. Phases 61–64 (`8ffea50`)
-- **Phase 61 (`d4d3f29`)**:
-  - `61-01` (`e8ab1fd`): Classic drawer two-line rows (`classic_row_lines`), `[R:n]` header chip, `:drawer rows`.
-  - `61-02` (`4e92499`): Effective zoom derived from focus (`z_stack.top()`), true `toggle_zoom`, no mouse hit-test fall-through while zoomed.
-  - `61-03` (`7e0fac9`): Focusing click on inactive window preserves OIA/prompt chrome (`was_active` gate); prompt mode, raw mode (`SavedPaneState`), copy mode, and scrollback offset survive stack switches and column reflow.
-- **Phase 62 (`60cb6bb`)**:
-  - `62-01` (`c9b117f`): `Shift`/`Alt` mouse drag local selection override over mouse-tracking TUIs (`src/input/mouse_select.rs`), SGR modifier bits, auto-copy on release with toast, split-read inbound OSC 52 reassembly (`src/vt/scan_osc_dcs.rs`), OIA `MOUSE->APP` and `[COPY]` badges.
-  - `62-02` (`60cb6bb`): Scrollback-absolute selections, vi/emacs motions (`w b e`, `0 ^ $`, `gg G`, `H M L`, `/ ? n N`), double/triple click word/line selection, state-driven copy hint line (`src/ui/copy_hints.rs`).
-- **Phase 63 (`985f84f`)**:
-  - `63-01`: `KeyEnv`, `Primary` modifier (`Cmd` on macOS GUI, `Ctrl+Shift` elsewhere), per-OS key profiles (`mac`, `windows`, `linux`, `portable`, `legacy`), replaced `Alt+M`, macOS Option & Win32 AltGr fixes.
-  - `63-02` (`becf228`): Sticky Window mode (leader `w`, `Primary+O`), which-key overlay (`src/ui/which_key_ui.rs`), keyboard-operable menu bar across all 9 categories (`src/ui/menu_model.rs`).
-  - `63-03` (`985f84f`): Key conflict engine (`src/input/keyconflict.rs`), `:keys list|check|explain|profile`, RPC `keys.*`, MCP `bilterm_keys`.
-- **Phase 64 (`1b4f2b3` / `3b4e907` / `0d8534d`)**:
-  - `64-01`: `src/traffic/` leaf module, `TrafficMeter` seam on `WindowManager`.
-  - `64-02`: All 33 byte-boundary hooks (`H01..H33`, including MCP stdio `H26`/`H27` via `src/api/metered.rs`), OIA rate indicator.
-  - `64-03`: `TRAFFIC MONITOR` TUI & GUI window (`src/ui/traffic_monitor_{ui,gui}.rs`), `:traffic`, RPC `traffic.*`, MCP `bilterm_traffic`, `DOCS OK 42`.
+## 2. Completed Work in This Increment
 
-### 2. Daemon Backend (`PID 0`) & Floating `DAEMON SUPERVISOR` Menu (`50a020b` -> `6ab91c0`)
-- **`src/main.rs` & `src/daemon/{supervisor,registry}.rs` (`d857966`)**:
-  - Headless daemon mode (`-d` / `--headless` / `--daemon`) now acquires the lockfile (`acquire_lock(&runtime_dir, daemon_name, sock_path)`) and registers in `DaemonRegistry::register(...)` with real PID and start timestamp.
-  - `spawn_daemon` returns `Result<u32, String>` (`child.id()`); `ensure_started` reports the real non-zero PID, synthesizes registry entries when needed, and `stop_daemon` falls back to `<name>.sock.pid` if the lockfile was removed.
-- **Floating `DAEMON SUPERVISOR` Window in TUI & GUI (`3297e1e` & `50a020b`)**:
-  - Added `src/wm/daemon_window.rs`, `src/ui/daemon_window_ui.rs`, and `src/input/daemon_window.rs` (`Modal::DaemonManager`).
-  - `:daemon list|status|start|stop|switch` and Top Menu `Daemon` items open/refresh the floating `DAEMON SUPERVISOR` window in both TUI and GUI with keyboard (`j/k`, `Enter/s` start, `x/q/Del` stop, `w` switch, `p` prune, `r` refresh, `Esc`) and mouse support.
-  - Fixed `render_menubar_dropdown` in `src/ui/mod.rs` so dropdown menus render under `TopBarKind::Pills` and when the menubar is toggled open via `F10`/`Alt`.
+- **Browser Canvas TUI Rendering, Prompt Occlusion Fix & Interactive Editable URL Bar (`w12:p7`, `a317666`)**:
+  - `src/pane/browser_canvas/{mod,chrome_ui}.rs`, `src/input/{mod,mouse_media,mouse}.rs`: Clicking `BrowserNavHit::UrlBar` on the 1-row nav bar or pressing `Ctrl+L` enters interactive URL editing mode (`is_editing_url()`, `url_input`, `url_cursor`) supporting `Char`, `Backspace`, `Delete`, `Left`/`Right`/`Home`/`End`, `Ctrl+U`/`Ctrl+A`/`Ctrl+E`, `Enter` (navigates, auto-prepending `https://` when scheme is omitted), and `Esc` (cancels edit).
+  - `src/pane/mod.rs`: Offsets `prompt_rect` by `+1` row when `browser_canvas.is_some()` and `PromptAnchor::Top` so Pass 2 `occlude_rect` never hides the 1-row browser navigation bar.
+  - `src/ui/mod.rs`: Rasterizes `browser.cached_frame()` (`canvas.y + 1 .. canvas.bottom()`) and `video.cached_frame()` (`canvas.y .. canvas.bottom() - 1`) in TUI mode using TrueColor half-block (`▀`) cells.
+  - `tests/browser_canvas_tui_and_url_edit.rs` (4/4 passing).
+- **Video Canvas Real `FfmpegPipeBackend` Frame Reader & Diagnostics (`w12:p8`, `cdea0bf`)**:
+  - `src/pane/video_canvas/{ffmpeg,mod,osd}.rs`: Background reader thread decoding `width * height * 4` RGBA frames from `ffmpeg` stdout pipe; `render_half_block_frame` helper.
+  - `src/colon_command/execute_media.rs`: Clear backend (`CDP` vs `synthetic`, `ffmpeg` vs `synthetic`) and surface (`[TUI half-block; run bilterm --gui for GPU canvas]`) status messages.
+  - `tests/video_canvas_tui_and_ffmpeg.rs` (5/5 passing).
+- **OIA `[TUI]` / `[GUI]` Surface Indicator & `:voice` Pre-Flight Diagnostics (`w12:pA`, `a26bf07`)**:
+  - `src/ui/oia.rs`: Surface mode badge `[TUI]` / `[GUI]` in the OIA status bar (`GOLDENS OK 11` preserved).
+  - `src/stt/{mod,audio,worker}.rs`, `src/colon_command/execute_voice.rs`: Pre-flight audio recorder (`pw-record`/`parecord`/`arecord`/`ffmpeg`) and STT endpoint reachability diagnostics with actionable status hints.
+  - `tests/voice_and_oia_surface_badge.rs` (4/4 passing).
 
-### 3. `:ssh-tmux` Top-to-Bottom Audit, TDD Suite & Fixes (`e48bd27` -> `c098821` -> `69c603c`)
-- **Red-Phase TDD Suite (`tests/ssh_tmux_tdd_regression.rs`, `e48bd27`)**: Wrote 6 regression tests first and confirmed 5/6 failed against `main` (`17a0ae3`).
-- **Green-Phase Fixes (`c098821` & `69c603c`)**:
-  1. **No Local `/bin/bash` PTY in Remote Panes (`src/wm/tmux_remote.rs`)**: `split_focused_remote_pane` always creates PTY-less remote panes even when `headless_mode == false`; `CompositePane::write_to_pty` returns immediately after appending to `remote_input` when `remote_input_tap` is set (eliminating double characters and local shell execution).
-  2. **No Plaintext SSH Password Leak (`src/pane/mod.rs`)**: `is_prompt_visible()` checks `if self.link_raw_input { return false; }` before `if self.prompt.force_command_prompt { return true; }`, and `connect_ssh_tmux_body` clears `force_command_prompt = false`, so pre-control SSH password prompts are never echoed in the floating prompt or local PTY.
-  3. **Idle Remote `tmux -CC` Session Attach & Same-Tick Command Delivery (`src/tmux/list_panes.rs`, `src/wm/tmux_link.rs`, `src/wm/tmux_io.rs`)**: Provisionally maps `primary_pane <-> %0` on control-mode entry, queues `list-panes -s -F '#{window_id} #{pane_id}'` (`ReplyKind::ListPanes`) to reconcile non-zero pane IDs and extra panes, maps `primary_pane` in `pump_tmux_input` instead of dropping commands with `"Link down"`, and runs a second outbound `driver.pump()` pass at the end of `tick_tmux_link`.
-  4. **`:ssh-tmux prefill` (`src/colon_command/execute_link.rs`)**: Closes modals, exits copy/raw/link-raw/overlay states, sets `force_command_prompt = true`, and populates `:ssh-tmux ` with cursor at the end across all modes and surfaces.
+## 3. Verification Baseline
 
-## Next Immediate Step (After `/compact`)
+- `scripts/verify.sh --quick`: `PASS 135/135`
+- `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
+- New suites: `browser_canvas_tui_and_url_edit` (4/4), `video_canvas_tui_and_ffmpeg` (5/5), `voice_and_oia_surface_badge` (4/4), `menubar_mouse_and_leader_m` (2/2), `signalable_pid_invariants` (12/12).
 
-1. Merge/fast-forward `feat/phases-61-64` (`6ab91c0`) into `main` in `/home/bill/src/ai/bilterm` (or push and merge PR to `origin/main`) and remove the remaining temporary worktrees (`/tmp/bilterm-integ`, `/tmp/bilterm-ssh-tmux`, `/tmp/bilterm-daemon-merged`).
+## 4. Next Steps (If Resuming)
+
+- Execute remaining Phase 65 waves (`GUARD-02` `PaneTransport` enum refactor in `src/pane/mod.rs` and `GUARD-03` focus-isolation verification in `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`) when requested.

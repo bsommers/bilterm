@@ -976,9 +976,9 @@ pub fn handle_wm_mouse_event(
                 && pane_mouse.column >= right_edge.saturating_sub(8)
                 && pane_mouse.column < right_edge.saturating_sub(2)
         };
-        let on_browser_nav = pane.browser_canvas().is_some() && pane_mouse.row == canvas_rect.y;
+        let has_media_canvas = pane.browser_canvas().is_some() || pane.video_canvas().is_some();
         if !on_prompt_pin_badge
-            && !on_browser_nav
+            && !has_media_canvas
             && !pane.copy_mode().rect_mode
             && !pane_mouse.modifiers.contains(KeyModifiers::ALT)
             && !pane_mouse.modifiers.contains(KeyModifiers::CONTROL)
