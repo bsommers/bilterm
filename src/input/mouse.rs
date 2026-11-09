@@ -766,15 +766,15 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Handled);
     }
 
+    if let Some(action) = handle_modal_mouse_event(wm, mouse, workspace_area) {
+        return Ok(action);
+    }
+
     if let Some(action) = handle_drawer_mouse_event(wm, mouse, workspace_area) {
         return Ok(action);
     }
 
     if let Some(action) = handle_wm_window_drag_event(wm, mouse, workspace_area)? {
-        return Ok(action);
-    }
-
-    if let Some(action) = handle_modal_mouse_event(wm, mouse, workspace_area) {
         return Ok(action);
     }
 

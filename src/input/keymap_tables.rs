@@ -122,7 +122,7 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('s'), Action::PromptSplitToggle),
     (KeyCode::Char('e'), Action::PromptModeSet(None)),
     (KeyCode::Char('E'), Action::PromptModeSet(None)),
-    (KeyCode::Char('m'), Action::PromptModeSet(None)),
+    (KeyCode::Char('m'), Action::MenuOpen { category: None }),
     (KeyCode::F(4), Action::PromptModeSet(None)),
     (KeyCode::Char('g'), Action::RawToggle),
     (KeyCode::Char('G'), Action::RawToggle),
