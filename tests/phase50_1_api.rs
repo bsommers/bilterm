@@ -174,7 +174,7 @@ fn tools_list_has_eleven_tools_with_find_last() {
     let tools = r.get("result").and_then(|x| x.get("tools")).and_then(JsonValue::as_array).unwrap();
     // Phase 51-10 appended `bilterm_agents_list` and `bilterm_agents_demo` after `bilterm_find`;
     // Phase 51.1-11 appended `bilterm_remote_link`; Phase 58 appended `bilterm_voice`; Phase 59 appended `bilterm_browser` and `bilterm_video`; Phase 60 appended `bilterm_web_surface`.
-    assert_eq!(tools.len(), 24);
+    assert_eq!(tools.len(), 25);
     let last = &tools[10];
     assert_eq!(last.get("name").and_then(JsonValue::as_str), Some("bilterm_find"));
     let props = last.get("inputSchema").and_then(|s| s.get("properties")).unwrap();

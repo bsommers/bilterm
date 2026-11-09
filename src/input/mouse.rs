@@ -664,6 +664,9 @@ pub fn handle_wm_mouse_event(
         if let Some(action) = super::clipboard_window::handle_clipboard_window_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
+        if let Some(action) = super::traffic_monitor::handle_traffic_monitor_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
         if let Some(action) = super::script_studio::handle_script_studio_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }

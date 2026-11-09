@@ -3,6 +3,8 @@ pub mod agents_list_keys;
 mod agents_window;
 pub mod clipboard_window;
 pub mod clipboard_window_keys;
+pub mod traffic_monitor;
+pub mod traffic_monitor_keys;
 pub mod command_window;
 pub mod command_window_keys;
 pub mod drawer_navigator;

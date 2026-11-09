@@ -141,6 +141,7 @@ fn tools_list_only_gains_find() {
             "bilterm_web_surface",
             "bilterm_drawer_preview",
             "bilterm_clipboard",
+            "bilterm_traffic",
             "bilterm_voice",
             "bilterm_browser",
             "bilterm_video",
