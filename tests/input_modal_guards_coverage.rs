@@ -469,7 +469,9 @@ fn menubar_left_right_wrap_and_reset_item() {
     press(&mut w, k(KeyCode::Down));
     assert_eq!(w.menubar_state(), Some((0, 1)));
     press(&mut w, k(KeyCode::Left));
-    assert_eq!(w.menubar_state(), Some((6, 0)), "Left wraps to the last category and resets item");
+    // Phase 63-02: wraps over the whole table (9 categories), not the old literal 7.
+    let last = bilterm::ui::menu_model::MENUBAR_CATEGORIES.len() - 1;
+    assert_eq!(w.menubar_state(), Some((last, 0)), "Left wraps to the last category and resets item");
     press(&mut w, k(KeyCode::Right));
     assert_eq!(w.menubar_state(), Some((0, 0)), "Right wraps to the first category");
     press(&mut w, k(KeyCode::Right));
@@ -488,7 +490,7 @@ fn menubar_up_down_clamp_to_item_count() {
     assert_eq!(w.menubar_state(), Some((2, n - 1)));
     press(&mut w, k(KeyCode::Up));
     assert_eq!(w.menubar_state(), Some((2, n - 2)));
-    press(&mut w, ch('x'));
+    press(&mut w, ch('!'));
     assert_eq!(w.menubar_state(), Some((2, n - 2)), "unmapped keys are ignored");
 }
 
