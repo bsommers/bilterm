@@ -451,6 +451,7 @@ impl WindowManager {
                     {
                         let rendered = render_capture(capped);
                         if !rendered.is_empty() {
+                            pane.count_payload_rx(rendered.len());
                             pane.process_pty_output(&rendered);
                         }
                     }

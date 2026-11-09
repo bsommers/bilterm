@@ -8,6 +8,7 @@ use super::http::{HttpListen, RpcRequest};
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
 use crate::error::{BiltermError, Result};
+use crate::traffic::{Origin, Role};
 
 /// Listening endpoint for the headless JSON-RPC automation daemon.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -484,6 +485,8 @@ async fn serve_loop<A: RpcAcceptor>(
     http: Option<HttpListen>,
 ) -> Result<()> {
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<RpcRequest>(64);
+    let meter = plane.wm.traffic_meter();
+    let mut conn_seq = 0u64;
     if let Some(mut h) = http {
         h.web.bind_plane(&mut plane);
         let tx = req_tx.clone();
@@ -505,6 +508,14 @@ async fn serve_loop<A: RpcAcceptor>(
                     Ok((stream, peer)) => {
                         let req_tx = req_tx.clone();
                         let token = token.clone();
+                        conn_seq += 1;
+                        let origin = match peer.parse::<std::net::SocketAddr>() {
+                            Ok(a) => Origin::RpcTcp { remote: !a.ip().is_loopback() },
+                            Err(_) if peer.starts_with("unix:") => Origin::RpcUnix,
+                            Err(_) => Origin::RpcTcp { remote: true },
+                        };
+                        let tap = meter.open_channel(origin, &format!("rpc#{conn_seq}"), None, Role::Wire);
+                        let stream = super::metered::Metered::new(stream, tap);
                         tokio::spawn(async move {
                             if let Err(e) = serve_jsonrpc_connection(stream, req_tx, token).await {
                                 tracing::warn!(%peer, error = %e, "JSON-RPC connection closed");

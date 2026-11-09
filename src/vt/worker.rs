@@ -170,6 +170,7 @@ pub struct VtWorkerHandle {
     shared: Arc<SharedGridSnapshot>,
     alive: Arc<AtomicBool>,
     child_pid: Option<u32>,
+    traffic: crate::traffic::TrafficTap,
 }
 
 impl VtWorkerHandle {
@@ -293,8 +294,10 @@ impl VtWorkerHandle {
         let (cmd_tx, cmd_rx) = mpsc::channel::<VtWorkerCommand>();
         let (event_tx, event_rx) = mpsc::channel::<VtWorkerEvent>();
         let (pty_tx, pty_rx) = mpsc::sync_channel::< Option<Vec<u8>> >(64);
+        let traffic = crate::traffic::ChannelCounters::new();
 
         if let Some(mut pty_reader) = reader {
+            let pipe_cell = traffic.clone();
             thread::Builder::new()
                 .name("bilterm-pty-pipe".to_string())
                 .spawn(move || {
@@ -306,6 +309,7 @@ impl VtWorkerHandle {
                                 break;
                             }
                             Ok(n) => {
+                                pipe_cell.rx(n);
                                 if pty_tx.send(Some(buf[..n].to_vec())).is_err() {
                                     break;
                                 }
@@ -318,6 +322,7 @@ impl VtWorkerHandle {
 
         let shared_clone = Arc::clone(&shared);
         let alive_clone = Arc::clone(&alive);
+        let worker_cell = traffic.clone();
 
         thread::Builder::new()
             .name("bilterm-vt-worker".to_string())
@@ -333,6 +338,7 @@ impl VtWorkerHandle {
                     &shared_clone,
                     &event_tx,
                     &wake,
+                    &worker_cell,
                 );
                 alive_clone.store(false, Ordering::Release);
                 let _ = event_tx.send(VtWorkerEvent::Exited);
@@ -347,7 +353,13 @@ impl VtWorkerHandle {
             shared,
             alive,
             child_pid,
+            traffic,
         })
+    }
+
+    /// Shared traffic counters (pipe-thread rx, `WritePty` and query-reply tx).
+    pub fn traffic_cell(&self) -> &crate::traffic::TrafficTap {
+        &self.traffic
     }
 
     /// Sends a command to the worker thread.
@@ -445,6 +457,7 @@ fn worker_loop(
     shared: &SharedGridSnapshot,
     event_tx: &mpsc::Sender<VtWorkerEvent>,
     wake: &(dyn Fn() + Send + Sync),
+    traffic: &crate::traffic::TrafficTap,
 ) {
     #[cfg(feature = "ghostty-vt")]
     let mut ghostty_engine =
@@ -470,6 +483,7 @@ fn worker_loop(
             match cmd {
                 VtWorkerCommand::WritePty(data) => {
                     let _ = writer.write_all(&data);
+                    traffic.tx(data.len());
                     let _ = writer.flush();
                 }
                 VtWorkerCommand::FeedOutput(bytes) => {
@@ -608,11 +622,13 @@ fn worker_loop(
         if let Some(eng) = &mut ghostty_engine {
             for resp in eng.take_query_responses() {
                 let _ = writer.write_all(&resp);
+                traffic.tx(resp.len());
                 let _ = writer.flush();
             }
         }
         for resp in vt.take_query_responses() {
             let _ = writer.write_all(&resp);
+            traffic.tx(resp.len());
             let _ = writer.flush();
         }
 

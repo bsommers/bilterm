@@ -1,4 +1,3 @@
-use std::io;
 use std::path::{Path, PathBuf};
 
 use bilterm::api::{
@@ -512,7 +511,7 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     let host_guard = TerminalRestoreGuard::enter_host_tui()?;
-    let backend = CrosstermBackend::new(io::stdout());
+    let backend = CrosstermBackend::new(bilterm::app::CountingStdout::new(&app.wm.traffic_meter()));
     let mut terminal = Terminal::new(backend)?;
 
     let run_res = app.run(&mut terminal).await;

@@ -38,6 +38,8 @@ pub struct WsContext {
     pub token: Arc<str>,
     /// Bearer token already verified on the upgrade request (header or `?token=`).
     pub pre_authed: bool,
+    /// Traffic meter used to open the per-client `ws:web-N` channel (Phase 64).
+    pub meter: Option<crate::traffic::TrafficMeter>,
 }
 
 /// Validates upgrade headers; returns the `101 Switching Protocols` response head.
@@ -128,12 +130,13 @@ pub struct WsBridge {
     known: BTreeSet<PaneId>,
     out: Vec<JsonValue>,
     close: Option<(u16, &'static str)>,
+    tap: Option<crate::traffic::TrafficTap>,
 }
 
 impl WsBridge {
     pub fn new(ctx: WsContext) -> Self {
         let authed = ctx.pre_authed;
-        Self { ctx, client_id: None, authed, sent: BTreeMap::new(), status: BTreeMap::new(), known: BTreeSet::new(), out: Vec::new(), close: None }
+        Self { ctx, client_id: None, authed, sent: BTreeMap::new(), status: BTreeMap::new(), known: BTreeSet::new(), out: Vec::new(), close: None, tap: None }
     }
 
     /// Registered client id once `hello` succeeded.
@@ -228,6 +231,10 @@ impl WsBridge {
                 self.out.push(error_msg(None, None, "RATE_LIMITED", "too many web clients"));
                 self.close = Some((1013, "too many clients"));
                 return;
+            }
+            if let Some(m) = &self.ctx.meter {
+                let origin = crate::traffic::Origin::Ws { client: id.clone() };
+                self.tap = Some(m.open_channel(origin, &id, None, crate::traffic::Role::Wire));
             }
             self.client_id = Some(id);
         }
@@ -484,12 +491,16 @@ pub async fn serve_ws(mut stream: tokio::net::TcpStream, ctx: WsContext) -> std:
     let mut tick = tokio::time::interval(PUMP_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_rx = tokio::time::Instant::now();
+    // Bytes seen before `hello` allocated the `web-N` channel are flushed once it exists.
+    let mut pending = (0usize, 0usize);
     loop {
         let mut wire = Vec::new();
+        let mut rx_n = 0usize;
         tokio::select! {
             r = stream.read(&mut chunk) => {
                 let n = match r { Ok(0) | Err(_) => return Ok(()), Ok(n) => n };
                 last_rx = tokio::time::Instant::now();
+                rx_n = n;
                 buf.extend_from_slice(&chunk[..n]);
                 for text in drain_messages(&mut bridge, &mut buf, &mut partial, &mut wire) {
                     bridge.on_text(&text).await;
@@ -509,11 +520,25 @@ pub async fn serve_ws(mut stream: tokio::net::TcpStream, ctx: WsContext) -> std:
             }
         }
         wire.extend(bridge.take_frames());
+        let close_frame = bridge
+            .close
+            .take()
+            .map(|(code, reason)| encode_frame(Opcode::Close, &ws_codec::close_payload(code, reason)));
+        pending.0 += rx_n;
+        pending.1 += wire.len() + close_frame.as_ref().map_or(0, Vec::len);
+        if let Some(t) = &bridge.tap {
+            if pending.0 > 0 {
+                t.rx(std::mem::take(&mut pending.0));
+            }
+            if pending.1 > 0 {
+                t.tx(std::mem::take(&mut pending.1));
+            }
+        }
         if !wire.is_empty() {
             stream.write_all(&wire).await?;
         }
-        if let Some((code, reason)) = bridge.close.take() {
-            let _ = stream.write_all(&encode_frame(Opcode::Close, &ws_codec::close_payload(code, reason))).await;
+        if let Some(frame) = close_frame {
+            let _ = stream.write_all(&frame).await;
             let _ = stream.flush().await;
             return Ok(());
         }

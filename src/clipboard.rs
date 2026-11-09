@@ -124,10 +124,31 @@ fn is_automated_test_process() -> bool {
         .unwrap_or(false)
 }
 
+static TRAFFIC_TAP: std::sync::Mutex<Option<crate::traffic::TrafficTap>> = std::sync::Mutex::new(None);
+
+/// Installs (or clears) the process-wide clipboard traffic cell (Phase 64, `TMON-01`).
+pub fn set_traffic_tap(tap: Option<crate::traffic::TrafficTap>) {
+    if let Ok(mut g) = TRAFFIC_TAP.lock() {
+        *g = tap;
+    }
+}
+
+/// Whether a clipboard traffic cell is installed.
+pub fn has_traffic_tap() -> bool {
+    TRAFFIC_TAP.lock().map(|g| g.is_some()).unwrap_or(false)
+}
+
+fn traffic_tap() -> Option<crate::traffic::TrafficTap> {
+    TRAFFIC_TAP.lock().ok().and_then(|g| g.clone())
+}
+
 /// Writes `text` to the in-process clipboard buffer and the native OS system clipboard.
 pub fn set_system_clipboard(text: &str) {
     if text.is_empty() {
         return;
+    }
+    if let Some(t) = traffic_tap() {
+        t.tx(text.len());
     }
     if let Ok(mut guard) = PROCESS_CLIPBOARD.lock() {
         *guard = text.to_string();
@@ -140,6 +161,14 @@ pub fn set_system_clipboard(text: &str) {
 
 /// Reads text from the native OS system clipboard (falling back to the in-process clipboard buffer).
 pub fn get_system_clipboard() -> Option<String> {
+    let out = get_system_clipboard_inner();
+    if let (Some(s), Some(t)) = (out.as_ref(), traffic_tap()) {
+        t.rx(s.len());
+    }
+    out
+}
+
+fn get_system_clipboard_inner() -> Option<String> {
     #[cfg(not(test))]
     if !is_automated_test_process()
         && let Some(s) = os_get_clipboard()

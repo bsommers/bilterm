@@ -12,6 +12,7 @@ pub mod http;
 pub mod http_web;
 pub mod json;
 pub mod mcp;
+pub mod metered;
 pub mod mcp_resources;
 pub mod output_ring;
 pub mod playbook;

@@ -10,6 +10,22 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use super::config::SttConfig;
+use crate::traffic::{Origin, Role, TrafficMeter, TrafficTap};
+
+static TRAFFIC_METER: std::sync::Mutex<Option<TrafficMeter>> = std::sync::Mutex::new(None);
+
+/// Installs the meter used to account STT request/response bytes (Phase 64, hook H33).
+pub fn set_traffic_meter(meter: Option<TrafficMeter>) {
+    if let Ok(mut g) = TRAFFIC_METER.lock() {
+        *g = meter;
+    }
+}
+
+/// Opens one `Origin::Stt{host}` channel for a request (`None` when no meter is installed).
+fn stt_tap(host: &str) -> Option<TrafficTap> {
+    let m = TRAFFIC_METER.lock().ok()?.clone()?;
+    Some(m.open_channel(Origin::Stt { host: host.to_string() }, host, None, Role::Wire))
+}
 use super::wav::ScrubbedTempWav;
 use super::{SttBackendKind, TranscriptionRequest, TranscriptionResponse};
 
@@ -240,10 +256,14 @@ impl SttProvider for OpenAiCompatSttProvider {
                 .await
                 .map_err(|e| format!("Failed to connect to STT server at {host}:{port}: {e}"))?;
 
+            let tap = stt_tap(&host);
             stream
                 .write_all(&request)
                 .await
                 .map_err(|e| format!("Failed to write HTTP request: {e}"))?;
+            if let Some(t) = &tap {
+                t.tx(request.len());
+            }
 
             // Read response (bounded 64 KiB, SEC-R01)
             let mut response_bytes = Vec::new();
@@ -252,6 +272,9 @@ impl SttProvider for OpenAiCompatSttProvider {
                 .read_to_end(&mut response_bytes)
                 .await
                 .map_err(|e| format!("Failed to read HTTP response: {e}"))?;
+            if let Some(t) = &tap {
+                t.rx(response_bytes.len());
+            }
 
             let response_str = String::from_utf8_lossy(&response_bytes);
 
@@ -335,10 +358,14 @@ impl SttProvider for OllamaSttProvider {
                 .await
                 .map_err(|e| format!("Failed to connect to Ollama server at {host}:{port}: {e}"))?;
 
+            let tap = stt_tap(&host);
             stream
                 .write_all(&request)
                 .await
                 .map_err(|e| format!("Failed to send request to Ollama: {e}"))?;
+            if let Some(t) = &tap {
+                t.tx(request.len());
+            }
 
             let mut response_bytes = Vec::new();
             let mut reader = stream.take(65536);
@@ -346,6 +373,9 @@ impl SttProvider for OllamaSttProvider {
                 .read_to_end(&mut response_bytes)
                 .await
                 .map_err(|e| format!("Failed to read Ollama response: {e}"))?;
+            if let Some(t) = &tap {
+                t.rx(response_bytes.len());
+            }
 
             let response_str = String::from_utf8_lossy(&response_bytes);
             let first_line = response_str.lines().next().unwrap_or("");

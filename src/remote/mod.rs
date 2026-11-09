@@ -71,6 +71,27 @@ pub fn validate_destination(dest: &str) -> Result<()> {
     Ok(())
 }
 
+/// Extracts `(destination, port)` from `ssh` argv: the first token after `--` (validated) and
+/// the value of `-p N` / `-pN` (Phase 64 traffic attribution; never used to build commands).
+pub fn ssh_destination_from_args(args: &[String]) -> Option<(String, Option<u16>)> {
+    let sep = args.iter().position(|a| a == "--")?;
+    let dest = args.get(sep + 1)?;
+    validate_destination(dest).ok()?;
+    let mut port = None;
+    let mut i = 0;
+    while i < sep {
+        let a = args[i].as_str();
+        if a == "-p" {
+            port = args.get(i + 1).and_then(|v| v.parse::<u16>().ok());
+            i += 1;
+        } else if let Some(v) = a.strip_prefix("-p") {
+            port = v.parse::<u16>().ok().or(port);
+        }
+        i += 1;
+    }
+    Some((dest.clone(), port))
+}
+
 impl RemoteHostProfile {
     pub fn new(name: impl Into<String>, destination: impl Into<String>) -> Self {
         Self {
@@ -524,5 +545,21 @@ mod tests {
         let bad_long = Path::new(long_path_str);
         let args = prof.build_ssh_args(Some(bad_long)).unwrap();
         assert!(!args.iter().any(|a| a.contains("Control")));
+    }
+
+    #[test]
+    fn ssh_destination_from_args_parses_port_and_destination() {
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            ssh_destination_from_args(&v(&["-tt", "-p", "2222", "--", "bill@prod-db", "tmux"])),
+            Some(("bill@prod-db".to_string(), Some(2222)))
+        );
+        assert_eq!(
+            ssh_destination_from_args(&v(&["--", "host"])),
+            Some(("host".to_string(), None))
+        );
+        assert_eq!(ssh_destination_from_args(&v(&["-tt", "host"])), None);
+        assert_eq!(ssh_destination_from_args(&v(&["-tt", "--"])), None);
+        assert_eq!(ssh_destination_from_args(&v(&["--", "-oProxyCommand=x"])), None);
     }
 }

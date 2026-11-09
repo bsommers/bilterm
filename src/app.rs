@@ -13,6 +13,43 @@ use crate::pane::CompositePane;
 use crate::ui::WorkspaceWidget;
 use crate::wm::WindowManager;
 
+static HOST_OUT_TAP: std::sync::OnceLock<crate::traffic::TrafficTap> = std::sync::OnceLock::new();
+
+/// `io::Stdout` wrapper that counts every byte written to the host terminal (hook H29,
+/// `TMON-01`). Payload bytes are never inspected.
+pub struct CountingStdout {
+    inner: io::Stdout,
+    tap: crate::traffic::TrafficTap,
+}
+
+/// Host-terminal writer type used by the ratatui backend.
+pub type HostOut = CountingStdout;
+
+impl CountingStdout {
+    /// Opens the `HostTty` output channel on `meter` (also used for outbound OSC 52).
+    pub fn new(meter: &crate::traffic::TrafficMeter) -> Self {
+        let tap = meter.open_channel(
+            crate::traffic::Origin::HostTty,
+            "host-tty",
+            None,
+            crate::traffic::Role::Wire,
+        );
+        let _ = HOST_OUT_TAP.set(tap.clone());
+        Self { inner: io::stdout(), tap }
+    }
+}
+
+impl Write for CountingStdout {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        self.tap.tx(n);
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// Top-level Bilterm TUI application state and async multi-pane event loop coordinator.
 pub struct App {
     pub wm: WindowManager,
@@ -48,11 +85,17 @@ impl App {
     /// multi-PTY output chunks, and line-discipline telemetry ticks.
     pub async fn run(
         &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        terminal: &mut Terminal<CrosstermBackend<HostOut>>,
     ) -> Result<()> {
         self.wm.set_tui_cell_grid_mode(true);
         let _ = terminal.hide_cursor();
         let mut reader = EventStream::new();
+        let input_tap = self.wm.traffic_meter().open_channel(
+            crate::traffic::Origin::HostTty,
+            "host-input",
+            None,
+            crate::traffic::Role::Wire,
+        );
         let mut tick = tokio::time::interval(Duration::from_millis(16));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -80,6 +123,7 @@ impl App {
             tokio::select! {
                 maybe_event = reader.next() => {
                     if let Some(Ok(event)) = maybe_event {
+                        input_tap.event(1);
                         self.handle_crossterm_event(event)?;
                         self.needs_redraw = true;
                     }
@@ -122,6 +166,9 @@ impl App {
                 seq
             };
             out.write_all(wire.as_bytes())?;
+            if let Some(t) = HOST_OUT_TAP.get() {
+                t.tx(wire.len());
+            }
             wrote = true;
         }
         if wrote {

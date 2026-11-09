@@ -207,6 +207,10 @@ pub trait LinkDriver: Send {
     fn resize(&mut self, rows: u16, cols: u16);
     /// Terminates the transport.
     fn kill(&mut self);
+    /// Traffic cell of the raw transport stream (Phase 64); `None` for synthetic drivers.
+    fn traffic_cell(&self) -> Option<crate::traffic::TrafficTap> {
+        None
+    }
 }
 
 /// A connected transport: the control channels plus the optional driver behind them.
