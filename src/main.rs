@@ -256,6 +256,19 @@ async fn main() -> color_eyre::Result<()> {
         let allow_remote = has_switch(&args, &["-r", "--allow-remote"]);
         let default_unix = default_socket_path().ok();
         let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
+        let daemon_name = switch_value(&args, &["--name", "-s", "--session"]).unwrap_or("default");
+        let runtime_dir = bilterm::daemon::supervisor::resolve_runtime_dir()?;
+        let sock_path = match &cfg.endpoint {
+            ListenEndpoint::Unix(p) => p.clone(),
+            _ => bilterm::daemon::process::session_daemon_socket_path_in(&runtime_dir, daemon_name)?,
+        };
+        let _daemon_lock = match bilterm::daemon::supervisor::acquire_lock(&runtime_dir, daemon_name, sock_path.clone())? {
+            bilterm::daemon::supervisor::DaemonLockResult::Acquired(l) => l,
+            bilterm::daemon::supervisor::DaemonLockResult::AlreadyHeld(r) => {
+                eprintln!("bilterm: daemon '{daemon_name}' already running (PID {})", r.pid);
+                return Ok(());
+            }
+        };
         let mut plane = AutomationControlPlane::new_headless(24, 80);
         if let Some(sess_name) = switch_value(&args, &["-s", "--session"]) {
             let _ = plane.wm.restore_session(sess_name);
@@ -295,6 +308,13 @@ async fn main() -> color_eyre::Result<()> {
             }
             None => None,
         };
+        let _registration = bilterm::daemon::supervisor::register_current_daemon(
+            &runtime_dir,
+            daemon_name,
+            sock_path,
+            plane.wm.list_sessions().len(),
+            plane.wm.panes().len(),
+        )?;
         run_headless_server_with_http(cfg, plane, http).await?;
         return Ok(());
     }

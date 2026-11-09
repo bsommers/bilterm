@@ -220,8 +220,78 @@ impl DaemonRegistry {
             }
         }
 
+        Self::synthesize_from_locks_and_sockets(base_dir, &mut active);
         active.sort_by(|a, b| a.name.cmp(&b.name));
         active
+    }
+
+    /// Adds entries for live `daemon-*.lock` / `daemon-singleton.lock` records and live
+    /// `daemon-*.sock` sockets that have no registry json yet (dedupes by name).
+    fn synthesize_from_locks_and_sockets(base_dir: &Path, active: &mut Vec<DaemonRegistryEntry>) {
+        let Ok(read_dir) = fs::read_dir(base_dir.join("daemons")) else {
+            return;
+        };
+        let mut files: Vec<PathBuf> = read_dir.flatten().map(|e| e.path()).collect();
+        files.sort();
+        // Locks first (they carry a PID), then bare sockets.
+        for path in &files {
+            let Some(fname) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !(fname.starts_with("daemon-") && fname.ends_with(".lock")) {
+                continue;
+            }
+            let Ok(content) = fs::read_to_string(path) else {
+                continue;
+            };
+            let Ok(rec) = crate::daemon::supervisor::DaemonLockRecord::from_json(&content) else {
+                continue;
+            };
+            if !check_pid_alive(rec.pid) || active.iter().any(|e| e.name == rec.name) {
+                continue;
+            }
+            active.push(DaemonRegistryEntry {
+                id: format!("daemon-{}-{}", rec.name, rec.pid),
+                name: rec.name,
+                pid: rec.pid,
+                version: rec.version,
+                started_at_ms: rec.started_at_ms,
+                socket_path: rec.socket_path,
+                sessions_count: 1,
+                panes_count: 0,
+                agents_count: 0,
+                last_heartbeat_ms: now_ms(),
+            });
+        }
+        for path in &files {
+            let Some(name) = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .and_then(|f| f.strip_prefix("daemon-"))
+                .and_then(|f| f.strip_suffix(".sock"))
+            else {
+                continue;
+            };
+            if active.iter().any(|e| e.name == name || e.socket_path == *path) {
+                continue;
+            }
+            if !crate::daemon::process::probe_or_cleanup_stale_socket(path) {
+                continue;
+            }
+            // PID unknown for a bare live socket; reported as 0 (never signaled).
+            active.push(DaemonRegistryEntry {
+                id: format!("daemon-{name}-sock"),
+                name: name.to_string(),
+                pid: 0,
+                version: String::new(),
+                started_at_ms: 0,
+                socket_path: path.clone(),
+                sessions_count: 1,
+                panes_count: 0,
+                agents_count: 0,
+                last_heartbeat_ms: now_ms(),
+            });
+        }
     }
 
     /// Unregisters daemon `name`, removing its `.json` file.
