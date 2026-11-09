@@ -315,3 +315,64 @@ fn menubar_keyboard_right_reaches_daemon_category() {
     handle_wm_key_event(&mut wm, key(KeyCode::Right)).unwrap();
     assert_eq!(wm.menubar_state().map(|(c, _)| c), Some(7), "Right from Help should reach Daemon");
 }
+
+/// Restores `BILTERM_RUNTIME_DIR` on drop (even on panic).
+#[cfg(unix)]
+struct RuntimeDirGuard(Option<OsString>);
+#[cfg(unix)]
+impl Drop for RuntimeDirGuard {
+    fn drop(&mut self) {
+        // SAFETY: only used while ENV_LOCK is held by the enclosing `IsolatedRuntime`.
+        unsafe {
+            match self.0.take() {
+                Some(v) => std::env::set_var("BILTERM_RUNTIME_DIR", v),
+                None => std::env::remove_var("BILTERM_RUNTIME_DIR"),
+            }
+        }
+    }
+}
+
+/// `:daemon start` (DaemonSupervisorOp::Start) must run the supervisor op AND open the floating
+/// window showing the running daemon with its real non-zero PID. A live lock (held by this test
+/// process) plus a bound socket are seeded under `BILTERM_RUNTIME_DIR`, so `ensure_started`
+/// reports AlreadyRunning and no daemon process is spawned.
+#[cfg(unix)]
+#[test]
+fn start_opens_window_showing_running_daemon_with_real_pid() {
+    use bilterm::daemon::supervisor::{acquire_lock, DaemonLockResult};
+    let _env = isolated_runtime();
+    let dir = tempfile::tempdir().expect("tempdir");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let _guard = RuntimeDirGuard(std::env::var_os("BILTERM_RUNTIME_DIR"));
+    // SAFETY: serialized by ENV_LOCK held in `_env`; restored by `_guard`.
+    unsafe { std::env::set_var("BILTERM_RUNTIME_DIR", dir.path()) };
+    let sock = bilterm::daemon::process::session_daemon_socket_path_in(dir.path(), "default").unwrap();
+    let DaemonLockResult::Acquired(_lock) = acquire_lock(dir.path(), "default", sock.clone()).unwrap() else {
+        panic!("lock not acquired");
+    };
+    let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind socket");
+
+    let mut wm = WindowManager::new_headless(ROWS, COLS);
+    assert!(!wm.daemon_window().active);
+    let cmd = parse_colon_command(":daemon start").expect("parses").expect("valid");
+    execute_wm_colon_command(&mut wm, cmd);
+
+    let pid = std::process::id();
+    assert_ne!(pid, 0);
+    let w = wm.daemon_window();
+    assert!(w.active, "window must open after start");
+    let e = w.entries.iter().find(|e| e.name == "default").expect("default entry");
+    assert!(e.running);
+    assert_eq!(e.pid, Some(pid));
+
+    let ws = full_area();
+    let mut buf = Buffer::empty(ws);
+    render_daemon_window(&wm, ws, &BiltermConfig::default(), &ThemePalette::default(), &GlyphSet::default(), &mut buf);
+    let text: String = (0..ws.height).map(|y| row_text(&buf, y)).collect();
+    assert!(text.contains("DAEMON SUPERVISOR"));
+    assert!(text.contains("● RUNNING"), "running badge missing");
+    assert!(text.contains(&pid.to_string()), "pid {pid} missing");
+}

@@ -4,14 +4,13 @@ use crate::action::DaemonSupervisorOp;
 use crate::api::json::JsonValue;
 use crate::daemon::registry::DaemonRegistry;
 use crate::daemon::supervisor::{
-    daemon_lock_path_in, ensure_started, stop_daemon, DaemonLockRecord, DaemonStartResult,
+    daemon_lock_path_in, ensure_started, resolve_runtime_dir, stop_daemon, DaemonLockRecord, DaemonStartResult,
 };
-use crate::secure_fs::private_runtime_dir;
 use crate::wm::WindowManager;
 
 /// Executes a daemon supervisor operation against the local runtime directory.
 pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -> bool {
-    let runtime_dir = match private_runtime_dir() {
+    let runtime_dir = match resolve_runtime_dir() {
         Ok(dir) => dir,
         Err(e) => {
             wm.active_pane_mut()
@@ -62,7 +61,7 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 format!("Active daemons ({}): {}", active.len(), items.join(", "))
             };
             wm.active_pane_mut().set_status_message(Some(summary));
-            wm.open_daemon_window();
+            wm.open_daemon_window_from(&runtime_dir);
         }
         DaemonSupervisorOp::Status { name } => {
             let target = name.as_deref().unwrap_or("default");
@@ -116,7 +115,7 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 wm.active_pane_mut()
                     .set_status_message(Some(format!("Daemon '{target}': not running")));
             }
-            wm.open_daemon_window();
+            wm.open_daemon_window_from(&runtime_dir);
         }
         DaemonSupervisorOp::Start { name } => {
             let target = name.as_deref().unwrap_or("default");
@@ -216,10 +215,15 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
             )));
         }
     }
-    if !matches!(op, DaemonSupervisorOp::List | DaemonSupervisorOp::Status { .. })
-        && wm.daemon_window().active
-    {
-        wm.refresh_daemon_window();
+    match op {
+        // Start/Stop/Switch surface the live supervisor state in the floating window.
+        DaemonSupervisorOp::Start { .. }
+        | DaemonSupervisorOp::Stop { .. }
+        | DaemonSupervisorOp::Switch { .. } => wm.open_daemon_window_from(&runtime_dir),
+        DaemonSupervisorOp::Prune if wm.daemon_window().active => {
+            wm.refresh_daemon_window_from(&runtime_dir);
+        }
+        _ => {}
     }
     false
 }

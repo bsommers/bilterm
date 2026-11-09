@@ -192,13 +192,20 @@ impl WindowManager {
         self.refresh_daemon_window();
     }
 
+    /// Opens the window and refreshes it from an explicit runtime dir.
+    pub fn open_daemon_window_from(&mut self, runtime_dir: &Path) {
+        self.daemon_window.active = true;
+        self.daemon_window.focused = true;
+        self.refresh_daemon_window_from(runtime_dir);
+    }
+
     pub fn close_daemon_window(&mut self) {
         self.daemon_window.active = false;
         self.daemon_window.focused = false;
     }
 
     pub fn refresh_daemon_window(&mut self) {
-        match crate::secure_fs::private_runtime_dir() {
+        match crate::daemon::supervisor::resolve_runtime_dir() {
             Ok(dir) => self.refresh_daemon_window_from(&dir),
             Err(e) => self.daemon_window.status_line = format!("runtime dir error: {e}"),
         }
