@@ -7,6 +7,7 @@ pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
+pub mod copy_hints;
 pub mod exit_guard_ui;
 pub mod file_browser;
 pub mod find_ui;
@@ -444,8 +445,11 @@ fn render_output_canvas(
         }
     }
 
-    // Highlight Vi Copy Mode or mouse drag selection and cursor (VAL-04)
-    if pane.copy_mode().active || pane.copy_mode().has_selection() {
+    // Highlight Vi Copy Mode or mouse drag selection and cursor (VAL-04, COPY-02)
+    if pane.copy_mode().active
+        || pane.copy_mode().has_selection()
+        || pane.copy_mode().flash_region.is_some()
+    {
         for r in 0..render_rows {
             for c in 0..render_cols {
                 if pane.copy_mode().is_cell_selected(r, c)

@@ -222,6 +222,44 @@ impl VtParser {
         }
         matches
     }
+
+    /// Searches for `query` case-insensitively across scrollback history and active screen (`COPY-02`).
+    /// Returns `(abs_row, start_col, end_col)` tuples bounded to at most 10,000 matches.
+    pub fn search_history(&mut self, query: &str) -> Vec<(usize, u16, u16)> {
+        if query.is_empty() {
+            return Vec::new();
+        }
+        let needle = query.to_ascii_lowercase();
+        let needle_cols = needle.chars().count() as u16;
+        if needle_cols == 0 {
+            return Vec::new();
+        }
+        let total = self.total_available_rows();
+        let mut matches = Vec::new();
+        for abs_r in 0..total {
+            if matches.len() >= 10_000 {
+                break;
+            }
+            if let Some(text) = self.abs_row_text(abs_r) {
+                let hay = text.to_ascii_lowercase();
+                let mut from = 0usize;
+                while let Some(pos) = hay[from..].find(&needle) {
+                    let byte_idx = from + pos;
+                    let start_col = hay[..byte_idx].chars().count() as u16;
+                    matches.push((
+                        abs_r,
+                        start_col,
+                        start_col.saturating_add(needle_cols).saturating_sub(1),
+                    ));
+                    from = byte_idx + needle.len().max(1);
+                    if matches.len() >= 10_000 {
+                        break;
+                    }
+                }
+            }
+        }
+        matches
+    }
 }
 
 fn hint_index_to_label(idx: usize) -> String {

@@ -943,7 +943,7 @@ pub fn handle_wm_mouse_event(
         }
     }
 
-    if let crate::input::mouse_select::MouseRoute::Local(crate::input::mouse_select::LocalSelect::Stream) = route
+    if let crate::input::mouse_select::MouseRoute::Local(_) = route
         && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left))
     {
         let canvas_rect = pane.canvas_rect(pane_inner);
@@ -954,12 +954,27 @@ pub fn handle_wm_mouse_event(
         {
             let rel_r = pane_mouse.row.saturating_sub(canvas_rect.y).min(canvas_rect.height.saturating_sub(1));
             let rel_c = pane_mouse.column.saturating_sub(canvas_rect.x).min(canvas_rect.width.saturating_sub(1));
+            let top_abs = pane.vt_mut().viewport_top_abs();
+            let count = pane.record_click(pane.last_tick_ms(), rel_c, rel_r);
+            if count == 2 {
+                let text = pane.vt_mut().abs_row_text(top_abs + usize::from(rel_r)).unwrap_or_default();
+                let (sc, ec) = crate::pane::copy_motion::word_bounds_at(&text, rel_c);
+                let copy = pane.copy_mode_mut();
+                copy.begin_selection(rel_r, sc, crate::pane::CopySelectionKind::Char, top_abs);
+                copy.cursor_col = ec;
+                copy.active = true;
+                copy.origin = crate::pane::CopyOrigin::Mouse;
+                return Ok(AppAction::Handled);
+            } else if count == 3 {
+                let copy = pane.copy_mode_mut();
+                copy.begin_selection(rel_r, 0, crate::pane::CopySelectionKind::Line, top_abs);
+                copy.active = true;
+                copy.origin = crate::pane::CopyOrigin::Mouse;
+                return Ok(AppAction::Handled);
+            }
             let copy = pane.copy_mode_mut();
+            copy.begin_selection(rel_r, rel_c, crate::pane::CopySelectionKind::Char, top_abs);
             copy.active = true;
-            copy.anchor = Some((rel_r, rel_c));
-            copy.cursor_row = rel_r;
-            copy.cursor_col = rel_c;
-            copy.selection_kind = crate::pane::CopySelectionKind::Char;
             copy.visual_lock = false;
             copy.origin = crate::pane::CopyOrigin::Mouse;
             pane.set_mouse_drag(Some(PromptMouseDrag::CanvasCharSelect));

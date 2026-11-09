@@ -66,7 +66,7 @@ impl OverridePolicy {
 pub fn route(
     mods: KeyModifiers,
     kind: MouseEventKind,
-    _tracking: bool,
+    tracking: bool,
     _raw_passthrough: bool,
     copy_active: bool,
     rect_mode: bool,
@@ -113,8 +113,12 @@ pub fn route(
         return MouseRoute::Local(LocalSelect::Stream);
     }
 
-    // 7. Child owns the event
-    MouseRoute::ToChild
+    // 7. If child owns mouse tracking, forward to child; otherwise default to local selection
+    if tracking {
+        MouseRoute::ToChild
+    } else {
+        MouseRoute::Local(LocalSelect::Stream)
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +157,22 @@ mod tests {
                 OverridePolicy::ShiftAndAlt,
             ),
             MouseRoute::ToChild
+        );
+
+        // Plain drag over non-tracking child is local
+        assert_eq!(
+            route(
+                KeyModifiers::NONE,
+                MouseEventKind::Drag(MouseButton::Left),
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                OverridePolicy::ShiftAndAlt,
+            ),
+            MouseRoute::Local(LocalSelect::Stream)
         );
 
         // Shift drag selects stream locally

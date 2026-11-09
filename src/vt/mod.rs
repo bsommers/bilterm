@@ -372,6 +372,50 @@ impl VtParser {
         used
     }
 
+    /// Returns the absolute scrollback row corresponding to row 0 of the visible viewport (`COPY-02`).
+    pub fn viewport_top_abs(&mut self) -> usize {
+        let used = self.scrollback_used_rows();
+        let off = self.parser.screen().scrollback();
+        used.saturating_sub(off)
+    }
+
+    /// Total rows accessible in this terminal (retained scrollback rows + visible rows).
+    pub fn total_available_rows(&mut self) -> usize {
+        self.scrollback_used_rows() + usize::from(self.rows)
+    }
+
+    /// Reads the plain text of absolute row `abs_row` from scrollback or active screen (`COPY-02`).
+    pub fn abs_row_text(&mut self, abs_row: usize) -> Option<String> {
+        let (rows, cols) = self.parser.screen().size();
+        let used = self.scrollback_used_rows();
+        let total = used + usize::from(rows);
+        if abs_row >= total {
+            return None;
+        }
+        let saved_offset = self.parser.screen().scrollback();
+        let (screen_r, temp_offset) = if abs_row < used {
+            (0u16, used - abs_row)
+        } else {
+            ((abs_row - used) as u16, 0)
+        };
+        self.parser.screen_mut().set_scrollback(temp_offset);
+        let mut row_str = String::with_capacity(usize::from(cols));
+        for c in 0..cols {
+            if let Some(cell) = self.parser.screen().cell(screen_r, c) {
+                if cell.is_wide_continuation() {
+                    continue;
+                }
+                if cell.has_contents() {
+                    row_str.push_str(cell.contents());
+                } else {
+                    row_str.push(' ');
+                }
+            }
+        }
+        self.parser.screen_mut().set_scrollback(saved_offset);
+        Some(row_str)
+    }
+
     /// Estimated heap bytes held by scrollback history.
     pub fn estimated_scrollback_bytes(&mut self) -> u64 {
         self.scrollback_used_rows() as u64 * scrollback::row_bytes(self.cols)

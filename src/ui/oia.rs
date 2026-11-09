@@ -503,15 +503,29 @@ pub fn render_oia_status_bar_themed(
     } else {
         None
     };
-    let display_msg = pane.status_message().map(str::to_string).or(alt_hint);
+    let display_msg = if pane.copy_mode().active {
+        let scope = if pane.vt().is_alternate_screen() {
+            "screen only"
+        } else {
+            "history"
+        };
+        Some(crate::ui::copy_hints::copy_hint_line(
+            pane.copy_mode(),
+            scope,
+            status_rect.width,
+        ))
+    } else {
+        pane.status_message().map(str::to_string).or(alt_hint)
+    };
     if let Some(msg) = display_msg {
         // The message is feedback for the command just run (`:agents list`, ...). Appended last it is
         // pushed off the row on a normal-width window, so when the detail segments leave no room for
         // it, keep only the brand + state head and let the message have the rest of the row.
         let used: usize = spans.iter().map(Span::width).sum();
         let needed = Span::raw(format!(" {sep} {msg}")).width();
-        // Legacy keeps its historical layout byte-for-byte (Classic parity goldens).
-        if !is_legacy && used + needed > usize::from(status_rect.width) {
+        // Legacy keeps its historical layout byte-for-byte (Classic parity goldens)
+        // unless Copy Mode is active and needs the row for the hint line.
+        if (!is_legacy || pane.copy_mode().active) && used + needed > usize::from(status_rect.width) {
             spans.truncate(3);
         }
         spans.push(Span::styled(

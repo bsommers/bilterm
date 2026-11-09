@@ -734,7 +734,28 @@ impl CompositePane {
         {
             self.status_message = None;
             self.toast_expires_at = None;
+            self.copy_mode.flash_region = None;
         }
+    }
+
+    pub fn last_tick_ms(&self) -> u64 {
+        self.last_tick_ms
+    }
+
+    /// Records a mouse click at `(col, row)` and returns the click count (1=single, 2=double, 3=triple) (`COPY-02`).
+    pub fn record_click(&mut self, now_ms: u64, col: u16, row: u16) -> u8 {
+        let (count, updated_now) = if let Some((last_t, last_c, last_r, count)) = self.last_click {
+            if now_ms.saturating_sub(last_t) <= 400 && last_c == col && last_r == row {
+                let next = (count % 3) + 1;
+                (next, now_ms)
+            } else {
+                (1, now_ms)
+            }
+        } else {
+            (1, now_ms)
+        };
+        self.last_click = Some((updated_now, col, row, count));
+        count
     }
 
     pub fn mouse_select_sticky(&self) -> bool {
