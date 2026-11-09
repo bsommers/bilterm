@@ -21,6 +21,7 @@ pub mod keyprofile;
 pub(crate) mod keyprofile_ops;
 pub mod keyprofile_tables;
 pub mod link_mouse;
+pub(crate) mod menu_keys;
 pub mod modal;
 pub mod mouse;
 pub mod mouse_media;
@@ -29,6 +30,8 @@ pub mod script_studio;
 pub mod script_studio_keys;
 pub mod session_map;
 pub mod session_map_keys;
+pub(crate) mod window_mode;
+pub mod window_mode_tables;
 
 pub use encode::{
     encode_alternate_scroll_wheel, encode_key_to_pty_bytes, encode_key_to_pty_bytes_full,

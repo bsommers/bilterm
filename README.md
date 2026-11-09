@@ -105,7 +105,7 @@ bilterm run starter-packs/01-multi-agent-swarm/playbook.toml
 | **Appearance & Display Modes** | `F11` / `F4` (`<L> e`) | `:appearance [obsidian \| legacy \| ...]` / `:mode [standard \| zen]` | 8 visual profiles & distraction-free Zen mode |
 | **Detach & Re-Attach Workspace** | `Ctrl+X D` / Exit Guard `[d]` | `:detach [name]` / `:attach [name]` | Leaves shells running in background daemon |
 | **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> -`) / `Alt+V` (`<L> \|`) / `F5` (`<L> z`) | `:split h` / `:split v` / `:zoom` | Binary space partitioning tiling |
-| **Tiled Splits vs. Z-Stack / Shuffle Deck** | `Alt+M` (`<L> M`) / `F6` (`<L> o`) / `Alt+1..9` | `:layout tile\|stack` / `:deck next\|prev` | Overlapping Borland window cascade & switching |
+| **Tiled Splits vs. Z-Stack / Shuffle Deck** | `Cmd+L` / `Ctrl+Shift+L` (`<L> M`, Window mode `s`) / `F6` (`<L> o`) / `Alt+1..9` | `:layout tile\|stack` / `:deck next\|prev` | Overlapping Borland window cascade & switching |
 | **Utility Windows (Fonts / Studio)** | `*` (pin) / `[` / `]` (scale) | `:fonts` / `:commands` / `:studio` | Workbench windows, live recorder & step debugger |
 | **2D Rectangular Select & Copy** | `Alt+R` / `Alt+LeftDrag` | `:rect [mode \| copy \| cut \| clear]` | Drag-select & copy 2D block columns across canvas |
 | **Persistent Remote SSH + tmux** | — | `:ssh-tmux <host> [session]` | Auto-reconnecting resilient remote sessions |

@@ -367,7 +367,8 @@ fn menu_existing_entries_unchanged() {
         &[":broadcast", ":lock", ":quake", ":raw"],
         &[":help", ":inspector", ":session list", ":help"],
     ];
-    let appended = [0usize, 1, 0, 11, 0, 4, 0];
+    // Phase 63-02 appended Tile Windows, Toggle Stack/Tile and Window Mode (Window) and Keyboard Conflicts (Help).
+    let appended = [0usize, 4, 0, 11, 0, 4, 1];
     for (cat, cmds) in table.iter().enumerate() {
         assert_eq!(menubar_category_item_count(cat), cmds.len() + appended[cat], "category {cat} count");
         for (i, cmd) in cmds.iter().enumerate() {

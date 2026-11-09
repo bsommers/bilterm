@@ -21,6 +21,7 @@ pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
 pub mod key_mode;
+pub mod which_key_state;
 pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
@@ -156,6 +157,8 @@ pub struct WindowManager {
     broadcast_input: bool,
     /// Leader-pending / sticky Window mode state (`v1.5.0`, Phase 63); see `key_mode.rs`.
     key_mode: key_mode::KeyMode,
+    /// Which-key popup idle timer and pin (`KEY-01`, Phase 63-02); see `which_key_state.rs`.
+    which_key: which_key_state::WhichKeyState,
     /// Keyboard environment (OS, surface, kitty protocol) driving `Primary` and the key profile.
     key_env: crate::input::keyenv::KeyEnv,
     /// Central `herdr`-style fleet registry managing local and remote SSH / `tmux -CC` sessions (`v1.4.0`).
@@ -290,6 +293,7 @@ impl WindowManager {
             modal: Modal::None,
             broadcast_input: false,
             key_mode: key_mode::KeyMode::Normal,
+            which_key: which_key_state::WhichKeyState::default(),
             key_env: if headless_mode {
                 crate::input::keyenv::KeyEnv::headless()
             } else {

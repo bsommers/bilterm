@@ -26,6 +26,7 @@ pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod media_canvas_gui;
+pub mod menu_model;
 pub mod modals;
 pub mod occlusion;
 pub mod pane_actions;
@@ -43,6 +44,7 @@ pub mod theme;
 pub mod theme_import;
 pub mod typography;
 pub mod visual_style;
+pub mod which_key_ui;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
@@ -745,7 +747,8 @@ impl Widget for WorkspaceWidget<'_> {
                 && workspace_area.height >= 6
                 && workspace_area.width >= 24
             {
-                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
+                let hints = menu_model::dropdown_hints(self.wm, cat);
+                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, &hints, buf);
             }
         }
 
@@ -792,6 +795,8 @@ impl Widget for WorkspaceWidget<'_> {
         {
             find_ui::render_find_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+
+        which_key_ui::render_which_key(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if let Some(exit_state) = self.wm.exit_guard_state() {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);

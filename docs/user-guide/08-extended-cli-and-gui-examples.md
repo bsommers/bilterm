@@ -94,7 +94,7 @@ Every border and corner of every pane frame is draggable with the mouse in both 
 - **Outer Borders (`Left`, `Right`, `Top`, `Bottom`)**: Dragging an outer border inward/outward maps your drag delta onto the opposite `SplitTree` divider so you can resize any pane from any of its 4 sides.
 - **All 4 Corners (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`)**: Dragging any corner resizes both horizontal and vertical splits simultaneously (or single-axis if dragged straight along one axis).
 - **Moving / Swapping Windows**:
-  - In `Stacked` mode (`Alt+M` / `:layout stacked`), drag the top title bar (`[1] ...`) to move the floating window anywhere on the workspace.
+  - In `Stacked` mode (`Cmd+L` / `Ctrl+Shift+L` / Window mode `s` / `:layout stacked`), drag the top title bar (`[1] ...`) to move the floating window anywhere on the workspace.
   - In `Tiled` mode, hold `Alt` and drag a pane's title bar (or use `Ctrl+Shift+Arrow`) to float or swap panes.
 
 ---

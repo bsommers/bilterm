@@ -321,6 +321,9 @@ fn is_repeatable_wm_action(action: &Action) -> bool {
 /// passthrough are checked first; once the active pane is in raw passthrough, every other key (Alt+h/t/c/l/x,
 /// Ctrl+Space, plain F2/F5 in an alt-screen app, ...) is forwarded to the child and keeps auto-repeating.
 pub(super) fn is_wm_toggle_chord(wm: &mut WindowManager, key: KeyEvent) -> bool {
+    if wm.key_mode().is_window() {
+        return !super::window_mode::is_repeatable_window_key(wm, key);
+    }
     let toggle = |a: &Action| !is_repeatable_wm_action(a);
     let km = wm.keymap();
     // 1. Intercepted before the passthrough decision.

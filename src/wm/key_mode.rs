@@ -55,18 +55,24 @@ impl WindowManager {
     /// Enters sticky Window mode (Focus sub-mode), cancelling a pending leader.
     pub fn enter_window_mode(&mut self) {
         self.key_mode = KeyMode::Window(WinSub::Focus);
+        self.reset_which_key();
     }
 
     /// Leaves Window mode (a pending leader is untouched).
     pub fn exit_window_mode(&mut self) {
         if self.key_mode.is_window() {
             self.key_mode = KeyMode::Normal;
+            self.reset_which_key();
         }
     }
 
     /// Switches the Window-mode sub-mode, entering Window mode when it is not active.
     pub fn set_window_sub(&mut self, sub: WinSub) {
+        if !self.key_mode.is_window() {
+            self.reset_which_key();
+        }
         self.key_mode = KeyMode::Window(sub);
+        self.touch_which_key();
     }
 
     /// `true` while the leader key awaits its next chord.
@@ -78,8 +84,10 @@ impl WindowManager {
     pub fn set_leader_pending(&mut self, pending: bool) {
         if pending {
             self.key_mode = KeyMode::LeaderPending;
+            self.reset_which_key();
         } else if self.key_mode.is_leader_pending() {
             self.key_mode = KeyMode::Normal;
+            self.reset_which_key();
         }
     }
 
@@ -133,7 +141,7 @@ impl WindowManager {
             WindowModeOp::Sub(sub) => self.set_window_sub(sub),
         }
         let msg = match self.key_mode {
-            KeyMode::Window(sub) => format!("WINDOW mode [{}]: Esc exits", sub.name()),
+            KeyMode::Window(_) => crate::ui::which_key_ui::footer_line(&self.key_mode, &self.keymap(), &self.config.leader_key),
             _ => "Window mode off".to_string(),
         };
         self.active_pane_mut().set_status_message(Some(msg));
