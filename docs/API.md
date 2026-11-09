@@ -154,6 +154,12 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `find.history` | `query` (string, optional), `limit` (int, optional) | Find envelope; rows of kind `history` | Commands captured in this run, then `history.log` files on disk. Secret-looking lines are masked and only counted in `masked`. |
 | `agents.list` | `op` (string, optional: absent or `list` reads the state; otherwise one of `open close toggle dismiss blur select jump zoom pin unpin scale filter dock float move resize rect size scroll`), `args` (array of strings or integers, or one whitespace-separated string; optional, at most 8 tokens) | `wm.command` result fields plus a top-level `agents_list` object (`active`, `pinned`, `focused`, `docked`, `filter`, `selected`, `row_count`, `scale_pct`) | Read the AGENTS list state or run a list operation (`:agents list [op args]`). Also opens the AGENTS list window (Phase 51). See "Agents list and demo" below. |
 | `agents.demo` | `stop` (boolean, optional, default `false`) | `wm.command` result fields plus `demo` (`running`, `endpoints`, `spawned`) | Start the agent traffic demo, or with `stop: true` close the panes the demo created and remove its traffic. No write gate. See "Agents list and demo" below. |
+| `keys.list` | None (`{}`) | `{"profile", "rows": [{"chord","action","table"}]}` | Every chord of the active key profile (Primary, global, pane, leader). Read-only. |
+| `keys.check` | None (`{}`) | `{"profile","os","block","warn","info","findings":[{"chord","bound_as","action","severity","class","consumer","note","source"}]}` | Key-conflict report (OS/desktop, shell, editor, multiplexer, internal). Read-only. |
+| `keys.explain` | `chord` (string, req) | `{"chord","bound","action","origin","findings"}` | What a chord does and which conflicts apply. Read-only. |
+| `keys.profile` | `name` (string, optional) | `{"profile","configured","available"}` | Without `name`: report the active profile (read-only). With `name`: switch for this session (write-gated). |
+| `keys.window_mode` | `op` (string, req: `on`, `off`, `toggle`, `focus`, `resize`, `move`) | `{"ok","key_mode","menu_open"}` | Enter, leave or retarget sticky Window mode (write-gated). |
+| `menu.open` | `category` (int, optional, 0-based) | `{"ok","key_mode","menu_open":{"category","item"}}` | Open the menu bar from the API (write-gated). |
 
 ---
 
@@ -913,6 +919,7 @@ The server exposes **14 tools** (the `tools/list` result).
 | `bilterm_agents_list` | `op` (string, optional: `open`, `close`, `toggle`, `dismiss`, `blur`, `select`, `jump`, `zoom`, `pin`, `unpin`, `scale`, `filter`, `dock`, `float`, `move`, `resize`, `rect`, `size` or `scroll`; absent reads the state), `args` (string, space-separated) | Open, close, pin, select, jump, zoom, scale, filter, dock or position the AGENTS list window, or read the agent state. Returns the `agents_list` object (see "Agents list and demo"). | `agents.list` |
 | `bilterm_agents_demo` | `stop` (boolean, optional; `true` stops the demo and closes the panes it spawned) | Start the agent traffic demo, or stop it. No write gate. | `agents.demo` |
 | `bilterm_window_manage` | `action` (string, req: `move`, `rename`, `rename_session`, `select`, `bulk`, `undo`), plus action-specific parameters | Move, rename, multi-select, bulk mutate, and undo window and session topology (`SES-01..05`). | `window.move`, `window.rename`, `session.rename`, `window.select`, `window.bulk`, `window.undo` |
+| `bilterm_keys` | `action` (string: `list`, `check`, `explain`, `profile`, `window_mode`, `menu_open`; default `list`), `chord`, `name`, `op`, `category` | Inspect the key profile, check key conflicts, explain a chord, switch profile, enter Window mode or open the menu bar. `profile <name>`, `window_mode` and `menu_open` need `[api] allow_config_write`. | `keys.list` / `keys.check` / `keys.explain` / `keys.profile` / `keys.window_mode` / `menu.open` |
 
 ### MCP Tool Calling Format
 
@@ -1239,12 +1246,38 @@ MCP `tools/call` with `"name":"bilterm_agents_list"` and `"arguments":{"op":"ope
 
 Gaps that affect these results (remote exit codes and cwd need OSC 133 and OSC 7 on the remote shell; raw-mode input is not captured; no command attaches the `tmux -CC` bridge) are listed in [user guide chapter 12](user-guide/12-find-registry-and-history.md#9-known-limits-g1-to-g10).
 
+### Keyboard Surface: `keys.*`, `menu.open` and `bilterm_keys` (Phase 63)
+
+The keyboard model (per-OS key profiles, the `Primary` modifier, leader and Window mode) is inspectable and drivable over the control plane. Every method lowers to the same `Action` as the keys, the `:keys` / `:wmode` / `:menu open` colon commands, the palette rows and the menu items, and runs through `WindowManager::apply`. The JSON a method returns is exactly what the colon form stores in command data, so all surfaces report identical results.
+
+| Capability | Colon command | RPC | MCP (`bilterm_keys`) | Gate |
+| :--- | :--- | :--- | :--- | :--- |
+| List chords | `:keys list` | `keys.list` | `action: "list"` | read-only |
+| Check conflicts | `:keys check` | `keys.check` | `action: "check"` | read-only |
+| Explain a chord | `:keys explain <chord>` | `keys.explain {chord}` | `action: "explain"` | read-only |
+| Query / switch profile | `:keys profile [name]` | `keys.profile {name?}` | `action: "profile"` | switching is write-gated |
+| Window mode | `:wmode on\|off\|toggle\|focus\|resize\|move` | `keys.window_mode {op}` | `action: "window_mode"` | write-gated |
+| Open the menu bar | `:menu open [category]` | `menu.open {category?}` | `action: "menu_open"` | write-gated |
+
+- **Write gate.** `keys.profile` with a `name`, `keys.window_mode` and `menu.open` (and their colon forms over `wm.command`) are refused unless `[api] allow_config_write = true`, with `key and mode changes over the API are disabled; set [api] allow_config_write = true in config.toml`. `keys.list`, `keys.check`, `keys.explain` and `keys.profile` without a name never mutate state.
+- **`keys.check` result.** `findings` is sorted by severity (`block`, `warn`, `info`), then chord. `class` is `internal` (two Bilterm actions on one chord, a user binding that shadows the leader key or `Ctrl+Q`), `host` (the OS, desktop or terminal host consumes the chord) or `consumer` (a program in the pane, such as readline, vim, tmux or Claude Code, expects it). `source` is `default`, `keys.bind` or `keybindings`. Shipped defaults that clash with a consumer are reported as `info` with the accepted reason in `note`.
+- **Example.**
+  ```json
+  {"jsonrpc": "2.0", "id": 7, "method": "keys.check", "params": {}}
+  ```
+  ```json
+  {"jsonrpc": "2.0", "id": 7, "result": {"profile": "linux", "os": "linux", "block": 0, "warn": 1, "info": 36,
+    "findings": [{"chord": "Ctrl+A", "bound_as": "Ctrl+A", "action": "SplitVertical", "severity": "warn",
+                  "class": "consumer", "consumer": "readline, GNU screen", "note": "line editing and history", "source": "keys.bind"}]}}
+  ```
+- **Errors.** `keys.explain` without `chord` returns `missing 'chord' parameter`; an unparseable chord and an unknown profile name return the parser message (the profile error lists the valid names).
+
 ### API Security Switch: `[api] allow_config_write`
 
 All API-originated operations (invoked via RPC `wm.command` or MCP `bilterm_colon_command`) are subject to strict policy enforcement:
 1. **Default Off**: In `config.toml`, `[api] allow_config_write = false` by default.
 2. **Refusal Behavior**:
-   When `allow_config_write` is `false`, any attempt to execute `:set`, `:config save`, or `:appearance save` over JSON-RPC or MCP fails with:
+   When `allow_config_write` is `false`, any attempt to execute `:set`, `:config save`, or `:appearance save` over JSON-RPC or MCP fails with the message below. Key-profile switches, Window mode and menu-bar opening (`keys.profile <name>`, `keys.window_mode`, `menu.open`) are gated by the same switch:
    ```
    config writes over the API are disabled; set [api] allow_config_write = true in config.toml
    ```

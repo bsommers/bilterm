@@ -13,4 +13,4 @@ Bilterm must support both modern terminal multiplexer H/V tiled splits (`tmux`-s
 - Mouse hit-testing (`hit_test_pane`) traverses visible panes in **reverse z-order** (`order.iter().rev()`), raising clicked panes to the top of `ZStack` and translating global SGR (1006) mouse coordinates to pane-local coordinates.
 
 ## Consequences
-- Users can seamlessly toggle between Tiled Splits and Stacked Z-Order Cascade windows (`Alt+M` or `:layout tile|stack`) without losing any pane state or PTY sessions.
+- Users can seamlessly toggle between Tiled Splits and Stacked Z-Order Cascade windows (`Cmd+L` / `Ctrl+Shift+L`, `Ctrl+X M`, Window mode `s`, or `:layout tile|stack`) without losing any pane state or PTY sessions.

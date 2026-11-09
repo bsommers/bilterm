@@ -130,6 +130,7 @@ fn try_apply(cfg: &BiltermConfig, key: &str, val: toml::Value) -> Result<Bilterm
     if walk(&to_value(&next)?, key).is_none() {
         return Err(format!("unknown config key `{key}`"));
     }
+    crate::input::keyconflict::revalidate_after_set(key, &next)?;
     next.custom_palette_override = cfg.custom_palette_override.clone();
     next.cursor_blink_hidden = cfg.cursor_blink_hidden;
     Ok(next)

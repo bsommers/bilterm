@@ -6,6 +6,9 @@ use crate::error::Result;
 use crate::input::AppAction;
 use crate::pty::line_discipline::InputRoutingMode;
 use crate::wm::WindowManager;
+use crate::input::chord::KeyChord;
+use crate::input::keyenv::{HostOs, KeyEnv, Surface};
+use crate::input::keyprofile::{EffectiveKeymap, lookup_global, lookup_pane, user_bound_command};
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::agents_list_cmd::AgentsListOp;
 use crate::wm::find_cmd::FindOp;
@@ -25,7 +28,8 @@ pub fn default_leader_action(key: KeyEvent) -> Option<Action> {
         .map(|(_, action)| action.clone())
 }
 
-/// Looks up `key` in [`DEFAULT_GLOBAL_BINDINGS`].
+/// Looks up `key` in [`DEFAULT_GLOBAL_BINDINGS`] (the `legacy` profile; workspaces use
+/// [`EffectiveKeymap::global_action`]).
 pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option<Action> {
     if fuzzy_search_active
         && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -33,22 +37,7 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
     {
         return None;
     }
-    let lookup_mods = match key.code {
-        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
-        _ => key.modifiers,
-    };
-    if let Some((_, _, action)) = DEFAULT_GLOBAL_BINDINGS
-        .iter()
-        .find(|(mods, code, _)| *code == key.code && *mods == key.modifiers)
-    {
-        return Some(action.clone());
-    }
-    DEFAULT_GLOBAL_BINDINGS
-        .iter()
-        .find(|(mods, code, _)| {
-            *code == key.code && *mods == lookup_mods && !mods.contains(KeyModifiers::SHIFT)
-        })
-        .map(|(_, _, action)| action.clone())
+    lookup_global(DEFAULT_GLOBAL_BINDINGS.iter().map(|(m, c, a)| (*m, *c, a)), key)
 }
 
 /// The global chords that must reach the window manager even while the active pane is in raw PTY
@@ -56,31 +45,30 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// global shortcut is forwarded to the child. Today that is the agent-traffic toggle (`Ctrl+Alt+A`)
 /// the Find window (`Ctrl+Alt+F`) and the tmux link reconnect (`Ctrl+Alt+R`): the launchers the user needs
 /// while an agent or a remote ssh prompt owns the pane.
-pub(super) fn reserved_global_action(key: KeyEvent) -> Option<Action> {
-    match default_global_action(key, false) {
+pub(super) fn reserved_global_action(km: &EffectiveKeymap, key: KeyEvent) -> Option<Action> {
+    match km.global_action(key, false) {
         Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
         _ => None,
     }
 }
 
-/// Looks up `key` in [`DEFAULT_PANE_BINDINGS`].
+/// Looks up `key` in [`DEFAULT_PANE_BINDINGS`] (the `legacy` profile; panes use
+/// [`EffectiveKeymap::pane_action`]).
 pub fn default_pane_action(key: KeyEvent) -> Option<Action> {
-    let lookup_mods = match key.code {
-        KeyCode::Char(_) => key.modifiers - KeyModifiers::SHIFT,
-        _ => key.modifiers,
-    };
-    DEFAULT_PANE_BINDINGS
-        .iter()
-        .find(|(mods, code, _)| *mods == lookup_mods && *code == key.code)
-        .map(|(_, _, action)| action.clone())
+    lookup_pane(DEFAULT_PANE_BINDINGS.iter().map(|(m, c, a)| (*m, *c, a)), key)
 }
 
 /// Normalizes macOS `Option+<key>` and `Option+Shift+<key>` Unicode dead-key / symbol characters
 /// (`˙`, `√`, `∫`, `ƒ`, `†`, `ß`, `ç`, `¬`, `π`, `∑`, `Ω`, `µ`, `≈`, `\u{00a0}`, `¡`..`ª`, etc.)
 /// into canonical `KeyModifiers::ALT` (and `KeyModifiers::SHIFT`) `KeyEvent`s so hotkeys and Readline
 /// word bindings work out-of-the-box on macOS even when the host terminal has not enabled "Use Option as Meta".
-pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool) -> KeyEvent {
+///
+/// Identity unless `env` is a macOS TUI: on Linux/Windows (and in any GUI, which delivers composed
+/// text itself) `ø ß å ç µ π` are real input and must never become `Alt+<letter>`.
+pub fn normalize_macos_option_key(key: KeyEvent, enabled: bool, env: &KeyEnv) -> KeyEvent {
     if !enabled
+        || env.os != HostOs::MacOs
+        || env.surface != Surface::Tui
         || key.modifiers.contains(KeyModifiers::CONTROL)
         || key.modifiers.contains(KeyModifiers::ALT)
     {
@@ -199,27 +187,30 @@ pub fn is_leader_key_with_tmux(key: KeyEvent, leader_cfg: &str, inside_tmux: boo
 }
 
 pub(crate) fn format_key_chord(key: KeyEvent) -> Option<String> {
-    let mut parts = Vec::new();
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        parts.push("Ctrl".to_string());
-    }
-    if key.modifiers.contains(KeyModifiers::ALT) {
-        parts.push("Alt".to_string());
-    }
-    if key.modifiers.contains(KeyModifiers::SHIFT) {
-        parts.push("Shift".to_string());
-    }
-    match key.code {
-        KeyCode::Char(' ') => parts.push("Space".to_string()),
-        KeyCode::Char(c) => parts.push(c.to_ascii_uppercase().to_string()),
-        KeyCode::F(n) => parts.push(format!("F{n}")),
-        KeyCode::Tab => parts.push("Tab".to_string()),
-        KeyCode::BackTab => parts.push("BackTab".to_string()),
-        KeyCode::Enter => parts.push("Enter".to_string()),
-        KeyCode::Esc => parts.push("Esc".to_string()),
-        _ => return None,
-    }
-    Some(parts.join("+"))
+    let bindable = matches!(
+        key.code,
+        KeyCode::Char(_)
+            | KeyCode::F(_)
+            | KeyCode::Tab
+            | KeyCode::BackTab
+            | KeyCode::Enter
+            | KeyCode::Esc
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Insert
+            | KeyCode::Delete
+            | KeyCode::Backspace
+    );
+    bindable.then(|| {
+        let super_name = if HostOs::detect() == HostOs::MacOs { "Cmd" } else { "Super" };
+        KeyChord::raw(key).format_with(super_name)
+    })
 }
 
 pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
@@ -263,7 +254,7 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
         return Ok(AppAction::Handled);
     }
 
-    if let Some(action) = default_leader_action(lookup_key) {
+    if let Some(action) = wm.keymap().leader_action(lookup_key) {
         if drawer_was_focused && !matches!(action, Action::DrawerToggle | Action::DrawerFocus) {
             wm.drawer_mut().focused = false;
         }
@@ -330,13 +321,14 @@ fn is_repeatable_wm_action(action: &Action) -> bool {
 /// passthrough are checked first; once the active pane is in raw passthrough, every other key (Alt+h/t/c/l/x,
 /// Ctrl+Space, plain F2/F5 in an alt-screen app, ...) is forwarded to the child and keeps auto-repeating.
 pub(super) fn is_wm_toggle_chord(wm: &mut WindowManager, key: KeyEvent) -> bool {
+    if wm.key_mode().is_window() {
+        return !super::window_mode::is_repeatable_window_key(wm, key);
+    }
     let toggle = |a: &Action| !is_repeatable_wm_action(a);
+    let km = wm.keymap();
     // 1. Intercepted before the passthrough decision.
-    if !wm.config().keybindings.is_empty()
-        && let Some(chord) = format_key_chord(key)
-        && let Some((_, bound)) = wm.config().keybindings.iter().find(|(k, _)| k.eq_ignore_ascii_case(&chord))
-    {
-        return !matches!(parse_colon_command(bound), Some(Ok(a)) if !toggle(&a));
+    if let Some(bound) = user_bound_command(wm.config(), key, &km.env()) {
+        return !matches!(parse_colon_command(&bound), Some(Ok(a)) if !toggle(&a));
     }
     if is_leader_key_with_tmux(key, &wm.config().leader_key, crate::tmux::TmuxEnv::detect().is_some()) {
         return true;
@@ -347,7 +339,10 @@ pub(super) fn is_wm_toggle_chord(wm: &mut WindowManager, key: KeyEvent) -> bool 
     {
         return true;
     }
-    if reserved_global_action(key).is_some_and(|a| toggle(&a)) {
+    if reserved_global_action(&km, key).is_some_and(|a| toggle(&a)) {
+        return true;
+    }
+    if km.primary_action(key).is_some_and(|a| toggle(&a)) {
         return true;
     }
     // 2. Passthrough-dependent routing.
@@ -377,10 +372,11 @@ pub(super) fn is_wm_toggle_chord(wm: &mut WindowManager, key: KeyEvent) -> bool 
                 return true;
             }
         }
-        return default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
+        return km
+            .global_action(key, wm.active_pane().prompt().fuzzy_search.active)
             .is_some_and(|a| matches!(a, Action::PaletteToggle));
     }
-    default_global_action(key, wm.active_pane().prompt().fuzzy_search.active).is_some_and(|a| toggle(&a))
+    km.global_action(key, wm.active_pane().prompt().fuzzy_search.active).is_some_and(|a| toggle(&a))
 }
 
 /// Handles user-configured `[keybindings]` and Workspace Leader mode entry.
@@ -388,22 +384,13 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    if !wm.config().keybindings.is_empty()
-        && let Some(chord) = format_key_chord(key)
-    {
-        let bound_opt = wm
-            .config()
-            .keybindings
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(&chord))
-            .map(|(_, v)| v.clone());
-        if let Some(bound_action) = bound_opt {
-            if let Some(Ok(action)) = parse_colon_command(&bound_action) {
-                return Ok(Some(wm.apply(action)?));
-            }
-            wm.active_pane_mut().prompt_mut().set_text(&bound_action);
-            return Ok(Some(AppAction::Handled));
+    let km = wm.keymap();
+    if let Some(bound_action) = user_bound_command(wm.config(), key, &km.env()) {
+        if let Some(Ok(action)) = parse_colon_command(&bound_action) {
+            return Ok(Some(wm.apply(action)?));
         }
+        wm.active_pane_mut().prompt_mut().set_text(&bound_action);
+        return Ok(Some(AppAction::Handled));
     }
 
     let inside_tmux = crate::tmux::TmuxEnv::detect().is_some();
@@ -414,9 +401,8 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
         } else {
             format!("{} / Ctrl+B", wm.config().leader_key)
         };
-        wm.active_pane_mut().set_status_message(Some(format!(
-            "⌨ LEADER [{leader_label}]: \"/-=SplitH %/|=SplitV z=Zoom n/p/o=Deck 1-9=Pane d=Drawer q=Quake e/t/b/s=Prompt [=Copy f=Hints ?=Help"
-        )));
+        let line = km.leader_status_line(&leader_label);
+        wm.active_pane_mut().set_status_message(Some(line));
         return Ok(Some(AppAction::Handled));
     }
 
@@ -479,7 +465,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
 
     // Always route per-pane font zoom (`Ctrl++`/`Ctrl+-`/`Ctrl+0`), clipboard paste (`Ctrl+Shift+V`/`Shift+Insert`),
     // Command Palette (`Ctrl+P`/`Alt+Space`), and WM pane focus/resize chords even when the active pane is running an interactive RawPtyPassthrough TUI app (`nmon`, `htop`, `vim`, `herdr`).
-    if let Some(action) = default_global_action(key, wm.active_pane().prompt().fuzzy_search.active)
+    if let Some(action) = km.global_action(key, wm.active_pane().prompt().fuzzy_search.active)
         && matches!(
             action,
             Action::PasteClipboard
@@ -499,7 +485,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
     }
 
     if wm.pane_count() > 1
-        && key.modifiers == KeyModifiers::ALT
+        && Some(key.modifiers) == km.focus_arrow_mods()
         && !wm.active_pane().vt().is_alternate_screen()
         && (wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
             || wm.active_pane().prompt().input.is_empty())
@@ -520,7 +506,7 @@ pub(super) fn handle_wm_user_binding_or_leader_entry(
         && !wm.active_pane().is_active_canvas_password_prompt()
         && !(wm.active_pane().scroll_mode() == crate::pane::PaneScrollMode::BlockPage
             && (wm.active_pane().is_page_holding() || wm.active_pane().is_holding_inspected()))
-        && let Some(action) = default_pane_action(key)
+        && let Some(action) = km.pane_action(key)
         && matches!(
             action,
             Action::SelectCommand(_) | Action::CopyModeToggle | Action::HintsToggle
@@ -550,8 +536,9 @@ pub(super) fn handle_wm_shortcut_key(
         }
     }
     let fuzzy_active = wm.active_pane().prompt().fuzzy_search.active;
+    let km = wm.keymap();
     if wm.pane_count() > 1
-        && key.modifiers == KeyModifiers::ALT
+        && Some(key.modifiers) == km.focus_arrow_mods()
         && (wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
             || wm.active_pane().prompt().input.is_empty())
     {
@@ -569,7 +556,8 @@ pub(super) fn handle_wm_shortcut_key(
     if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
         return Ok(Some(wm.apply(Action::ClipboardWindow(ClipboardWindowOp::PopYankRing))?));
     }
-    if (wm.drawer_is_open() || wm.is_drawer_effectively_visible())
+    if km.alt_layer()
+        && (wm.drawer_is_open() || wm.is_drawer_effectively_visible())
         && key.modifiers.contains(KeyModifiers::ALT)
         && !key.modifiers.contains(KeyModifiers::CONTROL)
         && matches!(key.code, KeyCode::Char('p') | KeyCode::Char('P'))
@@ -578,7 +566,7 @@ pub(super) fn handle_wm_shortcut_key(
             wm.apply(Action::DrawerPreview(crate::action::DrawerPreviewOp::Toggle))?,
         ));
     }
-    if let Some(action) = default_global_action(key, fuzzy_active) {
+    if let Some(action) = km.global_action(key, fuzzy_active) {
         return Ok(Some(wm.apply(action)?));
     }
     Ok(None)

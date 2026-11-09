@@ -395,7 +395,7 @@ The strip is recomputed from the live workspace, so a terminal resize keeps the 
 
 Moving, resizing, closing or floating a docked panel releases its space in the strip. The docked state is not written to layout profiles or to config. With no list, traffic window or `:mcp` console open, arrange behaves as it did before.
 
-Unchanged by this: `:layout tile`, `:layout stack`, `:layout cycle` and `Alt+M` (these switch the tiled and stacked modes and never dock panels), and the drawer's own Push or Overlay setting.
+Unchanged by this: `:layout tile`, `:layout stack`, `:layout cycle` and their keys `Cmd+L` / `Ctrl+Shift+L` (these switch the tiled and stacked modes and never dock panels), and the drawer's own Push or Overlay setting.
 
 ## Command palette coverage
 

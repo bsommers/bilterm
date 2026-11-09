@@ -2,10 +2,14 @@ use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crossterm::event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture};
+use crossterm::event::{
+    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement, EnterAlternateScreen,
+    LeaveAlternateScreen,
 };
 use thiserror::Error;
 
@@ -35,6 +39,8 @@ pub type Result<T> = std::result::Result<T, BiltermError>;
 #[derive(Clone, Debug)]
 pub struct TerminalRestoreGuard {
     active: Arc<AtomicBool>,
+    /// The kitty keyboard enhancement flags were pushed and must be popped on restore (Phase 63).
+    kitty_pushed: Arc<AtomicBool>,
 }
 
 impl Default for TerminalRestoreGuard {
@@ -48,11 +54,23 @@ impl TerminalRestoreGuard {
     pub fn new() -> Self {
         Self {
             active: Arc::new(AtomicBool::new(false)),
+            kitty_pushed: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Enters host terminal raw mode, alternate screen, mouse capture, and bracketed paste.
+    /// Pushes the kitty keyboard protocol when the terminal supports it (`keys.kitty_protocol = "auto"`).
     pub fn enter_host_tui() -> Result<Self> {
+        Self::enter_host_tui_with(crate::config::keys::KittyProtocol::Auto)
+    }
+
+    /// [`Self::enter_host_tui`] with an explicit `keys.kitty_protocol` policy.
+    ///
+    /// With `Auto` and `supports_keyboard_enhancement() == Ok(true)` this pushes
+    /// `DISAMBIGUATE_ESCAPE_CODES` after raw mode is on (so `Ctrl+Shift+<key>` and `Primary`
+    /// chords become visible) and records it in [`crate::input::keyenv::kitty_active`]; the flags are
+    /// popped on restore. Children still receive legacy key bytes (see `encode_key_to_pty_bytes_full`).
+    pub fn enter_host_tui_with(kitty: crate::config::keys::KittyProtocol) -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(
@@ -61,9 +79,19 @@ impl TerminalRestoreGuard {
             EnableMouseCapture,
             EnableBracketedPaste
         )?;
+        let push_kitty = kitty == crate::config::keys::KittyProtocol::Auto
+            && matches!(supports_keyboard_enhancement(), Ok(true));
+        if push_kitty {
+            execute!(
+                stdout,
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )?;
+            crate::input::keyenv::set_kitty_active(true);
+        }
         stdout.flush()?;
         Ok(Self {
             active: Arc::new(AtomicBool::new(true)),
+            kitty_pushed: Arc::new(AtomicBool::new(push_kitty)),
         })
     }
 
@@ -71,6 +99,7 @@ impl TerminalRestoreGuard {
     pub fn new_simulated_active() -> Self {
         Self {
             active: Arc::new(AtomicBool::new(true)),
+            kitty_pushed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -84,6 +113,10 @@ impl TerminalRestoreGuard {
         if self.active.swap(false, Ordering::SeqCst) {
             let _ = disable_raw_mode();
             let mut stdout = io::stdout();
+            if self.kitty_pushed.swap(false, Ordering::SeqCst) {
+                let _ = execute!(stdout, PopKeyboardEnhancementFlags);
+                crate::input::keyenv::set_kitty_active(false);
+            }
             let _ = execute!(
                 stdout,
                 DisableBracketedPaste,

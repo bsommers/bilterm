@@ -13,6 +13,9 @@
   - [Wide Characters (CJK / Emoji / Nerd Fonts) Near Window Borders](#wide-characters-cjk--emoji--nerd-fonts-near-window-borders)
   - [Clipboard Copy (`:yank`) Not Reaching Host Clipboard Inside `tmux`](#clipboard-copy-yank-not-reaching-host-clipboard-inside-tmux)
   - [Remote tmux over SSH Quits Early or Reconnect is Odd](#remote-tmux-over-ssh-quits-early-or-reconnect-is-odd)
+  - [Option+key Types Symbols on macOS](#optionkey-types-symbols-on-macos)
+  - [AltGr Keys Do Nothing on Windows](#altgr-keys-do-nothing-on-windows)
+  - [Ctrl+Shift+letter Does Nothing in My Terminal](#ctrlshiftletter-does-nothing-in-my-terminal)
 - [2. Diagnostics & Logging](#2-diagnostics--logging)
 - [3. Terminal State Recovery After Forced Kill (`SIGKILL`)](#3-terminal-state-recovery-after-forced-kill-sigkill)
 - [4. Frequently Asked Questions (FAQ)](#4-frequently-asked-questions-faq)
@@ -128,6 +131,26 @@
   7. **Restored Workspace Shows `(not connected)`**:
      - When restoring a saved workspace session, Bilterm honestly labels previously remote panes as `(not connected)` if they are running a local shell rather than a live remote transport.
      - Run `:ssh-tmux <dest> [session]` (or `Ctrl+X u`) to reconnect to the remote session.
+
+### Option+key Types Symbols on macOS
+
+- **Symptom:** `Option+M` types `µ`, `Option+1` types `¡`, and the old `Alt+...` chords do nothing.
+- **Cause:** macOS Terminal and most emulators compose Option+key into a symbol instead of sending Alt. Bilterm's `mac` profile therefore has **no `Alt+<letter>` chords** at all; use `Cmd` chords in the native `--gui` window (`Cmd+L` cycles the layout), or the leader (`Ctrl+X M`, `Ctrl+X w` for Window mode, `Ctrl+X Space` for the palette).
+- **If you want Option as Meta in a terminal:** enable it in the emulator (Terminal.app: Settings > Profiles > Keyboard > "Use Option as Meta key"; iTerm2: Profiles > Keys > "Esc+"; Alacritty: `option_as_alt = "Both"`; WezTerm: `send_composed_key_when_left_alt_is_pressed = false`; Kitty: `macos_option_as_alt yes`). Bilterm's `macos_option_as_alt` setting only decides how it interprets the symbols the terminal already sent.
+- Run `:keys check` to see which of your own bindings are affected (`macOS Option key` findings).
+
+### AltGr Keys Do Nothing on Windows
+
+- **Symptom:** On a German, Nordic or other European layout, `AltGr+Q` (`@`) or `AltGr+7` (`{`) types nothing in the native GUI window, or triggers a Bilterm shortcut.
+- **Cause:** Windows reports AltGr as `Ctrl+Alt`. Bilterm's GUI keeps AltGr as text, but a user binding on `Ctrl+Alt+<letter>` is ambiguous on those layouts, and the `Ctrl+Alt` launcher chords are secondary paths only.
+- **Fix:** bind your own shortcuts on `Primary+<key>` (`Ctrl+Shift+<key>` on Windows) or the leader instead; run `:keys check` and look for `Windows AltGr` findings; or select `profile = "portable"` in `[keys]`, which has no `Ctrl+Alt` or `Alt` chords.
+
+### Ctrl+Shift+letter Does Nothing in My Terminal
+
+- **Symptom:** `Ctrl+Shift+L` (the `Primary` chord on Windows and Linux) behaves exactly like `Ctrl+L`, or `Primary+P` never opens the palette.
+- **Cause:** a classic terminal cannot tell `Ctrl+Shift+letter` from `Ctrl+letter`. Bilterm enables the **kitty keyboard protocol** at startup when the terminal supports it (kitty, WezTerm, foot, Ghostty, recent Alacritty and iTerm2); without it, `Primary` chords do not exist in a TUI and the leader, Window mode and F-keys are the way in. Terminals that own the chord themselves (Windows Terminal `Ctrl+Shift+W/P/F/T/N/D`, GNOME Terminal and Konsole `Ctrl+Shift+T/N/W/C/V/F`) never deliver it either.
+- **Fix:** use the leader (`Ctrl+X` then a key) or Window mode (`Ctrl+X w`). Set `kitty_protocol = "off"` in `[keys]` if the protocol misbehaves with your multiplexer, or `profile = "portable"` to avoid every modifier-heavy chord. The native `--gui` window always has `Primary` (`Cmd` on macOS, `Ctrl+Shift` on Windows and Linux).
+- `:keys explain Primary+L` shows what the chord resolves to in your environment, and `:keys check` lists the host terminals that consume chords in your profile. See [Chapter 6](06-keyboard-mouse-and-command-reference.md) for the `[keys]` table and [Chapter 10](10-security-and-best-practices.md#7-key-binding-safety-reserved-chords--the-exit-guard-key-02) for how reserved chords are handled.
 
 ---
 

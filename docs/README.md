@@ -76,7 +76,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v3.1.0`)** — 
 | **Split Horizontal / Split Vertical / Zoom** | `F2` (`<L> -` / `Alt+H`) / `<L> \|` (`Alt+V`) / `F5` (`<L> z`) | `:split h` / `:split v` / `:zoom` |
 | **Per-Pane Font Zoom In / Out / Reset** | `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+Wheel` | `:fontsize [+ \| - \| reset \| <pt> \| <pct>%]` / `:font` |
 | **Resize Pane Frame / Equalize Splits** | Drag ANY border or corner / `Ctrl+Alt+Arrows` / `<L> =` | `:resize <left\|right\|up\|down\|reset>` / `:equalize` |
-| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `<L> M` (`Alt+M`) / `F6` (`<L> o` / `Alt+Tab`) / `<L> 1..9` | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
+| **Toggle Tiled vs. Z-Stack / Shuffle Deck** | `Cmd+L` / `Ctrl+Shift+L` (`<L> M`, Window mode `s`) / `F6` (`<L> o` / `Alt+Tab`) / `<L> 1..9` | `:layout stack\|tile` / `:deck next\|prev` / `:focus <N>` |
 | **Layout Profiles & Automatic Layout Saving** | — | `:profile [list \| switch <name> \| save [name] \| default <name> \| autosave [on\|off] \| next \| prev \| delete <name>]` / `:autosave [on\|off]` |
 | **Guake Quick Terminal / Raw PTY Toggle** | `F10` (`Ctrl+\` / `Alt+\``) / `F12` (`Ctrl+G`) | `:quake` / `:raw` |
 | **Cycle Floating / Fixed / Regular Terminal** | `F4` (`<L> e` / `Alt+E`) / Click OIA `READY` or `CMD BOX` | `:mode [float \| fixed \| terminal \| cycle]` |

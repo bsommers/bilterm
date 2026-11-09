@@ -375,7 +375,7 @@ impl WindowManager {
             DrawerVisibilityMode::OnDemand => false,
             DrawerVisibilityMode::Fixed => true,
             DrawerVisibilityMode::AutoHide => {
-                self.leader_pending || self.drawer.hover_active || self.has_background_pane_alert()
+                self.is_leader_pending() || self.drawer.hover_active || self.has_background_pane_alert()
             }
         }
     }

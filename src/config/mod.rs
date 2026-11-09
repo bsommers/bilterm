@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod dotted;
+pub mod keys;
 pub use dotted::ApiConfig;
 pub use crate::stt::SttConfig;
 
@@ -119,6 +120,8 @@ pub struct BiltermConfig {
     pub macos_option_as_alt: bool,
     /// User-configurable key chord bindings (`"Ctrl+B" = ":split v"`, `v0.6.0`).
     pub keybindings: BTreeMap<String, String>,
+    /// Per-OS key profiles, `Primary` modifier options, `keys.bind` and Window-mode overrides (`[keys]`, Phase 63).
+    pub keys: keys::KeysConfig,
     /// Case-insensitive output highlight trigger patterns (`:trigger add <pat>`, `v0.7.0`).
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
@@ -236,6 +239,7 @@ impl Default for BiltermConfig {
             leader_key: "Ctrl+X".to_string(),
             macos_option_as_alt: true,
             keybindings: BTreeMap::new(),
+            keys: keys::KeysConfig::default(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
             agents: BTreeMap::new(),
@@ -319,9 +323,9 @@ impl BiltermConfig {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
         };
-        Self::from_toml_str(&raw)
-            .map(Some)
-            .map_err(|e| format!("invalid {}: {e}", path.display()))
+        let cfg = Self::from_toml_str(&raw).map_err(|e| format!("invalid {}: {e}", path.display()))?;
+        cfg.keys.validate().map_err(|e| format!("invalid {}: {e}", path.display()))?;
+        Ok(Some(cfg))
     }
 
     /// Config for a machine with no config file yet: the defaults plus the Obsidian profile.
