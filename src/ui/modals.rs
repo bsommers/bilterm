@@ -473,6 +473,11 @@ pub fn menubar_category_x_offset(category: usize) -> u16 {
 }
 
 /// Returns the number of items in `category` of the top menu bar (`ECO-03`).
+/// Number of top-level menubar categories (used for keyboard wrap-around).
+pub fn menubar_category_count() -> usize {
+    MENUBAR_CATEGORIES.len()
+}
+
 pub fn menubar_category_item_count(category: usize) -> usize {
     let cat_idx = category.min(MENUBAR_CATEGORIES.len().saturating_sub(1));
     MENUBAR_CATEGORIES[cat_idx].1.len()

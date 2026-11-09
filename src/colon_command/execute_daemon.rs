@@ -62,6 +62,7 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 format!("Active daemons ({}): {}", active.len(), items.join(", "))
             };
             wm.active_pane_mut().set_status_message(Some(summary));
+            wm.open_daemon_window();
         }
         DaemonSupervisorOp::Status { name } => {
             let target = name.as_deref().unwrap_or("default");
@@ -115,6 +116,7 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 wm.active_pane_mut()
                     .set_status_message(Some(format!("Daemon '{target}': not running")));
             }
+            wm.open_daemon_window();
         }
         DaemonSupervisorOp::Start { name } => {
             let target = name.as_deref().unwrap_or("default");
@@ -213,6 +215,11 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 "Pruned {pruned} dead daemon record(s)"
             )));
         }
+    }
+    if !matches!(op, DaemonSupervisorOp::List | DaemonSupervisorOp::Status { .. })
+        && wm.daemon_window().active
+    {
+        wm.refresh_daemon_window();
     }
     false
 }
