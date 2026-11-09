@@ -1,4 +1,4 @@
-# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v3.1.0`)
+# Running Bilterm: CLI Reference, Native `--gui` Mode, Shells, Tab Completions & Configuration (`v3.2.0`)
 
 [← Back to Documentation Hub](README.md) | [← Back to Project README](../README.md)
 
@@ -25,7 +25,7 @@ cargo build --release
 ./target/release/bilterm
 ```
 
-### Complete CLI Options (`v3.1.0`)
+### Complete CLI Options (`v3.2.0`)
 ```bash
 bilterm                                         # Launch interactive TUI multiplexer (auto-resumes detached session)
 bilterm attach [session] / -a / --attach        # Re-attach to live background daemon or restore saved multi-pane layout

@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.1.0] - 2026-11-08
+## [3.2.0] - 2026-11-09
+
+Feature and hardening release delivering Classic Drawer 2-line rows and focus-derived zoom (Phase 61), Nested TUI Shift/Alt local selection override and Vi copy-mode motions (Phase 62), Cross-platform `Primary` modifier, OS key profiles, Sticky Window mode, which-key overlay, keyboard-operable menu bar, and key conflict engine (Phase 63), Real-time byte-boundary traffic telemetry and `TRAFFIC MONITOR` window (Phase 64), Floating `DAEMON SUPERVISOR` management window and real PID tracking, and a top-to-bottom TDD overhaul of `:ssh-tmux` remote panes.
+
+### Added
+- **Phase 61 — Drawer Rows, Zoom Logic & Window State Preservation (`DRW-ROWS-01..02`, `ZOOM-01..02`, `WST-01`):**
+  - Classic drawer two-line compact rows (`classic_row_lines`) with `[R:n]` header chips and `:drawer rows` toggle.
+  - Effective zoom strictly derived from `z_stack.top()`, ensuring `toggle_zoom` is an idempotent toggle and preventing mouse hit-testing fall-through while zoomed.
+  - Inactive window focus clicks now preserve OIA and prompt chrome (`was_active` gate); prompt mode, raw mode (`SavedPaneState`), copy mode, and scrollback offsets survive stack switches and column reflows.
+- **Phase 62 — Nested TUI Selection Override & Vi Copy Mode Ergonomics (`NTUI-01..03`, `COPY-01..03`):**
+  - `Shift` / `Alt` mouse drag local selection override when inner TUIs (`vim`, `htop`, `tmux`) capture mouse events.
+  - Reassembled split-read inbound OSC 52 sequences across buffer boundaries; added OIA `MOUSE->APP` and `[COPY]` badges.
+  - Scrollback-absolute selections with Vi/Emacs motions (`w`, `b`, `e`, `0`, `^`, `$`, `gg`, `G`, `H`, `M`, `L`, `/`, `?`, `n`, `N`), double/triple-click word/line selection, and dynamic copy mode hotkey hint bar (`src/ui/copy_hints.rs`).
+- **Phase 63 — Keyboard-First Navigation, Sticky Window Mode & Key Conflicts (`KEYS-01..03`):**
+  - Cross-platform `Primary` modifier (`Cmd` on macOS GUI, `Ctrl+Shift` on Linux/Windows) and per-OS key profiles (`mac`, `windows`, `linux`, `portable`, `legacy`).
+  - Fixed macOS `Option` dead-key navigation and Windows `AltGr` compose handling; replaced conflicting `Alt+M` global chords.
+  - Sticky Window mode (leader `w` / `Primary+O`) with which-key visual overlay (`src/ui/which_key_ui.rs`).
+  - Keyboard-operable top menu bar across all 9 categories with mnemonics, hotkeys, and computed accelerators.
+  - Key collision detection engine (`src/input/keyconflict.rs`), `:keys check|list|explain|profile` commands, `keys.*` JSON-RPC methods, and `bilterm_keys` MCP tool.
+- **Phase 64 — Real-Time Traffic Telemetry & Traffic Monitor (`TMON-01..05`):**
+  - Leaf module `src/traffic/` providing lock-free zero-allocation ring-buffer metrics across all 33 byte boundaries (`H01..H33`).
+  - Live classification of escape sequences, control bytes, and printable text payloads.
+  - Floating `TRAFFIC MONITOR` window in TUI and GUI (`src/ui/traffic_monitor_ui.rs`).
+  - `:traffic` colon commands, `traffic.*` JSON-RPC methods, and `bilterm_traffic` MCP tool.
+- **Daemon Supervisor & Real Process Tracking:**
+  - Floating `DAEMON SUPERVISOR` management window in both TUI & GUI (`src/wm/daemon_window.rs`, `src/ui/daemon_window_ui.rs`).
+  - Wired `:daemon list|status|start|stop|switch` and the top menu `Daemon` items to open and refresh the supervisor dialog.
+
+### Fixed
+- **Daemon PID 0 Bug:** Fixed `spawn_daemon` / `ensure_started` returning `PID 0`; now tracks real child OS process IDs, acquires lockfile, and registers in `DaemonRegistry` under `-d` / `--headless` flags.
+- **`:ssh-tmux` Remote Pane Overhaul:**
+  - Remote panes now run PTY-less, eliminating local shell double-echo and unintended local command execution.
+  - Added `link_raw_input` to mask SSH passwords and credentials from echoing on screen or recording into shell history.
+  - Implemented immediate fallback binding (`primary_pane <-> %0`) with background `list-panes` reconciliation on idle `tmux -CC` attach, eliminating `"Link down"` errors.
+  - Fixed `:ssh-tmux prefill` to close active modals, exit raw/copy modes, and force open the prompt populated with `:ssh-tmux ` and cursor at the end.
 
 Feature release delivering Drawer Window Peek & Live Preview (Phase 56), Smart MIME-Aware Clipboard Paste & Filterable Clipboard Viewer Window (Phase 57), Local AI Speech-to-Text (`STT`) Dictation (Phase 58), Embedded Chrome CDP Browser & 60fps Video Player Canvases (Phase 59), and the Multi-Surface Web Frontend Backend & `@agent-manager/protocol` v1 Bridge (Phase 60).
 
