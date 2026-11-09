@@ -460,10 +460,10 @@ fn copy_mode_entry_contract_for_phase_62() {
                 !chords.iter().any(|c| c.primary && matches!(c.code, KeyCode::Char('c' | 'x' | 'v'))),
                 "{profile:?}: Primary+C/X/V stay with the host clipboard"
             );
-            // Window mode `[` / `c` (63-02 fills `window_mode_sequence`; vacuous until then).
-            if let Some(seq) = window_mode_sequence(&Action::CopyModeToggle) {
-                assert!(seq == "[" || seq == "c", "{seq}");
-            }
+            // Window mode `[` / `c`: the sequence is leader-relative (`w c`, shown as `Ctrl+X w c`).
+            let seq = window_mode_sequence(&Action::CopyModeToggle).expect("window-mode copy entry");
+            let last = seq.split_whitespace().last().unwrap_or_default();
+            assert!(seq.starts_with("w ") && (last == "[" || last == "c"), "{seq}");
         }
     }
 }
