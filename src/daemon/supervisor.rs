@@ -21,6 +21,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::api::json::JsonValue;
+pub use crate::daemon::types::{DaemonError, SignalablePid};
 use crate::secure_fs::{ensure_private_dir, validate_safe_name};
 #[cfg(unix)]
 use crate::secure_fs::private_open_options;
@@ -91,6 +92,11 @@ impl DaemonLockRecord {
             started_at_ms,
             socket_path,
         })
+    }
+
+    /// Returns the verified [`SignalablePid`] for this lock record.
+    pub fn signalable_pid(&self) -> Result<SignalablePid, DaemonError> {
+        SignalablePid::try_from(i64::from(self.pid))
     }
 }
 
@@ -184,21 +190,24 @@ pub fn daemon_lock_path_in(runtime_dir: &Path, name: &str) -> io::Result<PathBuf
 /// Rejects `0`/negative values (which `kill(2)` interprets as process groups or "all
 /// processes") and `1` (init), plus anything that would overflow `pid_t`.
 pub fn parse_daemon_pid(raw: i64) -> Option<u32> {
-    if raw > 1 && raw <= i64::from(i32::MAX) {
-        Some(raw as u32)
-    } else {
-        None
-    }
+    SignalablePid::try_from(raw).ok().map(|p| p.as_raw())
 }
 
 /// Probes whether `pid` is currently alive (`libc::kill(pid, 0)`).
 pub fn check_pid_alive(pid: u32) -> bool {
-    if parse_daemon_pid(i64::from(pid)).is_none() {
+    let Ok(sig_pid) = SignalablePid::try_from(i64::from(pid)) else {
         return false;
-    }
+    };
+    check_signalable_pid_alive(sig_pid)
+}
+
+/// Probes whether `pid` is currently alive (`libc::kill(pid, 0)`).
+///
+/// Guaranteed at compile time to never pass `0`, `-1`, or `1` to `libc::kill`.
+pub fn check_signalable_pid_alive(pid: SignalablePid) -> bool {
     #[cfg(unix)]
     {
-        let ret = unsafe { libc::kill(pid as libc::pid_t, 0) };
+        let ret = unsafe { libc::kill(pid.as_raw() as libc::pid_t, 0) };
         if ret == 0 {
             true
         } else {
@@ -208,6 +217,7 @@ pub fn check_pid_alive(pid: u32) -> bool {
     }
     #[cfg(not(unix))]
     {
+        let _ = pid;
         false
     }
 }
@@ -500,22 +510,35 @@ pub fn register_current_daemon(
     })
 }
 
-#[cfg(unix)]
-fn terminate_pid(pid: u32, force: bool) {
-    let sig = if force { libc::SIGKILL } else { libc::SIGTERM };
-    unsafe {
-        libc::kill(pid as libc::pid_t, sig);
-    }
-    for _ in 0..10 {
-        std::thread::sleep(Duration::from_millis(20));
-        if !check_pid_alive(pid) {
-            return;
-        }
-    }
-    if !force {
+/// Signals and terminates a daemon process identified by `pid`.
+///
+/// Takes a [`SignalablePid`] to guarantee at compile-time that `pid` is non-zero,
+/// non-init, non-negative (`2 <= pid <= i32::MAX`), making it impossible to pass
+/// `0`, `-1`, or `1` to `libc::kill`.
+pub fn kill_daemon_process(pid: SignalablePid, force: bool) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let sig = if force { libc::SIGKILL } else { libc::SIGTERM };
         unsafe {
-            libc::kill(pid as libc::pid_t, libc::SIGKILL);
+            libc::kill(pid.as_raw() as libc::pid_t, sig);
         }
+        for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(20));
+            if !check_signalable_pid_alive(pid) {
+                return Ok(());
+            }
+        }
+        if !force {
+            unsafe {
+                libc::kill(pid.as_raw() as libc::pid_t, libc::SIGKILL);
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (pid, force);
+        Ok(())
     }
 }
 
@@ -564,13 +587,12 @@ pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bo
             .into_iter()
             .find(|e| e.name == name)
         {
-            #[cfg(unix)]
-            if parse_daemon_pid(i64::from(e.pid)).is_some()
-                && e.pid != std::process::id()
-                && check_pid_alive(e.pid)
+            if let Ok(sig_pid) = SignalablePid::try_from(i64::from(e.pid))
+                && sig_pid.as_raw() != std::process::id()
+                && check_signalable_pid_alive(sig_pid)
                 && crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path)
             {
-                terminate_pid(e.pid, force);
+                kill_daemon_process(sig_pid, force)?;
                 stopped = true;
             }
             let _ = fs::remove_file(&e.socket_path);
@@ -596,9 +618,11 @@ pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bo
         Err(e) => return Err(e),
     }
 
-    if rec.pid != std::process::id() && check_pid_alive(rec.pid) {
-        #[cfg(unix)]
-        terminate_pid(rec.pid, force);
+    if let Ok(sig_pid) = SignalablePid::try_from(i64::from(rec.pid))
+        && sig_pid.as_raw() != std::process::id()
+        && check_signalable_pid_alive(sig_pid)
+    {
+        kill_daemon_process(sig_pid, force)?;
     }
 
     let _ = fs::remove_file(&lock_path);

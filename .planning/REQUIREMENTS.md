@@ -279,6 +279,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **TRAF-03**: TRAFFIC monitor utility window (TUI + GUI) with group-by, sort, filter, and sparklines, plus optional OIA rate indicator.
 - [ ] **TRAF-04**: Full `UNI-R01` surface parity (`:traffic`, palette, menu, RPC `traffic.*`, MCP `bilterm_traffic`) with synthetic-traffic headless test fixtures and a perf budget.
 
+## Architectural Guardrails & Type-Safe Domain Hardening (Phase 65)
+
+- [ ] **GUARD-01**: `SignalablePid` newtype strictly rejects `PID 0`, negative values, `PID 1`, and values exceeding `i32::MAX`; all internal process signaling and liveness probes (`libc::kill`) require `SignalablePid`.
+- [ ] **GUARD-02**: Remote pane transport decoupling via explicit `PaneTransport` enum (`Local`, `Remote`, `None`) separating local PTY from remote bridge, eliminating ambiguous boolean tap flags in `CompositePane`.
+- [ ] **GUARD-03**: Focus isolation in `src/input/mouse.rs`: clicking an inactive or unfocused window/pane is consumed strictly as a focus-and-raise event, preventing click bleed-through to child terminal applications or selection handlers.
+
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
 - [x] **SES-01**: A window can be moved to another session (including nested) by key sequence, `:` command and Navigator right-click menu, without disturbing its panes' PTYs, scrollback or running commands.
@@ -358,13 +364,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRAF-02 | Phase 64 | Planned |
 | TRAF-03 | Phase 64 | Planned |
 | TRAF-04 | Phase 64 | Planned |
+| GUARD-01 | Phase 65 | Planned |
+| GUARD-02 | Phase 65 | Planned |
+| GUARD-03 | Phase 65 | Planned |
 
 **Coverage:**
 
-- Total tracked requirements: 95 total (traceability table rows)
-- Mapped to phases: 95 (65 Complete, 30 Planned)
+- Total tracked requirements: 98 total (traceability table rows)
+- Mapped to phases: 98 (65 Complete, 33 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-08 for Phases 58–64*
+*Last updated: 2026-11-09 for Phases 58–65*
