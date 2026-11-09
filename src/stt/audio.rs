@@ -33,8 +33,11 @@ impl AudioRecorderKind {
     }
 }
 
+/// Actionable remedy appended to recorder-probe failures (`:voice` diagnostics).
+pub const RECORDER_INSTALL_HINT: &str = "Hint: install pipewire (pw-record), pulseaudio-utils (parecord), alsa-utils (arecord), sox or ffmpeg, or set [stt] audio_backend in config.toml";
+
 /// Helper checking if an executable is found on system `$PATH`.
-fn is_executable_on_path(exe: &str) -> bool {
+pub fn is_executable_on_path(exe: &str) -> bool {
     let Some(path_var) = std::env::var_os("PATH") else {
         return false;
     };

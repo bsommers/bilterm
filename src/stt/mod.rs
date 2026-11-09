@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 pub use audio::{
     AudioCaptureBackend, AudioRecorderKind, AudioStreamHandle, MockAudioCapture,
-    SubprocessAudioCapture, probe_available_recorder,
+    RECORDER_INSTALL_HINT, SubprocessAudioCapture, is_executable_on_path, probe_available_recorder,
 };
 pub use config::SttConfig;
 pub use provider::{
@@ -149,4 +149,121 @@ pub struct TranscriptionResponse {
     pub text: String,
     pub provider: SttBackendKind,
     pub duration_ms: u64,
+}
+
+/// Upper bound for the loopback TCP reachability probe; keeps `:voice start` snappy.
+const ENDPOINT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Pre-flight diagnostics for `:voice start|toggle|status`: recorder + provider endpoint health.
+#[derive(Debug, Clone)]
+pub struct VoicePreflight {
+    pub recorder: Result<AudioRecorderKind, String>,
+    pub provider: SttBackendKind,
+    pub endpoint: String,
+    pub endpoint_status: Result<(), String>,
+}
+
+impl VoicePreflight {
+    /// Probes the recorder the worker would use and whether `provider`'s backend is reachable.
+    pub fn run(config: &SttConfig, provider: SttBackendKind) -> Self {
+        // Mirrors `SttWorker`: a mock provider or mock backend records from the mock generator.
+        let recorder = if provider == SttBackendKind::Mock || config.audio_backend == "mock" {
+            Ok(AudioRecorderKind::Mock)
+        } else {
+            probe_available_recorder(&config.audio_backend)
+        };
+        Self {
+            recorder,
+            provider,
+            endpoint: config.endpoint.clone(),
+            endpoint_status: probe_provider_backend(config, provider),
+        }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.recorder.is_ok() && self.endpoint_status.is_ok()
+    }
+
+    /// `pw-record`, `mock`, or `missing`.
+    pub fn recorder_label(&self) -> &'static str {
+        self.recorder.as_ref().map_or("missing", AudioRecorderKind::executable_name)
+    }
+
+    /// One `"<problem>. Hint: <remedy>"` line per failed check.
+    pub fn hints(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Err(e) = &self.recorder {
+            out.push(format!("{e}. {RECORDER_INSTALL_HINT}"));
+        }
+        if let Err(e) = &self.endpoint_status {
+            let remedy = match self.provider {
+                SttBackendKind::LocalCli => {
+                    "Hint: install whisper-cli (whisper.cpp) or set [stt] cli_command, or switch with :voice provider mock"
+                }
+                SttBackendKind::Ollama => {
+                    "Hint: run `ollama serve` with a whisper model, or switch with :voice provider openai_compatible|local_cli|mock"
+                }
+                _ => {
+                    "Hint: start a local whisper server (e.g. `whisper-server --port 8080`) or set [stt] endpoint, or switch with :voice provider ollama|local_cli|mock"
+                }
+            };
+            out.push(format!("{e}. {remedy}"));
+        }
+        out
+    }
+}
+
+/// Checks the configured provider backend: CLI binary on `PATH`, or TCP reachability of the endpoint.
+fn probe_provider_backend(config: &SttConfig, provider: SttBackendKind) -> Result<(), String> {
+    match provider {
+        SttBackendKind::Mock => Ok(()),
+        SttBackendKind::LocalCli => {
+            let exe = config.cli_command.first().map(String::as_str).unwrap_or("");
+            if !exe.is_empty() && (is_executable_on_path(exe) || std::path::Path::new(exe).is_file()) {
+                Ok(())
+            } else {
+                Err(format!("STT CLI '{exe}' was not found on PATH"))
+            }
+        }
+        SttBackendKind::OpenAiCompatible | SttBackendKind::Ollama => {
+            config.validate_endpoint()?;
+            probe_endpoint_reachable(&config.endpoint)
+        }
+    }
+}
+
+/// TCP-connects to the endpoint's `host:port` (or checks a `unix:` socket path exists).
+fn probe_endpoint_reachable(endpoint: &str) -> Result<(), String> {
+    use std::net::{TcpStream, ToSocketAddrs};
+    let trimmed = endpoint.trim();
+    if let Some(path) = trimmed.strip_prefix("unix://").or_else(|| trimmed.strip_prefix("unix:")) {
+        return if std::path::Path::new(path).exists() {
+            Ok(())
+        } else {
+            Err(format!("STT socket '{path}' is unreachable (no such file)"))
+        };
+    }
+    let (rest, default_port) = if let Some(r) = trimmed.strip_prefix("https://") {
+        (r, 443)
+    } else if let Some(r) = trimmed.strip_prefix("http://") {
+        (r, 80)
+    } else {
+        return Err(format!("STT endpoint '{endpoint}' is unreachable (unsupported scheme)"));
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let has_port = if authority.starts_with('[') {
+        authority.contains("]:")
+    } else {
+        authority.contains(':')
+    };
+    let target = if has_port { authority.to_string() } else { format!("{authority}:{default_port}") };
+    let unreachable = |why: String| format!("STT endpoint '{endpoint}' is unreachable ({why})");
+    let addr = target
+        .to_socket_addrs()
+        .map_err(|e| unreachable(e.to_string()))?
+        .next()
+        .ok_or_else(|| unreachable("no address".to_string()))?;
+    TcpStream::connect_timeout(&addr, ENDPOINT_PROBE_TIMEOUT)
+        .map(drop)
+        .map_err(|e| unreachable(e.to_string()))
 }
