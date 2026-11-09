@@ -13,6 +13,7 @@ pub mod agents_list_geometry;
 pub mod command_window;
 pub mod clipboard_registry;
 pub mod clipboard_window;
+pub mod daemon_window;
 pub mod fonts_window;
 pub mod script_studio;
 pub mod script_studio_cmd;
@@ -20,6 +21,8 @@ pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
+pub mod key_mode;
+pub mod which_key_state;
 pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
@@ -36,7 +39,11 @@ pub mod split_tree;
 pub mod stt_ops;
 pub mod tmux_io;
 pub mod tmux_link;
+pub mod tmux_remote;
 pub mod traffic;
+pub mod traffic_monitor;
+pub mod traffic_monitor_geometry;
+mod traffic_view;
 pub mod v2_runtime;
 pub mod window_manage;
 pub mod window_style;
@@ -47,6 +54,7 @@ pub use window_manage::{
     WindowBulkOp, WindowManageOp, WindowManageState, WindowSelectTarget,
     WorkspaceTopologyUndo,
 };
+pub use key_mode::KeyMode;
 pub use rename_dialog::{RenameDialogKind, RenameDialogState};
 pub use drawer::{
     DrawerConfig, DrawerEdge, DrawerLayoutMode, DrawerPreviewState, DrawerPreviewTarget, DrawerRow,
@@ -84,7 +92,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
 
-use crate::action::Action;
+use crate::action::{Action, KeysOp};
 use crate::colon_command::execute_wm_colon_command;
 use crate::config::BiltermConfig;
 use crate::error::Result;
@@ -152,8 +160,12 @@ pub struct WindowManager {
     modal: Modal,
     /// Synchronized Multi-Pane Input Broadcast (`:broadcast`, `ECO-04`).
     broadcast_input: bool,
-    /// Whether the Prefix/Leader key (`Ctrl+X` by default) is awaiting the next chord (`v1.5.0`).
-    leader_pending: bool,
+    /// Leader-pending / sticky Window mode state (`v1.5.0`, Phase 63); see `key_mode.rs`.
+    key_mode: key_mode::KeyMode,
+    /// Which-key popup idle timer and pin (`KEY-01`, Phase 63-02); see `which_key_state.rs`.
+    which_key: which_key_state::WhichKeyState,
+    /// Keyboard environment (OS, surface, kitty protocol) driving `Primary` and the key profile.
+    key_env: crate::input::keyenv::KeyEnv,
     /// Central `herdr`-style fleet registry managing local and remote SSH / `tmux -CC` sessions (`v1.4.0`).
     fleet: FleetRegistry,
     next_pane_id: PaneId,
@@ -192,6 +204,7 @@ pub struct WindowManager {
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
+    daemon_window: daemon_window::DaemonWindowState,
     pub(crate) fonts_window: fonts_window::FontsWindowState,
     pub(crate) fonts_window_dirty: bool,
     /// Pinnable COMMAND PALETTE first-class window (`WIN-02`, Phase 51.2).
@@ -200,6 +213,10 @@ pub struct WindowManager {
     pub(crate) clipboard_registry: clipboard_registry::ClipboardRegistry,
     /// Floating, pinnable, dockable `CLIPBOARD` viewer window (`CLIP-03`, Phase 57).
     pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
+    /// Terminal traffic meter (`TMON-01`, Phase 64); one per window manager, no globals.
+    traffic_meter: crate::traffic::TrafficMeter,
+    /// Floating TRAFFIC MONITOR window state (`TMON-03`, Plan 64-03 fills the body).
+    pub(crate) traffic_monitor: traffic_monitor::TrafficMonitorState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
     pub(crate) script_studio: script_studio::ScriptStudioState,
     /// In-memory agent mailbox & coordination registry (`AGT-01..03`, Phase 52).
@@ -221,6 +238,9 @@ pub struct WindowManager {
     pub(crate) session_map_scale_pct: u16,
     /// Same for the CLIPBOARD viewer window (Phase 57).
     pub(crate) clipboard_scale_pct: u16,
+    /// Same for the TRAFFIC MONITOR window (Phase 64).
+    #[allow(dead_code)] // read by the Plan 64-03 GUI renderer
+    pub(crate) traffic_scale_pct: u16,
     /// Set by the GUI renderer path; the TUI cannot scale one region of its single cell grid.
     pub(crate) gui_surface: bool,
     /// Persistent background multiplexer daemon & hierarchical `SessionTree` state (`DAEM-01..02`, `TREE-01..02`).
@@ -275,10 +295,23 @@ impl WindowManager {
             layout_mode: WorkspaceLayoutMode::Tiled,
             zoomed_pane: None,
             quick_terminal,
-            config: BiltermConfig::default(),
+            config: {
+                let mut cfg = BiltermConfig::default();
+                if headless_mode {
+                    // Headless workspaces (tests, daemons) keep the pre-Phase-63 tables bit-for-bit.
+                    cfg.keys.profile = crate::config::keys::KeyProfileName::Legacy;
+                }
+                cfg
+            },
             modal: Modal::None,
             broadcast_input: false,
-            leader_pending: false,
+            key_mode: key_mode::KeyMode::Normal,
+            which_key: which_key_state::WhichKeyState::default(),
+            key_env: if headless_mode {
+                crate::input::keyenv::KeyEnv::headless()
+            } else {
+                crate::input::keyenv::KeyEnv::detect()
+            },
             fleet: FleetRegistry::new(),
             next_pane_id: initial_id + 1,
             headless_mode,
@@ -303,11 +336,14 @@ impl WindowManager {
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
             session_map: session_map::SessionMapState::default(),
+            daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
             fonts_window_dirty: false,
             command_window: command_window::CommandWindowState::default(),
             clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
+            traffic_meter: crate::traffic::TrafficMeter::new(),
+            traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
             agents_demo: agents_demo::AgentsDemoState::default(),
@@ -319,6 +355,7 @@ impl WindowManager {
             agents_list_scale_pct: 100,
             session_map_scale_pct: 100,
             clipboard_scale_pct: 100,
+            traffic_scale_pct: 100,
             gui_surface: false,
             daemon_state: crate::daemon::DaemonServerState::new(),
             web_surface: crate::api::web_surface::WebSurfaceState::new(),
@@ -396,6 +433,12 @@ impl WindowManager {
     /// Why `action` must be refused for an API-originated caller (config write gate, `[api]`).
     /// Returns `None` when the action is allowed. Local (non-API) callers are never gated.
     pub fn config_write_denied(&self, action: &Action) -> Option<String> {
+        // Phase 63: key-profile switches and keyboard-mode changes are mutations too (`keys.profile`,
+        // `keys.window_mode`, `menu.open` RPC and the same colon forms over `wm.command`).
+        if matches!(action, Action::Keys(KeysOp::Profile(Some(_))) | Action::WindowMode(_) | Action::MenuOpen { .. }) {
+            return (!self.config.api.allow_config_write)
+                .then(|| "key and mode changes over the API are disabled; set [api] allow_config_write = true in config.toml".to_string());
+        }
         let writes = matches!(action, Action::ConfigSet(..) | Action::ConfigSave | Action::AppearanceSave);
         if !writes {
             return None;
@@ -512,7 +555,12 @@ impl WindowManager {
     }
     pub fn split_tree(&self) -> &SplitTree { &self.split_tree }
     pub fn z_stack(&self) -> &ZStack { &self.z_stack }
-    pub fn zoomed_pane(&self) -> Option<PaneId> { self.zoomed_pane }
+    fn effective_zoomed(&self) -> Option<PaneId> {
+        self.zoomed_pane
+            .and(self.z_stack.top())
+            .filter(|id| self.panes.contains_key(id))
+    }
+    pub fn zoomed_pane(&self) -> Option<PaneId> { self.effective_zoomed() }
     pub fn quick_terminal(&self) -> &QuickTerminal { &self.quick_terminal }
     pub fn quick_terminal_mut(&mut self) -> &mut QuickTerminal { &mut self.quick_terminal }
     pub fn is_quick_terminal_visible(&self) -> bool { self.quick_terminal.visible }
@@ -599,14 +647,6 @@ impl WindowManager {
 
     pub fn is_broadcast_input(&self) -> bool {
         self.broadcast_input
-    }
-
-    pub fn is_leader_pending(&self) -> bool {
-        self.leader_pending
-    }
-
-    pub fn set_leader_pending(&mut self, pending: bool) {
-        self.leader_pending = pending;
     }
 
     pub fn fleet(&self) -> &FleetRegistry {
@@ -855,6 +895,10 @@ impl WindowManager {
             changed = true;
         }
         self.update_drawer_telemetry();
+        let tm_ms = self.link_now_ms();
+        if self.traffic_tick(tm_ms) {
+            changed = true;
+        }
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
@@ -876,13 +920,18 @@ impl WindowManager {
             self.agents_window.blur();
             self.agents_list.blur();
             self.fonts_window.blur();
+            self.daemon_window.focused = false;
             self.command_window.blur();
             self.clipboard_window.blur();
+            self.traffic_monitor.blur();
             self.script_studio.blur();
             self.session_map.blur();
             let changed = self.z_stack.raise(pane_id);
-            self.clear_inactive_transient_copy_cursors();
+            // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
             self.sync_config_scale_from_active_pane();
+            if self.zoomed_pane.is_some() {
+                self.reflow_default_viewport();
+            }
             changed
         } else {
             false
@@ -895,13 +944,18 @@ impl WindowManager {
         self.agents_window.blur();
         self.agents_list.blur();
         self.fonts_window.blur();
+        self.daemon_window.focused = false;
         self.command_window.blur();
         self.clipboard_window.blur();
+        self.traffic_monitor.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_top_to_bottom();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
+        if self.zoomed_pane.is_some() {
+            self.reflow_default_viewport();
+        }
         top
     }
 
@@ -911,13 +965,18 @@ impl WindowManager {
         self.agents_window.blur();
         self.agents_list.blur();
         self.fonts_window.blur();
+        self.daemon_window.focused = false;
         self.command_window.blur();
         self.clipboard_window.blur();
+        self.traffic_monitor.blur();
         self.script_studio.blur();
         self.session_map.blur();
         let top = self.z_stack.shuffle_bottom_to_top();
-        self.clear_inactive_transient_copy_cursors();
+        // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
+        if self.zoomed_pane.is_some() {
+            self.reflow_default_viewport();
+        }
         top
     }
 
@@ -926,11 +985,11 @@ impl WindowManager {
         let Some(top_id) = self.z_stack.top() else {
             return;
         };
-        if self.zoomed_pane == Some(top_id) {
-            self.zoomed_pane = None;
+        self.zoomed_pane = if self.zoomed_pane.is_some() {
+            None
         } else {
-            self.zoomed_pane = Some(top_id);
-        }
+            Some(top_id)
+        };
         self.reflow_default_viewport();
         self.maybe_autosave_layout();
     }
@@ -958,9 +1017,7 @@ impl WindowManager {
         if crate::ui::shell::effective_display_mode(&self.config) == crate::ui::design::DisplayMode::Zen {
             return vec![(self.active_pane_id(), area)];
         }
-        if let Some(zoomed_id) = self.zoomed_pane
-            && self.panes.contains_key(&zoomed_id)
-        {
+        if let Some(zoomed_id) = self.effective_zoomed() {
             return vec![(zoomed_id, area)];
         }
         match self.layout_mode {

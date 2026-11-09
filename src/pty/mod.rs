@@ -96,6 +96,7 @@ pub struct PtySession {
     current_size: Mutex<(u16, u16)>,
     sigwinch_count: Arc<AtomicUsize>,
     child_pid: Option<u32>,
+    traffic: crate::traffic::TrafficTap,
     #[cfg(unix)]
     master_fd: Option<std::os::fd::RawFd>,
 }
@@ -152,6 +153,8 @@ impl PtySession {
             .map_err(|e| BiltermError::Pty(format!("take_writer failed: {e}")))?;
 
         let (tx, rx) = mpsc::channel(32);
+        let traffic = crate::traffic::ChannelCounters::new();
+        let reader_cell = traffic.clone();
         thread::Builder::new()
             .name("bilterm-pty-reader".to_string())
             .spawn(move || {
@@ -163,6 +166,7 @@ impl PtySession {
                             break;
                         }
                         Ok(n) => {
+                            reader_cell.rx(n);
                             if tx
                                 .blocking_send(PtyEvent::Output(buf[..n].to_vec()))
                                 .is_err()
@@ -187,9 +191,15 @@ impl PtySession {
             current_size: Mutex::new((initial_rows, initial_cols)),
             sigwinch_count: Arc::new(AtomicUsize::new(0)),
             child_pid,
+            traffic,
             #[cfg(unix)]
             master_fd,
         })
+    }
+
+    /// Shared traffic counters for this PTY (`TMON-01`); adopted lazily by the meter.
+    pub fn traffic_cell(&self) -> &crate::traffic::TrafficTap {
+        &self.traffic
     }
 
     /// Writes raw bytes to the PTY master input stream and flushes immediately.
@@ -200,6 +210,7 @@ impl PtySession {
             .map_err(|_| BiltermError::Pty("PTY writer mutex poisoned".to_string()))?;
         if let Some(writer) = guard.as_mut() {
             writer.write_all(bytes)?;
+            self.traffic.tx(bytes.len());
             writer.flush()?;
         }
         Ok(())

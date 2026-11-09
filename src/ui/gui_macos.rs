@@ -204,13 +204,38 @@ pub enum MacGuiKeyAction {
     Quit,
 }
 
+fn never_bound(_: KeyEvent) -> bool {
+    false
+}
+
+/// How `Option+<key>` is delivered (`KEY-02`, Phase 63): as an `Alt` chord or as composed text.
+///
+/// Option is the macOS compose key, so on every profile except `legacy` an Option chord is
+/// delivered only when it edits the prompt (`PROMPT_EDIT_ALT_KEYS`) or the active profile binds it;
+/// everything else arrives as the composed character (`Option+5` -> `[` on German layouts).
+pub struct OptionPolicy<'a> {
+    /// `false` = legacy behaviour: every Option+key is an `Alt` chord.
+    pub compose_unbound: bool,
+    /// True when the active profile binds the given `Alt+key` chord.
+    pub is_bound: &'a dyn Fn(KeyEvent) -> bool,
+}
+
+impl OptionPolicy<'static> {
+    /// Every Option+key is an `Alt` chord (the pre-Phase-63 behaviour, `legacy` profile).
+    pub fn always_meta() -> Self {
+        Self { compose_unbound: false, is_bound: &never_bound }
+    }
+}
+
 /// Translates a macOS virtual `key_code`, `NSEventModifierFlags`, `characters`, and
-/// `charactersIgnoringModifiers` into a [`MacGuiKeyAction`].
+/// `charactersIgnoringModifiers` into a [`MacGuiKeyAction`]. Unbound `Cmd` chords arrive as
+/// `KeyModifiers::SUPER` events so `Primary` chords (`Cmd+L`) can match.
 pub fn translate_macos_key_event(
     key_code: u16,
     flags: u64,
     chars: &str,
     chars_ignoring_mods: &str,
+    policy: &OptionPolicy<'_>,
 ) -> Option<MacGuiKeyAction> {
     let shift = (flags & NS_EVENT_MODIFIER_SHIFT) != 0;
     let ctrl = (flags & NS_EVENT_MODIFIER_CONTROL) != 0;
@@ -223,7 +248,7 @@ pub fn translate_macos_key_event(
             .next()
             .unwrap_or_default()
             .to_ascii_lowercase();
-        return match ch {
+        let special = match ch {
             'q' => Some(MacGuiKeyAction::Quit),
             'c' => Some(MacGuiKeyAction::CopySelection),
             'x' => Some(MacGuiKeyAction::CutSelection),
@@ -234,6 +259,9 @@ pub fn translate_macos_key_event(
             '0' => Some(MacGuiKeyAction::FontZoomReset),
             _ => None,
         };
+        if special.is_some() {
+            return special;
+        }
     }
 
     let mut mods = KeyModifiers::empty();
@@ -245,6 +273,9 @@ pub fn translate_macos_key_event(
     }
     if alt {
         mods |= KeyModifiers::ALT;
+    }
+    if cmd {
+        mods |= KeyModifiers::SUPER;
     }
 
     let special_code = match key_code {
@@ -284,44 +315,43 @@ pub fn translate_macos_key_event(
         return Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(code, mods)));
     }
 
-    if ctrl || alt {
-        if key_code == 0x31 {
-            return Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-                KeyCode::Char(' '),
-                mods,
-            )));
-        }
-        if let Some(raw_ch) = chars_ignoring_mods
-            .chars()
-            .next()
-            .or_else(|| chars.chars().next())
-        {
+    if ctrl || alt || cmd {
+        let raw = if key_code == 0x31 {
+            Some(' ')
+        } else {
+            chars_ignoring_mods.chars().next().or_else(|| chars.chars().next())
+        };
+        if let Some(raw_ch) = raw {
             let ch = if ('\x01'..='\x1a').contains(&raw_ch) {
                 (b'a' + (raw_ch as u8 - 1)) as char
             } else {
                 raw_ch
             };
             if !ch.is_control() && !('\u{f700}'..='\u{f8ff}').contains(&ch) {
-                return Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-                    KeyCode::Char(ch),
-                    mods,
-                )));
+                let chord = KeyEvent::new(KeyCode::Char(ch), mods);
+                let option_only = alt && !ctrl && !cmd;
+                if option_only && policy.compose_unbound && !option_chord_wanted(chord, policy) {
+                    return composed_text(chars, mods - KeyModifiers::ALT);
+                }
+                return Some(MacGuiKeyAction::CrosstermKey(chord));
             }
         }
         return None;
     }
 
-    if let Some(ch) = chars.chars().next()
-        && !ch.is_control()
-        && !('\u{f700}'..='\u{f8ff}').contains(&ch)
-    {
-        return Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-            KeyCode::Char(ch),
-            mods,
-        )));
-    }
+    composed_text(chars, mods)
+}
 
-    None
+/// `true` when an `Alt+key` chord should be delivered as a chord rather than composed text.
+fn option_chord_wanted(chord: KeyEvent, policy: &OptionPolicy<'_>) -> bool {
+    crate::input::keyprofile_tables::PROMPT_EDIT_ALT_KEYS.contains(&chord.code) || (policy.is_bound)(chord)
+}
+
+/// The first printable character of `chars` as a plain key event (composed text), if any.
+fn composed_text(chars: &str, mods: KeyModifiers) -> Option<MacGuiKeyAction> {
+    let ch = chars.chars().next()?;
+    (!ch.is_control() && !('\u{f700}'..='\u{f8ff}').contains(&ch))
+        .then(|| MacGuiKeyAction::CrosstermKey(KeyEvent::new(KeyCode::Char(ch), mods)))
 }
 
 fn read_macos_pasteboard() -> Option<String> {
@@ -476,8 +506,14 @@ pub fn run_macos_gui_window(mut app: App) -> Result<()> {
                     let ns_chars_ign = unsafe { msg_send_id_0(ev, sel_chars_ign) };
                     let chars_s = cfstring_to_string(ns_chars.cast());
                     let chars_ign_s = cfstring_to_string(ns_chars_ign.cast());
+                    let km = app.wm.keymap();
+                    let is_bound = |ev: KeyEvent| km.option_chord_wanted(ev);
+                    let policy = OptionPolicy {
+                        compose_unbound: km.profile() != crate::config::keys::KeyProfileName::Legacy,
+                        is_bound: &is_bound,
+                    };
                     if let Some(action) =
-                        translate_macos_key_event(key_code, flags, &chars_s, &chars_ign_s)
+                        translate_macos_key_event(key_code, flags, &chars_s, &chars_ign_s, &policy)
                     {
                         match action {
                             MacGuiKeyAction::CrosstermKey(kev) => {
@@ -734,47 +770,56 @@ pub fn run_macos_gui_window(mut app: App) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn t(key_code: u16, flags: u64, chars: &str, ign: &str) -> Option<MacGuiKeyAction> {
+        translate_macos_key_event(key_code, flags, chars, ign, &OptionPolicy::always_meta())
+    }
+
+    fn key(code: KeyCode, mods: KeyModifiers) -> Option<MacGuiKeyAction> {
+        Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(code, mods)))
+    }
+
     #[test]
     fn translates_macos_virtual_keys_modifiers_and_cmd_shortcuts() {
         // Cmd+Q -> Quit, Cmd+V -> Paste, Cmd+= -> FontZoomIn
-        assert_eq!(
-            translate_macos_key_event(0x0C, NS_EVENT_MODIFIER_COMMAND, "q", "q"),
-            Some(MacGuiKeyAction::Quit)
-        );
-        assert_eq!(
-            translate_macos_key_event(0x09, NS_EVENT_MODIFIER_COMMAND, "v", "v"),
-            Some(MacGuiKeyAction::PasteClipboard)
-        );
-        assert_eq!(
-            translate_macos_key_event(0x18, NS_EVENT_MODIFIER_COMMAND, "=", "="),
-            Some(MacGuiKeyAction::FontZoomIn)
-        );
+        assert_eq!(t(0x0C, NS_EVENT_MODIFIER_COMMAND, "q", "q"), Some(MacGuiKeyAction::Quit));
+        assert_eq!(t(0x09, NS_EVENT_MODIFIER_COMMAND, "v", "v"), Some(MacGuiKeyAction::PasteClipboard));
+        assert_eq!(t(0x18, NS_EVENT_MODIFIER_COMMAND, "=", "="), Some(MacGuiKeyAction::FontZoomIn));
 
         // Ctrl+X -> Control + 'x'
-        assert_eq!(
-            translate_macos_key_event(0x07, NS_EVENT_MODIFIER_CONTROL, "\x18", "x"),
-            Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-                KeyCode::Char('x'),
-                KeyModifiers::CONTROL
-            )))
-        );
+        assert_eq!(t(0x07, NS_EVENT_MODIFIER_CONTROL, "\x18", "x"), key(KeyCode::Char('x'), KeyModifiers::CONTROL));
 
         // Option+B (macOS produces '∫' in characters, 'b' in charactersIgnoringModifiers) -> Alt + 'b'
-        assert_eq!(
-            translate_macos_key_event(0x0B, NS_EVENT_MODIFIER_OPTION, "∫", "b"),
-            Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-                KeyCode::Char('b'),
-                KeyModifiers::ALT
-            )))
-        );
+        assert_eq!(t(0x0B, NS_EVENT_MODIFIER_OPTION, "∫", "b"), key(KeyCode::Char('b'), KeyModifiers::ALT));
 
         // F4 (0x76)
+        assert_eq!(t(0x76, 0, "\u{f707}", "\u{f707}"), key(KeyCode::F(4), KeyModifiers::empty()));
+    }
+
+    #[test]
+    fn unbound_cmd_chords_arrive_as_super_events() {
+        // Cmd+L -> SUPER + 'l' (Primary+L), Cmd+] and Cmd+; likewise; Cmd+Option+Left keeps both.
+        assert_eq!(t(0x25, NS_EVENT_MODIFIER_COMMAND, "l", "l"), key(KeyCode::Char('l'), KeyModifiers::SUPER));
+        assert_eq!(t(0x1E, NS_EVENT_MODIFIER_COMMAND, "]", "]"), key(KeyCode::Char(']'), KeyModifiers::SUPER));
+        assert_eq!(t(0x29, NS_EVENT_MODIFIER_COMMAND, ";", ";"), key(KeyCode::Char(';'), KeyModifiers::SUPER));
         assert_eq!(
-            translate_macos_key_event(0x76, 0, "\u{f707}", "\u{f707}"),
-            Some(MacGuiKeyAction::CrosstermKey(KeyEvent::new(
-                KeyCode::F(4),
-                KeyModifiers::empty()
-            )))
+            t(0x7B, NS_EVENT_MODIFIER_COMMAND | NS_EVENT_MODIFIER_OPTION, "\u{f702}", "\u{f702}"),
+            key(KeyCode::Left, KeyModifiers::SUPER | KeyModifiers::ALT)
         );
+    }
+
+    #[test]
+    fn option_compose_policy_delivers_text_unless_prompt_edit_or_bound() {
+        let bound = |ev: KeyEvent| ev.code == KeyCode::Char('9') && ev.modifiers == KeyModifiers::ALT;
+        let policy = OptionPolicy { compose_unbound: true, is_bound: &bound };
+        let tr = |kc: u16, chars: &str, ign: &str| translate_macos_key_event(kc, NS_EVENT_MODIFIER_OPTION, chars, ign, &policy);
+        // Option+5 types `[` on German/Nordic layouts: composed text, never Alt+5.
+        assert_eq!(tr(0x17, "[", "5"), key(KeyCode::Char('['), KeyModifiers::empty()));
+        // Option+M types U+00B5: composed text, so Alt+M can never fire on macOS.
+        assert_eq!(tr(0x2E, "µ", "m"), key(KeyCode::Char('µ'), KeyModifiers::empty()));
+        // Prompt-editing Option keys stay chords (Option-as-Meta word navigation).
+        assert_eq!(tr(0x0B, "∫", "b"), key(KeyCode::Char('b'), KeyModifiers::ALT));
+        assert_eq!(tr(0x7B, "\u{f702}", "\u{f702}"), key(KeyCode::Left, KeyModifiers::ALT));
+        // A chord the active profile binds is delivered as a chord.
+        assert_eq!(tr(0x19, "(", "9"), key(KeyCode::Char('9'), KeyModifiers::ALT));
     }
 }

@@ -143,20 +143,22 @@ Session and window are **not stored** on channels. `wm::traffic_view` builds an 
 | TRAFFIC-INV-07 | The meter never stores payload bytes or previews. |
 | TRAFFIC-INV-08 | `handle_wm_key_event` stays <= 80 lines; no file exceeds 1200 lines. |
 
-## 7. Performance Budget (targets; calibrated by Plan 64-01 Task 5)
+## 7. Performance Budget (calibrated by Plan 64-01 Task 5)
 
-| Path | Budget |
-|------|--------|
-| Disabled `rx`/`tx` | <= 1 ns, 0 alloc |
-| Enabled bytes-only `rx`/`tx` | <= 5 ns uncontended |
-| Classify ground fast path / dense-escape worst case | >= 1 GB/s / >= 300 MB/s |
-| `sample()` non-boundary / boundary @256 channels | <= 50 ns / <= 50 us |
-| `snapshot()` + `group_by` @256 channels | <= 200 us |
-| Memory ceiling | <= 0.6 MB |
-| Monitor render (TUI, 100 rows) | <= 1 ms |
-| End-to-end PTY flood regression, monitor on vs off | <= 2% release / <= 25% debug |
+Measured 2026-11-08, AMD Ryzen 9 7950X, Linux x86_64, `cargo test --release --test phase64_traffic_core perf_budgets_measured` (median of 5 runs). The test asserts the budget plus headroom in release and only ratios in debug.
 
-All numbers are `[ASSUMED]` until measured; the benchmark task writes the measured values back into this table and the tests assert the measured value plus headroom (skill: sizing-limits-from-measurement).
+| Path | Budget | Measured (release) |
+|------|--------|--------------------|
+| Disabled `rx`/`tx` | <= 1 ns, 0 alloc | 0.37 ns (empty loop 0.18 ns) |
+| Enabled bytes-only `rx`/`tx` | <= 5 ns uncontended | 3.28 ns |
+| Classify ground fast path / dense-escape worst case | >= 1 GB/s / >= 300 MB/s | 3519 MB/s / 1305 MB/s |
+| `sample()` non-boundary / boundary @256 channels | <= 50 ns / <= 50 us | 1.9 ns / 29.9 us |
+| `snapshot(500)` + `group_by` @256 channels | <= 200 us | 185.9 us |
+| Memory ceiling (256 x (cell + ring + 256 B meta)) | <= 0.6 MB | 0.59 MB (589,824 B) |
+| Monitor render (TUI, 100 rows) | <= 1 ms | not yet measured (Plan 64-03) |
+| End-to-end PTY flood regression, monitor on vs off | <= 2% release / <= 25% debug | not yet measured (Plan 64-02) |
+
+Notes: the sampler budgets in the test carry 2x headroom (`<= 100 ns`, `<= 100 us`, snapshot+group `<= 400 us`). The snapshot+group figure is within 7% of its budget, so growth in `ChannelRow` size should be re-measured. Memory uses one shared 60-bucket ring (32-byte buckets) per channel carrying both directions.
 
 ## 8. Plan decomposition and file ownership
 

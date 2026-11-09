@@ -32,6 +32,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_web::parse_web_command(head, &parts) {
         return Some(res);
     }
+    if let Some(res) = super::parse_keys::parse_keys_command(head, &parts) {
+        return Some(res);
+    }
     if let Some(res) = super::parse_script::parse_script_colon_command(head, &parts, rest) {
         return Some(res);
     }
@@ -621,6 +624,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
             }
         }
+        "traffic" | "netmon" => Some(super::parse_traffic::parse(&parts[1..])),
         "clipboard" | "clips" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
             Some(super::parse_clipboard::parse(&parts[1..]))
         }

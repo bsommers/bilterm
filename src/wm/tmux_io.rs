@@ -318,7 +318,10 @@ impl WindowManager {
                 continue;
             }
             let is_primary = self.tmux_link.primary_pane == Some(pane_id);
-            let mapped_tmux = self.tmux_bridge.bilterm_to_tmux.get(&pane_id).copied();
+            let mut mapped_tmux = self.tmux_bridge.bilterm_to_tmux.get(&pane_id).copied();
+            if mapped_tmux.is_none() && is_primary && matches!(state, LinkState::Connected { .. }) {
+                mapped_tmux = self.ensure_provisional_primary();
+            }
 
             if matches!(
                 state,
@@ -439,6 +442,12 @@ impl WindowManager {
             .unwrap_or(0);
 
         for reply in replies {
+            if reply.kind == ReplyKind::ListPanes {
+                if reply.ok {
+                    self.apply_list_panes_reply(&reply.lines);
+                }
+                continue;
+            }
             if let ReplyKind::CapturePane { tmux_pane } = reply.kind {
                 let capped = if reply.lines.len() > HYDRATE_REPLY_LINES_CAP {
                     &reply.lines[..HYDRATE_REPLY_LINES_CAP]
@@ -451,6 +460,7 @@ impl WindowManager {
                     {
                         let rendered = render_capture(capped);
                         if !rendered.is_empty() {
+                            pane.count_payload_rx(rendered.len());
                             pane.process_pty_output(&rendered);
                         }
                     }

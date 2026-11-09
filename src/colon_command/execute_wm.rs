@@ -953,6 +953,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.clipboard_window_apply(op);
             false
         }
+        ColonCommand::TrafficMonitor(op) => {
+            if let Err(e) = wm.traffic_monitor_apply(op) {
+                wm.active_pane_mut().set_status_message(Some(e));
+            }
+            false
+        }
         ColonCommand::ScriptStudio(op) => {
             if let Some(msg) = wm.script_studio_apply(&op) {
                 wm.active_pane_mut().set_status_message(Some(msg));
@@ -977,6 +983,18 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::Browser(op) => super::execute_media::execute_browser_command(wm, op),
         ColonCommand::Video(op) => super::execute_media::execute_video_command(wm, op),
         ColonCommand::Web(ref op) => super::execute_web::execute_web_action(wm, op),
+        ColonCommand::WindowMode(op) => {
+            wm.apply_window_mode(op);
+            false
+        }
+        ColonCommand::MenuOpen { category } => {
+            wm.open_menu_from_keyboard(category);
+            false
+        }
+        ColonCommand::Keys(ref op) => {
+            wm.apply_keys_op(op);
+            false
+        }
         other => {
             let is_prompt_layout = matches!(
                 other,
@@ -1010,5 +1028,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
         PanelTarget::AgentsList => "Agents list",
         PanelTarget::SessionMap => "Session map",
         PanelTarget::Clipboard => "Clipboard",
+        PanelTarget::Traffic => "Traffic",
     }
 }

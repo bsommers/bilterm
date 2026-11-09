@@ -719,6 +719,51 @@ impl CompositePane {
 
     pub fn set_status_message(&mut self, msg: Option<String>) {
         self.status_message = msg;
+        self.toast_expires_at = None;
+    }
+
+    pub fn set_status_toast(&mut self, msg: String, ttl_ms: u64) {
+        self.status_message = Some(msg);
+        self.toast_expires_at = Some(self.last_tick_ms.saturating_add(ttl_ms));
+    }
+
+    pub fn tick_toast(&mut self, now_ms: u64) {
+        self.last_tick_ms = now_ms;
+        if let Some(exp) = self.toast_expires_at
+            && now_ms >= exp
+        {
+            self.status_message = None;
+            self.toast_expires_at = None;
+            self.copy_mode.flash_region = None;
+        }
+    }
+
+    pub fn last_tick_ms(&self) -> u64 {
+        self.last_tick_ms
+    }
+
+    /// Records a mouse click at `(col, row)` and returns the click count (1=single, 2=double, 3=triple) (`COPY-02`).
+    pub fn record_click(&mut self, now_ms: u64, col: u16, row: u16) -> u8 {
+        let (count, updated_now) = if let Some((last_t, last_c, last_r, count)) = self.last_click {
+            if now_ms.saturating_sub(last_t) <= 400 && last_c == col && last_r == row {
+                let next = (count % 3) + 1;
+                (next, now_ms)
+            } else {
+                (1, now_ms)
+            }
+        } else {
+            (1, now_ms)
+        };
+        self.last_click = Some((updated_now, col, row, count));
+        count
+    }
+
+    pub fn mouse_select_sticky(&self) -> bool {
+        self.mouse_select_sticky
+    }
+
+    pub fn set_mouse_select_sticky(&mut self, sticky: bool) {
+        self.mouse_select_sticky = sticky;
     }
 
     pub fn last_osc52_sequence(&self) -> Option<&str> {

@@ -17,7 +17,7 @@ Welcome to the official User Guide for **Bilterm (`v3.1.0`)** — the Rust + Rat
 2. **[Chapter 2: The Command Prompt, Tab Completion, History & Command Blocks](02-floating-command-prompt.md)**
    - Top/Bottom/Floating/Split positioning (`Alt+T`, `Alt+B`, `Alt+S`), resizable width (`Alt+[`/`Alt+]`, mouse border drag) & height (`Alt+Plus`/`Alt+Minus`), scrollable multi-line editing (`Shift+PageUp`/`Shift+PageDown`), running command banner (`⟳ RUNNING:`), Tab completion (`Tab`/`Shift+Tab`), Borland Command History Pop-up (`Alt+P` / `:history`), session persistence, and `OSC 133` block jumping.
 3. **[Chapter 3: Multi-Pane Window Manager, Z-Order Stacking, Mouse Frame Resizing & Guake Quick Terminal](03-window-manager-and-z-stack.md)**
-   - Horizontal/Vertical binary splits (`F2`/`Alt+H`, `Alt+V`), all-border & all-corner mouse frame drag resizing (`v1.12.0`), independent per-pane font scaling (`Ctrl++`/`Ctrl+-`), Borland Turbo Vision overlapping Z-order stack (`Alt+M`), deck shuffling (`F6`/`Alt+Tab`), selective raise (`Alt+1..9`, mouse click), Slide-Out Drawer (`F7` / `:drawer`), and the persistent Guake/Quake drop-down terminal (`F10` / `Alt+\`` / `:quake`).
+   - Horizontal/Vertical binary splits (`F2`/`Alt+H`, `Alt+V`), all-border & all-corner mouse frame drag resizing (`v1.12.0`), independent per-pane font scaling (`Ctrl++`/`Ctrl+-`), Borland Turbo Vision overlapping Z-order stack (`Cmd+L` / `Ctrl+Shift+L`), deck shuffling (`F6`/`Alt+Tab`), selective raise (`Alt+1..9`, mouse click), Slide-Out Drawer (`F7` / `:drawer`), and the persistent Guake/Quake drop-down terminal (`F10` / `Alt+\`` / `:quake`).
 4. **[Chapter 4: Retro Mainframe & DOS Aesthetics, Outlines, Drop Shadows, Cross-Hairs & Config](04-themes-glyphs-and-config.md)**
    - 8 border outline styles (`:outline`), 4 DOS drop-shadow modes (`:shadows`), 10 retro & modern palettes (`:theme`), 4 glyph packs (`:glyphs`), pane-local vs. full-screen IBM 3270 cross-hairs (`Alt+X` / `:crosshair`), OIA status bar telemetry, and `config.toml` / `.ini` configuration.
 5. **[Chapter 5: First-Class `tmux` Integration, SSH Domains & `herdr` Fleet Management](05-tmux-integration.md)**
@@ -36,6 +36,8 @@ Welcome to the official User Guide for **Bilterm (`v3.1.0`)** — the Rust + Rat
     - Optional agent-aware drawer style (`[drawer] style = "navigator"`): workspace > session > pane tree with working/blocked/idle/done/errored state dots, attention jump (`<Leader> !`), pairing/fan-out comms glyphs, full key and mouse operation tables, the AGENT TRAFFIC window (`<Leader> a` / `:agents`) with node graph and conversation snoop view, GUI vector rendering, and honest known limits.
 12. **[Chapter 12: Find: Agents, Sessions & Command History](12-find-registry-and-history.md)**
     - The Find window (`Ctrl+Alt+F`, `:find agent|session|history`, View menu): fuzzy ranked search of agents, live and saved sessions, and command history; every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`); secrets are masked and counted; `:finder` verbs; `find.*` RPC and `bilterm_find` MCP; SSH and tmux coverage and known gaps G1 to G10.
+13. **[Chapter 13: The Traffic Monitor](13-traffic-monitor.md)**
+    - The TRAFFIC MONITOR window (`Ctrl+Alt+T`, `:traffic`, `:netmon`): bytes per connection, session, window, pane, origin, locality and direction, sparklines, pause, drill-down, `traffic.*` RPC and `bilterm_traffic` MCP.
 
 ---
 

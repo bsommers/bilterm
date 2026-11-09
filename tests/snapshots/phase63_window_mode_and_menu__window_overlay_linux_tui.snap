@@ -1,0 +1,34 @@
+---
+source: tests/phase63_window_mode_and_menu.rs
+expression: "overlay(linux_tui(), KeyProfileName::Auto, true)"
+---
+┌ [1] PANE #1 (Z:1/3) ─────────────────[_][□][X]─┐┌ [2] PANE #2 [_][□][X]─┐╔ [3] PANE #3 [_][□][X]═╗
+│ ┌╣ BILTERM 3270 // CMD [TOP] ╠────────[▲][▼]─┐ ││ ┌╣ BILTERM 3270 // C┐ │║ ╔╣ BILTERM 3270 // C╗ ║
+│ │==>                                         │ ││ │==>                │ │║ ║==>                ║ ║
+│ └────────────────────────────────────────────┘ ││ └───────────────────┘ │║ ╚═══════════════════╝ ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│         ╔  WINDOW [focus] · ? pin · Esc exit  ═══════════════════════════════[_][□][X]═╗         ║
+│         ║q/Esc/Enter Exit          5           Pane 5        |/%         SplitV        ║         ║
+│         ║r           resize mode   6           Pane 6        x           Close         ║         ║
+│         ║m           move mode     7           Pane 7        d           Drawer        ║         ║
+│         ║f           focus mode    8           Pane 8        D           Drawer focus  ║         ║
+│         ║h/Left      Focus left    9           Pane 9        c/[         Copy          ║         ║
+│         ║j/Down      Focus down    n/Tab       Deck          a           Agents        ║         ║
+│         ║k/Up        Focus up      p/BackTab   Deck back     /           Find          ║         ║
+│         ║l/Right     Focus right   z           Zoom          :           Palette       ║         ║
+│         ║1           Pane 1        s           Stack         <           Resize left   ║         ║
+│         ║2           Pane 2        t           Tile          >           Resize right  ║         ║
+│         ║3           Pane 3        Space       Layout        J           Move down     ║         ║
+│3270-OIA│║4           Pane 4        -/"         SplitH        K           Move up       ║ADY │ INP║
+└─────────╚══════════════════════════════════════════════════════════════════════════════◢═════════◢

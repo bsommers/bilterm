@@ -65,6 +65,8 @@ pub fn parse_block_header(line: &str) -> Option<BlockHeader> {
 pub enum ReplyKind {
     Ignore,
     CapturePane { tmux_pane: usize },
+    /// `list-panes -s -F "#{window_id} #{pane_id} #{window_name}"` pane discovery.
+    ListPanes,
 }
 
 /// One correlated reply block.

@@ -64,6 +64,19 @@ pub struct TerminalNotification {
     pub body: String,
 }
 
+/// Mouse reporting tracking mode level for terminal child processes (`COPY-01`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum MouseReportLevel {
+    #[default]
+    None,
+    /// DECSET ?1000 - Press and release reporting.
+    Press,
+    /// DECSET ?1002 - Button-event (drag) reporting.
+    Drag,
+    /// DECSET ?1003 - Any-event (motion) reporting.
+    Motion,
+}
+
 /// Virtual terminal state machine wrapping `vt100-ctt` with explicit `DECSET 47/1047/1049`
 /// alternate screen tracking, `DECSET 2004` bracketed paste tracking, `DECSET 1007` alternate scroll,
 /// `DECRPM` mode reporting, Kitty keyboard protocol stacks, `XTGETTCAP`/`DECRQSS`, `OSC 4/10/11/12`
@@ -77,6 +90,8 @@ pub struct VtParser {
     bracketed_paste_2004: bool,
     application_cursor_decckm: bool,
     mouse_tracking_mode: bool,
+    mouse_report_level: MouseReportLevel,
+    mouse_sgr_1006: bool,
     mouse_alternate_scroll_1007: bool,
     focus_reporting_1004: bool,
     synchronized_output_2026: bool,
@@ -123,6 +138,7 @@ pub struct VtParser {
     line_size_attrs: std::collections::BTreeMap<u16, LineSizeAttr>,
     tektronix: TektronixState,
     utf8_carry: Vec<u8>,
+    osc52_carry: Vec<u8>,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
@@ -150,6 +166,8 @@ impl VtParser {
             bracketed_paste_2004: false,
             application_cursor_decckm: false,
             mouse_tracking_mode: false,
+            mouse_report_level: MouseReportLevel::None,
+            mouse_sgr_1006: false,
             mouse_alternate_scroll_1007: true,
             focus_reporting_1004: false,
             synchronized_output_2026: false,
@@ -196,6 +214,7 @@ impl VtParser {
             line_size_attrs: std::collections::BTreeMap::new(),
             tektronix: TektronixState::new(),
             utf8_carry: Vec::new(),
+            osc52_carry: Vec::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
         }
@@ -256,7 +275,14 @@ impl VtParser {
                 self.append_primary_stream_log(&normalized);
             }
         }
-        self.scan_control_sequences(bytes);
+        let scan_bytes: std::borrow::Cow<'_, [u8]> = if self.osc52_carry.is_empty() {
+            std::borrow::Cow::Borrowed(bytes)
+        } else {
+            let mut combined = std::mem::take(&mut self.osc52_carry);
+            combined.extend_from_slice(bytes);
+            std::borrow::Cow::Owned(combined)
+        };
+        self.scan_control_sequences(&scan_bytes);
     }
 
     fn append_primary_stream_log(&mut self, bytes: &[u8]) {
@@ -304,6 +330,11 @@ impl VtParser {
         let clamped_cols = cols.max(MIN_GRID_DIM);
         if (self.rows, self.cols) != (clamped_rows, clamped_cols) {
             let cols_changed = self.cols != clamped_cols;
+            let prev_offset = if self.is_alternate_screen() {
+                0
+            } else {
+                self.scrollback_offset()
+            };
             self.rows = clamped_rows;
             self.cols = clamped_cols;
             self.generation = self.generation.wrapping_add(1);
@@ -322,6 +353,9 @@ impl VtParser {
                 self.parser
                     .screen_mut()
                     .set_size(clamped_rows, clamped_cols);
+            }
+            if prev_offset > 0 && !self.is_alternate_screen() {
+                self.set_scrollback_offset(prev_offset);
             }
             if self.in_band_size_2048 {
                 self.pending_query_responses.push(
@@ -344,6 +378,50 @@ impl VtParser {
         let used = screen.scrollback();
         screen.set_scrollback(offset);
         used
+    }
+
+    /// Returns the absolute scrollback row corresponding to row 0 of the visible viewport (`COPY-02`).
+    pub fn viewport_top_abs(&mut self) -> usize {
+        let used = self.scrollback_used_rows();
+        let off = self.parser.screen().scrollback();
+        used.saturating_sub(off)
+    }
+
+    /// Total rows accessible in this terminal (retained scrollback rows + visible rows).
+    pub fn total_available_rows(&mut self) -> usize {
+        self.scrollback_used_rows() + usize::from(self.rows)
+    }
+
+    /// Reads the plain text of absolute row `abs_row` from scrollback or active screen (`COPY-02`).
+    pub fn abs_row_text(&mut self, abs_row: usize) -> Option<String> {
+        let (rows, cols) = self.parser.screen().size();
+        let used = self.scrollback_used_rows();
+        let total = used + usize::from(rows);
+        if abs_row >= total {
+            return None;
+        }
+        let saved_offset = self.parser.screen().scrollback();
+        let (screen_r, temp_offset) = if abs_row < used {
+            (0u16, used - abs_row)
+        } else {
+            ((abs_row - used) as u16, 0)
+        };
+        self.parser.screen_mut().set_scrollback(temp_offset);
+        let mut row_str = String::with_capacity(usize::from(cols));
+        for c in 0..cols {
+            if let Some(cell) = self.parser.screen().cell(screen_r, c) {
+                if cell.is_wide_continuation() {
+                    continue;
+                }
+                if cell.has_contents() {
+                    row_str.push_str(cell.contents());
+                } else {
+                    row_str.push(' ');
+                }
+            }
+        }
+        self.parser.screen_mut().set_scrollback(saved_offset);
+        Some(row_str)
     }
 
     /// Estimated heap bytes held by scrollback history.
@@ -612,11 +690,22 @@ impl VtParser {
         self.parser.screen().application_cursor() || self.application_cursor_decckm
     }
 
+    pub fn mouse_report_level(&self) -> MouseReportLevel {
+        if self.mouse_report_level != MouseReportLevel::None {
+            return self.mouse_report_level;
+        }
+        match self.parser.screen().mouse_protocol_mode() {
+            vt100_ctt::MouseProtocolMode::AnyMotion => MouseReportLevel::Motion,
+            vt100_ctt::MouseProtocolMode::ButtonMotion => MouseReportLevel::Drag,
+            vt100_ctt::MouseProtocolMode::Press | vt100_ctt::MouseProtocolMode::PressRelease => {
+                MouseReportLevel::Press
+            }
+            _ => MouseReportLevel::None,
+        }
+    }
+
     pub fn is_mouse_sgr_or_tracking(&self) -> bool {
-        !matches!(
-            self.parser.screen().mouse_protocol_mode(),
-            vt100_ctt::MouseProtocolMode::None
-        ) || self.mouse_tracking_mode
+        self.mouse_report_level() != MouseReportLevel::None || self.mouse_sgr_1006
     }
 
     pub fn is_focus_reporting(&self) -> bool { self.focus_reporting_1004 }
@@ -626,6 +715,7 @@ impl VtParser {
     pub fn is_report_color_scheme_2031(&self) -> bool { self.report_color_scheme_2031 }
     pub fn is_in_band_size_2048(&self) -> bool { self.in_band_size_2048 }
     pub fn is_backarrow_key_67(&self) -> bool { self.backarrow_key_67 }
+    pub fn osc52_carry_len(&self) -> usize { self.osc52_carry.len() }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
         let stack = if self.is_alternate_screen() {

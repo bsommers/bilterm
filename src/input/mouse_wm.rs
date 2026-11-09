@@ -801,36 +801,54 @@ pub(super) fn handle_drawer_mouse_event(
 
             if mouse.row == dr.y || (edge.is_vertical() && mouse.row == dr.y + 1) {
                 let rel_x = mouse.column.saturating_sub(dr.x);
-                let title_shift = if mouse.row == dr.y { 6 } else { 0 };
-                if edge.is_vertical() && mouse.row == dr.y + 1 && rel_x >= 38 {
-                    if let Ok(name) = wm.create_new_session(None, false) {
-                        wm.drawer_mut().focused = true;
-                        wm.sync_drawer_selection_to_active_pane();
-                        wm.active_pane_mut()
-                            .set_status_message(Some(format!("Created new session '{name}'")));
+                let title_row = mouse.row == dr.y;
+                let chips = crate::ui::drawer::classic_header_chips(
+                    wm,
+                    dr.width,
+                    dr.height.saturating_sub(2),
+                    title_row,
+                );
+                let hit = chips
+                    .iter()
+                    .find(|(_, range, _)| range.contains(&rel_x))
+                    .map(|(_, _, kind)| *kind)
+                    .unwrap_or(crate::ui::drawer::ClassicHeaderChipKind::Visibility);
+                match hit {
+                    crate::ui::drawer::ClassicHeaderChipKind::RowLines(n) => {
+                        let next = if n == 2 { 1 } else { 2 };
+                        let _ = wm.apply(crate::action::Action::DrawerRows(next));
                     }
-                } else if edge.is_vertical()
-                    && mouse.row == dr.y + 1
-                    && (rel_x >= 31 || rel_x >= dr.width.saturating_sub(8))
-                {
-                    if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
-                        wm.drawer_mut().focused = true;
-                        wm.sync_drawer_selection_to_active_pane();
-                        wm.active_pane_mut()
-                            .set_status_message(Some(format!("Created new window #{id}")));
+                    crate::ui::drawer::ClassicHeaderChipKind::NewSession => {
+                        if let Ok(name) = wm.create_new_session(None, false) {
+                            wm.drawer_mut().focused = true;
+                            wm.sync_drawer_selection_to_active_pane();
+                            wm.active_pane_mut()
+                                .set_status_message(Some(format!("Created new session '{name}'")));
+                        }
                     }
-                } else if rel_x < 10 + title_shift {
-                    wm.set_drawer_edge(None);
-                } else if rel_x < 20 + title_shift {
-                    wm.set_drawer_layout(None);
-                } else {
-                    let next_vis = if wm.drawer_config().visibility == crate::wm::DrawerVisibilityMode::Fixed {
-                        crate::wm::DrawerVisibilityMode::OnDemand
-                    } else {
-                        crate::wm::DrawerVisibilityMode::Fixed
-                    };
-                    wm.set_drawer_visibility(Some(next_vis));
-                    wm.drawer_mut().open = true;
+                    crate::ui::drawer::ClassicHeaderChipKind::NewWindow => {
+                        if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
+                            wm.drawer_mut().focused = true;
+                            wm.sync_drawer_selection_to_active_pane();
+                            wm.active_pane_mut()
+                                .set_status_message(Some(format!("Created new window #{id}")));
+                        }
+                    }
+                    crate::ui::drawer::ClassicHeaderChipKind::DockEdge => {
+                        wm.set_drawer_edge(None);
+                    }
+                    crate::ui::drawer::ClassicHeaderChipKind::LayoutMode => {
+                        wm.set_drawer_layout(None);
+                    }
+                    crate::ui::drawer::ClassicHeaderChipKind::Visibility => {
+                        let next_vis = if wm.drawer_config().visibility == crate::wm::DrawerVisibilityMode::Fixed {
+                            crate::wm::DrawerVisibilityMode::OnDemand
+                        } else {
+                            crate::wm::DrawerVisibilityMode::Fixed
+                        };
+                        wm.set_drawer_visibility(Some(next_vis));
+                        wm.drawer_mut().open = true;
+                    }
                 }
                 wm.reflow_default_viewport();
                 return Some(AppAction::Handled);

@@ -1,0 +1,34 @@
+---
+source: tests/phase63_window_mode_and_menu.rs
+expression: "menu_overlay(KeyEnv::new(HostOs::MacOs, Surface::Gui), \"Window\")"
+---
+ ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
+┌ [1] PANE╔ Window ════════════════════[_][□][X]═╗┌ [2] PANE #2 [_][□][X]─┐╔ [3] PANE #3 [_][□][X]═╗
+│ ┌╣ BILTE║► Split Horizontal                  ⌘B║│ ┌╣ BILTERM 3270 // C┐ │║ ╔╣ BILTERM 3270 // C╗ ║
+│ │==>    ║  Split Vertical                    ⌘D║│ │==>                │ │║ ║==>                ║ ║
+│ └───────║  Zoom Toggle                       ⌘Z║│ └───────────────────┘ │║ ╚═══════════════════╝ ║
+│         ║  Stack Windows             Ctrl+X w s║│                       │║                       ║
+│         ║  Window Theme Browser...             ║│                       │║                       ║
+│         ║  Customize Window Colors...          ║│                       │║                       ║
+│         ║  Next Window Theme                   ║│                       │║                       ║
+│         ║  Next Window Outline                 ║│                       │║                       ║
+│         ║  Toggle Bold Border                  ║│                       │║                       ║
+│         ║  Reset Window Style                  ║│                       │║                       ║
+│         ║  Tile Windows & Panels               ║│                       │║                       ║
+│         ║  Tile Windows              Ctrl+X w t║│                       │║                       ║
+│         ║  Toggle Stack/Tile                 ⌘L║│                       │║                       ║
+│         ║  Window Mode                       ⌘O║│                       │║                       ║
+│         ╚══════════════════════════════════════◢│                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖││3270-OIA│ ● READY │ INP│║3270-OIA│ ● READY │ INP║
+└────────────────────────────────────────────────◢└───────────────────────◢╚═══════════════════════◢

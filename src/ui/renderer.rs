@@ -559,8 +559,11 @@ impl GuiWorkspaceRenderer {
         let list_overlay_rect = real_rect(crate::ui::typography::PanelTarget::AgentsList, list_scale, &|a| wm.agents_list_rect(a));
         let clip_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Clipboard);
         let clip_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Clipboard, clip_scale, &|a| wm.clipboard_window_rect(a));
+        let traffic_scale = wm.scale_pct(crate::ui::typography::PanelTarget::Traffic);
+        let traffic_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Traffic, traffic_scale, &|a| wm.traffic_monitor_rect(a));
         let fonts_overlay_rect = wm.fonts_window_rect(ws_area);
         let cmd_overlay_rect = wm.command_window_rect(ws_area);
+        let daemon_overlay_rect = wm.daemon_window_rect(ws_area);
         let script_overlay_rect = wm.script_studio_rect(ws_area);
         let drawer_preview_overlay_rect = wm.drawer_preview_rect(ws_area);
 
@@ -580,8 +583,10 @@ impl GuiWorkspaceRenderer {
                 || agents_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || list_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || clip_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || traffic_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || fonts_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || cmd_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || daemon_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || script_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
@@ -607,12 +612,14 @@ impl GuiWorkspaceRenderer {
         let agents_rect = (agents_scale != 100).then_some(agents_overlay_rect).flatten();
         let list_rect = (list_scale != 100).then_some(list_overlay_rect).flatten();
         let clip_rect = (clip_scale != 100).then_some(clip_overlay_rect).flatten();
+        let traffic_rect = (traffic_scale != 100).then_some(traffic_overlay_rect).flatten();
         let cell_in_scaled_panel = |abs_c: u16, abs_r: u16| -> bool {
             (drawer_scale != 100 && drawer_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || mcp_scale != 100 && mcp_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || agents_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || list_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
-                || clip_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
+                || clip_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || traffic_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
                 && !(modal_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || dropdown_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                     || qt_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r)))
@@ -739,7 +746,7 @@ impl GuiWorkspaceRenderer {
             }
         }
 
-        if drawer_scale != 100 || mcp_scale != 100 || agents_scale != 100 || list_scale != 100 || clip_scale != 100 {
+        if drawer_scale != 100 || mcp_scale != 100 || agents_scale != 100 || list_scale != 100 || clip_scale != 100 || traffic_scale != 100 {
             let cfg = wm.config();
             let (pal, glyphs) = (cfg.palette(), cfg.glyph_set());
             let mut draw_panel = |scratch: &Buffer, vr: Rect, scale: u16| {
@@ -806,6 +813,14 @@ impl GuiWorkspaceRenderer {
                     draw_panel(&scratch, vr, clip_scale);
                 }
             }
+            if traffic_scale != 100 {
+                let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::Traffic);
+                if let Some(vr) = wm.traffic_monitor_rect(vws) {
+                    let mut scratch = Buffer::empty(vws);
+                    crate::ui::traffic_monitor_ui::render_traffic_monitor(wm, vws, cfg, &pal, &glyphs, &mut scratch);
+                    draw_panel(&scratch, vr, traffic_scale);
+                }
+            }
             if list_scale != 100 {
                 let vws = wm.panel_virtual_area(ws_area, crate::ui::typography::PanelTarget::AgentsList);
                 if let Some(vr) = wm.agents_list_rect(vws) {
@@ -845,6 +860,7 @@ impl GuiWorkspaceRenderer {
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || fonts_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || daemon_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || cmd_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
                     if top && let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
                         push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);

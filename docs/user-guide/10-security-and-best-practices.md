@@ -14,6 +14,7 @@ Terminal multiplexers and automation daemons sit at the highest-privilege bounda
 4. [JSON-RPC Daemon & MCP Control-Plane Hardening](#4-json-rpc-daemon--mcp-control-plane-hardening)
 5. [Production & Multi-Agent Security Best Practices](#5-production--multi-agent-security-best-practices)
 6. [Persistent Remote SSH & `tmux` Security Invariants (Phase 51.1)](#6-persistent-remote-ssh--tmux-security-invariants-phase-511)
+7. [Key Binding Safety: Reserved Chords & the Exit Guard (`KEY-02`)](#7-key-binding-safety-reserved-chords--the-exit-guard-key-02)
 
 ---
 
@@ -113,7 +114,29 @@ Bilterm's persistent remote `tmux -CC` integration (`:ssh-tmux`, `src/tmux/link.
    - Each reconnect attempt initiates a clean TCP handshake from scratch. Stale, hung, or corrupted OpenSSH master control sockets cannot deadlock auto-reconnect loops or poison subsequent sessions.
 4. **Typed Passwords Bypass Prompt & History Buffers**:
    - During the initial connection phase before the `tmux -CC` control sentinel (`ESC P 1000 p`) is detected, the pane operates in raw PTY passthrough mode (`set_link_raw_input`).
-   - Keystrokes typed in response to password or MFA prompts are sent straight to the PTY stdin and bypass Bilterm's prompt editor buffer, undo/redo history, command blocks, `history.log`, and the unified Find index.
+   - While the link is `Connecting` and waiting for a password or MFA response, every keystroke goes only to the remote `ssh` process. The command prompt is hidden and nothing is echoed on screen, so a password cannot be seen on the display, typed into the command line, or recorded in the prompt buffer, `history.log`, or the unified Find index.
+   - **Recommendation**: Prefer key-based authentication with `ssh-agent` (and a hardware-backed or passphrase-protected key) for `:ssh-tmux` links. With a loaded agent, no password is typed at all, which also keeps the reconnect loop from stalling on a prompt.
 5. **Strict Shell Wrapper Sanitization**:
    - Remote execution commands are wrapped in `exec $SHELL -lc 'exec env PATH="..." tmux -CC new-session -A -s NAME'`, where the session `NAME` is strictly validated against `[A-Za-z0-9_-]`. The argument contains exactly two single quotes and prohibits user-controlled quote escaping, preventing remote command injection across the SSH domain.
 
+---
+
+## 7. Key Binding Safety: Reserved Chords & the Exit Guard (`KEY-02`)
+
+User key bindings (`[keys.bind]`, and the older `[keybindings]` table) are checked against a table of chords that are not Bilterm's to take. The same check runs at config load, after `:set keys...`, and on demand through `:keys check`, the `keys.check` RPC and the `bilterm_keys` MCP tool.
+
+| Class | Meaning | What happens |
+| :--- | :--- | :--- |
+| **Block** | The OS, desktop or terminal host consumes the chord before Bilterm sees it (`Cmd+Space/Tab/H/M` on macOS, `Alt+F4` / `Alt+Tab` / `Ctrl+Alt+Delete` and every Win/Super chord on Windows and Linux, `Ctrl+Alt+F1..F7` and `Alt+F2` on Linux), or the chord is Bilterm's own (`Ctrl+Q`). | The binding is **rejected at config load** with a named error such as `config error: key binding 'Alt+F4' is reserved by Windows (close window) (using default keys)`. Bilterm starts with the built-in `[keys]` and `[keybindings]`; the rest of your config is kept. `:set` refuses the same bindings. |
+| **Warn** | The chord reaches Bilterm but shadows something a program in your panes expects (readline `Ctrl+A/E/K/...`, vim `Ctrl+W`, tmux/screen/herdr prefixes, zellij and Claude Code shortcuts) or types a symbol on common layouts (macOS Option, Windows AltGr). | The binding loads. The status bar shows `N key conflicts: :keys check`; each finding is also written to the log at `warn` level. |
+| **Info** | An override of a shipped binding, or a shipped default whose clash is accepted with a recorded reason. | Listed by `:keys check` only. |
+
+**`Ctrl+Q` cannot be shadowed.** Quit always goes through the Exit Guard, so no user binding, `[keybindings]` entry or `:set` can capture `Ctrl+Q` and strand the workspace without a way out. A binding on the leader key is reported as a Warn because it makes the leader prefix unreachable.
+
+**Shipped profiles are clean.** `mac`, `windows`, `linux` and `portable` carry no Block findings on any OS and surface; a unit test enforces this, and every shipped chord that still overlaps a common consumer is listed with its reason in the accepted-shadows table.
+
+**Caps.** `[keys.bind]` and `[keys.window_mode]` accept at most 512 entries, and a chord string may be at most 64 characters. Larger tables or longer chords are rejected at load, so a hostile or generated config cannot inflate the keymap.
+
+**API clients.** Over JSON-RPC or MCP, switching the key profile, entering Window mode and opening the menu bar are refused unless `[api] allow_config_write = true`; listing, checking and explaining chords are always read-only (see [API reference](../API.md#keyboard-surface-keys-menuopen-and-bilterm_keys-phase-63)).
+
+The `[keys]` table itself (profiles, `legacy_alt`, `kitty_protocol`, `bind`, `unbind`) is described in [Chapter 6](06-keyboard-mouse-and-command-reference.md).

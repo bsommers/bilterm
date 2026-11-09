@@ -97,9 +97,11 @@ impl AutomationControlPlane {
                     "bilterm_web_surface" => Some(Self::web_surface_method(&args).unwrap_or("")),
                     "bilterm_drawer_preview" => Some("drawer.preview"),
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
+                    "bilterm_traffic" => Some(Self::traffic_method(&args).unwrap_or("")),
                     "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
                     "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
+                    "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -114,6 +116,10 @@ impl AutomationControlPlane {
                             Err("invalid 'action' parameter: status, open, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
+                        } else if tool_name == "bilterm_keys" {
+                            Err("invalid 'action' parameter: list, check, explain, profile, window_mode or menu_open".to_string())
+                        } else if tool_name == "bilterm_traffic" {
+                            Err("missing or invalid 'action' parameter: snapshot, history, window, reset, or config".to_string())
                         } else if tool_name == "bilterm_voice" {
                             Err("missing or invalid 'action' parameter: toggle, start, stop, cancel, status, provider, or inject_wav".to_string())
                         } else {
@@ -345,6 +351,23 @@ impl AutomationControlPlane {
                 ],
             ),
             Self::mcp_tool_schema(
+                "bilterm_traffic",
+                "Read terminal traffic (bytes per connection, session, window, pane, origin, locality, direction) or drive the TRAFFIC MONITOR window and counters.",
+                &[
+                    ("action", "string", "Operation: snapshot | history | window | reset | config (default 'snapshot')"),
+                    ("group_by", "string", "connection | session | window | pane | origin | locality | direction"),
+                    ("sort", "string", "rate | rate10 | rate1m | total | peak | name"),
+                    ("descending", "boolean", "Sort direction"),
+                    ("locality", "string", "all | local | loopback | network"),
+                    ("filter", "string", "Text filter (max 64 chars)"),
+                    ("limit", "integer", "Row limit 1..500"),
+                    ("key", "string", "Row key for history"),
+                    ("n", "integer", "Seconds of history (max 60)"),
+                    ("op", "string", "Window operation for action='window': open | close | toggle | pin | dock | float | group | sort | filter | pause | resume | drill | up"),
+                    ("set", "object", "For action='config': {enabled|classify|oia_indicator: boolean} (write-gated)"),
+                ],
+            ),
+            Self::mcp_tool_schema(
                 "bilterm_voice",
                 "Control the Speech-to-Text (STT) voice dictation subsystem: toggle, start recording, stop and transcribe, cancel, check status, switch provider, or inject audio.",
                 &[
@@ -379,6 +402,17 @@ impl AutomationControlPlane {
                     ("speed", "integer", "Speed percentage (100 = 1.0x, 150 = 1.5x) for action='speed'"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_keys",
+                "Inspect and drive the keyboard model: list the active key profile, check key conflicts (OS, desktop, shell, editor and multiplexer chords), explain a chord, switch profile, enter Window mode, or open the menu bar. Mutating actions need [api] allow_config_write.",
+                &[
+                    ("action", "string", "Operation: list | check | explain | profile | window_mode | menu_open (default 'list')"),
+                    ("chord", "string", "Chord to explain for action='explain' (e.g. 'Primary+L', 'Alt+F4')"),
+                    ("name", "string", "Profile name for action='profile' (auto|mac|windows|linux|portable|legacy); omit to query"),
+                    ("op", "string", "Window mode operation for action='window_mode': on | off | toggle | focus | resize | move"),
+                    ("category", "integer", "Optional 0-based menu category for action='menu_open'"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
     }
@@ -408,6 +442,19 @@ impl AutomationControlPlane {
         }
     }
 
+    /// `bilterm_keys` `action` argument -> the `keys.*` / `menu.open` RPC method; `None` when unknown.
+    fn keys_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("list") {
+            "list" => Some("keys.list"),
+            "check" => Some("keys.check"),
+            "explain" => Some("keys.explain"),
+            "profile" => Some("keys.profile"),
+            "window_mode" => Some("keys.window_mode"),
+            "menu_open" => Some("menu.open"),
+            _ => None,
+        }
+    }
+
     /// `bilterm_video` `action` argument -> the `video.*` RPC method.
     fn video_method(args: &JsonValue) -> Option<&'static str> {
         let action = args.get("action").and_then(JsonValue::as_str).unwrap_or("state");
@@ -430,6 +477,18 @@ impl AutomationControlPlane {
             "delete" => Some("clipboard.delete"),
             "clear" => Some("clipboard.clear"),
             "window" => Some("clipboard.window"),
+            _ => None,
+        }
+    }
+
+    /// `bilterm_traffic` `action` argument -> the `traffic.*` RPC method; `None` when unknown.
+    fn traffic_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("snapshot") {
+            "snapshot" => Some("traffic.snapshot"),
+            "history" => Some("traffic.history"),
+            "window" => Some("traffic.window"),
+            "reset" => Some("traffic.reset"),
+            "config" => Some("traffic.config"),
             _ => None,
         }
     }
@@ -556,13 +615,22 @@ pub async fn run_mcp_stdio_server_with_plane(mut plane: AutomationControlPlane) 
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let mut lines = BufReader::new(stdin).lines();
+    // H26/H27: the stdio loop counts its own bytes on an `Origin::Mcp` wire channel.
+    let tap = plane.wm.traffic_meter().open_channel(
+        crate::traffic::Origin::Mcp,
+        "mcp",
+        None,
+        crate::traffic::Role::Wire,
+    );
 
     while let Some(line) = lines.next_line().await? {
+        tap.rx(line.len() + 1);
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         if let Some(resp) = plane.handle_mcp_line(trimmed) {
+            tap.tx(resp.len() + 1);
             stdout.write_all(format!("{resp}\n").as_bytes()).await?;
             stdout.flush().await?;
         }

@@ -165,6 +165,10 @@ impl LinkDriver for PtyLinkDriver {
         }
     }
 
+    fn traffic_cell(&self) -> Option<crate::traffic::TrafficTap> {
+        self.pty.as_ref().map(|p| p.traffic_cell().clone())
+    }
+
     fn kill(&mut self) {
         // Dropping the session kills and reaps the child on its reaper thread.
         self.pty = None;

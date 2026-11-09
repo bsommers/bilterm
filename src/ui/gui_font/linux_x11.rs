@@ -28,6 +28,8 @@ const KEY_PRESS: c_int = 2; const BUTTON_PRESS: c_int = 4; const BUTTON_RELEASE:
 const MOTION_NOTIFY: c_int = 6; const EXPOSE: c_int = 12; const CONFIGURE_NOTIFY: c_int = 22;
 const CLIENT_MESSAGE: c_int = 33; const Z_PIXMAP: c_int = 2;
 const SHIFT_MASK: c_uint = 1 << 0; const CONTROL_MASK: c_uint = 1 << 2; const MOD1_MASK: c_uint = 1 << 3;
+/// Super/Windows modifier: no Super chords on X11 in Phase 63; such events are dropped, never typed as text.
+const MOD4_MASK: c_uint = 1 << 6;
 
 #[repr(C)]
 struct XftFont { ascent: c_int, descent: c_int, height: c_int, max_advance_width: c_int, charset: *mut c_void, pattern: *mut c_void }
@@ -583,6 +585,9 @@ impl Drop for X11GuiCanvas<'_> {
 
 /// Pure X11 `KeySym` + modifier bitmask + `XLookupString` byte slice translator (`GPU-02`).
 pub fn translate_x11_keysym_and_bytes(keysym: u32, state: u32, bytes: &[u8]) -> Option<KeyEvent> {
+    if (state & MOD4_MASK) != 0 {
+        return None;
+    }
     let (ctrl, alt, shift) = (
         (state & CONTROL_MASK) != 0,
         (state & MOD1_MASK) != 0,
@@ -631,7 +636,11 @@ pub fn translate_x11_keysym_and_bytes(keysym: u32, state: u32, bytes: &[u8]) -> 
             return Some(KeyEvent::new(KeyCode::Char('0'), KeyModifiers::CONTROL));
         }
         ks @ 0x20..=0x7E if ctrl || alt => {
-            let raw = ks as u8 as char;
+            let mut raw = ks as u8 as char;
+            if ctrl && shift {
+                // Ctrl+Shift+1 arrives as keysym `!`: report the base key so `Primary+1` matches.
+                raw = crate::input::chord::base_key(raw);
+            }
             let ch = if shift && !ctrl {
                 raw.to_ascii_uppercase()
             } else {
@@ -850,4 +859,26 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
         (api.x_close_display)(dpy);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn ctrl_shift_symbols_map_back_to_the_base_key() {
+        let cs = CONTROL_MASK | SHIFT_MASK;
+        for (sym, base) in [('!', '1'), ('(', '9'), ('{', '['), ('}', ']'), (':', ';')] {
+            let ev = translate_x11_keysym_and_bytes(sym as u32, cs, &[]).expect("chord");
+            assert_eq!(ev.code, KeyCode::Char(base), "{sym}");
+            assert_eq!(ev.modifiers, KeyModifiers::CONTROL | KeyModifiers::SHIFT);
+        }
+        let b = translate_x11_keysym_and_bytes('B' as u32, cs, &[]).expect("Ctrl+Shift+B");
+        assert_eq!(b.code, KeyCode::Char('b'));
+    }
+
+    #[test]
+    fn super_chords_are_dropped_not_typed() {
+        assert_eq!(translate_x11_keysym_and_bytes('l' as u32, 1 << 6, b"l"), None);
+    }
 }

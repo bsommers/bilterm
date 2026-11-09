@@ -367,7 +367,8 @@ fn menu_existing_entries_unchanged() {
         &[":broadcast", ":lock", ":quake", ":raw"],
         &[":help", ":inspector", ":session list", ":help"],
     ];
-    let appended = [0usize, 1, 0, 11, 0, 4, 0];
+    // Phase 61-01 appended Drawer Rows 1/2 (View); Phase 63-02 appended Tile Windows, Toggle Stack/Tile and Window Mode (Window) and Keyboard Conflicts (Help); Phase 64-03 appended Traffic Monitor (View).
+    let appended = [0usize, 4, 0, 14, 0, 4, 1];
     for (cat, cmds) in table.iter().enumerate() {
         assert_eq!(menubar_category_item_count(cat), cmds.len() + appended[cat], "category {cat} count");
         for (i, cmd) in cmds.iter().enumerate() {
@@ -375,12 +376,12 @@ fn menu_existing_entries_unchanged() {
         }
     }
     assert_eq!(menubar_category_item_count(2), 4, "Prompt keeps 4 items");
-    // The tallest dropdown still fits a 24-row terminal.
+    // The tallest dropdown still fits a 24-row terminal (clamped to workspace height when items + 2 > workspace.height).
     let screen = Rect::new(0, 0, 80, 24);
     let workspace = ShellLayout::compute(screen, &bilterm::config::BiltermConfig::default(), 1).workspace;
     for cat in 0..7 {
         let r = menubar_dropdown_rect(cat, workspace);
         assert!(r.y + r.height <= screen.height, "category {cat} dropdown {r:?} fits 24 rows");
-        assert_eq!(r.height, menubar_category_item_count(cat) as u16 + 2, "category {cat} is not clipped");
+        assert_eq!(r.height, (menubar_category_item_count(cat) as u16 + 2).min(workspace.height), "category {cat} height");
     }
 }

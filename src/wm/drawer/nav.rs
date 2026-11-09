@@ -406,12 +406,27 @@ impl WindowManager {
         Some(id)
     }
 
-    /// Sets the lines per Navigator pane row (`drawer.row_lines`): `1` is the compact single-line layout,
-    /// anything else `2`. Takes effect on the next frame; the other drawer styles ignore it.
+    /// Sets the lines per drawer row for the active style (`drawer.row_lines` in Navigator,
+    /// `drawer.classic_row_lines` in Classic): `1` is the compact single-line layout, anything else `2`.
     pub fn set_drawer_row_lines(&mut self, lines: u8) -> u8 {
         let lines = if lines == 1 { 1 } else { 2 };
-        self.config.drawer.row_lines = lines;
-        self.active_pane_mut().set_status_message(Some(format!("Drawer rows: {lines} (navigator style)")));
+        let msg = match self.config.drawer.style {
+            DrawerStyle::Navigator => {
+                self.config.drawer.row_lines = lines;
+                format!("Drawer rows: {lines} (navigator style)")
+            }
+            DrawerStyle::Classic => {
+                self.config.drawer.classic_row_lines = lines;
+                if self.config.drawer.edge.is_vertical() {
+                    format!("Drawer rows: {lines} (classic style)")
+                } else {
+                    format!(
+                        "Drawer rows: {lines} (classic style) - horizontal drawers show one line"
+                    )
+                }
+            }
+        };
+        self.active_pane_mut().set_status_message(Some(msg));
         lines
     }
 

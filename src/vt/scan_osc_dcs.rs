@@ -155,14 +155,31 @@ impl VtParser {
             return;
         }
 
+        if "52;".starts_with(osc_rest) && osc_rest.len() < 3 {
+            self.osc52_carry.clear();
+            self.osc52_carry.extend_from_slice(b"\x1b]");
+            self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
+            return;
+        }
+
         if osc_rest.starts_with("52;") {
             // Terminate at the first BEL or ESC of *this* OSC; an ESC that does not begin ST
             // aborts the sequence so no foreign escapes can ride along to the host terminal.
             if let Some(end) = osc_rest.find(['\x07', '\x1b']) {
-                let terminator = match &osc_rest[end..] {
+                let rest_from_end = &osc_rest[end..];
+                if rest_from_end == "\x1b" {
+                    self.osc52_carry.clear();
+                    self.osc52_carry.extend_from_slice(b"\x1b]");
+                    self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
+                    return;
+                }
+                let terminator = match rest_from_end {
                     t if t.starts_with('\x07') => "\x07",
                     t if t.starts_with("\x1b\\") => "\x1b\\",
-                    _ => return,
+                    _ => {
+                        self.osc52_carry.clear();
+                        return;
+                    }
                 };
                 let body = &osc_rest[..end];
                 if is_forwardable_osc52_write(body) {
@@ -170,6 +187,20 @@ impl VtParser {
                     if let Some(decoded) = decode_osc52_payload(body) {
                         self.pending_osc52_decoded.push(decoded);
                     }
+                }
+                self.osc52_carry.clear();
+            } else {
+                const MAX_CARRY: usize = super::codec::MAX_OSC52_PAYLOAD_BYTES + 64;
+                if osc_rest.len() <= MAX_CARRY {
+                    if osc_rest.contains('\x1b') {
+                        self.osc52_carry.clear();
+                    } else {
+                        self.osc52_carry.clear();
+                        self.osc52_carry.extend_from_slice(b"\x1b]");
+                        self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
+                    }
+                } else {
+                    self.osc52_carry.clear();
                 }
             }
             return;

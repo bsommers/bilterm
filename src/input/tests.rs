@@ -202,7 +202,7 @@ fn decset_1007_alternate_scroll_and_vi_copy_mode_rectangular_selection_work() {
     pane.enter_copy_mode();
     pane.copy_mode_mut().cursor_row = 0;
     pane.copy_mode_mut().cursor_col = 4;
-    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)).unwrap();
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
@@ -217,6 +217,11 @@ fn decset_1007_alternate_scroll_and_vi_copy_mode_rectangular_selection_work() {
 #[test]
 fn macos_option_unicode_normalization_leader_prefix_readline_and_raw_passthrough_work() {
     let mut wm = WindowManager::new_headless(24, 80);
+    // The Option-symbol normalizer only runs for a macOS TUI (Phase 63, KEY-02).
+    wm.set_key_env(crate::input::keyenv::KeyEnv::new(
+        crate::input::keyenv::HostOs::MacOs,
+        crate::input::keyenv::Surface::Tui,
+    ));
 
     // 1. macOS Option+<key> Unicode characters (e.g. Option+V -> '√', Option+H -> '˙', Option+1 -> '¡')
     //    automatically normalize to Alt+<key> and trigger WM splits & pane focus!
@@ -620,4 +625,28 @@ fn status_bar_mouse_clicks_control_status_items_and_never_leak_into_canvas_selec
     .unwrap();
     assert_eq!(wm.active_pane().prompt().anchor, PromptAnchor::Bottom);
     assert!(!wm.active_pane().copy_mode().active);
+}
+
+/// Pitfall 6 (Phase 63): once the host terminal speaks the kitty keyboard protocol, `Tab`/`Enter`/`Esc`
+/// and Alt/Ctrl+letter arrive as CSI-u events, but a child that pushed no kitty flags must still
+/// receive the legacy bytes.
+#[test]
+fn legacy_child_bytes_are_unchanged_for_modified_and_special_keys() {
+    let cases: &[(KeyCode, KeyModifiers, &[u8])] = &[
+        (KeyCode::Char('b'), KeyModifiers::ALT, b"\x1bb"),
+        (KeyCode::Char('f'), KeyModifiers::ALT, b"\x1bf"),
+        (KeyCode::Char('x'), KeyModifiers::CONTROL, b"\x18"),
+        (KeyCode::Char('c'), KeyModifiers::CONTROL, b"\x03"),
+        (KeyCode::Char('i'), KeyModifiers::CONTROL, b"\t"),
+        (KeyCode::Char('m'), KeyModifiers::CONTROL, b"\r"),
+        (KeyCode::Tab, KeyModifiers::NONE, b"\t"),
+        (KeyCode::Enter, KeyModifiers::NONE, b"\r"),
+        (KeyCode::Esc, KeyModifiers::NONE, b"\x1b"),
+        (KeyCode::Backspace, KeyModifiers::NONE, b"\x7f"),
+        (KeyCode::Char('a'), KeyModifiers::NONE, b"a"),
+    ];
+    for (code, mods, want) in cases {
+        let got = encode_key_to_pty_bytes_full(KeyEvent::new(*code, *mods), false, false, 0);
+        assert_eq!(got, *want, "{code:?}+{mods:?} must encode to legacy bytes for a child without kitty flags");
+    }
 }

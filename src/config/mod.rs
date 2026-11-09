@@ -1,5 +1,7 @@
 pub mod agents;
 pub mod dotted;
+pub mod keys;
+pub mod traffic;
 pub use dotted::ApiConfig;
 pub use crate::stt::SttConfig;
 
@@ -119,6 +121,8 @@ pub struct BiltermConfig {
     pub macos_option_as_alt: bool,
     /// User-configurable key chord bindings (`"Ctrl+B" = ":split v"`, `v0.6.0`).
     pub keybindings: BTreeMap<String, String>,
+    /// Per-OS key profiles, `Primary` modifier options, `keys.bind` and Window-mode overrides (`[keys]`, Phase 63).
+    pub keys: keys::KeysConfig,
     /// Case-insensitive output highlight trigger patterns (`:trigger add <pat>`, `v0.7.0`).
     pub triggers: Vec<String>,
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
@@ -128,6 +132,8 @@ pub struct BiltermConfig {
     pub agents: BTreeMap<String, agents::AgentProfile>,
     /// Agent traffic window settings (`[agents_window]`, e.g. `edge_fade_secs`).
     pub agents_window: agents::AgentsWindowConfig,
+    /// Terminal traffic monitor settings (`[traffic]`, Phase 64).
+    pub traffic: traffic::TrafficConfig,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -167,8 +173,10 @@ pub struct BiltermConfig {
     pub appearance: crate::ui::design::AppearanceConfig,
     /// Automation-plane policy (`[api]`, Phase 49-04); config writes over the API are off by default.
     pub api: ApiConfig,
-    /// When `false` (default), mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`).
+    /// When `false`, mouse selection/drag only highlights text and requires an explicit copy (`Enter`/`y`/`Ctrl+C`/`:copy yank`). Default `true`.
     pub copy_on_select: bool,
+    /// Modifier override policy for mouse selection over child applications with mouse tracking (`shift_alt`, `shift`, `alt`, `off`).
+    pub mouse_select_override: String,
     /// Persists the cut-and-paste yank buffer history uniquely per Bilterm session (`true` by default, `:clipboard persist [on|off]`).
     pub clipboard_history_persist: bool,
     /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text via bracketed paste unless image/video media is on the system clipboard (`true` by default, `CLIP-01`).
@@ -234,10 +242,12 @@ impl Default for BiltermConfig {
             leader_key: "Ctrl+X".to_string(),
             macos_option_as_alt: true,
             keybindings: BTreeMap::new(),
+            keys: keys::KeysConfig::default(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
             agents: BTreeMap::new(),
             agents_window: agents::AgentsWindowConfig::default(),
+            traffic: traffic::TrafficConfig::default(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,
@@ -257,7 +267,8 @@ impl Default for BiltermConfig {
             liquid_glass: false,
             appearance: crate::ui::design::AppearanceConfig::default(),
             api: ApiConfig::default(),
-            copy_on_select: false,
+            copy_on_select: true,
+            mouse_select_override: "shift_alt".to_string(),
             clipboard_history_persist: true,
             smart_ctrl_v_paste: true,
             custom_palette_override: None,
@@ -316,9 +327,9 @@ impl BiltermConfig {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
         };
-        Self::from_toml_str(&raw)
-            .map(Some)
-            .map_err(|e| format!("invalid {}: {e}", path.display()))
+        let cfg = Self::from_toml_str(&raw).map_err(|e| format!("invalid {}: {e}", path.display()))?;
+        cfg.keys.validate().map_err(|e| format!("invalid {}: {e}", path.display()))?;
+        Ok(Some(cfg))
     }
 
     /// Config for a machine with no config file yet: the defaults plus the Obsidian profile.

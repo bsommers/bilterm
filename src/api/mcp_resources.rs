@@ -140,6 +140,7 @@ impl AutomationControlPlane {
             ("show_top_menubar", b(c.show_top_menubar)),
             ("show_dos_fkey_bar", b(c.show_dos_fkey_bar)),
             ("copy_on_select", b(c.copy_on_select)),
+            ("mouse_select_override", s(c.mouse_select_override.clone())),
             ("history_enabled", b(c.history_enabled)),
             ("layout_autosave", b(c.layout_autosave)),
             ("leader_key", s(c.leader_key.clone())),

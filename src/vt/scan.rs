@@ -22,6 +22,8 @@ impl VtParser {
         for (idx, _) in text.match_indices('\x1b') {
             let after_esc = &text[idx + 1..];
             let Some(&kind) = after_esc.as_bytes().first() else {
+                self.osc52_carry.clear();
+                self.osc52_carry.push(0x1b);
                 break;
             };
             let payload_rest = &after_esc[1..];
@@ -64,8 +66,53 @@ impl VtParser {
             }
             "67" => self.backarrow_key_67 = enable,
             "1007" => self.mouse_alternate_scroll_1007 = enable,
-            "1000" | "1002" | "1003" | "1006" => {
-                self.mouse_tracking_mode = enable;
+            "1000" => {
+                self.mouse_report_level = if enable {
+                    super::MouseReportLevel::Press
+                } else if self.mouse_report_level == super::MouseReportLevel::Press {
+                    super::MouseReportLevel::None
+                } else {
+                    self.mouse_report_level
+                };
+                self.mouse_tracking_mode = self.mouse_report_level != super::MouseReportLevel::None;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1000h (MousePress ON)"
+                } else {
+                    "CSI ?1000l (MousePress OFF)"
+                });
+            }
+            "1002" => {
+                self.mouse_report_level = if enable {
+                    super::MouseReportLevel::Drag
+                } else if self.mouse_report_level == super::MouseReportLevel::Drag {
+                    super::MouseReportLevel::None
+                } else {
+                    self.mouse_report_level
+                };
+                self.mouse_tracking_mode = self.mouse_report_level != super::MouseReportLevel::None;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1002h (MouseDrag ON)"
+                } else {
+                    "CSI ?1002l (MouseDrag OFF)"
+                });
+            }
+            "1003" => {
+                self.mouse_report_level = if enable {
+                    super::MouseReportLevel::Motion
+                } else if self.mouse_report_level == super::MouseReportLevel::Motion {
+                    super::MouseReportLevel::None
+                } else {
+                    self.mouse_report_level
+                };
+                self.mouse_tracking_mode = self.mouse_report_level != super::MouseReportLevel::None;
+                self.record_escape_sequence(if enable {
+                    "CSI ?1003h (MouseMotion ON)"
+                } else {
+                    "CSI ?1003l (MouseMotion OFF)"
+                });
+            }
+            "1006" => {
+                self.mouse_sgr_1006 = enable;
                 self.record_escape_sequence(if enable {
                     "CSI ?1006h (MouseSGR ON)"
                 } else {

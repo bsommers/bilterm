@@ -25,9 +25,11 @@ use tokio::sync::{mpsc, oneshot};
 use super::agent_wait::{AgentWaiters, WAIT_TICK};
 pub use super::http_web::WebServeOptions;
 use super::json::JsonValue;
+use super::metered::Metered;
 use super::rpc::AutomationControlPlane;
 use super::static_serve::{cors_headers, serve_static_asset};
 use crate::error::{BiltermError, Result};
+use crate::traffic::{Origin, Role};
 
 /// One queued JSON-RPC request line plus its reply channel (shared with the Unix/TCP server loop).
 pub type RpcRequest = (String, oneshot::Sender<String>);
@@ -184,6 +186,11 @@ pub async fn serve_http_standalone_with(
             _ = wait_tick.tick(), if !waiters.is_empty() => waiters.poll(&plane),
         }
     }
+}
+
+fn next_label(kind: &str) -> String {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    format!("{kind}#{}", SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1)
 }
 
 struct Request {
@@ -419,13 +426,13 @@ fn is_api_path(path: &str) -> bool {
 
 /// Browser-facing routes served before bearer auth. Returns the stream back when not handled.
 async fn serve_pre_auth(
-    mut stream: tokio::net::TcpStream,
+    mut stream: Metered<tokio::net::TcpStream>,
     req: &Request,
     rpc_tx: &mpsc::Sender<RpcRequest>,
     token: &Arc<str>,
     opts: &WebServeOptions,
     cors: &str,
-) -> std::io::Result<Option<tokio::net::TcpStream>> {
+) -> std::io::Result<Option<Metered<tokio::net::TcpStream>>> {
     let path = req.path.split('?').next().unwrap_or("");
     let (method, head_only) = (req.method.as_str(), req.method == "HEAD");
     if method == "OPTIONS" {
@@ -460,11 +467,18 @@ async fn serve_pre_auth(
 }
 
 async fn handle_connection(
-    mut stream: tokio::net::TcpStream,
+    stream: tokio::net::TcpStream,
     rpc_tx: mpsc::Sender<RpcRequest>,
     token: Arc<str>,
     opts: Arc<WebServeOptions>,
 ) -> std::io::Result<()> {
+    // One `Origin::Http` channel per connection (rolled up when it closes); every request read
+    // and response write goes through the `Metered` wrapper (hooks H20/H21).
+    let tap = match opts.meter.as_ref() {
+        Some(m) => m.open_channel(Origin::Http, &next_label("http"), None, Role::Wire),
+        None => crate::traffic::ChannelCounters::with_flags(0),
+    };
+    let mut stream = Metered::new(stream, tap);
     let req = match tokio::time::timeout(READ_TIMEOUT, read_request(&mut stream)).await {
         Err(_) => return write_response(&mut stream, 408, "", &err_body("request timeout")).await,
         Ok(Err(HttpError(code, msg))) => {
@@ -509,7 +523,7 @@ async fn handle_connection(
                 }
             }
         }
-        ("GET", "/events") => serve_sse(stream, rpc_tx).await,
+        ("GET", "/events") => serve_sse(stream, rpc_tx, &opts).await,
         (_, "/health" | "/rpc" | "/events") => {
             write_response(&mut stream, 405, "", &err_body("method not allowed")).await
         }
@@ -519,9 +533,14 @@ async fn handle_connection(
 
 /// Streams events drained via `events.poll` as SSE `data:` frames until the client disconnects.
 async fn serve_sse(
-    mut stream: tokio::net::TcpStream,
+    mut stream: Metered<tokio::net::TcpStream>,
     rpc_tx: mpsc::Sender<RpcRequest>,
+    opts: &WebServeOptions,
 ) -> std::io::Result<()> {
+    // SSE frames and the EOF probe are counted on their own `Origin::Sse` channel (H22/H23).
+    if let Some(m) = opts.meter.as_ref() {
+        stream.set_tap(m.open_channel(Origin::Sse, &next_label("sse"), None, Role::Wire));
+    }
     stream
         .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n: bilterm events\n\n")
         .await?;

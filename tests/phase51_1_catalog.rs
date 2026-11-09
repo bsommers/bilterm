@@ -323,7 +323,8 @@ fn category_titles_and_indices_unchanged() {
     let rect_24 = menubar_dropdown_rect(5, area_24);
     assert!(rect_24.height <= 24, "dropdown height must be clamped to workspace height");
     assert_eq!(rect_24.height, 10, "8 items + 2 borders = 10 rows");
-    assert!(rect_24.width <= 30, "dropdown width must be <= 30");
+    // Phase 63-02: the pull-down is wider so the computed accelerator fits at the right.
+    assert!(rect_24.width <= bilterm::ui::modals::MENUBAR_DROPDOWN_WIDTH, "dropdown width must be <= MENUBAR_DROPDOWN_WIDTH");
 
     let area_5 = Rect::new(0, 0, 80, 5);
     let rect_5 = menubar_dropdown_rect(5, area_5);

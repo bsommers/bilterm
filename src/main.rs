@@ -1,4 +1,3 @@
-use std::io;
 use std::path::{Path, PathBuf};
 
 use bilterm::api::{
@@ -256,6 +255,19 @@ async fn main() -> color_eyre::Result<()> {
         let allow_remote = has_switch(&args, &["-r", "--allow-remote"]);
         let default_unix = default_socket_path().ok();
         let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
+        let daemon_name = switch_value(&args, &["--name", "-s", "--session"]).unwrap_or("default");
+        let runtime_dir = bilterm::daemon::supervisor::resolve_runtime_dir()?;
+        let sock_path = match &cfg.endpoint {
+            ListenEndpoint::Unix(p) => p.clone(),
+            _ => bilterm::daemon::process::session_daemon_socket_path_in(&runtime_dir, daemon_name)?,
+        };
+        let _daemon_lock = match bilterm::daemon::supervisor::acquire_lock(&runtime_dir, daemon_name, sock_path.clone())? {
+            bilterm::daemon::supervisor::DaemonLockResult::Acquired(l) => l,
+            bilterm::daemon::supervisor::DaemonLockResult::AlreadyHeld(r) => {
+                eprintln!("bilterm: daemon '{daemon_name}' already running (PID {})", r.pid);
+                return Ok(());
+            }
+        };
         let mut plane = AutomationControlPlane::new_headless(24, 80);
         if let Some(sess_name) = switch_value(&args, &["-s", "--session"]) {
             let _ = plane.wm.restore_session(sess_name);
@@ -295,6 +307,13 @@ async fn main() -> color_eyre::Result<()> {
             }
             None => None,
         };
+        let _registration = bilterm::daemon::supervisor::register_current_daemon(
+            &runtime_dir,
+            daemon_name,
+            sock_path,
+            plane.wm.list_sessions().len(),
+            plane.wm.panes().len(),
+        )?;
         run_headless_server_with_http(cfg, plane, http).await?;
         return Ok(());
     }
@@ -369,6 +388,13 @@ async fn main() -> color_eyre::Result<()> {
                 cfg_error = Some(format!("config error: {msg} (using defaults)"));
             }
         }
+    }
+    let key_env = bilterm::input::keyenv::KeyEnv::new(
+        bilterm::input::keyenv::HostOs::detect(),
+        if gui_mode { bilterm::input::keyenv::Surface::Gui } else { bilterm::input::keyenv::Surface::Tui },
+    );
+    if let Some(err) = bilterm::input::keyconflict::enforce_load_policy(&mut cfg, &key_env) {
+        cfg_error = Some(err);
     }
     let new_subcmd = matches!(args.first().map(String::as_str), Some("new" | "new-session"));
     let blank_subcmd = matches!(
@@ -502,6 +528,9 @@ async fn main() -> color_eyre::Result<()> {
             "Loaded layout profile '{prof}' ({count} pane(s), autosave={autosave_lbl})"
         )));
     }
+    if cfg_error.is_none() {
+        cfg_error = bilterm::input::keyconflict::load_time_status(app.wm.config(), &key_env);
+    }
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
     }
@@ -511,8 +540,8 @@ async fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let host_guard = TerminalRestoreGuard::enter_host_tui()?;
-    let backend = CrosstermBackend::new(io::stdout());
+    let host_guard = TerminalRestoreGuard::enter_host_tui_with(app.wm.config().keys.kitty_protocol)?;
+    let backend = CrosstermBackend::new(bilterm::app::CountingStdout::new(&app.wm.traffic_meter()));
     let mut terminal = Terminal::new(backend)?;
 
     let run_res = app.run(&mut terminal).await;

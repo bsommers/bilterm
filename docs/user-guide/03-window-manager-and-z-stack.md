@@ -40,7 +40,7 @@ Every `CompositePane` (complete with its own PTY `OutputCanvas` and its own mova
 ## 3. Z-Order Window Stacking, Deck Shuffling & Selective Raise (`WM-02`)
 
 Inspired by classic **Borland Turbo Vision (Turbo C / Turbo Pascal)** overlapping windows, Bilterm maintains a **Z-Order Deck (`ZStack`)** across all open composite panes:
-- **Toggle Tiled vs. Stacked Cascade Layout**: Press `Alt+M` (`<Leader> M`) or run `:layout stack` / `:layout tile`.
+- **Toggle Tiled vs. Stacked Cascade Layout**: Press `Cmd+L` / `Ctrl+Shift+L` (`<Leader> M`), use Window mode `s` / `t` (`Ctrl+X w s`), or run `:layout stack` / `:layout tile`.
 - **Shuffle Deck Top-to-Bottom (`Next Window`)**: Press `Alt+Tab`, `F6`, `<Leader> n`, or run `:deck next`. Sends the current top window to the bottom of the deck (`Z:1/N`) and promotes the next window to the top (`Z:N/N`).
 - **Shuffle Deck Bottom-to-Top (`Prev Window`)**: Press `Alt+Shift+Tab`, `<Leader> p`, or run `:deck prev`. Pulls the bottom-most window to the top of the deck.
 - **Selective Raise by Window Number**: Press `Alt+1` through `Alt+9` (`<Leader> 1..9`) or run `:focus <id>` to immediately pluck pane `#1..#9` from anywhere in the stack and raise it to the front.

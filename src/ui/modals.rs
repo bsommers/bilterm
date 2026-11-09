@@ -15,6 +15,7 @@ use crate::pane::CompositePane;
 use crate::ui::chrome::{render_borland_frame_styled, render_drop_shadow_styled};
 use crate::ui::design::{AppearanceProfile, ColorRole, DesignTokens};
 use crate::ui::glyphs::GlyphSet;
+use crate::ui::menu_model::MENUBAR_CATEGORIES;
 use crate::ui::occlusion::occlude_rect;
 use crate::ui::theme::ThemePalette;
 use crate::ui::visual_style::{
@@ -380,81 +381,15 @@ pub(super) fn render_help_modal(
     Paragraph::new(rendered).render(inner, buf);
 }
 
-const MENUBAR_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
-    ("≡ System", &[
-        ("3270 Inspector (F9)", ":inspector"), ("New Session", ":session new"),
-        ("Save Session", ":session save"), ("Restore Session", ":session restore"),
-        ("Session Processes & CWD...", ":session info"), ("Toggle Auto-Relaunch Apps", ":session processes"),
-        ("Quit (Ctrl+Q)", ":quit"),
-    ]),
-    ("Window", &[
-        ("Split Horizontal (F2)", ":split h"), ("Split Vertical (Alt+V)", ":split v"),
-        ("Zoom Toggle (F5)", ":zoom"), ("Stack Windows (Alt+M)", ":layout stack"),
-        ("Window Theme Browser...", ":window theme list"), ("Customize Window Colors...", ":window menu"),
-        ("Next Window Theme", ":window theme next"), ("Next Window Outline", ":window outline next"),
-        ("Toggle Bold Border", ":window bold toggle"), ("Reset Window Style", ":window reset"),
-        ("Tile Windows & Panels", ":arrange grid"),
-    ]),
-    ("Prompt", &[
-        ("Pin Top (Alt+T)", ":prompt top"), ("Pin Bottom (Alt+B)", ":prompt bottom"),
-        ("Fixed / Float (Alt+S)", ":prompt split"), ("Cycle Float/Fix/Term (F4)", ":mode cycle"),
-    ]),
-    ("View", &[
-        ("3270 Field Hints (Alt+F)", ":hints"), ("Vi Copy Mode (Alt+C)", ":copy"),
-        ("Rectangular Select (Alt+R)", ":rect"), ("Toggle Rect Mouse Mode", ":rect mode"),
-        ("Cross-Hair Ruler (Alt+X)", ":crosshair"), ("DOS F-Key Bar", ":fkeybar"),
-        ("Agent Traffic (Ctrl+Alt+A)", ":agents toggle"),
-        ("Find Agents (Ctrl+Alt+F)", ":find agent"),
-        ("Find Sessions", ":find session"),
-        ("Find Command History", ":find history"),
-        ("Agents List (Ctrl+Alt+N)", ":agents list toggle"), ("Agent Demo (Ctrl+X y)", ":agents demo"),
-        ("Stop Agent Demo (Ctrl+X Y)", ":agents demo stop"),
-        ("Fonts Window", ":fonts toggle"),
-        ("Command Palette Window", ":commands toggle"),
-        ("Clipboard Viewer (Ctrl+Alt+V)", ":clipboard toggle"),
-        ("Script Studio", ":script toggle"),
-        ("Drawer Peek Preview (Alt+P)", ":drawer preview toggle"),
-        ("Voice Dictation Toggle (Ctrl+Alt+S)", ":voice toggle"),
-        ("Browser Canvas (Ctrl+Alt+B)", ":browser"),
-        ("Video Canvas (Ctrl+Alt+Y)", ":video"),
-    ]),
-    ("Theme", &[
-        ("Borland Turbo Blue", ":theme turbo-blue"), ("Borland Turbo Cyan", ":theme turbo-cyan"),
-        ("IBM 3278 Phosphor Green", ":theme 3278"), ("IBM 3279 Amber CRT", ":theme 3279"),
-    ]),
-    ("Tmux", &[
-        ("Broadcast Input", ":broadcast"), ("Read-Only Lock (Alt+L)", ":lock"),
-        ("Quake Terminal (F10)", ":quake"), ("Raw Passthrough (F12)", ":raw"),
-        ("SSH tmux link... (Ctrl+X u)", ":ssh-tmux prefill"),
-        ("Reconnect link (Ctrl+Alt+R)", ":ssh-tmux reconnect"),
-        ("Disconnect link (Ctrl+X Q)", ":ssh-tmux disconnect"),
-        ("Link info", ":ssh-tmux info"),
-    ]),
-    ("Help", &[
-        ("Help Reference (F1)", ":help"), ("3270 Inspector (F9)", ":inspector"),
-        ("List Sessions", ":session list"), ("Close Help", ":help"),
-    ]),
-    ("Daemon", &[
-        ("List Daemons (Ctrl+X D L)", ":daemon list"),
-        ("Daemon Status (Ctrl+X D S)", ":daemon status"),
-        ("Start Daemon (Ctrl+X D N)", ":daemon start"),
-        ("Stop Daemon (Ctrl+X D Q)", ":daemon stop"),
-        ("Switch Daemon (Ctrl+X D W)", ":daemon switch default"),
-        ("Prune Daemons", ":daemon prune"),
-    ]),
-    ("Web", &[
-        ("Web Server Status (Ctrl+X @)", ":web status"),
-        ("Open Web UI", ":web open"),
-        ("Stop Web Server", ":web stop"),
-    ]),
-];
+/// Outer width of a pull-down: room for the longest label plus a right-aligned accelerator.
+pub const MENUBAR_DROPDOWN_WIDTH: u16 = 40;
 
 /// Returns the menu bar category index (`0..MENUBAR_CATEGORIES.len()`) at `rel_col`
 /// relative to the left edge of the top menu bar (`ECO-03`).
 pub fn menubar_category_at_col(rel_col: u16) -> Option<usize> {
     let mut x = 0u16;
-    for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
-        let w = title.chars().count() as u16 + 2;
+    for (idx, cat) in MENUBAR_CATEGORIES.iter().enumerate() {
+        let w = cat.title.chars().count() as u16 + 2;
         if rel_col >= x && rel_col < x + w {
             return Some(idx);
         }
@@ -468,33 +403,52 @@ pub fn menubar_category_x_offset(category: usize) -> u16 {
     MENUBAR_CATEGORIES
         .iter()
         .take(category.min(MENUBAR_CATEGORIES.len()))
-        .map(|&(title, _)| title.chars().count() as u16 + 2)
+        .map(|cat| cat.title.chars().count() as u16 + 2)
         .sum()
 }
 
 /// Returns the number of items in `category` of the top menu bar (`ECO-03`).
+/// Number of top-level menubar categories (used for keyboard wrap-around).
+pub fn menubar_category_count() -> usize {
+    MENUBAR_CATEGORIES.len()
+}
+
 pub fn menubar_category_item_count(category: usize) -> usize {
     let cat_idx = category.min(MENUBAR_CATEGORIES.len().saturating_sub(1));
-    MENUBAR_CATEGORIES[cat_idx].1.len()
+    MENUBAR_CATEGORIES[cat_idx].items.len()
 }
 
 /// Returns the `:colon` command string for `(category, item)` in the top menu bar (`ECO-03`).
 pub fn menubar_item_command(category: usize, item: usize) -> Option<&'static str> {
-    let (_, items) = MENUBAR_CATEGORIES.get(category)?;
-    items.get(item).map(|&(_, cmd)| cmd)
+    MENUBAR_CATEGORIES.get(category)?.items.get(item).map(|entry| entry.command)
 }
 
 /// Computes the outer `Rect` of the open pull-down menu for `category` inside `workspace_area` (`ECO-03`).
 pub fn menubar_dropdown_rect(category: usize, workspace_area: Rect) -> Rect {
     let cat_idx = category.min(MENUBAR_CATEGORIES.len().saturating_sub(1));
-    let (_, items) = MENUBAR_CATEGORIES[cat_idx];
+    let items = MENUBAR_CATEGORIES[cat_idx].items;
     let x_off = menubar_category_x_offset(cat_idx);
-    let w = 30u16.min(workspace_area.width);
+    let w = MENUBAR_DROPDOWN_WIDTH.min(workspace_area.width);
     let h = (items.len() as u16 + 2).min(workspace_area.height);
     let x = (workspace_area.x + x_off)
         .min(workspace_area.x + workspace_area.width.saturating_sub(w));
     let y = workspace_area.y;
     Rect::new(x, y, w, h)
+}
+
+/// Splits `text` into spans with the mnemonic letter underlined (when the text contains it).
+fn mnemonic_spans(text: &str, mnemonic: char, style: Style, lead: &str, trail: &str) -> Vec<Span<'static>> {
+    let mut spans = Vec::with_capacity(4);
+    match crate::ui::menu_model::mnemonic_index(text, mnemonic) {
+        Some(i) => {
+            let c_len = text[i..].chars().next().map_or(1, char::len_utf8);
+            spans.push(Span::styled(format!("{lead}{}", &text[..i]), style));
+            spans.push(Span::styled(text[i..i + c_len].to_string(), style.add_modifier(Modifier::UNDERLINED)));
+            spans.push(Span::styled(format!("{}{trail}", &text[i + c_len..]), style));
+        }
+        None => spans.push(Span::styled(format!("{lead}{text}{trail}"), style)),
+    }
+    spans
 }
 
 pub(super) fn render_top_menubar(
@@ -519,7 +473,7 @@ pub(super) fn render_top_menubar(
         Color::Black
     };
     let mut spans = Vec::new();
-    for (idx, &(title, _)) in MENUBAR_CATEGORIES.iter().enumerate() {
+    for (idx, cat) in MENUBAR_CATEGORIES.iter().enumerate() {
         let is_open = wm.menubar_open_category() == Some(idx);
         let (fg, bg) = if is_open {
             if is_modern {
@@ -536,10 +490,8 @@ pub(super) fn render_top_menubar(
         } else {
             (bar_fg, bar_bg)
         };
-        spans.push(Span::styled(
-            format!(" {title} "),
-            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
-        ));
+        let style = Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD);
+        spans.extend(mnemonic_spans(cat.title, cat.mnemonic, style, " ", " "));
     }
     if wm.is_broadcast_input() {
         spans.push(Span::styled(
@@ -580,10 +532,11 @@ pub(super) fn render_menubar_dropdown(
     cfg: &BiltermConfig,
     palette: &ThemePalette,
     glyphs: &GlyphSet,
+    hints: &[Option<String>],
     buf: &mut Buffer,
 ) {
     let cat_idx = category.min(MENUBAR_CATEGORIES.len() - 1);
-    let (cat_title, items) = MENUBAR_CATEGORIES[cat_idx];
+    let (cat_title, items) = (MENUBAR_CATEGORIES[cat_idx].title, MENUBAR_CATEGORIES[cat_idx].items);
     let dropdown = menubar_dropdown_rect(cat_idx, workspace_area);
 
     render_modal_surface_and_frame(dropdown, workspace_area, cat_title, cfg, palette, glyphs, buf);
@@ -593,7 +546,7 @@ pub(super) fn render_menubar_dropdown(
     }
 
     let mut lines = Vec::with_capacity(items.len());
-    for (idx, &(label, _)) in items.iter().enumerate() {
+    for (idx, entry) in items.iter().enumerate() {
         let is_sel = idx == selected_item.min(items.len().saturating_sub(1));
         let (fg, bg) = if cfg.is_modern() {
             if is_sel {
@@ -621,17 +574,26 @@ pub(super) fn render_menubar_dropdown(
         } else {
             "  "
         };
-        lines.push(Line::from(Span::styled(
-            format!(
-                "{prefix}{label:<width$}",
-                width = usize::from(inner.width.saturating_sub(2))
-            ),
-            Style::default().fg(fg).bg(bg).add_modifier(if is_sel {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            }),
-        )));
+        let style = Style::default().fg(fg).bg(bg).add_modifier(if is_sel {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        });
+        let hint = hints.get(idx).and_then(|h| h.as_deref()).unwrap_or("");
+        let text_w = usize::from(inner.width.saturating_sub(2));
+        let hint_w = hint.chars().count();
+        let label_w = entry.label.chars().count();
+        // Right-align the accelerator; a hint that does not fit next to the label is dropped.
+        let (hint, pad) = if label_w + hint_w < text_w {
+            (hint, text_w - label_w - hint_w)
+        } else {
+            ("", text_w.saturating_sub(label_w))
+        };
+        let mut spans = vec![Span::styled(prefix.to_string(), style)];
+        spans.extend(mnemonic_spans(entry.label, entry.mnemonic, style, "", ""));
+        spans.push(Span::styled(" ".repeat(pad), style));
+        spans.push(Span::styled(hint.to_string(), style.add_modifier(Modifier::DIM)));
+        lines.push(Line::from(spans));
     }
     Block::default()
         .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))

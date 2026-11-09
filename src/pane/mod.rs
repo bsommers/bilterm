@@ -1,5 +1,8 @@
 pub mod browser_canvas;
+pub mod copy_motion;
+pub mod copy_search;
 mod output_tap;
+mod traffic_tap;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -23,7 +26,7 @@ pub use canvas_scene::{
 pub use exit_guard::{
     ExitGuardChoice, ExitGuardState, ExitProtectionPolicy, HeldExitedShellState, LinkBanner,
 };
-pub use modes::{CanvasSearchState, CopyModeState, CopySelectionKind, HintsModeState};
+pub use modes::{CanvasSearchState, CopyModeState, CopyOrigin, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
 pub use scroll::{PaneScrollMode, PaneScrollState};
 pub use typography::{
@@ -56,6 +59,8 @@ pub struct CompositePane {
     title: String,
     pub(crate) vt: VtParser,
     pty: Option<PtySession>,
+    /// Lazily created payload traffic cell (tmux-mapped panes, events); see `traffic_tap.rs`.
+    payload_traffic: std::sync::OnceLock<crate::traffic::TrafficTap>,
     prompt: FloatingPromptState,
     history_store: HistoryStore,
     line_discipline: LineDisciplineState,
@@ -112,12 +117,18 @@ pub struct CompositePane {
     exit_code: Option<i32>,
     /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text unless media is on the clipboard (`CLIP-01`).
     smart_ctrl_v_paste: bool,
+    /// Effective key bindings pushed by the owning workspace before each key (Phase 63); `legacy` standalone.
+    keymap: crate::input::keyprofile::EffectiveKeymap,
     /// Pending clipboard/yank events waiting to be drained into `ClipboardRegistry`.
     pending_clipboard_records: Vec<(crate::clipboard::ClipboardSource, String)>,
     /// Pending media passthrough events waiting to be drained into `ClipboardRegistry`.
     pending_media_records: Vec<(String, usize)>,
     /// Live STT status badge rendered in the 3270 OIA status bar (`STT-02`, `STT-03`).
     stt_badge: Option<String>,
+    mouse_select_sticky: bool,
+    toast_expires_at: Option<u64>,
+    last_tick_ms: u64,
+    last_click: Option<(u64, u16, u16, u8)>,
     pub(crate) browser_canvas: Option<browser_canvas::BrowserCanvasState>,
     pub(crate) video_canvas: Option<video_canvas::VideoCanvasState>,
 }
@@ -138,6 +149,7 @@ impl CompositePane {
             title,
             vt: VtParser::new(canvas_rows, canvas_cols, scrollback_lines),
             pty,
+            payload_traffic: std::sync::OnceLock::new(),
             prompt: FloatingPromptState::default(),
             history_store,
             line_discipline: LineDisciplineState::default(),
@@ -169,9 +181,14 @@ impl CompositePane {
             link_banner: None,
             exit_code: None,
             smart_ctrl_v_paste: true,
+            keymap: crate::input::keyprofile::EffectiveKeymap::legacy_default(),
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),
             stt_badge: None,
+            mouse_select_sticky: false,
+            toast_expires_at: None,
+            last_tick_ms: 0,
+            last_click: None,
             browser_canvas: None,
             video_canvas: None,
         }
@@ -718,6 +735,7 @@ impl CompositePane {
 
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
+        self.observe_ingest(bytes);
         self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
@@ -772,6 +790,7 @@ impl CompositePane {
             // Every byte must reach the parser in order: truncating the stream splits escape
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.observe_ingest(&coalesced);
             self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
@@ -794,11 +813,14 @@ impl CompositePane {
 
     /// Writes raw bytes to the underlying `PtySession` if one is attached (`v1.1.0` / `v1.4.0`).
     pub fn write_to_pty(&mut self, bytes: &[u8]) -> Result<()> {
+        self.count_pty_less_tx(bytes.len());
         self.last_pty_write.clear();
         self.last_pty_write.extend_from_slice(bytes);
         if self.remote_input_tap {
             let room = crate::tmux::link::REMOTE_INPUT_CAP.saturating_sub(self.remote_input.len());
             self.remote_input.extend_from_slice(&bytes[..bytes.len().min(room)]);
+            // Remote-tapped panes deliver through the link only; never also to a local PTY.
+            return Ok(());
         }
         if let Some(pty) = &self.pty {
             pty.write_all(bytes)?;
@@ -824,6 +846,15 @@ impl CompositePane {
         self.smart_ctrl_v_paste = enabled;
     }
 
+    /// The key bindings this pane routes with (`legacy` until its workspace pushes the active profile).
+    pub fn keymap(&self) -> &crate::input::keyprofile::EffectiveKeymap {
+        &self.keymap
+    }
+
+    pub fn set_keymap(&mut self, keymap: crate::input::keyprofile::EffectiveKeymap) {
+        self.keymap = keymap;
+    }
+
     pub fn record_clipboard_event(
         &mut self,
         source: crate::clipboard::ClipboardSource,
@@ -831,11 +862,13 @@ impl CompositePane {
     ) {
         let text = text.into();
         if !text.is_empty() {
+            self.count_event(text.len());
             self.pending_clipboard_records.push((source, text));
         }
     }
 
     pub fn record_media_passthrough(&mut self, mime: impl Into<String>, bytes_len: usize) {
+        self.count_event(bytes_len);
         self.pending_media_records.push((mime.into(), bytes_len));
     }
 
@@ -851,6 +884,7 @@ impl CompositePane {
 
     fn drain_osc52_decoded(&mut self) {
         for decoded in self.vt.take_osc52_decoded() {
+            self.count_event(decoded.len());
             crate::clipboard::set_system_clipboard(&decoded);
             self.prompt.push_yank_entry(&decoded);
             let _ = self.history_store.record_clipboard_entry(&decoded);

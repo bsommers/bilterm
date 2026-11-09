@@ -82,13 +82,13 @@
 | **`F12`** / `Ctrl+G` | `<L> g` / `<L> F12` | `:raw` | Toggle between `INPUT: CMD BOX` and `INPUT: RAW PTY` |
 | **`Ctrl+P`** / `Alt+Space` | `<L> :` / `<L> Space` | `:palette` / `:cmd` | Open interactive Fuzzy Command Palette (`nucleo-matcher`) |
 | `Alt+1` .. `Alt+9` | `<L> 1` .. `<L> 9` | `:focus <1..9>` | Selectively raise and focus pane `#1..#9` |
-| `Alt+M` | `<L> M` | `:layout stack\|tile` | Toggle between Tiled Splits and Overlapping Z-Order Cascade |
+| `Cmd+L` / `Ctrl+Shift+L` | `<L> M` / `<L> w s` | `:layout stack\|tile\|cycle` | Toggle between Tiled Splits and Overlapping Z-Order Cascade |
 | `Alt+W` | `<L> w` | `:close` | Close focused composite pane |
 | `Alt+L` | `<L> l` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane |
 | `Alt+P` | `<L> P` / `<L> H` | `:history` / `:hist` | Toggle Borland Command History Pop-up Window |
 | — | `<L> R` | `:record workspace` | Start or stop whole-workspace Asciicast v2 (`.cast`) recording (`⏺ REC`) |
 | `Ctrl+Alt+R` | `<L> U` | `:ssh-tmux reconnect` | Reconnect persistent remote tmux link now (skips retry timer; reserved in raw passthrough; menu Tmux > Reconnect link) |
-| — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (menu Tmux > SSH tmux link...) |
+| — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter`. Works from any state: closes open modals, leaves copy mode, and works while a link waits for a password (menu Tmux > SSH tmux link...) |
 | — | `<L> Q` | `:ssh-tmux disconnect` | Stop persistent remote tmux link; remote tmux session keeps running (menu Tmux > Disconnect link) |
 | `Alt+X` | `<L> x` | `:crosshair` | Cycle IBM 3270 Cross-Hair Cursor (`Pane-Local` -> `Full-Screen` -> `Off`) |
 | `Alt+O` | `<L> L` | `:spotlight` | Cycle Focal Spotlight shader around active cursor (`Circle` -> `Ellipse` -> `Pixel` -> `Off`) |
@@ -129,7 +129,7 @@ When an active pane shows an interactive link banner (`Backoff`, `Failed`, `Deta
 | `x` / `X` | `:ssh-tmux disconnect` | Stop remote tmux link; remote tmux session keeps running |
 | `d` / `D` | `:detach` | Detach Bilterm client |
 
-Non-interactive banners (`Connecting`) pass keystrokes directly to the PTY raw so password and SSH prompts are never swallowed.
+Non-interactive banners (`Connecting`) pass keystrokes directly to the remote `ssh` process raw, so password and SSH prompts are never swallowed. While connecting, the command prompt is hidden and typed characters are not echoed on screen.
 
 ### Menu bar entries added in Phase 51 & Phase 51.1
 
@@ -139,12 +139,61 @@ Non-interactive banners (`Connecting`) pass keystrokes directly to the PTY raw s
 | View > Agent Demo (Ctrl+X y) | `:agents demo` |
 | View > Stop Agent Demo (Ctrl+X Y) | `:agents demo stop` |
 | Window > Tile Windows & Panels | `:arrange grid` |
+| Window > Tile Windows | `:layout tile` |
+| Window > Toggle Stack/Tile | `:layout cycle` |
+| Window > Window Mode | `:wmode` |
+| Help > Keyboard Conflicts... | `:keys check` |
 | Tmux > SSH tmux link... (Ctrl+X u) | `:ssh-tmux prefill` |
 | Tmux > Reconnect link (Ctrl+Alt+R) | `:ssh-tmux reconnect` |
 | Tmux > Disconnect link (Ctrl+X Q) | `:ssh-tmux disconnect` |
 | Tmux > Link info | `:ssh-tmux info` |
 
 Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded exclusion with a reason. `:arrange` has no key chord: use the palette (`Ctrl+P`, then `arrange`) or the Window menu. The full mapping is in [Chapter 11, Surface uniformity](11-navigator-sidebar-and-agent-traffic.md#surface-uniformity).
+
+### Keyboard-first navigation (Window mode, which-key, menu bar)
+
+Everything the mouse does to windows, the drawer and the menu bar is reachable from the keyboard without typing a `:command`.
+`Primary` below means `Cmd` on macOS (GUI), `Ctrl+Shift` on Windows and Linux (GUI, and terminals that speak the kitty keyboard protocol); plain terminals have no `Primary`, so use the leader (`Ctrl+X`).
+
+| Capability | Keys | `:command` |
+|------------|------|------------|
+| Enter sticky **Window mode** | `Primary+O`, leader `w` (`Ctrl+X w`), menu `Window > Window Mode` | `:wmode` |
+| Toggle tiled / stacked layout | `Cmd+L` / `Ctrl+Shift+L`, leader `M` (`Ctrl+X M`), Window mode `Space` | `:layout cycle` |
+| Stack windows / tile windows | Window mode `s` / `t` (`Ctrl+X w s`, `Ctrl+X w t`) | `:layout stack` / `:layout tile` |
+| Open the menu bar | `Primary+;`, leader `m` (`Ctrl+X m`) | `:menu open [category]` |
+| Show every key of the current mode | wait `keys.which_key_delay_ms` (400 ms), or press `?` | - |
+
+**Window mode** stays active until you leave it with `Esc`, `Enter` or `q`; no byte reaches the child process while it is active (it also works over a full-screen application).
+Unknown keys are ignored and a hint is shown.
+
+| Key | Window mode action |
+|-----|--------------------|
+| `h` `j` `k` `l` / arrows | move focus left / down / up / right |
+| `1`..`9` | jump to window N |
+| `Tab` / `n`, `Shift+Tab` / `p` | next / previous window in the deck |
+| `z` | zoom the focused window |
+| `s` / `t` / `Space` | stacked layout / tiled layout / cycle layout |
+| `-` or `"`, `\|` or `%` | split horizontally / vertically |
+| `x` | close the focused window |
+| `d` / `D` | toggle / focus the drawer |
+| `c` or `[` | copy mode (leaves Window mode) |
+| `a`, `/`, `:` | agents list, find, command palette (leave Window mode) |
+| `<` `>` `J` `K` | one-key resize and move steps |
+| `r` / `m` / `f` | switch to the Resize / Move / Focus sub-mode (`h j k l` then resize or move the window) |
+| `?` | pin the which-key panel |
+| `Esc`, `Enter`, `q` | leave Window mode |
+
+**Menu bar keys:** `Left` / `Right` / `Tab` change the category, `Up` / `Down` / `Home` / `End` the item, `Enter` runs it, `Esc` closes.
+A letter picks the item whose underlined letter it is; `Alt+letter` or `Shift+letter` jumps to the category with that mnemonic (`S`ystem, `W`indow, `P`rompt, `V`iew, `T`heme, tmu`X`, `H`elp, `D`aemon, W`E`b).
+The accelerator at the right of every item is computed from the active key profile, so it is correct for your OS (`⌘L` on macOS, `Ctrl+Shift+L` on Windows and Linux, `Ctrl+X M` in a plain terminal).
+
+**Profiles and configuration.** `[keys] profile` is `auto` (default: `mac`, `windows` or `linux` by host), `portable` (leader and Window mode only, no modifiers beyond `Ctrl+X`), or `legacy` (the pre-Phase-63 tables). Related keys: `which_key = true`, `which_key_delay_ms = 400`, `kitty_protocol = "auto"`, `legacy_alt = "auto"`, `[keys.bind]` (chord = `:command`), `[keys.window_mode]` (key = `:command`, added to Window mode) and `[keys.unbind]`. `:keys profile [name]` switches for the session.
+
+**macOS: Option as Meta.** The `mac` profile binds no `Alt+<printable>` window-manager chord because `Option+key` types accented or symbol characters. Option+key is delivered to the application as text, except the prompt-editing keys `Option+b`, `Option+f`, `Option+d`, `Option+y`, `Option+Backspace`, `Option+Delete` and `Option+Left` / `Option+Right`. For `Meta`-style shortcuts inside shells and editors enable "Use Option as Meta" in your host terminal; in the Bilterm GUI use `Cmd`, the leader or Window mode instead.
+
+#### Legacy (Alt) chords
+
+The previous defaults stay available on the `legacy` profile and, for one release, on `windows` and `linux` while `legacy_alt = "auto"`: `Alt+H` / `Alt+V` split, `Alt+Z` zoom, `Alt+W` close, `Alt+M` toggles tiled and stacked layout, `Alt+1`..`Alt+9` focus a window. They are never bound on `mac` or `portable`, and `Alt+M` in particular collides with Claude Code on Windows and with the macOS compose key, so prefer `Cmd+L` / `Ctrl+Shift+L`.
 
 ---
 
@@ -382,7 +431,7 @@ Every colon verb has a command-palette entry (`Ctrl+P`, then type) or a recorded
 | `:ssh-tmux reconnect` | — | *(none)* | Reconnect the persistent remote tmux link immediately (skips backoff timer; `Ctrl+Alt+R` / `Ctrl+X U`) |
 | `:ssh-tmux disconnect` | — | *(none)* | Stop the remote tmux link; remote tmux session keeps running on the host (`Ctrl+X Q`) |
 | `:ssh-tmux info` | — | *(none)* | Show tmux link state, retry timer, last exit reason and mapped panes |
-| `:ssh-tmux prefill` | — | *(none)* | Open prompt prefilled with `:ssh-tmux ` ready to type `<user@host> [session]` (`Ctrl+X u`) |
+| `:ssh-tmux prefill` | — | *(none)* | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter` (`Ctrl+X u`). Works from normal, raw passthrough, copy mode, a waiting-for-password link, or with a menu/modal open (closes modals, leaves copy mode) |
 | `:remote` | `:fleet`, `:herdr` | `list \| add <name> <user@host> [@tag1,@tag2] \| exec <all\|local\|remote\|@tag\|node> <cmd> \| disconnect <name>` | Register remote fleet nodes, inspect fleet status, fan out commands by `@tag`, or disconnect nodes |
 
 ### 6.8 Workspace Sessions, Master Control Program (`:mcp`), Exit Guard, Recording & Inspection

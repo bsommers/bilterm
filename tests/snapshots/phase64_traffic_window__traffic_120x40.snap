@@ -1,0 +1,35 @@
+---
+source: tests/phase64_traffic_window.rs
+expression: "text(&render(&w, ws))"
+---
+
+
+
+
+
+
+
+
+
+                  ╔  TRAFFIC MONITOR  ════════════════════════════════════════════════════[o]][□][[×]╗
+                  ║1s RX8.8K TX6.6K|10s RX19.3K TX2.8K|1m RX19.3K TX2.8K|TOT RX154K TX22.1K          ║
+                  ║[Conn] [Sess] [Win] [Pane] [Orig] [Loc] [Dir]                                     ║
+                  ║/ filter:                                              [All] [Local] [Loop] [Net] ║
+                  ║NAME           LOC    RX/s    TX/s     10s      1m  TOT RX  TOT TX ESC%      SPARK║
+                  ║tmux-link:ba…  NET    8.8K      0B    3.3K    3.3K   26.4K      0B   0%        ███║
+                  ║ws:web-1       LB       0B    5.9K    2.2K    2.2K      0B   17.6K   0%        ███║
+                  ║rpc-unix       L        0B    800B    300B    300B      0B    2.3K   0%        ███║
+                  ║local          L        0B      0B    781B    781B    5.9K    250B   0%   ▅▆▆▇█   ║
+                  ║ssh:prod-db:…  NET      0B      0B   12.5K   12.5K   97.7K    2.0K   0%   █████   ║
+                  ║ssh:web-1:22…  NET      0B      0B    3.1K    3.1K   24.4K      0B   0%   █████   ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║                                                                                  ║
+                  ║tmux-link:bastion/work RX                       ███ TX                            ║
+                  ║[p Pause] [x Reset] [Enter Drill]  Tab:group s:sort /:filter l:locality P/D:pin/do║
+                  ╚══════════════════════════════════════════════════════════════════════════════════◢

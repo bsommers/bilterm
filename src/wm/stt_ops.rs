@@ -7,6 +7,7 @@ use crate::wm::WindowManager;
 
 pub fn ensure_stt_worker(wm: &mut WindowManager) -> Option<&mut SttHandle> {
     if wm.stt_handle.is_none() {
+        crate::stt::provider::set_traffic_meter(Some(wm.traffic_meter()));
         let handle = SttWorker::spawn_autonomous(wm.config().stt.clone());
         wm.stt_handle = Some(handle);
     }

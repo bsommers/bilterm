@@ -60,7 +60,7 @@ The tree has three levels. Workspace and session rows take one line; with the de
 ▸ notes                ○1            folded workspace
 ```
 
-- **Second line**: a shell-prompt style `user@host  path`, indented under the `#id`. A local pane shows your login, the short host name and the pane's live working directory (`~` for your home). A pane attached to a remote host (`:ssh`, `:ssh-tmux`) shows that destination and only the directory its shell reported over `OSC 7`. A pane that exposes neither shows no second line. The whole two-line row is one click target and is highlighted as a unit; the dot, `[+]`, fold marker and comms glyph stay on line 1. Classic drawer style ignores `row_lines`.
+- **Second line**: a shell-prompt style `user@host  path`, indented under the `#id`. A local pane shows your login, the short host name and the pane's live working directory (`~` for your home). A pane attached to a remote host (`:ssh`, `:ssh-tmux`) shows that destination and only the directory its shell reported over `OSC 7`. A pane that exposes neither shows no second line. The whole two-line row is one click target and is highlighted as a unit; the dot, `[+]`, fold marker and comms glyph stay on line 1. `:drawer rows 1|2` mutates only the active style's setting (`row_lines` in Navigator, `classic_row_lines` in Classic, where `0` = auto, `1` = one line, `2` = two lines: title line then telemetry line) and names the active style in the status bar (`:drawer style` toggles styles). In Classic style you can also toggle row height via the `[R:n]` header/title chip, keys `2` / `1` while the drawer is focused, or the `View` menu (`Drawer Rows: 1 line` / `Drawer Rows: 2 lines`); horizontal-edge (`top`/`bottom`) Classic drawers always render one line per strip.
 
 - **Fold markers**: `▾` open, `▸` folded (ASCII pack `-` / `+`). Workspaces are the roots of the session tree; saved (not running) sessions appear with a pane rollup.
 - **Current pane**: marked with `›` (ASCII `>`).
@@ -395,7 +395,7 @@ The strip is recomputed from the live workspace, so a terminal resize keeps the 
 
 Moving, resizing, closing or floating a docked panel releases its space in the strip. The docked state is not written to layout profiles or to config. With no list, traffic window or `:mcp` console open, arrange behaves as it did before.
 
-Unchanged by this: `:layout tile`, `:layout stack`, `:layout cycle` and `Alt+M` (these switch the tiled and stacked modes and never dock panels), and the drawer's own Push or Overlay setting.
+Unchanged by this: `:layout tile`, `:layout stack`, `:layout cycle` and their keys `Cmd+L` / `Ctrl+Shift+L` (these switch the tiled and stacked modes and never dock panels), and the drawer's own Push or Overlay setting.
 
 ## Command palette coverage
 

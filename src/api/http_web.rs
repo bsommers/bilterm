@@ -22,6 +22,8 @@ pub struct WebServeOptions {
     pub hub: OutputHub,
     pub static_root: Option<StaticRoot>,
     pub cors_origin: Option<String>,
+    /// Traffic meter of the bound plane's `WindowManager` (Phase 64); `None` = not metered.
+    pub meter: Option<crate::traffic::TrafficMeter>,
 }
 
 impl WebServeOptions {
@@ -29,6 +31,7 @@ impl WebServeOptions {
     /// `WindowManager` reports this server's web surface (so `:web status` sees it).
     pub fn bind_plane(&mut self, plane: &mut AutomationControlPlane) {
         self.hub = plane.output_hub.clone();
+        self.meter = Some(plane.wm.traffic_meter());
         self.surface.set_web_dir(self.static_root.as_ref().map(|r| r.path().to_path_buf()));
         self.surface.set_cors_origin(self.cors_origin.clone());
         plane.wm.set_web_surface(self.surface.clone());
@@ -113,7 +116,7 @@ pub async fn tokens_css(tx: &mpsc::Sender<RpcRequest>) -> Option<String> {
 
 /// Completes the `/ws` upgrade and runs the protocol bridge.
 pub async fn upgrade(
-    mut stream: tokio::net::TcpStream,
+    mut stream: super::metered::Metered<tokio::net::TcpStream>,
     header: impl Fn(&str) -> Option<String>,
     full_path: &str,
     header_authed: bool,
@@ -143,6 +146,8 @@ pub async fn upgrade(
         surface: opts.surface.clone(),
         token,
         pre_authed: header_authed || query_authed,
+        meter: opts.meter.clone(),
     };
-    serve_ws(stream, ctx).await
+    // The handshake was counted on the HTTP channel; frames are counted on `ws:web-N`.
+    serve_ws(stream.into_inner(), ctx).await
 }

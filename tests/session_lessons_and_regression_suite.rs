@@ -40,6 +40,11 @@ fn render_wm_text(wm: &WindowManager, area: Rect) -> String {
 #[test]
 fn lesson_1_macos_option_dead_keys_and_held_ctrl_leader_chords() {
     let mut wm = WindowManager::new_headless(24, 80);
+    // The Option-symbol normalizer only runs for a macOS TUI (Phase 63, KEY-02).
+    wm.set_key_env(bilterm::input::keyenv::KeyEnv::new(
+        bilterm::input::keyenv::HostOs::MacOs,
+        bilterm::input::keyenv::Surface::Tui,
+    ));
     assert_eq!(wm.pane_count(), 1);
 
     // On macOS, Option+V emits '√' with KeyModifiers::NONE. Verify it normalizes to Alt+V (split vertical).

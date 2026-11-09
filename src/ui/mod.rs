@@ -3,10 +3,14 @@ pub mod agents_list_ui;
 pub mod agents_ui;
 pub mod clipboard_window_gui;
 pub mod clipboard_window_ui;
+pub mod traffic_monitor_gui;
+pub mod traffic_monitor_ui;
 pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
 pub mod contrast;
+pub mod copy_hints;
+pub mod daemon_window_ui;
 pub mod exit_guard_ui;
 pub mod file_browser;
 pub mod find_ui;
@@ -26,6 +30,7 @@ pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod media_canvas_gui;
+pub mod menu_model;
 pub mod modals;
 pub mod occlusion;
 pub mod pane_actions;
@@ -43,6 +48,7 @@ pub mod theme;
 pub mod theme_import;
 pub mod typography;
 pub mod visual_style;
+pub mod which_key_ui;
 
 pub use canvas_raster::{braille_char_from_mask, render_graphical_canvas, sextant_char_from_mask};
 pub use drawer::render_workspace_drawer;
@@ -444,8 +450,11 @@ fn render_output_canvas(
         }
     }
 
-    // Highlight Vi Copy Mode or mouse drag selection and cursor (VAL-04)
-    if pane.copy_mode().active || pane.copy_mode().has_selection() {
+    // Highlight Vi Copy Mode or mouse drag selection and cursor (VAL-04, COPY-02)
+    if pane.copy_mode().active
+        || pane.copy_mode().has_selection()
+        || pane.copy_mode().flash_region.is_some()
+    {
         for r in 0..render_rows {
             for c in 0..render_cols {
                 if pane.copy_mode().is_cell_selected(r, c)
@@ -741,12 +750,13 @@ impl Widget for WorkspaceWidget<'_> {
             navigator::render_navigator(self.wm, bar, &palette, buf);
         } else if let Some(menubar_rect) = shell.top_bar {
             render_top_menubar(menubar_rect, self.wm, &palette, buf);
-            if let Some((cat, sel_item)) = self.wm.menubar_state()
-                && workspace_area.height >= 6
-                && workspace_area.width >= 24
-            {
-                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
-            }
+        }
+        if let Some((cat, sel_item)) = self.wm.menubar_state()
+            && workspace_area.height >= 6
+            && workspace_area.width >= 24
+        {
+            let hints = menu_model::dropdown_hints(self.wm, cat);
+            render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, &hints, buf);
         }
 
         if let Some(fkey_rect) = shell.bottom_bar {
@@ -767,9 +777,13 @@ impl Widget for WorkspaceWidget<'_> {
             session_map_ui::render_session_map(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         fonts_window_ui::render_fonts_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        daemon_window_ui::render_daemon_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Clipboard) == 100 {
             clipboard_window_ui::render_clipboard_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Traffic) == 100 {
+            traffic_monitor_ui::render_traffic_monitor(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         script_studio_ui::render_script_studio(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
@@ -792,6 +806,8 @@ impl Widget for WorkspaceWidget<'_> {
         {
             find_ui::render_find_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+
+        which_key_ui::render_which_key(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if let Some(exit_state) = self.wm.exit_guard_state() {
             render_exit_guard_modal(buf, workspace_area, &palette, exit_state);
