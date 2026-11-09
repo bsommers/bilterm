@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use bilterm::api::metered::Metered;
 use bilterm::api::{AutomationControlPlane, WebServeOptions};
 use bilterm::pane::CompositePane;
+#[cfg(target_os = "linux")]
 use bilterm::pty::{PtyConfig, PtySession};
 use bilterm::tmux::TmuxControlSubprocess;
 use bilterm::tmux::link::{
@@ -24,6 +25,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const ON: u8 = F_ENABLED;
 
+#[cfg(target_os = "linux")]
 fn sh(script: &str) -> PtyConfig {
     PtyConfig {
         program: "sh".into(),
