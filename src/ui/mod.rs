@@ -26,6 +26,7 @@ pub mod graph_raster;
 pub mod hires_subcell;
 pub mod mcp_ui;
 pub mod media_canvas_gui;
+pub mod menu_model;
 pub mod modals;
 pub mod occlusion;
 pub mod pane_actions;
@@ -746,7 +747,8 @@ impl Widget for WorkspaceWidget<'_> {
                 && workspace_area.height >= 6
                 && workspace_area.width >= 24
             {
-                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, buf);
+                let hints = menu_model::dropdown_hints(self.wm, cat);
+                render_menubar_dropdown(cat, sel_item, workspace_area, cfg, &palette, &glyphs, &hints, buf);
             }
         }
 

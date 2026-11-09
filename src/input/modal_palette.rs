@@ -497,28 +497,6 @@ pub(super) fn handle_active_modal_overlay_key(
             Ok(Some(AppAction::Handled))
         }
         Modal::Find { .. } => crate::input::find_modal::handle_find_modal_key(wm, key),
-        Modal::Menubar { category, item } => {
-            let (cat, sel) = (*category, *item);
-            match key.code {
-                KeyCode::Esc => wm.close_modal(),
-                KeyCode::Left => {
-                    *category = (cat + 6) % 7;
-                    *item = 0;
-                }
-                KeyCode::Right => {
-                    *category = (cat + 1) % 7;
-                    *item = 0;
-                }
-                KeyCode::Up => *item = sel.saturating_sub(1),
-                KeyCode::Down => {
-                    let max_idx =
-                        crate::ui::modals::menubar_category_item_count(cat).saturating_sub(1);
-                    *item = (sel + 1).min(max_idx);
-                }
-                KeyCode::Enter => return execute_menubar_selection(wm, cat, sel).map(Some),
-                _ => {}
-            }
-            Ok(Some(AppAction::Handled))
-        }
+        Modal::Menubar { .. } => crate::input::menu_keys::handle_menubar_key(wm, key),
     }
 }

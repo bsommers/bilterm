@@ -27,7 +27,7 @@
    - 3-signal password interception detects dropped `ECHO` flags, terminal queries, and PAM password prompts, locking prompt history and signaling `!ECHO LOCK` on the 3270 OIA bar.
    - Raw passthrough mode (`F12` / `:raw`) routes bytes directly to the PTY master.
 4. **Windowing & Retro Aesthetics:**
-   - Dual topology: Binary Space Partitioned (BSP) tiling (`F2`/`Alt+H`, `Alt+V`, `F5`) + Borland Turbo Vision Z-order cascading window decks (`Alt+M`, `F6`, `Alt+1..9`) + Guake scratchpad dropdown (`F10`).
+   - Dual topology: Binary Space Partitioned (BSP) tiling (`F2`/`Alt+H`, `Alt+V`, `F5`) + Borland Turbo Vision Z-order cascading window decks (`Cmd+L` / `Ctrl+Shift+L`, `F6`, `Alt+1..9`) + Guake scratchpad dropdown (`F10`).
    - 5 retro palettes (`turbo-blue`, `turbo-cyan`, `3278` phosphor green, `3279` amber, `mono`), CP437 double borders (`╔═╗`), character-cell drop shadows, CRT scanlines (`:crt`), and IBM 3270 cross-hairs (`Alt+X`).
    - Math shaders: In-TUI Focal Spotlight (`Alt+O`) and Focal Zoom Lens (`Alt+Shift+O`) with Hermite `smoothstep` falloff; passthrough for Kitty graphics (`APC G`) and Sixel (`DCS q`).
 5. **Infrastructure & Agent Automation:**
@@ -82,7 +82,7 @@
 - **Header:** Dual Topology: BSP Tiling + Z-Order Cascade Deck
 - **Comparison Matrix:**
   - **Binary Space Partitioning (BSP):** `F2` / `Alt+H` (horizontal split), `Alt+V` (vertical split), `F5` (full-pane zoom). Dynamic ratio rebalancing.
-  - **Borland Turbo Vision Z-Deck:** `Alt+M` (toggle tile/stack), `F6` (shuffle deck), `Alt+1..9` (direct index). Character-cell drop shadows and active-frame highlight.
+  - **Borland Turbo Vision Z-Deck:** `Cmd+L` / `Ctrl+Shift+L`, `Ctrl+X M` or Window mode `s` (toggle tile/stack), `F6` (shuffle deck), `Alt+1..9` (direct index). Character-cell drop shadows and active-frame highlight.
   - **Guake Dropdown:** `F10` persistent scratchpad overlay slides from top of screen without interrupting active workspace.
 
 ## Slide 6: Visual Pipeline & Shaders
@@ -207,7 +207,7 @@ Running `yes` or dumping megabytes of logs cannot starve your keyboard input or 
 
 ### [2:20 - 3:15] PART 4: MAINFRAME RIGOR & BORLAND TURBO VISION AESTHETICS
 **[VISUAL]**: Tour of visual capabilities:
-1. `Alt+M` switches from BSP tiled splits to Borland Z-order cascading window decks.
+1. `Cmd+L` / `Ctrl+Shift+L` (or Window mode `s`) switches from BSP tiled splits to Borland Z-order cascading window decks.
 2. `F6` shuffles windows with character-cell drop shadows.
 3. `Alt+X` toggles full-screen IBM 3270 cross-hairs tracking the active cursor.
 4. `:theme 3278` shifts display to vivid phosphor green CRT with scanlines (`:crt`).
@@ -216,7 +216,7 @@ Running `yes` or dumping megabytes of logs cannot starve your keyboard input or 
 **[AUDIO - VO]**:  
 "Bilterm’s interface pays homage to two legendary eras of computing: IBM 3270 mainframe terminals and Borland Turbo Vision.
 
-You get double-line CP437 box-drawing borders, drop shadows, and full Z-order window stacking with Alt+M and F6. Toggle between binary space partitioned splits or shuffle overlapping panes in a true window deck.
+You get double-line CP437 box-drawing borders, drop shadows, and full Z-order window stacking with Cmd+L (Ctrl+Shift+L) and F6. Toggle between binary space partitioned splits or shuffle overlapping panes in a true window deck.
 
 Press Alt+X to toggle IBM 3270 cross-hairs—hardware-style row and column guide lines that follow your cursor across the grid.
 

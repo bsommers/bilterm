@@ -1,0 +1,34 @@
+---
+source: tests/phase63_window_mode_and_menu.rs
+expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
+---
+ ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
+┌ [1] PANE #1 (Z:1/3) ────╔ View ══════════════════════[_][□][X]═╗][□][X]─┐╔ [3] PANE #3 [_][□][X]═╗
+│ ┌╣ BILTERM 3270 // CMD [║► 3270 Field Hints            Ctrl+X f║0 // C┐ │║ ╔╣ BILTERM 3270 // C╗ ║
+│ │==>                    ║  Vi Copy Mode                Ctrl+X c║      │ │║ ║==>                ║ ║
+│ └───────────────────────║  Rectangular Select          Ctrl+X r║──────┘ │║ ╚═══════════════════╝ ║
+│                         ║  Toggle Rect Mouse Mode              ║        │║                       ║
+│                         ║  Cross-Hair Ruler                    ║        │║                       ║
+│                         ║  DOS F-Key Bar                       ║        │║                       ║
+│                         ║  Agent Traffic             Ctrl+Alt+A║        │║                       ║
+│                         ║  Find Agents               Ctrl+X w /║        │║                       ║
+│                         ║  Find Sessions                       ║        │║                       ║
+│                         ║  Find Command History                ║        │║                       ║
+│                         ║  Agents List                 Ctrl+X A║        │║                       ║
+│                         ║  Agent Demo                  Ctrl+X y║        │║                       ║
+│                         ║  Stop Agent Demo             Ctrl+X Y║        │║                       ║
+│                         ║  Fonts Window                        ║        │║                       ║
+│                         ║  Command Palette Window              ║        │║                       ║
+│                         ║  Clipboard Viewer            Ctrl+X ;║        │║                       ║
+│                         ║  Script Studio                       ║        │║                       ║
+│                         ║  Drawer Peek Preview         Ctrl+X P║        │║                       ║
+│                         ║  Voice Dictation Toggle      Ctrl+X ,║        │║                       ║
+│                         ║  Browser Canvas              Ctrl+X .║        │║                       ║
+│                         ║  Video Canvas                Ctrl+X '║        │║                       ║
+│                         ╚══════════════════════════════════════◢        │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│                                                ││                       │║                       ║
+│3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖││3270-OIA│ ● READY │ INP│║3270-OIA│ ● READY │ INP║
+└────────────────────────────────────────────────◢└───────────────────────◢╚═══════════════════════◢
