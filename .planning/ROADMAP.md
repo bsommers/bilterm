@@ -62,6 +62,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
 - [x] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
 - [x] **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1, atomic `workspace.view_model` RPC & REST endpoints with CSS design tokens export, multi-client `ClientViewState` registry, static SPA serving, and full `UNI-R01` surface parity (`WEB-FE-01..04`)
+- [ ] **Phase 61: Window & Drawer Regression Fixes** - Fix Classic drawer row lines, Zoom input fall-through, and preserve per-pane state across stacked-window switches (`FIX-01..03`)
+- [ ] **Phase 62: Copy Mode Ergonomics & Nested-TUI Copy Fix** - Reliable copying over nested TUIs (Alt-screen/mouse-tracking) and streamlined copy mode navigation (`COPY-01..02`)
+- [ ] **Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization** - Pure-keyboard window/pane/menu navigation, per-OS key profiles, and collision-free hotkeys (`KEY-01..03`)
+- [ ] **Phase 64: First-Class Terminal Traffic Monitor** - Measure and display aggregate terminal traffic across boundaries via zero-cost instrumentation and TRAFFIC MONITOR window (`TRAF-01..04`)
+- [ ] **Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`)** - Type-safe domain invariants with `SignalablePid`, `PaneTransport` decoupling, and mouse focus isolation (`GUARD-01..03`)
 
 ## Phase Details
 
@@ -1198,6 +1203,22 @@ Plans:
   - [ ] 64-03-PLAN.md — TRAFFIC MONITOR window & UNI-R01 surfaces (wave 2)
 - Status: **PLANNED**
 
+### Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (GUARD-01..03)
+
+**Goal**: Fortify critical architectural boundaries and eliminate class-wide bug categories via type-safe domain modeling and event isolation: establish `SignalablePid` to eliminate dangerous broadcast/process-group signaling, decouple `PaneTransport` into an explicit sum type separating local PTYs from remote link transports, and enforce strict mouse focus isolation so inactive-window clicks are consumed as focus events without bleed-through.
+**Depends on**: Phase 21 (`ARCH-R02`), Phase 28 (`ARCH-R01..04`), Phase 51.1 (`PST-01..04`), Phase 55 (`DAEM-05..08`).
+**Requirements**: GUARD-01, GUARD-02, GUARD-03
+**Today (baseline)**: Raw integer PIDs (`u32`/`i32`/`i64`) are passed to low-level signaling and probe functions, exposing potential accidental `kill(0, sig)` (process group signaling), `kill(-1, sig)` (broadcast kill), and `kill(1, sig)` (init); `CompositePane` tightly couples local PTY storage (`pty: Option<PtySession>`) with remote link state (`remote_input_tap: bool`, `remote_input: Vec<u8>`) using ad-hoc flags and mutable branching; clicking on an inactive window/pane raises and focuses the pane but does not cleanly swallow canvas clicks, allowing mouse down/drag/SGR events to bleed through into child terminal applications or trigger unintended selections.
+**Success Criteria** (what must be TRUE):
+
+  1. `GUARD-01`: Type-safe `SignalablePid` newtype strictly rejects `PID 0`, negative values, `PID 1`, and values exceeding `i32::MAX`; all internal process signaling and liveness probes (`libc::kill`) require `SignalablePid`.
+  2. `GUARD-02`: `PaneTransport` enum (`Local(PtySession)`, `Remote(RemotePaneBridge)`, `None`) cleanly separates local PTY lifecycle from remote multiplexing and link streams, eliminating ambiguous multi-field flags in `CompositePane`.
+  3. `GUARD-03`: Focus isolation in `src/input/mouse.rs`: any click on an unfocused/inactive window/pane is consumed strictly as a focus-and-raise event, preventing click bleed-through to child PTY/canvas/SGR/selection handlers.
+
+**Artifacts**:
+- Plan: `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`
+- Status: **PLANNED**
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -1216,7 +1237,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64 → 65
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1288,3 +1309,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 62. Copy Mode Ergonomics & Nested-TUI Copy Fix (`COPY-01..02`) | 0/2 | Planned | - |
 | 63. Keyboard-First Navigation & Cross-OS Hotkey Harmonization (`KEY-01..03`) | 0/3 | Planned | - |
 | 64. First-Class Terminal Traffic Monitor (`TRAF-01..04`) | 0/3 | Planned | - |
+| 65. Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`) | 0/1 | Planned | - |
