@@ -32,6 +32,17 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
     );
 }
 
+/// Compact byte-rate label (`12B`, `1.5K`, `2.0M`) for the opt-in OIA traffic indicator.
+fn rate_label(bps: u64) -> String {
+    if bps >= 1_048_576 {
+        format!("{:.1}M", bps as f64 / 1_048_576.0)
+    } else if bps >= 1024 {
+        format!("{:.1}K", bps as f64 / 1024.0)
+    } else {
+        format!("{bps}B")
+    }
+}
+
 pub fn render_oia_status_bar_themed(
     pane: &CompositePane,
     status_rect: Rect,
@@ -205,6 +216,16 @@ pub fn render_oia_status_bar_themed(
         format!(" {out_lines}L · {out_bytes_label}")
     } else {
         format!(" {} OUT:{out_lines}L/{out_bytes_label}", glyphs.output_len_icon)
+    };
+    let out_str = if pane.oia_traffic_enabled() {
+        let (rx, tx) = pane.traffic_rates();
+        if is_modern {
+            format!("{out_str} ↓{}/s ↑{}/s", rate_label(rx), rate_label(tx))
+        } else {
+            format!("{out_str} RX:{} TX:{}", rate_label(rx), rate_label(tx))
+        }
+    } else {
+        out_str
     };
     let oia_title = if is_modern {
         if palette.name == "LIQUID-GLASS" {

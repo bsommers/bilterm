@@ -642,6 +642,9 @@ pub fn handle_wm_mouse_event(
         if let Some(action) = super::clipboard_window::handle_clipboard_window_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
+        if let Some(action) = super::traffic_monitor::handle_traffic_monitor_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
         if let Some(action) = super::script_studio::handle_script_studio_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }
@@ -962,7 +965,19 @@ pub fn handle_wm_mouse_event(
         && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left))
     {
         let canvas_rect = pane.canvas_rect(pane_inner);
-        if pane_mouse.column >= canvas_rect.x
+        let on_prompt_pin_badge = pane.is_prompt_visible() && {
+            let pr = pane.prompt_rect(pane_inner);
+            let right_edge = pr.x + pr.width;
+            pr.width >= 16
+                && pane_mouse.row == pr.y
+                && pane_mouse.column >= right_edge.saturating_sub(8)
+                && pane_mouse.column < right_edge.saturating_sub(2)
+        };
+        if !on_prompt_pin_badge
+            && !pane.copy_mode().rect_mode
+            && !pane_mouse.modifiers.contains(KeyModifiers::ALT)
+            && !pane_mouse.modifiers.contains(KeyModifiers::CONTROL)
+            && pane_mouse.column >= canvas_rect.x
             && pane_mouse.column < canvas_rect.x + canvas_rect.width
             && pane_mouse.row >= canvas_rect.y
             && pane_mouse.row < canvas_rect.y + canvas_rect.height
@@ -1005,7 +1020,10 @@ pub fn handle_wm_mouse_event(
         let no_extent = p.copy_mode().anchor == Some((p.copy_mode().cursor_row, p.copy_mode().cursor_col));
         if is_mouse_origin && no_extent {
             p.copy_mode_mut().clear_selection();
-        } else if auto_copy && p.copy_mode().has_selection() {
+        } else if auto_copy
+            && p.copy_mode().has_selection()
+            && p.copy_mode().selection_kind != crate::pane::CopySelectionKind::Block
+        {
             let _ = p.yank_mouse_canvas_selection();
             if is_mouse_origin
                 && (p.effective_routing_mode() == InputRoutingMode::RawPtyPassthrough

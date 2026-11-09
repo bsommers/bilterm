@@ -574,6 +574,7 @@ impl TmuxControlBridge {
                     && let Some(id) = self.ensure_tmux_pane(wm, *pane_id)
                     && let Some(pane) = wm.pane_mut(id)
                 {
+                    pane.count_payload_rx(data.len());
                     pane.process_pty_output(data);
                 }
             }
@@ -690,6 +691,8 @@ pub struct TmuxControlSubprocess {
     pub session_name: String,
     pub cmd_tx: tokio::sync::mpsc::UnboundedSender<String>,
     pub line_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    /// Traffic cell of the legacy local `tmux -CC` pipes (Phase 64); `None` for channel-only handles.
+    pub traffic: Option<crate::traffic::TrafficTap>,
 }
 
 impl TmuxControlSubprocess {
@@ -715,12 +718,15 @@ impl TmuxControlSubprocess {
 
         let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (line_tx, line_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let traffic = crate::traffic::ChannelCounters::new();
+        let (tx_cell, rx_cell) = (traffic.clone(), traffic.clone());
 
         tokio::spawn(async move {
             while let Some(cmd) = cmd_rx.recv().await {
                 if stdin.write_all(cmd.as_bytes()).await.is_err() {
                     break;
                 }
+                tx_cell.tx(cmd.len());
                 let _ = stdin.flush().await;
             }
         });
@@ -728,6 +734,7 @@ impl TmuxControlSubprocess {
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
+                rx_cell.rx(line.len() + 1);
                 if line_tx.send(line).is_err() {
                     break;
                 }
@@ -739,6 +746,7 @@ impl TmuxControlSubprocess {
             session_name: clean_name.to_string(),
             cmd_tx,
             line_rx,
+            traffic: Some(traffic),
         })
     }
 
@@ -752,6 +760,7 @@ impl TmuxControlSubprocess {
             session_name: session_name.into(),
             cmd_tx,
             line_rx,
+            traffic: None,
         }
     }
 }

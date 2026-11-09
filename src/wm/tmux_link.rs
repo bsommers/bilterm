@@ -521,6 +521,7 @@ impl WindowManager {
                 && let Some(id) = self.tmux_link.primary_pane
                 && let Some(pane) = self.panes.get_mut(&id)
             {
+                pane.count_payload_rx(poll.raw_output.len());
                 pane.process_pty_output(&poll.raw_output);
                 changed = true;
             }

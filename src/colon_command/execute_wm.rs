@@ -953,6 +953,12 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.clipboard_window_apply(op);
             false
         }
+        ColonCommand::TrafficMonitor(op) => {
+            if let Err(e) = wm.traffic_monitor_apply(op) {
+                wm.active_pane_mut().set_status_message(Some(e));
+            }
+            false
+        }
         ColonCommand::ScriptStudio(op) => {
             if let Some(msg) = wm.script_studio_apply(&op) {
                 wm.active_pane_mut().set_status_message(Some(msg));
@@ -1022,5 +1028,6 @@ fn panel_name(target: PanelTarget) -> &'static str {
         PanelTarget::AgentsList => "Agents list",
         PanelTarget::SessionMap => "Session map",
         PanelTarget::Clipboard => "Clipboard",
+        PanelTarget::Traffic => "Traffic",
     }
 }

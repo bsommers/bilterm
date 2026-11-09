@@ -23,6 +23,8 @@ pub enum DockPanel {
     SessionMap,
     /// The CLIPBOARD viewer window (Phase 57).
     Clipboard,
+    /// The TRAFFIC MONITOR window (Phase 64).
+    Traffic,
 }
 
 /// Workspace width from which the strip sits on the right (narrower: at the bottom).
@@ -83,6 +85,9 @@ impl WindowManager {
         if self.clipboard_window.active && self.clipboard_window.docked {
             v.push(DockPanel::Clipboard);
         }
+        if self.traffic_monitor.visible && self.traffic_monitor.docked {
+            v.push(DockPanel::Traffic);
+        }
         v
     }
 
@@ -92,6 +97,7 @@ impl WindowManager {
             DockPanel::AgentsTraffic => PanelTarget::Agents,
             DockPanel::SessionMap => PanelTarget::SessionMap,
             DockPanel::Clipboard => PanelTarget::Clipboard,
+            DockPanel::Traffic => PanelTarget::Traffic,
         }
     }
 
@@ -241,6 +247,7 @@ impl WindowManager {
             DockPanel::AgentsTraffic => (self.agents_window.active, &mut self.agents_window.docked),
             DockPanel::SessionMap => (self.session_map.active, &mut self.session_map.docked),
             DockPanel::Clipboard => (self.clipboard_window.active, &mut self.clipboard_window.docked),
+            DockPanel::Traffic => (self.traffic_monitor.visible, &mut self.traffic_monitor.docked),
         };
         let want = on && active;
         if *flag == want {
@@ -256,6 +263,7 @@ impl WindowManager {
                 DockPanel::AgentsTraffic => self.agents_window.docked = false,
                 DockPanel::SessionMap => self.session_map.docked = false,
                 DockPanel::Clipboard => self.clipboard_window.docked = false,
+                DockPanel::Traffic => self.traffic_monitor.docked = false,
             }
             self.dock_status(NO_ROOM);
             return false;

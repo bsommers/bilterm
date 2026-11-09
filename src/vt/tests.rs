@@ -127,11 +127,12 @@ fn osc52_rejects_read_queries_and_malformed_payloads() {
 }
 
 #[test]
-fn osc52_split_across_chunks_is_not_forwarded() {
+fn osc52_split_across_chunks_is_reassembled() {
     let mut vt = VtParser::new(10, 40, 100);
     vt.process(b"\x1b]52;c;aGVs");
-    vt.process(b"bG8=\x07");
     assert!(vt.take_outbound_osc52().is_empty());
+    vt.process(b"bG8=\x07");
+    assert_eq!(vt.take_outbound_osc52(), vec!["\x1b]52;c;aGVsbG8=\x07".to_string()]);
 }
 
 #[test]

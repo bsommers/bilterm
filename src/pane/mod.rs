@@ -2,6 +2,7 @@ pub mod browser_canvas;
 pub mod copy_motion;
 pub mod copy_search;
 mod output_tap;
+mod traffic_tap;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -58,6 +59,8 @@ pub struct CompositePane {
     title: String,
     pub(crate) vt: VtParser,
     pty: Option<PtySession>,
+    /// Lazily created payload traffic cell (tmux-mapped panes, events); see `traffic_tap.rs`.
+    payload_traffic: std::sync::OnceLock<crate::traffic::TrafficTap>,
     prompt: FloatingPromptState,
     history_store: HistoryStore,
     line_discipline: LineDisciplineState,
@@ -146,6 +149,7 @@ impl CompositePane {
             title,
             vt: VtParser::new(canvas_rows, canvas_cols, scrollback_lines),
             pty,
+            payload_traffic: std::sync::OnceLock::new(),
             prompt: FloatingPromptState::default(),
             history_store,
             line_discipline: LineDisciplineState::default(),
@@ -731,6 +735,7 @@ impl CompositePane {
 
     /// Feeds raw PTY output bytes into the pane's `VtParser` and updates line-discipline state.
     pub fn process_pty_output(&mut self, bytes: &[u8]) {
+        self.observe_ingest(bytes);
         self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
@@ -785,6 +790,7 @@ impl CompositePane {
             // Every byte must reach the parser in order: truncating the stream splits escape
             // sequences and loses mode changes (DECSET 1049/2004, OSC 133). Per-frame work is
             // already bounded by `PtySession::drain_events` plus the bounded reader channel.
+            self.observe_ingest(&coalesced);
             self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
@@ -807,6 +813,7 @@ impl CompositePane {
 
     /// Writes raw bytes to the underlying `PtySession` if one is attached (`v1.1.0` / `v1.4.0`).
     pub fn write_to_pty(&mut self, bytes: &[u8]) -> Result<()> {
+        self.count_pty_less_tx(bytes.len());
         self.last_pty_write.clear();
         self.last_pty_write.extend_from_slice(bytes);
         if self.remote_input_tap {
@@ -853,11 +860,13 @@ impl CompositePane {
     ) {
         let text = text.into();
         if !text.is_empty() {
+            self.count_event(text.len());
             self.pending_clipboard_records.push((source, text));
         }
     }
 
     pub fn record_media_passthrough(&mut self, mime: impl Into<String>, bytes_len: usize) {
+        self.count_event(bytes_len);
         self.pending_media_records.push((mime.into(), bytes_len));
     }
 
@@ -873,6 +882,7 @@ impl CompositePane {
 
     fn drain_osc52_decoded(&mut self) {
         for decoded in self.vt.take_osc52_decoded() {
+            self.count_event(decoded.len());
             crate::clipboard::set_system_clipboard(&decoded);
             self.prompt.push_yank_entry(&decoded);
             let _ = self.history_store.record_clipboard_entry(&decoded);

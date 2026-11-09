@@ -5,30 +5,30 @@ expression: "overlay(KeyEnv::new(HostOs::MacOs, Surface::Gui), KeyProfileName::A
 ┌ [1] PANE #1 (Z:1/3) ─────────────────[_][□][X]─┐┌ [2] PANE #2 [_][□][X]─┐╔ [3] PANE #3 [_][□][X]═╗
 │ ┌╣ BILTERM 3270 // CMD [TOP] ╠────────[▲][▼]─┐ ││ ┌╣ BILTERM 3270 // C┐ │║ ╔╣ BILTERM 3270 // C╗ ║
 │ │==>                                         │ ││ │==>                │ │║ ║==>                ║ ║
-│ └────────────────────────────────────────────┘ ││ └───────────────────┘ │║ ╚═══════════════════╝ ║
-│      ╔  WHICH KEY · Ctrl+X · Esc cancel  ═══════════════════════════════════════[_][□][X]═╗      ║
-│      ║"/-/h/F2  SplitH            6         Pane 6            g/G/F12   raw               ║      ║
-│      ║%/|/\/V   SplitV            7         Pane 7            c/C/[/F8  Copy              ║      ║
-│      ║!         drawer attention  8         Pane 8            r         rect              ║      ║
-│      ║a         agents zoom       9         Pane 9            f/F/F3    hints             ║      ║
-│      ║A         Agents            w         Window            l         lock              ║      ║
-│      ║S         sessions map      W         Close             /         search prefill    ║      ║
-│      ║y         agents demo       d/F7      Drawer            N         search prev       ║      ║
-│      ║Y         agents demo stop  D         drawer mode       P         drawer preview t  ║      ║
-│      ║u         ssh-tmux prefill  F11       style             H         history popup     ║      ║
-│      ║U         ssh-tmux reconne  M         Layout            R         record workspace  ║      ║
-│      ║Q         ssh-tmux disconn  q/`/~/F10 quake             Left      Focus left        ║      ║
-│      ║z/Z/F5    Zoom              :/Space   Palette           Right     Focus right       ║      ║
-│      ║o/O/n/F6  Deck              ?/F1      Help              k/Up      Focus up          ║      ║
-│      ║BackTab   Deck back         @         web status        j/Down    Focus down        ║      ║
-│      ║p/v/]     paste             i/I/F9    inspector         <         Resize left       ║      ║
-│      ║,         voice toggle      x/X       crosshair cycle   >         Resize right      ║      ║
-│      ║;         buffers           L         spotlight         J         Move down         ║      ║
-│      ║.         browser           }         spotlight +       K         Move up           ║      ║
-│      ║'         video             {         spotlight -       +         prompt resize-he  ║      ║
-│      ║1         Pane 1            t/T       prompt top        =         cascade           ║      ║
-│      ║2         Pane 2            b/B       prompt bottom     #         Arrange grid      ║      ║
-│      ║3         Pane 3            s         prompt split      0         fontsize reset    ║      ║
-│      ║4         Pane 4            e/E/F4    mode cycle        PageUp    block prev        ║      ║
-│3270-O║5         Pane 5            m         Menu              PageDown  scroll toggle     ║ │ INP║
+│ └────╔  WHICH KEY · Ctrl+X · Esc cancel  ═══════════════════════════════════════[_][□][X]═╗════╝ ║
+│      ║"/-/h/F2  SplitH            6         Pane 6            c/C/[/F8  Copy              ║      ║
+│      ║%/|/\/V   SplitV            7         Pane 7            r         rect              ║      ║
+│      ║!         drawer attention  8         Pane 8            f/F/F3    hints             ║      ║
+│      ║a         agents zoom       9         Pane 9            l         lock              ║      ║
+│      ║A         Agents            w         Window            /         search prefill    ║      ║
+│      ║S         sessions map      W         Close             N         search prev       ║      ║
+│      ║y         agents demo       d/F7      Drawer            P         drawer preview t  ║      ║
+│      ║Y         agents demo stop  D         drawer mode       H         history popup     ║      ║
+│      ║u         ssh-tmux prefill  F11       style             R         record workspace  ║      ║
+│      ║U         ssh-tmux reconne  M         Layout            Left      Focus left        ║      ║
+│      ║Q         ssh-tmux disconn  q/`/~/F10 quake             Right     Focus right       ║      ║
+│      ║z/Z/F5    Zoom              :/Space   Palette           k/Up      Focus up          ║      ║
+│      ║o/O/n/F6  Deck              ?/F1      Help              j/Down    Focus down        ║      ║
+│      ║BackTab   Deck back         @         web status        <         Resize left       ║      ║
+│      ║p/v/]     paste             i/I/F9    inspector         >         Resize right      ║      ║
+│      ║,         voice toggle      x/X       crosshair cycle   J         Move down         ║      ║
+│      ║;         buffers           L         spotlight         K         Move up           ║      ║
+│      ║$         traffic toggle    }         spotlight +       +         prompt resize-he  ║      ║
+│      ║.         browser           {         spotlight -       =         cascade           ║      ║
+│      ║'         video             t/T       prompt top        #         Arrange grid      ║      ║
+│      ║1         Pane 1            b/B       prompt bottom     0         fontsize reset    ║      ║
+│      ║2         Pane 2            s         prompt split      PageUp    block prev        ║      ║
+│      ║3         Pane 3            e/E/F4    mode cycle        PageDown  scroll toggle     ║      ║
+│      ║4         Pane 4            m         Menu                                          ║      ║
+│3270-O║5         Pane 5            g/G/F12   raw                                           ║ │ INP║
 └──────╚════════════════════════════════════════════════════════════════════════════════════◢══════◢

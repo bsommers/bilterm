@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod dotted;
 pub mod keys;
+pub mod traffic;
 pub use dotted::ApiConfig;
 pub use crate::stt::SttConfig;
 
@@ -131,6 +132,8 @@ pub struct BiltermConfig {
     pub agents: BTreeMap<String, agents::AgentProfile>,
     /// Agent traffic window settings (`[agents_window]`, e.g. `edge_fade_secs`).
     pub agents_window: agents::AgentsWindowConfig,
+    /// Terminal traffic monitor settings (`[traffic]`, Phase 64).
+    pub traffic: traffic::TrafficConfig,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -244,6 +247,7 @@ impl Default for BiltermConfig {
             remotes: BTreeMap::new(),
             agents: BTreeMap::new(),
             agents_window: agents::AgentsWindowConfig::default(),
+            traffic: traffic::TrafficConfig::default(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,

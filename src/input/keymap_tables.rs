@@ -10,6 +10,7 @@ use crate::wm::find_cmd::{FindKind, FindOp};
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
 use crate::wm::clipboard_window::ClipboardWindowOp;
+use crate::wm::traffic_monitor::TrafficMonitorOp;
 
 /// Declarative leader-chord table (`<Leader> + key` -> [`Action`], `ARCH-R01.2`).
 ///
@@ -53,6 +54,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char(','), Action::Voice(VoiceOp::Toggle)),
     // Filterable CLIPBOARD viewer window toggle (`Ctrl+X ;`, Phase 57)
     (KeyCode::Char(';'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    // TRAFFIC MONITOR toggle (`Ctrl+X $`, Phase 64; `#` is ArrangeGrid)
+    (KeyCode::Char('$'), Action::TrafficMonitor(TrafficMonitorOp::Toggle)),
     // Browser Canvas (leader .) & Video Player Canvas (leader ')
     (KeyCode::Char('.'), Action::Browser(BrowserOp::Toggle)),
     (KeyCode::Char('\''), Action::Video(VideoOp::Toggle)),
@@ -240,6 +243,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // CLIPBOARD viewer window toggle: Ctrl+Alt+V (Phase 57, CLIP-04)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('v'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('V'), Action::ClipboardWindow(ClipboardWindowOp::Toggle)),
+    // TRAFFIC MONITOR toggle: Ctrl+Alt+T (Phase 64, TMON-04)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('t'), Action::TrafficMonitor(TrafficMonitorOp::Toggle)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('T'), Action::TrafficMonitor(TrafficMonitorOp::Toggle)),
     // Speech-to-Text Voice Dictation toggle: Ctrl+Alt+S (STT-03)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('s'), Action::Voice(VoiceOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('S'), Action::Voice(VoiceOp::Toggle)),

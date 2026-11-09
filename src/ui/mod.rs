@@ -3,6 +3,8 @@ pub mod agents_list_ui;
 pub mod agents_ui;
 pub mod clipboard_window_gui;
 pub mod clipboard_window_ui;
+pub mod traffic_monitor_gui;
+pub mod traffic_monitor_ui;
 pub mod command_window_ui;
 pub mod bitmap_font;
 pub mod canvas_raster;
@@ -777,6 +779,9 @@ impl Widget for WorkspaceWidget<'_> {
         command_window_ui::render_command_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Clipboard) == 100 {
             clipboard_window_ui::render_clipboard_window(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+        if self.wm.scale_pct(crate::ui::typography::PanelTarget::Traffic) == 100 {
+            traffic_monitor_ui::render_traffic_monitor(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         script_studio_ui::render_script_studio(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 

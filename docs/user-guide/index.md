@@ -36,6 +36,8 @@ Welcome to the official User Guide for **Bilterm (`v3.1.0`)** — the Rust + Rat
     - Optional agent-aware drawer style (`[drawer] style = "navigator"`): workspace > session > pane tree with working/blocked/idle/done/errored state dots, attention jump (`<Leader> !`), pairing/fan-out comms glyphs, full key and mouse operation tables, the AGENT TRAFFIC window (`<Leader> a` / `:agents`) with node graph and conversation snoop view, GUI vector rendering, and honest known limits.
 12. **[Chapter 12: Find: Agents, Sessions & Command History](12-find-registry-and-history.md)**
     - The Find window (`Ctrl+Alt+F`, `:find agent|session|history`, View menu): fuzzy ranked search of agents, live and saved sessions, and command history; every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`); secrets are masked and counted; `:finder` verbs; `find.*` RPC and `bilterm_find` MCP; SSH and tmux coverage and known gaps G1 to G10.
+13. **[Chapter 13: The Traffic Monitor](13-traffic-monitor.md)**
+    - The TRAFFIC MONITOR window (`Ctrl+Alt+T`, `:traffic`, `:netmon`): bytes per connection, session, window, pane, origin, locality and direction, sparklines, pause, drill-down, `traffic.*` RPC and `bilterm_traffic` MCP.
 
 ---
 

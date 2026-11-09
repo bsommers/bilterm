@@ -99,6 +99,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Fonts Window", ":fonts toggle", 'N'),
             mi("Command Palette Window", ":commands toggle", 'W'),
             mi("Clipboard Viewer", ":clipboard toggle", 'B'),
+            mi("Traffic Monitor", ":traffic toggle", 'T'),
             mi("Script Studio", ":script toggle", 'U'),
             mi("Drawer Peek Preview", ":drawer preview toggle", 'V'),
             mi("Drawer Rows: 1 line", ":drawer rows 1", '1'),

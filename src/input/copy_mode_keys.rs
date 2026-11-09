@@ -301,6 +301,9 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
         KeyCode::Char('V') => {
             return toggle_selection(pane, CopySelectionKind::Line, top_abs);
         }
+        KeyCode::Char('r') => {
+            return toggle_selection(pane, CopySelectionKind::Block, top_abs);
+        }
         KeyCode::Char('y') | KeyCode::Enter => {
             pane.yank_copy_selection();
         }

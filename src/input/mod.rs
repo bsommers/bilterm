@@ -4,6 +4,8 @@ mod agents_window;
 pub mod chord;
 pub mod clipboard_window;
 pub mod clipboard_window_keys;
+pub mod traffic_monitor;
+pub mod traffic_monitor_keys;
 pub mod command_window;
 pub mod command_window_keys;
 pub mod copy_mode_keys;

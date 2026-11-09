@@ -184,6 +184,8 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":block prev | :block next", "Jump between prior commands in scrollback (OSC 133)"),
     (":yank / :paste / :clear", "Yank via OSC 52, paste OS clipboard into PTY, or clear OutputCanvas"),
     (":clipboard [open|close|toggle|all|session|window|pinned|media]", "Open/filter the Pinnable & Dockable CLIPBOARD Viewer window (Ctrl+Alt+V / Ctrl+X ;)"),
+    (":traffic [open|close|toggle|group|sort|filter|locality|pause|drill|show|reset|...]", "TRAFFIC MONITOR window: bytes per connection/session/window/pane. Agent Traffic (`:agents traffic`) shows who messaged whom; Traffic Monitor shows bytes"),
+    ("Ctrl+Alt+T / Ctrl+X $", "Toggle the TRAFFIC MONITOR. Agent Traffic (`:agents traffic`) shows who messaged whom; Traffic Monitor shows bytes"),
     (":paste raw-ctrl-v", "Forward raw Ctrl+V (0x16) byte directly to the active pane PTY"),
     ("Ctrl+Shift+V / Shift+Ins / Ctrl+X p/v", "Paste OS clipboard directly into active PTY (even in RAW PTY)"),
     ("Shift+Arrows / Ctrl+C/V / Alt+B/F", "Select text, Copy/Paste, or move/delete by word in Prompt"),

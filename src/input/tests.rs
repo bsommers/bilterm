@@ -202,7 +202,7 @@ fn decset_1007_alternate_scroll_and_vi_copy_mode_rectangular_selection_work() {
     pane.enter_copy_mode();
     pane.copy_mode_mut().cursor_row = 0;
     pane.copy_mode_mut().cursor_col = 4;
-    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE)).unwrap();
+    handle_key_event(&mut pane, KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();
     handle_key_event(&mut pane, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)).unwrap();

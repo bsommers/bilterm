@@ -27,6 +27,7 @@ pub mod parse_keys;
 mod parse_link;
 pub mod parse_media;
 mod parse_script;
+mod parse_traffic;
 pub mod parse_session_map;
 pub mod parse_voice;
 mod parse_visual;

@@ -705,7 +705,7 @@ impl VtParser {
     }
 
     pub fn is_mouse_sgr_or_tracking(&self) -> bool {
-        self.mouse_report_level() != MouseReportLevel::None
+        self.mouse_report_level() != MouseReportLevel::None || self.mouse_sgr_1006
     }
 
     pub fn is_focus_reporting(&self) -> bool { self.focus_reporting_1004 }

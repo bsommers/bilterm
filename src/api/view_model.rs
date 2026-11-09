@@ -174,6 +174,7 @@ impl WorkspaceViewModelDto {
             ("scriptStudio", utility(wm.script_studio().active, wm.script_studio().focused)),
             ("sessionMap", utility(wm.session_map().active, wm.session_map().focused)),
             ("clipboardViewer", utility(wm.clipboard_window().active, wm.clipboard_window().focused)),
+            ("trafficMonitor", utility(wm.traffic_monitor().active(), wm.traffic_monitor().focused)),
             ("fontsWindow", utility(wm.fonts_window().active, wm.fonts_window().focused)),
             ("fileBrowser", utility(false, false)),
         ]);
