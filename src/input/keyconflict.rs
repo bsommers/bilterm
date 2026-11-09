@@ -326,6 +326,43 @@ pub fn validate_user_bindings(cfg: &BiltermConfig, env: &KeyEnv) -> Result<(), B
     }
 }
 
+/// Load-time policy (`main.rs`): when a user binding is a `Block` finding the whole `[keys]` table
+/// and `[keybindings]` fall back to the built-in defaults and the returned text is the
+/// `config error:` status line; otherwise `None`.
+pub fn enforce_load_policy(cfg: &mut BiltermConfig, env: &KeyEnv) -> Option<String> {
+    match validate_user_bindings(cfg, env) {
+        Ok(()) => None,
+        Err(e) => {
+            let msg = match e {
+                BiltermError::Config(m) => m,
+                other => other.to_string(),
+            };
+            tracing::warn!("{msg}; using default keys");
+            cfg.keys = KeysConfig::default();
+            cfg.keybindings.clear();
+            Some(format!("config error: {msg} (using default keys)"))
+        }
+    }
+}
+
+/// Logs every user-introduced finding and returns the one-line `N key conflicts: :keys check` status.
+pub fn load_time_status(cfg: &BiltermConfig, env: &KeyEnv) -> Option<String> {
+    let km = crate::input::keyprofile::KeyProfile::resolve(&cfg.keys, env);
+    let findings = check_config(&km, env, cfg);
+    for f in user_findings(&findings) {
+        tracing::warn!("key conflict: {} ({}) vs {}: {}", f.chord, f.class.as_str(), f.consumer, f.note);
+    }
+    load_status(&findings)
+}
+
+/// Re-validation after `:set keys.*` / `:set keybindings.*` (called from `config::dotted`).
+pub fn revalidate_after_set(key: &str, next: &BiltermConfig) -> Result<(), String> {
+    if key.starts_with("keys") || key.starts_with("keybindings") || key == "leader_key" {
+        validate_user_bindings(next, &KeyEnv::detect()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Findings introduced by the user (everything not from the shipped tables, minus plain overrides).
 pub fn user_findings(findings: &[Finding]) -> impl Iterator<Item = &Finding> {
     findings.iter().filter(|f| f.source != "default" && f.severity <= Severity::Warn)

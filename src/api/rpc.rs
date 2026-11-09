@@ -99,6 +99,12 @@ pub const RPC_METHODS: &[&str] = &[
     "web.create",
     "web.kill",
     "web.update",
+    "keys.list",
+    "keys.check",
+    "keys.explain",
+    "keys.profile",
+    "keys.window_mode",
+    "menu.open",
 ];
 
 /// Stateful automation control plane wrapping a `WindowManager` and an event subscription ring buffer.

@@ -7,6 +7,7 @@ mod execute_command_window;
 mod execute_config;
 pub mod execute_daemon;
 pub mod execute_find;
+pub mod execute_keys;
 pub mod execute_link;
 pub mod execute_voice;
 pub mod execute_media;

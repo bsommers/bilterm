@@ -100,6 +100,7 @@ impl AutomationControlPlane {
                     "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
                     "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
+                    "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -114,6 +115,8 @@ impl AutomationControlPlane {
                             Err("invalid 'action' parameter: status, open, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
+                        } else if tool_name == "bilterm_keys" {
+                            Err("invalid 'action' parameter: list, check, explain, profile, window_mode or menu_open".to_string())
                         } else if tool_name == "bilterm_voice" {
                             Err("missing or invalid 'action' parameter: toggle, start, stop, cancel, status, provider, or inject_wav".to_string())
                         } else {
@@ -379,6 +382,17 @@ impl AutomationControlPlane {
                     ("speed", "integer", "Speed percentage (100 = 1.0x, 150 = 1.5x) for action='speed'"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_keys",
+                "Inspect and drive the keyboard model: list the active key profile, check key conflicts (OS, desktop, shell, editor and multiplexer chords), explain a chord, switch profile, enter Window mode, or open the menu bar. Mutating actions need [api] allow_config_write.",
+                &[
+                    ("action", "string", "Operation: list | check | explain | profile | window_mode | menu_open (default 'list')"),
+                    ("chord", "string", "Chord to explain for action='explain' (e.g. 'Primary+L', 'Alt+F4')"),
+                    ("name", "string", "Profile name for action='profile' (auto|mac|windows|linux|portable|legacy); omit to query"),
+                    ("op", "string", "Window mode operation for action='window_mode': on | off | toggle | focus | resize | move"),
+                    ("category", "integer", "Optional 0-based menu category for action='menu_open'"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
     }
@@ -405,6 +419,19 @@ impl AutomationControlPlane {
             "open" => Some("browser.open"),
             "state" => Some("browser.state"),
             _ => Some("browser.control"),
+        }
+    }
+
+    /// `bilterm_keys` `action` argument -> the `keys.*` / `menu.open` RPC method; `None` when unknown.
+    fn keys_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("list") {
+            "list" => Some("keys.list"),
+            "check" => Some("keys.check"),
+            "explain" => Some("keys.explain"),
+            "profile" => Some("keys.profile"),
+            "window_mode" => Some("keys.window_mode"),
+            "menu_open" => Some("menu.open"),
+            _ => None,
         }
     }
 
