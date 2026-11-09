@@ -633,6 +633,9 @@ pub fn handle_wm_mouse_event(
         .active_modal_rect(workspace_area)
         .is_some_and(|r| rect_contains(r, mouse.column, mouse.row));
     if wm.menubar_state().is_none() && !over_modal {
+        if let Some(action) = super::daemon_window::handle_daemon_window_mouse(wm, mouse, workspace_area) {
+            return Ok(action);
+        }
         if let Some(action) = super::fonts_window::handle_fonts_window_mouse(wm, mouse, workspace_area) {
             return Ok(action);
         }

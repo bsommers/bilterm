@@ -470,8 +470,8 @@ fn menubar_left_right_wrap_and_reset_item() {
     assert_eq!(w.menubar_state(), Some((0, 1)));
     press(&mut w, k(KeyCode::Left));
     // Phase 63-02: wraps over the whole table (9 categories), not the old literal 7.
-    let last = bilterm::ui::menu_model::MENUBAR_CATEGORIES.len() - 1;
-    assert_eq!(w.menubar_state(), Some((last, 0)), "Left wraps to the last category and resets item");
+    let last = bilterm::ui::modals::menubar_category_count() - 1;
+    assert_eq!(w.menubar_state(), Some((last, 0)), "Left wraps to the last category (all 9, not a literal 7) and resets item");
     press(&mut w, k(KeyCode::Right));
     assert_eq!(w.menubar_state(), Some((0, 0)), "Right wraps to the first category");
     press(&mut w, k(KeyCode::Right));

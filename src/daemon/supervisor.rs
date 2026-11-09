@@ -320,17 +320,43 @@ pub fn acquire_lock(
     ))
 }
 
-/// Spawns a background detached daemon process for `name`.
+/// Resolves the daemon runtime dir: `BILTERM_RUNTIME_DIR` (absolute) if set, else the
+/// process-wide private runtime dir. Lets a spawned child share its parent's `runtime_dir`.
+pub fn resolve_runtime_dir() -> io::Result<PathBuf> {
+    if let Some(v) = std::env::var_os("BILTERM_RUNTIME_DIR") {
+        let p = PathBuf::from(v);
+        if p.is_absolute() {
+            ensure_private_dir(&p)?;
+            return Ok(p);
+        }
+    }
+    crate::secure_fs::private_runtime_dir()
+}
+
+/// Spawns a background detached daemon process for `name` using the default runtime dir.
 pub fn spawn_daemon(name: &str) -> io::Result<PathBuf> {
+    let dir = resolve_runtime_dir()?;
+    spawn_daemon_in(&dir, name).map(|(_, p)| p)
+}
+
+/// Convenience wrapper returning the child PID and socket path (default runtime dir).
+pub fn spawn_daemon_with_pid(name: &str) -> io::Result<(u32, PathBuf)> {
+    let dir = resolve_runtime_dir()?;
+    spawn_daemon_in(&dir, name)
+}
+
+/// Spawns a detached daemon for `name` bound to `runtime_dir`, returning `(child_pid, socket_path)`.
+pub fn spawn_daemon_in(runtime_dir: &Path, name: &str) -> io::Result<(u32, PathBuf)> {
     validate_safe_name(name)
         .map_err(|e| io::Error::new(ErrorKind::InvalidInput, format!("invalid daemon name: {e}")))?;
 
-    let sock_path = crate::daemon::process::session_daemon_socket_path(name)?;
+    let sock_path = crate::daemon::process::session_daemon_socket_path_in(runtime_dir, name)?;
     let exe = std::env::current_exe()?;
     let listen_arg = format!("unix:{}", sock_path.display());
 
     let mut cmd = Command::new(exe);
     cmd.args(["--daemon", "--name", name, "-l", &listen_arg])
+        .env("BILTERM_RUNTIME_DIR", runtime_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -340,61 +366,157 @@ pub fn spawn_daemon(name: &str) -> io::Result<PathBuf> {
         cmd.process_group(0);
     }
 
-    let _child = cmd.spawn()?;
-    Ok(sock_path)
+    let child = cmd.spawn()?;
+    Ok((child.id(), sock_path))
+}
+
+fn read_lock_record(lock_path: &Path) -> Option<DaemonLockRecord> {
+    let mut s = String::new();
+    File::open(lock_path).ok()?.read_to_string(&mut s).ok()?;
+    DaemonLockRecord::from_json(&s).ok()
 }
 
 /// Ensures the daemon for `name` is running. Returns `AlreadyRunning` or `Started`.
+/// The returned PID is always a real signalable PID (`> 1`), never `0`.
 pub fn ensure_started(runtime_dir: &Path, name: &str) -> io::Result<DaemonStartResult> {
     validate_safe_name(name)
         .map_err(|e| io::Error::new(ErrorKind::InvalidInput, format!("invalid daemon name: {e}")))?;
 
     let sock_path = crate::daemon::process::session_daemon_socket_path_in(runtime_dir, name)?;
-
-    // Check existing lockfile
     let lock_path = daemon_lock_path_in(runtime_dir, name)?;
-    if let Ok(mut f) = File::open(&lock_path) {
-        let mut s = String::new();
-        if f.read_to_string(&mut s).is_ok()
-            && let Ok(record) = DaemonLockRecord::from_json(&s)
-            && check_pid_alive(record.pid)
-            && crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path)
-        {
-            return Ok(DaemonStartResult::AlreadyRunning {
-                pid: record.pid,
-                socket_path: sock_path,
-            });
-        }
+
+    // Already running per lockfile?
+    if let Some(record) = read_lock_record(&lock_path)
+        && check_pid_alive(record.pid)
+        && crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path)
+    {
+        return Ok(DaemonStartResult::AlreadyRunning {
+            pid: record.pid,
+            socket_path: sock_path,
+        });
+    }
+    // Already running per registry (json or synthesized)?
+    if let Some(e) = crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
+        .into_iter()
+        .find(|e| e.name == name && parse_daemon_pid(i64::from(e.pid)).is_some())
+        && crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path)
+    {
+        return Ok(DaemonStartResult::AlreadyRunning {
+            pid: e.pid,
+            socket_path: e.socket_path,
+        });
     }
 
-    // Spawn and wait up to 1 second for socket readiness
-    let _ = spawn_daemon(name)?;
+    let (spawned_pid, _) = spawn_daemon_in(runtime_dir, name)?;
     let start = Instant::now();
-    while start.elapsed() < Duration::from_millis(1000) {
+    while start.elapsed() < Duration::from_millis(3000) {
         std::thread::sleep(Duration::from_millis(25));
-        if crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path) {
-            // Read PID from lockfile if available
-            let pid = if let Ok(mut f) = File::open(&lock_path) {
-                let mut s = String::new();
-                if f.read_to_string(&mut s).is_ok() {
-                    DaemonLockRecord::from_json(&s).map(|r| r.pid).unwrap_or(0)
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
-            return Ok(DaemonStartResult::Started {
-                pid,
-                socket_path: sock_path,
-            });
+        if !crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path) {
+            continue;
         }
+        let pid = read_lock_record(&lock_path)
+            .map(|r| r.pid)
+            .filter(|p| check_pid_alive(*p))
+            .or_else(|| {
+                crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
+                    .into_iter()
+                    .find(|e| e.name == name && parse_daemon_pid(i64::from(e.pid)).is_some())
+                    .map(|e| e.pid)
+            })
+            .unwrap_or(spawned_pid);
+        debug_assert!(pid > 1);
+        // Make sure the registry holds a real record for this daemon.
+        let registered = crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
+            .iter()
+            .any(|e| e.name == name && e.pid == pid);
+        if !registered {
+            let _ = crate::daemon::registry::DaemonRegistry::register(
+                runtime_dir,
+                &crate::daemon::registry::DaemonRegistryEntry {
+                    id: format!("daemon-{name}-{pid}"),
+                    name: name.to_string(),
+                    pid,
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    started_at_ms: now_ms(),
+                    socket_path: sock_path.clone(),
+                    sessions_count: 1,
+                    panes_count: 0,
+                    agents_count: 0,
+                    last_heartbeat_ms: now_ms(),
+                },
+            );
+        }
+        return Ok(DaemonStartResult::Started {
+            pid,
+            socket_path: sock_path,
+        });
     }
 
     Err(io::Error::new(
         ErrorKind::TimedOut,
         format!("timed out waiting for daemon '{name}' socket to become ready"),
     ))
+}
+
+/// Registers the running daemon in the registry, returning a guard that unregisters on drop.
+pub struct RegistrationGuard {
+    runtime_dir: PathBuf,
+    name: String,
+}
+
+impl Drop for RegistrationGuard {
+    fn drop(&mut self) {
+        let _ = crate::daemon::registry::DaemonRegistry::unregister(&self.runtime_dir, &self.name);
+    }
+}
+
+/// Registers the current process as daemon `name` (called by the headless daemon before serving).
+pub fn register_current_daemon(
+    runtime_dir: &Path,
+    name: &str,
+    socket_path: PathBuf,
+    sessions: usize,
+    panes: usize,
+) -> io::Result<RegistrationGuard> {
+    let pid = std::process::id();
+    crate::daemon::registry::DaemonRegistry::register(
+        runtime_dir,
+        &crate::daemon::registry::DaemonRegistryEntry {
+            id: format!("daemon-{name}-{pid}"),
+            name: name.to_string(),
+            pid,
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            started_at_ms: now_ms(),
+            socket_path,
+            sessions_count: sessions.max(1),
+            panes_count: panes,
+            agents_count: 0,
+            last_heartbeat_ms: now_ms(),
+        },
+    )?;
+    Ok(RegistrationGuard {
+        runtime_dir: runtime_dir.to_path_buf(),
+        name: name.to_string(),
+    })
+}
+
+#[cfg(unix)]
+fn terminate_pid(pid: u32, force: bool) {
+    let sig = if force { libc::SIGKILL } else { libc::SIGTERM };
+    unsafe {
+        libc::kill(pid as libc::pid_t, sig);
+    }
+    for _ in 0..10 {
+        std::thread::sleep(Duration::from_millis(20));
+        if !check_pid_alive(pid) {
+            return;
+        }
+    }
+    if !force {
+        unsafe {
+            libc::kill(pid as libc::pid_t, libc::SIGKILL);
+        }
+    }
 }
 
 /// Tries a non-blocking exclusive `flock` on `lock_path`.
@@ -435,12 +557,28 @@ pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bo
     };
 
     let Some(rec) = record else {
-        // No valid record found; clean up any lingering lockfile/socket/registry file
-        let _ = fs::remove_file(&lock_path);
+        // No lock record: fall back to the registry (json / synthesized) for a live daemon.
+        let mut stopped = false;
         let sock = crate::daemon::process::session_daemon_socket_path_in(runtime_dir, name)?;
+        if let Some(e) = crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
+            .into_iter()
+            .find(|e| e.name == name)
+        {
+            #[cfg(unix)]
+            if parse_daemon_pid(i64::from(e.pid)).is_some()
+                && e.pid != std::process::id()
+                && check_pid_alive(e.pid)
+                && crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path)
+            {
+                terminate_pid(e.pid, force);
+                stopped = true;
+            }
+            let _ = fs::remove_file(&e.socket_path);
+        }
+        let _ = fs::remove_file(&lock_path);
         let _ = fs::remove_file(sock);
         let _ = crate::daemon::registry::DaemonRegistry::unregister(runtime_dir, name);
-        return Ok(false);
+        return Ok(stopped);
     };
 
     // Only signal a PID whose daemon still holds the flock: if we can claim the lock
@@ -460,28 +598,7 @@ pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bo
 
     if rec.pid != std::process::id() && check_pid_alive(rec.pid) {
         #[cfg(unix)]
-        {
-            let sig = if force {
-                libc::SIGKILL
-            } else {
-                libc::SIGTERM
-            };
-            unsafe {
-                libc::kill(rec.pid as libc::pid_t, sig);
-            }
-            // Wait up to 200ms for exit
-            for _ in 0..10 {
-                std::thread::sleep(Duration::from_millis(20));
-                if !check_pid_alive(rec.pid) {
-                    break;
-                }
-            }
-            if !force && check_pid_alive(rec.pid) {
-                unsafe {
-                    libc::kill(rec.pid as libc::pid_t, libc::SIGKILL);
-                }
-            }
-        }
+        terminate_pid(rec.pid, force);
     }
 
     let _ = fs::remove_file(&lock_path);

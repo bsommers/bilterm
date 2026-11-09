@@ -155,6 +155,12 @@ pub(super) fn handle_wm_modal_key(
         {
             return Ok(Some(action));
         }
+        if wm.daemon_window().captures_input()
+            && !wm.is_leader_pending()
+            && wm.daemon_window_key(key)
+        {
+            return Ok(Some(AppAction::Handled));
+        }
         if wm.script_studio().captures_input()
             && !wm.is_leader_pending()
             && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)

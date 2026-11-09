@@ -563,6 +563,7 @@ impl GuiWorkspaceRenderer {
         let traffic_overlay_rect = real_rect(crate::ui::typography::PanelTarget::Traffic, traffic_scale, &|a| wm.traffic_monitor_rect(a));
         let fonts_overlay_rect = wm.fonts_window_rect(ws_area);
         let cmd_overlay_rect = wm.command_window_rect(ws_area);
+        let daemon_overlay_rect = wm.daemon_window_rect(ws_area);
         let script_overlay_rect = wm.script_studio_rect(ws_area);
         let drawer_preview_overlay_rect = wm.drawer_preview_rect(ws_area);
 
@@ -585,6 +586,7 @@ impl GuiWorkspaceRenderer {
                 || traffic_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || fonts_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || cmd_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
+                || daemon_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
                 || script_overlay_rect.is_some_and(|r| crate::wm::rect_contains(r, abs_c, abs_r))
         };
 
@@ -858,6 +860,7 @@ impl GuiWorkspaceRenderer {
                         || dropdown_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || qt_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || fonts_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
+                        || daemon_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r))
                         || cmd_overlay_rect.is_some_and(|m| crate::wm::rect_contains(m, abs_c, abs_r));
                     if top && let Some(cell) = cell_buf.cell((abs_c, abs_r)) {
                         push_cell(cell, r, c, f32::from(c) * cw, f32::from(r) * ch, cw, ch, eff_cw, eff_ch, surface.font_size_pt);

@@ -12,6 +12,7 @@ pub mod copy_mode_keys;
 pub mod drawer_navigator;
 pub mod encode;
 pub mod find_modal;
+pub mod daemon_window;
 pub mod fonts_window;
 pub mod fonts_window_keys;
 pub mod gui_route;
