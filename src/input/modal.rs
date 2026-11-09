@@ -59,6 +59,24 @@ pub(super) fn handle_unsafe_paste_modal_key(
 }
 
 pub(super) fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<AppAction> {
+    if pane.copy_mode().origin == crate::pane::CopyOrigin::Mouse {
+        let is_copy = matches!(
+            (key.modifiers, key.code),
+            (KeyModifiers::NONE, KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Char('x') | KeyCode::F(8))
+                | (KeyModifiers::CONTROL, KeyCode::Char('c' | 'C' | 'g'))
+                | (KeyModifiers::SHIFT, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down | KeyCode::Home | KeyCode::End)
+        ) || (key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Char('c' | 'C')));
+        if key.code == KeyCode::Esc {
+            pane.copy_mode_mut().clear_selection();
+            return Ok(AppAction::Handled);
+        }
+        if !is_copy {
+            pane.copy_mode_mut().clear_selection();
+            return super::handle_key_event(pane, key);
+        }
+    }
     let (rows, cols) = pane.vt().size();
     let max_r = rows.saturating_sub(1);
     let max_c = cols.saturating_sub(1);

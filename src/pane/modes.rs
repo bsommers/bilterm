@@ -45,6 +45,14 @@ pub enum CopySelectionKind {
     Block,
 }
 
+/// Indicates whether Copy Mode was initiated by keyboard navigation or a mouse drag gesture (`COPY-01`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CopyOrigin {
+    #[default]
+    Keyboard,
+    Mouse,
+}
+
 /// Keyboard-driven Vi Copy Mode & rectangular block selection state for the `OutputCanvas` (`VAL-04`).
 #[derive(Clone, Debug, Default)]
 pub struct CopyModeState {
@@ -57,6 +65,8 @@ pub struct CopyModeState {
     pub visual_lock: bool,
     /// When `true`, plain mouse drag (`LeftDrag`) and `Shift+Arrows` default to rectangular (`Block`) selection.
     pub rect_mode: bool,
+    /// Origin of this Copy Mode session (`Keyboard` vs `Mouse`, `COPY-01`).
+    pub origin: CopyOrigin,
 }
 
 impl CopyModeState {
@@ -82,6 +92,7 @@ impl CopyModeState {
         self.anchor = None;
         self.selection_kind = CopySelectionKind::None;
         self.visual_lock = false;
+        self.origin = CopyOrigin::Keyboard;
     }
 
     /// Returns `true` if cell `(row, col)` lies inside the current selection (`Char`, `Line`, or `Block`).
@@ -289,6 +300,7 @@ impl CompositePane {
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
+        self.copy_mode.origin = CopyOrigin::Keyboard;
         self.status_message = Some(
             "CANVAS SELECT: Arrows/hjkl move | r/b/Ctrl+V=Rect | v/Space=Char | V=Line | Enter/y copy | x to prompt | Esc exit"
                 .to_string(),
@@ -546,6 +558,7 @@ impl CompositePane {
         self.copy_mode.anchor = None;
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
+        self.copy_mode.origin = CopyOrigin::Keyboard;
         self.status_message = Some(if self.is_prompt_visible() {
             "Returned focus to Command Prompt".to_string()
         } else {
@@ -661,15 +674,21 @@ impl CompositePane {
             &text,
         );
         if is_block && let Some((h, w)) = dims {
-            self.status_message = Some(format!(
-                "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
-                text.chars().count()
-            ));
+            self.set_status_toast(
+                format!(
+                    "RECT SELECT [{h}×{w}]: Copied {} chars to clipboard (Shift+Arrows refine | Enter/y copy | x to prompt | Esc clear)",
+                    text.chars().count()
+                ),
+                3000,
+            );
         } else {
-            self.status_message = Some(format!(
-                "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
-                text.chars().count()
-            ));
+            self.set_status_toast(
+                format!(
+                    "Copied {} chars to clipboard (Shift+Arrows refine | x to prompt | Tab/Esc -> Prompt)",
+                    text.chars().count()
+                ),
+                3000,
+            );
         }
         Some(text)
     }

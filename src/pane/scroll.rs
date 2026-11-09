@@ -719,6 +719,30 @@ impl CompositePane {
 
     pub fn set_status_message(&mut self, msg: Option<String>) {
         self.status_message = msg;
+        self.toast_expires_at = None;
+    }
+
+    pub fn set_status_toast(&mut self, msg: String, ttl_ms: u64) {
+        self.status_message = Some(msg);
+        self.toast_expires_at = Some(self.last_tick_ms.saturating_add(ttl_ms));
+    }
+
+    pub fn tick_toast(&mut self, now_ms: u64) {
+        self.last_tick_ms = now_ms;
+        if let Some(exp) = self.toast_expires_at
+            && now_ms >= exp
+        {
+            self.status_message = None;
+            self.toast_expires_at = None;
+        }
+    }
+
+    pub fn mouse_select_sticky(&self) -> bool {
+        self.mouse_select_sticky
+    }
+
+    pub fn set_mouse_select_sticky(&mut self, sticky: bool) {
+        self.mouse_select_sticky = sticky;
     }
 
     pub fn last_osc52_sequence(&self) -> Option<&str> {

@@ -559,3 +559,17 @@ pub fn find_modal_key_action(key: KeyEvent) -> Option<Action> {
         _ => None,
     }
 }
+
+/// Declarative copy mode entry chords (Phase 63 re-points per OS).
+pub const COPY_ENTRY_CHORDS: &[(KeyModifiers, KeyCode, Action)] = &[
+    (
+        KeyModifiers::from_bits_truncate(KeyModifiers::CONTROL.bits() | KeyModifiers::SHIFT.bits()),
+        KeyCode::Char('C'),
+        Action::CopyModeToggle,
+    ),
+    (
+        KeyModifiers::from_bits_truncate(KeyModifiers::CONTROL.bits() | KeyModifiers::SHIFT.bits()),
+        KeyCode::Char('c'),
+        Action::CopyModeToggle,
+    ),
+];

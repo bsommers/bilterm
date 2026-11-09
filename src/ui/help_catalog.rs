@@ -440,6 +440,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":search off", "—", "Clear the search and its highlights"),
     (":find next", "—", "Jump to the next scrollback match (alias of :search next)"),
     (":find prev", "—", "Jump to the previous scrollback match (alias of :search prev)"),
+    (":copy mouse toggle", "Shift/Alt+drag", "Mouse select override: toggle local selection vs child mouse reporting"),
     (":copy rect", "—", "Copy mode: rectangular block selection"),
     (":copy block", "—", "Copy mode: block selection"),
     (":copy char", "—", "Copy mode: character selection"),

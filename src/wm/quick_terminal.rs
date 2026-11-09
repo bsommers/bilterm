@@ -1,4 +1,4 @@
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use crate::error::Result;
@@ -18,6 +18,8 @@ pub fn inset_window_frame(outer: Rect) -> Rect {
     }
 }
 
+use crate::vt::MouseReportLevel;
+
 pub fn rect_contains(r: Rect, col: u16, row: u16) -> bool {
     col >= r.x && col < r.x + r.width && row >= r.y && row < r.y + r.height
 }
@@ -25,24 +27,68 @@ pub fn rect_contains(r: Rect, col: u16, row: u16) -> bool {
 /// Translates a global `MouseEvent` into pane-local coordinates and encodes an SGR (1006)
 /// mouse sequence (`\x1b[<btn;local_col;local_rowM` or `m`) (`WM-03`).
 pub fn encode_sgr_mouse_local(mouse: MouseEvent, pane_inner: Rect) -> Option<Vec<u8>> {
+    encode_sgr_mouse_with_mode(mouse, pane_inner, MouseReportLevel::Drag)
+}
+
+/// Translates a global `MouseEvent` into pane-local coordinates and encodes an SGR (1006)
+/// mouse sequence respecting child `MouseReportLevel` and modifier bits (`+4 Shift`, `+8 Alt`, `+16 Ctrl`, `+32 motion`).
+pub fn encode_sgr_mouse_with_mode(
+    mouse: MouseEvent,
+    pane_inner: Rect,
+    mode: MouseReportLevel,
+) -> Option<Vec<u8>> {
     if !rect_contains(pane_inner, mouse.column, mouse.row) {
         return None;
     }
     let local_col = mouse.column.saturating_sub(pane_inner.x) + 1;
     let local_row = mouse.row.saturating_sub(pane_inner.y) + 1;
 
-    let (btn_code, suffix) = match mouse.kind {
+    let (base_btn, suffix) = match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => (0, 'M'),
         MouseEventKind::Down(MouseButton::Middle) => (1, 'M'),
         MouseEventKind::Down(MouseButton::Right) => (2, 'M'),
         MouseEventKind::Up(MouseButton::Left) => (0, 'm'),
         MouseEventKind::Up(MouseButton::Middle) => (1, 'm'),
         MouseEventKind::Up(MouseButton::Right) => (2, 'm'),
-        MouseEventKind::Drag(MouseButton::Left) => (32, 'M'),
+        MouseEventKind::Drag(MouseButton::Left) => {
+            if mode == MouseReportLevel::Press {
+                return None;
+            }
+            (32, 'M')
+        }
+        MouseEventKind::Drag(MouseButton::Middle) => {
+            if mode == MouseReportLevel::Press {
+                return None;
+            }
+            (33, 'M')
+        }
+        MouseEventKind::Drag(MouseButton::Right) => {
+            if mode == MouseReportLevel::Press {
+                return None;
+            }
+            (34, 'M')
+        }
+        MouseEventKind::Moved => {
+            if mode != MouseReportLevel::Motion {
+                return None;
+            }
+            (35, 'M')
+        }
         MouseEventKind::ScrollUp => (64, 'M'),
         MouseEventKind::ScrollDown => (65, 'M'),
         _ => return None,
     };
+
+    let mut btn_code = base_btn;
+    if mouse.modifiers.contains(KeyModifiers::SHIFT) {
+        btn_code |= 4;
+    }
+    if mouse.modifiers.contains(KeyModifiers::ALT) {
+        btn_code |= 8;
+    }
+    if mouse.modifiers.contains(KeyModifiers::CONTROL) {
+        btn_code |= 16;
+    }
 
     Some(format!("\x1b[<{btn_code};{local_col};{local_row}{suffix}").into_bytes())
 }
@@ -123,5 +169,52 @@ mod tests {
         assert!(qt.visible);
         assert!(qt.pane.vt().contents().contains("PERSISTENT_QUAKE_OUTPUT"));
         assert_eq!(qt.pane.prompt().text(), "htop");
+    }
+
+    #[test]
+    fn encode_sgr_mouse_modifiers() {
+        let area = Rect::new(10, 5, 80, 24);
+        // Left click with Ctrl -> btn 16
+        let ev_ctrl = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 15,
+            row: 7,
+            modifiers: KeyModifiers::CONTROL,
+        };
+        let bytes_ctrl = encode_sgr_mouse_local(ev_ctrl, area).unwrap();
+        assert_eq!(bytes_ctrl, b"\x1b[<16;6;3M");
+
+        // Left click with Shift -> btn 4
+        let ev_shift = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 15,
+            row: 7,
+            modifiers: KeyModifiers::SHIFT,
+        };
+        let bytes_shift = encode_sgr_mouse_local(ev_shift, area).unwrap();
+        assert_eq!(bytes_shift, b"\x1b[<4;6;3M");
+
+        // Left click with Alt -> btn 8
+        let ev_alt = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 15,
+            row: 7,
+            modifiers: KeyModifiers::ALT,
+        };
+        let bytes_alt = encode_sgr_mouse_local(ev_alt, area).unwrap();
+        assert_eq!(bytes_alt, b"\x1b[<8;6;3M");
+
+        // Drag with Press-only mode is suppressed
+        let ev_drag = MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 15,
+            row: 7,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(encode_sgr_mouse_with_mode(ev_drag, area, MouseReportLevel::Press).is_none());
+        assert_eq!(
+            encode_sgr_mouse_with_mode(ev_drag, area, MouseReportLevel::Drag).unwrap(),
+            b"\x1b[<32;6;3M"
+        );
     }
 }

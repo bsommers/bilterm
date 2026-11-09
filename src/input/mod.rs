@@ -16,6 +16,7 @@ pub mod link_mouse;
 pub mod modal;
 pub mod mouse;
 pub mod mouse_media;
+pub mod mouse_select;
 mod mouse_wm;
 pub mod script_studio;
 pub mod script_studio_keys;
@@ -170,6 +171,17 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
             && pane.copy_mode().has_selection()
         {
             let _ = pane.yank_copy_selection();
+            return Ok(AppAction::Handled);
+        }
+        if crate::input::keymap::COPY_ENTRY_CHORDS
+            .iter()
+            .any(|(m, c, _)| *m == key.modifiers && *c == key.code)
+        {
+            if pane.copy_mode().has_selection() {
+                let _ = pane.yank_copy_selection();
+            } else {
+                pane.enter_copy_mode();
+            }
             return Ok(AppAction::Handled);
         }
         let is_ctrl_shift_v = key.modifiers.contains(KeyModifiers::CONTROL)

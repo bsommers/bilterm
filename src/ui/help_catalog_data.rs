@@ -190,6 +190,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":scroll next | :scroll prev | :more", "Advance or step back 1 full page in Page-Hold (MORE...) mode"),
     (":scrollback [clear|status]", "Report adaptive scrollback memory budget or clear scrollback"),
     (":copy / :vi (F8 / Alt+C)", "Enter OutputCanvas Vi/Cursor Copy & Rectangular Block mode"),
+    (":copy mouse [on|off|toggle]", "Toggle sticky local mouse selection override (Shift/Alt+drag selects locally)"),
     (":rect / :select (Alt+R / Alt+Drag)", "Enter Rectangular Block Select mode (r/b/Ctrl+V/Alt+Shift+Arrows)"),
     (":rect mode [on|off|toggle]", "Toggle persistent Rectangular Mouse Drag mode (plain LeftDrag = block)"),
     (":rect <r1> <c1> <r2> <c2> [copy]", "Highlight (or copy) a 1-based rectangular region on OutputCanvas"),

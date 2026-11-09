@@ -379,6 +379,23 @@ impl crate::wm::WindowManager {
             return;
         }
 
+        if first == "mouse" {
+            let current = self.active_pane().mouse_select_sticky();
+            let next = match parts.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                Some("on" | "true" | "enable") => true,
+                Some("off" | "false" | "disable") => false,
+                Some("toggle") => !current,
+                _ => !current,
+            };
+            self.active_pane_mut().set_mouse_select_sticky(next);
+            self.active_pane_mut().set_status_message(Some(if next {
+                "MOUSE SELECT: ON - drag selects here, child mouse suspended".to_string()
+            } else {
+                "MOUSE SELECT: OFF - mouse forwarded to child application".to_string()
+            }));
+            return;
+        }
+
         if first == "clipboard" {
             let sub = parts.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
             match sub.as_str() {
