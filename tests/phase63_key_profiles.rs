@@ -426,7 +426,7 @@ fn keys_ops_list_check_explain_and_profile_switch() {
     wm.apply(Action::Keys(KeysOp::Profile(Some("linux".into())))).unwrap();
     assert_eq!(wm.keymap().profile(), KeyProfileName::Linux);
     wm.apply(Action::Keys(KeysOp::Check)).unwrap();
-    assert!(wm.active_pane().status_message().unwrap().contains("no internal conflicts"));
+    assert!(wm.active_pane().status_message().unwrap().contains("no conflicts"));
     wm.apply(Action::Keys(KeysOp::Explain("Primary+L".into()))).unwrap();
     let msg = wm.active_pane().status_message().unwrap().to_string();
     assert!(msg.contains("Ctrl+Shift+L") && msg.contains("LayoutCycle"), "{msg}");
