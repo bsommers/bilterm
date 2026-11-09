@@ -5,6 +5,26 @@ use crate::pane::browser_canvas::{MediaMouseEvent, MediaMouseEventKind};
 use crate::wm::WindowManager;
 use crossterm::event::{KeyModifiers, MouseButton};
 
+const TUI_SURFACE_HINT: &str = " [TUI half-block; run bilterm --gui for GPU canvas]";
+
+fn surface_hint(wm: &WindowManager) -> &'static str {
+    if wm.gui_surface { "" } else { TUI_SURFACE_HINT }
+}
+
+fn browser_backend_label(name: &str, url: &str) -> &'static str {
+    if name == "cdp-chromium" {
+        "CDP"
+    } else if url.starts_with("demo://") || url.starts_with("about:") || url.starts_with("test://") {
+        "synthetic preview"
+    } else {
+        "synthetic preview (Chrome not found)"
+    }
+}
+
+fn video_backend_label(name: &str) -> &'static str {
+    if name == "ffmpeg-pipe" { "ffmpeg" } else { "synthetic demo" }
+}
+
 pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
     let target_id = match &op {
         BrowserOp::Toggle => wm.active_pane_id(),
@@ -20,6 +40,7 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
         | BrowserOp::Close { pane_id } => pane_id.unwrap_or_else(|| wm.active_pane_id()),
     };
 
+    let hint = surface_hint(wm);
     let Some(pane) = wm.pane_mut(target_id) else {
         return false;
     };
@@ -31,7 +52,11 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
                 pane.set_status_message(Some("Closed browser canvas".to_string()));
             } else {
                 pane.open_browser("https://example.com");
-                pane.set_status_message(Some("Opened browser canvas".to_string()));
+                let label = pane
+                    .browser_canvas()
+                    .map(|b| browser_backend_label(b.backend_name(), "https://example.com"))
+                    .unwrap_or("none");
+                pane.set_status_message(Some(format!("Opened browser canvas: {label}{hint}")));
             }
         }
         BrowserOp::Open { url, .. } => {
@@ -40,7 +65,11 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
             } else {
                 pane.open_browser(&url);
             }
-            pane.set_status_message(Some(format!("Browser opened: {url}")));
+            let label = pane
+                .browser_canvas()
+                .map(|b| browser_backend_label(b.backend_name(), &url))
+                .unwrap_or("none");
+            pane.set_status_message(Some(format!("Browser opened: {url} ({label}){hint}")));
         }
         BrowserOp::Back { .. } => {
             if let Some(b) = pane.browser_canvas_mut() {
@@ -125,6 +154,7 @@ pub fn execute_video_command(wm: &mut WindowManager, op: VideoOp) -> bool {
         | VideoOp::Close { pane_id } => pane_id.unwrap_or_else(|| wm.active_pane_id()),
     };
 
+    let hint = surface_hint(wm);
     let Some(pane) = wm.pane_mut(target_id) else {
         return false;
     };
@@ -136,12 +166,22 @@ pub fn execute_video_command(wm: &mut WindowManager, op: VideoOp) -> bool {
                 pane.set_status_message(Some("Closed video player canvas".to_string()));
             } else {
                 pane.open_video("demo://smpte");
-                pane.set_status_message(Some("Opened video canvas (demo://smpte)".to_string()));
+                let label = pane
+                    .video_canvas()
+                    .map(|v| video_backend_label(v.backend_name()))
+                    .unwrap_or("none");
+                pane.set_status_message(Some(format!(
+                    "Opened video canvas (demo://smpte): {label}{hint}"
+                )));
             }
         }
         VideoOp::Open { source, .. } => {
             pane.open_video(&source);
-            pane.set_status_message(Some(format!("Video player opened: {source}")));
+            let label = pane
+                .video_canvas()
+                .map(|v| video_backend_label(v.backend_name()))
+                .unwrap_or("none");
+            pane.set_status_message(Some(format!("Video player opened: {source} ({label}){hint}")));
         }
         VideoOp::Play { .. } => {
             if let Some(v) = pane.video_canvas_mut() {
