@@ -161,6 +161,7 @@ impl Widget for CompositePaneWidget<'_> {
         {
             let body = Rect::new(canvas.x, canvas.y + 1, canvas.width, canvas.height - 1);
             rasterize_frame_halfblocks(buf, body, browser.cached_frame());
+            crate::pane::browser_canvas::render_browser_status_overlay(buf, body, browser);
         }
         if let Some(video) = self.pane.video_canvas()
             && canvas.height > 1

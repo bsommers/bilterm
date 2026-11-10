@@ -132,6 +132,8 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/stt/audio.rs", "microphone capture child process, not terminal traffic"),
     ("src/stt/mod.rs", "connect-only reachability probe of the STT endpoint in VoicePreflight; no bytes are exchanged and the stream is dropped"),
     ("src/pane/video_canvas/ffmpeg.rs", "video decode child process pipes, not terminal traffic"),
+    ("src/pane/browser_canvas/cdp_launch.rs", "headless Chrome child process and its DevTools pipe (fd 3/4), not terminal traffic"),
+    ("src/pane/browser_canvas/cdp_session.rs", "reader/writer threads on the Chrome DevTools pipe, not terminal traffic"),
     ("src/swarm/heal.rs", "self-heal verify-command child process pipes, not terminal traffic"),
     ("src/daemon/mod.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),
     ("src/swarm/heal.rs", "verify_cmd child-process stdout/stderr pipes for the Phase 69 self-heal loop, not terminal traffic"),
