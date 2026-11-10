@@ -17,6 +17,7 @@ pub mod pty;
 pub mod remote;
 pub mod secure_fs;
 pub mod stt;
+pub mod swarm;
 pub mod tmux;
 pub mod traffic;
 pub mod ui;
