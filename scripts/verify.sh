@@ -3,6 +3,8 @@
 #   scripts/verify.sh              full: clippy, unit, every tests/*.rs (fmt is opt-in: --only fmt; repo has legacy drift)
 #   scripts/verify.sh --quick      clippy, unit
 #   scripts/verify.sh --failed     re-run only stages that failed last run
+#   scripts/verify.sh --integration every tests/*.rs, without clippy/unit (CI runs those in the quick job)
+#   scripts/verify.sh --shard K/N  with full/--integration: only every N-th tests/*.rs stage, slice K (1-based); CI fan-out
 #   scripts/verify.sh --tier <name> smoke|unit|integration|system|perf|stress|torture|security
 #   scripts/verify.sh --only a b   named stages or hierarchical groups g:<name> (see --list / --groups)
 #   scripts/verify.sh --match <pat> pass pattern to cargo test stages
@@ -18,6 +20,7 @@
 #   report.md         comprehensive Markdown verification report
 #   junit.xml         standard JUnit XML test report
 #   coverage.txt      cargo llvm-cov summary (when --coverage requested)
+#   skips.txt         every test that did not really run: `#[ignore]`d tests per stage + runtime `SKIPPED` lines
 #   <stage>/status    PASS|FAIL   <stage>/fail.txt  compact failure excerpt (<=40 lines)
 #   <stage>/log       full output (read only if fail.txt is not enough)
 # Exit code: 0 all pass, 1 any fail, 2 usage.
@@ -55,7 +58,12 @@ export APPDATA="$VERIFY_STATE/appdata/roaming"
 export LOCALAPPDATA="$VERIFY_STATE/appdata/local"
 mkdir -p "$XDG_STATE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$HOME" "$APPDATA" "$LOCALAPPDATA"
 
+# Git Bash / MSYS exports SHELL=/usr/bin/bash, a path native Windows programs cannot start. A real
+# Windows launch has no SHELL at all (the product then falls back to COMSPEC), so tests see the same.
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) unset SHELL ;; esac
+
 MATCH_PATTERN=""
+SHARD=""
 DO_COVERAGE=false
 USE_XVFB=false
 tier_name=""
@@ -65,6 +73,13 @@ all_stages() {
   local f; for f in tests/*.rs; do echo "t:$(basename "$f" .rs)"; done
 }
 quick_stages() { echo clippy; echo unit; }
+integration_stages() { local f; for f in tests/*.rs; do echo "t:$(basename "$f" .rs)"; done; }
+# Keeps clippy/unit, and of the t:* stages only slice K of N (round-robin over the sorted list, so
+# slices stay balanced as test files are added).
+shard_filter() {
+  local k="${SHARD%%/*}" n="${SHARD##*/}"
+  awk -v k="$k" -v n="$n" '/^t:/ { if (i++ % n == k - 1) print; next } { print }'
+}
 
 tier_stages() {
   case "$1" in
@@ -297,6 +312,18 @@ while [[ $# -gt 0 ]]; do
       mode=failed
       shift
       ;;
+    --integration)
+      mode=integration
+      shift
+      ;;
+    --shard)
+      if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || [ "${2%%/*}" -gt "${2##*/}" ]; then
+        echo "--shard needs K/N with 1 <= K <= N (e.g. --shard 2/3)" >&2
+        exit 2
+      fi
+      SHARD="$2"
+      shift 2
+      ;;
     --list)
       all_stages
       exit 0
@@ -358,6 +385,8 @@ while [[ $# -gt 0 ]]; do
       echo "  scripts/verify.sh              full: clippy, unit, every tests/*.rs" >&2
       echo "  scripts/verify.sh --quick      clippy, unit" >&2
       echo "  scripts/verify.sh --failed     re-run only stages that failed last run" >&2
+      echo "  scripts/verify.sh --integration every tests/*.rs without clippy/unit" >&2
+      echo "  scripts/verify.sh --shard K/N  with full/--integration: slice K of N of the tests/*.rs stages" >&2
       echo "  scripts/verify.sh --tier <name> smoke|unit|integration|system|perf|stress|torture|security" >&2
       echo "  scripts/verify.sh --only a b   named stages or groups g:<name> (--list / --groups)" >&2
       echo "  scripts/verify.sh --match <pat> pass pattern to cargo test stages" >&2
@@ -376,7 +405,9 @@ done
 read_stages() { stages=(); local l; while IFS= read -r l; do [ -n "$l" ] && stages+=("$l"); done; }
 
 case $mode in
-  full)   read_stages < <(all_stages) ;;
+  full)   if [ -n "$SHARD" ]; then read_stages < <(all_stages | shard_filter); else read_stages < <(all_stages); fi ;;
+  integration)
+          if [ -n "$SHARD" ]; then read_stages < <(integration_stages | shard_filter); else read_stages < <(integration_stages); fi ;;
   quick)  read_stages < <(quick_stages) ;;
   failed) read_stages < <(awk -F'\t' '$2=="FAIL"{print $1}' "$OUT/summary.tsv" 2>/dev/null)
           [ ${#stages[@]} -eq 0 ] && { echo "PASS nothing-failed"; exit 0; } ;;
@@ -405,6 +436,22 @@ case "$OS_NAME" in
     ;;
 esac
 
+# Pre-build every selected test binary in ONE cargo invocation: cargo then compiles them in parallel
+# across all cores, instead of one binary per stage. A build error here is not fatal; the stage
+# that owns the broken target reports it (with its own log) when it runs below.
+if [ ${#stages[@]} -ge 4 ]; then
+  prebuild=()
+  for s in "${stages[@]}"; do
+    case "$s" in
+      unit) prebuild+=(--lib --bins) ;;
+      t:*)  prebuild+=(--test "${s#t:}") ;;
+    esac
+  done
+  if [ ${#prebuild[@]} -gt 0 ]; then
+    cargo test -q --no-run "${prebuild[@]}" >"$OUT/prebuild.log" 2>&1 || true
+  fi
+fi
+
 new=$(mktemp)
 for s in ${stages[@]+"${stages[@]}"}; do
   c=$(cmd_for "$s") || { echo "unknown stage: $s (try --list)"; exit 2; }
@@ -424,7 +471,7 @@ for s in ${stages[@]+"${stages[@]}"}; do
 done
 
 # merge: partial runs replace only the stages they ran
-if [ "$mode" = full ] || [ ! -f "$OUT/summary.tsv" ]; then
+if { [ "$mode" = full ] && [ -z "$SHARD" ]; } || [ ! -f "$OUT/summary.tsv" ]; then
   sort -u -k1,1 "$new" >"$OUT/summary.tsv"
 elif [ "$mode" = quick ]; then
   grep -vE '^(clippy|unit)'$'\t' "$OUT/summary.tsv" >>"$new" 2>/dev/null || true
@@ -440,6 +487,17 @@ if [ "$DO_COVERAGE" = true ]; then
     cargo llvm-cov --summary-only >"$OUT/coverage.txt" 2>&1 || true
   fi
 fi
+
+# Nothing may be skipped silently: list `#[ignore]`d tests (with the stage they belong to) and
+# every runtime `SKIPPED <test>: <reason>` line (tests/common `skip()`) from this run's logs.
+{
+  for d in "$OUT"/t_* "$OUT"/unit; do
+    [ -f "$d/log" ] || continue
+    ign=$(awk '/^test result:/ { for (i = 1; i < NF; i++) if ($(i + 1) ~ /^ignored/) n += $i } END { print n + 0 }' "$d/log")
+    [ "$ign" -gt 0 ] && printf 'IGNORED\t%s\t%s test(s) marked #[ignore] (reasons: cargo test --test %s -- --ignored --list)\n' "$(basename "$d")" "$ign" "$(basename "$d" | sed 's/^t_//')"
+    grep -ho 'SKIPPED .*' "$d/log" 2>/dev/null | sed "s|^|$(basename "$d")\t|"
+  done
+} >"$OUT/skips.txt" 2>/dev/null || true
 
 r=$(line)
 st_overall="${r%% *}"
