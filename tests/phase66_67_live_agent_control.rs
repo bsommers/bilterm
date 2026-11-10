@@ -43,7 +43,10 @@ fn live_socket_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn runtime_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bt66-{tag}-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
+    // Unix socket paths are limited to ~104 bytes (macOS); its per-user temp dir alone is ~50, so
+    // sockets live under a short root instead of `std::env::temp_dir()`.
+    let root = if cfg!(unix) { PathBuf::from("/tmp") } else { std::env::temp_dir() };
+    let dir = root.join(format!("bt66-{tag}-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
     bilterm::secure_fs::ensure_private_dir(&dir).unwrap();
     dir
 }
@@ -184,8 +187,11 @@ fn client_socket_resolution_order() {
 // ------------------------------------------------------------------ LIVE-01 live socket
 
 #[tokio::test]
+// The guard only serialises tests that set the process-global live socket; nothing else contends for it.
+#[allow(clippy::await_holding_lock)]
 async fn foreground_socket_executes_against_the_live_window_manager() {
     isolate();
+    let _live = live_socket_lock();
     let rt = runtime_dir("live");
     // SAFETY: this is the only test in this binary that reads XDG_RUNTIME_DIR.
     unsafe { std::env::set_var("XDG_RUNTIME_DIR", &rt) };
