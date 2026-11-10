@@ -10,6 +10,8 @@ use crate::traffic::ChannelCounters;
 
 const LONG: Duration = Duration::from_secs(30);
 
+type Captured = Arc<Mutex<Vec<u8>>>;
+
 /// Sink that stores what it is given; each `write` first waits for a permit when gated.
 struct Sink {
     out: Arc<Mutex<Vec<u8>>>,
@@ -38,13 +40,13 @@ impl Write for Sink {
     }
 }
 
-fn open_sink() -> (Box<Sink>, Arc<Mutex<Vec<u8>>>) {
+fn open_sink() -> (Box<Sink>, Captured) {
     let out = Arc::new(Mutex::new(Vec::new()));
     (Box::new(Sink { out: out.clone(), gate: None, entered: None, fail: false }), out)
 }
 
 /// A sink whose every `write` blocks until a permit is sent (like a child that is not reading).
-fn gated_sink() -> (Box<Sink>, Arc<Mutex<Vec<u8>>>, Sender<()>, Receiver<()>) {
+fn gated_sink() -> (Box<Sink>, Captured, Sender<()>, Receiver<()>) {
     let out = Arc::new(Mutex::new(Vec::new()));
     let (permit_tx, permit_rx) = channel();
     let (entered_tx, entered_rx) = channel();

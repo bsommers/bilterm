@@ -40,6 +40,7 @@ pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
 pub mod panel_dock;
+pub mod pty_drain;
 pub mod quick_terminal;
 pub mod registry;
 pub mod rename_dialog;

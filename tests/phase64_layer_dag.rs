@@ -113,7 +113,7 @@ pub const HOOK_MANIFEST: &[(&str, &str, &str, HookStatus)] = &[
     ("src/api/mcp.rs", "stdout.write_all(format!(\"{resp}\\n\").as_bytes()).await?;", ".tx(", Done),
     ("src/app.rs", "out.write_all(wire.as_bytes())?;", ".tx(", Done),
     ("src/main.rs", "let backend = CrosstermBackend::new(bilterm::app::CountingStdout::new(", "Counting", Done),
-    ("src/app.rs", "let mut reader = EventStream::new();", "input_tap", Done),
+    ("src/app.rs", "let reader = EventStream::new();", "input_tap", Done),
     ("src/clipboard.rs", "let _ = stdin.write_all(text.as_bytes());", "traffic_tap()", Done),
     ("src/clipboard.rs", "let _ = out.read_to_end(&mut buf);", "traffic_tap()", Done),
     ("src/stt/provider.rs", ".write_all(&request)", ".tx(", Done),
