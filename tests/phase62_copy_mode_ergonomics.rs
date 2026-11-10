@@ -305,7 +305,9 @@ fn test_12_hint_not_overwritten_by_toast() {
 fn test_13_copied_region_flashes_then_clears() {
     let mut wm = pane_100_lines();
     run_colon(&mut wm, "copy");
-    run_colon(&mut wm, "select word");
+    // The VT cursor sits on a blank cell after the last line; yanked text is right-trimmed,
+    // so select the (non-blank) cursor row rather than a whitespace-only word.
+    run_colon(&mut wm, "select line");
     let _ = wm.active_pane_mut().yank_copy_selection();
 
     assert!(wm.active_pane().copy_mode().flash_region.is_some());

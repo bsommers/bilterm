@@ -34,6 +34,11 @@ fn ch(c: char) -> KeyEvent {
     k(KeyCode::Char(c))
 }
 
+/// Phase 62-02 (60cb6bb): copy-mode state is surfaced via the OIA hint line, not status messages.
+fn hint(p: &CompositePane) -> String {
+    bilterm::ui::copy_hints::copy_hint_line(p.copy_mode(), "history", 120)
+}
+
 fn pane() -> CompositePane {
     isolate();
     CompositePane::new_headless(1, 12, 40)
@@ -234,7 +239,7 @@ fn copy_mode_ctrl_v_starts_visual_block_at_cursor() {
     assert_eq!(p.copy_mode().anchor, Some((3, 5)));
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Block);
     assert!(p.copy_mode().visual_lock);
-    assert_eq!(p.status_message(), Some("COPY MODE: VISUAL BLOCK (rectangular)"));
+    assert!(hint(&p).contains("BLOCK"), "{}", hint(&p));
 }
 
 #[test]
@@ -249,7 +254,7 @@ fn copy_mode_ctrl_c_yanks_and_ctrl_x_cuts_selection() {
     handle_key_event(&mut p, km(KeyCode::Char('c'), KeyModifiers::CONTROL)).unwrap();
     assert!(!p.copy_mode().active, "yank leaves copy mode");
     assert!(p.copy_mode().anchor.is_none());
-    assert_eq!(p.status_message(), Some("Yanked 5 chars to clipboard"));
+    assert_eq!(p.status_message(), Some("Copied 5 chars -> clipboard (OSC52 sent)"));
 
     let mut p = copy_pane();
     p.copy_mode_mut().cursor_row = 0;
@@ -279,7 +284,7 @@ fn copy_mode_shift_arrow_starts_char_selection_then_block_when_alt() {
     assert_eq!(p.copy_mode().anchor, Some((3, 5)));
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Char);
     assert!(!p.copy_mode().visual_lock);
-    assert!(p.status_message().unwrap().starts_with("CANVAS SELECT"));
+    assert!(hint(&p).contains("CHAR"), "{}", hint(&p));
     assert_eq!(p.copy_mode().cursor_col, 6);
 
     // Existing Char anchor + Shift+Alt arrow upgrades to Block with lock.
@@ -302,7 +307,7 @@ fn copy_mode_shift_alt_arrow_without_anchor_starts_block_with_rect_message() {
     .unwrap();
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Block);
     assert!(p.copy_mode().visual_lock);
-    assert!(p.status_message().unwrap().starts_with("RECT SELECT"));
+    assert!(hint(&p).contains("BLOCK"), "{}", hint(&p));
 }
 
 #[test]
@@ -332,7 +337,10 @@ fn copy_mode_exit_keys() {
 
 #[test]
 fn copy_mode_horizontal_motion_clamps_at_edges() {
-    let mut p = copy_pane();
+    let mut p = pane();
+    p.process_pty_output(b"alpha beta gamma\r\n");
+    p.enter_copy_mode();
+    p.copy_mode_mut().cursor_row = 0;
     let (_, cols) = p.vt().size();
     let max_c = cols - 1;
     p.copy_mode_mut().cursor_col = 1;
@@ -342,11 +350,16 @@ fn copy_mode_horizontal_motion_clamps_at_edges() {
     assert_eq!(p.copy_mode().cursor_col, 0, "clamped at 0");
     handle_key_event(&mut p, k(KeyCode::Right)).unwrap();
     assert_eq!(p.copy_mode().cursor_col, 1);
-    // word modifier steps 5 columns
+    // word modifier steps by real words (62-02: replaces the legacy +/-5 columns)
     handle_key_event(&mut p, km(KeyCode::Right, KeyModifiers::ALT)).unwrap();
     assert_eq!(p.copy_mode().cursor_col, 6);
     handle_key_event(&mut p, km(KeyCode::Left, KeyModifiers::ALT)).unwrap();
-    assert_eq!(p.copy_mode().cursor_col, 1);
+    assert_eq!(p.copy_mode().cursor_col, 0);
+    handle_key_event(&mut p, km(KeyCode::Right, KeyModifiers::CONTROL)).unwrap();
+    assert_eq!(p.copy_mode().cursor_col, 6);
+    handle_key_event(&mut p, km(KeyCode::Left, KeyModifiers::CONTROL)).unwrap();
+    assert_eq!(p.copy_mode().cursor_col, 0);
+    p.copy_mode_mut().cursor_col = 1;
     handle_key_event(&mut p, k(KeyCode::End)).unwrap();
     assert_eq!(p.copy_mode().cursor_col, max_c);
     handle_key_event(&mut p, ch('l')).unwrap();
@@ -358,12 +371,11 @@ fn copy_mode_horizontal_motion_clamps_at_edges() {
     handle_key_event(&mut p, ch('0')).unwrap();
     assert_eq!(p.copy_mode().cursor_col, 0);
     handle_key_event(&mut p, ch('w')).unwrap();
-    assert_eq!(p.copy_mode().cursor_col, 5);
-    handle_key_event(&mut p, ch('B')).unwrap();
-    assert_eq!(p.copy_mode().cursor_col, 0);
-    p.copy_mode_mut().cursor_col = max_c - 2;
-    handle_key_event(&mut p, ch('w')).unwrap();
-    assert_eq!(p.copy_mode().cursor_col, max_c);
+    assert_eq!(p.copy_mode().cursor_col, 6, "w = next word start");
+    handle_key_event(&mut p, ch('b')).unwrap();
+    assert_eq!(p.copy_mode().cursor_col, 0, "b = previous word start");
+    handle_key_event(&mut p, ch('e')).unwrap();
+    assert_eq!(p.copy_mode().cursor_col, 4, "e = word end");
 }
 
 #[test]
@@ -435,15 +447,12 @@ fn copy_mode_r_toggles_rect_selection_on_and_off() {
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Block);
     assert!(p.copy_mode().visual_lock);
     assert_eq!(p.copy_mode().anchor, Some((3, 5)));
-    assert!(p.status_message().unwrap().contains("VISUAL BLOCK"));
+    assert!(hint(&p).contains("BLOCK"), "{}", hint(&p));
     handle_key_event(&mut p, ch('R')).unwrap();
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::None);
     assert!(!p.copy_mode().visual_lock);
     assert!(p.copy_mode().anchor.is_none());
-    assert_eq!(
-        p.status_message(),
-        Some("COPY MODE: rectangular selection cleared")
-    );
+    assert!(!hint(&p).contains("BLOCK"), "{}", hint(&p));
 }
 
 #[test]
@@ -457,17 +466,21 @@ fn copy_mode_r_keeps_existing_anchor_when_starting_block() {
 }
 
 #[test]
-fn copy_mode_b_starts_block_then_moves_back_five_columns() {
-    let mut p = copy_pane();
-    handle_key_event(&mut p, ch('b')).unwrap();
-    assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Block);
-    assert_eq!(p.copy_mode().anchor, Some((3, 5)));
+fn copy_mode_b_is_word_back_and_does_not_start_block() {
+    // 62-02 plan: `b` is a real vi word-back motion (previously start-block / -5 columns).
+    let mut p = pane();
+    p.process_pty_output(b"alpha beta gamma\r\n");
+    p.enter_copy_mode();
+    p.copy_mode_mut().cursor_row = 0;
     p.copy_mode_mut().cursor_col = 12;
     handle_key_event(&mut p, ch('b')).unwrap();
-    assert_eq!(p.copy_mode().cursor_col, 7);
-    p.copy_mode_mut().cursor_col = 2;
+    assert_eq!(p.copy_mode().cursor_col, 11);
+    handle_key_event(&mut p, ch('b')).unwrap();
+    assert_eq!(p.copy_mode().cursor_col, 6);
     handle_key_event(&mut p, ch('b')).unwrap();
     assert_eq!(p.copy_mode().cursor_col, 0);
+    assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::None);
+    assert!(p.copy_mode().anchor.is_none());
 }
 
 #[test]
@@ -476,11 +489,11 @@ fn copy_mode_v_and_space_toggle_char_selection() {
     handle_key_event(&mut p, ch('v')).unwrap();
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Char);
     assert!(p.copy_mode().visual_lock);
-    assert!(p.status_message().unwrap().contains("VISUAL CHAR"));
+    assert!(hint(&p).contains("CHAR"), "{}", hint(&p));
     handle_key_event(&mut p, ch(' ')).unwrap();
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::None);
     assert!(!p.copy_mode().visual_lock);
-    assert_eq!(p.status_message(), Some("COPY MODE: selection cleared"));
+    assert!(!hint(&p).contains("CHAR"), "{}", hint(&p));
 }
 
 #[test]
@@ -490,7 +503,7 @@ fn copy_mode_capital_v_selects_line() {
     assert_eq!(p.copy_mode().selection_kind, CopySelectionKind::Line);
     assert!(p.copy_mode().visual_lock);
     assert_eq!(p.copy_mode().anchor, Some((3, 5)));
-    assert_eq!(p.status_message(), Some("COPY MODE: VISUAL LINE"));
+    assert!(hint(&p).contains("LINE"), "{}", hint(&p));
 }
 
 #[test]
