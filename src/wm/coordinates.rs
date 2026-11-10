@@ -37,6 +37,19 @@ impl CoordDisplayStyle {
     pub fn name(self) -> &'static str { todo!("COORD impl") }
 }
 
+/// `:coords` sub-operation carried by `Action::Coords(CoordsOp)` (`COORD-04`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CoordsOp {
+    /// `:coords` — report focused window's coordinate (status bar + `command_data`).
+    Show,
+    /// `:coords verbose|compact|daemon|off`.
+    Style(CoordDisplayStyle),
+    /// `:coords locate <coord>` — resolve and focus the first match.
+    Locate(String),
+    /// `:coords copy` — copy focused window's canonical path to the clipboard.
+    Copy,
+}
+
 /// Parse error for coordinate text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordParseError(pub String);
