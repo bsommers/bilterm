@@ -1,5 +1,16 @@
 name: ci
 
+# Six native cells: {Linux, macOS, Windows} x {x86_64, ARM64}.
+#
+# Tier        | quick (build, clippy, unit, binary smoke) | integration (every tests/*.rs, 3 shards) | coverage
+# ------------|-------------------------------------------|------------------------------------------|---------
+# pull_request| all six cells                             | linux-x86_64 + macos-arm64               | linux-x86_64
+# push to main| all six cells                             | all six cells                            | linux-x86_64
+# nightly     | all six cells                             | all six cells                            | linux-x86_64
+# manual      | all six cells                             | all six cells                            | linux-x86_64
+#
+# Every job runs the same one-line gate (scripts/verify.sh -> "PASS n/n" | "FAIL k/n: <stages>");
+# docs/TEST_COVERAGE.md explains the tiers and how to reproduce each cell locally.
 on:
   pull_request:
   push:
@@ -8,6 +19,9 @@ on:
       - '**.md'
       - '.planning/**'
       - 'docs/**'
+  schedule:
+    - cron: '17 4 * * *' # nightly, off the hour
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,34 +33,188 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  # Test builds do not need debugger-grade symbols; this roughly halves target/ and link time.
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+defaults:
+  run:
+    shell: bash # Git Bash on Windows: one script for every OS
 
 jobs:
-  test:
-    name: clippy + quick verify (${{ matrix.os }})
+  # ---------------------------------------------------------------------------------------------
+  # Decides which cells run the full integration tier for this event (see the table above).
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      integration: ${{ steps.cells.outputs.integration }}
+    steps:
+      - id: cells
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          linux_x64='{"cell":"linux-x86_64","os":"ubuntu-latest","experimental":false}'
+          linux_arm='{"cell":"linux-arm64","os":"ubuntu-24.04-arm","experimental":false}'
+          mac_arm='{"cell":"macos-arm64","os":"macos-latest","experimental":false}'
+          mac_x64='{"cell":"macos-x86_64","os":"macos-15-intel","experimental":false}'
+          win_x64='{"cell":"windows-x86_64","os":"windows-latest","experimental":true}'
+          win_arm='{"cell":"windows-arm64","os":"windows-11-arm","experimental":true}'
+          if [ "$EVENT" = pull_request ]; then
+            cells="[$linux_x64,$mac_arm]"
+          else
+            cells="[$linux_x64,$linux_arm,$mac_arm,$mac_x64,$win_x64,$win_arm]"
+          fi
+          echo "integration={\"cell\":$cells,\"shard\":[1,2,3]}" >>"$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------------------------
+  # Every event, every cell: the product builds, lints clean, passes its unit tests and starts.
+  quick:
+    name: quick (${{ matrix.cell }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - { cell: linux-x86_64,   os: ubuntu-latest,    experimental: false }
+          - { cell: linux-arm64,    os: ubuntu-24.04-arm, experimental: false }
+          - { cell: macos-arm64,    os: macos-latest,     experimental: false }
+          # Intel macOS: `macos-13` is retired; `macos-15-intel` is the standard x86_64 label
+          # (`macos-26-intel` also exists). Revisit when macOS 15 images are retired.
+          - { cell: macos-x86_64,   os: macos-15-intel,   experimental: false }
+          # Windows: build + clippy are hard gates (cross-checked clean for both MSVC targets).
+          # The test steps are `continue-on-error` until the first green run on real Windows
+          # runners (tracking item WIN-TESTS in docs/TEST_COVERAGE.md); their real outcome is
+          # always written to the job summary, never hidden.
+          - { cell: windows-x86_64, os: windows-latest,   experimental: true }
+          - { cell: windows-arm64,  os: windows-11-arm,   experimental: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # No extra system packages: the default build has no -sys crates that
-      # need distro libraries (no X11/Wayland); the runner's C toolchain suffices.
-      - name: Install Rust toolchain
+      # No extra system packages: the default build has no -sys crates that need distro libraries
+      # (no X11/Wayland); the runner's C toolchain suffices.
+      - name: Install Rust toolchain (channel from rust-toolchain.toml)
         run: |
-          rustup toolchain install stable --profile minimal --component clippy
-          rustup default stable
+          if ! command -v rustup >/dev/null; then # windows-11-arm images may ship without rustup
+            curl -sSfLo "$RUNNER_TEMP/rustup-init.exe" https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+            "$RUNNER_TEMP/rustup-init.exe" -y --profile minimal --default-toolchain none
+            echo "$USERPROFILE/.cargo/bin" >>"$GITHUB_PATH"
+            export PATH="$USERPROFILE/.cargo/bin:$PATH"
+          fi
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --component clippy
+          rustc -vV
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Quick verify (clippy + unit tests)
+        with:
+          key: quick-${{ matrix.cell }}
+      - name: Build
+        run: cargo build --locked
+      - name: Clippy
+        run: bash scripts/verify.sh --only clippy
+      - name: Unit tests
+        id: unit
+        continue-on-error: ${{ matrix.experimental }}
+        run: bash scripts/verify.sh --only unit
+      - name: Binary smoke (--version, --help, MCP session, RPC session, PTY)
+        id: smoke
+        continue-on-error: ${{ matrix.experimental }}
+        run: bash scripts/verify.sh --only t:smoke_binary_per_os
+      - name: Report
+        if: always()
+        env:
+          CELL: ${{ matrix.cell }}
+          UNIT: ${{ steps.unit.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
+          EXPERIMENTAL: ${{ matrix.experimental }}
+        run: bash scripts/ci_report.sh "quick ($CELL)" "unit=$UNIT" "smoke=$SMOKE" "non-blocking-tests=$EXPERIMENTAL"
+
+  # ---------------------------------------------------------------------------------------------
+  # Every tests/*.rs, fanned out over three shards per cell.
+  integration:
+    name: integration (${{ matrix.cell.cell }}, ${{ matrix.shard }}/3)
+    needs: plan
+    runs-on: ${{ matrix.cell.os }}
+    timeout-minutes: 90
+    # Windows cells: see WIN-TESTS above. A failing shard is reported in the job summary.
+    continue-on-error: ${{ matrix.cell.experimental }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.integration) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain (channel from rust-toolchain.toml)
         run: |
-          status=0
-          bash scripts/verify.sh --quick || status=$?
-          for f in target/verify/*/fail.txt; do
-            [ -f "$f" ] && { echo "::group::$f"; cat "$f"; echo "::endgroup::"; }
-          done
-          exit "$status"
+          if ! command -v rustup >/dev/null; then
+            curl -sSfLo "$RUNNER_TEMP/rustup-init.exe" https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+            "$RUNNER_TEMP/rustup-init.exe" -y --profile minimal --default-toolchain none
+            echo "$USERPROFILE/.cargo/bin" >>"$GITHUB_PATH"
+            export PATH="$USERPROFILE/.cargo/bin:$PATH"
+          fi
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # One cache per cell, shared by its three shards (they build the same dependency graph).
+          shared-key: integration-${{ matrix.cell.cell }}
+          save-if: ${{ matrix.shard == 1 }}
+      - name: Integration tests (shard ${{ matrix.shard }}/3)
+        id: gate
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: bash scripts/verify.sh --integration --shard "$SHARD/3"
+      - name: Report
+        if: always()
+        env:
+          CELL: ${{ matrix.cell.cell }}
+          SHARD: ${{ matrix.shard }}
+          GATE: ${{ steps.gate.outcome }}
+          EXPERIMENTAL: ${{ matrix.cell.experimental }}
+        run: bash scripts/ci_report.sh "integration ($CELL, $SHARD/3)" "gate=$GATE" "non-blocking-tests=$EXPERIMENTAL"
+
+  # ---------------------------------------------------------------------------------------------
+  # Line coverage with a per-module ratchet (.github/coverage-floor.txt). No external service:
+  # the table goes to the job summary, lcov + HTML to a workflow artifact.
+  coverage:
+    name: coverage (linux-x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain + llvm-tools
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --component llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: coverage
+      - name: Install cargo-llvm-cov (pinned, built from crates.io)
+        run: cargo llvm-cov --version 2>/dev/null | grep -q ' 0\.9\.1$' || cargo install cargo-llvm-cov --locked --version 0.9.1
+      - name: Coverage + ratchet
+        run: bash scripts/coverage.sh
+      - name: Job summary
+        if: always()
+        run: |
+          [ -f target/coverage/summary.md ] && cat target/coverage/summary.md >>"$GITHUB_STEP_SUMMARY"
+          [ -f target/coverage/modules.tsv ] && cat target/coverage/modules.tsv
+          exit 0
+      - name: Upload lcov + HTML report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: |
+            target/coverage/lcov.info
+            target/coverage/modules.tsv
+            target/coverage/gaps.txt
+            target/coverage/summary.md
+            target/coverage/html
+          if-no-files-found: warn
+          retention-days: 14
 
   deny:
     name: cargo-deny
