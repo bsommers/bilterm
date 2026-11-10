@@ -146,6 +146,7 @@ If you toggle `INPUT: RAW PTY` (via **`F12`**, **`Ctrl+G`**, or `:raw`), pressin
 | `history_max_files` | `usize` | `1..=10000` (retained session dirs) | `25` |
 | `history_dir` | `string` (optional) | Directory path | `None` |
 | `history_session` | `string` | Session name (`--session <name>` overrides) | `"default"` |
+| `coords.badge` | `string` (`[coords]`) | `"off"`, `"compact"`, `"verbose"`, `"daemon"` (window title-bar coordinate badge; `:coords <style>` overrides at runtime) | `"off"` |
 | `layout_autosave` | `bool` | `true`, `false` (automatically saves pane/window layout changes to active profile) | `true` |
 | `default_layout_profile` | `string` | Default layout profile restored on startup (`"default"`, `"single"`, `"dual-v"`, `"dual-h"`, `"main-side"`, `"quad"`, `"cascade"`, or custom) | `"default"` |
 | `active_layout_profile` | `string` | Initial active layout profile (`--profile <name>` overrides) | `"default"` |

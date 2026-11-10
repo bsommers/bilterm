@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod dotted;
 pub mod keys;
+pub mod coords;
 pub mod traffic;
 pub use dotted::ApiConfig;
 pub use crate::stt::SttConfig;
@@ -135,6 +136,8 @@ pub struct BiltermConfig {
     pub agents_window: agents::AgentsWindowConfig,
     /// Terminal traffic monitor settings (`[traffic]`, Phase 64).
     pub traffic: traffic::TrafficConfig,
+    /// Hierarchical coordinate badge settings (`[coords]`, Phase 71).
+    pub coords: coords::CoordsConfig,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
     pub scrollback: ScrollbackConfig,
     /// Default per-pane scrolling discipline (`"smooth"`, `"page"` / `"block"`, or `"instant"`, `SCRL-01..02`).
@@ -249,6 +252,7 @@ impl Default for BiltermConfig {
             agents: agents::AgentsSection::default(),
             agents_window: agents::AgentsWindowConfig::default(),
             traffic: traffic::TrafficConfig::default(),
+            coords: coords::CoordsConfig::default(),
             scrollback: ScrollbackConfig::default(),
             scroll_mode: PaneScrollMode::Smooth,
             exit_protection: ExitProtectionPolicy::Guard,

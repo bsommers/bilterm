@@ -77,6 +77,10 @@ pub(super) fn execute_config_command(wm: &mut WindowManager, cmd: ColonCommand) 
             match dotted::set_key(&mut next, &key, &value) {
                 Ok(()) => {
                     *wm.config_mut() = next;
+                    if key.starts_with("coords.") {
+                        let style = wm.config().coords.badge;
+                        wm.set_coord_style(style);
+                    }
                     let shown = dotted::get_key(wm.config(), &key).unwrap_or(value);
                     let data = JsonValue::obj([("key", JsonValue::String(key.clone())), ("value", JsonValue::String(shown.clone()))]);
                     wm.set_command_data(data.to_json_string());

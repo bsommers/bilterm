@@ -225,6 +225,7 @@ Bilterm loads `~/.config/bilterm/config.toml` (or `$XDG_CONFIG_HOME/bilterm/conf
 | `history_enabled` | `bool` | `true`, `false` | `true` | Automatically persists submitted commands to session log files |
 | `history_max_files` | `usize` | `1..=10000` | `25` | Max named session directories retained (least-recently-used pruned, never the active one) |
 | `history_session` | `string` | Session name | `"default"` | Named persistent history session (`--session <name>` overrides) |
+| `coords.badge` | `string` | `"off"`, `"compact"`, `"verbose"`, `"daemon"` | `"off"` | Title-bar coordinate badge style (`[coords]` section; `:coords <style>` overrides at runtime) |
 | `history_max_entries` | `usize` | `1..` | `100000` | Entries kept per session file before compaction |
 | `history_load_limit` | `usize` | `0..` | `10000` | Prior session commands restored into each new pane |
 | `history_dir` | `string` (optional) | Any directory path | `None` | Custom directory override for persisted session history logs |

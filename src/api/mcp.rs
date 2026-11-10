@@ -103,6 +103,8 @@ impl AutomationControlPlane {
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
                     "bilterm_agent_control" => Some(Self::agent_control_method(&args).unwrap_or("")),
+                    "bilterm_coords_resolve" => Some("coords.resolve"),
+                    "bilterm_coords_format" => Some("coords.format"),
                     _ => None,
                 };
                 match mapped_method {
@@ -430,6 +432,19 @@ impl AutomationControlPlane {
                     ("force", "boolean", "approve even if the pane is not blocked"),
                     ("name", "string", "Workspace name for workspace_select/new/rename"),
                     ("direction", "string", "pane_split direction: h | v"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_coords_resolve",
+                "Resolve a hierarchical coordinate (e.g. d0:w1:main:y2, wildcards allowed) to the pane ids and canonical coordinate paths it addresses.",
+                &[("coord", "string", "Target coordinate: dD:wW:session:yY / pane path, `*` wildcards")],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_coords_format",
+                "Format a pane's hierarchical coordinate as badge text in a display style, plus its canonical path.",
+                &[
+                    ("pane_id", "integer", "Optional pane ID (defaults to the active pane)"),
+                    ("style", "string", "verbose | compact | daemon | off (default 'compact')"),
                 ],
             ),
         ];
