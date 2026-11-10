@@ -61,7 +61,7 @@ impl CompositePane {
             Some(target) => {
                 let (host, transport) = match target.split_once('/') {
                     Some((host, _)) => {
-                        if !self.remote_input_tap {
+                        if !self.transport.is_remote() {
                             let cwd = self.vt.reported_cwd().or(self.tracked_cwd.as_deref());
                             return (None, None, cwd.map(|p| p.display().to_string()));
                         }
