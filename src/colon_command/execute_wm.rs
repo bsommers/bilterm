@@ -934,6 +934,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::AgentsHud(op) => super::execute_agents_hud::execute_hud(wm, &op),
+        ColonCommand::AgentsReplay(op) => super::execute_agents_hud::execute_replay(wm, &op),
+        ColonCommand::AgentsWatchdog(_) => super::execute_agents_hud::execute_watchdog(wm),
         ColonCommand::SessionMap(op) => {
             if let Some(msg) = wm.apply_session_map_op(&op) {
                 wm.active_pane_mut().set_status_message(Some(msg));
@@ -953,6 +956,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.clipboard_window_apply(op);
             false
         }
+        ColonCommand::Context(op) => super::execute_context::execute_context(wm, op),
+        ColonCommand::AgentQueue(op) => super::execute_context::execute_agent_queue(wm, op),
+        ColonCommand::Swarm(op) => super::execute_swarm::execute_swarm(wm, op),
+        ColonCommand::AgentGate(op) => super::execute_context::execute_agent_gate(wm, op),
         ColonCommand::Coords(op) => super::execute_coords::execute_coords(wm, op),
         ColonCommand::TrafficMonitor(op) => {
             if let Err(e) = wm.traffic_monitor_apply(op) {

@@ -124,6 +124,8 @@ pub struct CompositePane {
     /// GUARD-03: a focus-only click was consumed; its Drag/Up tail must not reach the child.
     focus_click_pending: bool,
     last_canvas_size: (u16, u16),
+    /// Number of canvas resizes applied to the VT/PTY (SIGWINCH sources); read by Phase 70 no-resize tests.
+    resize_events: u64,
     exited: bool,
     /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
     pub(crate) held_exited_shell: Option<HeldExitedShellState>,
@@ -195,6 +197,7 @@ impl CompositePane {
             last_pty_write: Vec::new(),
             focus_click_pending: false,
             last_canvas_size: (canvas_rows, canvas_cols),
+            resize_events: 0,
             exited: false,
             held_exited_shell: None,
             captured: Vec::new(),
@@ -546,8 +549,14 @@ impl CompositePane {
             return Ok(false);
         }
         self.last_canvas_size = new_size;
+        self.resize_events += 1;
         self.vt.set_size(new_size.0, new_size.1);
         self.transport.resize(new_size.0, new_size.1)
+    }
+
+    /// Canvas resizes applied so far (each may deliver `SIGWINCH`).
+    pub fn resize_events(&self) -> u64 {
+        self.resize_events
     }
 
     /// Changes the prompt's anchor (`Top`, `Bottom`, `Floating`, `SplitTop`, or `SplitBottom`)

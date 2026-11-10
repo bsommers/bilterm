@@ -6,13 +6,18 @@ pub mod agents_window;
 pub mod agents_window_ops;
 pub mod agents_cmd;
 pub mod agents_demo;
+pub mod agents_hud;
+pub mod agents_hud_cmd;
+mod agents_hud_feed;
 pub mod agents_list;
 pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
 pub mod command_window;
 pub mod context_bus;
+pub mod context_queue_ops;
 pub mod prompt_queue;
+pub mod swarm_surface;
 pub mod mission_control_hud;
 pub mod turn_replay;
 pub mod agent_watchdog;
@@ -207,6 +212,8 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Mission Control HUD, turn replay and watchdog state (`HUD-01..03`, Phase 70).
+    agents_hud: agents_hud::AgentsHudState,
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
@@ -233,6 +240,7 @@ pub struct WindowManager {
     context_bus: context_bus::ContextBus,
     /// Per-pane prompt queues (`BEYOND-03`, Phase 68).
     prompt_queue: prompt_queue::PromptQueue,
+    swarm_surface: swarm_surface::SwarmSurface,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -347,6 +355,7 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            agents_hud: agents_hud::AgentsHudState::default(),
             session_map: session_map::SessionMapState::default(),
             daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
@@ -361,6 +370,7 @@ impl WindowManager {
             agent_mail: agent_mail::AgentMailRegistry::new(false),
             context_bus: context_bus::ContextBus::new(),
             prompt_queue: prompt_queue::PromptQueue::new(),
+            swarm_surface: swarm_surface::SwarmSurface::default(),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -482,6 +492,16 @@ impl WindowManager {
     /// Records the first error of the running automation action (surfaced by [`Self::apply_automation`]).
     pub fn record_automation_error(&mut self, err: String) {
         self.automation_error.get_or_insert(err);
+    }
+
+    /// Swarm / Mission Control HUD / replay engine state (UNI-R01, Phases 69/70).
+    pub fn swarm_surface(&self) -> &swarm_surface::SwarmSurface {
+        &self.swarm_surface
+    }
+
+    /// Mutable swarm / HUD / replay engine state.
+    pub fn swarm_surface_mut(&mut self) -> &mut swarm_surface::SwarmSurface {
+        &mut self.swarm_surface
     }
 
     /// Context bus handle (cheap clone shares the store).

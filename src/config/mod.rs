@@ -129,8 +129,9 @@ pub struct BiltermConfig {
     /// Declarative remote SSH host profiles (`[remotes.<name>]`, `v1.4.0`).
     pub remotes: BTreeMap<String, RemoteHostProfile>,
     /// Optional agent recognition profiles (`[agents.<name>]`, Phase 50-03); empty by default and then not serialised.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub agents: BTreeMap<String, agents::AgentProfile>,
+    /// Also holds `[agents.watchdog]` (Phase 70, HUD-03).
+    #[serde(default, skip_serializing_if = "agents::AgentsSection::is_empty")]
+    pub agents: agents::AgentsSection,
     /// Agent traffic window settings (`[agents_window]`, e.g. `edge_fade_secs`).
     pub agents_window: agents::AgentsWindowConfig,
     /// Terminal traffic monitor settings (`[traffic]`, Phase 64).
@@ -248,7 +249,7 @@ impl Default for BiltermConfig {
             keys: keys::KeysConfig::default(),
             triggers: Vec::new(),
             remotes: BTreeMap::new(),
-            agents: BTreeMap::new(),
+            agents: agents::AgentsSection::default(),
             agents_window: agents::AgentsWindowConfig::default(),
             traffic: traffic::TrafficConfig::default(),
             coords: coords::CoordsConfig::default(),
@@ -333,6 +334,7 @@ impl BiltermConfig {
         };
         let cfg = Self::from_toml_str(&raw).map_err(|e| format!("invalid {}: {e}", path.display()))?;
         cfg.keys.validate().map_err(|e| format!("invalid {}: {e}", path.display()))?;
+        cfg.agents.watchdog.validate().map_err(|e| format!("invalid {}: {e}", path.display()))?;
         Ok(Some(cfg))
     }
 

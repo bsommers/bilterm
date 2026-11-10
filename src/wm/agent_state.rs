@@ -465,7 +465,7 @@ impl WindowManager {
     /// its row changes are also reported, drawer visible or not (51-05).
     pub fn tick_agent_ui(&mut self, now: Instant) -> bool {
         let changed = self.update_agent_states(now);
-        let traffic = self.tick_agents_window_traffic(now) | self.agents_list_tick_changed();
+        let traffic = self.tick_agents_window_traffic(now) | self.agents_list_tick_changed() | self.tick_agents_hud(now);
         if self.config.drawer.style != crate::wm::drawer::DrawerStyle::Navigator
             || !self.is_drawer_effectively_visible()
         {

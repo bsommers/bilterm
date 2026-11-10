@@ -23,6 +23,7 @@ pub(super) fn parse_agent_colon_command(
     };
 
     match sub {
+        "replay" => Some(super::parse_agents_hud::parse_replay(&parts[2..])),
         "name" => {
             // :agent name [pane_id] <name>
             let tail = &parts[2..];

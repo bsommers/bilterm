@@ -252,6 +252,14 @@ impl MissionControlHud {
     pub fn is_empty(&self) -> bool {
         self.cards.is_empty()
     }
+    /// Pane ids that have a card, ascending.
+    pub fn card_ids(&self) -> Vec<PaneId> {
+        self.cards.keys().copied().collect()
+    }
+    /// All cards in pane-id order.
+    pub fn cards(&self) -> impl Iterator<Item = &AgentCardTelemetry> {
+        self.cards.values()
+    }
     pub fn card(&self, pane: PaneId) -> Option<&AgentCardTelemetry> {
         self.cards.get(&pane)
     }
@@ -476,6 +484,10 @@ impl MissionControlHud {
     // --- refresh gating ---
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+    }
+    /// Clears the dirty flag after a refresh pass (refresh gating, not drawing, uses it).
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
     }
     pub fn is_dirty(&self) -> bool {
         self.dirty

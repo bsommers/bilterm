@@ -1,3 +1,4 @@
+pub mod agents_hud;
 pub mod agents_list;
 pub mod agents_list_keys;
 mod agents_window;

@@ -133,7 +133,9 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/pane/video_canvas/ffmpeg.rs", "video decode child process pipes, not terminal traffic"),
     ("src/swarm/heal.rs", "self-heal verify-command child process pipes, not terminal traffic"),
     ("src/daemon/mod.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),
+    ("src/swarm/heal.rs", "verify_cmd child-process stdout/stderr pipes for the Phase 69 self-heal loop, not terminal traffic"),
     ("src/daemon/process.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),
+    ("src/swarm/heal.rs", "self-heal verify_cmd child process in a worktree, not terminal traffic"),
 ];
 
 /// Taps implemented by a wrapper or accessor type rather than an adjacent call.
