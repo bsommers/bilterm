@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.2.0
-current_phase: 65
-current_phase_name: architectural-guardrails-and-type-hardening
+milestone: v3.3.0
+current_phase: 66
+current_phase_name: foreground-rpc-and-instance-discovery
 status: planned
-stopped_at: "Registered Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (GUARD-01..03)"
+stopped_at: "Registered Milestone v3.3.0 (Phases 66–70, LIVE/HERDR/BEYOND/SWARM/HUD); Phases 61–65 marked Complete"
 last_updated: "2026-11-09T13:08:00Z"
 last_activity: 2026-11-09
-last_activity_desc: "Registered Phase 65 in roadmap and requirements; generated 65-PLAN.md covering SignalablePid, PaneTransport decoupling, and mouse focus isolation"
+last_activity_desc: "Marked Phases 61–65 complete; registered Milestone v3.3.0 (Phases 66–70) with 20 requirements and 66–70 PLAN files"
 state_head: feat/phase-65-guardrails
 progress:
-  total_phases: 65
-  completed_phases: 60
-  total_plans: 155
-  completed_plans: 143
-milestone_name: "Bilterm v3.2.0 — Regressions, Copy Mode, Keymaps, Traffic Monitor & Architectural Guardrails"
+  total_phases: 70
+  completed_phases: 65
+  total_plans: 160
+  completed_plans: 155
+milestone_name: "Bilterm v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration (Beyond Herdr)"
 ---
 
 # Project State
@@ -24,16 +24,16 @@ milestone_name: "Bilterm v3.2.0 — Regressions, Copy Mode, Keymaps, Traffic Mon
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-09):** Active roadmap extended through Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`).
+**Current focus (2026-11-09):** Milestone v3.3.0 registered (Phases 66–70): Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr. Phases 61–65 complete.
 
 ## Current Position
 
-Phase: 65 (architectural-guardrails-and-type-hardening) — PLANNED (alongside planned phases 61–64)
-Plan: 60/65 phases complete (143/155 plans complete).
-Status: 60/65 Phases complete.
-Last activity: 2026-11-09 — Registered Phase 65 in ROADMAP.md, created 65-PLAN.md, and updated STATE.md.
+Phase: 66 (foreground-rpc-and-instance-discovery) — PLANNED (alongside planned phases 67–70)
+Plan: 65/70 phases complete (155/160 plans complete).
+Status: 65/70 Phases complete.
+Last activity: 2026-11-09 — Marked Phases 61–65 Complete; registered Milestone v3.3.0 (Phases 66–70) and 66–70 PLAN files.
 
-Progress: [█████████░] 92.3% (60/65 Phases)
+Progress: [█████████░] 92.9% (65/70 Phases)
 
 ## Performance Metrics
 
@@ -74,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 60]: Completed Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`).
 - [Phase 65]: Registered Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`): type-safe `SignalablePid` newtype preventing broadcast/init signaling, `PaneTransport` sum type separating local PTY from remote bridge, and mouse focus isolation in `src/input/mouse.rs`.
 
+- [Phases 61–65]: Marked COMPLETE (FIX-01..03, COPY-01..02, KEY-01..03, TRAF-01..04, GUARD-01..03).
+- [Milestone v3.3.0]: Registered Phases 66–70 (LIVE-01..04, HERDR-01..04, BEYOND-01..04, SWARM-01..04, HUD-01..04): always-on foreground RPC, agent/pane/workspace CLI with zero-polling wait, semantic introspection & context bus, worktree swarm DAG runner, Mission Control HUD.
+
 ### Pending Todos
 
 None.
@@ -93,5 +96,5 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-11-08T18:20:00Z
-Stopped at: Registered Phase 65 (GUARD-01..03) in roadmap, requirements, and state.
+Stopped at: Registered Milestone v3.3.0 (Phases 66–70) in roadmap, requirements, and state.
 Resume file: None
