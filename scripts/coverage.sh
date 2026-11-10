@@ -106,11 +106,16 @@ esac
 cargo llvm-cov --version >/dev/null 2>&1 || { echo "FAIL cargo-llvm-cov not installed (cargo install cargo-llvm-cov --locked)"; exit 2; }
 
 # Same isolation as verify.sh: tests must never see the developer's real HOME / XDG state.
-STATE="$(mktemp -d "${TMPDIR:-/tmp}/bilterm-coverage-state.XXXXXX")"
+# Short root on purpose: macOS's per-user TMPDIR (/var/folders/.../T, ~50 bytes) pushes Unix socket
+# paths past sun_path (104 bytes) and ssh ControlPath past its limit, and long temp paths get
+# clipped in rendered frames. Tests therefore get a short TMPDIR and a private XDG_RUNTIME_DIR.
+if [ -d /tmp ] && [ -w /tmp ]; then STATE="$(mktemp -d /tmp/btv.XXXXXX)"; else STATE="$(mktemp -d "${TMPDIR:-/tmp}/btv.XXXXXX")"; fi
 trap 'rm -rf "$STATE"' EXIT
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}" RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
 export XDG_STATE_HOME="$STATE/state" XDG_CONFIG_HOME="$STATE/config" XDG_DATA_HOME="$STATE/data"
 export HOME="$STATE/home" USERPROFILE="$STATE/home" APPDATA="$STATE/appdata/roaming" LOCALAPPDATA="$STATE/appdata/local"
+export TMPDIR="$STATE/t" XDG_RUNTIME_DIR="$STATE/r"
+mkdir -p "$TMPDIR" "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 mkdir -p "$XDG_STATE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$HOME" "$APPDATA" "$LOCALAPPDATA"
 
 sel=()

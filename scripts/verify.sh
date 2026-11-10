@@ -45,7 +45,10 @@ export CARGO_BUILD_JOBS="$(detect_cpus)"
 
 # Cross-platform environment and temp directory isolation:
 # Covers Linux/POSIX (XDG_*), macOS ($HOME, XDG_*), and Windows/MSYS ($USERPROFILE, $APPDATA, $LOCALAPPDATA).
-VERIFY_STATE="$(mktemp -d "${TMPDIR:-/tmp}/bilterm-verify-state.XXXXXX")"
+# Short root on purpose: macOS's per-user TMPDIR (/var/folders/.../T, ~50 bytes) pushes Unix socket
+# paths past sun_path (104 bytes) and ssh ControlPath past its limit, and long temp paths get
+# clipped in rendered frames. Tests therefore get a short TMPDIR and a private XDG_RUNTIME_DIR.
+if [ -d /tmp ] && [ -w /tmp ]; then VERIFY_STATE="$(mktemp -d /tmp/btv.XXXXXX)"; else VERIFY_STATE="$(mktemp -d "${TMPDIR:-/tmp}/btv.XXXXXX")"; fi
 trap 'rm -rf "$VERIFY_STATE"' EXIT
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
@@ -56,6 +59,8 @@ export HOME="$VERIFY_STATE/home"
 export USERPROFILE="$VERIFY_STATE/home"
 export APPDATA="$VERIFY_STATE/appdata/roaming"
 export LOCALAPPDATA="$VERIFY_STATE/appdata/local"
+export TMPDIR="$VERIFY_STATE/t" XDG_RUNTIME_DIR="$VERIFY_STATE/r"
+mkdir -p "$TMPDIR" "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 mkdir -p "$XDG_STATE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$HOME" "$APPDATA" "$LOCALAPPDATA"
 
 # Git Bash / MSYS exports SHELL=/usr/bin/bash, a path native Windows programs cannot start. A real
