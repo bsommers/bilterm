@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-09
+
+Milestone v3.3.0 "Beyond Herdr": always-on foreground RPC, first-class agent/pane/workspace CLI, semantic agent introspection, worktree swarm DAG runner, Mission Control HUD, and hierarchical `D:(W,S,Y,P)` coordinates (Phases 65–71, 71 phases total).
+
+### Added
+- **Phase 65 — Architectural Guardrails (`GUARD-01..03`):** `SignalablePid` newtype for all signaling, `PaneTransport` enum (`Local`/`Remote`/`None`), and focus-and-raise mouse isolation.
+- **Phase 66 — Always-On Foreground RPC & Instance Discovery (`LIVE-01..04`):** `0600` RPC socket in TUI and GUI, child PTY env injection (`BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`) with `from_pane` attribution, multi-instance registry with `--instance <pid|all>`, OIA `[RPC:LIVE]` and `:rpc`.
+- **Phase 67 — Agent/Pane/Workspace CLI (`HERDR-01..04`):** `w<N>:p<M>` and semantic selectors (`@claude`, `@idle`, `@blocked`, ...), `bilterm agent|pane|workspace` subcommands, smart prompt injection (bracketed paste aware), zero-polling server-side `agent wait`.
+- **Phase 68 — Semantic Introspection & Context Bus (`BEYOND-01..04`):** `agent.last_turn`, permission-gate interceptor with approve/deny, per-pane FIFO prompt queue, cross-agent `bilterm context` bus.
+- **Phase 69 — Worktree Swarm & DAG Runner (`SWARM-01..04`):** atomic worktree agent spawner, `:swarm run <plan.toml>` DAG waves, diff/merge/clean, self-healing `verify_cmd` retry loop.
+- **Phase 70 — Mission Control HUD & Time-Travel (`HUD-01..04`):** `:agents hud`, per-turn replay scrubber, stall/loop watchdog, full `UNI-R01` parity.
+- **Phase 71 — Hierarchical Coordinates (`COORD-01..04`):** 5-level `D:(W,S,Y,P)` addressing, universal parser/resolver, title-bar coordinate badge, `:coords`, `coords.resolve`/`coords.format` RPC, `bilterm_coords_resolve` MCP tool, `[coords]` config, tmux pane ids.
+
 ## [3.2.0] - 2026-11-09
 
 Feature and hardening release delivering Classic Drawer 2-line rows and focus-derived zoom (Phase 61), Nested TUI Shift/Alt local selection override and Vi copy-mode motions (Phase 62), Cross-platform `Primary` modifier, OS key profiles, Sticky Window mode, which-key overlay, keyboard-operable menu bar, and key conflict engine (Phase 63), Real-time byte-boundary traffic telemetry and `TRAFFIC MONITOR` window (Phase 64), Floating `DAEMON SUPERVISOR` management window and real PID tracking, and a top-to-bottom TDD overhaul of `:ssh-tmux` remote panes.

@@ -287,30 +287,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Milestone v3.3.0, Phases 66–71)
 
-- [ ] **LIVE-01**: Always-on foreground RPC socket (`0600`) served by both `App::run` (TUI) and `run_native_gui_window` (GUI), dispatching through `Action`/`WindowManager::apply`.
-- [ ] **LIVE-02**: Child PTY env injection (`BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`) with automatic `from_pane` attribution on RPC calls from children.
-- [ ] **LIVE-03**: Multi-instance socket registry (`/run/user/<uid>/bilterm/instances/<pid>.sock`) validated via `SignalablePid`, with `--instance <pid|all>` federation.
-- [ ] **LIVE-04**: OIA `[RPC:LIVE]` indicator and `:rpc status|start|stop|clients` with `UNI-R01` parity.
-- [ ] **HERDR-01**: Hierarchical `w<N>:p<M>` and semantic (`@claude`, `@agy`, `@idle`, `@working`, `@blocked`) pane selectors.
-- [ ] **HERDR-02**: First-class CLI subcommands `bilterm agent list|prompt|wait|approve|interrupt|last-turn`, `pane list|read|split|focus|zoom|send`, `workspace list|select|new|rename`.
-- [ ] **HERDR-03**: Smart prompt injection engine auto-detecting shell `FloatingPrompt` vs raw TUI (`DECSET 2004` bracketed paste + submit chord).
-- [ ] **HERDR-04**: Zero-polling server-side blocking `agent.wait` waking on exact state transitions (`working->idle|blocked|done`, `OSC 133;D`).
-- [ ] **BEYOND-01**: Structured turn delta `agent.last_turn` (prompt, stripped markdown response, fenced `code_blocks`, `files_touched`, `duration_ms`, exit status).
-- [ ] **BEYOND-02**: Permission & confirmation gate interceptor with blocked-reason classifier and one-click `[Approve]`/`[Deny]` in Drawer Peek, `:agents list`, GUI toast, `bilterm agent approve`, and MCP.
-- [ ] **BEYOND-03**: Per-pane FIFO prompt queue (`:agent queue`, `bilterm agent prompt --queue`) auto-dispatching on `Working->Idle`.
-- [ ] **BEYOND-04**: Cross-agent shared context bus & scratchpad (`bilterm context set|get|watch|list`, `:context`, `bilterm://context/<key>`).
-- [ ] **SWARM-01**: Atomic git-worktree agent spawner (`:agent spawn`, `bilterm agent spawn --worktree <slug> --agent claude '<prompt>'`).
-- [ ] **SWARM-02**: Declarative DAG wave orchestrator (`:swarm run <plan.toml>`, `bilterm swarm run`) with `depends_on`, `worktree`, `prompt`, `verify_cmd`.
-- [ ] **SWARM-03**: Worktree diff inspector & one-key merge (`:swarm review`, `bilterm swarm status|diff|merge|clean`).
-- [ ] **SWARM-04**: Autonomous self-healing verification retry loop (`max_retries`, failing `verify_cmd` output fed back to the agent pane).
-- [ ] **HUD-01**: Agent Mission Control HUD (`:agents hud`, `Leader A`) with live mini viewports, velocity sparklines, queue depth, traffic arcs, and one-click `[Approve]`/`[Prompt]`/`[Diff]`/`[Zoom]`.
-- [ ] **HUD-02**: Per-turn time-travel scrubber (`:agent replay <pane>`).
-- [ ] **HUD-03**: Autonomous stall/loop watchdog (`[agents.watchdog]`) with alerting.
-- [ ] **HUD-04**: Full `UNI-R01` surface parity verified by `tests/phase70_agent_swarm_parity.rs`.
-- [ ] **COORD-01**: Canonical 5-level addressing hierarchy: Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P; optional sub-pane / tmux `%id` / Herdr `w12:p6`).
-- [ ] **COORD-02**: Universal coordinate parser & resolver accepting `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, colon paths `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
-- [ ] **COORD-03**: Right-aligned window title-bar coordinate badge: `(Wksp: W, Sess: S, Win: Y, Pane: P)` (Verbose), `(W,S,Y,P)`/`(W,S,Y)` (Compact), or `(D:(W,S,Y,P))` (DaemonTuple), right of existing bar info, without breaking classic golden snapshots.
-- [ ] **COORD-04**: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, Command Palette, Menu Bar, RPC `coords.resolve`/`coords.format`, and MCP `bilterm_coords_resolve` (`UNI-R01`).
+- [x] **LIVE-01**: Always-on foreground RPC socket (`0600`) served by both `App::run` (TUI) and `run_native_gui_window` (GUI), dispatching through `Action`/`WindowManager::apply`.
+- [x] **LIVE-02**: Child PTY env injection (`BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`) with automatic `from_pane` attribution on RPC calls from children.
+- [x] **LIVE-03**: Multi-instance socket registry (`/run/user/<uid>/bilterm/instances/<pid>.sock`) validated via `SignalablePid`, with `--instance <pid|all>` federation.
+- [x] **LIVE-04**: OIA `[RPC:LIVE]` indicator and `:rpc status|start|stop|clients` with `UNI-R01` parity.
+- [x] **HERDR-01**: Hierarchical `w<N>:p<M>` and semantic (`@claude`, `@agy`, `@idle`, `@working`, `@blocked`) pane selectors.
+- [x] **HERDR-02**: First-class CLI subcommands `bilterm agent list|prompt|wait|approve|interrupt|last-turn`, `pane list|read|split|focus|zoom|send`, `workspace list|select|new|rename`.
+- [x] **HERDR-03**: Smart prompt injection engine auto-detecting shell `FloatingPrompt` vs raw TUI (`DECSET 2004` bracketed paste + submit chord).
+- [x] **HERDR-04**: Zero-polling server-side blocking `agent.wait` waking on exact state transitions (`working->idle|blocked|done`, `OSC 133;D`).
+- [x] **BEYOND-01**: Structured turn delta `agent.last_turn` (prompt, stripped markdown response, fenced `code_blocks`, `files_touched`, `duration_ms`, exit status).
+- [x] **BEYOND-02**: Permission & confirmation gate interceptor with blocked-reason classifier and one-click `[Approve]`/`[Deny]` in Drawer Peek, `:agents list`, GUI toast, `bilterm agent approve`, and MCP.
+- [x] **BEYOND-03**: Per-pane FIFO prompt queue (`:agent queue`, `bilterm agent prompt --queue`) auto-dispatching on `Working->Idle`.
+- [x] **BEYOND-04**: Cross-agent shared context bus & scratchpad (`bilterm context set|get|watch|list`, `:context`, `bilterm://context/<key>`).
+- [x] **SWARM-01**: Atomic git-worktree agent spawner (`:agent spawn`, `bilterm agent spawn --worktree <slug> --agent claude '<prompt>'`).
+- [x] **SWARM-02**: Declarative DAG wave orchestrator (`:swarm run <plan.toml>`, `bilterm swarm run`) with `depends_on`, `worktree`, `prompt`, `verify_cmd`.
+- [x] **SWARM-03**: Worktree diff inspector & one-key merge (`:swarm review`, `bilterm swarm status|diff|merge|clean`).
+- [x] **SWARM-04**: Autonomous self-healing verification retry loop (`max_retries`, failing `verify_cmd` output fed back to the agent pane).
+- [x] **HUD-01**: Agent Mission Control HUD (`:agents hud`, `Leader A`) with live mini viewports, velocity sparklines, queue depth, traffic arcs, and one-click `[Approve]`/`[Prompt]`/`[Diff]`/`[Zoom]`.
+- [x] **HUD-02**: Per-turn time-travel scrubber (`:agent replay <pane>`).
+- [x] **HUD-03**: Autonomous stall/loop watchdog (`[agents.watchdog]`) with alerting.
+- [x] **HUD-04**: Full `UNI-R01` surface parity verified by `tests/phase70_agent_swarm_parity.rs`.
+- [x] **COORD-01**: Canonical 5-level addressing hierarchy: Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P; optional sub-pane / tmux `%id` / Herdr `w12:p6`).
+- [x] **COORD-02**: Universal coordinate parser & resolver accepting `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, colon paths `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
+- [x] **COORD-03**: Right-aligned window title-bar coordinate badge: `(Wksp: W, Sess: S, Win: Y, Pane: P)` (Verbose), `(W,S,Y,P)`/`(W,S,Y)` (Compact), or `(D:(W,S,Y,P))` (DaemonTuple), right of existing bar info, without breaking classic golden snapshots.
+- [x] **COORD-04**: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, Command Palette, Menu Bar, RPC `coords.resolve`/`coords.format`, and MCP `bilterm_coords_resolve` (`UNI-R01`).
 
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
@@ -394,30 +394,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GUARD-01 | Phase 65 | Complete (Phase 65) |
 | GUARD-02 | Phase 65 | Complete (Phase 65) |
 | GUARD-03 | Phase 65 | Complete (Phase 65) |
-| LIVE-01 | Phase 66 | Planned |
-| LIVE-02 | Phase 66 | Planned |
-| LIVE-03 | Phase 66 | Planned |
-| LIVE-04 | Phase 66 | Planned |
-| HERDR-01 | Phase 67 | Planned |
-| HERDR-02 | Phase 67 | Planned |
-| HERDR-03 | Phase 67 | Planned |
-| HERDR-04 | Phase 67 | Planned |
-| BEYOND-01 | Phase 68 | Planned |
-| BEYOND-02 | Phase 68 | Planned |
-| BEYOND-03 | Phase 68 | Planned |
-| BEYOND-04 | Phase 68 | Planned |
-| SWARM-01 | Phase 69 | Planned |
-| SWARM-02 | Phase 69 | Planned |
-| SWARM-03 | Phase 69 | Planned |
-| SWARM-04 | Phase 69 | Planned |
-| HUD-01 | Phase 70 | Planned |
-| HUD-02 | Phase 70 | Planned |
-| HUD-03 | Phase 70 | Planned |
-| HUD-04 | Phase 70 | Planned |
-| COORD-01 | Phase 71 | Planned |
-| COORD-02 | Phase 71 | Planned |
-| COORD-03 | Phase 71 | Planned |
-| COORD-04 | Phase 71 | Planned |
+| LIVE-01 | Phase 66 | Complete (Phase 66) |
+| LIVE-02 | Phase 66 | Complete (Phase 66) |
+| LIVE-03 | Phase 66 | Complete (Phase 66) |
+| LIVE-04 | Phase 66 | Complete (Phase 66) |
+| HERDR-01 | Phase 67 | Complete (Phase 67) |
+| HERDR-02 | Phase 67 | Complete (Phase 67) |
+| HERDR-03 | Phase 67 | Complete (Phase 67) |
+| HERDR-04 | Phase 67 | Complete (Phase 67) |
+| BEYOND-01 | Phase 68 | Complete (Phase 68) |
+| BEYOND-02 | Phase 68 | Complete (Phase 68) |
+| BEYOND-03 | Phase 68 | Complete (Phase 68) |
+| BEYOND-04 | Phase 68 | Complete (Phase 68) |
+| SWARM-01 | Phase 69 | Complete (Phase 69) |
+| SWARM-02 | Phase 69 | Complete (Phase 69) |
+| SWARM-03 | Phase 69 | Complete (Phase 69) |
+| SWARM-04 | Phase 69 | Complete (Phase 69) |
+| HUD-01 | Phase 70 | Complete (Phase 70) |
+| HUD-02 | Phase 70 | Complete (Phase 70) |
+| HUD-03 | Phase 70 | Complete (Phase 70) |
+| HUD-04 | Phase 70 | Complete (Phase 70) |
+| COORD-01 | Phase 71 | Complete (Phase 71) |
+| COORD-02 | Phase 71 | Complete (Phase 71) |
+| COORD-03 | Phase 71 | Complete (Phase 71) |
+| COORD-04 | Phase 71 | Complete (Phase 71) |
 
 **Coverage:**
 

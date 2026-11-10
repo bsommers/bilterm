@@ -67,12 +67,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization** - Pure-keyboard window/pane/menu navigation, per-OS key profiles, and collision-free hotkeys (`KEY-01..03`)
 - [x] **Phase 64: First-Class Terminal Traffic Monitor** - Measure and display aggregate terminal traffic across boundaries via zero-cost instrumentation and TRAFFIC MONITOR window (`TRAF-01..04`)
 - [x] **Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`)** - Type-safe domain invariants with `SignalablePid`, `PaneTransport` decoupling, and mouse focus isolation (`GUARD-01..03`)
-- [ ] **Phase 66: Always-On Foreground RPC & Multi-Instance Discovery (`LIVE-01..04`)** - Foreground RPC socket in `App::run`/`run_native_gui_window`, child PTY env injection, instance registry, `[RPC:LIVE]` OIA + `:rpc`
-- [ ] **Phase 67: First-Class Agent/Pane/Workspace CLI & Zero-Polling Wait (`HERDR-01..04`)** - `w<N>:p<M>` + semantic selectors, `bilterm agent|pane|workspace`, smart prompt injection, server-side `agent wait`
-- [ ] **Phase 68: Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`)** - `agent.last_turn`, permission gate interceptor, FIFO prompt queue, shared context bus
-- [ ] **Phase 69: Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`)** - Worktree agent spawner, DAG wave orchestrator, diff/merge, self-healing verify retry
-- [ ] **Phase 70: Agent Mission Control HUD & Time-Travel (`HUD-01..04`)** - Mission Control HUD, replay scrubber, stall/loop watchdog, `UNI-R01` parity
-- [ ] **Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`)** - 5-level `D:(W,S,Y,P)` addressing, universal parser/resolver, title-bar badge, `:coords`
+- [x] **Phase 66: Always-On Foreground RPC & Multi-Instance Discovery (`LIVE-01..04`)** - Foreground RPC socket in `App::run`/`run_native_gui_window`, child PTY env injection, instance registry, `[RPC:LIVE]` OIA + `:rpc`
+- [x] **Phase 67: First-Class Agent/Pane/Workspace CLI & Zero-Polling Wait (`HERDR-01..04`)** - `w<N>:p<M>` + semantic selectors, `bilterm agent|pane|workspace`, smart prompt injection, server-side `agent wait`
+- [x] **Phase 68: Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`)** - `agent.last_turn`, permission gate interceptor, FIFO prompt queue, shared context bus
+- [x] **Phase 69: Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`)** - Worktree agent spawner, DAG wave orchestrator, diff/merge, self-healing verify retry
+- [x] **Phase 70: Agent Mission Control HUD & Time-Travel (`HUD-01..04`)** - Mission Control HUD, replay scrubber, stall/loop watchdog, `UNI-R01` parity
+- [x] **Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`)** - 5-level `D:(W,S,Y,P)` addressing, universal parser/resolver, title-bar badge, `:coords`
 
 ## Phase Details
 

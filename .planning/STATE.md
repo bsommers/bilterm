@@ -1,9 +1,9 @@
 ---
 gsd_state_version: "1.0"
 milestone: v3.3.0
-current_phase: 66
-current_phase_name: foreground-rpc-and-instance-discovery
-status: planned
+current_phase: 71
+current_phase_name: hierarchical-coordinates
+status: complete
 stopped_at: "Registered Milestone v3.3.0 (Phases 66–71, LIVE/HERDR/BEYOND/SWARM/HUD); Phases 61–65 marked Complete"
 last_updated: "2026-11-09T13:08:00Z"
 last_activity: 2026-11-09
@@ -11,7 +11,7 @@ last_activity_desc: "Marked Phases 61–65 complete; registered Milestone v3.3.0
 state_head: feat/phase-65-guardrails
 progress:
   total_phases: 71
-  completed_phases: 65
+  completed_phases: 71
   total_plans: 161
   completed_plans: 155
 milestone_name: "Bilterm v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration (Beyond Herdr)"
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-10-31)
 
 ## Current Position
 
-Phase: 66 (foreground-rpc-and-instance-discovery) — PLANNED (alongside planned phases 67–71)
+Phase: 71 (hierarchical-coordinates) — COMPLETE (Phases 66–71 shipped in v3.3.0)
 Plan: 65/71 phases complete (155/161 plans complete).
-Status: 65/71 Phases complete.
+Status: 71/71 Phases complete.
 Last activity: 2026-11-09 — Marked Phases 61–65 Complete; registered Milestone v3.3.0 (Phases 66–71) and 66–71 PLAN files.
 
-Progress: [█████████░] 91.5% (65/71 Phases)
+Progress: [██████████] 100% (71/71 Phases)
 
 ## Performance Metrics
 
