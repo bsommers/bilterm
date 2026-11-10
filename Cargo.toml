@@ -38,3 +38,12 @@ nucleo-matcher = "0.3.1"
 [dev-dependencies]
 insta = "1.42.2"
 tempfile = "3.19.1"
+
+# Line tables keep file:line in backtraces but cut a full test build ~19G -> ~9G (with deps below; worktrees on quota'd /tmp
+# ran out of space). Set `CARGO_PROFILE_DEV_DEBUG=true` for full debug info when you need a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies rarely need stepping into; dropping their debug info is the bulk of the saving.
+[profile.dev.package."*"]
+debug = false
