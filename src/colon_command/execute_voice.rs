@@ -1,7 +1,14 @@
 //! Execution logic for `:voice` and `:stt` colon commands and `Action::Voice` (`STT-01..03`).
 
 use crate::action::VoiceOp;
+use crate::stt::VoicePreflight;
 use crate::wm::WindowManager;
+
+/// Recorder + backend health for the provider the worker will actually use.
+fn preflight(wm: &WindowManager) -> VoicePreflight {
+    let cfg = &wm.config().stt;
+    VoicePreflight::run(cfg, cfg.backend_kind())
+}
 
 pub fn execute_voice_command(wm: &mut WindowManager, op: &VoiceOp) {
     match op {
@@ -18,12 +25,18 @@ pub fn execute_voice_command(wm: &mut WindowManager, op: &VoiceOp) {
             wm.stt_status_mut().transcribing = false;
             wm.stt_status_mut().target_pane_id = Some(target_id);
             wm.stt_status_mut().elapsed_ms = 0;
-            wm.stt_status_mut().last_error = None;
+            let hints = preflight(wm).hints();
+            wm.stt_status_mut().last_error = (!hints.is_empty()).then(|| hints.join(" | "));
             if let Some(worker) = wm.ensure_stt_worker() {
                 worker.start(Some(target_id));
             }
+            let msg = if hints.is_empty() {
+                "Voice recording started [🎙 REC]...".to_string()
+            } else {
+                format!("Voice recording started [🎙 REC] — WARN: {}", hints.join(" | "))
+            };
             if let Some(pane) = wm.pane_mut(target_id) {
-                pane.set_status_message(Some("Voice recording started [🎙 REC]...".to_string()));
+                pane.set_status_message(Some(msg));
             }
             wm.sync_stt_badges();
         }
@@ -63,10 +76,19 @@ pub fn execute_voice_command(wm: &mut WindowManager, op: &VoiceOp) {
             } else {
                 "IDLE"
             };
-            let msg = format!(
-                "STT [{state_str}]: provider={prov}, last_transcript={:?}",
+            let pf = preflight(wm);
+            let reach = if pf.endpoint_status.is_ok() { "ok" } else { "unreachable" };
+            let mut msg = format!(
+                "STT [{state_str}]: provider={prov}, endpoint={} ({reach}), recorder={}, last_transcript={:?}",
+                pf.endpoint,
+                pf.recorder_label(),
                 status.last_transcript.as_deref().unwrap_or("none")
             );
+            let hints = pf.hints();
+            if !hints.is_empty() {
+                msg.push_str(" — ");
+                msg.push_str(&hints.join(" | "));
+            }
             let json = crate::api::json::JsonValue::obj([
                 ("enabled", crate::api::json::JsonValue::Bool(status.enabled)),
                 ("recording", crate::api::json::JsonValue::Bool(status.recording)),
@@ -93,6 +115,19 @@ pub fn execute_voice_command(wm: &mut WindowManager, op: &VoiceOp) {
                 (
                     "active_provider",
                     crate::api::json::JsonValue::String(status.active_provider.as_str().to_string()),
+                ),
+                ("recorder", crate::api::json::JsonValue::String(pf.recorder_label().to_string())),
+                ("recorder_available", crate::api::json::JsonValue::Bool(pf.recorder.is_ok())),
+                ("endpoint", crate::api::json::JsonValue::String(pf.endpoint.clone())),
+                (
+                    "endpoint_reachable",
+                    crate::api::json::JsonValue::Bool(pf.endpoint_status.is_ok()),
+                ),
+                (
+                    "hints",
+                    crate::api::json::JsonValue::Array(
+                        hints.into_iter().map(crate::api::json::JsonValue::String).collect(),
+                    ),
                 ),
             ])
             .to_json_string();

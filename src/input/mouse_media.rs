@@ -50,7 +50,7 @@ pub fn handle_media_canvas_mouse(
                 }
                 BrowserNavHit::UrlBar => {
                     if let Some(b) = pane.browser_canvas_mut() {
-                        b.set_focus(true);
+                        b.begin_url_edit();
                     }
                 }
             }

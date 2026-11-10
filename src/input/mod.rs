@@ -707,6 +707,10 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(AppAction::Handled);
     }
 
+    if let Some(action) = handle_browser_url_edit_key(wm, key) {
+        return Ok(action);
+    }
+
     // Active WM modal overlays (Help, Inspector, Palette, Menu Bar)
     if let Some(action) = handle_wm_modal_key(wm, key)? {
         return Ok(action);
@@ -755,6 +759,20 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     }
 
     dispatch_pane_key(wm, key)
+}
+
+/// Routes keys to the browser URL bar editor (active editing, or `Ctrl+L` to start it).
+fn handle_browser_url_edit_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
+    let b = wm.active_pane_mut().browser_canvas_mut()?;
+    if b.is_editing_url() {
+        b.handle_url_edit_key(key);
+        return Some(AppAction::Handled);
+    }
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('l') {
+        b.begin_url_edit();
+        return Some(AppAction::Handled);
+    }
+    None
 }
 
 fn dispatch_pane_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {

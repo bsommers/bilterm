@@ -326,7 +326,7 @@ impl SttWorker {
                                 Ok(kind) => {
                                     SubprocessAudioCapture::new(kind).start_recording(self.config.effective_max_recording_secs())
                                 }
-                                Err(e) => Err(e),
+                                Err(e) => Err(format!("{e}. {}", super::audio::RECORDER_INSTALL_HINT)),
                             }
                         };
 

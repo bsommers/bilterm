@@ -32,6 +32,47 @@ pub fn render_oia_status_bar(pane: &CompositePane, status_rect: Rect, buf: &mut 
     );
 }
 
+/// Narrowest OIA row that still carries the right-aligned surface badge; below this the head wins.
+const SURFACE_BADGE_MIN_WIDTH: u16 = 40;
+
+/// `[GUI]` on a native GUI window (`--gui`), `[TUI]` on a terminal surface.
+pub fn oia_surface_badge(gui_surface: bool) -> &'static str {
+    if gui_surface { "[GUI]" } else { "[TUI]" }
+}
+
+impl crate::wm::WindowManager {
+    /// True when rendering into a native GUI window rather than a terminal (`--gui`).
+    pub fn is_gui_surface(&self) -> bool {
+        self.gui_surface
+    }
+}
+
+/// Themed OIA row plus a right-aligned `[TUI]`/`[GUI]` surface badge.
+///
+/// Opt-in entry point: `render_oia_status_bar{,_themed}` stay byte-identical so the Classic
+/// parity goldens are unaffected.
+pub fn render_oia_status_bar_with_surface(
+    pane: &CompositePane,
+    status_rect: Rect,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    gui_surface: bool,
+    buf: &mut Buffer,
+) {
+    render_oia_status_bar_themed(pane, status_rect, palette, glyphs, buf);
+    if status_rect.height == 0 || status_rect.width < SURFACE_BADGE_MIN_WIDTH {
+        return;
+    }
+    let badge = oia_surface_badge(gui_surface);
+    let w = Span::raw(badge).width() as u16;
+    let x = status_rect.right().saturating_sub(w + 1);
+    let style = Style::default()
+        .fg(Color::Black)
+        .bg(Color::Rgb(0, 200, 255))
+        .add_modifier(Modifier::BOLD);
+    buf.set_string(x, status_rect.y, badge, style);
+}
+
 /// Compact byte-rate label (`12B`, `1.5K`, `2.0M`) for the opt-in OIA traffic indicator.
 fn rate_label(bps: u64) -> String {
     if bps >= 1_048_576 {
