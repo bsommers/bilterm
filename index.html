@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bilterm v3.0.1 — Retro-Futuristic Terminal Multiplexer & Agent Control Plane</title>
+<title>Bilterm v3.2.0 — Retro-Futuristic Terminal Multiplexer & Agent Control Plane</title>
 <meta name="description" content="Bilterm v3.0: Retro-futuristic terminal multiplexer, native desktop GUI, and AI agent control plane in Rust. IBM 3270 x Borland Turbo Vision x TRON.">
 <link rel="icon" href="assets/bilterm-64.png">
 <style>
@@ -148,14 +148,15 @@ a:hover{color:var(--white)}
 <nav class="menubar" aria-label="Primary">
   <span>&#9776;</span>
   <a href="#install"><b>I</b>nstall</a>
-  <a href="#v3-highlights"><b>N</b>ew in v3.0</a>
+  <a href="#v3-2"><b>N</b>ew in v3.2</a>
+  <a href="#v3-highlights">v3.0</a>
   <a href="#screens"><b>S</b>creenshots</a>
   <a href="#features"><b>F</b>eatures</a>
   <a href="#reference"><b>R</b>eference</a>
   <a href="#api-mcp"><b>A</b>PI / MCP</a>
   <a href="https://github.com/bsommers/bilterm"><b>G</b>itHub</a>
   <span class="sp"></span>
-  <span class="badge">v3.0.1</span>
+  <span class="badge">v3.2.0 &bull; 65 phases</span>
 </nav>
 
 <main class="wrap">
@@ -164,8 +165,8 @@ a:hover{color:var(--white)}
     <p class="tag">IBM 3270 <em>&times;</em> Borland Turbo Vision <em>&times;</em> Autonomous AI Swarms</p>
     <p class="subtag">A retro-futuristic terminal multiplexer, native desktop GUI terminal, and AI agent coordination workspace in Rust. Zero <code>SIGWINCH</code> thrash, 2D rectangular block copy, and resilient remote SSH/tmux sessions.</p>
     <div>
-      <a class="v-pill" href="https://github.com/bsommers/bilterm/releases/tag/v3.0.1">
-        <span class="dot dot-done"></span><strong>Bilterm v3.0.1 Released</strong> &bull; Agent-Aware Navigator &bull; Remote SSH+tmux &bull; 8 Modern Profiles &bull; Script Studio
+      <a class="v-pill" href="https://github.com/bsommers/bilterm/releases/tag/v3.2.0">
+        <span class="dot dot-done"></span><strong>Bilterm v3.2.0 Released</strong> &bull; Embedded Chrome Browser &bull; Voice-to-Text &bull; 60fps Video &bull; Traffic Monitor &bull; Daemon Supervisor
       </a>
     </div>
   </header>
@@ -189,17 +190,82 @@ cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local
 
       <div class="btns">
         <a class="btn" href="https://github.com/bsommers/bilterm">&#9658; GitHub Repository</a>
-        <a class="btn btn-amber" href="https://github.com/bsommers/bilterm/releases">&#9658; Download v3.0.1 Binaries</a>
-        <a class="btn" href="#v3-highlights">&#9658; Explore v3.0 Features</a>
+        <a class="btn btn-amber" href="https://github.com/bsommers/bilterm/releases">&#9658; Download v3.2.0 Binaries</a>
+        <a class="btn" href="#v3-2">&#9658; Explore v3.2 Features</a>
         <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/user-guide/README.md">&#9658; 12-Chapter User Guide</a>
         <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/API.md">&#9658; API &amp; RPC Reference</a>
       </div>
     </div>
   </section>
 
+  <!-- v3.2 Highlights Section -->
+  <section class="win amber" id="v3-2">
+    <h2>[&#9632;] What's New in Bilterm v3.2.0 (Phases 56&ndash;65)</h2>
+    <div class="body">
+      <p class="note" style="margin-top:0;">65 development phases &bull; 175+ test suites &bull; 110+ <code>Action</code> variants &bull; every feature reachable from keyboard, colon command, JSON-RPC, and MCP.</p>
+    </div>
+    <div class="body grid">
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.56 &middot; Drawer Window Peek &amp; Inline Input</h3>
+        <p>Hover or highlight any window in the drawer for a live 8-line ANSI preview (<code>:drawer preview</code> / <code>:peek</code>). Inline prompt bar and full actions without leaving the drawer.</p>
+        <div class="meta">Zero-copy &bull; Zero <code>SIGWINCH</code> &bull; <code>drawer.preview</code> RPC &bull; MCP <code>bilterm_drawer_preview</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.57 &middot; Smart Clipboard &amp; Content Viewer</h3>
+        <p><code>:clip</code> opens a filterable, MIME-aware overlay previewing text, JSON, diff, image, and file clipboards. <code>:paste</code> and bracketed-paste probing, plus inbound/outbound OSC 52.</p>
+        <div class="meta">Secret-masked 200-entry registry &bull; <code>Ctrl+Alt+V</code> &bull; MCP <code>bilterm_clipboard</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.58 &middot; Local AI Voice-to-Text</h3>
+        <p><code>:voice toggle|ptt|lang|model</code> dictates into the prompt via a local Whisper-compatible HTTP STT endpoint. Live waveform OIA badge, plus pre-flight recorder &amp; endpoint diagnostics.</p>
+        <div class="meta">Push-to-talk &bull; whisper.cpp / speaches / LocalAI &bull; <code>voice.*</code> RPC &bull; MCP <code>bilterm_voice</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.59 &middot; Embedded Chrome CDP Web Browser</h3>
+        <p><code>:browser [url]</code> with an editable URL bar (click or <kbd>Ctrl+L</kbd>, auto-<code>https://</code>) and Back / Forward / Reload nav bar. Dual-surface rendering: crisp RGBA in the GUI, TrueColor &#9600; half-block cells in the TUI (with +1 row top-prompt offset).</p>
+        <div class="meta">Private <code>0700</code> Chrome profile &bull; <code>browser.*</code> RPC &bull; MCP <code>bilterm_browser</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.59 &middot; 60fps Video Canvas</h3>
+        <p><code>:video &lt;path|url&gt;|pause|seek|stop</code> streams through a real non-blocking <code>ffmpeg</code> rawvideo RGBA pipe reader (synthetic fallback when absent) with interactive OSD controls, rendered in GUI and as TUI half-blocks.</p>
+        <div class="meta">OSD transport controls &bull; <code>video.*</code> RPC &bull; MCP <code>bilterm_video</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.60 &middot; Multi-Surface Web Frontend</h3>
+        <p><code>:web start|stop|status</code> launches an axum HTTP + WebSocket <code>/ws</code> server speaking <code>@agent-manager/protocol</code> v1. Zero-build browser viewport decoupled from TUI/GUI state.</p>
+        <div class="meta">Multi-client view registry &bull; <code>--web-dir</code> static SPA &bull; MCP <code>bilterm_web_surface</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.61 &middot; Classic 2-Line Drawer Items</h3>
+        <p>Each drawer entry is two lines: line 1 carries ID, title, badges, and action buttons; line 2 shows the live last output line of that window.</p>
+        <div class="meta"><code>:drawer rows</code> &bull; <code>[R:n]</code> chips &bull; Focus-derived zoom &bull; State preserved on stack switch</div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.62 &middot; Nested-TUI Selection &amp; Vi Copy Motions</h3>
+        <p><kbd>Shift</kbd>/<kbd>Alt</kbd>+Drag bypasses a nested app's mouse capture, with an <code>[OVERRIDE -&gt; CLIPBOARD]</code> toast. Vi copy mode gains <code>w b e</code>, <code>0 ^ $</code>, <code>f F t T</code>, and <code>; ,</code> motions.</p>
+        <div class="meta">Split-read OSC 52 reassembly &bull; <code>MOUSE-&gt;APP</code> / <code>[COPY]</code> OIA badges &bull; Hint bar</div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.63 &middot; Cross-OS Keys, Sticky Window Mode &amp; Menu Bar</h3>
+        <p>Primary modifier is <kbd>Cmd</kbd> on macOS and <kbd>Ctrl+Shift</kbd> on Linux/Windows (<code>:keymap profile auto|mac|linux|windows</code>). Sticky Window Mode (Leader <kbd>w</kbd>) takes single-key <kbd>s v q z f d c h j k l m</kbd> chords with a live <code>[WIN MODE]</code> HUD, a Which-Key chord popup, and a 9-category keyboard-navigable Menu Bar (Leader <kbd>m</kbd>, <kbd>Alt+S/W/P/V/A/D/N/T/H</kbd>).</p>
+        <div class="meta">Modal menu mouse hit-test priority over drawer &bull; Key conflict engine &bull; <code>:keys check|list|explain</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.64 &middot; 33-Hook Traffic Monitor</h3>
+        <p><code>:traffic</code> opens a live, filterable ring buffer with a detail payload inspector across 33 byte-boundary hooks: PTY, SSH, Tmux, RPC, MCP, Web, CDP, STT, and Session.</p>
+        <div class="meta">Lock-free, zero-allocation &bull; <code>traffic.*</code> RPC &bull; MCP <code>bilterm_traffic</code></div>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-blocked"></span> Ph.65 &middot; Daemon Supervisor &amp; Core Hardening</h3>
+        <p>Floating <b>DAEMON SUPERVISOR</b> modal (Leader <kbd>B</kbd> / <code>:daemon ui</code>) with compile-time <code>SignalablePid</code> guardrails that block PID &le; 1. PTY-less <code>:ssh-tmux</code> control-mode panes with auto-reconnect, and an OIA <code>[TUI]</code>/<code>[GUI]</code> surface badge.</p>
+        <div class="meta">Real child PIDs tracked &bull; Password echo masking &bull; No local double-echo</div>
+      </div>
+    </div>
+  </section>
+
   <!-- v3.0 Highlights Section -->
   <section class="win amber" id="v3-highlights">
-    <h2>[&#9632;] What's New in Bilterm v3.0</h2>
+    <h2>[&#9632;] Foundations: Bilterm v3.0 &ndash; v3.0.5</h2>
     <div class="body grid">
       <div class="cell">
         <h3><span class="dot dot-working"></span> Agent-Aware Navigator (F7)</h3>
@@ -210,7 +276,7 @@ cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local
       <div class="cell">
         <h3><span class="dot dot-done"></span> Agent-to-Agent Messaging</h3>
         <p>Direct inter-agent communication across terminal panes: <code>:agent send &lt;name&gt; &lt;msg&gt;</code>, per-agent bounded mailboxes (64 max), and 3 delivery modes: <code>mailbox</code>, <code>nudge</code> (when shell is idle), and <code>file</code> (for large payloads).</p>
-        <div class="meta">JSON-RPC <code>agent.*</code> &bull; MCP <code>bilterm_agent_mail</code> &bull; Loop guard (8 hops) &bull; Rate limiter</div>
+        <div class="meta">JSON-RPC <code>agent.*</code> &bull; MCP <code>bilterm_voice</code> &bull; <code>bilterm_browser</code> &bull; <code>bilterm_video</code> &bull; <code>bilterm_traffic</code> &bull; <code>bilterm_clipboard</code> &bull; <code>bilterm_agent_mail</code> &bull; Loop guard (8 hops) &bull; Rate limiter</div>
       </div>
 
       <div class="cell">
@@ -402,6 +468,60 @@ cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local
               <td><code>:sessions map</code> / <code>:window move &lt;sess&gt;</code></td>
               <td>Packing treemap &amp; live window migration</td>
             </tr>
+            <tr>
+              <td><strong>Clipboard Viewer / Paste</strong></td>
+              <td><kbd>Ctrl+Alt+V</kbd></td>
+              <td><code>:clip</code> / <code>:paste</code></td>
+              <td>MIME-aware preview, OSC 52</td>
+            </tr>
+            <tr>
+              <td><strong>Voice-to-Text</strong></td>
+              <td><kbd>Ctrl+Alt+S</kbd></td>
+              <td><code>:voice toggle|ptt|lang|model</code></td>
+              <td>Local Whisper STT, OIA waveform badge</td>
+            </tr>
+            <tr>
+              <td><strong>Embedded Browser</strong></td>
+              <td><kbd>Ctrl+Alt+B</kbd> / <kbd>Ctrl+L</kbd> (URL)</td>
+              <td><code>:browser [url]</code></td>
+              <td>Chrome CDP, GUI RGBA &amp; TUI half-blocks</td>
+            </tr>
+            <tr>
+              <td><strong>Video Canvas</strong></td>
+              <td><kbd>Ctrl+Alt+Y</kbd></td>
+              <td><code>:video &lt;path|url&gt;|pause|seek|stop</code></td>
+              <td>60fps ffmpeg pipe with OSD</td>
+            </tr>
+            <tr>
+              <td><strong>Web Frontend</strong></td>
+              <td><kbd>Ctrl+Alt+W</kbd></td>
+              <td><code>:web start|stop|status</code></td>
+              <td>axum HTTP + WebSocket <code>/ws</code></td>
+            </tr>
+            <tr>
+              <td><strong>Drawer Peek &amp; Rows</strong></td>
+              <td><kbd>P</kbd> / <kbd>v</kbd> in drawer</td>
+              <td><code>:peek</code> / <code>:drawer rows</code></td>
+              <td>Live preview, 2-line items</td>
+            </tr>
+            <tr>
+              <td><strong>Sticky Window Mode / Menu Bar</strong></td>
+              <td>Leader <kbd>w</kbd> / Leader <kbd>m</kbd></td>
+              <td><code>:keymap profile auto|mac|linux|windows</code></td>
+              <td>[WIN MODE] HUD, which-key, 9-category menus</td>
+            </tr>
+            <tr>
+              <td><strong>Traffic Monitor</strong></td>
+              <td>&mdash;</td>
+              <td><code>:traffic</code></td>
+              <td>33-hook filterable ring buffer</td>
+            </tr>
+            <tr>
+              <td><strong>Daemon Supervisor</strong></td>
+              <td>Leader <kbd>B</kbd></td>
+              <td><code>:daemon ui</code></td>
+              <td>Guarded PID signalling</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -418,13 +538,13 @@ cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local
       <div class="grid">
         <div class="cell">
           <h3>Model Context Protocol (MCP)</h3>
-          <p>Run <code>bilterm --mcp</code> for 11+ first-class MCP tools and dynamic resources:</p>
-          <code>bilterm_agent_mail</code> &bull; <code>bilterm_find</code> &bull; <code>bilterm_run_action</code> &bull; <code>bilterm_session_manager</code> &bull; <code>bilterm://state</code> &bull; <code>bilterm://config</code> &bull; <code>bilterm://agent/{name}/inbox</code>
+          <p>Run <code>bilterm --mcp</code> for 20+ first-class MCP tools and dynamic resources:</p>
+          <code>bilterm_voice</code> &bull; <code>bilterm_browser</code> &bull; <code>bilterm_video</code> &bull; <code>bilterm_traffic</code> &bull; <code>bilterm_clipboard</code> &bull; <code>bilterm_agent_mail</code> &bull; <code>bilterm_find</code> &bull; <code>bilterm_run_action</code> &bull; <code>bilterm_session_manager</code> &bull; <code>bilterm://state</code> &bull; <code>bilterm://config</code> &bull; <code>bilterm://agent/{name}/inbox</code>
         </div>
         <div class="cell">
           <h3>Strict JSON-RPC 2.0 &amp; HTTP+SSE</h3>
           <p>Drive headless workspaces via <code>bilterm ctl</code> or HTTP transport (<code>--http 127.0.0.1:9090</code>):</p>
-          <code>agent.send</code> &bull; <code>agent.wait</code> &bull; <code>find.agents</code> &bull; <code>window.move</code> &bull; <code>daemon.list</code> &bull; <code>wm.command</code> &bull; <code>pane.send_keys</code> &bull; <code>workspace.status</code>
+          <code>voice.*</code> &bull; <code>browser.*</code> &bull; <code>video.*</code> &bull; <code>web.*</code> &bull; <code>traffic.*</code> &bull; <code>keys.*</code> &bull; <code>agent.send</code> &bull; <code>agent.wait</code> &bull; <code>find.agents</code> &bull; <code>window.move</code> &bull; <code>daemon.list</code> &bull; <code>wm.command</code> &bull; <code>pane.send_keys</code> &bull; <code>workspace.status</code>
         </div>
       </div>
 
