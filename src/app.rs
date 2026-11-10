@@ -50,6 +50,16 @@ impl Write for CountingStdout {
     }
 }
 
+/// Next request on the always-on foreground RPC socket; pends forever when it is unavailable.
+async fn next_live_request(
+    rx: &mut Option<crate::api::live::LiveRpcRx>,
+) -> Option<crate::api::RpcRequest> {
+    match rx.as_mut() {
+        Some(r) => r.recv().await,
+        None => std::future::pending().await,
+    }
+}
+
 /// Top-level Bilterm TUI application state and async multi-pane event loop coordinator.
 pub struct App {
     pub wm: WindowManager,
@@ -96,6 +106,13 @@ impl App {
             None,
             crate::traffic::Role::Wire,
         );
+        let (mut live_rx, mut live) = match crate::api::live::LiveRpc::start(self.wm.traffic_meter()) {
+            Some((rx, handler)) => (Some(rx), Some(handler)),
+            None => {
+                crate::pty::set_live_socket(None);
+                (None, None)
+            }
+        };
         let mut tick = tokio::time::interval(Duration::from_millis(16));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -128,7 +145,16 @@ impl App {
                         self.needs_redraw = true;
                     }
                 }
+                Some((line, reply)) = next_live_request(&mut live_rx) => {
+                    if let Some(handler) = live.as_mut() {
+                        handler.handle(&mut self.wm, &line, reply);
+                    }
+                    self.needs_redraw = true;
+                }
                 _ = tick.tick() => {
+                    if let Some(handler) = live.as_mut() {
+                        handler.poll_waiters(&mut self.wm);
+                    }
                     self.wm.drain_stt_events();
                     if self.poll_all_ptys() {
                         self.needs_redraw = true;

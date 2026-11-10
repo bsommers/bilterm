@@ -682,3 +682,41 @@ where
         wr.flush().await?;
     }
 }
+
+/// Spawns a tokio accept loop that forwards every request line from `listener` to `req_tx`.
+///
+/// Used by the always-on foreground RPC socket (`LIVE-01`): the foreground event loop owns the
+/// `WindowManager`, receives `(line, reply)` pairs and answers them itself. Peer uid is checked
+/// per connection exactly like the headless daemon; no bearer token is used on the private
+/// `0600` Unix socket.
+#[cfg(unix)]
+pub(super) fn spawn_unix_acceptor(
+    listener: tokio::net::UnixListener,
+    req_tx: tokio::sync::mpsc::Sender<RpcRequest>,
+    meter: crate::traffic::TrafficMeter,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut seq = 0u64;
+        loop {
+            match RpcAcceptor::accept(&listener).await {
+                Ok((stream, _peer)) => {
+                    seq += 1;
+                    let tap = meter.open_channel(Origin::RpcUnix, &format!("live#{seq}"), None, Role::Wire);
+                    let stream = super::metered::Metered::new(stream, tap);
+                    let tx = req_tx.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = serve_jsonrpc_connection(stream, tx, None).await {
+                            tracing::debug!(error = %e, "live RPC connection closed");
+                        }
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "live RPC accept failed");
+                    if e.kind() != std::io::ErrorKind::PermissionDenied {
+                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    }
+                }
+            }
+        }
+    })
+}

@@ -45,6 +45,11 @@ impl AgentWaitSpec {
     }
 }
 
+/// `selector` / `until` select the pane-state form of `agent.wait` (never parked).
+fn wants_state_wait(params: &JsonValue) -> bool {
+    params.get("selector").is_some() || params.get("until").is_some()
+}
+
 fn received_response(msg: &AgentMessage) -> JsonValue {
     JsonValue::obj([
         ("status", JsonValue::String("received".to_string())),
@@ -78,6 +83,9 @@ fn received_response(msg: &AgentMessage) -> JsonValue {
 impl AutomationControlPlane {
     /// `agent.wait` (synchronous form): one inbox check, then the received or timeout result.
     pub(super) fn rpc_agent_wait(&mut self, params: &JsonValue) -> Result<JsonValue, String> {
+        if wants_state_wait(params) {
+            return self.rpc_agent_wait_state(params);
+        }
         let spec = self.agent_wait_spec(params)?;
         Ok(self
             .agent_wait_check(&spec)
@@ -192,6 +200,9 @@ impl AgentWaiters {
             .get("params")
             .cloned()
             .unwrap_or_else(|| JsonValue::Object(BTreeMap::new()));
+        if wants_state_wait(&params) {
+            return None;
+        }
         let spec = plane.agent_wait_spec(&params).ok()?;
         if plane.agent_wait_check(&spec).is_some() {
             return None;
