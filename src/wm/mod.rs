@@ -6,6 +6,9 @@ pub mod agents_window;
 pub mod agents_window_ops;
 pub mod agents_cmd;
 pub mod agents_demo;
+pub mod agents_hud;
+pub mod agents_hud_cmd;
+mod agents_hud_feed;
 pub mod agents_list;
 pub mod agents_list_cmd;
 pub mod agents_geometry;
@@ -209,6 +212,8 @@ pub struct WindowManager {
     pub(crate) agents_window: agents_window::AgentsWindowState,
     /// Floating AGENTS list window state (`UIT-03`, Phase 51).
     pub(crate) agents_list: agents_list::AgentsListState,
+    /// Mission Control HUD, turn replay and watchdog state (`HUD-01..03`, Phase 70).
+    agents_hud: agents_hud::AgentsHudState,
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
@@ -350,6 +355,7 @@ impl WindowManager {
             registry: registry::RegistryState::new(),
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
+            agents_hud: agents_hud::AgentsHudState::default(),
             session_map: session_map::SessionMapState::default(),
             daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),

@@ -104,7 +104,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Next Coordinate Badge Style", ":coords cycle", 'X'),
             mi("Context Bus Quick List", ":context list", 'Q'),
             mi("Agent Job Queue", ":agent queue list", 'J'),
-            mi("Mission Control HUD [Z]", ":agents hud toggle", 'Z'),
+            mi("Mission Control Squad HUD [Z]", ":agents hud toggle", 'Z'),
             mi("Swarm Status [7]", ":swarm status", '7'),
             mi("Agent Turn Replay [8]", ":agent replay show", '8'),
             mi("Script Studio", ":script toggle", 'U'),

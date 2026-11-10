@@ -5,7 +5,7 @@ use crate::wm::agents_cmd::{AgentsOp, SnoopFilterKind, SnoopFilterOp, TopologyOp
 use crate::config::agents::EDGE_FADE_RANGE;
 use crate::wm::agents_window::{GraphDir, NodeKey, WindowPane};
 
-const USAGE: &str = "Usage: :agents [list [verb]|zoom [pane-id]|toggle [pane-id]|demo [stop]|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|fade [secs]|topology [export <name>]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
+const USAGE: &str = "Usage: :agents [list [verb]|hud [verb]|watchdog|zoom [pane-id]|toggle [pane-id]|demo [stop]|close|dismiss|blur|select <left|right|up|down|node-key>|edge <next|prev|a b>|enter|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size <cols>x<rows>|auto|max|split <20..80|+n|-n>|grab [on|off]|nudge <dir>|node-pin <key> <x> <y>|node-unpin [key]|pin [toggle]|unpin|scale <75..200|+n|-n>|focus [graph|snoop|compose]|line <+n|-n|seq>|copy|scroll <±n|top>|follow [on|off]|fade [secs]|topology [export <name>]|filter <agent [label]|pair [a b]|text kw|clear|remove agent|pair|text>]";
 
 const FADE_USAGE: &str = "Usage: :agents fade [1..3600] (seconds for an edge to fade to its floor)";
 const TOPOLOGY_USAGE: &str = "Usage: :agents topology [export <name>]";
@@ -191,6 +191,8 @@ pub(super) fn parse_agents_colon_command(
             Ok(ColonCommand::Agents(AgentsOp::List))
         }
         Some("list" | "ls") if parts.len() > 2 => super::parse_agents_list::parse(&parts[2..]),
+        Some("hud") => super::parse_agents_hud::parse_hud(&parts[2..]),
+        Some("watchdog") => super::parse_agents_hud::parse_watchdog(&parts[2..]),
         Some("zoom") if parts.len() <= 3 => match parts.get(2) {
             None => Ok(ColonCommand::Agents(AgentsOp::Zoom(None))),
             Some(raw) => match raw.trim_start_matches('#').parse::<crate::pane::PaneId>() {

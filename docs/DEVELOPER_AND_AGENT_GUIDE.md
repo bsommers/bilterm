@@ -60,6 +60,8 @@ src/
 │   ├── parse_visual.rs         # Parses visual/theme/font/drawer/canvas ":..." strings into Result<Action, String>
 │   ├── parse_agents_list.rs    # `:agents list <verb>` grammar; every non-matching form is one usage error (Phase 51)
 │   ├── execute_agents_list.rs  # Runs an `AgentsListOp`, sets its status and the scalars-only window summary (Phase 51)
+│   ├── parse_agents_hud.rs     # `:agents hud ...`, `:agent replay ...`, `:agents watchdog` grammar (Phase 70)
+│   ├── execute_agents_hud.rs   # Runs HudOp / ReplayOp / watchdog status, sets status + command data (Phase 70)
 │   ├── parse_link.rs           # `:ssh-tmux` sub-verb grammar (reconnect, disconnect, info, prefill) (Phase 51.1)
 │   ├── execute_link.rs         # Remote link execution and link_summary_json (Phase 51.1)
 │   ├── execute.rs              # Executes ColonCommand against the active CompositePane
@@ -442,6 +444,35 @@ and MCP `bilterm_traffic`. Toggle chords: `Ctrl+Alt+T` (reserved global, works i
 ArrangeGrid). API callers are refused `reset|enable|classify|oia` unless `[api] allow_config_write = true`.
 `scripts/check_phase64_doc_coverage.sh` (run by `tests/phase64_traffic_surfaces.rs`) keeps chapter 13 in sync with the
 `:traffic` completion row.
+
+### Phase 70 Mission Control HUD, turn replay and watchdog (HUD-01..04)
+
+`src/wm/agents_hud_cmd.rs` holds the three op enums (`HudOp`, `ReplayOp`, `WatchdogOp`) wrapped as `Action::AgentsHud`,
+`Action::AgentsReplay`, `Action::AgentsWatchdog`; `colon_form()` is the inverse of `src/colon_command/parse_agents_hud.rs`.
+`src/wm/agents_hud.rs` (state `AgentsHudState`, ops, the shared `agent_approve_pane`) and `agents_hud_feed.rs` (poll-tick
+feed) own the behaviour; they wrap the standalone models `mission_control_hud.rs` (tiles, hit-test, Buffer renderer),
+`turn_replay.rs` (per-pane `TurnReplayLog`) and `agent_watchdog.rs`. The window is drawn by `src/ui/agents_hud_ui.rs`
+(the TUI and GUI share the cells) and driven by `src/input/agents_hud.rs`, whose pure functions `agents_hud_key_action` /
+`hud_mouse_action` map a key or click to an `Action` (leader `*`, since every letter and F-key chord was taken and `A`
+is the AGENTS list; in-window `a p d z r Esc`, arrows, PgUp/PgDn; right-click a tile = replay).
+
+- **No resize, ever.** Opening, refreshing and drawing only read pane state; `CompositePane::resize_events()` is the
+  counter the tests assert on. The refresh is capped by `MIN_REFRESH_MS` and the tile page by `MAX_TILES_PER_PAGE`.
+- **Approve** runs `WindowManager::agent_approve_pane`, the same function as RPC `agent.approve`: it needs the Blocked state,
+  and a click carries the tile's generation token (bumped on every state change), so a stale tile is refused. Panes in a
+  no-echo prompt are masked (no preview, no replay lines). **Diff** reports a status line only: Phase 69 has a `swarm`
+  library but no `:swarm review` surface to open yet (documented gap). **Prompt** focuses the pane's own prompt.
+- **Replay** is fed by agent-state transitions (Working starts a turn, Idle/Done/Errored ends it; the prompt text comes from
+  `agent.prompt` or the last command block). The view owns no PTY handle and swallows plain keys.
+- **Watchdog** `[agents.watchdog]` (`enabled`, `stall_secs`, `loop_window`, `loop_repeat`, `alert = ["oia","toast","event"]`,
+  `cooldown`) is parsed in `src/config/agents.rs` (`AgentsSection` keeps `[agents.<name>]` profiles beside it) and validated
+  at load. Alerts go to the pane status line (`oia`, wins over `toast`), a timed toast, and/or the RPC `events.poll` queue
+  (`watchdog_alert`). It never kills a pane.
+- **RPC / MCP / CLI:** `agent.hud` (snapshot; optional `op` lowers to the same Action), `agent.replay` (turn list, one turn
+  by `turn_id`, optional view `op`), `agent.watchdog`; MCP tool `bilterm_agent_control` (`action` = the method suffix, it also
+  reaches `agent.approve|prompt|last_turn|wait` and `pane.*` / `workspace.*`); CLI `bilterm agent hud|replay|watchdog`.
+  `tests/phase70_agent_swarm_parity.rs` is the `UNI-R01` matrix (Phases 66/67/70 live; Phases 68/69 are `#[ignore]`d gaps),
+  `tests/phase70_hud_wiring.rs` the behaviour tests.
 
 Adding a metered boundary (Plan 64-02 hooks): open a `TrafficTap` cell with the right `Origin` and `Role`
 (`Wire` for physical links, `Payload` for decoded pane streams, `Both` only for a local PTY), count with `rx`/`tx` at the

@@ -81,6 +81,7 @@ impl AutomationControlPlane {
             .inject_prompt(&text)
             .map_err(|e| e.to_string())?;
         self.wm.record_traffic_with(source, TrafficEndpoint::Pane(id), TrafficKind::Exec, &text, redact, Instant::now());
+        self.wm.agents_hud_note_prompt(id, &text);
         self.push_event(AutomationEvent::CommandSubmitted { pane_id: id, command: text });
         Ok(JsonValue::obj([
             ("status", s("injected")),
@@ -93,28 +94,14 @@ impl AutomationControlPlane {
 
     /// `agent.approve`: answers a blocked agent's approval prompt (default Enter; `answer`:
     /// `yes`/`y`, `no`/`n`, `esc`). Heuristic: it needs the pane to be `blocked` unless `force`.
+    /// Shares [`crate::wm::WindowManager::agent_approve_pane`] with the HUD Approve button.
     pub(super) fn rpc_agent_approve(&mut self, params: &JsonValue) -> Result<JsonValue, String> {
         let source = self.traffic_source(params)?;
-        let (id, redact) = self.writable_target(params)?;
+        let id = self.target_pane(params)?;
         let force = params.get("force").and_then(JsonValue::as_bool).unwrap_or(false);
-        let state = self.state_name(id);
-        if state != "blocked" && !force {
-            return Err(format!("pane #{id} is {state}, not blocked (pass force=true to send anyway)"));
-        }
+        let allow_echo = params.get("allow_echo_lock").and_then(JsonValue::as_bool).unwrap_or(false);
         let answer = params.get("answer").and_then(JsonValue::as_str).unwrap_or("yes").to_ascii_lowercase();
-        let bytes: &[u8] = match answer.as_str() {
-            "yes" | "enter" => b"\r",
-            "y" => b"y\r",
-            "n" | "no-text" => b"n\r",
-            "no" | "esc" | "escape" => b"\x1b",
-            other => return Err(format!("unknown answer '{other}' (yes, y, n, no, esc)")),
-        };
-        self.wm
-            .pane_mut(id)
-            .ok_or_else(|| format!("pane #{id} not found"))?
-            .write_input(bytes)
-            .map_err(|e| e.to_string())?;
-        self.wm.record_traffic_with(source, TrafficEndpoint::Pane(id), TrafficKind::Keys, &answer, redact, Instant::now());
+        let state = self.wm.agent_approve_pane(id, &answer, force, allow_echo, source)?;
         Ok(JsonValue::obj([
             ("status", s("approved")),
             ("pane_id", num(id)),

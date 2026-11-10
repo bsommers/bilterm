@@ -146,6 +146,7 @@ fn tools_list_only_gains_find() {
             "bilterm_browser",
             "bilterm_video",
             "bilterm_keys",
+            "bilterm_agent_control",
         ]
     );
 }

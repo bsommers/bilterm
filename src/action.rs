@@ -194,6 +194,12 @@ pub enum Action {
     Agents(crate::wm::agents_cmd::AgentsOp),
     /// `:agents list <verb>` - the AGENTS list window (Phase 51, UIT-03).
     AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
+    /// `:agents hud <verb>` - the Mission Control HUD (Phase 70, HUD-01).
+    AgentsHud(crate::wm::agents_hud_cmd::HudOp),
+    /// `:agent replay <pane|verb>` - the read-only turn replay view (Phase 70, HUD-02).
+    AgentsReplay(crate::wm::agents_hud_cmd::ReplayOp),
+    /// `:agents watchdog [status]` - stall / loop watchdog status (Phase 70, HUD-03).
+    AgentsWatchdog(crate::wm::agents_hud_cmd::WatchdogOp),
     /// `:sessions map <verb>` / `:packing <verb>` - the SESSION MAP packing viewer (Phase 54, VIEW-02).
     SessionMap(crate::wm::session_map::SessionMapOp),
     /// `:fonts <verb>` - the first-class FONTS utility window (`WIN-01`, Phase 51.2).
@@ -214,10 +220,6 @@ pub enum Action {
     AgentGate(crate::wm::context_queue_ops::AgentGateOp),
     /// `:swarm status|load|clear` - worktree swarm DAG orchestrator (`UNI-R01`, Phase 69).
     Swarm(crate::wm::swarm_surface::SwarmOp),
-    /// `:agents hud [open|close|toggle]` - Mission Control HUD (`UNI-R01`, Phase 70).
-    AgentsHud(crate::wm::swarm_surface::HudOp),
-    /// `:agent replay ...` - read-only per-turn replay (`UNI-R01`, Phase 70).
-    AgentReplay(crate::wm::swarm_surface::ReplayOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
     ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
@@ -396,6 +398,9 @@ impl Action {
     pub fn colon_form_or_summary(&self) -> String {
         match self {
             Self::AgentMail(op) => op.colon_form(),
+            Self::AgentsHud(op) => op.colon_form(),
+            Self::AgentsReplay(op) => op.colon_form(),
+            Self::AgentsWatchdog(_) => ":agents watchdog status".to_string(),
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(_) => ":session undo".to_string(),
             Self::DaemonSupervisor(_) | Self::Daemon(_) => ":daemon list".to_string(),
@@ -424,8 +429,6 @@ impl Action {
             Self::AgentQueue(op) => op.colon_form(),
             Self::AgentGate(op) => op.colon_form(),
             Self::Swarm(op) => op.colon_form(),
-            Self::AgentsHud(op) => op.colon_form(),
-            Self::AgentReplay(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
             Self::SessionMap(op) => op.colon_form(),

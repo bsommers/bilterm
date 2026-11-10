@@ -1,6 +1,5 @@
 ---
 source: tests/phase63_window_mode_and_menu.rs
-assertion_line: 613
 expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 ---
  ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
@@ -25,7 +24,7 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Next Coordinate Badge Style         ║        │║                       ║
 │                         ║  Context Bus Quick List              ║        │║                       ║
 │                         ║  Agent Job Queue                     ║        │║                       ║
-│                         ║  Mission Control HUD [Z]             ║        │║                       ║
+│                         ║  Mission Control Squad HUD [Z]       ║        │║                       ║
 │                         ║  Swarm Status [7]                    ║        │║                       ║
 │                         ║  Agent Turn Replay [8]               ║        │║                       ║
 │                         ║  Script Studio                       ║        │║                       ║
