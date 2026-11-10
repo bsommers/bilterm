@@ -766,15 +766,17 @@ pub fn handle_wm_mouse_event(
         return Ok(AppAction::Handled);
     }
 
+    // An in-flight move/resize drag (set by a prior Down) owns Drag/Up events even while the
+    // pointer is over a modal, whose handler would otherwise swallow them.
+    if let Some(action) = handle_wm_window_drag_event(wm, mouse, workspace_area)? {
+        return Ok(action);
+    }
+
     if let Some(action) = handle_modal_mouse_event(wm, mouse, workspace_area) {
         return Ok(action);
     }
 
     if let Some(action) = handle_drawer_mouse_event(wm, mouse, workspace_area) {
-        return Ok(action);
-    }
-
-    if let Some(action) = handle_wm_window_drag_event(wm, mouse, workspace_area)? {
         return Ok(action);
     }
 
@@ -976,8 +978,12 @@ pub fn handle_wm_mouse_event(
                 && pane_mouse.column >= right_edge.saturating_sub(8)
                 && pane_mouse.column < right_edge.saturating_sub(2)
         };
+        // A floating prompt overlays the canvas: clicks on it (text, border resize, corner) belong
+        // to the prompt handler, never to canvas char-select.
+        let on_prompt = pane.is_prompt_visible() && rect_contains(pane.prompt_rect(pane_inner), pane_mouse.column, pane_mouse.row);
         let has_media_canvas = pane.browser_canvas().is_some() || pane.video_canvas().is_some();
         if !on_prompt_pin_badge
+            && !on_prompt
             && !has_media_canvas
             && !pane.copy_mode().rect_mode
             && !pane_mouse.modifiers.contains(KeyModifiers::ALT)
