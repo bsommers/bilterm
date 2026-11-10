@@ -1,5 +1,6 @@
 ---
 source: tests/phase63_window_mode_and_menu.rs
+assertion_line: 603
 expression: "menu_overlay(linux_tui(), \"Window\")"
 ---
  ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
@@ -18,8 +19,8 @@ expression: "menu_overlay(linux_tui(), \"Window\")"
 │         ║  Tile Windows              Ctrl+X w t║│                       │║                       ║
 │         ║  Toggle Stack/Tile           Ctrl+X M║│                       │║                       ║
 │         ║  Window Mode                 Ctrl+X w║│                       │║                       ║
+│         ║  Copy Coordinate                     ║│                       │║                       ║
 │         ╚══════════════════════════════════════◢│                       │║                       ║
-│                                                ││                       │║                       ║
 │                                                ││                       │║                       ║
 │                                                ││                       │║                       ║
 │                                                ││                       │║                       ║

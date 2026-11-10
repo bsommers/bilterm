@@ -185,6 +185,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":yank / :paste / :clear", "Yank via OSC 52, paste OS clipboard into PTY, or clear OutputCanvas"),
     (":clipboard [open|close|toggle|all|session|window|pinned|media]", "Open/filter the Pinnable & Dockable CLIPBOARD Viewer window (Ctrl+Alt+V / Ctrl+X ;)"),
     (":traffic [open|close|toggle|group|sort|filter|locality|pause|drill|show|reset|...]", "TRAFFIC MONITOR window: bytes per connection/session/window/pane. Agent Traffic (`:agents traffic`) shows who messaged whom; Traffic Monitor shows bytes"),
+    (":coords [verbose|compact|daemon|off|locate <coord>|copy|cycle]", "Hierarchical Daemon:(Workspace,Session,Window,Pane) coordinates: show the focused window's, set the title-bar badge style (default off), locate and focus a window by coordinate, or copy the coordinate path (menu View > Next Coordinate Badge Style, Window > Copy Coordinate; RPC coords.resolve / coords.format)"),
     ("Ctrl+Alt+T / Ctrl+X $", "Toggle the TRAFFIC MONITOR. Agent Traffic (`:agents traffic`) shows who messaged whom; Traffic Monitor shows bytes"),
     (":paste raw-ctrl-v", "Forward raw Ctrl+V (0x16) byte directly to the active pane PTY"),
     ("Ctrl+Shift+V / Shift+Ins / Ctrl+X p/v", "Paste OS clipboard directly into active PTY (even in RAW PTY)"),

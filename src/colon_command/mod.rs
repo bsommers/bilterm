@@ -28,6 +28,8 @@ mod parse_link;
 pub mod parse_media;
 mod parse_script;
 mod parse_traffic;
+mod parse_coords;
+mod execute_coords;
 pub mod parse_session_map;
 pub mod parse_voice;
 mod parse_visual;
@@ -39,6 +41,7 @@ pub use execute::execute_colon_command;
 pub use execute_window::{execute_session_manage, execute_window_manage};
 pub use execute_wm::execute_wm_colon_command;
 pub use parse::parse_colon_command;
+pub use parse_coords::colon_form as coords_colon_form;
 pub use parse_window::{parse_session_manage_command, parse_window_manage_command};
 
 /// Type alias preserving `ColonCommand` compatibility while unifying on [`crate::action::Action`] (`ARCH-R01`).

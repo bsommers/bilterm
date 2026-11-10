@@ -953,6 +953,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.clipboard_window_apply(op);
             false
         }
+        ColonCommand::Coords(op) => super::execute_coords::execute_coords(wm, op),
         ColonCommand::TrafficMonitor(op) => {
             if let Err(e) = wm.traffic_monitor_apply(op) {
                 wm.active_pane_mut().set_status_message(Some(e));

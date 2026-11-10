@@ -503,6 +503,8 @@ impl AutomationControlPlane {
             "clipboard.delete" => self.rpc_clipboard_delete(params),
             "clipboard.clear" => self.rpc_clipboard_clear(params),
             "clipboard.window" => self.rpc_clipboard_window(params),
+            "coords.resolve" => self.rpc_coords_resolve(params),
+            "coords.format" => self.rpc_coords_format(params),
             "traffic.snapshot" => self.rpc_traffic_snapshot(params),
             "traffic.history" => self.rpc_traffic_history(params),
             "traffic.window" => self.rpc_traffic_window(params),

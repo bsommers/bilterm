@@ -2,6 +2,7 @@ pub mod agents_gui;
 pub mod agents_list_ui;
 pub mod agents_ui;
 pub mod clipboard_window_gui;
+pub mod coord_badge;
 pub mod clipboard_window_ui;
 pub mod traffic_monitor_gui;
 pub mod traffic_monitor_ui;
@@ -737,6 +738,11 @@ impl Widget for WorkspaceWidget<'_> {
                     outer, &frame_title, is_active, chrome_style.resolve_outline(cfg),
                     chrome_style.resolve_bold(cfg), &frame_palette, &glyphs, buf,
                 );
+                if self.wm.coord_style() != crate::wm::coordinates::CoordDisplayStyle::Off
+                    && let Some(badge) = self.wm.coord_of(id).and_then(|c| c.format(self.wm.coord_style()))
+                {
+                    coord_badge::render_coord_badge(outer, &frame_title, &badge, &frame_palette, &glyphs, buf);
+                }
                 if is_active {
                     pane_actions::render(cfg, outer, &pane_palette, buf);
                 }
