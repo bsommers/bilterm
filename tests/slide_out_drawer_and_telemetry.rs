@@ -852,7 +852,11 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
         .pane(p2)
         .unwrap()
         .canvas_rect(bilterm::wm::inset_window_frame(p2_outer));
+    // GUARD-03: the first click on inactive Pane #2 only focuses it; the drag that follows a
+    // second press is the accidental selection under test.
     for (kind, col) in [
+        (MouseEventKind::Down(MouseButton::Left), c2.x),
+        (MouseEventKind::Up(MouseButton::Left), c2.x),
         (MouseEventKind::Down(MouseButton::Left), c2.x),
         (MouseEventKind::Drag(MouseButton::Left), c2.x + 4),
         (MouseEventKind::Up(MouseButton::Left), c2.x + 4),

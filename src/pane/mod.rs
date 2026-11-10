@@ -97,6 +97,8 @@ pub struct CompositePane {
     last_osc52_sequence: Option<String>,
     /// Last raw byte payload written to the underlying PTY (`write_to_pty`).
     last_pty_write: Vec<u8>,
+    /// GUARD-03: a focus-only click was consumed; its Drag/Up tail must not reach the child.
+    focus_click_pending: bool,
     last_canvas_size: (u16, u16),
     exited: bool,
     /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
@@ -170,6 +172,7 @@ impl CompositePane {
             status_message: None,
             last_osc52_sequence: None,
             last_pty_write: Vec::new(),
+            focus_click_pending: false,
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
             held_exited_shell: None,
@@ -900,6 +903,16 @@ impl CompositePane {
                 decoded,
             ));
         }
+    }
+
+    /// Marks (or clears) a consumed focus-only click whose Drag/Up tail must be swallowed.
+    pub fn set_focus_click_pending(&mut self, pending: bool) {
+        self.focus_click_pending = pending;
+    }
+
+    /// Whether a consumed focus-only click is still awaiting its button release.
+    pub fn focus_click_pending(&self) -> bool {
+        self.focus_click_pending
     }
 
     /// Returns the most recent byte payload passed to [`Self::write_to_pty`].

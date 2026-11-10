@@ -167,8 +167,23 @@ fn click_text_area_still_focuses_and_passes_through() {
     let canvas_row = inner1.y + inner1.height / 2 + 2;
     let canvas_col = inner1.x + 4;
 
+    // GUARD-03: the first click on an inactive pane only focuses it.
     left_down(&mut wm, canvas_col, canvas_row);
     assert_eq!(wm.active_pane_id(), 1);
+    assert!(wm.pane(1).unwrap().mouse_drag().is_none());
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: canvas_col,
+            row: canvas_row,
+            modifiers: KeyModifiers::NONE,
+        },
+        AREA,
+    )
+    .unwrap();
+    // The second click on the now-active pane passes through normally.
+    left_down(&mut wm, canvas_col, canvas_row);
     assert_eq!(
         wm.pane(1).unwrap().mouse_drag(),
         Some(PromptMouseDrag::CanvasCharSelect)
