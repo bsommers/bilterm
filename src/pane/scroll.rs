@@ -477,11 +477,11 @@ impl CompositePane {
     }
 
     pub fn has_pty(&self) -> bool {
-        self.pty.is_some()
+        self.transport.is_local()
     }
 
     pub fn pty(&self) -> Option<&PtySession> {
-        self.pty.as_ref()
+        self.transport.local_pty()
     }
 
     pub fn prompt(&self) -> &FloatingPromptState {
@@ -611,7 +611,7 @@ impl CompositePane {
             return osc7_cwd.to_path_buf();
         }
         #[cfg(target_os = "linux")]
-        if let Some(pty) = &self.pty {
+        if let Some(pty) = self.transport.local_pty() {
             if let Some(fg_pid) = self.line_discipline.foreground_pgid.filter(|&p| p > 0)
                 && let Ok(path) = std::fs::read_link(format!("/proc/{fg_pid}/cwd"))
             {
@@ -644,7 +644,7 @@ impl CompositePane {
             }
         }
         #[cfg(target_os = "linux")]
-        if self.pty.is_some()
+        if self.transport.is_local()
             && self.line_discipline.has_foreground_subcommand()
             && let Some(fg_pid) = self.line_discipline.foreground_pgid.filter(|&p| p > 0)
             && let Ok(raw) = std::fs::read(format!("/proc/{fg_pid}/cmdline"))
@@ -788,7 +788,7 @@ impl CompositePane {
     }
 
     pub fn flush_query_responses(&mut self) {
-        if let Some(pty) = &self.pty {
+        if let Some(pty) = self.transport.local_pty() {
             for resp in self.vt.take_query_responses() {
                 let _ = pty.write_all(&resp);
             }
