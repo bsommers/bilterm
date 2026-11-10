@@ -583,7 +583,7 @@ fn mcp_envelope_errors() {
     let v = mcp(&mut p, r#"{"jsonrpc":"2.0","id":"str-id","method":"ping"}"#);
     assert_eq!(v.get("id").and_then(JsonValue::as_str), Some("str-id"));
     let tools = mcp(&mut p, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#);
-    assert_eq!(tools.get("result").and_then(|r| r.get("tools")).and_then(JsonValue::as_array).map(<[_]>::len), Some(26));
+    assert_eq!(tools.get("result").and_then(|r| r.get("tools")).and_then(JsonValue::as_array).map(<[_]>::len), Some(28));
 }
 
 #[test]
