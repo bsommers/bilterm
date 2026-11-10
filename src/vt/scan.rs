@@ -26,7 +26,10 @@ impl VtParser {
                 self.osc52_carry.push(0x1b);
                 break;
             };
-            let payload_rest = &after_esc[1..];
+            // `kind` may be the lead byte of a multi-byte char (`ESC é`): not a control introducer.
+            let Some(payload_rest) = after_esc.get(1..) else {
+                continue;
+            };
             match kind {
                 b'[' => self.scan_csi_sequence(payload_rest),
                 b']' => self.scan_osc_sequence(payload_rest),

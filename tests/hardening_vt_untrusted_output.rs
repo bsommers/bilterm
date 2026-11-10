@@ -320,3 +320,17 @@ fn tektronix_csi_buffer_is_capped() {
     tek.process_bytes(b"h\x1b[?38l");
     assert!(!tek.active && !tek.stream_capture);
 }
+
+#[test]
+fn esc_followed_by_multibyte_char_does_not_panic() {
+    // `ESC é` used to slice the lossy text inside the two-byte char (scan.rs `&after_esc[1..]`).
+    for input in [
+        "\x1bé".as_bytes(),
+        "\x1b€[31m".as_bytes(),
+        "a\x1b\u{1F600}b\x1b[0m".as_bytes(),
+        b"\x1b\xff\xfe[1m".as_slice(),
+    ] {
+        let mut p = vt();
+        p.process(input);
+    }
+}
