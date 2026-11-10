@@ -1,5 +1,6 @@
 ---
 source: tests/phase63_window_mode_and_menu.rs
+assertion_line: 608
 expression: "menu_overlay(KeyEnv::new(HostOs::MacOs, Surface::Gui), \"Window\")"
 ---
  ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
@@ -18,8 +19,8 @@ expression: "menu_overlay(KeyEnv::new(HostOs::MacOs, Surface::Gui), \"Window\")"
 │         ║  Tile Windows              Ctrl+X w t║│                       │║                       ║
 │         ║  Toggle Stack/Tile                 ⌘L║│                       │║                       ║
 │         ║  Window Mode                       ⌘O║│                       │║                       ║
+│         ║  Copy Coordinate                     ║│                       │║                       ║
 │         ╚══════════════════════════════════════◢│                       │║                       ║
-│                                                ││                       │║                       ║
 │                                                ││                       │║                       ║
 │                                                ││                       │║                       ║
 │                                                ││                       │║                       ║

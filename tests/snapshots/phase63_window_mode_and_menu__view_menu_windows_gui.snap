@@ -1,5 +1,6 @@
 ---
 source: tests/phase63_window_mode_and_menu.rs
+assertion_line: 613
 expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 ---
  ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
@@ -21,6 +22,7 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Command Palette Window              ║        │║                       ║
 │                         ║  Clipboard Viewer            Ctrl+X ;║        │║                       ║
 │                         ║  Traffic Monitor             Ctrl+X $║        │║                       ║
+│                         ║  Next Coordinate Badge Style         ║        │║                       ║
 │                         ║  Script Studio                       ║        │║                       ║
 │                         ║  Drawer Peek Preview         Ctrl+X P║        │║                       ║
 │                         ║  Drawer Rows: 1 line                 ║        │║                       ║
@@ -29,6 +31,5 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Browser Canvas              Ctrl+X .║        │║                       ║
 │                         ║  Video Canvas                Ctrl+X '║        │║                       ║
 │                         ╚══════════════════════════════════════◢        │║                       ║
-│                                                ││                       │║                       ║
 │3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖││3270-OIA│ ● READY │ INP│║3270-OIA│ ● READY │ INP║
 └────────────────────────────────────────────────◢└───────────────────────◢╚═══════════════════════◢
