@@ -10,6 +10,11 @@ use bilterm::daemon::supervisor::{
     DaemonLockResult, DaemonStartResult,
 };
 
+/// Serializes child spawning against tests that need a closed listener to refuse connections:
+/// a child forked mid-test inherits the listening fd until its `exec`, so a "stale" socket can
+/// briefly still accept a connection and look live.
+static FD_INHERIT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn rec(pid: u32, name: &str, sock: std::path::PathBuf) -> DaemonLockRecord {
     DaemonLockRecord {
         pid,
@@ -64,6 +69,7 @@ fn list_active_dedupes_json_and_lock() {
 
 #[test]
 fn list_active_ignores_dead_lock_and_stale_socket() {
+    let _guard = FD_INHERIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     let lock = daemon_lock_path_in(dir, "ghost").unwrap();
@@ -71,7 +77,8 @@ fn list_active_ignores_dead_lock_and_stale_socket() {
     // Stale (unbound) socket file: bind then drop listener leaves a refusing socket.
     let sp = dir.join("daemons").join("daemon-stale.sock");
     drop(UnixListener::bind(&sp).unwrap());
-    assert!(DaemonRegistry::list_active(dir).is_empty());
+    let found = DaemonRegistry::list_active(dir);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -131,6 +138,7 @@ fn ensure_started_uses_registry_when_lock_missing() {
 
 #[test]
 fn stop_daemon_falls_back_to_registry_and_kills_live_pid() {
+    let _guard = FD_INHERIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     let mut child = Command::new("sleep").arg("30").spawn().unwrap();

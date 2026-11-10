@@ -42,6 +42,8 @@ fn headless_rejects_world_readable_token_file() {
     std::fs::set_permissions(&token_file, std::fs::Permissions::from_mode(0o644)).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_bilterm"))
+        // Isolate the per-name daemon singleton lock from parallel tests and any real daemon.
+        .env("BILTERM_RUNTIME_DIR", temp_dir.path().join("rt"))
         .args([
             "--headless",
             "--listen",
@@ -73,6 +75,8 @@ fn headless_unix_socket_roundtrip_with_ctl() {
     let sock_path = temp_dir.path().join("roundtrip.sock");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_bilterm"))
+        // Isolate the per-name daemon singleton lock from parallel tests and any real daemon.
+        .env("BILTERM_RUNTIME_DIR", temp_dir.path().join("rt"))
         .args([
             "--headless",
             "--listen",
@@ -128,6 +132,8 @@ fn ctl_token_flow() {
     bilterm::secure_fs::write_private_file(&token_file, format!("{token}\n").as_bytes()).unwrap();
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_bilterm"))
+        // Isolate the per-name daemon singleton lock from parallel tests and any real daemon.
+        .env("BILTERM_RUNTIME_DIR", temp_dir.path().join("rt"))
         .args([
             "--headless",
             "--listen",

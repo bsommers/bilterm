@@ -106,6 +106,10 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
                 let _ = pane.cut_copy_selection_to_prompt();
                 return Ok(AppAction::Handled);
             }
+            KeyCode::Down => {
+                pane.exit_copy_mode();
+                return Ok(AppAction::Handled);
+            }
             KeyCode::Char(' ') => {
                 // Emacs set-mark (toggle Char selection)
                 return toggle_selection(pane, CopySelectionKind::Char, top_abs);
@@ -182,7 +186,7 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
         && key.modifiers.contains(KeyModifiers::SHIFT)
         && pane.copy_mode().anchor.is_none()
     {
-        let want_block = pane.copy_mode().rect_mode;
+        let want_block = key.modifiers.contains(KeyModifiers::ALT) || pane.copy_mode().rect_mode;
         let kind = if want_block {
             CopySelectionKind::Block
         } else {
@@ -191,19 +195,55 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
         let cr = pane.copy_mode().cursor_row;
         let cc = pane.copy_mode().cursor_col;
         pane.copy_mode_mut().begin_selection(cr, cc, kind, top_abs);
+        // Shift-started Char selections are transient (dropped by plain navigation);
+        // block selections stay locked.
+        pane.copy_mode_mut().visual_lock = want_block;
+    } else if is_nav_key && key.modifiers.contains(KeyModifiers::SHIFT) {
+        let want_block = key.modifiers.contains(KeyModifiers::ALT) || pane.copy_mode().rect_mode;
+        if want_block && pane.copy_mode().selection_kind != CopySelectionKind::Block {
+            pane.copy_mode_mut().selection_kind = CopySelectionKind::Block;
+            pane.copy_mode_mut().visual_lock = true;
+        }
+    } else if is_nav_key
+        && !pane.copy_mode().visual_lock
+        && pane.copy_mode().anchor.is_some()
+    {
+        let cm = pane.copy_mode_mut();
+        cm.anchor = None;
+        cm.anchor_abs = None;
+        cm.selection_kind = CopySelectionKind::None;
     }
+
+    // Word motion modifiers: Ctrl/Alt+Left/Right and Alt+f/b step by real words (62-02 plan).
+    let word_mod = (key.modifiers.contains(KeyModifiers::ALT)
+        && !key.modifiers.contains(KeyModifiers::SHIFT))
+        || key.modifiers.contains(KeyModifiers::CONTROL);
+    let word_code = match key.code {
+        KeyCode::Right => Some(KeyCode::Char('w')),
+        KeyCode::Left => Some(KeyCode::Char('b')),
+        KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::ALT) => Some(KeyCode::Char('w')),
+        KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::ALT) => Some(KeyCode::Char('b')),
+        _ => None,
+    };
+    let key_code = match word_code {
+        Some(c) if word_mod => c,
+        _ => key.code,
+    };
 
     // Two-key sequence state (`gg`)
     let was_pending_g = pane.copy_mode().pending_g;
     pane.copy_mode_mut().pending_g = false;
 
-    match key.code {
+    match key_code {
         KeyCode::Esc | KeyCode::Char('q') => {
             if pane.copy_mode().has_selection() {
                 pane.copy_mode_mut().clear_selection();
             } else {
                 pane.exit_copy_mode();
             }
+        }
+        KeyCode::Char('i') | KeyCode::Tab | KeyCode::F(8) => {
+            pane.exit_copy_mode();
         }
         KeyCode::Left | KeyCode::Char('h') => {
             pane.copy_mode_mut().cursor_col = pane.copy_mode().cursor_col.saturating_sub(1);
@@ -290,10 +330,20 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
             pane.copy_mode_mut().cursor_row = max_r;
         }
         KeyCode::PageUp => {
-            pane.vt_mut().scroll_up(usize::from(rows));
+            if pane.copy_mode().cursor_row >= 8 {
+                pane.copy_mode_mut().cursor_row -= 8;
+            } else {
+                pane.copy_mode_mut().cursor_row = 0;
+                pane.vt_mut().scroll_up(8);
+            }
         }
         KeyCode::PageDown => {
-            pane.vt_mut().scroll_down(usize::from(rows));
+            if pane.copy_mode().cursor_row + 8 <= max_r {
+                pane.copy_mode_mut().cursor_row += 8;
+            } else {
+                pane.copy_mode_mut().cursor_row = max_r;
+                pane.vt_mut().scroll_down(8);
+            }
         }
         KeyCode::Char('v') | KeyCode::Char(' ') => {
             return toggle_selection(pane, CopySelectionKind::Char, top_abs);
@@ -301,10 +351,10 @@ pub fn handle_copy_mode_key(pane: &mut CompositePane, key: KeyEvent) -> Result<A
         KeyCode::Char('V') => {
             return toggle_selection(pane, CopySelectionKind::Line, top_abs);
         }
-        KeyCode::Char('r') => {
+        KeyCode::Char('r') | KeyCode::Char('R') => {
             return toggle_selection(pane, CopySelectionKind::Block, top_abs);
         }
-        KeyCode::Char('y') | KeyCode::Enter => {
+        KeyCode::Char('y') | KeyCode::Char('c') | KeyCode::Enter => {
             pane.yank_copy_selection();
         }
         KeyCode::Char('Y') => {
@@ -372,6 +422,10 @@ fn toggle_selection(
         pane.copy_mode_mut().anchor_abs = None;
         pane.copy_mode_mut().selection_kind = CopySelectionKind::None;
         pane.copy_mode_mut().visual_lock = false;
+    } else if pane.copy_mode().anchor.is_some() {
+        // Switching kind keeps the existing anchor (e.g. Shift+Arrows then `r`).
+        pane.copy_mode_mut().selection_kind = kind;
+        pane.copy_mode_mut().visual_lock = true;
     } else {
         let (r, c) = (pane.copy_mode().cursor_row, pane.copy_mode().cursor_col);
         pane.copy_mode_mut().begin_selection(r, c, kind, top_abs);

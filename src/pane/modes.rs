@@ -730,13 +730,13 @@ impl CompositePane {
                             .skip(min_c)
                             .take(max_c.saturating_sub(min_c) + 1)
                             .collect();
-                        out.push(s);
+                        out.push(s.trim_end().to_string());
                     } else if r == sr {
                         let s: String = row_chars.iter().skip(sc as usize).collect();
                         out.push(s.trim_end().to_string());
                     } else if r == er {
                         let s: String = row_chars.iter().take(ec as usize + 1).collect();
-                        out.push(s);
+                        out.push(s.trim_end().to_string());
                     } else {
                         let s: String = row_chars.iter().collect();
                         out.push(s.trim_end().to_string());
@@ -766,6 +766,8 @@ impl CompositePane {
         self.copy_mode.selection_kind = CopySelectionKind::None;
         self.copy_mode.visual_lock = false;
         if text.is_empty() {
+            // Nothing copied: no flash (it would never be cleared without a toast TTL).
+            self.copy_mode.flash_region = None;
             self.status_message = Some("Copy Mode: empty selection".to_string());
             return None;
         }
@@ -805,6 +807,10 @@ impl CompositePane {
             self.copy_mode.anchor = None;
             self.copy_mode.selection_kind = CopySelectionKind::None;
             self.copy_mode.visual_lock = false;
+            if self.copy_mode.origin == crate::pane::CopyOrigin::Mouse {
+                // A mouse click/drag over blank cells must not leave a stray copy-mode cursor.
+                self.copy_mode.clear_selection();
+            }
             return None;
         }
         if is_block && let Some((h, w)) = dims {

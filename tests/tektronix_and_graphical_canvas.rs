@@ -228,13 +228,15 @@ fn interactive_typing_tek_and_canvas_in_floating_prompt_renders_immediately() {
     assert!(wm.active_pane().vt().tektronix().active);
     assert!(wm.active_pane().vt().tektronix().has_visible_content());
 
-    let area = Rect::new(0, 0, 120, 24);
+    // Render wider than the 120-col WM: the clickable [COPY] OIA badge (62-01) now precedes the
+    // status message, which needs the extra columns to show in full.
+    let area = Rect::new(0, 0, 140, 24);
     let mut buf = Buffer::empty(area);
     CompositePaneWidget::new(wm.active_pane(), true).render(area, &mut buf);
 
     let full_text: String = (0..24)
         .map(|y| {
-            (0..120)
+            (0..140)
                 .filter_map(|x| buf.cell((x, y)).map(|c| c.symbol()))
                 .collect::<String>()
         })

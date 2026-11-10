@@ -129,6 +129,7 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/daemon/supervisor.rs", "process supervision, not terminal traffic"),
     ("src/stt/wav.rs", "file I/O, not terminal traffic"),
     ("src/stt/audio.rs", "microphone capture child process, not terminal traffic"),
+    ("src/stt/mod.rs", "connect-only reachability probe of the STT endpoint in VoicePreflight; no bytes are exchanged and the stream is dropped"),
     ("src/pane/video_canvas/ffmpeg.rs", "video decode child process pipes, not terminal traffic"),
     ("src/daemon/mod.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),
     ("src/daemon/process.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),

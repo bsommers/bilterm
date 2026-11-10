@@ -833,7 +833,8 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
         .unwrap();
     }
     assert!(wm.active_pane().copy_mode().has_selection());
-    assert!(wm.active_pane().prompt().yank_buffer.is_empty());
+    // Phase 62-01 (copy_on_select default true): mouse release auto-copies into the yank ring.
+    assert_eq!(wm.active_pane().prompt().yank_buffer, "SECRET");
 
     // Explicitly copy with 'y'
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)).unwrap();
@@ -872,9 +873,12 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
     assert!(wm.active_pane().copy_mode().has_selection());
     // Pane #1's yank buffer and session clipboard history remain intact ("SECRET", not overwritten by "NOISE")
     assert_eq!(wm.pane(p1).unwrap().prompt().yank_buffer, "SECRET");
+    // Phase 62-01 auto-copy-on-release: pane #2 records its own "NOISE" selection, appended
+    // to (never replacing) the session history and never touching pane #1's buffer.
+    assert_eq!(wm.active_pane().prompt().yank_buffer, "NOISE");
     assert_eq!(
         wm.active_pane().history_store().load_recent_clipboard(10),
-        vec!["SECRET".to_string()]
+        vec!["NOISE".to_string(), "SECRET".to_string()]
     );
 
     // Now explicitly copy "NOISE" in Pane #2 and verify clipboard history ring has both entries
@@ -949,7 +953,9 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
         wm.focus_and_raise(id);
         execute_wm_colon_command(&mut wm, parse_colon_command(":mode raw").unwrap().unwrap());
     }
-    for click_target in [p1, p2, p3, p1] {
+    // Distinct columns per click: Phase 62-02 multi-click (same cell within 400ms) is a
+    // double-click word selection, which is not what this single-click invariant exercises.
+    for (click_idx, click_target) in [p1, p2, p3, p1].into_iter().enumerate() {
         let target_outer = wm
             .compute_workspace_rects(area)
             .into_iter()
@@ -964,7 +970,7 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
             &mut wm,
             MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
-                column: tc.x + 2,
+                column: tc.x + 2 + click_idx as u16,
                 row: tc.y + 1,
                 modifiers: KeyModifiers::NONE,
             },
@@ -975,7 +981,7 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
             &mut wm,
             MouseEvent {
                 kind: MouseEventKind::Up(MouseButton::Left),
-                column: tc.x + 2,
+                column: tc.x + 2 + click_idx as u16,
                 row: tc.y + 1,
                 modifiers: KeyModifiers::NONE,
             },
@@ -987,7 +993,7 @@ fn explicit_copy_clipboard_history_directional_focus_and_single_cursor_in_multi_
         for id in [p1, p2, p3] {
             assert!(
                 !wm.pane(id).unwrap().copy_mode().active,
-                "plain click should not activate copy_mode cursor on pane #{id}"
+                "plain click #{click_idx} (target {click_target}) should not activate copy_mode cursor on pane #{id}"
             );
         }
     }
