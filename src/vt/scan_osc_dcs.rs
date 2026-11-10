@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use super::codec::{
     base64_decode, hex_decode_ascii, hex_encode_ascii, is_forwardable_osc52_write,
+    truncate_on_char_boundary,
 };
 use super::detect::Osc8Hyperlink;
 use super::graphics::{
@@ -15,6 +16,17 @@ use super::{
     MAX_NOTIFICATIONS, MAX_OSC8_LINKS, Osc9Progress, Osc133Phase, TerminalNotification, VtParser,
 };
 
+/// Longest `OSC 8` URI retained; longer links are ignored rather than truncated to a different target.
+const MAX_OSC8_URI_BYTES: usize = 2048;
+/// Longest `OSC 8` `id=` parameter retained.
+const MAX_OSC8_ID_BYTES: usize = 256;
+/// Longest `OSC 0` / `OSC 2` window title retained (truncated on a char boundary).
+const MAX_WINDOW_TITLE_BYTES: usize = 256;
+/// Longest notification title retained (truncated on a char boundary).
+const MAX_NOTIFICATION_TITLE_BYTES: usize = 256;
+/// Longest notification body retained (truncated on a char boundary).
+const MAX_NOTIFICATION_BODY_BYTES: usize = 1024;
+
 impl VtParser {
     /// Dispatches a single `OSC` (`\x1b]...`) sequence starting at `osc_rest` (`&text[idx + 2..]`).
     pub(super) fn scan_osc_sequence(&mut self, osc_rest: &str) {
@@ -23,7 +35,8 @@ impl VtParser {
             .or_else(|| osc_rest.strip_prefix("2;"))
         {
             if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                self.window_title = Some(rest[..end].to_string());
+                let title = truncate_on_char_boundary(&rest[..end], MAX_WINDOW_TITLE_BYTES);
+                self.window_title = Some(title.to_string());
             }
             return;
         }
@@ -81,11 +94,12 @@ impl VtParser {
                 let payload = &rest[..end];
                 if let Some((params, uri)) = payload.split_once(';')
                     && !uri.is_empty()
+                    && uri.len() <= MAX_OSC8_URI_BYTES
                 {
                     let id = params
                         .split(':')
                         .find_map(|kv| kv.strip_prefix("id="))
-                        .map(str::to_string);
+                        .map(|id| truncate_on_char_boundary(id, MAX_OSC8_ID_BYTES).to_string());
                     push_bounded(
                         &mut self.osc8_links,
                         Osc8Hyperlink {
@@ -128,7 +142,7 @@ impl VtParser {
 
         if let Some(rest) = osc_rest.strip_prefix("9;") {
             if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let msg = rest[..end].trim();
+                let msg = truncate_on_char_boundary(rest[..end].trim(), MAX_NOTIFICATION_BODY_BYTES);
                 if !msg.is_empty() {
                     self.push_notification(TerminalNotification {
                         title: "OSC 9".to_string(),
@@ -145,6 +159,8 @@ impl VtParser {
             if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
                 let payload = &rest[..end];
                 let (title, body) = payload.split_once(';').unwrap_or(("NOTIFY", payload));
+                let title = truncate_on_char_boundary(title.trim(), MAX_NOTIFICATION_TITLE_BYTES);
+                let body = truncate_on_char_boundary(body.trim(), MAX_NOTIFICATION_BODY_BYTES);
                 self.push_notification(TerminalNotification {
                     title: title.trim().to_string(),
                     body: body.trim().to_string(),
@@ -285,7 +301,9 @@ impl VtParser {
                     format!("\x1bP1$r1;{rows}r\x1b\\")
                 }
                 " q" => "\x1bP1$r2 q\x1b\\".to_string(),
-                _ => format!("\x1bP0$r{pt}\x1b\\"),
+                // Never reflect the request: replies are written to the PTY as input, so
+                // echoing attacker text (newlines included) would inject commands.
+                _ => "\x1bP0$r\x1b\\".to_string(),
             };
             self.pending_query_responses.push(reply.into_bytes());
             return;

@@ -31,6 +31,11 @@ pub enum BiltermError {
 
 pub type Result<T> = std::result::Result<T, BiltermError>;
 
+/// Process-wide host TUI state: set by whichever guard entered raw mode / the alternate screen,
+/// read by every guard (the panic-hook guard is created before the TUI is entered).
+static HOST_TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
+static HOST_KITTY_PUSHED: AtomicBool = AtomicBool::new(false);
+
 /// RAII guard and panic-safe restoration controller for host terminal state.
 ///
 /// Ensures raw mode, mouse capture, bracketed paste, and the alternate screen
@@ -89,10 +94,19 @@ impl TerminalRestoreGuard {
             crate::input::keyenv::set_kitty_active(true);
         }
         stdout.flush()?;
+        HOST_TUI_ACTIVE.store(true, Ordering::SeqCst);
+        HOST_KITTY_PUSHED.store(push_kitty, Ordering::SeqCst);
         Ok(Self {
             active: Arc::new(AtomicBool::new(true)),
             kitty_pushed: Arc::new(AtomicBool::new(push_kitty)),
         })
+    }
+
+    /// Like [`Self::new_simulated_active`], but also sets the process-wide host state the way
+    /// [`Self::enter_host_tui_with`] does (no real stdout; for testing hook-side guards).
+    pub fn new_simulated_host_active() -> Self {
+        HOST_TUI_ACTIVE.store(true, Ordering::SeqCst);
+        Self::new_simulated_active()
     }
 
     /// Creates a guard flagged as active without touching real stdout (for unit testing drop/restore semantics).
@@ -105,15 +119,19 @@ impl TerminalRestoreGuard {
 
     /// Returns whether the guard currently considers the host TUI active.
     pub fn is_active(&self) -> bool {
-        self.active.load(Ordering::SeqCst)
+        self.active.load(Ordering::SeqCst) || HOST_TUI_ACTIVE.load(Ordering::SeqCst)
     }
 
     /// Idempotently restores host terminal state if active.
     pub fn restore(&self) {
-        if self.active.swap(false, Ordering::SeqCst) {
+        let own = self.active.swap(false, Ordering::SeqCst);
+        let host = HOST_TUI_ACTIVE.swap(false, Ordering::SeqCst);
+        if own || host {
             let _ = disable_raw_mode();
             let mut stdout = io::stdout();
-            if self.kitty_pushed.swap(false, Ordering::SeqCst) {
+            let own_kitty = self.kitty_pushed.swap(false, Ordering::SeqCst);
+            let host_kitty = HOST_KITTY_PUSHED.swap(false, Ordering::SeqCst);
+            if own_kitty || host_kitty {
                 let _ = execute!(stdout, PopKeyboardEnhancementFlags);
                 crate::input::keyenv::set_kitty_active(false);
             }
@@ -130,6 +148,8 @@ impl TerminalRestoreGuard {
     /// Marks the guard restored without writing escape sequences to stdout (used in tests).
     pub fn mark_restored_quiet(&self) {
         self.active.store(false, Ordering::SeqCst);
+        HOST_TUI_ACTIVE.store(false, Ordering::SeqCst);
+        HOST_KITTY_PUSHED.store(false, Ordering::SeqCst);
     }
 
     /// Installs a panic hook that invokes `restore()` before printing the `color_eyre` report.

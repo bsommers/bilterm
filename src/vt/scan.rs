@@ -26,7 +26,10 @@ impl VtParser {
                 self.osc52_carry.push(0x1b);
                 break;
             };
-            let payload_rest = &after_esc[1..];
+            // `kind` may be the lead byte of a multi-byte char (`ESC é`): not a control introducer.
+            let Some(payload_rest) = after_esc.get(1..) else {
+                continue;
+            };
             match kind {
                 b'[' => self.scan_csi_sequence(payload_rest),
                 b']' => self.scan_osc_sequence(payload_rest),
@@ -241,7 +244,8 @@ impl VtParser {
             if after_lt[digits.len()..].starts_with('u') {
                 let count = digits.parse::<usize>().unwrap_or(1).max(1);
                 let stack = self.kitty_keyboard_stack_mut();
-                for _ in 0..count {
+                // Untrusted count: the stack is fully popped after `len` iterations.
+                for _ in 0..count.min(stack.len().max(1)) {
                     if stack.len() > 1 {
                         stack.pop();
                     } else if let Some(first) = stack.first_mut() {
