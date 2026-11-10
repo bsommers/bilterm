@@ -285,7 +285,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [x] **GUARD-02**: Remote pane transport decoupling via explicit `PaneTransport` enum (`Local`, `Remote`, `None`) separating local PTY from remote bridge, eliminating ambiguous boolean tap flags in `CompositePane`.
 - [x] **GUARD-03**: Focus isolation in `src/input/mouse.rs`: clicking an inactive or unfocused window/pane is consumed strictly as a focus-and-raise event, preventing click bleed-through to child terminal applications or selection handlers.
 
-## Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Milestone v3.3.0, Phases 66–70)
+## Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Milestone v3.3.0, Phases 66–71)
 
 - [ ] **LIVE-01**: Always-on foreground RPC socket (`0600`) served by both `App::run` (TUI) and `run_native_gui_window` (GUI), dispatching through `Action`/`WindowManager::apply`.
 - [ ] **LIVE-02**: Child PTY env injection (`BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`) with automatic `from_pane` attribution on RPC calls from children.
@@ -307,6 +307,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **HUD-02**: Per-turn time-travel scrubber (`:agent replay <pane>`).
 - [ ] **HUD-03**: Autonomous stall/loop watchdog (`[agents.watchdog]`) with alerting.
 - [ ] **HUD-04**: Full `UNI-R01` surface parity verified by `tests/phase70_agent_swarm_parity.rs`.
+- [ ] **COORD-01**: Canonical 5-level addressing hierarchy: Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P; optional sub-pane / tmux `%id` / Herdr `w12:p6`).
+- [ ] **COORD-02**: Universal coordinate parser & resolver accepting `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, colon paths `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
+- [ ] **COORD-03**: Right-aligned window title-bar coordinate badge: `(Wksp: W, Sess: S, Win: Y, Pane: P)` (Verbose), `(W,S,Y,P)`/`(W,S,Y)` (Compact), or `(D:(W,S,Y,P))` (DaemonTuple), right of existing bar info, without breaking classic golden snapshots.
+- [ ] **COORD-04**: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, Command Palette, Menu Bar, RPC `coords.resolve`/`coords.format`, and MCP `bilterm_coords_resolve` (`UNI-R01`).
 
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
@@ -410,13 +414,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HUD-02 | Phase 70 | Planned |
 | HUD-03 | Phase 70 | Planned |
 | HUD-04 | Phase 70 | Planned |
+| COORD-01 | Phase 71 | Planned |
+| COORD-02 | Phase 71 | Planned |
+| COORD-03 | Phase 71 | Planned |
+| COORD-04 | Phase 71 | Planned |
 
 **Coverage:**
 
-- Total tracked requirements: 118 total (traceability table rows)
-- Mapped to phases: 118 (98 Complete, 20 Planned)
+- Total tracked requirements: 122 total (traceability table rows)
+- Mapped to phases: 122 (98 Complete, 24 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-09 for Phases 58–70 (v3.3.0 registered)*
+*Last updated: 2026-11-09 for Phases 58–71 (v3.3.0 registered)*

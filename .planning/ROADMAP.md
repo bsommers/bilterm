@@ -72,6 +72,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 68: Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`)** - `agent.last_turn`, permission gate interceptor, FIFO prompt queue, shared context bus
 - [ ] **Phase 69: Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`)** - Worktree agent spawner, DAG wave orchestrator, diff/merge, self-healing verify retry
 - [ ] **Phase 70: Agent Mission Control HUD & Time-Travel (`HUD-01..04`)** - Mission Control HUD, replay scrubber, stall/loop watchdog, `UNI-R01` parity
+- [ ] **Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`)** - 5-level `D:(W,S,Y,P)` addressing, universal parser/resolver, title-bar badge, `:coords`
 
 ## Phase Details
 
@@ -1224,7 +1225,7 @@ Plans:
 - Plan: `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`
 - Status: **COMPLETE**
 
-## Milestone v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Phases 66–70)
+## Milestone v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Phases 66–71)
 
 ### Phase 66: Always-On Foreground RPC & Multi-Instance Discovery (LIVE-01..04)
 
@@ -1310,6 +1311,23 @@ Plans:
 **Artifacts**:
 - Plan: `.planning/phases/70-agent-mission-control-hud-and-time-travel/70-PLAN.md`
 - Status: **PLANNED**
+### Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (COORD-01..04)
+
+**Goal**: Give every daemon, workspace, session, window, and pane a canonical 5-level coordinate `D:(W,S,Y,P)` that is accepted by every surface (CLI, RPC, MCP, colon) and shown as a right-aligned badge in each window title bar.
+**Depends on**: Phase 55 (multi-daemon), Phase 66–67 (instance registry, selectors), `UNI-R01`.
+**Requirements**: COORD-01, COORD-02, COORD-03, COORD-04
+**Today (baseline)**: Addressing is ad hoc (opaque pane ids, tmux `%id`, Herdr-style `w12:p6`); users cannot see or type a stable location for a window, and no single parser spans surfaces.
+**Success Criteria** (what must be TRUE):
+
+  1. `COORD-01`: Canonical hierarchy Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P, optional sub-pane / tmux `%id` / Herdr `w12:p6`).
+  2. `COORD-02`: One parser/resolver accepts `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
+  3. `COORD-03`: Right-aligned title-bar badge in Verbose, Compact, or DaemonTuple style, to the right of existing window bar info, without changing classic golden snapshots (badge off by default in goldens).
+  4. `COORD-04`: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, palette, menu, RPC `coords.resolve`/`coords.format`, MCP `bilterm_coords_resolve` (`UNI-R01`).
+
+**Artifacts**:
+- Plan: `.planning/phases/71-hierarchical-coordinate-addressing-and-badges/71-PLAN.md`
+- Status: **PLANNED**
+
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
 
 Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/swe-skills-2`, identical to `~/.claude/skills`). Rules: full task text per dispatch, terse report (status · files · verify output · blockers ≤10 lines), one writer per file, **subagents never commit — the orchestrator (Claude Code) reviews diffs, runs the verify command, and commits**, one worktree per concurrent agent (`git worktree add ../bilterm-<task> -b <branch>`), merge serially.
@@ -1328,7 +1346,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64 → 65 → 66 → 67 → 68 → 69 → 70
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64 → 65 → 66 → 67 → 68 → 69 → 70 → 71
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1406,3 +1424,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 68. Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`) | 0/1 | Planned | - |
 | 69. Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`) | 0/1 | Planned | - |
 | 70. Agent Mission Control HUD & Time-Travel (`HUD-01..04`) | 0/1 | Planned | - |
+| 71. Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`) | 0/1 | Planned | - |

@@ -4,15 +4,15 @@ milestone: v3.3.0
 current_phase: 66
 current_phase_name: foreground-rpc-and-instance-discovery
 status: planned
-stopped_at: "Registered Milestone v3.3.0 (Phases 66–70, LIVE/HERDR/BEYOND/SWARM/HUD); Phases 61–65 marked Complete"
+stopped_at: "Registered Milestone v3.3.0 (Phases 66–71, LIVE/HERDR/BEYOND/SWARM/HUD); Phases 61–65 marked Complete"
 last_updated: "2026-11-09T13:08:00Z"
 last_activity: 2026-11-09
-last_activity_desc: "Marked Phases 61–65 complete; registered Milestone v3.3.0 (Phases 66–70) with 20 requirements and 66–70 PLAN files"
+last_activity_desc: "Marked Phases 61–65 complete; registered Milestone v3.3.0 (Phases 66–71) with 24 requirements and 66–71 PLAN files"
 state_head: feat/phase-65-guardrails
 progress:
-  total_phases: 70
+  total_phases: 71
   completed_phases: 65
-  total_plans: 160
+  total_plans: 161
   completed_plans: 155
 milestone_name: "Bilterm v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration (Beyond Herdr)"
 ---
@@ -24,16 +24,16 @@ milestone_name: "Bilterm v3.3.0 — Live Foreground Agent Control Plane & Swarm 
 See: .planning/PROJECT.md (updated 2026-10-31)
 
 **Core value:** A responsive composite terminal pane (movable/resizable floating command prompt over a full-PTY output canvas that scrolls underneath) that can be split horizontally/vertically, stacked/shuffled in z-order via keyboard or mouse, styled with classic IBM 3270 mainframe & DOS Borland Turbo Vision or Non-Retro Modern Minimal / Liquid Glass aesthetics, and integrated seamlessly with `tmux` and the persistent `Bilterm` (`Herdr` + TRON `MCP`) multiplexer daemon.
-**Current focus (2026-11-09):** Milestone v3.3.0 registered (Phases 66–70): Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr. Phases 61–65 complete.
+**Current focus (2026-11-09):** Milestone v3.3.0 registered (Phases 66–71): Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr. Phases 61–65 complete.
 
 ## Current Position
 
-Phase: 66 (foreground-rpc-and-instance-discovery) — PLANNED (alongside planned phases 67–70)
-Plan: 65/70 phases complete (155/160 plans complete).
-Status: 65/70 Phases complete.
-Last activity: 2026-11-09 — Marked Phases 61–65 Complete; registered Milestone v3.3.0 (Phases 66–70) and 66–70 PLAN files.
+Phase: 66 (foreground-rpc-and-instance-discovery) — PLANNED (alongside planned phases 67–71)
+Plan: 65/71 phases complete (155/161 plans complete).
+Status: 65/71 Phases complete.
+Last activity: 2026-11-09 — Marked Phases 61–65 Complete; registered Milestone v3.3.0 (Phases 66–71) and 66–71 PLAN files.
 
-Progress: [█████████░] 92.9% (65/70 Phases)
+Progress: [█████████░] 91.5% (65/71 Phases)
 
 ## Performance Metrics
 
@@ -75,7 +75,7 @@ Recent decisions affecting current work:
 - [Phase 65]: Registered Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`): type-safe `SignalablePid` newtype preventing broadcast/init signaling, `PaneTransport` sum type separating local PTY from remote bridge, and mouse focus isolation in `src/input/mouse.rs`.
 
 - [Phases 61–65]: Marked COMPLETE (FIX-01..03, COPY-01..02, KEY-01..03, TRAF-01..04, GUARD-01..03).
-- [Milestone v3.3.0]: Registered Phases 66–70 (LIVE-01..04, HERDR-01..04, BEYOND-01..04, SWARM-01..04, HUD-01..04): always-on foreground RPC, agent/pane/workspace CLI with zero-polling wait, semantic introspection & context bus, worktree swarm DAG runner, Mission Control HUD.
+- [Milestone v3.3.0]: Registered Phases 66–71 (LIVE-01..04, HERDR-01..04, BEYOND-01..04, SWARM-01..04, HUD-01..04, COORD-01..04): always-on foreground RPC, agent/pane/workspace CLI with zero-polling wait, semantic introspection & context bus, worktree swarm DAG runner, Mission Control HUD, hierarchical coordinate addressing & title-bar badge.
 
 ### Pending Todos
 
@@ -96,5 +96,5 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-11-08T18:20:00Z
-Stopped at: Registered Milestone v3.3.0 (Phases 66–70) in roadmap, requirements, and state.
+Stopped at: Registered Milestone v3.3.0 (Phases 66–71) in roadmap, requirements, and state.
 Resume file: None
