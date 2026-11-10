@@ -96,7 +96,12 @@ pub fn spawn_background_daemon_for_session(session: &str) -> io::Result<PathBuf>
         cmd.process_group(0);
     }
 
-    let _child = cmd.spawn()?;
+    let mut child = cmd.spawn()?;
+    std::thread::Builder::new()
+        .name("daemon-reaper".to_string())
+        .spawn(move || {
+            let _ = child.wait();
+        })?;
     Ok(sock_path)
 }
 

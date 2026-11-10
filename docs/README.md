@@ -39,7 +39,7 @@ Welcome to the comprehensive documentation suite for **Bilterm (`v3.2.0`)** — 
 | Command | Description |
 |---------|-------------|
 | `bilterm` | Launch interactive IBM 3270 × Borland Turbo Vision TUI multiplexer (auto-resumes detached session) |
-| `bilterm attach [session]` (`-a` / `--attach`) | Re-attach & restore saved/detached multi-pane window layout intact (via live daemon RPC or saved session) |
+| `bilterm attach [session]` (`-a` / `--attach`) | Re-attach: rebuild the saved/detached multi-pane window layout from the session file and restart its shells and recorded commands |
 | `bilterm ls` (`bilterm sessions` / `--list-sessions`) | List live background daemon sockets (`LIVE DAEMON`) & saved `.toml` layouts (`SAVED LAYOUT`) |
 | `bilterm -G` / `--gui` | Launch standalone native desktop GUI window (X11 / Win32 GDI / Cocoa) |
 | `bilterm --gui-font <NAME>` (`-F` / `--font`) | Set font family or preset (`"JetBrains Mono"`, `"IBM 3270"`, `"Fira Code"`, `"vga"`, etc.) |

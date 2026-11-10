@@ -219,6 +219,81 @@ pub fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+/// Flushes directory metadata so a completed `rename` survives power loss (best effort).
+fn sync_dir(dir: &Path) {
+    #[cfg(unix)]
+    if let Ok(d) = File::open(dir) {
+        let _ = d.sync_all();
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+}
+
+/// Path of the last-good backup kept next to a durable state file (`<name>.bak`).
+pub fn backup_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".bak");
+    path.with_file_name(name)
+}
+
+/// Durable replacement of a state file: the current file becomes `<name>.bak` (hard link, so the
+/// old content is never copied or truncated), then the new content is written to a sibling temp
+/// file, fsynced, renamed into place, and the directory is fsynced.
+pub fn write_private_file_durable(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    if fs::symlink_metadata(path).is_ok_and(|md| md.is_file() && md.len() > 0) {
+        let bak = backup_path(path);
+        let staging = parent.join(format!(".bak.tmp.{}", unique_suffix()));
+        if fs::hard_link(path, &staging).is_ok() && fs::rename(&staging, &bak).is_err() {
+            let _ = fs::remove_file(&staging);
+        }
+    }
+    write_private_file(path, bytes)?;
+    sync_dir(parent);
+    Ok(())
+}
+
+/// Where the content returned by [`read_with_backup`] came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DurableSource {
+    Primary,
+    /// The primary file was missing, truncated or invalid; `<name>.bak` was used and written
+    /// back as the primary. A corrupt primary is kept as `<name>.corrupt`.
+    Backup,
+}
+
+/// Reads a durable state file, falling back to `<name>.bak` when the primary is unreadable or
+/// rejected by `valid`. Errors only when neither copy is usable; never returns invalid content.
+pub fn read_with_backup(path: &Path, valid: &dyn Fn(&str) -> bool) -> io::Result<(String, DurableSource)> {
+    let primary = fs::read_to_string(path);
+    if let Ok(text) = &primary
+        && valid(text)
+    {
+        return Ok((text.clone(), DurableSource::Primary));
+    }
+    let bak = backup_path(path);
+    match fs::read_to_string(&bak) {
+        Ok(text) if valid(&text) => {
+            if primary.is_ok() {
+                let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+                name.push(".corrupt");
+                let _ = fs::rename(path, path.with_file_name(name));
+            }
+            // Put the good copy back without rotating the corrupt file into the backup slot.
+            write_private_file(path, text.as_bytes())?;
+            sync_dir(path.parent().unwrap_or_else(|| Path::new(".")));
+            Ok((text, DurableSource::Backup))
+        }
+        _ => match primary {
+            Ok(_) => Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("{} is corrupt and no usable backup exists", path.display()),
+            )),
+            Err(e) => Err(e),
+        },
+    }
+}
+
 /// Reads an authentication token from `path`.
 ///
 /// Verifies the file is a regular file owned by the effective UID with mode 0600 (no group/world permissions).
