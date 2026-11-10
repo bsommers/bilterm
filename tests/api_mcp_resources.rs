@@ -146,6 +146,8 @@ fn tools_list_only_gains_find() {
             "bilterm_browser",
             "bilterm_video",
             "bilterm_keys",
+            "bilterm_coords_resolve",
+            "bilterm_coords_format",
         ]
     );
 }

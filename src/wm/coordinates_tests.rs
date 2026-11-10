@@ -159,3 +159,27 @@ fn style_setter() {
     wm.set_coord_style(CoordDisplayStyle::Compact);
     assert_eq!(wm.coord_style(), CoordDisplayStyle::Compact);
 }
+
+#[test]
+fn tmux_pane_lookup_feeds_coord_and_resolve() {
+    let mut wm = WindowManager::new_headless(24, 80);
+    assert_eq!(wm.coord_of(1).unwrap().pane, None);
+    let id = wm.insert_tmux_pane(7);
+    wm.tmux_bridge.tmux_to_bilterm.insert(7, id);
+    wm.tmux_bridge.bilterm_to_tmux.insert(id, 7);
+    assert_eq!(wm.tmux_pane_of(id).as_deref(), Some("%7"));
+    assert_eq!(wm.tmux_pane_of(1), None);
+    assert_eq!(wm.coord_of(id).unwrap().pane.as_deref(), Some("%7"));
+    assert_eq!(wm.coord_of(1).unwrap().pane, None);
+    let t = TargetCoord { pane: Some("%7".into()), ..Default::default() };
+    assert_eq!(wm.resolve_coord(&t).panes, vec![id]);
+}
+
+#[test]
+fn config_badge_applies_on_apply_config_and_config_set() {
+    let mut wm = WindowManager::new_headless(24, 80);
+    let mut cfg = wm.config().clone();
+    cfg.coords.badge = CoordDisplayStyle::Verbose;
+    wm.apply_config(cfg);
+    assert_eq!(wm.coord_style(), CoordDisplayStyle::Verbose);
+}

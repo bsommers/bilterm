@@ -161,6 +161,7 @@ impl WindowManager {
     pub fn apply_config(&mut self, config: BiltermConfig) {
         let scroll_mode = config.scroll_mode;
         self.config = config;
+        self.coord_style = self.config.coords.badge;
         if self.config.drawer.visibility == crate::wm::DrawerVisibilityMode::Fixed {
             self.drawer.open = true;
         }

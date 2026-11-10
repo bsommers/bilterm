@@ -58,7 +58,7 @@ async fn main() -> color_eyre::Result<()> {
                bilterm ls / bilterm sessions\n  \
                bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
-               bilterm agent|pane|workspace <SUBCOMMAND> ...   (live control; run `bilterm agent` for usage)\n  \
+               bilterm agent|pane|workspace|coords <SUBCOMMAND> ...   (live control; run `bilterm agent` for usage)\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
                -n, --new-session [SESSION]      Start a fresh named (or auto-named) 1-pane session\n  \

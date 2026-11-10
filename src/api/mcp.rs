@@ -102,6 +102,8 @@ impl AutomationControlPlane {
                     "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
+                    "bilterm_coords_resolve" => Some("coords.resolve"),
+                    "bilterm_coords_format" => Some("coords.format"),
                     _ => None,
                 };
                 match mapped_method {
@@ -411,6 +413,19 @@ impl AutomationControlPlane {
                     ("name", "string", "Profile name for action='profile' (auto|mac|windows|linux|portable|legacy); omit to query"),
                     ("op", "string", "Window mode operation for action='window_mode': on | off | toggle | focus | resize | move"),
                     ("category", "integer", "Optional 0-based menu category for action='menu_open'"),
+                ],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_coords_resolve",
+                "Resolve a hierarchical coordinate (e.g. d0:w1:main:y2, wildcards allowed) to the pane ids and canonical coordinate paths it addresses.",
+                &[("coord", "string", "Target coordinate: dD:wW:session:yY / pane path, `*` wildcards")],
+            ),
+            Self::mcp_tool_schema(
+                "bilterm_coords_format",
+                "Format a pane's hierarchical coordinate as badge text in a display style, plus its canonical path.",
+                &[
+                    ("pane_id", "integer", "Optional pane ID (defaults to the active pane)"),
+                    ("style", "string", "verbose | compact | daemon | off (default 'compact')"),
                 ],
             ),
         ];

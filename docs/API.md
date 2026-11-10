@@ -920,6 +920,8 @@ The server exposes **14 tools** (the `tools/list` result).
 | `bilterm_agents_demo` | `stop` (boolean, optional; `true` stops the demo and closes the panes it spawned) | Start the agent traffic demo, or stop it. No write gate. | `agents.demo` |
 | `bilterm_window_manage` | `action` (string, req: `move`, `rename`, `rename_session`, `select`, `bulk`, `undo`), plus action-specific parameters | Move, rename, multi-select, bulk mutate, and undo window and session topology (`SES-01..05`). | `window.move`, `window.rename`, `session.rename`, `window.select`, `window.bulk`, `window.undo` |
 | `bilterm_keys` | `action` (string: `list`, `check`, `explain`, `profile`, `window_mode`, `menu_open`; default `list`), `chord`, `name`, `op`, `category` | Inspect the key profile, check key conflicts, explain a chord, switch profile, enter Window mode or open the menu bar. `profile <name>`, `window_mode` and `menu_open` need `[api] allow_config_write`. | `keys.list` / `keys.check` / `keys.explain` / `keys.profile` / `keys.window_mode` / `menu.open` |
+| `bilterm_coords_resolve` | `coord` (string, e.g. `d0:w1:main:y2`) | Resolve a hierarchical coordinate to pane ids and canonical coordinate paths. CLI: `bilterm coords resolve <COORD>`. | `coords.resolve` |
+| `bilterm_coords_format` | `pane_id` (integer, default active), `style` (`verbose`, `compact`, `daemon`, `off`) | Format a pane's coordinate badge text and path. CLI: `bilterm coords format [--pane N] [--style S]`. | `coords.format` |
 
 ### MCP Tool Calling Format
 

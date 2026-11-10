@@ -7,6 +7,7 @@
 //! endpoint ([`resolve_endpoint`]).
 
 pub mod agent_cmd;
+mod coords_cmd;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -14,7 +15,7 @@ use std::path::Path;
 use crate::api::JsonValue;
 
 /// Subcommand words owned by this module.
-pub const CLI_COMMANDS: &[&str] = &["agent", "pane", "workspace"];
+pub const CLI_COMMANDS: &[&str] = &["agent", "pane", "workspace", "coords"];
 
 /// True when `first` is one of [`CLI_COMMANDS`].
 pub fn is_cli_command(first: Option<&str>) -> bool {
@@ -58,7 +59,7 @@ pub(crate) struct Parsed {
     pub flags: BTreeMap<String, Option<String>>,
 }
 
-const VALUE_FLAGS: &[&str] = &["timeout-ms", "until", "answer", "direction", "max-bytes", "name"];
+const VALUE_FLAGS: &[&str] = &["timeout-ms", "until", "answer", "direction", "max-bytes", "name", "pane", "style"];
 const BOOL_FLAGS: &[&str] = &["force", "enter", "allow-echo-lock", "blank"];
 
 pub(crate) fn split_args(args: &[String]) -> Result<Parsed, String> {
@@ -136,6 +137,8 @@ Usage:
   bilterm workspace select <NAME|wN>
   bilterm workspace new <NAME>
   bilterm workspace rename <NAME>
+  bilterm coords resolve <COORD>   (e.g. d0:w1:main:y2)
+  bilterm coords format [--pane N] [--style verbose|compact|daemon|off]
 
 SELECTOR: w<N>:p<M> | p<M> | <id> | @claude | @agy | @idle | @working | @blocked | @done | @errored | @focused
 Environment: BILTERM_SOCKET (endpoint), BILTERM_PANE_ID (caller pane, excluded from @selectors)"
@@ -151,6 +154,7 @@ pub fn parse(args: &[String], env: &CliEnv) -> Result<RpcCall, String> {
         "agent" => agent_cmd::parse_agent(&p, env),
         "pane" => parse_pane(&p, env),
         "workspace" => parse_workspace(&p),
+        "coords" => coords_cmd::parse_coords(&p, env),
         other => Err(format!("unknown command '{other}'\n{}", usage())),
     }
 }

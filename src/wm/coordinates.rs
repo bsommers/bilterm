@@ -359,14 +359,17 @@ impl WindowManager {
         if !self.panes.contains_key(&id) {
             return None;
         }
-        // No tmux `%pane_id` is exposed on `CompositePane`, so `pane` stays `None`.
         Some(TargetCoord {
             daemon: Some("d0".to_string()),
             workspace: Some("w1".to_string()),
             session: Some(self.config.history_session.clone()),
             window: Some(format!("y{id}")),
-            pane: None,
+            pane: self.tmux_pane_of(id),
         })
+    }
+    /// tmux `%N` pane id bound to `id` by the control bridge; `None` for non-tmux windows.
+    pub fn tmux_pane_of(&self, id: PaneId) -> Option<String> {
+        self.tmux_bridge.bilterm_to_tmux.get(&id).map(|n| format!("%{n}"))
     }
     /// Resolves `target` (wildcards on `None` levels) to matching windows.
     ///
