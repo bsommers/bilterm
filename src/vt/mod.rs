@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod codec;
+pub mod derived;
 pub mod detect;
 pub mod ghostty_backend;
 pub mod graphics;
@@ -144,6 +145,7 @@ pub struct VtParser {
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
     primary_log_complete: bool,
+    derived: derived::DerivedSlot,
 }
 
 /// Smallest grid dimension handed to `vt100-ctt` (1-row grids panic on soft-wrap).
@@ -219,6 +221,7 @@ impl VtParser {
             osc52_carry: Vec::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
+            derived: derived::DerivedSlot::default(),
         }
     }
 
@@ -675,6 +678,7 @@ impl VtParser {
 
     pub fn size(&self) -> (u16, u16) { (self.rows, self.cols) }
     pub fn generation(&self) -> u64 { self.generation }
+    pub fn derived(&self) -> &derived::DerivedSlot { &self.derived }
     pub fn line_size_attr(&self, row: u16) -> LineSizeAttr {
         self.line_size_attrs.get(&row).copied().unwrap_or_default()
     }
