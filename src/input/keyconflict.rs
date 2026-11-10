@@ -355,6 +355,28 @@ pub fn load_time_status(cfg: &BiltermConfig, env: &KeyEnv) -> Option<String> {
     load_status(&findings)
 }
 
+/// Startup hint for VTE host terminals (GNOME Terminal, Tilix, ...), whose default menu accelerator
+/// swallows F10 before it reaches Bilterm. `vte_version` is the host's `VTE_VERSION` (the caller reads
+/// the environment so this stays pure). `None` unless F10 is still bound to the Quake toggle in a TUI.
+pub fn vte_f10_hint(cfg: &BiltermConfig, env: &KeyEnv, vte_version: Option<&str>) -> Option<String> {
+    if env.surface != Surface::Tui || vte_version.is_none_or(str::is_empty) {
+        return None;
+    }
+    let km = crate::input::keyprofile::KeyProfile::resolve(&cfg.keys, env);
+    let f10 = KeyChord::new(KeyModifiers::NONE, KeyCode::F(10));
+    let chords = km.keys_for_action(&Action::QuakeToggle);
+    if !chords.iter().any(|c| c.folded() == f10.folded()) {
+        return None;
+    }
+    let alt = chords
+        .iter()
+        .find(|c| c.folded() != f10.folded())
+        .map_or_else(String::new, |c| format!("{} or ", c.display(env)));
+    Some(format!(
+        "F10 may open this terminal's menu instead of Quake: use {alt}:quake, or disable the menu accelerator (F10) in terminal preferences"
+    ))
+}
+
 /// Re-validation after `:set keys.*` / `:set keybindings.*` (called from `config::dotted`).
 pub fn revalidate_after_set(key: &str, next: &BiltermConfig) -> Result<(), String> {
     if key.starts_with("keys") || key.starts_with("keybindings") || key == "leader_key" {
