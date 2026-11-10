@@ -566,7 +566,12 @@ fn writer_loop<W: Write>(mut writer: W, shared: Arc<Shared>) {
         let bytes = cmd.encode(id, session);
         tracing::trace!(target: "bilterm::browser", "cdp -> {}", String::from_utf8_lossy(&bytes[..bytes.len().min(160)]));
         if let Err(e) = writer.write_all(&bytes).and_then(|()| writer.flush()) {
-            return shared.mark_dead(&format!("write to Chrome failed: {e}"));
+            // A closed pipe is the same fact the reader reports as EOF; whichever thread notices
+            // first must give the same reason.
+            return match e.kind() {
+                std::io::ErrorKind::BrokenPipe => shared.mark_dead("Chrome exited"),
+                _ => shared.mark_dead(&format!("write to Chrome failed: {e}")),
+            };
         }
     }
 }
