@@ -11,6 +11,9 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Mutex, Once};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use crate::pane::PaneId;
 use crate::secure_fs::{private_dir_in, private_runtime_dir};
@@ -202,10 +205,50 @@ impl Drop for ChromeProcess {
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
         };
-        if let Err(e) = std::thread::Builder::new().name("bilterm-chrome-reaper".into()).spawn(reap) {
-            tracing::warn!("browser: could not spawn reaper thread: {e}");
+        match std::thread::Builder::new().name("bilterm-chrome-reaper".into()).spawn(reap) {
+            Ok(handle) => track_reaper(handle),
+            Err(e) => tracing::warn!("browser: could not spawn reaper thread: {e}"),
         }
     }
+}
+
+/// Reaper threads still running. Process exit would cut them off and leave a profile directory
+/// behind, so an `atexit` hook gives them a short, bounded time to finish.
+static REAPERS: Mutex<Vec<JoinHandle<()>>> = Mutex::new(Vec::new());
+const EXIT_GRACE: Duration = Duration::from_secs(2);
+
+fn track_reaper(handle: JoinHandle<()>) {
+    static HOOK: Once = Once::new();
+    // SAFETY: registers a plain `extern "C"` function with no captured state.
+    HOOK.call_once(|| unsafe {
+        libc::atexit(finish_reapers_at_exit);
+    });
+    let mut reapers = REAPERS.lock().unwrap_or_else(|e| e.into_inner());
+    reapers.retain(|h| !h.is_finished());
+    reapers.push(handle);
+}
+
+/// Waits (bounded) for pending reaper threads. Returns `true` when all finished in time.
+pub fn finish_reapers(grace: Duration) -> bool {
+    let deadline = Instant::now() + grace;
+    loop {
+        let pending = {
+            let mut reapers = REAPERS.lock().unwrap_or_else(|e| e.into_inner());
+            reapers.retain(|h| !h.is_finished());
+            reapers.len()
+        };
+        if pending == 0 {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+extern "C" fn finish_reapers_at_exit() {
+    finish_reapers(EXIT_GRACE);
 }
 
 #[cfg(test)]
@@ -271,11 +314,7 @@ mod tests {
         let (pgid, dir) = (proc_.pgid(), proc_.profile_dir().to_path_buf());
         assert!(dir.exists());
         drop(proc_);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        // SAFETY: signal 0 only probes the group.
-        while (unsafe { libc::kill(-pgid, 0) } == 0 || dir.exists()) && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
+        assert!(finish_reapers(Duration::from_secs(5)), "reaper finished");
         assert!(!dir.exists(), "profile dir removed after drop");
         // SAFETY: as above.
         assert_ne!(unsafe { libc::kill(-pgid, 0) }, 0, "process group is gone");
