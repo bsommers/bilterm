@@ -377,6 +377,7 @@ impl super::WindowManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg_attr(not(unix), allow(unused_imports))] // only the Unix paths use it
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
