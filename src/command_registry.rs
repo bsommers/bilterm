@@ -124,6 +124,7 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":pane", ":window", "Alias of :window (manage or style the active window/pane)."),
     (":kill-pane", ":close", "Alias of :close (close the active pane)."),
     (":traffic", "", "TRAFFIC MONITOR window: bytes per connection, session, window, pane (Agent Traffic is :agents traffic)."),
+    (":coords", "", "Hierarchical D:(W,S,Y,P) coordinates: show the focused window's, set the title badge style, locate a window, copy."),
     (":netmon", ":traffic", "Alias of :traffic."),
     (":tab", "", "Tab-style window commands (:tab new|next|prev|close|rename)."),
     (":tabnew", ":tab", "Alias of :tab new (create a new terminal window)."),

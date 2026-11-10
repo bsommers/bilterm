@@ -624,6 +624,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
             }
         }
+        "coords" => Some(super::parse_coords::parse(&parts[1..])),
         "traffic" | "netmon" => Some(super::parse_traffic::parse(&parts[1..])),
         "clipboard" | "clips" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
             Some(super::parse_clipboard::parse(&parts[1..]))
