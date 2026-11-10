@@ -14,6 +14,9 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
     if let Some(res) = super::parse_config::parse_config_colon_command(head, &parts, rest) {
         return Some(res);
     }
+    if let Some(res) = super::parse_agent_queue::parse_agent_ops(head, &parts) {
+        return Some(res);
+    }
     if let Some(res) = super::parse_agent_mail::parse_agent_colon_command(head, &parts, rest) {
         return Some(res);
     }
@@ -624,8 +627,8 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
                 Some(Ok(ColonCommand::SelectCommand(Some(parts[1..].join(" ")))))
             }
         }
+        "context" => Some(super::parse_context::parse(&parts[1..])),
         "coords" => Some(super::parse_coords::parse(&parts[1..])),
-        "swarm" => Some(super::parse_swarm::parse(&parts[1..])),
         "traffic" | "netmon" => Some(super::parse_traffic::parse(&parts[1..])),
         "clipboard" | "clips" | "clip" | "cb" | "buffers" | "yank-history" | "yank-ring" => {
             Some(super::parse_clipboard::parse(&parts[1..]))

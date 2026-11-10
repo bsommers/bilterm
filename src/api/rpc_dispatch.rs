@@ -262,6 +262,7 @@ impl AutomationControlPlane {
                 Ok(JsonValue::obj(out))
             }
             "events.poll" => {
+                self.drain_watchdog_events();
                 let drain = params
                     .get("drain")
                     .and_then(JsonValue::as_bool)
@@ -487,6 +488,9 @@ impl AutomationControlPlane {
             "agent.prompt" => self.rpc_agent_prompt(params),
             "agent.approve" => self.rpc_agent_approve(params),
             "agent.last_turn" => self.rpc_agent_last_turn(params),
+            "agent.hud" => self.rpc_agent_hud(params),
+            "agent.replay" => self.rpc_agent_replay(params),
+            "agent.watchdog" => self.rpc_agent_watchdog(params),
             "pane.list" => self.rpc_pane_list(),
             "pane.split" => self.rpc_pane_split(params),
             "pane.focus" => self.rpc_pane_focus(params),
@@ -514,7 +518,14 @@ impl AutomationControlPlane {
             "clipboard.window" => self.rpc_clipboard_window(params),
             "coords.resolve" => self.rpc_coords_resolve(params),
             "coords.format" => self.rpc_coords_format(params),
-            "swarm.load" | "swarm.status" | "swarm.run" | "swarm.spawn" | "swarm.verify" | "swarm.diff" | "swarm.merge" | "swarm.clean" => self.rpc_swarm(method, params),
+            "context.set" => self.rpc_context_set(params),
+            "context.get" => self.rpc_context_get(params),
+            "context.list" => self.rpc_context_list(params),
+            "agent.queue" => self.rpc_agent_queue(params),
+            "swarm.status" => self.rpc_swarm_status(params),
+            "swarm.load" => self.rpc_swarm_load(params),
+            "swarm.clear" => self.rpc_swarm_clear(params),
+            "swarm.run" | "swarm.spawn" | "swarm.verify" | "swarm.diff" | "swarm.merge" | "swarm.clean" => self.rpc_swarm_runtime(method, params),
             "traffic.snapshot" => self.rpc_traffic_snapshot(params),
             "traffic.history" => self.rpc_traffic_history(params),
             "traffic.window" => self.rpc_traffic_window(params),

@@ -1,35 +1,48 @@
-//! JSON-RPC `swarm.*` handlers (Phase 69 wiring); `bilterm ctl swarm.status` reaches these.
+//! JSON-RPC 2.0 handlers `swarm.status|load|clear`
+//! (UNI-R01, Phase 69). All lower to `Action` and run through `WindowManager::apply`.
 
+use crate::action::Action;
 use crate::api::json::JsonValue;
 use crate::api::rpc::AutomationControlPlane;
-use crate::wm::swarm_cmd::SwarmOp;
-
-fn text(p: &JsonValue, k: &str) -> Result<String, String> {
-    p.get(k).and_then(JsonValue::as_str).map(str::to_string).ok_or_else(|| format!("missing '{k}' parameter"))
-}
-
-fn flag(p: &JsonValue, k: &str) -> bool {
-    p.get(k).and_then(JsonValue::as_bool).unwrap_or(false)
-}
+use crate::wm::swarm_surface::SwarmOp;
 
 impl AutomationControlPlane {
-    /// Dispatches `swarm.<verb>` to the same [`SwarmOp`] the colon command uses.
-    pub(super) fn rpc_swarm(&mut self, method: &str, p: &JsonValue) -> Result<JsonValue, String> {
+    /// `swarm.status` -> `{loaded, nodes, waves, ...}`.
+    pub(super) fn rpc_swarm_status(&mut self, _params: &JsonValue) -> Result<JsonValue, String> {
+        self.apply_with_data(Action::Swarm(SwarmOp::Status))
+    }
+
+    /// `swarm.load` `{path}`.
+    pub(super) fn rpc_swarm_load(&mut self, params: &JsonValue) -> Result<JsonValue, String> {
+        let path = params
+            .get("path")
+            .and_then(JsonValue::as_str)
+            .ok_or("missing 'path' parameter")?;
+        self.apply_with_data(Action::Swarm(SwarmOp::Load(path.to_string())))
+    }
+
+    /// `swarm.clear`.
+    pub(super) fn rpc_swarm_clear(&mut self, _params: &JsonValue) -> Result<JsonValue, String> {
+        self.apply_with_data(Action::Swarm(SwarmOp::Clear))
+    }
+
+    /// `swarm.run` / `swarm.spawn` / `swarm.verify` / `swarm.diff` / `swarm.merge` / `swarm.clean`.
+    pub(super) fn rpc_swarm_runtime(&mut self, method: &str, p: &JsonValue) -> Result<JsonValue, String> {
+        let text = |k: &str| p.get(k).and_then(JsonValue::as_str).map(str::to_string).ok_or_else(|| format!("missing '{k}' parameter"));
+        let flag = |k: &str| p.get(k).and_then(JsonValue::as_bool).unwrap_or(false);
         let op = match method {
-            "swarm.load" => SwarmOp::Load(text(p, "path")?),
-            "swarm.status" => SwarmOp::Status,
             "swarm.run" => SwarmOp::Run,
             "swarm.spawn" => SwarmOp::Spawn {
-                slug: text(p, "slug")?,
-                agent: text(p, "agent").unwrap_or_else(|_| "claude".to_string()),
-                prompt: text(p, "prompt").unwrap_or_default(),
+                slug: text("slug")?,
+                agent: text("agent").unwrap_or_else(|_| "claude".to_string()),
+                prompt: text("prompt").unwrap_or_default(),
             },
-            "swarm.verify" => SwarmOp::Verify(text(p, "node")?),
-            "swarm.diff" => SwarmOp::Diff(text(p, "slug")?),
-            "swarm.merge" => SwarmOp::Merge { slug: text(p, "slug")?, squash: flag(p, "squash") },
-            "swarm.clean" => SwarmOp::Clean { slug: text(p, "slug")?, force: flag(p, "force") },
+            "swarm.verify" => SwarmOp::Verify(text("node")?),
+            "swarm.diff" => SwarmOp::Diff(text("slug")?),
+            "swarm.merge" => SwarmOp::Merge { slug: text("slug")?, squash: flag("squash") },
+            "swarm.clean" => SwarmOp::Clean { slug: text("slug")?, force: flag("force") },
             _ => return Err(format!("unknown method {method}")),
         };
-        self.wm.swarm_apply(op)
+        self.apply_with_data(Action::Swarm(op))
     }
 }

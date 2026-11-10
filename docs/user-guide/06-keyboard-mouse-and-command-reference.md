@@ -73,6 +73,9 @@
 | `Ctrl+Alt+A` | — | `:agents toggle` | Open the Agent Traffic window, or close it when open (also menu View > Agent Traffic and the Navigator footer `@ agents` button; every `F` key is already taken) |
 | `Ctrl+Alt+N` | — | `:agents list toggle` | Open the AGENTS list window (one row per pane, with agent state), or close it when open. Also menu View > Agents List; works while a full-screen program owns the pane. See [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#agents-list-window) |
 | — | `<L> A` | `:agents list toggle` | The same toggle as a leader chord, for hosts that swallow `Ctrl+Alt+N` |
+| — | `<L> *` | `:agents hud toggle` | Open the Mission Control HUD (a tile per agent pane: state, bytes/s sparkline, queue depth, `[Approve]` `[Prompt]` `[Diff]` `[Zoom]`), or close it. In the HUD: arrows/Tab/`hjkl` select, PgUp/PgDn page, `a` `p` `d` `z` press the buttons, `r` (or right-click a tile) opens the replay, `Esc` closes. Also menu View > Mission Control Squad HUD. `<L> A` is the AGENTS list, so the HUD uses the free `*` |
+| — | — | `:agent replay <pane>` | Read-only per-turn replay of an agent pane (Left/Right turn, Up/Down scroll, Home/End first/last, `Esc` exits); also `prev\|next\|first\|last\|turn <id>\|up [n]\|down [n]\|close` |
+| — | — | `:agents watchdog` | Show the stall / loop watchdog settings (`[agents.watchdog]`) and recent alerts; it never kills a pane |
 | — | `<L> y` | `:agents demo` | Start the agent traffic demo (memory only; re-running replaces the earlier demo). Also menu View > Agent Demo |
 | — | `<L> Y` | `:agents demo stop` | Stop the demo: close only the panes it created and remove its traffic. Also menu View > Stop Agent Demo |
 | `Ctrl+Alt+F` | — | `:find agent` | Open the Find window (agents, sessions and command history; `Tab` switches kind), or close it when open. Also View > Find Agents. No leader chord ([Chapter 12](12-find-registry-and-history.md)) |
@@ -136,6 +139,7 @@ Non-interactive banners (`Connecting`) pass keystrokes directly to the remote `s
 | Menu entry | Runs |
 |------------|------|
 | View > Agents List (Ctrl+Alt+N) | `:agents list toggle` |
+| View > Mission Control Squad HUD (Ctrl+X *) | `:agents hud toggle` |
 | View > Agent Demo (Ctrl+X y) | `:agents demo` |
 | View > Stop Agent Demo (Ctrl+X Y) | `:agents demo stop` |
 | Window > Tile Windows & Panels | `:arrange grid` |

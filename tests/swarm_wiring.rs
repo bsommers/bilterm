@@ -1,8 +1,13 @@
 //! Swarm wiring: colon parse -> Action -> WindowManager::apply and RPC share one implementation.
 use bilterm::action::Action;
 use bilterm::colon_command::parse_colon_command;
+
+fn sw(wm: &mut WindowManager, op: SwarmOp) -> Result<bilterm::api::json::JsonValue, String> {
+    wm.apply(Action::Swarm(op)).map_err(|e| e.to_string())?;
+    Ok(bilterm::api::json::JsonValue::parse(&wm.take_command_data().unwrap_or_default()).unwrap_or(bilterm::api::json::JsonValue::Null))
+}
 use bilterm::wm::WindowManager;
-use bilterm::wm::swarm_cmd::SwarmOp;
+use bilterm::wm::swarm_surface::SwarmOp;
 use std::path::Path;
 use std::process::Command;
 
@@ -55,44 +60,44 @@ fn end_to_end_in_temp_repo() {
 
     let mut wm = WindowManager::new_headless(80, 24);
     for bad in [SwarmOp::Load(String::new()), SwarmOp::Diff(String::new()), SwarmOp::Verify(String::new())] {
-        assert!(wm.swarm_apply(bad).is_err());
+        assert!(sw(&mut wm, bad).is_err());
     }
-    assert!(wm.swarm_apply(SwarmOp::Spawn { slug: "../x".into(), agent: "claude".into(), prompt: String::new() }).is_err());
-    assert!(wm.swarm_apply(SwarmOp::Run).is_err(), "run before load");
-    let loaded = wm.swarm_apply(SwarmOp::Load("plan.toml".into())).unwrap().to_json_string();
-    assert!(loaded.contains("true") && loaded.contains("api: true"), "{loaded}");
-    assert!(wm.swarm_apply(SwarmOp::Load("../etc/nope.toml".into())).is_err());
+    assert!(sw(&mut wm, SwarmOp::Spawn { slug: "../x".into(), agent: "claude".into(), prompt: String::new() }).is_err());
+    assert!(sw(&mut wm, SwarmOp::Run).is_err(), "run before load");
+    let loaded = sw(&mut wm, SwarmOp::Load("plan.toml".into())).unwrap().to_json_string();
+    assert!(loaded.contains("\"loaded\":true") && loaded.contains("\"nodes\""), "{loaded}");
+    assert!(sw(&mut wm, SwarmOp::Load("../etc/nope.toml".into())).is_err());
 
     let panes_before = wm.pane_count();
-    let run = wm.swarm_apply(SwarmOp::Run).unwrap().to_json_string();
+    let run = sw(&mut wm, SwarmOp::Run).unwrap().to_json_string();
     assert!(run.contains("\"started\":[\"api\"]"), "{run}");
     assert_eq!(wm.pane_count(), panes_before + 1);
     assert!(repo.join(".bilterm/worktrees/api").exists());
 
     // Dependent node stays blocked until api passes.
-    assert!(wm.swarm_apply(SwarmOp::Run).unwrap().to_json_string().contains("\"started\":[]"));
-    wm.swarm_apply(SwarmOp::Verify("api".into())).unwrap();
+    assert!(sw(&mut wm, SwarmOp::Run).unwrap().to_json_string().contains("\"started\":[]"));
+    sw(&mut wm, SwarmOp::Verify("api".into())).unwrap();
     for _ in 0..100 {
-        let st = wm.swarm_apply(SwarmOp::Status).unwrap().to_json_string();
+        let st = sw(&mut wm, SwarmOp::Status).unwrap().to_json_string();
         if st.contains("\"state\":\"passed\"") {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    assert!(wm.swarm_apply(SwarmOp::Run).unwrap().to_json_string().contains("\"started\":[\"ui\"]"));
+    assert!(sw(&mut wm, SwarmOp::Run).unwrap().to_json_string().contains("\"started\":[\"ui\"]"));
 
     // Diff / merge / clean on tracked worktree only.
     let wt = repo.join(".bilterm/worktrees/api");
     std::fs::write(wt.join("b.txt"), "new\n").unwrap();
     git(&wt, &["add", "."]);
     git(&wt, &["commit", "-q", "-m", "work"]);
-    let d = wm.swarm_apply(SwarmOp::Diff("api".into())).unwrap().to_json_string();
+    let d = sw(&mut wm, SwarmOp::Diff("api".into())).unwrap().to_json_string();
     assert!(d.contains("b.txt"), "{d}");
-    assert!(wm.swarm_apply(SwarmOp::Diff("main".into())).is_err(), "untracked slug refused");
-    assert!(wm.swarm_apply(SwarmOp::Clean { slug: "api".into(), force: false }).is_err(), "unmerged refused");
-    wm.swarm_apply(SwarmOp::Merge { slug: "api".into(), squash: false }).unwrap();
+    assert!(sw(&mut wm, SwarmOp::Diff("main".into())).is_err(), "untracked slug refused");
+    assert!(sw(&mut wm, SwarmOp::Clean { slug: "api".into(), force: false }).is_err(), "unmerged refused");
+    sw(&mut wm, SwarmOp::Merge { slug: "api".into(), squash: false }).unwrap();
     assert!(repo.join("b.txt").exists());
-    wm.swarm_apply(SwarmOp::Clean { slug: "api".into(), force: false }).unwrap();
+    sw(&mut wm, SwarmOp::Clean { slug: "api".into(), force: false }).unwrap();
     assert!(!wt.exists());
 
     // Dirty primary tree blocks merge.
@@ -101,7 +106,7 @@ fn end_to_end_in_temp_repo() {
     git(&ui, &["add", "."]);
     git(&ui, &["commit", "-q", "-m", "ui"]);
     std::fs::write(repo.join("a.txt"), "dirty\n").unwrap();
-    let e = wm.swarm_apply(SwarmOp::Merge { slug: "ui".into(), squash: false }).unwrap_err();
+    let e = sw(&mut wm, SwarmOp::Merge { slug: "ui".into(), squash: false }).unwrap_err();
     assert!(e.contains("uncommitted"), "{e}");
     let _ = std::fs::remove_dir_all(&repo);
 }

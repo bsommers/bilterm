@@ -58,7 +58,7 @@ pub(crate) struct Parsed {
     pub flags: BTreeMap<String, Option<String>>,
 }
 
-const VALUE_FLAGS: &[&str] = &["timeout-ms", "until", "answer", "direction", "max-bytes", "name"];
+const VALUE_FLAGS: &[&str] = &["timeout-ms", "until", "answer", "direction", "max-bytes", "name", "op", "turn", "lines"];
 const BOOL_FLAGS: &[&str] = &["force", "enter", "allow-echo-lock", "blank"];
 
 pub(crate) fn split_args(args: &[String]) -> Result<Parsed, String> {
@@ -126,6 +126,9 @@ Usage:
   bilterm agent approve <SELECTOR> [--answer yes|y|n|no|esc] [--force]
   bilterm agent interrupt <SELECTOR>
   bilterm agent last-turn <SELECTOR> [--max-bytes N]
+  bilterm agent hud [open|close|toggle|next|prev|page-next|page-prev|select|approve|prompt|diff|zoom [SELECTOR]]
+  bilterm agent replay <SELECTOR> [--turn ID] [--op open|close|prev|next|first|last|turn|scroll] [--lines N]
+  bilterm agent watchdog
   bilterm pane list
   bilterm pane read [SELECTOR]
   bilterm pane split [h|v] [SELECTOR]

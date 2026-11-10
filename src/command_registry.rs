@@ -32,7 +32,7 @@ pub struct CommandInfo {
 /// Commands whose text exists in neither the palette nor the help lines:
 /// `(name, alias_of or "", summary)`.
 pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
-    (":agent", "", "Agent-to-agent messaging and coordination (:agent name|send|broadcast|inbox|ack|list|enable)."),
+    (":agent", "", "Agent-to-agent messaging and coordination (:agent name|send|broadcast|inbox|ack|list|enable|queue|approve|deny|replay)."),
     (":aero", ":glass", "Alias of :glass."),
     (":auto-arrange", ":arrange", "Alias of :arrange."),
     (":asciinema", ":record", "Alias of :record."),
@@ -124,7 +124,8 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":pane", ":window", "Alias of :window (manage or style the active window/pane)."),
     (":kill-pane", ":close", "Alias of :close (close the active pane)."),
     (":traffic", "", "TRAFFIC MONITOR window: bytes per connection, session, window, pane (Agent Traffic is :agents traffic)."),
-    (":swarm", "", "Ephemeral git-worktree swarm: load a DAG plan, run waves, spawn, verify (self-heal), diff, merge, clean."),
+    (":swarm", "", "Worktree swarm DAG orchestrator: :swarm status | load <plan.toml> | clear | run | spawn | verify | diff | merge | clean."),
+    (":context", "", "Shared context bus: :context set <k> <v> | get <k> | list [prefix] | clear <k>."),
     (":coords", "", "Hierarchical D:(W,S,Y,P) coordinates: show the focused window's, set the title badge style, locate a window, copy."),
     (":netmon", ":traffic", "Alias of :traffic."),
     (":tab", "", "Tab-style window commands (:tab new|next|prev|close|rename)."),
