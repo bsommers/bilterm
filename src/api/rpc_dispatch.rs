@@ -514,6 +514,7 @@ impl AutomationControlPlane {
             "clipboard.window" => self.rpc_clipboard_window(params),
             "coords.resolve" => self.rpc_coords_resolve(params),
             "coords.format" => self.rpc_coords_format(params),
+            "swarm.load" | "swarm.status" | "swarm.run" | "swarm.spawn" | "swarm.verify" | "swarm.diff" | "swarm.merge" | "swarm.clean" => self.rpc_swarm(method, params),
             "traffic.snapshot" => self.rpc_traffic_snapshot(params),
             "traffic.history" => self.rpc_traffic_history(params),
             "traffic.window" => self.rpc_traffic_window(params),

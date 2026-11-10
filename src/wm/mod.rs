@@ -1,4 +1,5 @@
 pub mod agent_mail;
+pub mod swarm_cmd;
 mod agent_mail_apply;
 pub mod agent_state;
 pub mod agents_topology;
@@ -220,6 +221,7 @@ pub struct WindowManager {
     traffic_meter: crate::traffic::TrafficMeter,
     /// Title-bar `D:(W,S,Y,P)` coordinate badge style (`COORD-03`, Phase 71).
     coord_style: coordinates::CoordDisplayStyle,
+    swarm: swarm_cmd::SwarmState,
     /// Floating TRAFFIC MONITOR window state (`TMON-03`, Plan 64-03 fills the body).
     pub(crate) traffic_monitor: traffic_monitor::TrafficMonitorState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
@@ -353,6 +355,7 @@ impl WindowManager {
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
             traffic_meter: crate::traffic::TrafficMeter::new(),
             coord_style: coordinates::CoordDisplayStyle::Off,
+            swarm: swarm_cmd::SwarmState::default(),
             traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
@@ -819,6 +822,11 @@ impl WindowManager {
     /// Splits the currently focused workspace pane in `direction` (`Horizontal` or `Vertical`),
     /// spawning a new independent `CompositePane` and raising it to the top of `ZStack` (`WM-01`).
     pub fn split_focused(&mut self, direction: SplitDirection) -> Result<PaneId> {
+        self.split_focused_in(direction, None)
+    }
+
+    /// [`Self::split_focused`] with the new pane's shell rooted in `cwd` (swarm worktrees).
+    pub fn split_focused_in(&mut self, direction: SplitDirection, cwd: Option<std::path::PathBuf>) -> Result<PaneId> {
         let target_id = self.z_stack.top().unwrap_or(1);
         let new_id = self.next_pane_id;
         self.next_pane_id += 1;
@@ -832,6 +840,7 @@ impl WindowManager {
                 PtyConfig {
                     rows,
                     cols,
+                    cwd,
                     ..Default::default()
                 },
             )?
