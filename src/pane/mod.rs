@@ -3,6 +3,7 @@ pub mod copy_motion;
 pub mod copy_search;
 mod output_tap;
 mod traffic_tap;
+pub mod transport;
 pub mod canvas_scene;
 pub mod capture;
 pub mod completion;
@@ -28,6 +29,7 @@ pub use exit_guard::{
 };
 pub use modes::{CanvasSearchState, CopyModeState, CopyOrigin, CopySelectionKind, HintsModeState};
 pub use prompt_editor::{FloatingPromptState, PromptAnchor, PromptMode, PromptMouseDrag};
+pub use transport::{PaneTransport, RemotePaneBridge};
 pub use scroll::{PaneScrollMode, PaneScrollState};
 pub use typography::{
     CanvasResolution, FontFamilyPreset, PaneFontOptions, probe_terminal_pixel_size,
@@ -79,7 +81,8 @@ pub struct CompositePane {
     id: PaneId,
     title: String,
     pub(crate) vt: VtParser,
-    pty: Option<PtySession>,
+    /// Local PTY / remote link bridge / nothing (`GUARD-02`).
+    transport: PaneTransport,
     /// Lazily created payload traffic cell (tmux-mapped panes, events); see `traffic_tap.rs`.
     payload_traffic: std::sync::OnceLock<crate::traffic::TrafficTap>,
     prompt: FloatingPromptState,
@@ -118,6 +121,8 @@ pub struct CompositePane {
     last_osc52_sequence: Option<String>,
     /// Last raw byte payload written to the underlying PTY (`write_to_pty`).
     last_pty_write: Vec<u8>,
+    /// GUARD-03: a focus-only click was consumed; its Drag/Up tail must not reach the child.
+    focus_click_pending: bool,
     last_canvas_size: (u16, u16),
     exited: bool,
     /// Hold-on-exit state when a final/root pane shell exits under `ExitProtectionPolicy::Guard` (`SAFE-01`).
@@ -126,13 +131,9 @@ pub struct CompositePane {
     captured: Vec<capture::CapturedCommand>,
     /// Secret-looking commands withheld from `captured` since the last drain (count only, D-U2).
     captured_masked: u32,
-    /// Bytes typed into this pane are mirrored to `remote_input` for the tmux link (Phase 51.1).
-    remote_input_tap: bool,
     /// Opt-in raw output mirror for web clients (`WEB-FE-01`); bounded by `OUTPUT_TAP_CAP`.
     output_tap: Option<Vec<u8>>,
-    /// Tap buffer, bounded by `REMOTE_INPUT_CAP`; drained once per link tick.
-    remote_input: Vec<u8>,
-    /// Link state banner drawn on the pane's bottom row (Phase 51.1).
+    /// Link state banner drawn (independent of transport: orphaned/held panes keep theirs) on the pane's bottom row (Phase 51.1).
     link_banner: Option<LinkBanner>,
     /// Exit code of the PTY child once known (hold path).
     exit_code: Option<i32>,
@@ -165,11 +166,12 @@ impl CompositePane {
         history_store: HistoryStore,
     ) -> Self {
         let is_live = pty.is_some();
+        let transport = pty.map_or(PaneTransport::None, PaneTransport::Local);
         Self {
             id,
             title,
             vt: VtParser::new(canvas_rows, canvas_cols, scrollback_lines),
-            pty,
+            transport,
             payload_traffic: std::sync::OnceLock::new(),
             prompt: FloatingPromptState::default(),
             history_store,
@@ -191,14 +193,13 @@ impl CompositePane {
             status_message: None,
             last_osc52_sequence: None,
             last_pty_write: Vec::new(),
+            focus_click_pending: false,
             last_canvas_size: (canvas_rows, canvas_cols),
             exited: false,
             held_exited_shell: None,
             captured: Vec::new(),
             captured_masked: 0,
-            remote_input_tap: false,
             output_tap: None,
-            remote_input: Vec::new(),
             link_banner: None,
             exit_code: None,
             smart_ctrl_v_paste: true,
@@ -546,10 +547,7 @@ impl CompositePane {
         }
         self.last_canvas_size = new_size;
         self.vt.set_size(new_size.0, new_size.1);
-        if let Some(pty) = &self.pty {
-            return pty.resize(new_size.0, new_size.1);
-        }
-        Ok(false)
+        self.transport.resize(new_size.0, new_size.1)
     }
 
     /// Changes the prompt's anchor (`Top`, `Bottom`, `Floating`, `SplitTop`, or `SplitBottom`)
@@ -700,7 +698,7 @@ impl CompositePane {
             Some(crate::vt::Osc133Phase::CommandFinished(_) | crate::vt::Osc133Phase::PromptStart)
         );
         #[cfg(unix)]
-        if let Some(pty) = &self.pty
+        if let Some(pty) = self.transport.local_pty()
             && let Some(fd) = pty.master_raw_fd()
         {
             let prev_sub = self.line_discipline.has_foreground_subcommand();
@@ -721,12 +719,12 @@ impl CompositePane {
         if osc_finished {
             self.prompt.running_command = None;
         }
-        if (self.pty.is_some() || self.prompt.running_command.is_some())
+        if (self.transport.is_local() || self.prompt.running_command.is_some())
             && self.canvas_cursor_line_looks_like_password_prompt()
         {
             self.line_discipline.echo_enabled = false;
             self.line_discipline.canonical_mode = true;
-        } else if self.pty.is_some() {
+        } else if self.transport.is_local() {
             self.line_discipline.echo_enabled = true;
         }
     }
@@ -820,7 +818,7 @@ impl CompositePane {
         if let Some(wt) = self.vt.window_title() {
             self.title = format!("{wt} [#{}]", self.id);
         }
-        if let Some(pty) = &self.pty {
+        if let Some(pty) = self.transport.local_pty() {
             for resp in self.vt.take_query_responses() {
                 let _ = pty.write_all(&resp);
             }
@@ -832,7 +830,7 @@ impl CompositePane {
     /// Drains pending events from the live `PtySession` with a bounded per-frame budget so
     /// high-throughput streams (`tail -f /dev/random`, `yes`) never starve the UI loop.
     pub fn poll_pty_events(&mut self) -> bool {
-        let events = if let Some(pty) = &mut self.pty {
+        let events = if let Some(pty) = self.transport.local_pty_mut() {
             pty.drain_events()
         } else {
             Vec::new()
@@ -855,7 +853,7 @@ impl CompositePane {
                     if let Some(c) = code_opt {
                         self.exit_code = Some(c as i32);
                     } else if self.remote_target.is_some()
-                        && let Some(pty) = &self.pty
+                        && let Some(pty) = self.transport.local_pty()
                     {
                         self.exit_code = pty.exit_code(std::time::Duration::from_millis(50));
                     }
@@ -875,7 +873,7 @@ impl CompositePane {
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }
-            if let Some(pty) = &self.pty {
+            if let Some(pty) = self.transport.local_pty() {
                 for resp in self.vt.take_query_responses() {
                     let _ = pty.write_all(&resp);
                 }
@@ -892,16 +890,8 @@ impl CompositePane {
         self.count_pty_less_tx(bytes.len());
         self.last_pty_write.clear();
         self.last_pty_write.extend_from_slice(bytes);
-        if self.remote_input_tap {
-            let room = crate::tmux::link::REMOTE_INPUT_CAP.saturating_sub(self.remote_input.len());
-            self.remote_input.extend_from_slice(&bytes[..bytes.len().min(room)]);
-            // Remote-tapped panes deliver through the link only; never also to a local PTY.
-            return Ok(());
-        }
-        if let Some(pty) = &self.pty {
-            pty.write_all(bytes)?;
-        }
-        Ok(())
+        // Single delivery point: Remote never reaches a local PTY, None drops (`GUARD-02`).
+        self.transport.write_bytes(bytes)
     }
 
     /// Convenience wrapper for writing input bytes into the pane's PTY.
@@ -971,6 +961,16 @@ impl CompositePane {
         }
     }
 
+    /// Marks (or clears) a consumed focus-only click whose Drag/Up tail must be swallowed.
+    pub fn set_focus_click_pending(&mut self, pending: bool) {
+        self.focus_click_pending = pending;
+    }
+
+    /// Whether a consumed focus-only click is still awaiting its button release.
+    pub fn focus_click_pending(&self) -> bool {
+        self.focus_click_pending
+    }
+
     /// Returns the most recent byte payload passed to [`Self::write_to_pty`].
     pub fn last_pty_write(&self) -> &[u8] {
         &self.last_pty_write
@@ -988,7 +988,7 @@ impl CompositePane {
     /// Transitions this pane into hold-on-exit mode (`🔒 [SHELL EXITED ...]`) instead of closing it (`SAFE-01`).
     pub fn hold_exited_shell(&mut self, exit_code: Option<i32>) {
         // Drop live PTY handle so the background `bilterm-pty-reaper` reaps it non-blockingly.
-        self.pty = None;
+        self.transport.drop_local();
         self.exited = false;
         let held = HeldExitedShellState::new(exit_code);
         self.status_message = Some(held.banner_message.clone());
@@ -1016,7 +1016,7 @@ impl CompositePane {
                 ..PtyConfig::default()
             };
             crate::pty::inject_live_env(&mut pty_cfg.env, self.id);
-            self.pty = Some(PtySession::spawn(pty_cfg)?);
+            self.transport = PaneTransport::Local(PtySession::spawn(pty_cfg)?);
         }
         self.status_message = Some("Shell respawned cleanly".to_string());
         Ok(())
@@ -1024,21 +1024,26 @@ impl CompositePane {
 
     /// Turns the remote-input tap on or off; turning it off drops buffered bytes (Phase 51.1).
     pub fn set_remote_input_tap(&mut self, on: bool) {
-        self.remote_input_tap = on;
-        if !on {
-            self.remote_input.clear();
+        if on {
+            self.transport.link_remote();
+        } else {
+            self.transport.unlink_remote();
         }
     }
 
     /// `true` while typed bytes are mirrored to the tmux link.
     pub fn remote_input_tap(&self) -> bool {
-        self.remote_input_tap
+        self.transport.is_remote()
     }
 
     /// Drains the bytes mirrored since the last call (the input pump, plan 51.1-13).
-    #[allow(dead_code)]
-    pub(crate) fn take_remote_input(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.remote_input)
+    pub fn take_remote_input(&mut self) -> Vec<u8> {
+        self.transport.remote_bridge_mut().map(RemotePaneBridge::take_input).unwrap_or_default()
+    }
+
+    /// The pane's byte transport (`GUARD-02`).
+    pub fn transport(&self) -> &PaneTransport {
+        &self.transport
     }
 
     /// Returns the exit code of the child process once known.
@@ -1073,7 +1078,7 @@ impl CompositePane {
 
     /// Holds a remote pane whose child exited, with a banner naming the code and reason.
     pub fn hold_remote_exit(&mut self, exit_code: Option<i32>, reason: Option<&str>) {
-        self.pty = None;
+        self.transport.drop_local();
         self.exited = false;
         self.exit_code = exit_code;
         let held = HeldExitedShellState::remote(exit_code, reason);
@@ -1089,7 +1094,7 @@ impl CompositePane {
 
     /// Returns `true` when this pane is headless (not backed by a live OS `PtySession`).
     pub fn is_headless(&self) -> bool {
-        self.pty.is_none()
+        !self.transport.is_local()
     }
 
     /// Returns the live STT badge string if active or enabled on this pane.

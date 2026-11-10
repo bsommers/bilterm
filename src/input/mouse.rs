@@ -784,50 +784,17 @@ pub fn handle_wm_mouse_event(
         return Ok(action);
     }
 
-    let (hit_focus, outer, inner) = if wm.active_pane().mouse_drag().is_some()
-        && matches!(
-            mouse.kind,
-            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
-        )
-    {
-        let focus = wm.focus();
-        match focus {
-            Focus::Quick => {
-                let qt_outer = wm.quick_terminal().overlay_rect(workspace_area);
-                (Focus::Quick, qt_outer, crate::wm::inset_window_frame(qt_outer))
-            }
-            Focus::Pane(id) => {
-                let rects = wm.compute_workspace_rects(workspace_area);
-                if let Some(&(_, r_outer)) = rects.iter().find(|&&(pid, _)| pid == id) {
-                    let r_inner = if wm.is_framed() {
-                        crate::wm::inset_window_frame(r_outer)
-                    } else {
-                        r_outer
-                    };
-                    (Focus::Pane(id), r_outer, r_inner)
-                } else {
-                    let Some(hit) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area)
-                    else {
-                        return Ok(AppAction::Continue);
-                    };
-                    hit
-                }
-            }
-        }
-    } else {
-        let Some(hit) = wm.hit_test_pane(mouse.column, mouse.row, workspace_area) else {
-            return Ok(AppAction::Continue);
-        };
-        hit
+    if super::mouse_focus::swallow_focus_click_tail(wm, mouse.kind) {
+        return Ok(AppAction::Handled);
+    }
+
+    let Some((hit_focus, outer, inner)) = super::mouse_focus::resolve_hit(wm, mouse, workspace_area)
+    else {
+        return Ok(AppAction::Continue);
     };
 
-    let was_active = matches!(hit_focus, Focus::Pane(id) if id == wm.active_pane_id())
-        || matches!(hit_focus, Focus::Quick);
-    if matches!(mouse.kind, MouseEventKind::Down(_))
-        && let Focus::Pane(hit_id) = hit_focus
-    {
-        wm.focus_and_raise(hit_id);
-    }
+    let was_active = super::mouse_focus::is_active_hit(wm, hit_focus);
+    super::mouse_focus::focus_on_down(wm, mouse.kind, hit_focus);
 
     if mouse.modifiers.contains(KeyModifiers::CONTROL)
         && matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
@@ -883,6 +850,12 @@ pub fn handle_wm_mouse_event(
         }
     }
 
+    // GUARD-03: a click on an inactive pane is consumed purely as focus+raise.
+    if super::mouse_focus::consumes_inactive_click(was_active, mouse.kind) {
+        super::mouse_focus::mark_focus_click(wm);
+        return Ok(AppAction::Handled);
+    }
+
     let (pane_inner, pane_mouse) =
         wm.translate_pane_mouse_event(hit_focus, inner, screen_area, mouse);
 
@@ -890,20 +863,6 @@ pub fn handle_wm_mouse_event(
         && pane_mouse.row == pane_inner.y + pane_inner.height.saturating_sub(1)
         && pane_mouse.column >= pane_inner.x
         && pane_mouse.column < pane_inner.x + pane_inner.width;
-    let on_prompt_chrome_row = wm.pane_by_focus(hit_focus).is_some_and(|p| {
-        if !p.is_prompt_visible() {
-            return false;
-        }
-        let pr = p.prompt_rect(pane_inner);
-        pane_mouse.row == pr.y && pane_mouse.column >= pr.x && pane_mouse.column < pr.x + pr.width
-    });
-    if !was_active
-        && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left))
-        && (on_pane_status_bar || on_prompt_chrome_row)
-    {
-        return Ok(AppAction::Handled);
-    }
-
     if on_pane_status_bar && matches!(pane_mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
         let status_rect = Rect::new(
             pane_inner.x,

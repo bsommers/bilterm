@@ -62,11 +62,17 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 58: Local AI Speech-to-Text (`STT`) Optional Module** - Independent, zero-bloat local AI voice dictation module (`src/stt/`) supporting OpenAI-compatible Whisper servers (`whisper.cpp`, `speaches`, `LocalAI`, `vLLM`, `LM Studio`), Ollama, and local CLI pipes with push-to-talk/VAD and OIA `[🎙 REC]` telemetry (`STT-01..03`)
 - [x] **Phase 59: GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas** - Embedded Chromium engine canvas (CDP Screencast frame-sink + optional CEF off-screen renderer) and 60fps RGBA Video Player canvas (`ffmpeg` pipe + OSD transport controls + audio sync) inside composite panes across GUI (`GuiTextureQuad`) and TUI (`Kitty`/`Sixel`/`HalfBlock`) (`WEB-01..02`, `VID-01..02`)
 - [x] **Phase 60: Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`)** - RFC 6455 WebSocket `GET /ws` server implementing `@agent-manager/protocol` v1, atomic `workspace.view_model` RPC & REST endpoints with CSS design tokens export, multi-client `ClientViewState` registry, static SPA serving, and full `UNI-R01` surface parity (`WEB-FE-01..04`)
-- [ ] **Phase 61: Window & Drawer Regression Fixes** - Fix Classic drawer row lines, Zoom input fall-through, and preserve per-pane state across stacked-window switches (`FIX-01..03`)
-- [ ] **Phase 62: Copy Mode Ergonomics & Nested-TUI Copy Fix** - Reliable copying over nested TUIs (Alt-screen/mouse-tracking) and streamlined copy mode navigation (`COPY-01..02`)
-- [ ] **Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization** - Pure-keyboard window/pane/menu navigation, per-OS key profiles, and collision-free hotkeys (`KEY-01..03`)
-- [ ] **Phase 64: First-Class Terminal Traffic Monitor** - Measure and display aggregate terminal traffic across boundaries via zero-cost instrumentation and TRAFFIC MONITOR window (`TRAF-01..04`)
-- [ ] **Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`)** - Type-safe domain invariants with `SignalablePid`, `PaneTransport` decoupling, and mouse focus isolation (`GUARD-01..03`)
+- [x] **Phase 61: Window & Drawer Regression Fixes** - Fix Classic drawer row lines, Zoom input fall-through, and preserve per-pane state across stacked-window switches (`FIX-01..03`)
+- [x] **Phase 62: Copy Mode Ergonomics & Nested-TUI Copy Fix** - Reliable copying over nested TUIs (Alt-screen/mouse-tracking) and streamlined copy mode navigation (`COPY-01..02`)
+- [x] **Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization** - Pure-keyboard window/pane/menu navigation, per-OS key profiles, and collision-free hotkeys (`KEY-01..03`)
+- [x] **Phase 64: First-Class Terminal Traffic Monitor** - Measure and display aggregate terminal traffic across boundaries via zero-cost instrumentation and TRAFFIC MONITOR window (`TRAF-01..04`)
+- [x] **Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`)** - Type-safe domain invariants with `SignalablePid`, `PaneTransport` decoupling, and mouse focus isolation (`GUARD-01..03`)
+- [ ] **Phase 66: Always-On Foreground RPC & Multi-Instance Discovery (`LIVE-01..04`)** - Foreground RPC socket in `App::run`/`run_native_gui_window`, child PTY env injection, instance registry, `[RPC:LIVE]` OIA + `:rpc`
+- [ ] **Phase 67: First-Class Agent/Pane/Workspace CLI & Zero-Polling Wait (`HERDR-01..04`)** - `w<N>:p<M>` + semantic selectors, `bilterm agent|pane|workspace`, smart prompt injection, server-side `agent wait`
+- [ ] **Phase 68: Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`)** - `agent.last_turn`, permission gate interceptor, FIFO prompt queue, shared context bus
+- [ ] **Phase 69: Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`)** - Worktree agent spawner, DAG wave orchestrator, diff/merge, self-healing verify retry
+- [ ] **Phase 70: Agent Mission Control HUD & Time-Travel (`HUD-01..04`)** - Mission Control HUD, replay scrubber, stall/loop watchdog, `UNI-R01` parity
+- [ ] **Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`)** - 5-level `D:(W,S,Y,P)` addressing, universal parser/resolver, title-bar badge, `:coords`
 
 ## Phase Details
 
@@ -1136,10 +1142,10 @@ Plans:
 **Artifacts**:
 - Research: `.planning/phases/61-window-and-drawer-regression-fixes/61-RESEARCH.md`
 - Plans:
-  - [ ] 61-01-PLAN.md — Classic drawer row-lines & discoverability (wave 1)
-  - [ ] 61-02-PLAN.md — Zoom follows focus, true toggle, no input fall-through (wave 1)
-  - [ ] 61-03-PLAN.md — Per-window/pane state preservation across stack switches (wave 2, after 61-02: shares `src/wm/mod.rs`)
-- Status: **PLANNED**
+  - [x] 61-01-PLAN.md — Classic drawer row-lines & discoverability (wave 1)
+  - [x] 61-02-PLAN.md — Zoom follows focus, true toggle, no input fall-through (wave 1)
+  - [x] 61-03-PLAN.md — Per-window/pane state preservation across stack switches (wave 2, after 61-02: shares `src/wm/mod.rs`)
+- Status: **COMPLETE**
 
 ### Phase 62: Copy Mode Ergonomics & Nested-TUI Copy Fix
 
@@ -1155,10 +1161,10 @@ Plans:
 **Artifacts**:
 - Research: `.planning/phases/62-copy-mode-ergonomics/62-RESEARCH.md`
 - Plans:
-  - [ ] 62-01-PLAN.md — Nested-TUI copy fix (wave 1)
-  - [ ] 62-02-PLAN.md — Copy mode ergonomics & parity (wave 2)
+  - [x] 62-01-PLAN.md — Nested-TUI copy fix (wave 1)
+  - [x] 62-02-PLAN.md — Copy mode ergonomics & parity (wave 2)
 - Open decision: `copy_on_select` default-on.
-- Status: **PLANNED**
+- Status: **COMPLETE**
 
 ### Phase 63: Keyboard-First Navigation & Cross-OS Hotkey Harmonization
 
@@ -1175,11 +1181,11 @@ Plans:
 **Artifacts**:
 - Research: `.planning/phases/63-keyboard-first-navigation-and-hotkeys/63-RESEARCH.md`
 - Plans:
-  - [ ] 63-01-PLAN.md — Key model, per-OS profiles, Alt+M replacement, layout fixes, new Actions/colon verbs (wave 1)
-  - [ ] 63-02-PLAN.md — Window mode, which-key overlay, keyboard menu & computed accelerator labels (wave 2)
-  - [ ] 63-03-PLAN.md — Conflict engine, reserved-chord data, `:keys`/RPC/MCP surfaces, parity tests & docs (wave 2)
+  - [x] 63-01-PLAN.md — Key model, per-OS profiles, Alt+M replacement, layout fixes, new Actions/colon verbs (wave 1)
+  - [x] 63-02-PLAN.md — Window mode, which-key overlay, keyboard menu & computed accelerator labels (wave 2)
+  - [x] 63-03-PLAN.md — Conflict engine, reserved-chord data, `:keys`/RPC/MCP surfaces, parity tests & docs (wave 2)
 - Open decisions: leader `w` = Window mode (`W` closes pane); keep `legacy_alt` one release on Win/Linux; restrict `Ctrl+G` / drop `Ctrl+_` font-zoom.
-- Status: **PLANNED**
+- Status: **COMPLETE**
 
 ### Phase 64: First-Class Terminal Traffic Monitor
 
@@ -1198,10 +1204,10 @@ Plans:
 - Research: `.planning/phases/64-terminal-traffic-monitor/64-RESEARCH.md`
 - ADR: `.planning/phases/64-terminal-traffic-monitor/64-ARCHITECTURE-ADR.md`
 - Plans:
-  - [ ] 64-01-PLAN.md — `traffic` layer, fixtures, audit tests, perf budgets (wave 1)
-  - [ ] 64-02-PLAN.md — Instrument 33 boundaries, attribution, OIA indicator (wave 2)
-  - [ ] 64-03-PLAN.md — TRAFFIC MONITOR window & UNI-R01 surfaces (wave 2)
-- Status: **PLANNED**
+  - [x] 64-01-PLAN.md — `traffic` layer, fixtures, audit tests, perf budgets (wave 1)
+  - [x] 64-02-PLAN.md — Instrument 33 boundaries, attribution, OIA indicator (wave 2)
+  - [x] 64-03-PLAN.md — TRAFFIC MONITOR window & UNI-R01 surfaces (wave 2)
+- Status: **COMPLETE**
 
 ### Phase 65: Architectural Guardrails & Type-Safe Domain Hardening (GUARD-01..03)
 
@@ -1217,6 +1223,109 @@ Plans:
 
 **Artifacts**:
 - Plan: `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`
+- Status: **COMPLETE**
+
+## Milestone v3.3.0 — Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Phases 66–71)
+
+### Phase 66: Always-On Foreground RPC & Multi-Instance Discovery (LIVE-01..04)
+
+**Goal**: Make every foreground Bilterm instance (TUI `App::run` and native GUI `run_native_gui_window`) a live RPC server so agents running inside its panes can control the *same* workspace they live in, and make all running instances discoverable and addressable.
+**Depends on**: Phase 55 (daemon supervisor), Phase 60 (`ClientViewState`), Phase 65 (`SignalablePid`), `UNI-R01`, `SEC-R01`.
+**Requirements**: LIVE-01, LIVE-02, LIVE-03, LIVE-04
+**Today (baseline)**: The JSON-RPC/MCP socket exists only for the headless daemon; a foreground TUI/GUI session cannot be controlled by `bilterm ctl`, child agents have no way to learn which workspace/pane they run in, and multiple instances are invisible to each other.
+**Success Criteria** (what must be TRUE):
+
+  1. `LIVE-01`: Foreground TUI and native GUI both bind a `0600` RPC socket at startup and serve requests on the UI thread via the existing `Action` pipeline.
+  2. `LIVE-02`: Child PTYs receive `BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`; RPC calls from a child auto-attribute `from_pane`.
+  3. `LIVE-03`: `/run/user/<uid>/bilterm/instances/<pid>.sock` registry validated via `SignalablePid`; stale entries pruned; `--instance <pid|all>` federates CLI calls.
+  4. `LIVE-04`: OIA shows `[RPC:LIVE]`; `:rpc status|start|stop|clients` with full `UNI-R01` parity.
+
+**Artifacts**:
+- Plan: `.planning/phases/66-foreground-rpc-and-instance-discovery/66-PLAN.md`
+- Status: **PLANNED**
+
+### Phase 67: First-Class Agent/Pane/Workspace CLI & Zero-Polling Wait (HERDR-01..04)
+
+**Goal**: Match and exceed Herdr's agent CLI: hierarchical and semantic selectors, first-class subcommands, reliable prompt injection into shells and raw TUIs, and server-side blocking waits with zero polling.
+**Depends on**: Phase 66, Phase 52 (agent messaging), Phase 57 (bracketed paste).
+**Requirements**: HERDR-01, HERDR-02, HERDR-03, HERDR-04
+**Today (baseline)**: Panes are addressed by opaque ids; there is no `bilterm agent|pane|workspace` CLI, prompt injection is not TUI-aware, and callers must poll to learn when an agent finishes.
+**Success Criteria** (what must be TRUE):
+
+  1. `HERDR-01`: `w<N>:p<M>` and semantic selectors (`@claude`, `@agy`, `@idle`, `@working`, `@blocked`) resolve deterministically with ambiguity errors.
+  2. `HERDR-02`: `bilterm agent list|prompt|wait|approve|interrupt|last-turn`, `pane list|read|split|focus|zoom|send`, `workspace list|select|new|rename` all lower to `Action`.
+  3. `HERDR-03`: Prompt injection auto-detects shell (FloatingPrompt) vs raw TUI (DECSET 2004 bracketed paste + submit chord).
+  4. `HERDR-04`: `agent.wait` blocks server-side and wakes on exact transitions (`working->idle|blocked|done`, OSC 133;D) with timeout.
+
+**Artifacts**:
+- Plan: `.planning/phases/67-first-class-agent-pane-workspace-cli/67-PLAN.md`
+- Status: **PLANNED**
+
+### Phase 68: Semantic Agent Introspection & Cross-Agent Context Bus (BEYOND-01..04)
+
+**Goal**: Go beyond Herdr with structured turn results, a permission-gate interceptor, per-pane prompt queues, and a shared context bus between agents.
+**Depends on**: Phase 66, Phase 67.
+**Requirements**: BEYOND-01, BEYOND-02, BEYOND-03, BEYOND-04
+**Today (baseline)**: Agent output is raw scrollback; blocked-on-permission agents need manual attention; prompts sent to a busy agent are lost or interleaved; agents share no state.
+**Success Criteria** (what must be TRUE):
+
+  1. `BEYOND-01`: `agent.last_turn` returns prompt, stripped markdown response, fenced `code_blocks`, `files_touched`, `duration_ms`, exit status.
+  2. `BEYOND-02`: Blocked-reason classifier with one-click `[Approve]`/`[Deny]` in Drawer Peek, `:agents list`, GUI toast, `bilterm agent approve`, and MCP.
+  3. `BEYOND-03`: Per-pane FIFO queue (`:agent queue`, `bilterm agent prompt --queue`) auto-dispatching on `Working->Idle`.
+  4. `BEYOND-04`: `bilterm context set|get|watch|list`, `:context`, and `bilterm://context/<key>` MCP resources.
+
+**Artifacts**:
+- Plan: `.planning/phases/68-semantic-agent-introspection-and-context-bus/68-PLAN.md`
+- Status: **PLANNED**
+
+### Phase 69: Ephemeral Worktree Swarm & DAG Runner (SWARM-01..04)
+
+**Goal**: Orchestrate swarms of agents in isolated git worktrees with declarative dependency waves, review/merge tooling, and autonomous verification retry.
+**Depends on**: Phase 66–68.
+**Requirements**: SWARM-01, SWARM-02, SWARM-03, SWARM-04
+**Today (baseline)**: Users hand-create worktrees and panes per agent, sequence work manually, and merge by hand.
+**Success Criteria** (what must be TRUE):
+
+  1. `SWARM-01`: `:agent spawn` / `bilterm agent spawn --worktree <slug> --agent claude '<prompt>'` atomically creates worktree, pane, and agent (rollback on failure).
+  2. `SWARM-02`: `:swarm run <plan.toml>` / `bilterm swarm run` executes a DAG in waves (`depends_on`, `worktree`, `prompt`, `verify_cmd`).
+  3. `SWARM-03`: `:swarm review` / `bilterm swarm status|diff|merge|clean` with one-key merge.
+  4. `SWARM-04`: `max_retries` self-healing loop feeds failing `verify_cmd` output back to the agent pane.
+
+**Artifacts**:
+- Plan: `.planning/phases/69-ephemeral-worktree-swarm-and-dag-runner/69-PLAN.md`
+- Status: **PLANNED**
+
+### Phase 70: Agent Mission Control HUD & Time-Travel (HUD-01..04)
+
+**Goal**: A live mission-control surface for the whole fleet, per-turn replay, stall/loop detection, and complete `UNI-R01` parity for all v3.3.0 features.
+**Depends on**: Phase 64 (traffic), Phase 66–69.
+**Requirements**: HUD-01, HUD-02, HUD-03, HUD-04
+**Today (baseline)**: Fleet state is visible only by cycling windows; no replay of agent turns; stuck or looping agents go unnoticed.
+**Success Criteria** (what must be TRUE):
+
+  1. `HUD-01`: `:agents hud` / `Leader A` shows live mini viewports, velocity sparklines, queue depth, traffic arcs, and one-click `[Approve]`/`[Prompt]`/`[Diff]`/`[Zoom]`.
+  2. `HUD-02`: `:agent replay <pane>` per-turn time-travel scrubber.
+  3. `HUD-03`: `[agents.watchdog]` stall/loop detection with alerts.
+  4. `HUD-04`: Full `UNI-R01` parity verified by `tests/phase70_agent_swarm_parity.rs`.
+
+**Artifacts**:
+- Plan: `.planning/phases/70-agent-mission-control-hud-and-time-travel/70-PLAN.md`
+- Status: **PLANNED**
+### Phase 71: Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (COORD-01..04)
+
+**Goal**: Give every daemon, workspace, session, window, and pane a canonical 5-level coordinate `D:(W,S,Y,P)` that is accepted by every surface (CLI, RPC, MCP, colon) and shown as a right-aligned badge in each window title bar.
+**Depends on**: Phase 55 (multi-daemon), Phase 66–67 (instance registry, selectors), `UNI-R01`.
+**Requirements**: COORD-01, COORD-02, COORD-03, COORD-04
+**Today (baseline)**: Addressing is ad hoc (opaque pane ids, tmux `%id`, Herdr-style `w12:p6`); users cannot see or type a stable location for a window, and no single parser spans surfaces.
+**Success Criteria** (what must be TRUE):
+
+  1. `COORD-01`: Canonical hierarchy Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P, optional sub-pane / tmux `%id` / Herdr `w12:p6`).
+  2. `COORD-02`: One parser/resolver accepts `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
+  3. `COORD-03`: Right-aligned title-bar badge in Verbose, Compact, or DaemonTuple style, to the right of existing window bar info, without changing classic golden snapshots (badge off by default in goldens).
+  4. `COORD-04`: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, palette, menu, RPC `coords.resolve`/`coords.format`, MCP `bilterm_coords_resolve` (`UNI-R01`).
+
+**Artifacts**:
+- Plan: `.planning/phases/71-hierarchical-coordinate-addressing-and-badges/71-PLAN.md`
 - Status: **PLANNED**
 
 ## UI Modernization Execution Model (Phases 43–48, subagent orchestration)
@@ -1237,7 +1346,7 @@ Governed by swe-skills `orchestrating-subagents` (synced from `/home/bill/src/sw
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64 → 65
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 50.1 → 51 → 51.1 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 61 → 62 → 63 → 64 → 65 → 66 → 67 → 68 → 69 → 70 → 71
 *(Note: Phase 35 and Phase 36 touch disjoint primary modules and can be executed sequentially or in parallel waves).*
 
 | Phase | Plans Complete | Status | Completed |
@@ -1305,8 +1414,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (… 18) → 19 → 2
 | 58. Local AI Speech-to-Text (`STT`) Optional Module (`STT-01..03`) | 2/2 | Complete | 2026-11-08 |
 | 59. GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (`WEB-01..02`, `VID-01..02`) | 2/2 | Complete | 2026-11-08 |
 | 60. Multi-Surface Web Frontend Backend & `@agent-manager/protocol` Bridge (`WEB-FE-01..04`) | 3/3 | Complete | 2026-11-08 |
-| 61. Window & Drawer Regression Fixes (`FIX-01..03`) | 0/3 | Planned | - |
-| 62. Copy Mode Ergonomics & Nested-TUI Copy Fix (`COPY-01..02`) | 0/2 | Planned | - |
-| 63. Keyboard-First Navigation & Cross-OS Hotkey Harmonization (`KEY-01..03`) | 0/3 | Planned | - |
-| 64. First-Class Terminal Traffic Monitor (`TRAF-01..04`) | 0/3 | Planned | - |
-| 65. Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`) | 0/1 | Planned | - |
+| 61. Window & Drawer Regression Fixes (`FIX-01..03`) | 3/3 | Complete | 2026-11-09 |
+| 62. Copy Mode Ergonomics & Nested-TUI Copy Fix (`COPY-01..02`) | 2/2 | Complete | 2026-11-09 |
+| 63. Keyboard-First Navigation & Cross-OS Hotkey Harmonization (`KEY-01..03`) | 3/3 | Complete | 2026-11-09 |
+| 64. First-Class Terminal Traffic Monitor (`TRAF-01..04`) | 3/3 | Complete | 2026-11-09 |
+| 65. Architectural Guardrails & Type-Safe Domain Hardening (`GUARD-01..03`) | 1/1 | Complete | 2026-11-09 |
+| 66. Always-On Foreground RPC & Multi-Instance Discovery (`LIVE-01..04`) | 0/1 | Planned | - |
+| 67. First-Class Agent/Pane/Workspace CLI & Zero-Polling Wait (`HERDR-01..04`) | 0/1 | Planned | - |
+| 68. Semantic Agent Introspection & Cross-Agent Context Bus (`BEYOND-01..04`) | 0/1 | Planned | - |
+| 69. Ephemeral Worktree Swarm & DAG Runner (`SWARM-01..04`) | 0/1 | Planned | - |
+| 70. Agent Mission Control HUD & Time-Travel (`HUD-01..04`) | 0/1 | Planned | - |
+| 71. Hierarchical Coordinate Addressing & Window Bar Coordinate Badge (`COORD-01..04`) | 0/1 | Planned | - |

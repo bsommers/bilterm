@@ -11,8 +11,11 @@ pub mod agents_list_cmd;
 pub mod agents_geometry;
 pub mod agents_list_geometry;
 pub mod command_window;
+pub mod context_bus;
+pub mod prompt_queue;
 pub mod clipboard_registry;
 pub mod clipboard_window;
+pub mod coordinates;
 pub mod daemon_window;
 pub mod fonts_window;
 pub mod script_studio;
@@ -215,12 +218,18 @@ pub struct WindowManager {
     pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
     /// Terminal traffic meter (`TMON-01`, Phase 64); one per window manager, no globals.
     traffic_meter: crate::traffic::TrafficMeter,
+    /// Title-bar `D:(W,S,Y,P)` coordinate badge style (`COORD-03`, Phase 71).
+    coord_style: coordinates::CoordDisplayStyle,
     /// Floating TRAFFIC MONITOR window state (`TMON-03`, Plan 64-03 fills the body).
     pub(crate) traffic_monitor: traffic_monitor::TrafficMonitorState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
     pub(crate) script_studio: script_studio::ScriptStudioState,
     /// In-memory agent mailbox & coordination registry (`AGT-01..03`, Phase 52).
     pub(crate) agent_mail: agent_mail::AgentMailRegistry,
+    /// Shared artifact scratchpad (`BEYOND-02`, Phase 68).
+    context_bus: context_bus::ContextBus,
+    /// Per-pane prompt queues (`BEYOND-03`, Phase 68).
+    prompt_queue: prompt_queue::PromptQueue,
     agents_demo: agents_demo::AgentsDemoState,
     /// Active mouse drag gesture for moving or resizing workspace windows/splits.
     pub(crate) wm_mouse_drag: Option<WmMouseDrag>,
@@ -343,9 +352,12 @@ impl WindowManager {
             clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
             traffic_meter: crate::traffic::TrafficMeter::new(),
+            coord_style: coordinates::CoordDisplayStyle::Off,
             traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
+            context_bus: context_bus::ContextBus::new(),
+            prompt_queue: prompt_queue::PromptQueue::new(),
             agents_demo: agents_demo::AgentsDemoState::default(),
             wm_mouse_drag: None,
             viewport_scale_pct: 100,
@@ -467,6 +479,26 @@ impl WindowManager {
     /// Records the first error of the running automation action (surfaced by [`Self::apply_automation`]).
     pub fn record_automation_error(&mut self, err: String) {
         self.automation_error.get_or_insert(err);
+    }
+
+    /// Context bus handle (cheap clone shares the store).
+    pub fn context_bus(&self) -> &context_bus::ContextBus {
+        &self.context_bus
+    }
+
+    /// Context bus handle (interior-mutable; same store as [`Self::context_bus`]).
+    pub fn context_bus_mut(&mut self) -> &mut context_bus::ContextBus {
+        &mut self.context_bus
+    }
+
+    /// Per-pane prompt queues.
+    pub fn prompt_queue(&self) -> &prompt_queue::PromptQueue {
+        &self.prompt_queue
+    }
+
+    /// Mutable per-pane prompt queues.
+    pub fn prompt_queue_mut(&mut self) -> &mut prompt_queue::PromptQueue {
+        &mut self.prompt_queue
     }
 
     /// Agent-to-agent messaging registry (`AGT-01..03`, Phase 52).
@@ -834,6 +866,7 @@ impl WindowManager {
         }
         self.fleet.remove_pane_references(target_id);
         self.agent_mail.remove_pane(target_id);
+        self.prompt_queue.remove_pane(target_id);
         self.reflow_default_viewport();
         self.rebalance_scrollback(Instant::now());
         self.maybe_autosave_layout();

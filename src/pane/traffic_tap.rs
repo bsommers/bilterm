@@ -11,7 +11,7 @@ use crate::traffic::TrafficTap;
 impl CompositePane {
     /// The pane's PTY traffic cell (`None` for PTY-less panes).
     pub fn traffic_cell(&self) -> Option<&TrafficTap> {
-        self.pty.as_ref().map(|p| p.traffic_cell())
+        self.transport.local_pty().map(|p| p.traffic_cell())
     }
 
     /// Lazily created payload cell (tmux `%output`, PTY-less input, clipboard/media events).
@@ -58,7 +58,7 @@ impl CompositePane {
 
     /// Counts a PTY-less pane's input bytes (tmux-mapped panes); live PTY panes count at the PTY.
     pub(super) fn count_pty_less_tx(&self, n: usize) {
-        if self.pty.is_none() {
+        if !self.transport.is_local() {
             self.payload_cell().tx(n);
         }
     }

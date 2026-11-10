@@ -67,6 +67,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Tile Windows", ":layout tile", 'T'),
             mi("Toggle Stack/Tile", ":layout cycle", 'G'),
             mi("Window Mode", ":wmode", 'M'),
+            mi("Copy Coordinate", ":coords copy", 'O'),
         ],
     },
     MenuCategory {
@@ -100,6 +101,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Command Palette Window", ":commands toggle", 'W'),
             mi("Clipboard Viewer", ":clipboard toggle", 'B'),
             mi("Traffic Monitor", ":traffic toggle", 'T'),
+            mi("Next Coordinate Badge Style", ":coords cycle", 'X'),
             mi("Script Studio", ":script toggle", 'U'),
             mi("Drawer Peek Preview", ":drawer preview toggle", 'V'),
             mi("Drawer Rows: 1 line", ":drawer rows 1", '1'),

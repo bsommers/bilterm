@@ -84,6 +84,8 @@ pub const RPC_METHODS: &[&str] = &[
     "clipboard.delete",
     "clipboard.clear",
     "clipboard.window",
+    "coords.resolve",
+    "coords.format",
     "traffic.snapshot",
     "traffic.history",
     "traffic.window",

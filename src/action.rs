@@ -202,6 +202,8 @@ pub enum Action {
     ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp),
     /// `:traffic ...` - TRAFFIC MONITOR window (`TMON-03`, Phase 64).
     TrafficMonitor(crate::wm::traffic_monitor::TrafficMonitorOp),
+    /// `:coords ...` - hierarchical `D:(W,S,Y,P)` coordinates: show, badge style, locate, copy (`COORD-04`, Phase 71).
+    Coords(crate::wm::coordinates::CoordsOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
     ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
@@ -401,6 +403,7 @@ impl Action {
             Self::CommandWindow(op) => op.colon_form(),
             Self::ClipboardWindow(op) => op.colon_form(),
             Self::TrafficMonitor(op) => op.colon_form(),
+            Self::Coords(op) => crate::colon_command::coords_colon_form(op),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
             Self::SessionMap(op) => op.colon_form(),
@@ -602,6 +605,7 @@ mod tests {
             Action::CommandWindow(_) => Some(":commands toggle"),
             Action::ClipboardWindow(_) => Some(":clipboard toggle"),
             Action::TrafficMonitor(_) => Some(":traffic toggle"),
+            Action::Coords(_) => Some(":coords compact"),
             Action::ScriptStudio(_) => Some(":script toggle"),
             Action::Find(_) => Some(":find agent"),
             Action::FontZoomIn => Some(":fontsize +"),
@@ -863,6 +867,7 @@ mod tests {
             Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
             Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::Toggle),
             Action::TrafficMonitor(crate::wm::traffic_monitor::TrafficMonitorOp::Toggle),
+            Action::Coords(crate::wm::coordinates::CoordsOp::Show),
             Action::ScriptStudio(crate::wm::script_studio::ScriptStudioOp::Toggle),
             Action::Find(FindOp::Open { kind: FindKind::Agent, query: String::new() }),
             Action::Find(FindOp::Open { kind: FindKind::Session, query: "x".to_string() }),
