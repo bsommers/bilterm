@@ -220,13 +220,14 @@ impl ControlLineSplitter {
     }
 }
 
-/// Line text without any trailing `\r`/`\n`; invalid UTF-8 is replaced.
+/// Line text without any trailing `\r`/`\n`; output lines keep every byte (high bytes are
+/// octal-escaped), other lines have invalid UTF-8 replaced.
 fn line_text(bytes: &[u8]) -> String {
     let mut end = bytes.len();
     while end > 0 && matches!(bytes[end - 1], b'\r' | b'\n') {
         end -= 1;
     }
-    String::from_utf8_lossy(&bytes[..end]).into_owned()
+    crate::tmux::decode::ascii_safe_line(&bytes[..end])
 }
 
 /// Sanitised, non-empty diagnostic lines from raw transport text.

@@ -50,6 +50,7 @@ pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
 pub mod stt_ops;
+pub mod tmux_flow;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod tmux_remote;
