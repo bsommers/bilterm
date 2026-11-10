@@ -822,8 +822,8 @@ impl CompositePane {
         self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
-        self.canvas_scene
-            .scan_osc_canvas_sequences(self.vt.tektronix_mut(), bytes);
+        self.vt
+            .drain_canvas_osc(|tek, seq| self.canvas_scene.scan_osc_canvas_sequences(tek, seq));
         if let Some(wt) = self.vt.window_title() {
             self.title = format!("{wt} [#{}]", self.id);
         }
@@ -877,8 +877,8 @@ impl CompositePane {
             self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
-            self.canvas_scene
-                .scan_osc_canvas_sequences(self.vt.tektronix_mut(), &coalesced);
+            self.vt
+                .drain_canvas_osc(|tek, seq| self.canvas_scene.scan_osc_canvas_sequences(tek, seq));
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }

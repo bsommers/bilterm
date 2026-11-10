@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Control sequences split across PTY reads**: the side scanner that handles what the VT engine does not (OSC 0/7/8/9/52/133/777/1337, DECSET flags, Kitty keyboard, DECRQSS/XTGETTCAP, Sixel, Kitty graphics, DEC line size, Tektronix entry) is now a stateful framer (`src/vt/framer.rs`). A sequence cut by a read boundary is handled exactly as if it arrived whole; previously only OSC 52 survived a split, and a split Sixel or Kitty image printed its payload on the grid.
+- **Scanner cost**: each output byte is consumed once. A long unterminated OSC 52 fed in small reads, and many unterminated OSCs in one read, were quadratic.
+- **Sequence boundaries**: a title or notification now ends at its own terminator instead of at a later `BEL`; `CSI 6n` and image placements use the cursor position at the sequence, not at the end of the read; `CSI ?38h` no longer swallows earlier sequences that shared its read.
+- **Bounded carry**: an unterminated `CSI` (256 bytes), `OSC` (1 MiB + 64), `APC` (Kitty payload limit + 4 KiB) or `DCS` (4 MiB) is dropped whole at its limit and the rest is skipped without being stored.
 - **Remote tmux link (`:ssh-tmux`) rendering**: the remote tmux client is now as large as the linked pane instead of the whole Bilterm window (full-screen programs and wrapped lines drew in the wrong place); a hydrate restores alternate screen, cursor position and visibility, application cursor keys and mouse modes (re-attaching while `vim` ran left the cursor in the wrong place and stale rows on the primary screen); a UTF-8 character split across two `%output` lines is no longer turned into replacement characters; `%extended-output` is understood.
 - **Remote tmux link flooding**: Bilterm asks tmux for `pause-after` flow control and re-captures a paused pane, so a flooding remote pane no longer starves input (Ctrl-C typed in Bilterm now arrives).
 - **Remote tmux link input**: a paste larger than 4096 bytes was silently truncated; pastes are now delivered complete and in order.
