@@ -525,6 +525,7 @@ impl AutomationControlPlane {
             "swarm.status" => self.rpc_swarm_status(params),
             "swarm.load" => self.rpc_swarm_load(params),
             "swarm.clear" => self.rpc_swarm_clear(params),
+            "swarm.run" | "swarm.spawn" | "swarm.verify" | "swarm.diff" | "swarm.merge" | "swarm.clean" => self.rpc_swarm_runtime(method, params),
             "traffic.snapshot" => self.rpc_traffic_snapshot(params),
             "traffic.history" => self.rpc_traffic_history(params),
             "traffic.window" => self.rpc_traffic_window(params),

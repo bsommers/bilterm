@@ -5,6 +5,7 @@
 
 pub mod dag;
 pub mod heal;
+pub mod ops;
 pub mod review;
 pub mod worktree;
 

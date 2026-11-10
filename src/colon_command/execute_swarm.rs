@@ -72,6 +72,7 @@ fn swarm_json(o: &SwarmOrchestrator) -> JsonValue {
 
 /// Runs one `:swarm` op; never quits.
 pub fn execute_swarm(wm: &mut WindowManager, op: SwarmOp) -> bool {
+    wm.swarm_poll(); // apply finished background verifications before any op
     match op {
         SwarmOp::Status => {
             let (status, data) = match &wm.swarm_surface().swarm {
@@ -94,12 +95,26 @@ pub fn execute_swarm(wm: &mut WindowManager, op: SwarmOp) -> bool {
                 let o = SwarmOrchestrator::new(plan);
                 let data = swarm_json(&o);
                 let n = o.plan().nodes.len();
+                wm.swarm_surface_mut().runtime.reset();
                 wm.swarm_surface_mut().swarm = Some(o);
                 emit(wm, format!("swarm: loaded {n} node(s)"), data);
             }
             Err(e) => fail(wm, e),
         },
+        op @ (SwarmOp::Run
+        | SwarmOp::Spawn { .. }
+        | SwarmOp::Verify(_)
+        | SwarmOp::Diff(_)
+        | SwarmOp::Merge { .. }
+        | SwarmOp::Clean { .. }) => {
+            let form = op.colon_form();
+            match wm.swarm_apply(op) {
+                Ok(data) => emit(wm, format!("{form}: ok"), data),
+                Err(e) => fail(wm, format!("swarm: {e}")),
+            }
+        }
         SwarmOp::Clear => {
+            wm.swarm_surface_mut().runtime.reset();
             let had = wm.swarm_surface_mut().swarm.take().is_some();
             emit(
                 wm,

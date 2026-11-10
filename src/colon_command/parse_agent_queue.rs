@@ -24,13 +24,31 @@ pub(super) fn parse_agent_ops(head: &str, parts: &[&str]) -> Option<Result<Colon
     }
 }
 
+const SWARM_USAGE: &str = "Usage: :swarm [status|load <plan.toml>|clear|run|spawn <slug> [agent] [prompt]|verify <node>|diff <slug>|merge <slug> [--squash]|clean <slug> [--force]]";
+
 fn parse_swarm(args: &[&str]) -> Result<ColonCommand, String> {
+    let bad = || SWARM_USAGE.to_string();
+    let flag = |rest: &[&str], f: &str| rest.contains(&f);
     let op = match args {
         [] | ["status"] => SwarmOp::Status,
         ["clear"] => SwarmOp::Clear,
-        ["load"] => SwarmOp::Load(String::new()),
+        ["run"] => SwarmOp::Run,
+        // Bare verbs (palette prompt entries) parse; the empty argument errors at execute time.
         ["load", path @ ..] => SwarmOp::Load(path.join(" ")),
-        _ => return Err("Usage: :swarm [status|load <plan.toml>|clear]".to_string()),
+        ["verify", rest @ ..] if rest.len() <= 1 => SwarmOp::Verify(rest.first().copied().unwrap_or("").to_string()),
+        ["diff", rest @ ..] if rest.len() <= 1 => SwarmOp::Diff(rest.first().copied().unwrap_or("").to_string()),
+        ["spawn", rest @ ..] => SwarmOp::Spawn {
+            slug: rest.first().copied().unwrap_or("").to_string(),
+            agent: rest.get(1).map_or("claude", |a| *a).to_string(),
+            prompt: rest.iter().skip(2).copied().collect::<Vec<_>>().join(" "),
+        },
+        ["merge", rest @ ..] if rest.iter().filter(|a| !a.starts_with("--")).count() <= 1 && rest.iter().all(|a| !a.starts_with("--") || *a == "--squash") => {
+            SwarmOp::Merge { slug: rest.iter().find(|a| !a.starts_with("--")).copied().unwrap_or("").to_string(), squash: flag(rest, "--squash") }
+        }
+        ["clean", rest @ ..] if rest.iter().filter(|a| !a.starts_with("--")).count() <= 1 && rest.iter().all(|a| !a.starts_with("--") || *a == "--force") => {
+            SwarmOp::Clean { slug: rest.iter().find(|a| !a.starts_with("--")).copied().unwrap_or("").to_string(), force: flag(rest, "--force") }
+        }
+        _ => return Err(bad()),
     };
     Ok(Action::Swarm(op))
 }

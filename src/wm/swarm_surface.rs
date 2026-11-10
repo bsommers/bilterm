@@ -13,6 +13,18 @@ pub enum SwarmOp {
     Load(String),
     /// Drop the loaded plan.
     Clear,
+    /// `:swarm run` - start every ready node (worktree + pane + agent + queued prompt).
+    Run,
+    /// `:swarm spawn <slug> [agent] [prompt...]` - one ad-hoc worktree agent (SWARM-01).
+    Spawn { slug: String, agent: String, prompt: String },
+    /// `:swarm verify <node>` - background `verify_cmd` with bounded self-healing retries.
+    Verify(String),
+    /// `:swarm diff <slug>` - diff stat of a tracked worktree branch vs the primary HEAD.
+    Diff(String),
+    /// `:swarm merge <slug> [--squash]`.
+    Merge { slug: String, squash: bool },
+    /// `:swarm clean <slug> [--force]`.
+    Clean { slug: String, force: bool },
 }
 
 impl SwarmOp {
@@ -22,6 +34,13 @@ impl SwarmOp {
             Self::Status => ":swarm status".to_string(),
             Self::Load(p) => format!(":swarm load {p}"),
             Self::Clear => ":swarm clear".to_string(),
+            Self::Run => ":swarm run".to_string(),
+            Self::Spawn { slug, agent, prompt } if prompt.is_empty() => format!(":swarm spawn {slug} {agent}"),
+            Self::Spawn { slug, agent, prompt } => format!(":swarm spawn {slug} {agent} {prompt}"),
+            Self::Verify(n) => format!(":swarm verify {n}"),
+            Self::Diff(s) => format!(":swarm diff {s}"),
+            Self::Merge { slug, squash } => format!(":swarm merge {slug}{}", if *squash { " --squash" } else { "" }),
+            Self::Clean { slug, force } => format!(":swarm clean {slug}{}", if *force { " --force" } else { "" }),
         }
     }
 }
@@ -30,4 +49,6 @@ impl SwarmOp {
 #[derive(Debug, Default)]
 pub struct SwarmSurface {
     pub swarm: Option<SwarmOrchestrator>,
+    /// Runtime bookkeeping for `run`/`spawn`/`verify` (panes, heal loops, background verifies).
+    pub runtime: super::swarm_cmd::SwarmState,
 }

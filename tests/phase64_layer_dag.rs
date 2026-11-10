@@ -126,6 +126,7 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/secure_fs.rs", "file I/O, not terminal traffic"),
     ("src/pane/history_store.rs", "file I/O, not terminal traffic"),
     ("src/vt/recording.rs", "file I/O, not terminal traffic"),
+    ("src/swarm/heal.rs", "verify_cmd child-process pipes, not terminal traffic"),
     ("src/daemon/supervisor.rs", "process supervision, not terminal traffic"),
     ("src/stt/wav.rs", "file I/O, not terminal traffic"),
     ("src/stt/audio.rs", "microphone capture child process, not terminal traffic"),

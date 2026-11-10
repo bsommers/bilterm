@@ -1,4 +1,5 @@
 pub mod agent_mail;
+pub mod swarm_cmd;
 mod agent_mail_apply;
 pub mod agent_state;
 pub mod agents_topology;
@@ -842,6 +843,11 @@ impl WindowManager {
     /// Splits the currently focused workspace pane in `direction` (`Horizontal` or `Vertical`),
     /// spawning a new independent `CompositePane` and raising it to the top of `ZStack` (`WM-01`).
     pub fn split_focused(&mut self, direction: SplitDirection) -> Result<PaneId> {
+        self.split_focused_in(direction, None)
+    }
+
+    /// [`Self::split_focused`] with the new pane's shell rooted in `cwd` (swarm worktrees).
+    pub fn split_focused_in(&mut self, direction: SplitDirection, cwd: Option<std::path::PathBuf>) -> Result<PaneId> {
         let target_id = self.z_stack.top().unwrap_or(1);
         let new_id = self.next_pane_id;
         self.next_pane_id += 1;
@@ -855,6 +861,7 @@ impl WindowManager {
                 PtyConfig {
                     rows,
                     cols,
+                    cwd,
                     ..Default::default()
                 },
             )?

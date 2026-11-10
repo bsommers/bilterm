@@ -352,7 +352,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":title", &[]),
     (":kill-pane", &[]),
     (":tab", &["new", "next", "prev", "close", "rename "]),
-    (":swarm", &["status", "load ", "clear"]),
+    (":swarm", &["status", "load ", "clear", "run", "spawn ", "verify ", "diff ", "merge ", "clean "]),
     (":context", &["set ", "get ", "list", "clear "]),
     (":coords", &["verbose", "compact", "daemon", "off", "locate ", "copy", "cycle"]),
     (":netmon", &[]),
