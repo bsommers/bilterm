@@ -112,6 +112,10 @@ fn url_bar_click_enters_edit_and_enter_navigates_with_scheme() {
 #[test]
 fn ctrl_l_edits_and_esc_cancels() {
     let (mut wm, id, _screen) = setup();
+    // Ctrl+L belongs to the shell until the browser viewport has focus.
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL)).unwrap();
+    assert!(!wm.pane(id).unwrap().browser_canvas().unwrap().is_editing_url(), "unfocused Ctrl+L is not stolen");
+    wm.pane_mut(id).unwrap().browser_canvas_mut().unwrap().set_focus(true);
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL)).unwrap();
     assert!(wm.pane(id).unwrap().browser_canvas().unwrap().is_editing_url());
     handle_wm_key_event(&mut wm, key(KeyCode::Char('x'))).unwrap();
@@ -119,4 +123,84 @@ fn ctrl_l_edits_and_esc_cancels() {
     let b = wm.pane(id).unwrap().browser_canvas().unwrap();
     assert!(!b.is_editing_url());
     assert_eq!(b.current_url(), "https://example.com");
+}
+
+fn frame_seq(wm: &WindowManager, id: usize) -> u64 {
+    wm.pane(id).unwrap().browser_canvas().unwrap().cached_frame().map_or(0, |f| f.seq)
+}
+
+#[test]
+fn focused_viewport_gets_keys_and_ctrl_bracket_returns_them() {
+    let (mut wm, id, _screen) = setup();
+    let ctrl_bracket = KeyEvent::new(KeyCode::Char(']'), KeyModifiers::CONTROL);
+
+    // Unfocused: the key goes to the prompt, not to the page.
+    let before = frame_seq(&wm, id);
+    handle_wm_key_event(&mut wm, key(KeyCode::Char('a'))).unwrap();
+    assert_eq!(frame_seq(&wm, id), before, "page saw no key");
+    assert_eq!(wm.pane(id).unwrap().prompt().text(), "a");
+
+    // Ctrl+] gives the keyboard to the page.
+    handle_wm_key_event(&mut wm, ctrl_bracket).unwrap();
+    assert!(wm.pane(id).unwrap().browser_canvas().unwrap().viewport_focused);
+    handle_wm_key_event(&mut wm, key(KeyCode::Char('b'))).unwrap();
+    handle_wm_key_event(&mut wm, key(KeyCode::Enter)).unwrap();
+    assert_eq!(frame_seq(&wm, id), before + 2, "both keys reached the engine");
+    assert_eq!(wm.pane(id).unwrap().prompt().text(), "a", "prompt untouched while the page has focus");
+
+    // Ctrl+] (legacy terminals send it as Ctrl+5) is the escape hatch back to bilterm.
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('5'), KeyModifiers::CONTROL)).unwrap();
+    assert!(!wm.pane(id).unwrap().browser_canvas().unwrap().viewport_focused);
+    handle_wm_key_event(&mut wm, key(KeyCode::Char('c'))).unwrap();
+    assert_eq!(wm.pane(id).unwrap().prompt().text(), "ac");
+}
+
+#[test]
+fn leader_chords_still_work_while_the_page_has_focus() {
+    let (mut wm, id, _screen) = setup();
+    wm.pane_mut(id).unwrap().browser_canvas_mut().unwrap().set_focus(true);
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)).unwrap();
+    assert!(wm.is_leader_pending(), "leader is resolved before keys are forwarded to the page");
+    handle_wm_key_event(&mut wm, key(KeyCode::Char('.'))).unwrap();
+    assert!(wm.pane(id).unwrap().browser_canvas().is_none(), "leader . closed the browser");
+}
+
+#[test]
+fn clicking_the_page_focuses_it_and_maps_cells_to_frame_pixels() {
+    let (mut wm, id, screen) = setup();
+    let canvas = wm.pane(id).unwrap().canvas_rect(screen);
+    let (col, row) = (canvas.x + canvas.width - 1, canvas.bottom() - 1);
+    let b = wm.pane(id).unwrap().browser_canvas().unwrap();
+    let frame = b.cached_frame().unwrap();
+    let body = ratatui::layout::Rect::new(canvas.x, canvas.y + 1, canvas.width, canvas.height - 1);
+    let (x, y) = b.frame_px_for_cell(body, col, row).unwrap();
+    assert!(x >= frame.width_px - frame.width_px / canvas.width && x < frame.width_px, "last column maps to the right edge: {x}");
+    assert!(y >= frame.height_px - frame.height_px / body.height && y < frame.height_px, "last row maps to the bottom edge: {y}");
+    assert_eq!(b.frame_px_for_cell(body, canvas.x, canvas.y), None, "the nav bar row is not part of the page");
+
+    let seq = frame.seq;
+    let click = MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: col, row, modifiers: KeyModifiers::NONE };
+    handle_wm_mouse_event(&mut wm, click, screen).unwrap();
+    let b = wm.pane(id).unwrap().browser_canvas().unwrap();
+    assert!(b.viewport_focused, "a click on the page gives it the keyboard");
+    assert!(b.cached_frame().unwrap().seq > seq, "the click reached the engine");
+}
+
+#[test]
+fn blocked_urls_never_open_or_navigate() {
+    let (mut wm, id, _screen) = setup();
+    for bad in ["javascript:alert(1)", "data:text/html,x", "chrome://settings", "--no-sandbox", "file:///etc/passwd"] {
+        let cmd = bilterm::colon_command::parse_colon_command(&format!(":browser open {bad}"));
+        if let Some(Ok(action)) = cmd {
+            wm.apply(action).unwrap();
+        }
+        assert_eq!(wm.pane(id).unwrap().browser_canvas().unwrap().current_url(), "https://example.com", "{bad}");
+    }
+    // With no canvas open, a refused URL opens nothing.
+    wm.pane_mut(id).unwrap().close_browser();
+    wm.pane_mut(id).unwrap().open_browser("javascript:alert(1)");
+    assert!(wm.pane(id).unwrap().browser_canvas().is_none());
+    // The synthetic engine is reported as what it is, and tests never start a real browser.
+    wm.pane_mut(id).unwrap().open_browser("https://example.com");
+    assert_eq!(wm.pane(id).unwrap().browser_canvas().unwrap().backend_name(), "synthetic");
 }
