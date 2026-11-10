@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::api::json::JsonValue;
+use crate::daemon::liveness::DaemonLiveness;
 use crate::daemon::supervisor::{check_pid_alive, now_ms};
 use crate::secure_fs::{ensure_private_dir, validate_safe_name, write_private_file};
 
@@ -209,20 +210,46 @@ impl DaemonRegistry {
                 continue;
             };
 
-            if check_pid_alive(item.pid) {
+            if Self::entry_is_live(base_dir, &item) {
                 active.push(item);
             } else {
-                // Prune dead peer
+                // Prune dead peer (its lock record, if any, stays as crash evidence).
                 let _ = fs::remove_file(&path);
-                if fs::symlink_metadata(&item.socket_path).is_ok() {
-                    let _ = fs::remove_file(&item.socket_path);
-                }
+                let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&item.socket_path);
             }
         }
 
         Self::synthesize_from_locks_and_sockets(base_dir, &mut active);
         active.sort_by(|a, b| a.name.cmp(&b.name));
         active
+    }
+
+    /// The lock decides when it has a record (held = live, unheld = crashed); a registry entry
+    /// with no lock record falls back to the PID probe, which treats zombies as dead.
+    fn entry_is_live(base_dir: &Path, item: &DaemonRegistryEntry) -> bool {
+        match crate::daemon::liveness::daemon_liveness(base_dir, &item.name) {
+            DaemonLiveness::Running(_) => true,
+            DaemonLiveness::Crashed(_) => false,
+            DaemonLiveness::Stopped => check_pid_alive(item.pid),
+        }
+    }
+
+    /// Lock records left behind by daemons that died without cleaning up, sorted by name.
+    pub fn list_crashed(base_dir: &Path) -> Vec<crate::daemon::supervisor::DaemonLockRecord> {
+        let Ok(read_dir) = fs::read_dir(base_dir.join("daemons")) else {
+            return Vec::new();
+        };
+        let mut out: Vec<_> = read_dir
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("lock"))
+            .filter_map(|p| match crate::daemon::liveness::lock_liveness(&p) {
+                DaemonLiveness::Crashed(rec) => Some(rec),
+                _ => None,
+            })
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
     }
 
     /// Adds entries for live `daemon-*.lock` / `daemon-singleton.lock` records and live
@@ -247,7 +274,9 @@ impl DaemonRegistry {
             let Ok(rec) = crate::daemon::supervisor::DaemonLockRecord::from_json(&content) else {
                 continue;
             };
-            if !check_pid_alive(rec.pid) || active.iter().any(|e| e.name == rec.name) {
+            if !matches!(crate::daemon::liveness::lock_liveness(path), DaemonLiveness::Running(_))
+                || active.iter().any(|e| e.name == rec.name)
+            {
                 continue;
             }
             active.push(DaemonRegistryEntry {
@@ -324,11 +353,9 @@ impl DaemonRegistry {
                 continue;
             };
 
-            if !check_pid_alive(item.pid) {
+            if !Self::entry_is_live(base_dir, &item) {
                 let _ = fs::remove_file(&path);
-                if fs::symlink_metadata(&item.socket_path).is_ok() {
-                    let _ = fs::remove_file(&item.socket_path);
-                }
+                let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&item.socket_path);
                 count += 1;
             }
         }
