@@ -1,6 +1,7 @@
 pub mod execute;
 pub mod execute_agent_mail;
 mod execute_agents;
+mod execute_agents_hud;
 mod execute_agents_list;
 mod execute_agents_topology;
 mod execute_command_window;
@@ -17,6 +18,7 @@ pub mod execute_wm;
 pub mod parse;
 mod parse_agent_mail;
 mod parse_agents;
+mod parse_agents_hud;
 mod parse_agents_list;
 mod parse_clipboard;
 mod parse_command_window;

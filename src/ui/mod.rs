@@ -1,4 +1,5 @@
 pub mod agents_gui;
+pub mod agents_hud_ui;
 pub mod agents_list_ui;
 pub mod agents_ui;
 pub mod clipboard_window_gui;
@@ -847,6 +848,7 @@ impl Widget for WorkspaceWidget<'_> {
             traffic_monitor_ui::render_traffic_monitor(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
         script_studio_ui::render_script_studio(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        agents_hud_ui::render_agents_hud(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);

@@ -68,3 +68,111 @@ impl AgentsWindowConfig {
         std::time::Duration::from_secs(u64::from(s))
     }
 }
+
+/// Allowed `alert` sinks of `[agents.watchdog]`.
+pub const WATCHDOG_ALERT_SINKS: [&str; 3] = ["oia", "toast", "event"];
+
+/// `[agents.watchdog]` (Phase 70, HUD-03): stall and loop detection for agent panes. Never kills.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AgentsWatchdogConfig {
+    /// Master switch (default `true`); `false` makes the watchdog a no-op.
+    pub enabled: bool,
+    /// Working with no output for this many seconds raises a stall alert (`1..=86400`).
+    pub stall_secs: u64,
+    /// Number of recent output lines inspected for repeats (`2..=256`).
+    pub loop_window: usize,
+    /// The same normalized line seen this many times in the window raises a loop alert.
+    pub loop_repeat: usize,
+    /// Where alerts go: any of `"oia"` (status text), `"toast"`, `"event"` (RPC `events.poll`).
+    pub alert: Vec<String>,
+    /// Seconds before the same alert kind repeats for the same pane (`0..=86400`).
+    #[serde(alias = "cooldown")]
+    pub cooldown_secs: u64,
+}
+
+impl Default for AgentsWatchdogConfig {
+    fn default() -> Self {
+        let d = crate::wm::agent_watchdog::WatchdogConfig::default();
+        Self {
+            enabled: d.enabled,
+            stall_secs: d.stall_secs,
+            loop_window: d.loop_window,
+            loop_repeat: d.loop_repeat,
+            alert: WATCHDOG_ALERT_SINKS.iter().map(ToString::to_string).collect(),
+            cooldown_secs: d.cooldown_secs,
+        }
+    }
+}
+
+impl AgentsWatchdogConfig {
+    /// The detector settings (without the alert sinks).
+    pub fn to_runtime(&self) -> crate::wm::agent_watchdog::WatchdogConfig {
+        crate::wm::agent_watchdog::WatchdogConfig {
+            enabled: self.enabled,
+            stall_secs: self.stall_secs,
+            loop_window: self.loop_window,
+            loop_repeat: self.loop_repeat,
+            cooldown_secs: self.cooldown_secs,
+        }
+    }
+
+    /// Whether `sink` (`oia` / `toast` / `event`) is enabled.
+    pub fn sends_to(&self, sink: &str) -> bool {
+        self.alert.iter().any(|a| a == sink)
+    }
+
+    /// Range and sink validation; the error names the offending key.
+    pub fn validate(&self) -> Result<(), String> {
+        self.to_runtime().validate().map_err(|e| format!("[agents.watchdog] {e}"))?;
+        if self.alert.len() > WATCHDOG_ALERT_SINKS.len() {
+            return Err("[agents.watchdog] alert lists too many entries".to_string());
+        }
+        for a in &self.alert {
+            if !WATCHDOG_ALERT_SINKS.contains(&a.as_str()) {
+                return Err(format!("[agents.watchdog] unknown alert sink '{a}' (oia, toast, event)"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The `[agents]` table: `[agents.watchdog]` plus the free-form `[agents.<name>]` profiles.
+///
+/// Derefs to the profile map so profile lookups read as before.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AgentsSection {
+    /// Watchdog settings (`[agents.watchdog]`).
+    #[serde(skip_serializing_if = "AgentsWatchdogConfig::is_default")]
+    pub watchdog: AgentsWatchdogConfig,
+    /// Recognition profiles (`[agents.<name>]`).
+    #[serde(flatten)]
+    pub profiles: std::collections::BTreeMap<String, AgentProfile>,
+}
+
+impl AgentsWatchdogConfig {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl AgentsSection {
+    /// True when nothing is configured (the section is then not serialised).
+    pub fn is_empty(&self) -> bool {
+        self.profiles.is_empty() && self.watchdog.is_default()
+    }
+}
+
+impl std::ops::Deref for AgentsSection {
+    type Target = std::collections::BTreeMap<String, AgentProfile>;
+    fn deref(&self) -> &Self::Target {
+        &self.profiles
+    }
+}
+
+impl std::ops::DerefMut for AgentsSection {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.profiles
+    }
+}

@@ -95,6 +95,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Find Sessions", ":find session", 'S'),
             mi("Find Command History", ":find history", 'Y'),
             mi("Agents List", ":agents list toggle", 'L'),
+            mi("Mission Control Squad HUD", ":agents hud toggle", 'Q'),
             mi("Agent Demo", ":agents demo", 'E'),
             mi("Stop Agent Demo", ":agents demo stop", 'P'),
             mi("Fonts Window", ":fonts toggle", 'N'),

@@ -77,6 +77,7 @@ pub fn short_label(action: &Action) -> String {
         Action::PaneResize { dw, dh } => format!("Resize {}", dir(*dw, *dh)),
         Action::PaneMove { dx, dy } => format!("Move {}", dir(*dx, *dy)),
         Action::AgentsList(_) => "Agents".into(),
+        Action::AgentsHud(_) => "HUD".into(),
         Action::Find(_) => "Find".into(),
         other => catalog_label(other),
     }

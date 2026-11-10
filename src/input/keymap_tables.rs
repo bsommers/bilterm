@@ -30,6 +30,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('a'), Action::Agents(AgentsOp::Zoom(None))),
     // AGENTS list toggle and agent demo / stop (Phase 51-07, D-03)
     (KeyCode::Char('A'), Action::AgentsList(AgentsListOp::Toggle)),
+    // Mission Control HUD toggle (`Ctrl+X *`, Phase 70; every letter is taken, `A` is the AGENTS list)
+    (KeyCode::Char('*'), Action::AgentsHud(crate::wm::agents_hud_cmd::HudOp::Toggle)),
     (KeyCode::Char('S'), Action::SessionMap(SessionMapOp::Toggle)),
     (KeyCode::Char('y'), Action::Agents(AgentsOp::Demo)),
     (KeyCode::Char('Y'), Action::Agents(AgentsOp::DemoStop)),

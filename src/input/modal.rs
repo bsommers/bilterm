@@ -131,6 +131,12 @@ pub(super) fn handle_wm_modal_key(
     let is_drawer_toggle_fkey = key.code == KeyCode::F(7)
         && (key.modifiers.is_empty() || key.modifiers == KeyModifiers::ALT);
     if matches!(wm.modal(), crate::wm::Modal::None) && !is_drawer_toggle_fkey {
+        if wm.agents_hud().captures_input()
+            && !wm.is_leader_pending()
+            && let Some(action) = super::agents_hud::handle_agents_hud_key(wm, key)
+        {
+            return Ok(Some(action));
+        }
         if wm.command_window().captures_input()
             && !wm.is_leader_pending()
             && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)

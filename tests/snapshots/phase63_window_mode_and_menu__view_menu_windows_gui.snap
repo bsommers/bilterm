@@ -1,6 +1,5 @@
 ---
 source: tests/phase63_window_mode_and_menu.rs
-assertion_line: 613
 expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 ---
  ≡ System  Window  Prompt  View  Theme  Tmux  Help  Daemon  Web
@@ -16,6 +15,7 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Find Sessions                       ║        │║                       ║
 │                         ║  Find Command History                ║        │║                       ║
 │                         ║  Agents List                 Ctrl+X A║        │║                       ║
+│                         ║  Mission Control Squad HUD   Ctrl+X *║        │║                       ║
 │                         ║  Agent Demo                  Ctrl+X y║        │║                       ║
 │                         ║  Stop Agent Demo             Ctrl+X Y║        │║                       ║
 │                         ║  Fonts Window                        ║        │║                       ║
@@ -30,6 +30,5 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Voice Dictation Toggle      Ctrl+X ,║        │║                       ║
 │                         ║  Browser Canvas              Ctrl+X .║        │║                       ║
 │                         ║  Video Canvas                Ctrl+X '║        │║                       ║
-│                         ╚══════════════════════════════════════◢        │║                       ║
-│3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖││3270-OIA│ ● READY │ INP│║3270-OIA│ ● READY │ INP║
+│3270-OIA│ ● READY │ INPUT╚══════════════════════════════════════◢DY │ INP│║3270-OIA│ ● READY │ INP║
 └────────────────────────────────────────────────◢└───────────────────────◢╚═══════════════════════◢

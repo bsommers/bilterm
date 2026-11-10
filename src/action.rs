@@ -192,6 +192,12 @@ pub enum Action {
     Agents(crate::wm::agents_cmd::AgentsOp),
     /// `:agents list <verb>` - the AGENTS list window (Phase 51, UIT-03).
     AgentsList(crate::wm::agents_list_cmd::AgentsListOp),
+    /// `:agents hud <verb>` - the Mission Control HUD (Phase 70, HUD-01).
+    AgentsHud(crate::wm::agents_hud_cmd::HudOp),
+    /// `:agent replay <pane|verb>` - the read-only turn replay view (Phase 70, HUD-02).
+    AgentsReplay(crate::wm::agents_hud_cmd::ReplayOp),
+    /// `:agents watchdog [status]` - stall / loop watchdog status (Phase 70, HUD-03).
+    AgentsWatchdog(crate::wm::agents_hud_cmd::WatchdogOp),
     /// `:sessions map <verb>` / `:packing <verb>` - the SESSION MAP packing viewer (Phase 54, VIEW-02).
     SessionMap(crate::wm::session_map::SessionMapOp),
     /// `:fonts <verb>` - the first-class FONTS utility window (`WIN-01`, Phase 51.2).
@@ -380,6 +386,9 @@ impl Action {
     pub fn colon_form_or_summary(&self) -> String {
         match self {
             Self::AgentMail(op) => op.colon_form(),
+            Self::AgentsHud(op) => op.colon_form(),
+            Self::AgentsReplay(op) => op.colon_form(),
+            Self::AgentsWatchdog(_) => ":agents watchdog status".to_string(),
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(_) => ":session undo".to_string(),
             Self::DaemonSupervisor(_) | Self::Daemon(_) => ":daemon list".to_string(),
@@ -600,6 +609,9 @@ mod tests {
             Action::DrawerRows(_) => Some(":drawer rows 2"),
             Action::Agents(_) => Some(":agents list"),
             Action::AgentsList(_) => Some(":agents list toggle"),
+            Action::AgentsHud(_) => Some(":agents hud toggle"),
+            Action::AgentsReplay(_) => Some(":agent replay 1"),
+            Action::AgentsWatchdog(_) => Some(":agents watchdog"),
             Action::SessionMap(_) => Some(":sessions map toggle"),
             Action::FontsWindow(_) => Some(":fonts toggle"),
             Action::CommandWindow(_) => Some(":commands toggle"),
@@ -862,6 +874,9 @@ mod tests {
             Action::DrawerRows(2),
             Action::Agents(crate::wm::agents_cmd::AgentsOp::List),
             Action::AgentsList(crate::wm::agents_list_cmd::AgentsListOp::Toggle),
+            Action::AgentsHud(crate::wm::agents_hud_cmd::HudOp::Toggle),
+            Action::AgentsReplay(crate::wm::agents_hud_cmd::ReplayOp::Open(1)),
+            Action::AgentsWatchdog(crate::wm::agents_hud_cmd::WatchdogOp::Status),
             Action::SessionMap(crate::wm::session_map::SessionMapOp::Toggle),
             Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
             Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),

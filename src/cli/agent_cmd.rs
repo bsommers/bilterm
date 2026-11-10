@@ -51,6 +51,32 @@ pub(super) fn parse_agent(p: &Parsed, env: &CliEnv) -> Result<RpcCall, String> {
             }
             Ok(call("agent.approve", base_params(env, e)))
         }
+        "hud" => {
+            let mut e = Vec::new();
+            if let Some(op) = rest.first() {
+                e.push(("op", str_val(&op.replace('-', "_"))));
+            }
+            if let Some(sel) = rest.get(1) {
+                e.push(("selector", str_val(sel)));
+            }
+            Ok(call("agent.hud", base_params(env, e)))
+        }
+        "replay" => {
+            let mut e = vec![selector()?];
+            if let Some(t) = p.flag("turn") {
+                let n = t.parse::<i64>().map_err(|_| format!("invalid --turn '{t}'"))?;
+                e.push(("turn_id", JsonValue::Number(n)));
+            }
+            if let Some(op) = p.flag("op") {
+                e.push(("op", str_val(op)));
+            }
+            if let Some(l) = p.flag("lines") {
+                let n = l.parse::<i64>().map_err(|_| format!("invalid --lines '{l}'"))?;
+                e.push(("lines", JsonValue::Number(n)));
+            }
+            Ok(call("agent.replay", base_params(env, e)))
+        }
+        "watchdog" => Ok(call("agent.watchdog", base_params(env, vec![]))),
         "interrupt" => Ok(call(
             "pane.send",
             base_params(env, vec![selector()?, ("text", str_val("\u{3}"))]),

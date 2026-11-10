@@ -102,6 +102,7 @@ impl AutomationControlPlane {
                     "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
+                    "bilterm_agent_control" => Some(Self::agent_control_method(&args).unwrap_or("")),
                     _ => None,
                 };
                 match mapped_method {
@@ -116,6 +117,8 @@ impl AutomationControlPlane {
                             Err("invalid 'action' parameter: status, open, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
+                        } else if tool_name == "bilterm_agent_control" {
+                            Err("missing or invalid 'action' parameter: hud, replay, watchdog, approve, prompt, last_turn, wait, pane_list, pane_split, pane_focus, pane_zoom, pane_send, workspace_list, workspace_select, workspace_new or workspace_rename".to_string())
                         } else if tool_name == "bilterm_keys" {
                             Err("invalid 'action' parameter: list, check, explain, profile, window_mode or menu_open".to_string())
                         } else if tool_name == "bilterm_traffic" {
@@ -413,6 +416,22 @@ impl AutomationControlPlane {
                     ("category", "integer", "Optional 0-based menu category for action='menu_open'"),
                 ],
             ),
+            Self::mcp_tool_schema(
+                "bilterm_agent_control",
+                "Live agent control: the Mission Control HUD snapshot (hud), per-turn replay (replay), the stall/loop watchdog (watchdog), answer or prompt an agent pane (approve, prompt), read its last turn, and pane/workspace control. Each action is the RPC method of the same name (agent.hud, agent.replay, agent.approve, pane.split, ...).",
+                &[
+                    ("action", "string", "Operation: hud | replay | watchdog | approve | prompt | last_turn | wait | pane_list | pane_split | pane_focus | pane_zoom | pane_send | workspace_list | workspace_select | workspace_new | workspace_rename (required)"),
+                    ("selector", "string", "Pane selector (p3, @blocked, @focused, ...)"),
+                    ("pane_id", "integer", "Pane id (alternative to selector)"),
+                    ("op", "string", "Sub-operation for hud (open|close|toggle|next|prev|select|approve|prompt|diff|zoom) and replay (open|close|prev|next|first|last|turn|scroll)"),
+                    ("turn_id", "integer", "Replay: return this turn with its output"),
+                    ("text", "string", "Text for prompt / pane_send"),
+                    ("answer", "string", "approve answer: yes | y | n | no | esc"),
+                    ("force", "boolean", "approve even if the pane is not blocked"),
+                    ("name", "string", "Workspace name for workspace_select/new/rename"),
+                    ("direction", "string", "pane_split direction: h | v"),
+                ],
+            ),
         ];
         JsonValue::obj([("tools", JsonValue::Array(tools))])
     }
@@ -440,6 +459,29 @@ impl AutomationControlPlane {
             "state" => Some("browser.state"),
             _ => Some("browser.control"),
         }
+    }
+
+    /// `bilterm_agent_control` `action` argument -> the `agent.*` / `pane.*` / `workspace.*` RPC method.
+    pub fn agent_control_method(args: &JsonValue) -> Option<&'static str> {
+        Some(match args.get("action").and_then(JsonValue::as_str)? {
+            "hud" => "agent.hud",
+            "replay" => "agent.replay",
+            "watchdog" => "agent.watchdog",
+            "approve" => "agent.approve",
+            "prompt" => "agent.prompt",
+            "last_turn" => "agent.last_turn",
+            "wait" => "agent.wait",
+            "pane_list" => "pane.list",
+            "pane_split" => "pane.split",
+            "pane_focus" => "pane.focus",
+            "pane_zoom" => "pane.zoom",
+            "pane_send" => "pane.send",
+            "workspace_list" => "workspace.list",
+            "workspace_select" => "workspace.select",
+            "workspace_new" => "workspace.new",
+            "workspace_rename" => "workspace.rename",
+            _ => return None,
+        })
     }
 
     /// `bilterm_keys` `action` argument -> the `keys.*` / `menu.open` RPC method; `None` when unknown.

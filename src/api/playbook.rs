@@ -53,6 +53,13 @@ pub enum AutomationEvent {
         name: String,
         state: String,
     },
+    /// Watchdog stall / loop alert (`[agents.watchdog] alert` contains `"event"`, Phase 70).
+    WatchdogAlert {
+        pane_id: usize,
+        kind: String,
+        detail: String,
+        count: usize,
+    },
 }
 
 impl AutomationEvent {
@@ -142,6 +149,13 @@ impl AutomationEvent {
                 ("pane_id", JsonValue::Number(*pane_id as i64)),
                 ("name", JsonValue::String(name.clone())),
                 ("state", JsonValue::String(state.clone())),
+            ]),
+            Self::WatchdogAlert { pane_id, kind, detail, count } => JsonValue::obj([
+                ("type", JsonValue::String("watchdog_alert".to_string())),
+                ("pane_id", JsonValue::Number(*pane_id as i64)),
+                ("kind", JsonValue::String(kind.clone())),
+                ("detail", JsonValue::String(detail.clone())),
+                ("count", JsonValue::Number(*count as i64)),
             ]),
         }
     }

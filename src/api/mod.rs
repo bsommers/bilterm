@@ -7,6 +7,7 @@
 //! 3. **Real-Time Event Subscription Bus & Declarative Robot Playbooks** (`AutomationEvent`, `Playbook`, `bilterm --playbook`)
 
 mod agent_wait;
+pub mod agents_hud_json;
 pub mod client_view;
 pub mod http;
 pub mod http_web;
@@ -22,6 +23,7 @@ pub mod rpc;
 pub mod rpc_dispatch;
 pub mod rpc_agents;
 pub mod rpc_agent_ctl;
+pub mod rpc_agent_hud;
 pub mod selector;
 pub mod rpc_clipboard;
 pub mod rpc_daemon;

@@ -934,6 +934,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         | ColonCommand::StateQuery => super::execute_config::execute_config_command(wm, cmd),
         ColonCommand::Agents(op) => super::execute_agents::execute_agents_command(wm, op),
         ColonCommand::AgentsList(op) => super::execute_agents_list::execute_agents_list_command(wm, op),
+        ColonCommand::AgentsHud(op) => super::execute_agents_hud::execute_hud(wm, &op),
+        ColonCommand::AgentsReplay(op) => super::execute_agents_hud::execute_replay(wm, &op),
+        ColonCommand::AgentsWatchdog(_) => super::execute_agents_hud::execute_watchdog(wm),
         ColonCommand::SessionMap(op) => {
             if let Some(msg) = wm.apply_session_map_op(&op) {
                 wm.active_pane_mut().set_status_message(Some(msg));

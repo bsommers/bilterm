@@ -262,6 +262,7 @@ impl AutomationControlPlane {
                 Ok(JsonValue::obj(out))
             }
             "events.poll" => {
+                self.drain_watchdog_events();
                 let drain = params
                     .get("drain")
                     .and_then(JsonValue::as_bool)
@@ -487,6 +488,9 @@ impl AutomationControlPlane {
             "agent.prompt" => self.rpc_agent_prompt(params),
             "agent.approve" => self.rpc_agent_approve(params),
             "agent.last_turn" => self.rpc_agent_last_turn(params),
+            "agent.hud" => self.rpc_agent_hud(params),
+            "agent.replay" => self.rpc_agent_replay(params),
+            "agent.watchdog" => self.rpc_agent_watchdog(params),
             "pane.list" => self.rpc_pane_list(),
             "pane.split" => self.rpc_pane_split(params),
             "pane.focus" => self.rpc_pane_focus(params),
