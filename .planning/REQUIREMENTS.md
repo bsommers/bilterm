@@ -257,33 +257,60 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ## Window & Drawer Regression Fixes (Phase 61)
 
-- [ ] **FIX-01**: In Classic (legacy) drawer mode, `:drawer rows 2` renders two-line rows again (regression from ~2026-11-05), and the current row-lines setting is discoverable/toggleable from the drawer itself.
-- [ ] **FIX-02**: Menu `Window -> Zoom` toggles zoom correctly; while zoomed, mouse and key input route only to the zoomed pane and never fall through to panes/windows beneath.
-- [ ] **FIX-03**: Switching or toggling between stacked windows preserves each window/pane's prompt type, input mode, and current UI state (no cross-window state leakage or reset).
+- [x] **FIX-01**: In Classic (legacy) drawer mode, `:drawer rows 2` renders two-line rows again (regression from ~2026-11-05), and the current row-lines setting is discoverable/toggleable from the drawer itself.
+- [x] **FIX-02**: Menu `Window -> Zoom` toggles zoom correctly; while zoomed, mouse and key input route only to the zoomed pane and never fall through to panes/windows beneath.
+- [x] **FIX-03**: Switching or toggling between stacked windows preserves each window/pane's prompt type, input mode, and current UI state (no cross-window state leakage or reset).
 
 ## Copy Mode Ergonomics & Nested-TUI Copy Fix (Phase 62)
 
-- [ ] **COPY-01**: Copying text from panes running nested TUIs with alt-screen + mouse tracking (e.g. `herdr`, Claude Code) works reliably via mouse (modifier override) and keyboard copy mode.
-- [ ] **COPY-02**: Copy mode is easy to discover and use: one-key entry/exit, on-screen key hints, arrow/vi/emacs selection, word/line/block modes, search, copy-on-release, and visual confirmation.
+- [x] **COPY-01**: Copying text from panes running nested TUIs with alt-screen + mouse tracking (e.g. `herdr`, Claude Code) works reliably via mouse (modifier override) and keyboard copy mode.
+- [x] **COPY-02**: Copy mode is easy to discover and use: one-key entry/exit, on-screen key hints, arrow/vi/emacs selection, word/line/block modes, search, copy-on-release, and visual confirmation.
 
 ## Keyboard-First Navigation & Cross-OS Hotkey Harmonization (Phase 63)
 
-- [ ] **KEY-01**: Pure-keyboard navigation of windows, panes, drawers, and menus in both TUI and GUI without typing long colon commands (modal window mode + leader key with which-key hints).
-- [ ] **KEY-02**: Per-OS default keymap profiles (macOS, Windows, Linux) with a platform-aware modifier abstraction, platform-correct menu accelerator labels, and load-time conflict detection against OS/desktop, shell, editor, and nested-multiplexer bindings.
-- [ ] **KEY-03**: `Window -> Stack windows` (currently `Alt+M`, which conflicts with macOS Option-compose) and other conflicting defaults are rebound to harmonized, conflict-free bindings that work uniformly on all target OSes.
+- [x] **KEY-01**: Pure-keyboard navigation of windows, panes, drawers, and menus in both TUI and GUI without typing long colon commands (modal window mode + leader key with which-key hints).
+- [x] **KEY-02**: Per-OS default keymap profiles (macOS, Windows, Linux) with a platform-aware modifier abstraction, platform-correct menu accelerator labels, and load-time conflict detection against OS/desktop, shell, editor, and nested-multiplexer bindings.
+- [x] **KEY-03**: `Window -> Stack windows` (currently `Alt+M`, which conflicts with macOS Option-compose) and other conflicting defaults are rebound to harmonized, conflict-free bindings that work uniformly on all target OSes.
 
 ## First-Class Terminal Traffic Monitor (Phase 64)
 
-- [ ] **TRAF-01**: Zero-cost-when-disabled instrumentation seam at every terminal byte boundary (PTY, SSH, RPC/MCP/WebSocket clients, OSC/clipboard) feeding a `traffic` metrics layer placed correctly in the layer DAG.
-- [ ] **TRAF-02**: Bounded-memory traffic aggregation by connection (local vs each remote), session, window, pane, and direction with rolling rates, totals, and peaks.
-- [ ] **TRAF-03**: TRAFFIC monitor utility window (TUI + GUI) with group-by, sort, filter, and sparklines, plus optional OIA rate indicator.
-- [ ] **TRAF-04**: Full `UNI-R01` surface parity (`:traffic`, palette, menu, RPC `traffic.*`, MCP `bilterm_traffic`) with synthetic-traffic headless test fixtures and a perf budget.
+- [x] **TRAF-01**: Zero-cost-when-disabled instrumentation seam at every terminal byte boundary (PTY, SSH, RPC/MCP/WebSocket clients, OSC/clipboard) feeding a `traffic` metrics layer placed correctly in the layer DAG.
+- [x] **TRAF-02**: Bounded-memory traffic aggregation by connection (local vs each remote), session, window, pane, and direction with rolling rates, totals, and peaks.
+- [x] **TRAF-03**: TRAFFIC monitor utility window (TUI + GUI) with group-by, sort, filter, and sparklines, plus optional OIA rate indicator.
+- [x] **TRAF-04**: Full `UNI-R01` surface parity (`:traffic`, palette, menu, RPC `traffic.*`, MCP `bilterm_traffic`) with synthetic-traffic headless test fixtures and a perf budget.
 
 ## Architectural Guardrails & Type-Safe Domain Hardening (Phase 65)
 
-- [ ] **GUARD-01**: `SignalablePid` newtype strictly rejects `PID 0`, negative values, `PID 1`, and values exceeding `i32::MAX`; all internal process signaling and liveness probes (`libc::kill`) require `SignalablePid`.
-- [ ] **GUARD-02**: Remote pane transport decoupling via explicit `PaneTransport` enum (`Local`, `Remote`, `None`) separating local PTY from remote bridge, eliminating ambiguous boolean tap flags in `CompositePane`.
-- [ ] **GUARD-03**: Focus isolation in `src/input/mouse.rs`: clicking an inactive or unfocused window/pane is consumed strictly as a focus-and-raise event, preventing click bleed-through to child terminal applications or selection handlers.
+- [x] **GUARD-01**: `SignalablePid` newtype strictly rejects `PID 0`, negative values, `PID 1`, and values exceeding `i32::MAX`; all internal process signaling and liveness probes (`libc::kill`) require `SignalablePid`.
+- [x] **GUARD-02**: Remote pane transport decoupling via explicit `PaneTransport` enum (`Local`, `Remote`, `None`) separating local PTY from remote bridge, eliminating ambiguous boolean tap flags in `CompositePane`.
+- [x] **GUARD-03**: Focus isolation in `src/input/mouse.rs`: clicking an inactive or unfocused window/pane is consumed strictly as a focus-and-raise event, preventing click bleed-through to child terminal applications or selection handlers.
+
+## Live Foreground Agent Control Plane & Swarm Orchestration — Beyond Herdr (Milestone v3.3.0, Phases 66–71)
+
+- [ ] **LIVE-01**: Always-on foreground RPC socket (`0600`) served by both `App::run` (TUI) and `run_native_gui_window` (GUI), dispatching through `Action`/`WindowManager::apply`.
+- [ ] **LIVE-02**: Child PTY env injection (`BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID`, `BILTERM_PANE_ID`) with automatic `from_pane` attribution on RPC calls from children.
+- [ ] **LIVE-03**: Multi-instance socket registry (`/run/user/<uid>/bilterm/instances/<pid>.sock`) validated via `SignalablePid`, with `--instance <pid|all>` federation.
+- [ ] **LIVE-04**: OIA `[RPC:LIVE]` indicator and `:rpc status|start|stop|clients` with `UNI-R01` parity.
+- [ ] **HERDR-01**: Hierarchical `w<N>:p<M>` and semantic (`@claude`, `@agy`, `@idle`, `@working`, `@blocked`) pane selectors.
+- [ ] **HERDR-02**: First-class CLI subcommands `bilterm agent list|prompt|wait|approve|interrupt|last-turn`, `pane list|read|split|focus|zoom|send`, `workspace list|select|new|rename`.
+- [ ] **HERDR-03**: Smart prompt injection engine auto-detecting shell `FloatingPrompt` vs raw TUI (`DECSET 2004` bracketed paste + submit chord).
+- [ ] **HERDR-04**: Zero-polling server-side blocking `agent.wait` waking on exact state transitions (`working->idle|blocked|done`, `OSC 133;D`).
+- [ ] **BEYOND-01**: Structured turn delta `agent.last_turn` (prompt, stripped markdown response, fenced `code_blocks`, `files_touched`, `duration_ms`, exit status).
+- [ ] **BEYOND-02**: Permission & confirmation gate interceptor with blocked-reason classifier and one-click `[Approve]`/`[Deny]` in Drawer Peek, `:agents list`, GUI toast, `bilterm agent approve`, and MCP.
+- [ ] **BEYOND-03**: Per-pane FIFO prompt queue (`:agent queue`, `bilterm agent prompt --queue`) auto-dispatching on `Working->Idle`.
+- [ ] **BEYOND-04**: Cross-agent shared context bus & scratchpad (`bilterm context set|get|watch|list`, `:context`, `bilterm://context/<key>`).
+- [ ] **SWARM-01**: Atomic git-worktree agent spawner (`:agent spawn`, `bilterm agent spawn --worktree <slug> --agent claude '<prompt>'`).
+- [ ] **SWARM-02**: Declarative DAG wave orchestrator (`:swarm run <plan.toml>`, `bilterm swarm run`) with `depends_on`, `worktree`, `prompt`, `verify_cmd`.
+- [ ] **SWARM-03**: Worktree diff inspector & one-key merge (`:swarm review`, `bilterm swarm status|diff|merge|clean`).
+- [ ] **SWARM-04**: Autonomous self-healing verification retry loop (`max_retries`, failing `verify_cmd` output fed back to the agent pane).
+- [ ] **HUD-01**: Agent Mission Control HUD (`:agents hud`, `Leader A`) with live mini viewports, velocity sparklines, queue depth, traffic arcs, and one-click `[Approve]`/`[Prompt]`/`[Diff]`/`[Zoom]`.
+- [ ] **HUD-02**: Per-turn time-travel scrubber (`:agent replay <pane>`).
+- [ ] **HUD-03**: Autonomous stall/loop watchdog (`[agents.watchdog]`) with alerting.
+- [ ] **HUD-04**: Full `UNI-R01` surface parity verified by `tests/phase70_agent_swarm_parity.rs`.
+- [ ] **COORD-01**: Canonical 5-level addressing hierarchy: Daemon (D) -> Workspace (W) -> Session (S) -> Window (Y) -> Pane (P; optional sub-pane / tmux `%id` / Herdr `w12:p6`).
+- [ ] **COORD-02**: Universal coordinate parser & resolver accepting `D:(W,S,Y,P)`, `(W,S,Y,P)`, `(W,S,Y)`, `(Wksp: W, Sess: S, Win: Y, Pane: P)`, colon paths `d0:w1:s1:y2:p1`, and Herdr `w12:p6` across CLI, RPC, MCP, and `:colon`.
+- [ ] **COORD-03**: Right-aligned window title-bar coordinate badge: `(Wksp: W, Sess: S, Win: Y, Pane: P)` (Verbose), `(W,S,Y,P)`/`(W,S,Y)` (Compact), or `(D:(W,S,Y,P))` (DaemonTuple), right of existing bar info, without breaking classic golden snapshots.
+- [ ] **COORD-04**: `:coords [verbose|compact|daemon|off|locate <coord>|copy]`, Command Palette, Menu Bar, RPC `coords.resolve`/`coords.format`, and MCP `bilterm_coords_resolve` (`UNI-R01`).
 
 ## Milestone v2.10 — Session Management & Packing Viewer (Phases 53–54)
 
@@ -352,28 +379,52 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WEB-FE-02 | Phase 60 | Complete (Phase 60) |
 | WEB-FE-03 | Phase 60 | Complete (Phase 60) |
 | WEB-FE-04 | Phase 60 | Complete (Phase 60) |
-| FIX-01 | Phase 61 | Planned |
-| FIX-02 | Phase 61 | Planned |
-| FIX-03 | Phase 61 | Planned |
-| COPY-01 | Phase 62 | Planned |
-| COPY-02 | Phase 62 | Planned |
-| KEY-01 | Phase 63 | Planned |
-| KEY-02 | Phase 63 | Planned |
-| KEY-03 | Phase 63 | Planned |
-| TRAF-01 | Phase 64 | Planned |
-| TRAF-02 | Phase 64 | Planned |
-| TRAF-03 | Phase 64 | Planned |
-| TRAF-04 | Phase 64 | Planned |
-| GUARD-01 | Phase 65 | Planned |
-| GUARD-02 | Phase 65 | Planned |
-| GUARD-03 | Phase 65 | Planned |
+| FIX-01 | Phase 61 | Complete (Phase 61) |
+| FIX-02 | Phase 61 | Complete (Phase 61) |
+| FIX-03 | Phase 61 | Complete (Phase 61) |
+| COPY-01 | Phase 62 | Complete (Phase 62) |
+| COPY-02 | Phase 62 | Complete (Phase 62) |
+| KEY-01 | Phase 63 | Complete (Phase 63) |
+| KEY-02 | Phase 63 | Complete (Phase 63) |
+| KEY-03 | Phase 63 | Complete (Phase 63) |
+| TRAF-01 | Phase 64 | Complete (Phase 64) |
+| TRAF-02 | Phase 64 | Complete (Phase 64) |
+| TRAF-03 | Phase 64 | Complete (Phase 64) |
+| TRAF-04 | Phase 64 | Complete (Phase 64) |
+| GUARD-01 | Phase 65 | Complete (Phase 65) |
+| GUARD-02 | Phase 65 | Complete (Phase 65) |
+| GUARD-03 | Phase 65 | Complete (Phase 65) |
+| LIVE-01 | Phase 66 | Planned |
+| LIVE-02 | Phase 66 | Planned |
+| LIVE-03 | Phase 66 | Planned |
+| LIVE-04 | Phase 66 | Planned |
+| HERDR-01 | Phase 67 | Planned |
+| HERDR-02 | Phase 67 | Planned |
+| HERDR-03 | Phase 67 | Planned |
+| HERDR-04 | Phase 67 | Planned |
+| BEYOND-01 | Phase 68 | Planned |
+| BEYOND-02 | Phase 68 | Planned |
+| BEYOND-03 | Phase 68 | Planned |
+| BEYOND-04 | Phase 68 | Planned |
+| SWARM-01 | Phase 69 | Planned |
+| SWARM-02 | Phase 69 | Planned |
+| SWARM-03 | Phase 69 | Planned |
+| SWARM-04 | Phase 69 | Planned |
+| HUD-01 | Phase 70 | Planned |
+| HUD-02 | Phase 70 | Planned |
+| HUD-03 | Phase 70 | Planned |
+| HUD-04 | Phase 70 | Planned |
+| COORD-01 | Phase 71 | Planned |
+| COORD-02 | Phase 71 | Planned |
+| COORD-03 | Phase 71 | Planned |
+| COORD-04 | Phase 71 | Planned |
 
 **Coverage:**
 
-- Total tracked requirements: 98 total (traceability table rows)
-- Mapped to phases: 98 (65 Complete, 33 Planned)
+- Total tracked requirements: 122 total (traceability table rows)
+- Mapped to phases: 122 (98 Complete, 24 Planned)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-19*
-*Last updated: 2026-11-09 for Phases 58–65*
+*Last updated: 2026-11-09 for Phases 58–71 (v3.3.0 registered)*
