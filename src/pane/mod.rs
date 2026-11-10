@@ -551,6 +551,7 @@ impl CompositePane {
         self.last_canvas_size = new_size;
         self.resize_events += 1;
         self.vt.set_size(new_size.0, new_size.1);
+        self.sync_browser_viewport();
         self.transport.resize(new_size.0, new_size.1)
     }
 
@@ -1149,12 +1150,7 @@ impl CompositePane {
     }
 
     pub fn open_browser(&mut self, url: &str) {
-        let (cols, rows) = self.vt.size();
-        let width_px = cols.saturating_mul(10).max(320);
-        let height_px = rows.saturating_mul(18).max(240);
-        self.browser_canvas = Some(browser_canvas::BrowserCanvasState::new_cdp_or_synthetic(
-            url, width_px, height_px, self.id,
-        ));
+        self.open_browser_canvas(url);
     }
 
     pub fn close_browser(&mut self) {

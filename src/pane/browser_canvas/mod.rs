@@ -8,10 +8,20 @@ use crate::error::Result;
 use crate::pane::PaneId;
 
 pub mod cdp;
+pub mod cdp_input;
+#[cfg(unix)]
+pub mod cdp_launch;
+pub mod cdp_proto;
+pub mod cdp_session;
 pub mod chrome_ui;
+pub mod geometry;
+mod pane_hooks;
+pub mod state;
+pub mod url_policy;
 
 pub use cdp::CdpBrowserBackend;
-pub use chrome_ui::{BrowserNavHit, hit_test_browser_nav_bar, render_browser_nav_bar};
+pub use chrome_ui::{BrowserNavHit, hit_test_browser_nav_bar, render_browser_nav_bar, render_browser_status_overlay};
+pub use state::{BrowserCanvasState, UrlEditState};
 
 /// Shared RGBA frame buffer with monotonic sequence counter for zero-copy GUI texture upload.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,254 +122,57 @@ pub trait BrowserEngine: Send {
     fn current_url(&self) -> &str;
     fn page_title(&self) -> &str;
     fn is_loading(&self) -> bool;
+    /// `"cdp"` or `"synthetic"`: the engine that is really running.
     fn backend_name(&self) -> &'static str;
+    /// Pulls state published by a background engine. `true` when url/title/loading/health changed.
+    fn poll(&mut self) -> bool {
+        false
+    }
+    fn health(&self) -> EngineHealth {
+        EngineHealth::Ready
+    }
+    /// Inserts pasted text at the page's focused element.
+    fn insert_text(&mut self, _text: &str) -> Result<()> {
+        Ok(())
+    }
+    fn can_go_back(&self) -> bool {
+        false
+    }
+    fn can_go_forward(&self) -> bool {
+        false
+    }
+    /// Process group id and profile directory of an out-of-process engine.
+    fn process_info(&self) -> Option<(i32, std::path::PathBuf)> {
+        None
+    }
+    /// Last navigation error reported by the engine (for example `net::ERR_NAME_NOT_RESOLVED`).
+    fn nav_error(&self) -> Option<&str> {
+        None
+    }
 }
 
-/// Stateful browser canvas manager owned by [`crate::pane::CompositePane`].
-pub struct BrowserCanvasState {
-    engine: Box<dyn BrowserEngine>,
-    pub viewport_focused: bool,
-    pub zoom_pct: u16,
-    pub history: Vec<String>,
-    pub history_idx: usize,
-    cached_frame: Option<MediaRgbaFrame>,
-    url_edit: Option<UrlEditState>,
-}
-
-/// In-progress URL bar edit: text buffer plus cursor (in chars).
+/// Health of a browser engine, as seen from the UI thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UrlEditState {
-    pub text: String,
-    pub cursor: usize,
+pub enum EngineHealth {
+    /// Launched, handshake not finished yet.
+    Starting,
+    Ready,
+    /// Was running, then the page or the browser process died.
+    Crashed(String),
+    /// Never came up; the canvas falls back to the synthetic engine.
+    Failed(String),
 }
 
-impl BrowserCanvasState {
-    pub fn new(mut engine: Box<dyn BrowserEngine>) -> Self {
-        let initial_url = engine.current_url().to_string();
-        let cached_frame = engine.latest_frame();
-        Self {
-            engine,
-            viewport_focused: false,
-            zoom_pct: 100,
-            history: vec![initial_url],
-            history_idx: 0,
-            cached_frame,
-            url_edit: None,
-        }
-    }
+/// Builds the error used for browser failures (shown in the status line without an I/O prefix).
+pub fn browser_error(kind: std::io::ErrorKind, msg: impl Into<String>) -> crate::error::BiltermError {
+    crate::error::BiltermError::Io(std::io::Error::new(kind, msg.into()))
+}
 
-    pub fn new_synthetic(initial_url: &str, width_px: u16, height_px: u16) -> Self {
-        let engine = Box::new(SyntheticBrowserBackend::new(initial_url, width_px, height_px));
-        Self::new(engine)
-    }
-
-    pub fn new_cdp_or_synthetic(
-        initial_url: &str,
-        width_px: u16,
-        height_px: u16,
-        pane_id: PaneId,
-    ) -> Self {
-        if initial_url.starts_with("demo://")
-            || initial_url.starts_with("about:")
-            || initial_url.starts_with("test://")
-            || std::env::var("BILTERM_BROWSER_SYNTHETIC").is_ok()
-            || std::env::var("BILTERM_SYNTHETIC_MEDIA").is_ok()
-            || (cfg!(test) && std::env::var("BILTERM_BROWSER_CDP").is_err())
-        {
-            return Self::new_synthetic(initial_url, width_px, height_px);
-        }
-        match cdp::CdpBrowserBackend::try_spawn(initial_url, width_px, height_px, pane_id) {
-            Ok(backend) => Self::new(Box::new(backend)),
-            Err(_) => Self::new_synthetic(initial_url, width_px, height_px),
-        }
-    }
-
-    pub fn navigate(&mut self, url: &str) -> Result<()> {
-        self.engine.navigate(url)?;
-        if self.history_idx + 1 < self.history.len() {
-            self.history.truncate(self.history_idx + 1);
-        }
-        self.history.push(url.to_string());
-        self.history_idx = self.history.len().saturating_sub(1);
-        self.cached_frame = self.engine.latest_frame();
-        Ok(())
-    }
-
-    pub fn go_back(&mut self) -> Result<()> {
-        if self.history_idx > 0 {
-            self.history_idx -= 1;
-            let url = self.history[self.history_idx].clone();
-            self.engine.navigate(&url)?;
-            self.cached_frame = self.engine.latest_frame();
-        } else {
-            self.engine.go_back()?;
-        }
-        Ok(())
-    }
-
-    pub fn go_forward(&mut self) -> Result<()> {
-        if self.history_idx + 1 < self.history.len() {
-            self.history_idx += 1;
-            let url = self.history[self.history_idx].clone();
-            self.engine.navigate(&url)?;
-            self.cached_frame = self.engine.latest_frame();
-        } else {
-            self.engine.go_forward()?;
-        }
-        Ok(())
-    }
-
-    pub fn reload(&mut self) -> Result<()> {
-        self.engine.reload()?;
-        self.cached_frame = self.engine.latest_frame();
-        Ok(())
-    }
-
-    pub fn stop(&mut self) -> Result<()> {
-        self.engine.stop()
-    }
-
-    pub fn resize_viewport(&mut self, width_px: u16, height_px: u16, scale_factor: f32) -> Result<()> {
-        self.engine.resize_viewport(width_px, height_px, scale_factor)?;
-        self.cached_frame = self.engine.latest_frame();
-        Ok(())
-    }
-
-    pub fn set_zoom(&mut self, zoom_pct: u16) {
-        self.zoom_pct = zoom_pct.clamp(25, 500);
-    }
-
-    pub fn zoom_delta(&mut self, delta_pct: i16) {
-        let current = self.zoom_pct as i32;
-        let next = (current + delta_pct as i32).clamp(25, 500) as u16;
-        self.zoom_pct = next;
-    }
-
-    pub fn toggle_focus(&mut self) {
-        self.viewport_focused = !self.viewport_focused;
-    }
-
-    pub fn set_focus(&mut self, focused: bool) {
-        self.viewport_focused = focused;
-    }
-
-    pub fn dispatch_mouse(&mut self, event: MediaMouseEvent) -> Result<()> {
-        self.engine.dispatch_mouse(event)?;
-        self.cached_frame = self.engine.latest_frame();
-        Ok(())
-    }
-
-    pub fn dispatch_key(&mut self, key: KeyEvent) -> Result<()> {
-        self.engine.dispatch_key(key)?;
-        self.cached_frame = self.engine.latest_frame();
-        Ok(())
-    }
-
-    pub fn poll_screencast_frame(&mut self) -> bool {
-        if let Some(f) = self.engine.latest_frame() {
-            let changed = self.cached_frame.as_ref().map(|c| c.seq) != Some(f.seq);
-            self.cached_frame = Some(f);
-            changed
-        } else {
-            false
-        }
-    }
-
-    pub fn is_editing_url(&self) -> bool {
-        self.url_edit.is_some()
-    }
-
-    pub fn url_edit(&self) -> Option<&UrlEditState> {
-        self.url_edit.as_ref()
-    }
-
-    /// Enters URL edit mode prefilled with the current URL (cursor at end).
-    pub fn begin_url_edit(&mut self) {
-        let text = self.engine.current_url().to_string();
-        let cursor = text.chars().count();
-        self.url_edit = Some(UrlEditState { text, cursor });
-    }
-
-    pub fn cancel_url_edit(&mut self) {
-        self.url_edit = None;
-    }
-
-    /// Commits the edit, navigating to the buffer (prefixing `https://` when no scheme).
-    pub fn commit_url_edit(&mut self) -> Result<()> {
-        let Some(edit) = self.url_edit.take() else {
-            return Ok(());
-        };
-        let t = edit.text.trim();
-        if t.is_empty() {
-            return Ok(());
-        }
-        let url = if t.contains("://") || t.starts_with("about:") {
-            t.to_string()
-        } else {
-            format!("https://{t}")
-        };
-        self.navigate(&url)
-    }
-
-    /// Routes a key to the URL editor. Returns `true` when consumed (always while editing).
-    pub fn handle_url_edit_key(&mut self, key: KeyEvent) -> bool {
-        use crossterm::event::KeyCode;
-        let Some(edit) = self.url_edit.as_mut() else {
-            return false;
-        };
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let len = edit.text.chars().count();
-        let byte_at = |t: &str, i: usize| t.char_indices().nth(i).map_or(t.len(), |(b, _)| b);
-        match key.code {
-            KeyCode::Enter => {
-                let _ = self.commit_url_edit();
-            }
-            KeyCode::Esc => self.url_edit = None,
-            KeyCode::Char('u') if ctrl => {
-                edit.text.clear();
-                edit.cursor = 0;
-            }
-            KeyCode::Char(c) if !ctrl => {
-                let b = byte_at(&edit.text, edit.cursor);
-                edit.text.insert(b, c);
-                edit.cursor += 1;
-            }
-            KeyCode::Backspace if edit.cursor > 0 => {
-                let b = byte_at(&edit.text, edit.cursor - 1);
-                edit.text.remove(b);
-                edit.cursor -= 1;
-            }
-            KeyCode::Delete if edit.cursor < len => {
-                let b = byte_at(&edit.text, edit.cursor);
-                edit.text.remove(b);
-            }
-            KeyCode::Left => edit.cursor = edit.cursor.saturating_sub(1),
-            KeyCode::Right => edit.cursor = (edit.cursor + 1).min(len),
-            KeyCode::Home => edit.cursor = 0,
-            KeyCode::End => edit.cursor = len,
-            _ => {}
-        }
-        true
-    }
-
-    pub fn cached_frame(&self) -> Option<&MediaRgbaFrame> {
-        self.cached_frame.as_ref()
-    }
-
-    pub fn current_url(&self) -> &str {
-        self.engine.current_url()
-    }
-
-    pub fn page_title(&self) -> &str {
-        self.engine.page_title()
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.engine.is_loading()
-    }
-
-    pub fn backend_name(&self) -> &'static str {
-        self.engine.backend_name()
+/// Text of a browser error for status lines.
+pub fn browser_error_text(err: &crate::error::BiltermError) -> String {
+    match err {
+        crate::error::BiltermError::Io(e) => e.to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -373,6 +186,8 @@ pub struct SyntheticBrowserBackend {
     frame_seq: u64,
     last_click: Option<(u16, u16)>,
     latest_frame: Option<MediaRgbaFrame>,
+    history: Vec<String>,
+    history_idx: usize,
 }
 
 impl SyntheticBrowserBackend {
@@ -386,9 +201,20 @@ impl SyntheticBrowserBackend {
             frame_seq: 0,
             last_click: None,
             latest_frame: None,
+            history: vec![initial_url.to_string()],
+            history_idx: 0,
         };
         backend.render_synthetic_frame();
         backend
+    }
+
+    fn show_history_entry(&mut self, idx: usize) {
+        if let Some(url) = self.history.get(idx).cloned() {
+            self.history_idx = idx;
+            self.title = format!("Synthetic - {url}");
+            self.url = url;
+        }
+        self.render_synthetic_frame();
     }
 
     fn render_synthetic_frame(&mut self) {
@@ -464,18 +290,29 @@ impl BrowserEngine for SyntheticBrowserBackend {
     fn navigate(&mut self, url: &str) -> Result<()> {
         self.url = url.to_string();
         self.title = format!("Synthetic - {url}");
+        self.history.truncate(self.history_idx + 1);
+        self.history.push(url.to_string());
+        self.history_idx = self.history.len() - 1;
         self.render_synthetic_frame();
         Ok(())
     }
 
     fn go_back(&mut self) -> Result<()> {
-        self.render_synthetic_frame();
+        self.show_history_entry(self.history_idx.saturating_sub(1));
         Ok(())
     }
 
     fn go_forward(&mut self) -> Result<()> {
-        self.render_synthetic_frame();
+        self.show_history_entry((self.history_idx + 1).min(self.history.len().saturating_sub(1)));
         Ok(())
+    }
+
+    fn can_go_back(&self) -> bool {
+        self.history_idx > 0
+    }
+
+    fn can_go_forward(&self) -> bool {
+        self.history_idx + 1 < self.history.len()
     }
 
     fn reload(&mut self) -> Result<()> {

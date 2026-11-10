@@ -59,6 +59,7 @@ pub mod traffic_monitor;
 pub mod traffic_monitor_geometry;
 mod traffic_view;
 pub mod v2_runtime;
+mod media_tick;
 pub mod window_manage;
 pub mod window_style;
 pub mod z_stack;
@@ -969,6 +970,7 @@ impl WindowManager {
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
+        changed |= self.tick_media_canvases(tm_ms);
         registry::capture::tick(self, Instant::now());
         self.sync_clipboard_records();
         self.maybe_rebalance_scrollback(Instant::now());

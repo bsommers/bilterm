@@ -4,6 +4,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use crate::input::AppAction;
+use crate::pane::browser_canvas::geometry::viewport_body;
 use crate::pane::browser_canvas::{
     BrowserNavHit, MediaMouseEvent, MediaMouseEventKind, hit_test_browser_nav_bar,
 };
@@ -38,7 +39,8 @@ pub fn handle_media_canvas_mouse(
                     let _ = pane.browser_canvas_mut().map(|b| b.go_forward());
                 }
                 BrowserNavHit::Reload => {
-                    let _ = pane.browser_canvas_mut().map(|b| b.reload());
+                    // The button shows "stop" while the page is loading.
+                    let _ = pane.browser_canvas_mut().map(|b| if b.is_loading() { b.stop() } else { b.reload() });
                 }
                 BrowserNavHit::ToggleFocus => {
                     if let Some(b) = pane.browser_canvas_mut() {
@@ -105,14 +107,14 @@ pub fn handle_media_canvas_mouse(
 
     // 3. Viewport forwarding
     if pane.browser_canvas().is_some() && row > canvas_rect.y && row < canvas_rect.bottom() {
+        let pressed = matches!(mouse.kind, MouseEventKind::Down(_));
         if in_prompt {
+            // A click on the floating prompt hands the keyboard back to it.
+            if pressed && let Some(b) = pane.browser_canvas_mut() {
+                b.set_focus(false);
+            }
             return None;
         }
-        let rel_x = col.saturating_sub(canvas_rect.x);
-        let rel_y = row.saturating_sub(canvas_rect.y + 1);
-        let x_px = rel_x.saturating_mul(10);
-        let y_px = rel_y.saturating_mul(18);
-
         let kind = match mouse.kind {
             MouseEventKind::Down(mb) => Some(MediaMouseEventKind::Down(mb)),
             MouseEventKind::Up(mb) => Some(MediaMouseEventKind::Up(mb)),
@@ -122,15 +124,18 @@ pub fn handle_media_canvas_mouse(
             MouseEventKind::ScrollUp => Some(MediaMouseEventKind::Wheel { delta_x: 0, delta_y: -53 }),
             _ => None,
         };
-
-        if let Some(k) = kind {
-            let ev = MediaMouseEvent {
-                kind: k,
-                x_px,
-                y_px,
-                modifiers: mouse.modifiers,
-            };
-            let _ = pane.browser_canvas_mut().map(|b| b.dispatch_mouse(ev));
+        // The frame is stretched over the viewport cells, so the cell maps to a frame pixel by
+        // proportion (same in the TUI and the GUI); no fixed cell size is assumed.
+        let body = viewport_body(canvas_rect);
+        if let Some(k) = kind
+            && let Some(b) = pane.browser_canvas_mut()
+            && let Some((x_px, y_px)) = b.frame_px_for_cell(body, col, row)
+        {
+            if pressed {
+                // Clicking the page gives it the keyboard (Ctrl+] gives it back).
+                b.set_focus(true);
+            }
+            let _ = b.dispatch_mouse(MediaMouseEvent { kind: k, x_px, y_px, modifiers: mouse.modifiers });
             return Some(AppAction::Handled);
         }
     }
