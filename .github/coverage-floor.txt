@@ -6,17 +6,19 @@ cli	94
 colon_command	82
 config	92
 (crate root)	67
-daemon	74
+daemon	75
 input	77
 mcp_console	84
 pane	81
 pty	92
 remote	90
-stt	73
+# stt: calibrated on the CI runner (72.4%), which has no audio recorder on PATH; a dev box with
+# pw-record/parecord/arecord/ffmpeg reaches ~75.6% because the recorder probe then succeeds.
+stt	70
 swarm	92
 tmux	92
 TOTAL	82
 traffic	91
-ui	78
-vt	87
+ui	80
+vt	88
 wm	84

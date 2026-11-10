@@ -69,25 +69,28 @@ jobs:
   # ---------------------------------------------------------------------------------------------
   # Every event, every cell: the product builds, lints clean, passes its unit tests and starts.
   quick:
-    name: quick (${{ matrix.cell }})
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { cell: linux-x86_64,   os: ubuntu-latest,    experimental: false }
-          - { cell: linux-arm64,    os: ubuntu-24.04-arm, experimental: false }
-          - { cell: macos-arm64,    os: macos-latest,     experimental: false }
+          # Branch protection on main requires the check contexts `clippy + quick verify (ubuntu-latest)`,
+          # `clippy + quick verify (macos-latest)` and `cargo-deny`. These two cells keep those exact
+          # names so the required checks keep reporting; rename them only together with the rule.
+          - { cell: linux-x86_64,   os: ubuntu-latest,    experimental: false, name: 'clippy + quick verify (ubuntu-latest)' }
+          - { cell: linux-arm64,    os: ubuntu-24.04-arm, experimental: false, name: 'quick (linux-arm64)' }
+          - { cell: macos-arm64,    os: macos-latest,     experimental: false, name: 'clippy + quick verify (macos-latest)' }
           # Intel macOS: `macos-13` is retired; `macos-15-intel` is the standard x86_64 label
           # (`macos-26-intel` also exists). Revisit when macOS 15 images are retired.
-          - { cell: macos-x86_64,   os: macos-15-intel,   experimental: false }
+          - { cell: macos-x86_64,   os: macos-15-intel,   experimental: false, name: 'quick (macos-x86_64)' }
           # Windows: build + clippy are hard gates (cross-checked clean for both MSVC targets).
           # The test steps are `continue-on-error` until the first green run on real Windows
           # runners (tracking item WIN-TESTS in docs/TEST_COVERAGE.md); their real outcome is
           # always written to the job summary, never hidden.
-          - { cell: windows-x86_64, os: windows-latest,   experimental: true }
-          - { cell: windows-arm64,  os: windows-11-arm,   experimental: true }
+          - { cell: windows-x86_64, os: windows-latest,   experimental: true,  name: 'quick (windows-x86_64)' }
+          - { cell: windows-arm64,  os: windows-11-arm,   experimental: true,  name: 'quick (windows-arm64)' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
