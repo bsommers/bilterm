@@ -9,6 +9,8 @@ pub mod traffic_monitor_gui;
 pub mod traffic_monitor_ui;
 pub mod command_window_ui;
 pub mod bitmap_font;
+pub mod canvas_cache;
+pub mod canvas_layer;
 pub mod canvas_raster;
 pub mod contrast;
 pub mod copy_hints;
@@ -231,39 +233,6 @@ impl Widget for CompositePaneWidget<'_> {
     }
 }
 
-fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: bool) -> bool {
-    if s.is_empty() {
-        return false;
-    }
-    let w = unicode_width::UnicodeWidthStr::width(s);
-    if w != expected_width {
-        let first_ok = expected_width == 1
-            && s.chars().next().is_some_and(|ch| {
-                gui_font::geometric::is_private_use_area(ch)
-                    || gui_font::geometric::is_geometric_glyph(ch)
-                    || unicode_width::UnicodeWidthChar::width(ch) == Some(1)
-            });
-        if !first_ok {
-            return false;
-        }
-    }
-    for ch in s.chars() {
-        let code = ch as u32;
-        if matches!(code, 0xFE00..=0xFE0F) || (grapheme_mode_2027 && code == 0x200D) {
-            continue;
-        }
-        if ch.is_control()
-            || matches!(
-                code,
-                0x200B..=0x200F | 0x2028..=0x202F | 0x2060..=0x206F | 0xFEFF | 0xFFF9..=0xFFFB
-            )
-        {
-            return false;
-        }
-    }
-    true
-}
-
 /// Rasterizes an RGBA frame into `area` using TrueColor `▀` half-blocks (2 pixel rows per cell).
 fn rasterize_frame_halfblocks(
     buf: &mut Buffer,
@@ -302,137 +271,11 @@ fn render_output_canvas(
     let (vt_rows, vt_cols) = vt.size();
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
-    let grapheme_2027 = vt.is_grapheme_cluster_2027();
-    let fill_style = Style::default()
-        .fg(palette.text_fg.unwrap_or(palette.title_fg))
-        .bg(palette.window_frame_bg);
-    for y in canvas.y..canvas.y + canvas.height {
-        for x in canvas.x..canvas.x + canvas.width {
-            if let Some(c) = buf.cell_mut((x, y)) {
-                c.set_symbol(" ");
-                c.set_style(fill_style);
-            }
-        }
-    }
 
-    let font_opts = pane.font_options();
-    for r in 0..render_rows {
-        let mut line_attr = vt.line_size_attr(r);
-        if !line_attr.is_double_width() && font_opts.double_width {
-            line_attr = LineSizeAttr::DoubleWidth;
-        }
-        if line_attr.is_double_width() {
-            typography::render_double_width_row(vt, r, canvas, render_cols, line_attr, buf);
-            continue;
-        }
-        let mut skip_next_wide_continuation = false;
-        for c in 0..render_cols {
-            let Some(vt_cell) = vt.cell_view(r, c) else {
-                skip_next_wide_continuation = false;
-                continue;
-            };
-            let dst_x = canvas.x + c;
-            let dst_y = canvas.y + r;
-            let mut style = contrast::readable_canvas_cell_style(&vt_cell, cfg.theme, palette);
-            if font_opts.bold {
-                style = style.add_modifier(Modifier::BOLD);
-            }
-            if font_opts.italic {
-                style = style.add_modifier(Modifier::ITALIC);
-            }
-
-            if skip_next_wide_continuation {
-                skip_next_wide_continuation = false;
-                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_style(style);
-                }
-                continue;
-            }
-
-            if vt_cell.is_wide_continuation() {
-                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_symbol(" ");
-                    dst_cell.set_style(style);
-                }
-                continue;
-            }
-
-            let contents = vt_cell.grapheme;
-            if vt_cell.is_wide() {
-                // Prevent a 2-column wide glyph at the rightmost column from overflowing/wrapping the host terminal
-                if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2, grapheme_2027) {
-                    if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                        dst_cell.set_symbol(contents);
-                        dst_cell.set_style(style);
-                    }
-                    skip_next_wide_continuation = true;
-                } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_symbol(" ");
-                    dst_cell.set_style(style);
-                }
-            } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                if contents.is_empty() {
-                    dst_cell.set_symbol(" ");
-                } else if is_safe_terminal_cluster(contents, 1, grapheme_2027) {
-                    if !grapheme_2027 && contents.contains(['\u{FE0E}', '\u{FE0F}'])
-                        && let Some(base) = contents.chars().next()
-                    {
-                        let mut sym = [0u8; 4];
-                        dst_cell.set_symbol(base.encode_utf8(&mut sym));
-                    } else {
-                        dst_cell.set_symbol(contents);
-                    }
-                } else {
-                    dst_cell.set_symbol("·");
-                }
-                dst_cell.set_style(style);
-            }
-        }
-    }
-
-    // Highlight detected URLs with underline + bright cyan tint (VAL-03)
-    for url in pane.vt().detect_visible_urls() {
-        if url.row < render_rows {
-            for c in url.start_col..=url.end_col.min(render_cols.saturating_sub(1)) {
-                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + url.row)) {
-                    cell.set_style(
-                        cell.style()
-                            .fg(Color::Rgb(85, 255, 255))
-                            .add_modifier(Modifier::UNDERLINED),
-                    );
-                }
-            }
-        }
-    }
-
-    // Highlight custom output triggers (v0.7.0)
-    for trigger in &cfg.triggers {
-        for m in pane.vt().search_canvas(trigger) {
-            if m.row < render_rows {
-                for c in m.start_col..=m.end_col.min(render_cols.saturating_sub(1)) {
-                    if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + m.row)) {
-                        cell.set_style(
-                            Style::default()
-                                .fg(Color::White)
-                                .bg(Color::Rgb(200, 0, 80))
-                                .add_modifier(Modifier::BOLD),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Apply CRT phosphor scanline effect on odd rows when enabled (v0.6.0)
-    if cfg.crt_scanlines {
-        for r in (1..render_rows).step_by(2) {
-            for c in 0..render_cols {
-                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r)) {
-                    cell.set_style(cell.style().add_modifier(Modifier::DIM));
-                }
-            }
-        }
-    }
+    // Layer 1 (cached per pane): background fill, VT cells with contrast, URL and trigger
+    // highlights, CRT scanlines. Everything below is cheap or state-dependent and redrawn each frame.
+    let layer_inputs = canvas_layer::CanvasLayerInputs::gather(pane, canvas, cfg, palette);
+    canvas_cache::paint_canvas_layer_cached(vt, &layer_inputs, buf);
 
     // Render Kitty Graphics (APC G) and DEC Sixel (DCS q) placements using TrueColor half-blocks (GFX-01)
     for gfx in pane.vt().graphic_placements() {
