@@ -257,11 +257,13 @@ fn drop_reconnect_hydrate_scenario() {
     // 5. `ls` typed in pane for %3 sent as `send-keys -t %3 -H 6c 73 0a`
     wm.pane_mut(p3).unwrap().submit_command("ls").unwrap();
     wm.tick_tmux_link(750);
-    // Flow control is requested once the hydrate is done (it precedes the first keystrokes).
+    // Flow control and session keeping are requested once the hydrate is done (before the
+    // first keystrokes).
     assert_eq!(
         drain_cmds(&mut h1.cmd_rx),
         vec![
             "refresh-client -f pause-after=2\n".to_string(),
+            "set-option destroy-unattached off\n".to_string(),
             "send-keys -t %3 -H 6c 73 0a\n".to_string(),
         ]
     );

@@ -127,6 +127,11 @@ fn utf8_split_across_output_lines_renders_intact() {
 fn extended_output_is_rendered_and_a_pause_recaptures_then_continues() {
     let mut rig = Rig::connect();
     assert_eq!(rig.sent("refresh-client -f pause-after=").len(), 1, "flow control is requested once per attach");
+    assert_eq!(
+        rig.sent("set-option destroy-unattached off").len(),
+        1,
+        "a remote tmux.conf with destroy-unattached on must not destroy the session on disconnect"
+    );
     rig.feed(b"%extended-output %0 1500 : STALE-LINE\\015\\012\r\n");
     assert!(rig.text().contains("STALE-LINE"));
 
@@ -310,8 +315,11 @@ fn missing_or_old_tmux_is_named_in_the_failure_text() {
         at_ms: 0,
         class: ExitClass::Fatal,
     };
-    let missing = disconnect_text(&down("bash: line 1: exec: tmux: not found"));
-    assert!(missing.contains("tmux is not installed on the remote host"), "{missing}");
+    // The exact line a real remote printed (recorded over ssh), plus the shell variants.
+    for line in ["env: 'tmux': No such file or directory", "env: tmux: No such file or directory", "bash: line 1: exec: tmux: not found"] {
+        let missing = disconnect_text(&down(line));
+        assert!(missing.contains("tmux is not installed on the remote host"), "{line} -> {missing}");
+    }
     let old = disconnect_text(&down("tmux: unknown option -- C"));
     assert!(old.contains("too old for control mode"), "{old}");
     // Authentication errors keep ssh's own line (it already says what happened).

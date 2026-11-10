@@ -58,7 +58,16 @@ const FATAL_EVIDENCE: [&str; 5] = [
 ];
 
 /// Evidence that the remote has no usable tmux (shown instead of a bare exit code).
-const NO_TMUX_EVIDENCE: [&str; 3] = ["tmux: command not found", "tmux: not found", "exec: tmux"];
+/// The link runs `exec env PATH=... tmux`, so the usual text is env's
+/// `env: 'tmux': No such file or directory` (GNU quotes it, BSD does not).
+const NO_TMUX_EVIDENCE: [&str; 6] = [
+    "'tmux': no such file",
+    "\u{2018}tmux\u{2019}: no such file",
+    "env: tmux: no such file",
+    "tmux: command not found",
+    "tmux: not found",
+    "exec: tmux",
+];
 const OLD_TMUX_EVIDENCE: [&str; 3] = ["unknown option -- c", "tmux: illegal option", "usage: tmux"];
 
 /// A plain-language cause when the diagnostic tail shows a known setup problem.

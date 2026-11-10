@@ -498,6 +498,9 @@ impl WindowManager {
             // `%error`, which is ignored).
             self.tmux_bridge
                 .queue_command(crate::tmux::decode::pause_after_command(), ReplyKind::Ignore);
+            // The session must outlive the link whatever the remote tmux.conf says.
+            self.tmux_bridge
+                .queue_command(crate::tmux::decode::keep_session_command(), ReplyKind::Ignore);
         }
     }
 }

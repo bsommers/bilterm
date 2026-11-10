@@ -22,6 +22,12 @@ pub fn pause_after_command() -> String {
     format!("refresh-client -f pause-after={PAUSE_AFTER_SECS}\n")
 }
 
+/// `set-option destroy-unattached off` for the attached session: a remote `~/.tmux.conf` with
+/// `destroy-unattached on` would otherwise destroy the session the moment the link drops.
+pub fn keep_session_command() -> String {
+    "set-option destroy-unattached off\n".to_string()
+}
+
 /// `refresh-client -A '%N:continue'`: resumes a paused pane. The argument must be quoted: tmux's
 /// command parser rejects a bare leading `%` ("parse error: syntax error").
 pub fn continue_pane_command(tmux_pane: usize) -> String {
