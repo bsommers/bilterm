@@ -241,7 +241,8 @@ impl VtParser {
             if after_lt[digits.len()..].starts_with('u') {
                 let count = digits.parse::<usize>().unwrap_or(1).max(1);
                 let stack = self.kitty_keyboard_stack_mut();
-                for _ in 0..count {
+                // Untrusted count: the stack is fully popped after `len` iterations.
+                for _ in 0..count.min(stack.len().max(1)) {
                     if stack.len() > 1 {
                         stack.pop();
                     } else if let Some(first) = stack.first_mut() {

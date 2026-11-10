@@ -137,6 +137,7 @@ pub struct VtParser {
     last_styled_underline_color: Option<RgbTriplet>,
     line_size_attrs: std::collections::BTreeMap<u16, LineSizeAttr>,
     tektronix: TektronixState,
+    csi_count_clamp: codec::CsiCountClamp,
     utf8_carry: Vec<u8>,
     osc52_carry: Vec<u8>,
     primary_stream_log: Vec<u8>,
@@ -213,6 +214,7 @@ impl VtParser {
             last_styled_underline_color: None,
             line_size_attrs: std::collections::BTreeMap::new(),
             tektronix: TektronixState::new(),
+            csi_count_clamp: codec::CsiCountClamp::default(),
             utf8_carry: Vec::new(),
             osc52_carry: Vec::new(),
             primary_stream_log: Vec::new(),
@@ -254,6 +256,7 @@ impl VtParser {
             let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
             self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
             self.append_primary_stream_log(&sanitized);
+            self.csi_count_clamp.reset();
             self.parser.process(&sanitized);
             return;
         }
@@ -264,6 +267,9 @@ impl VtParser {
         self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
         if !vt_bytes.is_empty() {
             let normalized = normalize_extended_sgr_for_vt100(&vt_bytes);
+            // vt100-ctt does not clamp ICH / IL / SD counts; bound them to the grid first.
+            let (grid_rows, grid_cols) = self.parser.screen().size();
+            let normalized = self.csi_count_clamp.filter(&normalized, grid_rows.max(grid_cols));
             self.parser.process(&normalized);
             scan_dec_line_size_escapes(
                 &vt_bytes,
