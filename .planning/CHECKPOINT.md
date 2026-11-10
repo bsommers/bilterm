@@ -1,39 +1,47 @@
 # Session Checkpoint — `bilterm`
 
-**Updated:** 2026-11-09T19:00:00-05:00  
-**Status:** COMPLETE — all media/browser/video/voice TUI & URL bar enhancements, menu fixes, Phase 65 GUARD-01 (`SignalablePid`), and v3.2.0 verified and merged to `main`.
+**Updated:** 2026-11-09T20:30:00-05:00  
+**Status:** COMPLETE — all media/browser/video/voice TUI & URL bar enhancements, menu fixes, Phase 65 GUARD-01 (`SignalablePid`), `v3.2.0`, the main test-suite repair (#50), live OIA surface badge (#49) and VTE F10 hint (#51) merged to `main` (`96307c9`), and release binary installed.
 
-## 1. Goal & User Decisions (Verbatim)
+## 1. Installed Release Binaries (`bilterm 3.2.0` @ `96307c9`, sha256 `154583c4…`)
 
-1. *"looking at all of the bugs and bug fixes, let's write a report of bugs. Find those that were introduced by poor specification others that could otherwise be corrected by better skills or design things"* -> Committed `docs/BUG_AUDIT_REPORT.md` (PR #42).
-2. *"let's do a /release"* -> Released `v3.2.0` (`ec942fb`, PR #41, GitHub Release `v3.2.0`).
-3. *"let's take those Actionable Recommendations & Guardrails and turn them into a plan - improved skills, improved planning skills, bug fixing behavior during agent builds and in skills, and write a report. save that report, put it into the milestones on the plan. start executing the plan in parallel subagents using the cheapest model suited to the tasks"* -> Updated `AGENTS.md`, `swe-skills-2` (`93accf7`), registered Phase 65 in `.planning/ROADMAP.md`, and implemented `GUARD-01` (`SignalablePid` in `src/daemon/types.rs` + `tests/signalable_pid_invariants.rs`, PR #43).
-4. *"these aren't right on Linux. double check and fix as needed: ... Leader m ... Window Menu doesn't grab the mouse clicks, they go below the window to the drawer window or other window below."* -> Fixed `Leader m` (`Action::MenuOpen`) across all profiles in `src/input/keymap_tables.rs` and reordered `handle_modal_mouse_event` before `handle_drawer_mouse_event` in `src/input/mouse.rs` (`tests/menubar_mouse_and_leader_m.rs`, PR #44).
-5. *"in subagents: find out and fix: - is the \":browser\" canvas supposed to work? I see that it says i toggled it on, but I don't see a web browser inside of bilterm. same with video canvas. don't see that. am I in tui mode? also what about the voice mode>"*
-6. *"dispatch the subagents, one into each the three claude sessions through herdr here in this same repos on the windows on the right. make sure the webbrowser mode lets us edit the URL bar."*
+- **Workspace Release Binary**: `/home/bill/src/ai/bilterm/target/release/bilterm` (`16M`)
+- **Workspace Debug Binary**: `/home/bill/src/ai/bilterm/target/debug/bilterm` (`156M`)
+- **User `$PATH` Binaries**:
+  - `/home/bill/.local/bin/bilterm` (`16M`, primary on `$PATH`)
+  - `/home/bill/.cargo/bin/bilterm` (`16M`)
 
-## 2. Completed Work in This Increment
+## 2. Completed Work in This Session
 
-- **Browser Canvas TUI Rendering, Prompt Occlusion Fix & Interactive Editable URL Bar (`w12:p7`, `a317666`)**:
-  - `src/pane/browser_canvas/{mod,chrome_ui}.rs`, `src/input/{mod,mouse_media,mouse}.rs`: Clicking `BrowserNavHit::UrlBar` on the 1-row nav bar or pressing `Ctrl+L` enters interactive URL editing mode (`is_editing_url()`, `url_input`, `url_cursor`) supporting `Char`, `Backspace`, `Delete`, `Left`/`Right`/`Home`/`End`, `Ctrl+U`/`Ctrl+A`/`Ctrl+E`, `Enter` (navigates, auto-prepending `https://` when scheme is omitted), and `Esc` (cancels edit).
-  - `src/pane/mod.rs`: Offsets `prompt_rect` by `+1` row when `browser_canvas.is_some()` and `PromptAnchor::Top` so Pass 2 `occlude_rect` never hides the 1-row browser navigation bar.
-  - `src/ui/mod.rs`: Rasterizes `browser.cached_frame()` (`canvas.y + 1 .. canvas.bottom()`) and `video.cached_frame()` (`canvas.y .. canvas.bottom() - 1`) in TUI mode using TrueColor half-block (`▀`) cells.
-  - `tests/browser_canvas_tui_and_url_edit.rs` (4/4 passing).
-- **Video Canvas Real `FfmpegPipeBackend` Frame Reader & Diagnostics (`w12:p8`, `cdea0bf`)**:
-  - `src/pane/video_canvas/{ffmpeg,mod,osd}.rs`: Background reader thread decoding `width * height * 4` RGBA frames from `ffmpeg` stdout pipe; `render_half_block_frame` helper.
-  - `src/colon_command/execute_media.rs`: Clear backend (`CDP` vs `synthetic`, `ffmpeg` vs `synthetic`) and surface (`[TUI half-block; run bilterm --gui for GPU canvas]`) status messages.
-  - `tests/video_canvas_tui_and_ffmpeg.rs` (5/5 passing).
-- **OIA `[TUI]` / `[GUI]` Surface Indicator & `:voice` Pre-Flight Diagnostics (`w12:pA`, `a26bf07`)**:
-  - `src/ui/oia.rs`: Surface mode badge `[TUI]` / `[GUI]` in the OIA status bar (`GOLDENS OK 11` preserved).
-  - `src/stt/{mod,audio,worker}.rs`, `src/colon_command/execute_voice.rs`: Pre-flight audio recorder (`pw-record`/`parecord`/`arecord`/`ffmpeg`) and STT endpoint reachability diagnostics with actionable status hints.
-  - `tests/voice_and_oia_surface_badge.rs` (4/4 passing).
+1. **Phases 61–64 Merged (`7aaa11b`, PR #40)**:
+   - Phase 61: Classic drawer 2-line rows (`:drawer rows`), focus-derived zoom (`z_stack.top()`), inactive-window focus click state preservation (`was_active` gate).
+   - Phase 62: `Shift`/`Alt` mouse drag local selection override over mouse-tracking TUIs (`Herdr`/`vim`/`tmux`), split-read `OSC 52` reassembly, Vi copy-mode motions (`w b e`, `0 ^ $`, `gg G`, `H M L`, `/ ? n N`).
+   - Phase 63: Cross-OS `Primary` modifier & key profiles, sticky Window mode (`w`/`Primary+O`), which-key overlay, 9-category keyboard menu bar, key conflict engine (`:keys check|list|explain|profile`).
+   - Phase 64: `src/traffic/` lock-free ring buffer across all 33 byte boundaries (`H01..H33`), `TRAFFIC MONITOR` TUI/GUI window (`:traffic`).
+2. **Daemon Supervisor & `:ssh-tmux` TDD Overhaul (`7aaa11b`, PR #40)**:
+   - Real child PID tracking (eliminating `PID 0`), `-d`/`--headless` lock/registry registration, and floating `DAEMON SUPERVISOR` modal in TUI & GUI (`:daemon`).
+   - PTY-less remote `:ssh-tmux` panes (no local double-echo/execution), `link_raw_input` password masking, immediate `primary_pane <-> %0` fallback binding with `list-panes` reconciliation on idle attach, and `:ssh-tmux prefill` fix.
+3. **Release `v3.2.0` (`ec942fb`, PR #41, Tag `v3.2.0`) & Bug Audit (`5c2ea56`, PR #42)**:
+   - Published GitHub Release `v3.2.0` and `docs/BUG_AUDIT_REPORT.md`.
+4. **Phase 65 `GUARD-01` (`SignalablePid`) & Agent Guardrails (`d424638`, PR #43)**:
+   - Registered Phase 65 in `.planning/ROADMAP.md` & `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`.
+   - Implemented `SignalablePid` in `src/daemon/types.rs` (`tests/signalable_pid_invariants.rs`, 12/12).
+   - Updated `AGENTS.md` (`TEST-R01`, `PLAT-R01`, `SPEC-R05`, `TEST-R02`) and `swe-skills-2` (`93accf7`).
+5. **Menu Bar `Leader m` & Dropdown Mouse Priority Fix (`458785d`, PR #44)**:
+   - `Leader m` (`Ctrl+B m` / `Ctrl+X m`) opens the top menu bar across all profiles (`src/input/keymap_tables.rs`).
+   - Reordered `handle_modal_mouse_event` before `handle_drawer_mouse_event` in `src/input/mouse.rs` (`tests/menubar_mouse_and_leader_m.rs`, 2/2).
+6. **Browser, Video, Voice & OIA Surface Enhancements (`dce5340`, PR #48)**:
+   - **Browser (`:browser`)**: Clickable/editable URL bar (`BrowserNavHit::UrlBar` or `Ctrl+L`, `Enter` to navigate with auto-`https://`, `Esc` to cancel), `+1` row prompt offset when `PromptAnchor::Top` so `occlude_rect` never hides the URL bar, and TrueColor `▀` half-block TUI rendering (`tests/browser_canvas_tui_and_url_edit.rs`, 4/4).
+   - **Video (`:video`)**: Non-blocking `FfmpegPipeBackend` stdout reader thread decoding RGBA frames, TrueColor `▀` half-block TUI rendering, and clear backend/surface status messages (`tests/video_canvas_tui_and_ffmpeg.rs`, 5/5).
+   - **OIA & Voice (`:voice`)**: `[TUI]` / `[GUI]` surface mode indicator in OIA status bar (`GOLDENS OK 11` preserved) and pre-flight microphone recorder / STT endpoint diagnostics (`tests/voice_and_oia_surface_badge.rs`, 4/4).
 
-## 3. Verification Baseline
+7. **Main Test-Suite Repair (PR #50)**: fixed all 29 failing tests on `main` — real regressions (modal drag routing before modal handler, floating-prompt border click, copy-mode trim/anchor/paging/word motions, Shift/Shift+Alt selection) plus stale expectations (MCP tool count 26, `[COPY]` badge offsets) and isolation (`BILTERM_RUNTIME_DIR` for phase19 ctl tests). Five copy-mode keys restored (Ctrl+Down, `i`/Tab/F8 exit, plain `c` yank, plain-nav drops transient selection, `R`). Daemon flakes: spawned children inherit listener fds until `exec` (`FD_INHERIT_LOCK` in `tests/daemon_lifecycle_and_pid_fix.rs`; retrying probe in `src/daemon/mod.rs` unit test for macOS).
+8. **Live OIA Surface Badge (PR #49)**: `CompositePaneWidget::with_surface_badge` shows `[TUI]`/`[GUI]` for non-Classic profiles only (Classic goldens unchanged).
+9. **VTE F10 Hint (PR #51)**: `keyconflict::vte_f10_hint` — startup hint when `VTE_VERSION` is set and F10 is still Quake (GNOME Terminal's menu accelerator eats F10). Not a keymap bug.
+- **Deliberately not done**: tek OIA message truncation at 120 cols in Classic — fitting it would hide the clickable `[COPY]` badge while `oia_copy_badge_rect` keeps reporting it.
 
-- `scripts/verify.sh --quick`: `PASS 135/135`
-- `scripts/check_classic_goldens.sh`: `GOLDENS OK 11`
-- New suites: `browser_canvas_tui_and_url_edit` (4/4), `video_canvas_tui_and_ffmpeg` (5/5), `voice_and_oia_surface_badge` (4/4), `menubar_mouse_and_leader_m` (2/2), `signalable_pid_invariants` (12/12).
+## 3. Working-Tree & Verification State
 
-## 4. Next Steps (If Resuming)
-
-- Execute remaining Phase 65 waves (`GUARD-02` `PaneTransport` enum refactor in `src/pane/mod.rs` and `GUARD-03` focus-isolation verification in `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`) when requested.
+- **Branch**: `main` at `96307c9` (`origin/main`), only `.planning/CHECKPOINT.md` and `docs/CHECKPOINT.md` updated locally. Extra worktree `/tmp/bilterm-wt-pages` (`pages`) predates this session.
+- **Verification**: full `cargo test` green on #49 rebase; CI (ubuntu + macOS + cargo-deny) green on `96307c9`; `GOLDENS OK 11`. `scripts/verify.sh` not re-run since `dce5340` (`PASS 135/135` there).
+- **Next Step on Resume**: Start a fresh session from `docs/CHECKPOINT.md` (or execute Phase 65 `GUARD-02` / `GUARD-03` in `.planning/phases/65-architectural-guardrails-and-type-hardening/65-PLAN.md`).

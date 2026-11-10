@@ -1,6 +1,11 @@
 # Session Checkpoint — `bilterm`
 
-See [`.planning/CHECKPOINT.md`](../.planning/CHECKPOINT.md) for the full checkpoint state.
+**Updated:** 2026-11-09T20:30:00-05:00  
+**Status:** COMPLETE (`main` @ `96307c9`, CI green; `GOLDENS OK 11`)
 
-- **Status:** COMPLETE (`PASS 135/135`, `GOLDENS OK 11`)
-- **Latest Increment:** Browser canvas TUI half-block rendering + editable URL bar (`Ctrl+L` / click URL bar), Video canvas real `ffmpeg` frame reader, OIA `[TUI]`/`[GUI]` surface badge, `:voice` pre-flight diagnostics, `Leader m` + menubar dropdown click fix, and Phase 65 `GUARD-01` (`SignalablePid`).
+- **Release Binaries Built & Installed (`bilterm 3.2.0` from `96307c9`, sha256 `154583c4…`)**:
+  - `/home/bill/src/ai/bilterm/target/release/bilterm` (`16M`)
+  - `/home/bill/.local/bin/bilterm` (`16M`, active on `$PATH`)
+  - `/home/bill/.cargo/bin/bilterm` (`16M`)
+- **Latest merges**: PR #50 (29 failing tests + daemon fd-inheritance flakes), #49 (`[TUI]`/`[GUI]` OIA badge in live renderer, non-Classic), #51 (VTE F10 Quake startup hint).
+- **Full Details**: See [`.planning/CHECKPOINT.md`](../.planning/CHECKPOINT.md).
