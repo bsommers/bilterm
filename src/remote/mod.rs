@@ -48,6 +48,8 @@ fn default_true() -> bool {
     true
 }
 
+/// `ServerAliveInterval` of the tmux link transport.
+pub const LINK_ALIVE_INTERVAL_SECS: u32 = 5;
 pub const CONTROL_PATH_LEAF: &str = "ssh-%C";
 pub const CONTROL_DIR_MAX_BYTES: usize = 40;
 
@@ -107,7 +109,7 @@ impl RemoteHostProfile {
     }
 
     fn push_common_args(&self, args: &mut Vec<String>, control_dir: Option<&Path>, is_link: bool) {
-        push_keepalive_args(args);
+        push_keepalive_args(args, is_link);
         if is_link {
             args.push("-o".to_string());
             args.push("ControlMaster=no".to_string());
@@ -190,9 +192,12 @@ impl RemoteHostProfile {
     }
 }
 
-fn push_keepalive_args(args: &mut Vec<String>) {
+/// Keepalives: a link notices a dead peer after `5s x 3` (it reconnects by itself, so a short
+/// detection time costs nothing); an interactive `:ssh` pane keeps the gentler `15s x 3`.
+fn push_keepalive_args(args: &mut Vec<String>, is_link: bool) {
+    let interval = if is_link { LINK_ALIVE_INTERVAL_SECS } else { 15 };
     args.push("-o".to_string());
-    args.push("ServerAliveInterval=15".to_string());
+    args.push(format!("ServerAliveInterval={interval}"));
     args.push("-o".to_string());
     args.push("ServerAliveCountMax=3".to_string());
     args.push("-o".to_string());

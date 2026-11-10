@@ -59,7 +59,11 @@ fn test_singleton_lock_and_recovery() {
     // 3. Release lock cleanly
     lock.release().expect("clean release");
     let lock_path = daemon_lock_path_in(runtime_dir, "default").unwrap();
-    assert!(!lock_path.exists(), "lockfile must be unlinked on clean release");
+    assert_eq!(
+        fs::read(&lock_path).unwrap().len(),
+        0,
+        "clean release clears the record and keeps the lockfile (flock is the only truth)"
+    );
 
     // 4. Stale lock recovery: write a fake lockfile with a dead PID (e.g. 9999999)
     let fake_record = DaemonLockRecord {

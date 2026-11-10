@@ -19,6 +19,15 @@ pub const TEK_MAX_X: u16 = 4096;
 /// Logical Tektronix 4014 12-bit vertical coordinate resolution (`0..3120`).
 pub const TEK_MAX_Y: u16 = 3120;
 
+/// Most active vector / point segments retained; excess input is dropped silently.
+pub const MAX_TEK_SEGMENTS: usize = 65_536;
+/// Longest alpha label text retained, in bytes; excess input is dropped silently.
+pub const MAX_TEK_LABEL_LEN: usize = 4096;
+/// Most alpha labels retained; excess input is dropped silently.
+pub const MAX_TEK_LABELS: usize = 4096;
+/// Longest in-band CSI sequence buffered while looking for `?38h` / `?38l`.
+const MAX_TEK_CSI_BUF: usize = 256;
+
 /// Active Tektronix 4010/4014 sub-mode (`TEK-01`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TekMode {
@@ -263,7 +272,9 @@ impl TektronixState {
 
     fn process_byte(&mut self, b: u8) {
         if self.csi_pending {
-            self.csi_buf.push(b);
+            if self.csi_buf.len() < MAX_TEK_CSI_BUF {
+                self.csi_buf.push(b);
+            }
             if (0x40..=0x7e).contains(&b) {
                 if self.csi_buf == b"?38h" {
                     self.active = true;
@@ -369,8 +380,10 @@ impl TektronixState {
                             .last_mut()
                             .filter(|l| l.x == self.beam_x && l.y == self.beam_y)
                         {
-                            last.text.push(b as char);
-                        } else {
+                            if last.text.len() < MAX_TEK_LABEL_LEN {
+                                last.text.push(b as char);
+                            }
+                        } else if self.labels.len() < MAX_TEK_LABELS {
                             self.labels.push(TekAlphaLabel {
                                 x: self.beam_x,
                                 y: self.beam_y,
@@ -380,6 +393,12 @@ impl TektronixState {
                     }
                 }
             },
+        }
+    }
+
+    fn push_segment(&mut self, segment: TekVectorSegment) {
+        if self.segments.len() < MAX_TEK_SEGMENTS {
+            self.segments.push(segment);
         }
     }
 
@@ -420,7 +439,7 @@ impl TektronixState {
                 let target_y = y_12.min(TEK_MAX_Y - 1);
 
                 if self.mode == TekMode::PointPlot {
-                    self.segments.push(TekVectorSegment {
+                    self.push_segment(TekVectorSegment {
                         x0: target_x,
                         y0: target_y,
                         x1: target_x,
@@ -430,7 +449,7 @@ impl TektronixState {
                         phosphor_age: 0,
                     });
                 } else if self.pen_down {
-                    self.segments.push(TekVectorSegment {
+                    self.push_segment(TekVectorSegment {
                         x0: self.beam_x,
                         y0: self.beam_y,
                         x1: target_x,
@@ -475,7 +494,7 @@ impl TektronixState {
         let nx = (i32::from(self.beam_x) + dx).clamp(0, i32::from(TEK_MAX_X - 1)) as u16;
         let ny = (i32::from(self.beam_y) + dy).clamp(0, i32::from(TEK_MAX_Y - 1)) as u16;
         if self.pen_down {
-            self.segments.push(TekVectorSegment {
+            self.push_segment(TekVectorSegment {
                 x0: self.beam_x,
                 y0: self.beam_y,
                 x1: nx,

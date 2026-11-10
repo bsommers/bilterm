@@ -1,4 +1,5 @@
 pub mod agent_mail;
+pub mod resilience;
 pub mod swarm_cmd;
 mod agent_mail_apply;
 pub mod agent_state;
@@ -49,6 +50,7 @@ pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
 pub mod stt_ops;
+pub mod tmux_flow;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod tmux_remote;
@@ -272,6 +274,7 @@ pub struct WindowManager {
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
     pub(crate) client_detached: bool,
+    pub(crate) resilience: resilience::ResilienceState,
     /// In-memory cache of saved/autosaved named layout profiles for instant dynamic switching.
     pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
     /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
@@ -387,6 +390,7 @@ impl WindowManager {
             web_surface: crate::api::web_surface::WebSurfaceState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
+            resilience: Default::default(),
             layout_profiles_mem: BTreeMap::new(),
             last_blink_toggle: Instant::now(),
             pane_chrome: BTreeMap::new(),
@@ -968,6 +972,7 @@ impl WindowManager {
         registry::capture::tick(self, Instant::now());
         self.sync_clipboard_records();
         self.maybe_rebalance_scrollback(Instant::now());
+        changed |= self.resilience_tick(Instant::now());
         changed
     }
 

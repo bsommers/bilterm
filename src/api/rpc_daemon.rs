@@ -3,13 +3,12 @@
 use crate::api::json::JsonValue;
 use crate::daemon::registry::DaemonRegistry;
 use crate::daemon::supervisor::{
-    daemon_lock_path_in, ensure_started, stop_daemon, DaemonLockRecord, DaemonStartResult,
+    daemon_lock_path_in, ensure_started, resolve_runtime_dir, stop_daemon, DaemonLockRecord, DaemonStartResult,
 };
-use crate::secure_fs::private_runtime_dir;
 
 /// Handles `daemon.list`.
 pub fn handle_daemon_list() -> Result<JsonValue, String> {
-    let runtime_dir = private_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
+    let runtime_dir = resolve_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
     let active = DaemonRegistry::list_active(&runtime_dir);
 
     let mut daemons = Vec::new();
@@ -36,7 +35,7 @@ pub fn handle_daemon_list() -> Result<JsonValue, String> {
 
 /// Handles `daemon.status`.
 pub fn handle_daemon_status(params: &JsonValue) -> Result<JsonValue, String> {
-    let runtime_dir = private_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
+    let runtime_dir = resolve_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
     let name = params
         .get("name")
         .and_then(JsonValue::as_str)
@@ -76,7 +75,7 @@ pub fn handle_daemon_status(params: &JsonValue) -> Result<JsonValue, String> {
                 "socket_path",
                 JsonValue::String(rec.socket_path.to_string_lossy().into_owned()),
             ),
-            ("status", JsonValue::String("locked".to_string())),
+            ("status", JsonValue::String("crashed".to_string())),
         ]))
     } else {
         Ok(JsonValue::obj([
@@ -88,7 +87,7 @@ pub fn handle_daemon_status(params: &JsonValue) -> Result<JsonValue, String> {
 
 /// Handles `daemon.start`.
 pub fn handle_daemon_start(params: &JsonValue) -> Result<JsonValue, String> {
-    let runtime_dir = private_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
+    let runtime_dir = resolve_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
     let name = params
         .get("name")
         .and_then(JsonValue::as_str)
@@ -119,7 +118,7 @@ pub fn handle_daemon_start(params: &JsonValue) -> Result<JsonValue, String> {
 
 /// Handles `daemon.stop`.
 pub fn handle_daemon_stop(params: &JsonValue) -> Result<JsonValue, String> {
-    let runtime_dir = private_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
+    let runtime_dir = resolve_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
     let name = params
         .get("name")
         .and_then(JsonValue::as_str)

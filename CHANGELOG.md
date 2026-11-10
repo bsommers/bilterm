@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Remote tmux link (`:ssh-tmux`) rendering**: the remote tmux client is now as large as the linked pane instead of the whole Bilterm window (full-screen programs and wrapped lines drew in the wrong place); a hydrate restores alternate screen, cursor position and visibility, application cursor keys and mouse modes (re-attaching while `vim` ran left the cursor in the wrong place and stale rows on the primary screen); a UTF-8 character split across two `%output` lines is no longer turned into replacement characters; `%extended-output` is understood.
+- **Remote tmux link flooding**: Bilterm asks tmux for `pause-after` flow control and re-captures a paused pane, so a flooding remote pane no longer starves input (Ctrl-C typed in Bilterm now arrives).
+- **Remote tmux link input**: a paste larger than 4096 bytes was silently truncated; pastes are now delivered complete and in order.
+- **Remote tmux link reconnect**: a stalled connection is noticed in about 15 to 20 seconds instead of about 55 (link keepalive 5 s); backoff has jitter; the UI thread no longer sleeps while collecting the transport's exit code; a missing or too-old remote tmux is named in the failure text.
+- `tmux_link_state()` / `:ssh-tmux info` no longer report `idle` while a removed link's transport is still attached.
+
+### Added
+- `:ssh-tmux -- <host> [session]` reaches hosts named `info`, `reconnect`, `disconnect` or `prefill`.
+- The link sets `destroy-unattached off` on the session it attaches to, so a remote `tmux.conf` cannot make a disconnect destroy the session.
+- `tests/tmux_link_transcripts.rs` (recorded control-mode transcripts through the real parser into a pane) and `tests/tmux_link_live.rs` (real tmux on a private socket, `BILTERM_TMUX_LIVE=1`).
+
 ## [3.3.0] - 2026-11-09
 
 Milestone v3.3.0 "Beyond Herdr": always-on foreground RPC, first-class agent/pane/workspace CLI, semantic agent introspection, worktree swarm DAG runner, Mission Control HUD, and hierarchical `D:(W,S,Y,P)` coordinates (Phases 65–71, 71 phases total).

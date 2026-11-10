@@ -149,6 +149,8 @@ pub fn render_daemon_window(
         let name = if e.current { format!("*{}", e.name) } else { format!(" {}", e.name) };
         let (badge_txt, badge_fg) = if e.running {
             ("● RUNNING", tokens.success)
+        } else if e.is_crashed() {
+            ("✖ CRASHED", tokens.danger)
         } else {
             ("○ STOPPED", tokens.text_muted)
         };

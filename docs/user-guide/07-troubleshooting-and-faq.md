@@ -129,7 +129,7 @@
        ```
      - If `tcpkeepalive 0` or sleep triggers, TCP connections are dropped when the display sleeps. Enable network keepalives with `sudo pmset -a tcpkeepalive 1`, or prevent sleep during long jobs using `caffeinate -s`.
   6. **SSH Keepalives & Network Timeouts**:
-     - Bilterm automatically applies `-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o ConnectTimeout=15` to both `:ssh` and `:ssh-tmux` connections.
+     - Bilterm automatically applies `-o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o ConnectTimeout=15` to both `:ssh` and `:ssh-tmux` connections, with `-o ServerAliveInterval=15` for `:ssh` panes and `-o ServerAliveInterval=5` for the `:ssh-tmux` link (a stalled link is noticed in about 15 to 20 seconds).
      - If stateful NAT gateways or firewalls drop idle connections faster than 15 seconds, adjust your local `~/.ssh/config` or remote `sshd_config` `ClientAliveInterval`.
   7. **Restored Workspace Shows `(not connected)`**:
      - When restoring a saved workspace session, Bilterm honestly labels previously remote panes as `(not connected)` if they are running a local shell rather than a live remote transport.

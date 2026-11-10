@@ -348,6 +348,7 @@ impl WindowManager {
                         .collect();
                     let snap = SavedWorkspaceSession {
                         name: s.clone(),
+                        format_version: crate::wm::session::SESSION_FORMAT_VERSION,
                         layout_mode: self.layout_mode,
                         split_tree: bg.split_tree.clone(),
                         z_order: bg.z_stack.order().to_vec(),

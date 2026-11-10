@@ -188,10 +188,18 @@ async fn main() -> color_eyre::Result<()> {
         let resp = match send_rpc_request_with_token(&endpoint, &method, params.clone(), ctl_token.as_deref()).await {
             Ok(r) => r,
             Err(_) if endpoint.starts_with("unix:") => {
-                if let Ok(runtime_dir) = bilterm::secure_fs::private_runtime_dir() {
-                    let _ = bilterm::daemon::supervisor::ensure_started(&runtime_dir, "default");
+                use bilterm::daemon::supervisor::{ensure_started, DaemonStartResult};
+                // Nothing answered: start the default daemon and, when no endpoint was given,
+                // talk to the socket it actually listens on.
+                let mut retry_ep = endpoint.clone();
+                if let Ok(runtime_dir) = bilterm::secure_fs::private_runtime_dir()
+                    && let Ok(DaemonStartResult::Started { socket_path, .. } | DaemonStartResult::AlreadyRunning { socket_path, .. }) =
+                        ensure_started(&runtime_dir, "default")
+                    && endpoint == default_ep
+                {
+                    retry_ep = format!("unix:{}", socket_path.display());
                 }
-                send_rpc_request_with_token(&endpoint, &method, params, ctl_token.as_deref()).await?
+                send_rpc_request_with_token(&retry_ep, &method, params, ctl_token.as_deref()).await?
             }
             Err(e) => return Err(e.into()),
         };
@@ -538,8 +546,9 @@ async fn main() -> color_eyre::Result<()> {
     } else if attach_subcmd || attach_flag || app.wm.has_detached_session(&session_to_restore) {
         match app.wm.restore_session(&session_to_restore) {
             Ok(count) => {
+                let note = app.wm.take_restore_note().map(|n| format!(" — {n}")).unwrap_or_default();
                 app.wm.active_pane_mut().set_status_message(Some(format!(
-                    "Re-attached session '{session_to_restore}' ({count} pane(s) window layout restored)"
+                    "Re-attached session '{session_to_restore}' ({count} pane(s) window layout restored; programs restarted){note}"
                 )));
             }
             Err(err) if attach_subcmd || attach_flag => {
@@ -547,7 +556,11 @@ async fn main() -> color_eyre::Result<()> {
                     "Attach '{session_to_restore}': {err} (started fresh session)"
                 )));
             }
-            Err(_) => {}
+            Err(err) => {
+                app.wm.active_pane_mut().set_status_message(Some(format!(
+                    "Session '{session_to_restore}' could not be restored: {err} (started fresh)"
+                )));
+            }
         }
     } else if (explicit_profile.is_some() || app.wm.config().layout_autosave)
         && let Some((prof, count)) = app.wm.restore_default_layout_profile_on_startup()
@@ -567,6 +580,11 @@ async fn main() -> color_eyre::Result<()> {
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
     }
+    // Crash recovery: a leftover running marker means the last run of this session died.
+    app.wm.load_persisted_session_tree();
+    if let Some(note) = app.wm.begin_run(!(blank_session_flag || new_session_flag)) {
+        app.wm.active_pane_mut().set_status_message(Some(note));
+    }
 
     if gui_mode {
         bilterm::ui::gui_window::run_native_gui_window(app)?;
@@ -580,11 +598,12 @@ async fn main() -> color_eyre::Result<()> {
     let run_res = app.run(&mut terminal).await;
     host_guard.restore();
     run_res?;
+    app.wm.end_run();
     if app.wm.is_client_detached() {
         let sess = &app.wm.config().history_session;
         let _ = bilterm::daemon::spawn_background_daemon_for_session(sess);
         println!(
-            "[bilterm: detached session '{}' ({} pane(s) window layout intact) — run 'bilterm' or 'bilterm attach {}' to resume]",
+            "[bilterm: detached session '{}' ({} pane(s): layout saved; running programs were ended and restart on attach) — run 'bilterm' or 'bilterm attach {}' to resume]",
             sess,
             app.wm.pane_count(),
             sess
