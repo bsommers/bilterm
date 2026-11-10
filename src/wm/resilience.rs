@@ -305,6 +305,14 @@ impl WindowManager {
         match read_with_backup(&path, &|t| parse_session(t).is_some()) {
             Ok((text, source)) => match parse_session(&text) {
                 Some(snap) => {
+                    // The backup is one generation older: never let it replace a richer layout
+                    // that the normal startup restore already brought back.
+                    if source == DurableSource::Backup && snap.panes.len() < self.panes.len() {
+                        return format!(
+                            "Session '{sess}' ended uncleanly; its newest checkpoint was corrupt, kept the last saved layout ({} pane(s))",
+                            self.panes.len()
+                        );
+                    }
                     let panes = self.apply_saved_session_snapshot(&snap);
                     let from = if source == DurableSource::Backup { " (backup copy; newest was corrupt)" } else { "" };
                     format!(
