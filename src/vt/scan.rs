@@ -28,6 +28,16 @@ impl VtParser {
             };
             let payload_rest = &after_esc[1..];
             match kind {
+                // A CSI cut by the read boundary (parameter/intermediate bytes only, no final
+                // byte yet) is carried so the next chunk completes it; else a split `?1049l`
+                // would leave the shadow alt-screen flag set.
+                b'[' if payload_rest.len() <= 32
+                    && payload_rest.bytes().all(|b| (0x20..=0x3f).contains(&b)) =>
+                {
+                    self.osc52_carry.clear();
+                    self.osc52_carry.extend_from_slice(b"\x1b[");
+                    self.osc52_carry.extend_from_slice(payload_rest.as_bytes());
+                }
                 b'[' => self.scan_csi_sequence(payload_rest),
                 b']' => self.scan_osc_sequence(payload_rest),
                 b'P' => self.scan_dcs_sequence(payload_rest),

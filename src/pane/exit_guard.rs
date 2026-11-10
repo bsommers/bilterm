@@ -147,6 +147,8 @@ impl ExitGuardState {
 pub struct HeldExitedShellState {
     pub exit_code: Option<i32>,
     pub banner_message: String,
+    /// The pane owned a live PTY when it was held, so a respawn must spawn a new one.
+    pub had_pty: bool,
 }
 
 impl HeldExitedShellState {
@@ -160,6 +162,7 @@ impl HeldExitedShellState {
         Self {
             exit_code,
             banner_message,
+            had_pty: false,
         }
     }
 }
@@ -183,6 +186,7 @@ impl HeldExitedShellState {
         Self {
             exit_code,
             banner_message,
+            had_pty: false,
         }
     }
 }
@@ -204,6 +208,7 @@ impl Default for HeldExitedShellState {
         Self {
             exit_code: None,
             banner_message: DEFAULT_HELD_EXITED_BANNER.to_string(),
+            had_pty: false,
         }
     }
 }

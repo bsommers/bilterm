@@ -48,13 +48,23 @@ impl WindowManager {
         self.reflow_default_viewport();
     }
 
-    pub(crate) fn blur_utility_windows(&mut self) {
+    /// Releases the keyboard from every floating window. The single list shared by pane focus
+    /// changes and drawer focus, so no window can keep the keyboard next to a new owner.
+    pub(crate) fn blur_floating_windows(&mut self) {
+        self.agents_hud.blur();
         self.agents_window.blur();
         self.agents_list.blur();
         self.fonts_window.blur();
+        self.daemon_window.focused = false;
         self.command_window.blur();
+        self.clipboard_window.blur();
+        self.traffic_monitor.blur();
         self.script_studio.blur();
         self.session_map.blur();
+    }
+
+    pub(crate) fn blur_utility_windows(&mut self) {
+        self.blur_floating_windows();
         if self.mcp_console.pinned {
             self.mcp_console.focused = false;
         }

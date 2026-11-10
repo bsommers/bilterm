@@ -980,15 +980,7 @@ impl WindowManager {
     pub fn focus_and_raise(&mut self, pane_id: PaneId) -> bool {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
-            self.agents_window.blur();
-            self.agents_list.blur();
-            self.fonts_window.blur();
-            self.daemon_window.focused = false;
-            self.command_window.blur();
-            self.clipboard_window.blur();
-            self.traffic_monitor.blur();
-            self.script_studio.blur();
-            self.session_map.blur();
+            self.blur_floating_windows();
             let changed = self.z_stack.raise(pane_id);
             // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
             self.sync_config_scale_from_active_pane();
@@ -1004,15 +996,7 @@ impl WindowManager {
     /// Shuffles the pane deck top-to-bottom (`Alt+Tab` / `F6` / `:deck next`, `WM-02`).
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.daemon_window.focused = false;
-        self.command_window.blur();
-        self.clipboard_window.blur();
-        self.traffic_monitor.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.blur_floating_windows();
         let top = self.z_stack.shuffle_top_to_bottom();
         // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
@@ -1025,15 +1009,7 @@ impl WindowManager {
     /// Shuffles the pane deck bottom-to-top (`Alt+Shift+Tab` / `:deck prev`, `WM-02`).
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.daemon_window.focused = false;
-        self.command_window.blur();
-        self.clipboard_window.blur();
-        self.traffic_monitor.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.blur_floating_windows();
         let top = self.z_stack.shuffle_bottom_to_top();
         // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();

@@ -997,9 +997,10 @@ impl CompositePane {
     /// Transitions this pane into hold-on-exit mode (`🔒 [SHELL EXITED ...]`) instead of closing it (`SAFE-01`).
     pub fn hold_exited_shell(&mut self, exit_code: Option<i32>) {
         // Drop live PTY handle so the background `bilterm-pty-reaper` reaps it non-blockingly.
+        let mut held = HeldExitedShellState::new(exit_code);
+        held.had_pty = self.transport.is_local();
         self.transport.drop_local();
         self.exited = false;
-        let held = HeldExitedShellState::new(exit_code);
         self.status_message = Some(held.banner_message.clone());
         self.held_exited_shell = Some(held);
     }
@@ -1007,14 +1008,14 @@ impl CompositePane {
     /// Resets stale `TerminalBackend` state (`DECSET 1049`, `BlockPage` `MORE...` anchor, line discipline)
     /// and respawns or resets the shell inside this pane (`SAFE-01`).
     pub fn respawn_shell_in_place(&mut self) -> Result<()> {
-        self.held_exited_shell = None;
+        let had_pty = self.held_exited_shell.take().is_some_and(|h| h.had_pty);
         self.exited = false;
         // Leave alternate screen & reset scrollback/page anchor so stale TUI/page-hold state never leaks.
         self.process_pty_output(b"\x1b[?1049l\r\n[SHELL RESPAWNED]\r\n");
         self.line_discipline = LineDisciplineState::default();
         let _ = self.prompt.take_submission();
         self.reset_page_anchor();
-        if !self.is_headless() {
+        if had_pty || !self.is_headless() {
             let (rows, cols) = self.vt.size();
             let mut pty_cfg = PtyConfig {
                 rows: rows.max(1),
@@ -1087,10 +1088,11 @@ impl CompositePane {
 
     /// Holds a remote pane whose child exited, with a banner naming the code and reason.
     pub fn hold_remote_exit(&mut self, exit_code: Option<i32>, reason: Option<&str>) {
+        let mut held = HeldExitedShellState::remote(exit_code, reason);
+        held.had_pty = self.transport.is_local();
         self.transport.drop_local();
         self.exited = false;
         self.exit_code = exit_code;
-        let held = HeldExitedShellState::remote(exit_code, reason);
         self.status_message = Some(held.banner_message.clone());
         self.held_exited_shell = Some(held);
     }
