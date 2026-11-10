@@ -1,0 +1,22 @@
+# Per-module line-coverage floor (percent). Checked by scripts/coverage.sh; a module below its floor fails CI.
+# Regenerate after raising coverage: scripts/coverage.sh && scripts/coverage.sh --update-floor
+# (recorded as measured minus 2 points of run-to-run slack, floored). Never lower a value by hand.
+api	85
+cli	94
+colon_command	82
+config	92
+(crate root)	67
+daemon	74
+input	77
+mcp_console	84
+pane	81
+pty	92
+remote	90
+stt	73
+swarm	92
+tmux	92
+TOTAL	82
+traffic	91
+ui	78
+vt	87
+wm	84
