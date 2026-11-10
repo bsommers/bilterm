@@ -38,6 +38,8 @@ Welcome to the official User Guide for **Bilterm (`v3.2.0`)** — the Rust + Rat
     - The Find window (`Ctrl+Alt+F`, `:find agent|session|history`, View menu): fuzzy ranked search of agents, live and saved sessions, and command history; every row shows its source (`[live]`, `[saved:<name>]`, `[log:<name>]`); secrets are masked and counted; `:finder` verbs; `find.*` RPC and `bilterm_find` MCP; SSH and tmux coverage and known gaps G1 to G10.
 13. **[Chapter 13: The Traffic Monitor](13-traffic-monitor.md)**
     - The TRAFFIC MONITOR window (`Ctrl+Alt+T`, `:traffic`, `:netmon`): bytes per connection, session, window, pane, origin, locality and direction, sparklines, pause, drill-down, `traffic.*` RPC and `bilterm_traffic` MCP.
+14. **[Chapter 14: The Browser Canvas](14-browser-canvas.md)**
+    - A real web page in a pane (`:browser open <url>`, `Ctrl+Alt+B`): headless Chrome over a private DevTools pipe, keyboard focus and the `Ctrl+]` escape hatch, mouse, resize and zoom, what the status line says about the running engine, allowed URLs, profile isolation, environment switches and known limits.
 
 ---
 
