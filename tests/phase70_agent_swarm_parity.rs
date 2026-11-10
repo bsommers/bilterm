@@ -3,8 +3,8 @@
 //! Every capability of the live-agent phases (66, 67) and the Mission Control phase (70) is listed
 //! against the eight surfaces: key, colon command, palette, menu, mouse, CLI, RPC, MCP. A surface
 //! either *performs the capability* (and the test proves the observable effect equals the effect
-//! of the canonical `Action`, or of the same RPC method), or is `Na` with a reason. Phase 68 and 69
-//! capabilities have no interactive surfaces yet: they are explicit `#[ignore]`d known gaps.
+//! of the canonical `Action`, or of the same RPC method), or is `Na` with a reason. The Phase 68/69
+//! surfaces (context bus, prompt queue, swarm) live in `phase68_69_surface_parity.rs`.
 //!
 //! Style follows `phase63_keys_surface_parity.rs`: pure headless workspaces, no PTYs.
 
@@ -1027,70 +1027,4 @@ fn hud_pure_mappings_agree_with_the_canonical_actions() {
             generation: None
         })
     );
-}
-
-// ---------------------------------------------------------------- Phase 68 / 69 known gaps
-
-/// Capabilities of phases 68 and 69 that exist as library code but have no wired surface yet.
-/// `(capability, colon probe, rpc probe)`.
-const PHASE68_GAPS: &[(&str, &str, &str)] = &[
-    ("context bus set/get/watch", ":context get k", "context.get"),
-    (
-        "prompt queue enqueue/reorder/pause",
-        ":queue add 2 task",
-        "queue.add",
-    ),
-    (
-        "blocked-prompt classifier approve/deny",
-        ":agents approve 2",
-        "agent.classify",
-    ),
-];
-
-const PHASE69_GAPS: &[(&str, &str, &str)] = &[
-    (
-        "swarm run (worktree DAG)",
-        ":swarm run plan.toml",
-        "swarm.run",
-    ),
-    ("swarm review / diff", ":swarm review 2", "swarm.review"),
-    ("swarm heal / merge", ":swarm heal 2", "swarm.heal"),
-];
-
-fn gap_is_wired(colon_probe: &str, rpc_probe: &str) -> bool {
-    matches!(parse_colon_command(colon_probe), Some(Ok(_))) || RPC_METHODS.contains(&rpc_probe)
-}
-
-/// Guards the ignore list: while this passes the gaps are real; when a surface lands it fails and
-/// tells the author to un-ignore the matching test below and fill in the matrix rows.
-#[test]
-fn phase68_69_gaps_are_still_gaps() {
-    for (cap, c, r) in PHASE68_GAPS.iter().chain(PHASE69_GAPS) {
-        assert!(
-            !gap_is_wired(c, r),
-            "`{cap}` now has a surface: add its row to rows() and un-ignore its test"
-        );
-    }
-}
-
-#[test]
-#[ignore = "Phase 68/69 surfaces not yet wired"]
-fn phase68_context_bus_queue_and_classifier_have_all_eight_surfaces() {
-    for (cap, c, r) in PHASE68_GAPS {
-        assert!(
-            gap_is_wired(c, r),
-            "Phase 68 `{cap}`: needs key, colon, palette, menu, mouse, CLI, RPC and MCP surfaces (probe {c} / {r})"
-        );
-    }
-}
-
-#[test]
-#[ignore = "Phase 68/69 surfaces not yet wired"]
-fn phase69_swarm_dag_and_review_have_all_eight_surfaces() {
-    for (cap, c, r) in PHASE69_GAPS {
-        assert!(
-            gap_is_wired(c, r),
-            "Phase 69 `{cap}`: needs key, colon, palette, menu, mouse, CLI, RPC and MCP surfaces (probe {c} / {r})"
-        );
-    }
 }

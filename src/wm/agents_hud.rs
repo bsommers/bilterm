@@ -372,6 +372,20 @@ impl WindowManager {
     /// Executes one replay operation (read-only: no PTY writer is reachable from here).
     pub fn agents_replay_apply(&mut self, op: &ReplayOp) -> Result<Option<String>, String> {
         let viewport = self.agents_hud.viewport();
+        let focused = self.active_pane_id();
+        // `show` and the prev|next|first|last verbs fall back to the focused pane's replay.
+        let implicit_open = matches!(
+            op,
+            ReplayOp::Show | ReplayOp::Prev | ReplayOp::Next | ReplayOp::First | ReplayOp::Last
+        );
+        if implicit_open && self.agents_hud.replay.is_none() {
+            return self.agents_replay_apply(&ReplayOp::Open(focused));
+        }
+        if matches!(op, ReplayOp::Show) {
+            let id = self.agents_hud.replay.unwrap_or(focused);
+            let n = self.agents_hud.logs.get(&id).map_or(0, TurnReplayLog::len);
+            return Ok(Some(format!("Replay pane #{id}: {n} turn(s)")));
+        }
         if let ReplayOp::Open(id) = op {
             if !self.panes.contains_key(id) {
                 return Err(format!("pane #{id} not found"));
@@ -405,7 +419,7 @@ impl WindowManager {
                 }
                 true
             }
-            ReplayOp::Open(_) | ReplayOp::Close => true,
+            ReplayOp::Show | ReplayOp::Open(_) | ReplayOp::Close => true,
         };
         Ok((!moved).then(|| "No more turns in that direction".to_string()))
     }

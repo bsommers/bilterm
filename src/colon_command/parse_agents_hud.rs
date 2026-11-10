@@ -9,7 +9,7 @@ use crate::wm::mission_control_hud::HudButtonKind;
 
 pub(super) const HUD_USAGE: &str = "Usage: :agents hud [open|close|toggle|select <next|prev|pane-id>|page <next|prev>|approve [pane]|prompt [pane]|diff [pane]|zoom [pane]]";
 pub(super) const REPLAY_USAGE: &str =
-    "Usage: :agent replay <pane-id|close|prev|next|first|last|turn <id>|up [n]|down [n]>";
+    "Usage: :agent replay [show]|<pane-id|close|prev|next|first|last|turn <id>|up [n]|down [n]>";
 pub(super) const WATCHDOG_USAGE: &str = "Usage: :agents watchdog [status]";
 
 fn pane_id(raw: &str) -> Option<PaneId> {
@@ -71,6 +71,7 @@ pub(super) fn parse_replay(args: &[&str]) -> Result<ColonCommand, String> {
         Ok(ColonCommand::AgentsReplay(ReplayOp::Scroll(sign * k)))
     };
     let op = match args {
+        [] | ["show"] => ReplayOp::Show,
         ["close"] => ReplayOp::Close,
         ["prev"] => ReplayOp::Prev,
         ["next"] => ReplayOp::Next,

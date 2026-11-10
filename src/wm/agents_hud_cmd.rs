@@ -37,6 +37,8 @@ pub enum HudOp {
 /// One `:agent replay ...` operation, lowered to [`crate::action::Action::AgentsReplay`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReplayOp {
+    /// `:agent replay [show]` - open the replay view on the focused pane (no-op when already open).
+    Show,
     /// `:agent replay <pane>` - open the read-only replay view over a pane's turn log.
     Open(PaneId),
     /// `:agent replay close` (Esc) - leave the view.
@@ -91,6 +93,7 @@ impl ReplayOp {
     pub fn colon_form(&self) -> String {
         let p = ":agent replay";
         match self {
+            Self::Show => format!("{p} show"),
             Self::Open(id) => format!("{p} {id}"),
             Self::Close => format!("{p} close"),
             Self::Prev => format!("{p} prev"),

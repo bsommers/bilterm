@@ -35,6 +35,8 @@ pub mod rpc_window;
 pub mod rpc_session_map;
 pub mod rpc_traffic;
 pub mod rpc_coords;
+pub mod rpc_context;
+pub mod rpc_swarm;
 pub mod rpc_voice;
 pub mod rpc_web;
 pub mod server;

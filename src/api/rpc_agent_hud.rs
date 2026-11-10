@@ -89,6 +89,7 @@ impl AutomationControlPlane {
                 .and_then(JsonValue::as_i64)
                 .map_or(1, |l| l.clamp(-1000, 1000) as i16);
             let op = match op {
+                "show" => ReplayOp::Show,
                 "open" => ReplayOp::Open(pane),
                 "close" => ReplayOp::Close,
                 "prev" => ReplayOp::Prev,
