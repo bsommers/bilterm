@@ -165,3 +165,20 @@ fn drop_ends_a_thread_blocked_in_write_once_the_pty_is_torn_down() {
     assert!(probe.wait_finished(LONG));
     assert!(out.lock().unwrap().is_empty(), "queued bytes are discarded on close");
 }
+
+/// Review fix: the thread's "finished" flag is published under the state lock, so a waiter can
+/// never check the flag, miss the notify, and sleep out its whole patience. With the race a
+/// missed notify costs `LONG` (30 s) per iteration; the bound below is 1000x the normal total.
+#[test]
+fn wait_finished_never_misses_the_exit_notification() {
+    let started = std::time::Instant::now();
+    for _ in 0..2000 {
+        let (sink, _out) = open_sink();
+        let w = PtyWriter::spawn(sink, counters()).unwrap();
+        let probe = w.probe();
+        let waiter = std::thread::spawn(move || probe.wait_finished(LONG));
+        drop(w);
+        assert!(waiter.join().unwrap());
+    }
+    assert!(started.elapsed() < LONG, "a waiter slept through the exit notification");
+}

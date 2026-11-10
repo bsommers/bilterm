@@ -149,3 +149,52 @@ fn write_after_the_child_died_marks_the_pane_exited() {
     }));
     assert!(pane.has_exited());
 }
+
+/// Review fix: a link command refused under PTY backpressure is held and delivered, in order,
+/// once the child reads again (it used to be popped and silently dropped).
+#[test]
+fn link_command_refused_under_backpressure_is_held_and_delivered_in_order() {
+    use bilterm::tmux::link::LinkDriver;
+    use bilterm::tmux::transport::PtyLinkDriver;
+
+    let dir = std::env::temp_dir().join(format!("btfifo-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let fifo = dir.join("gate");
+    let _ = std::fs::remove_file(&fifo);
+    assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+    // The child does not read its tty until the gate fifo is opened and closed by the test.
+    let script = format!("stty raw -echo; printf READY; cat '{}' >/dev/null; exec cat", fifo.display());
+    let (control, mut driver) = PtyLinkDriver::spawn(sh(&script)).unwrap();
+    let mut seen = Vec::new();
+    assert!(wait_for(|| {
+        seen.extend_from_slice(&driver.pump().raw_output);
+        seen.ends_with(b"READY")
+    }));
+
+    // Fill the input backlog to its limit, then queue two commands.
+    let block = vec![b'k'; 1024 * 1024];
+    for _ in 0..MAX_QUEUED_INPUT_BYTES / block.len() {
+        driver.write_raw(&block).unwrap();
+    }
+    control.cmd_tx.send("first-command".to_string()).unwrap();
+    control.cmd_tx.send("second-command".to_string()).unwrap();
+    let mut got = driver.pump().raw_output;
+    assert_eq!(driver.held_command_len(), "first-command\n".len(), "refused command is held, not dropped");
+    let _ = driver.pump();
+    assert_eq!(driver.held_command_len(), "first-command\n".len(), "still held while the backlog is full");
+
+    // Open the gate: the child starts reading and echoes everything back.
+    drop(std::fs::OpenOptions::new().write(true).open(&fifo).unwrap());
+    let tail = b"first-command\nsecond-command\n";
+    assert!(
+        wait_for(|| {
+            got.extend_from_slice(&driver.pump().raw_output);
+            got.ends_with(tail)
+        }),
+        "commands were lost or reordered; got {} bytes",
+        got.len()
+    );
+    assert_eq!(got.len(), MAX_QUEUED_INPUT_BYTES + tail.len(), "nothing dropped, nothing duplicated");
+    assert_eq!(driver.held_command_len(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}

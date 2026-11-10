@@ -1,3 +1,4 @@
+mod exit_report;
 pub mod line_discipline;
 pub mod shell_integration;
 pub mod wake;
@@ -140,8 +141,8 @@ pub enum PtyEvent {
 pub struct PtySession {
     /// Input queue drained by this PTY's writer thread; writes never block the caller.
     writer: Arc<writer::PtyWriter>,
-    /// A writer failure has been turned into a `PtyEvent::Exited` already.
-    write_failure_reported: bool,
+    /// `drain_events` has handed out a `PtyEvent::Exited` (the reader's or a synthesised one).
+    exit_reported: bool,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
     output_rx: mpsc::Receiver<PtyEvent>,
@@ -243,7 +244,7 @@ impl PtySession {
         Ok(Self {
             master: Mutex::new(Some(pair.master)),
             writer: Arc::new(writer),
-            write_failure_reported: false,
+            exit_reported: false,
             child: Mutex::new(Some(child)),
             output_rx: rx,
             current_size: Mutex::new((initial_rows, initial_cols)),
@@ -382,17 +383,10 @@ impl PtySession {
                 Err(_) => break,
             }
         }
-        // A failed write means the PTY is gone for input: report it as an exit (once, and only
-        // after the output queued before it) so the pane is held/closed like any dead child.
-        if events.len() < MAX_EVENTS_PER_POLL
-            && !self.write_failure_reported
-            && let Some(err) = self.writer.failure()
-        {
-            self.write_failure_reported = true;
-            tracing::warn!(error = %err, pid = ?self.child_pid, "PTY write failed; reporting the pane as exited");
-            if !events.iter().any(|e| matches!(e, PtyEvent::Exited(_))) {
-                events.push(PtyEvent::Exited(None));
-            }
+        let drained_all = events.len() < MAX_EVENTS_PER_POLL;
+        let failure = if drained_all && !self.exit_reported { self.writer.failure() } else { None };
+        if exit_report::settle(&mut events, &mut self.exit_reported, failure.as_deref()) {
+            tracing::warn!(error = ?failure, pid = ?self.child_pid, "PTY write failed; reporting the pane as exited");
         }
         events
     }

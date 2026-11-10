@@ -66,6 +66,9 @@ struct FinishGuard(Arc<Shared>);
 
 impl Drop for FinishGuard {
     fn drop(&mut self) {
+        // Under the state lock: a waiter checks `finished` and then waits while holding it, so
+        // a store + notify outside the lock could land in between and be missed.
+        let _st = self.0.lock();
         self.0.finished.store(true, Ordering::SeqCst);
         self.0.drained.notify_all();
     }

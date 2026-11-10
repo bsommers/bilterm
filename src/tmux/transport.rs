@@ -33,6 +33,11 @@ pub struct PtyLinkDriver {
     exit_reported: bool,
     /// The PTY stream ended at this instant; the exit code is still being collected.
     exit_seen: Option<std::time::Instant>,
+    /// A command taken off `cmd_rx` that the PTY refused (input backlog full) or failed to
+    /// take; it is offered again, ahead of newer commands, on the next pump.
+    held_cmd: Option<String>,
+    /// The current refusal has been logged (one line per episode, not one per pump).
+    refusal_logged: bool,
 }
 
 impl Default for PtyLinkDriver {
@@ -45,6 +50,8 @@ impl Default for PtyLinkDriver {
             cmd_rx: None,
             exit_reported: false,
             exit_seen: None,
+            held_cmd: None,
+            refusal_logged: false,
         }
     }
 }
@@ -82,6 +89,8 @@ impl PtyLinkDriver {
             cmd_rx: Some(cmd_rx),
             exit_reported: false,
             exit_seen: None,
+            held_cmd: None,
+            refusal_logged: false,
         };
         Ok((control, driver))
     }
@@ -119,14 +128,36 @@ impl PtyLinkDriver {
         let (Some(rx), Some(pty)) = (self.cmd_rx.as_mut(), self.pty.as_ref()) else {
             return;
         };
-        while let Ok(mut cmd) = rx.try_recv() {
-            if !cmd.ends_with('\n') {
-                cmd.push('\n');
+        // Order is kept: the held command first, then the channel. A refused command is never
+        // dropped; it stays held until the PTY takes it or the driver is killed.
+        loop {
+            let cmd = match self.held_cmd.take() {
+                Some(c) => c,
+                None => match rx.try_recv() {
+                    Ok(mut c) => {
+                        if !c.ends_with('\n') {
+                            c.push('\n');
+                        }
+                        c
+                    }
+                    Err(_) => break,
+                },
+            };
+            if let Err(err) = pty.write_all(cmd.as_bytes()) {
+                if !self.refusal_logged {
+                    self.refusal_logged = true;
+                    tracing::warn!(target: "bilterm::link", error = %err, bytes = cmd.len(), "link command not written; held for retry");
+                }
+                self.held_cmd = Some(cmd);
+                return;
             }
-            if pty.write_all(cmd.as_bytes()).is_err() {
-                break;
-            }
+            self.refusal_logged = false;
         }
+    }
+
+    /// Bytes of the command held back by PTY backpressure (0 when none).
+    pub fn held_command_len(&self) -> usize {
+        self.held_cmd.as_ref().map_or(0, String::len)
     }
 }
 
