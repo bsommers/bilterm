@@ -29,6 +29,7 @@ pub(crate) mod menu_keys;
 pub mod modal;
 pub mod mouse;
 pub mod mouse_media;
+mod mouse_focus;
 pub mod mouse_select;
 mod mouse_wm;
 pub mod script_studio;
