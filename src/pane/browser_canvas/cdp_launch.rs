@@ -316,6 +316,13 @@ mod tests {
         drop(proc_);
         assert!(finish_reapers(Duration::from_secs(5)), "reaper finished");
         assert!(!dir.exists(), "profile dir removed after drop");
+        // The group leader is reaped above, but its SIGKILLed children are reaped by init, and a
+        // not-yet-reaped zombie still counts as a group member. Wait (bounded) for that reap.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only probes for existence; nothing is delivered.
+        while unsafe { libc::kill(-pgid, 0) } == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
         // SAFETY: as above.
         assert_ne!(unsafe { libc::kill(-pgid, 0) }, 0, "process group is gone");
     }
