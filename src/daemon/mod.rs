@@ -679,8 +679,19 @@ mod tests {
         assert!(sock_path.exists());
         drop(listener);
 
-        // 2. Dropped listener (ConnectionRefused) -> unlinks stale socket and returns Ok(false)
-        assert!(!DaemonServerState::probe_or_clean_stale_socket(&sock_path).unwrap());
+        // 2. Dropped listener (ConnectionRefused) -> unlinks stale socket and returns Ok(false).
+        // A child forked by a parallel test may briefly inherit the listening fd until its
+        // `exec` (macOS sets CLOEXEC after `socket()`), so the socket can still look live for a
+        // moment; a live probe never unlinks, so retrying is safe.
+        let mut live = true;
+        for _ in 0..50 {
+            live = DaemonServerState::probe_or_clean_stale_socket(&sock_path).unwrap();
+            if !live {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(!live, "dropped listener must be detected as stale");
         assert!(!sock_path.exists());
 
         // 3. PermissionDenied on parent/socket -> returns Err(PermissionDenied) and NEVER unlinks
