@@ -325,8 +325,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             };
             match wm.restore_session(&target) {
                 Ok(count) => {
+                    let note = wm.take_restore_note().map(|n| format!(" — {n}")).unwrap_or_default();
                     wm.active_pane_mut().set_status_message(
-                        Some(format!("Restored session '{target}' ({count} pane(s))")),
+                        Some(format!("Restored session '{target}' ({count} pane(s)){note}")),
                     );
                 }
                 Err(err) => {

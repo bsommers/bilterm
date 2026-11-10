@@ -43,7 +43,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":keys check", "—", "Check the active key profile for conflicting bindings"),
     (":keys explain ", "—", "Explain what a chord does in the active key profile"),
     (":keys profile ", "—", "Show or switch the key profile (auto|mac|windows|linux|portable|legacy)"),
-    (":detach", "Ctrl+X D", "Detach client & save full multi-pane window layout intact"),
+    (":detach", "Ctrl+X D", "Detach client & save the multi-pane window layout (programs restart on attach)"),
     (":attach", "bilterm -a", "Re-attach & restore saved/detached multi-pane window layout"),
     (":exit-guard guard", "—", "Enable Exit Guard modal on final/root shell exit"),
     (":exit-guard respawn", "—", "Auto-respawn shell in-place on final/root shell exit"),

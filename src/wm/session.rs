@@ -73,10 +73,16 @@ pub struct SavedPaneState {
     pub colors: BTreeMap<String, String>,
 }
 
+/// Newest session file format this build writes and understands.
+pub const SESSION_FORMAT_VERSION: u32 = 1;
+
 /// Declarative TOML snapshot of a multi-pane Bilterm workspace (`ECO-02`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedWorkspaceSession {
     pub name: String,
+    /// On-disk format version; files written before versioning read as `0`.
+    #[serde(default)]
+    pub format_version: u32,
     pub layout_mode: WorkspaceLayoutMode,
     pub split_tree: SplitTree,
     pub z_order: Vec<PaneId>,
@@ -429,6 +435,7 @@ impl WindowManager {
             .collect();
         SavedWorkspaceSession {
             name: name.to_string(),
+            format_version: SESSION_FORMAT_VERSION,
             layout_mode: self.layout_mode,
             split_tree: self.split_tree.clone(),
             z_order: self.z_stack.order().to_vec(),
@@ -528,7 +535,7 @@ impl WindowManager {
         let snap = self.snapshot_session(file_stem);
         let toml_str = toml::to_string_pretty(&snap)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
-        crate::secure_fs::write_private_file(&path, toml_str.as_bytes())?;
+        crate::secure_fs::write_private_file_durable(&path, toml_str.as_bytes())?;
         Ok(path)
     }
 
@@ -550,9 +557,22 @@ impl WindowManager {
             safe_name
         };
         let path = self.resolve_session_dir()?.join(format!("{file_stem}.toml"));
-        let raw = std::fs::read_to_string(&path)?;
+        // A truncated or corrupt file falls back to the last good `.bak`; never start empty silently.
+        let parses = |t: &str| toml::from_str::<SavedWorkspaceSession>(t).is_ok();
+        let (raw, source) = crate::secure_fs::read_with_backup(&path, &parses)?;
         let mut saved: SavedWorkspaceSession = toml::from_str(&raw)
             .map_err(|e| crate::error::BiltermError::Config(e.to_string()))?;
+        if saved.format_version > SESSION_FORMAT_VERSION {
+            return Err(crate::error::BiltermError::Config(format!(
+                "session '{file_stem}' uses file format v{} but this bilterm reads up to v{SESSION_FORMAT_VERSION}",
+                saved.format_version
+            )));
+        }
+        if source == crate::secure_fs::DurableSource::Backup {
+            self.set_restore_note(format!(
+                "session file '{file_stem}.toml' was corrupt: restored the last good backup (damaged copy kept as {file_stem}.toml.corrupt)"
+            ));
+        }
         let was_detached = saved.detached;
         self.config.history_session = file_stem.clone();
         self.config.active_layout_profile = file_stem.clone();
