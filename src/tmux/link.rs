@@ -23,8 +23,11 @@ pub const DIAG_LINE_CAP: usize = 160;
 pub const CONTROL_LINE_MAX: usize = 256 * 1024;
 /// Queued tmux commands; the oldest non-hydrate commands are dropped beyond this.
 pub const OUTBOUND_CAP: usize = 256;
-/// Bytes buffered per pane between ticks.
-pub const REMOTE_INPUT_CAP: usize = 4096;
+/// Bytes buffered per pane between ticks (a large paste arrives as one event).
+pub const REMOTE_INPUT_CAP: usize = 1024 * 1024;
+/// Typed bytes kept per pane while the command queue is busy; beyond this input is refused with a
+/// status message.
+pub const INPUT_BACKLOG_CAP: usize = 4 * 1024 * 1024;
 /// Payload bytes per `send-keys -H` command.
 pub const SEND_KEYS_CHUNK: usize = 512;
 /// Pending reply FIFO bound.
@@ -180,6 +183,8 @@ pub struct LinkMachine {
     pub(crate) connected_since: Option<u64>,
     /// `true` once a `Spawn` was issued and no `Down`/kill has followed (a transport may exist).
     pub(crate) transport_live: bool,
+    /// Largest extra delay added to a backoff step, in percent of the step (0 = exact schedule).
+    pub(crate) jitter_pct: u32,
 }
 
 /// What one transport poll produced.
@@ -247,6 +252,12 @@ pub struct LinkAux {
     pub last_mapped_count: usize,
     /// Free-form counters/flags keyed by name.
     pub notes: std::collections::BTreeMap<String, String>,
+    /// Typed bytes not yet turned into `send-keys` (the command queue was busy), per pane.
+    pub input_backlog: std::collections::BTreeMap<PaneId, Vec<u8>>,
+    /// Screen state reported for a tmux pane, consumed by that pane's next capture reply.
+    pub pane_states: std::collections::BTreeMap<usize, crate::tmux::pane_state::PaneState>,
+    /// Client / per-window sizes last sent to tmux (change detection).
+    pub sent_sizes: std::collections::BTreeMap<Option<usize>, (u16, u16)>,
 }
 
 /// All link state held by the `WindowManager` (one link at a time, P-01).

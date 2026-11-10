@@ -48,8 +48,11 @@ fn link_then_disconnect_transitions() {
 fn remote_buffer_is_capped() {
     let mut p = headless();
     p.set_remote_input_tap(true);
-    p.write_to_pty(&vec![b'a'; 10_000]).unwrap();
-    assert_eq!(p.take_remote_input().len(), 4096);
+    // The cap is sized for a large paste arriving as one event (it was 4096, which silently
+    // truncated pastes); beyond it bytes are still dropped rather than buffered without bound.
+    let cap = bilterm::tmux::link::REMOTE_INPUT_CAP;
+    p.write_to_pty(&vec![b'a'; cap + 10_000]).unwrap();
+    assert_eq!(p.take_remote_input().len(), cap);
 }
 
 #[test]

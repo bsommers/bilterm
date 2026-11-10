@@ -6,6 +6,7 @@ use crate::daemon::registry::DaemonRegistry;
 use crate::daemon::supervisor::{
     daemon_lock_path_in, ensure_started, resolve_runtime_dir, stop_daemon, DaemonLockRecord, DaemonStartResult,
 };
+use crate::wm::resilience::DaemonJob;
 use crate::wm::WindowManager;
 
 /// Executes a daemon supervisor operation against the local runtime directory.
@@ -18,6 +19,28 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
             return false;
         }
     };
+
+    // With a UI attached, start/stop wait on a worker; the result arrives as a status message.
+    if !wm.is_headless() {
+        let job = match op {
+            DaemonSupervisorOp::Start { name } => {
+                Some(DaemonJob::Start { name: name.clone().unwrap_or_else(|| "default".to_string()) })
+            }
+            DaemonSupervisorOp::Stop { name, force } => Some(DaemonJob::Stop {
+                name: name.clone().unwrap_or_else(|| "default".to_string()),
+                force: *force,
+            }),
+            _ => None,
+        };
+        if let Some(job) = job {
+            let verb = if matches!(job, DaemonJob::Start { .. }) { "starting" } else { "stopping" };
+            let (DaemonJob::Start { name } | DaemonJob::Stop { name, .. }) = &job;
+            wm.active_pane_mut().set_status_message(Some(format!("Daemon '{name}': {verb}…")));
+            wm.spawn_daemon_job(&runtime_dir, job);
+            wm.open_daemon_window_from(&runtime_dir);
+            return false;
+        }
+    }
 
     match op {
         DaemonSupervisorOp::List => {
@@ -99,12 +122,12 @@ pub fn execute_daemon_command(wm: &mut WindowManager, op: &DaemonSupervisorOp) -
                 let res = JsonValue::obj([
                     ("name", JsonValue::String(rec.name.clone())),
                     ("pid", JsonValue::Number(rec.pid as i64)),
-                    ("status", JsonValue::String("locked".to_string())),
+                    ("status", JsonValue::String("crashed".to_string())),
                 ]);
                 wm.set_command_data(res.to_json_string());
                 wm.active_pane_mut().set_status_message(Some(format!(
-                    "Daemon '{}': lock held by PID {}",
-                    rec.name, rec.pid
+                    "Daemon '{}': crashed (PID {} exited without cleanup) — ':daemon start {}' restarts it",
+                    rec.name, rec.pid, rec.name
                 )));
             } else {
                 let res = JsonValue::obj([

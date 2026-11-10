@@ -60,6 +60,27 @@ async fn next_live_request(
     }
 }
 
+/// Consecutive host input stream read errors after which the app quits.
+pub const MAX_INPUT_STREAM_ERRORS: u8 = 8;
+
+/// Next delivery of a long-lived Unix signal stream (pending forever when unavailable).
+#[cfg(unix)]
+async fn next_unix_signal(sig: &mut Option<tokio::signal::unix::Signal>) {
+    match sig.as_mut() {
+        Some(s) => {
+            if s.recv().await.is_none() {
+                std::future::pending::<()>().await;
+            }
+        }
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(not(unix))]
+async fn next_unix_signal(_sig: &mut ()) {
+    std::future::pending().await
+}
+
 /// Top-level Bilterm TUI application state and async multi-pane event loop coordinator.
 pub struct App {
     pub wm: WindowManager,
@@ -115,6 +136,16 @@ impl App {
         };
         let mut tick = tokio::time::interval(Duration::from_millis(16));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut input_errors: u8 = 0;
+        let ctrl_c = tokio::signal::ctrl_c();
+        tokio::pin!(ctrl_c);
+        #[cfg(unix)]
+        let (mut sigterm, mut sighup) = {
+            use tokio::signal::unix::{signal, SignalKind};
+            (signal(SignalKind::terminate()).ok(), signal(SignalKind::hangup()).ok())
+        };
+        #[cfg(not(unix))]
+        let (mut sigterm, mut sighup) = ((), ());
 
         loop {
             if self.needs_redraw {
@@ -139,11 +170,10 @@ impl App {
 
             tokio::select! {
                 maybe_event = reader.next() => {
-                    if let Some(Ok(event)) = maybe_event {
+                    if matches!(maybe_event, Some(Ok(_))) {
                         input_tap.event(1);
-                        self.handle_crossterm_event(event)?;
-                        self.needs_redraw = true;
                     }
+                    self.on_input_stream_item(maybe_event, &mut input_errors);
                 }
                 Some((line, reply)) = next_live_request(&mut live_rx) => {
                     if let Some(handler) = live.as_mut() {
@@ -160,7 +190,13 @@ impl App {
                         self.needs_redraw = true;
                     }
                 }
-                _ = tokio::signal::ctrl_c() => {
+                _ = &mut ctrl_c => {
+                    self.should_quit = true;
+                }
+                _ = next_unix_signal(&mut sigterm) => {
+                    self.should_quit = true;
+                }
+                _ = next_unix_signal(&mut sighup) => {
                     self.should_quit = true;
                 }
             }
@@ -201,6 +237,34 @@ impl App {
             out.flush()?;
         }
         Ok(())
+    }
+
+    /// Consumes one item of the host input stream. A closed stream (`None`) or
+    /// [`MAX_INPUT_STREAM_ERRORS`] consecutive read errors quit instead of spinning; an error from
+    /// handling one event (e.g. a PTY write on one pane) is shown in the status line, not fatal.
+    pub fn on_input_stream_item(&mut self, item: Option<io::Result<Event>>, consecutive_errors: &mut u8) {
+        match item {
+            Some(Ok(event)) => {
+                *consecutive_errors = 0;
+                if let Err(err) = self.handle_crossterm_event(event) {
+                    self.report_event_error(&err);
+                }
+                self.needs_redraw = true;
+            }
+            Some(Err(_)) => {
+                *consecutive_errors = consecutive_errors.saturating_add(1);
+                if *consecutive_errors >= MAX_INPUT_STREAM_ERRORS {
+                    self.should_quit = true;
+                }
+            }
+            None => self.should_quit = true,
+        }
+    }
+
+    /// Shows a non-fatal input-handling error in the focused pane's status line.
+    pub fn report_event_error(&mut self, err: &crate::error::BiltermError) {
+        self.wm.active_pane_mut().set_status_message(Some(format!("Input error: {err}")));
+        self.needs_redraw = true;
     }
 
     pub fn handle_crossterm_event(&mut self, event: Event) -> Result<()> {

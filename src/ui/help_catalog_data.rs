@@ -5,7 +5,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     ("═══ LEADER PREFIX (Ctrl+X), DETACH & GLOBAL HOTKEYS ═══", ""),
     ("Ctrl+X <key>", "Universal Leader Prefix (works in Command Box & Raw PTY)"),
     ("Ctrl+X ? / F1 / :help", "Toggle this interactive Help & :colon Command reference"),
-    ("Ctrl+X D / :detach [name]", "Detach client & preserve full multi-pane window layout intact"),
+    ("Ctrl+X D / :detach [name]", "Detach client & save the multi-pane window layout (programs restart on attach)"),
     (":attach [name] / bilterm -a", "Re-attach & restore saved/detached multi-pane window layout"),
     ("bilterm ls / bilterm sessions", "List live background daemon sockets & saved .toml session layouts"),
     (":daemon [list|status|start|stop|switch|prune]", "Supervise background daemons: PIDs, sockets, peer discovery, graceful stop"),

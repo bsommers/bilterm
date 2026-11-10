@@ -270,7 +270,7 @@ impl Default for ThemePalette {
 /// Parses a `#RRGGBB` hex string into a `ratatui::style::Color::Rgb`.
 pub fn parse_hex_color(hex: &str) -> Option<Color> {
     let trimmed = hex.trim().strip_prefix('#')?;
-    if trimmed.len() != 6 {
+    if trimmed.len() != 6 || !trimmed.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let r = u8::from_str_radix(&trimmed[0..2], 16).ok()?;

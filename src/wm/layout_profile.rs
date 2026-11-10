@@ -641,6 +641,7 @@ impl WindowManager {
         }
 
         let pane_count = new_panes.len();
+        self.forget_all_pane_ids_before_replace();
         self.panes = new_panes;
         self.restore_pane_chrome(&saved.panes);
         self.split_tree = saved.split_tree.clone();

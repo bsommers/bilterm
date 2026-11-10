@@ -4,7 +4,7 @@
 //! graceful stop, and auto-spawn capabilities for Bilterm background daemons.
 
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 #[cfg(unix)]
 use std::io::{Seek, SeekFrom};
@@ -21,6 +21,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::api::json::JsonValue;
+pub use crate::daemon::liveness::{clear_stale_record, daemon_liveness, lock_liveness, DaemonLiveness};
 pub use crate::daemon::types::{DaemonError, SignalablePid};
 use crate::secure_fs::{ensure_private_dir, validate_safe_name};
 #[cfg(unix)]
@@ -128,9 +129,18 @@ impl DaemonLock {
         &self.lock_path
     }
 
-    /// Explicitly releases the lock, unlinking the lockfile and releasing `flock`.
+    /// Clears the record while the lock is still held (a clean exit leaves an empty file).
+    /// The lockfile is never unlinked: another process may already have it open.
+    fn clear_record(&mut self) {
+        if let Some(f) = self.file.as_mut() {
+            let _ = f.set_len(0);
+            let _ = f.sync_all();
+        }
+    }
+
+    /// Explicitly releases the lock: clears the record, then drops the `flock`.
     pub fn release(mut self) -> io::Result<()> {
-        let _ = fs::remove_file(&self.lock_path);
+        self.clear_record();
         #[cfg(unix)]
         {
             if let Some(ref f) = self.file {
@@ -148,6 +158,7 @@ impl DaemonLock {
 
 impl Drop for DaemonLock {
     fn drop(&mut self) {
+        self.clear_record();
         #[cfg(unix)]
         {
             if let Some(ref f) = self.file {
@@ -209,7 +220,7 @@ pub fn check_signalable_pid_alive(pid: SignalablePid) -> bool {
     {
         let ret = unsafe { libc::kill(pid.as_raw() as libc::pid_t, 0) };
         if ret == 0 {
-            true
+            !crate::daemon::liveness::pid_is_zombie(pid.as_raw())
         } else {
             let err = io::Error::last_os_error();
             err.raw_os_error() != Some(libc::ESRCH)
@@ -250,19 +261,24 @@ pub fn acquire_lock(
 
         let mut file = open_opts.open(&lock_path)?;
         let fd = file.as_raw_fd();
-        let flock_res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+        // A liveness probe holds a shared lock for microseconds: retry before giving up.
+        let mut flock_res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+        for _ in 0..5 {
+            if flock_res == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+            flock_res = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+        }
         if flock_res == 0 {
             // Flock acquired. Check if prior dead daemon left a stale socket.
             let mut old_content = String::new();
             let _ = file.read_to_string(&mut old_content);
-            if let Ok(old_rec) = DaemonLockRecord::from_json(&old_content)
-                && fs::symlink_metadata(&old_rec.socket_path).is_ok()
-            {
-                let _ = fs::remove_file(&old_rec.socket_path);
+            // We own the lock now; only sockets nobody answers on are removed.
+            if let Ok(old_rec) = DaemonLockRecord::from_json(&old_content) {
+                let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&old_rec.socket_path);
             }
-            if fs::symlink_metadata(&socket_path).is_ok() {
-                let _ = fs::remove_file(&socket_path);
-            }
+            let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&socket_path);
 
             // Truncate and write fresh record.
             let record = DaemonLockRecord {
@@ -283,39 +299,11 @@ pub fn acquire_lock(
             }));
         }
 
-        // Flock blocked. Inspect lockfile contents.
+        // The lock is held, and a held lock is a live daemon (PIDs are not consulted).
         let mut content = String::new();
         let _ = file.read_to_string(&mut content);
-
         if let Ok(rec) = DaemonLockRecord::from_json(&content) {
-            if check_pid_alive(rec.pid) {
-                return Ok(DaemonLockResult::AlreadyHeld(rec));
-            }
-            // Stale lock detected: PID is dead!
-            if fs::symlink_metadata(&rec.socket_path).is_ok() {
-                let _ = fs::remove_file(&rec.socket_path);
-            }
-            // Retry flock after brief backoff
-            std::thread::sleep(Duration::from_millis(20));
-            let retry_flock = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-            if retry_flock == 0 {
-                let record = DaemonLockRecord {
-                    pid: std::process::id(),
-                    name: name.to_string(),
-                    version: env!("CARGO_PKG_VERSION").to_string(),
-                    started_at_ms: now_ms(),
-                    socket_path,
-                };
-                file.set_len(0)?;
-                file.seek(SeekFrom::Start(0))?;
-                file.write_all(record.to_json().as_bytes())?;
-                file.sync_all()?;
-                return Ok(DaemonLockResult::Acquired(DaemonLock {
-                    file: Some(file),
-                    record,
-                    lock_path,
-                }));
-            }
+            return Ok(DaemonLockResult::AlreadyHeld(rec));
         }
     }
 
@@ -376,14 +364,15 @@ pub fn spawn_daemon_in(runtime_dir: &Path, name: &str) -> io::Result<(u32, PathB
         cmd.process_group(0);
     }
 
-    let child = cmd.spawn()?;
-    Ok((child.id(), sock_path))
-}
-
-fn read_lock_record(lock_path: &Path) -> Option<DaemonLockRecord> {
-    let mut s = String::new();
-    File::open(lock_path).ok()?.read_to_string(&mut s).ok()?;
-    DaemonLockRecord::from_json(&s).ok()
+    let mut child = cmd.spawn()?;
+    let pid = child.id();
+    // Reap the daemon when it exits so it never lingers as a zombie of this process.
+    std::thread::Builder::new()
+        .name("daemon-reaper".to_string())
+        .spawn(move || {
+            let _ = child.wait();
+        })?;
+    Ok((pid, sock_path))
 }
 
 /// Ensures the daemon for `name` is running. Returns `AlreadyRunning` or `Started`.
@@ -396,8 +385,7 @@ pub fn ensure_started(runtime_dir: &Path, name: &str) -> io::Result<DaemonStartR
     let lock_path = daemon_lock_path_in(runtime_dir, name)?;
 
     // Already running per lockfile?
-    if let Some(record) = read_lock_record(&lock_path)
-        && check_pid_alive(record.pid)
+    if let DaemonLiveness::Running(record) = lock_liveness(&lock_path)
         && crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path)
     {
         return Ok(DaemonStartResult::AlreadyRunning {
@@ -424,9 +412,10 @@ pub fn ensure_started(runtime_dir: &Path, name: &str) -> io::Result<DaemonStartR
         if !crate::daemon::process::probe_or_cleanup_stale_socket(&sock_path) {
             continue;
         }
-        let pid = read_lock_record(&lock_path)
-            .map(|r| r.pid)
-            .filter(|p| check_pid_alive(*p))
+        let pid = match lock_liveness(&lock_path) {
+            DaemonLiveness::Running(r) => Some(r.pid),
+            _ => None,
+        }
             .or_else(|| {
                 crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
                     .into_iter()
@@ -542,99 +531,72 @@ pub fn kill_daemon_process(pid: SignalablePid, force: bool) -> io::Result<()> {
     }
 }
 
-/// Tries a non-blocking exclusive `flock` on `lock_path`.
-///
-/// Returns `Ok(Some(file))` (lock now held by the caller) when no daemon holds it, i.e. the
-/// lockfile is stale, and `Ok(None)` when a live daemon holds it.
-#[cfg(unix)]
-fn claim_unheld_lock(lock_path: &Path) -> io::Result<Option<File>> {
-    let file = private_open_options().read(true).open(lock_path)?;
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
-        return Ok(Some(file));
-    }
-    let err = io::Error::last_os_error();
-    if err.raw_os_error() == Some(libc::EWOULDBLOCK) {
-        Ok(None)
-    } else {
-        Err(err)
-    }
-}
-
-/// Gracefully stops daemon `name`.
+/// Stops daemon `name`. Returns `Ok(true)` when a live daemon was stopped, `Ok(false)` when
+/// none was running (a crashed daemon's leftovers are cleared). The lockfile is never unlinked.
 pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bool> {
-    #[cfg(not(unix))]
-    let _ = force;
     validate_safe_name(name)
         .map_err(|e| io::Error::new(ErrorKind::InvalidInput, format!("invalid daemon name: {e}")))?;
-
     let lock_path = daemon_lock_path_in(runtime_dir, name)?;
-    let record = if let Ok(mut f) = File::open(&lock_path) {
-        let mut s = String::new();
-        if f.read_to_string(&mut s).is_ok() {
-            DaemonLockRecord::from_json(&s).ok()
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let Some(rec) = record else {
-        // No lock record: fall back to the registry (json / synthesized) for a live daemon.
-        let mut stopped = false;
-        let sock = crate::daemon::process::session_daemon_socket_path_in(runtime_dir, name)?;
-        if let Some(e) = crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
-            .into_iter()
-            .find(|e| e.name == name)
-        {
-            if let Ok(sig_pid) = SignalablePid::try_from(i64::from(e.pid))
-                && sig_pid.as_raw() != std::process::id()
-                && check_signalable_pid_alive(sig_pid)
-                && crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path)
-            {
-                kill_daemon_process(sig_pid, force)?;
-                stopped = true;
-            }
-            let _ = fs::remove_file(&e.socket_path);
-        }
-        let _ = fs::remove_file(&lock_path);
-        let _ = fs::remove_file(sock);
+    let unregister = || {
         let _ = crate::daemon::registry::DaemonRegistry::unregister(runtime_dir, name);
-        return Ok(stopped);
     };
 
-    // Only signal a PID whose daemon still holds the flock: if we can claim the lock
-    // ourselves it is stale, and the recorded PID may now belong to an unrelated process.
-    #[cfg(unix)]
-    match claim_unheld_lock(&lock_path) {
-        Ok(None) => {}
-        Ok(Some(_stale_guard)) => {
-            let _ = fs::remove_file(&lock_path);
-            let _ = fs::remove_file(&rec.socket_path);
-            let _ = crate::daemon::registry::DaemonRegistry::unregister(runtime_dir, name);
-            return Ok(false);
+    match lock_liveness(&lock_path) {
+        DaemonLiveness::Running(rec) => {
+            if rec.pid == std::process::id() {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("daemon '{name}' is this process (PID {}); stop it from another instance", rec.pid),
+                ));
+            }
+            // The lock is held, so the recorded PID is the daemon and not a reused PID.
+            if let Ok(sig_pid) = SignalablePid::try_from(i64::from(rec.pid)) {
+                kill_daemon_process(sig_pid, force)?;
+            }
+            if clear_stale_record(&lock_path, Duration::from_millis(1000)) {
+                let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&rec.socket_path);
+                unregister();
+            }
+            Ok(true)
         }
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(e),
+        DaemonLiveness::Crashed(rec) => {
+            clear_stale_record(&lock_path, Duration::ZERO);
+            let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&rec.socket_path);
+            unregister();
+            Ok(false)
+        }
+        DaemonLiveness::Stopped => {
+            // No lock record: fall back to the registry (json / synthesized) for a live daemon.
+            let mut stopped = false;
+            let sock = crate::daemon::process::session_daemon_socket_path_in(runtime_dir, name)?;
+            if let Some(e) = crate::daemon::registry::DaemonRegistry::list_active(runtime_dir)
+                .into_iter()
+                .find(|e| e.name == name)
+            {
+                if let Ok(sig_pid) = SignalablePid::try_from(i64::from(e.pid))
+                    && sig_pid.as_raw() != std::process::id()
+                    && check_signalable_pid_alive(sig_pid)
+                    && crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path)
+                {
+                    kill_daemon_process(sig_pid, force)?;
+                    stopped = true;
+                    // The process we just stopped was the one answering on this socket.
+                    let _ = std::fs::remove_file(&e.socket_path);
+                }
+                let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&e.socket_path);
+            }
+            clear_stale_record(&lock_path, Duration::ZERO);
+            let _ = crate::daemon::process::probe_or_cleanup_stale_socket(&sock);
+            unregister();
+            Ok(stopped)
+        }
     }
-
-    if let Ok(sig_pid) = SignalablePid::try_from(i64::from(rec.pid))
-        && sig_pid.as_raw() != std::process::id()
-        && check_signalable_pid_alive(sig_pid)
-    {
-        kill_daemon_process(sig_pid, force)?;
-    }
-
-    let _ = fs::remove_file(&lock_path);
-    let _ = fs::remove_file(&rec.socket_path);
-    let _ = crate::daemon::registry::DaemonRegistry::unregister(runtime_dir, name);
-
-    Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn record_json(pid: &str) -> String {
         format!(r#"{{"pid":{pid},"name":"t","version":"0","started_at_ms":0,"socket_path":"/x.sock"}}"#)
@@ -683,7 +645,7 @@ mod tests {
         let _ = victim.wait();
         assert!(!stopped, "stale lock must report not_running");
         assert!(survived, "unrelated process must not be signaled");
-        assert!(!lock_path.exists(), "stale lockfile is cleaned up");
+        assert_eq!(fs::read_to_string(&lock_path).unwrap(), "", "stale record is cleared, file kept");
     }
 
     #[cfg(unix)]
@@ -695,7 +657,8 @@ mod tests {
         let DaemonLockResult::Acquired(_lock) = acquire_lock(runtime_dir, "live", sock).unwrap() else {
             panic!("expected to acquire fresh lock");
         };
-        // Held by this process: recognized as live (not stale), and never self-signaled.
-        assert!(stop_daemon(runtime_dir, "live", false).unwrap());
+        // Held by this process: recognized as live, never self-signaled, and left intact.
+        assert!(stop_daemon(runtime_dir, "live", false).is_err());
+        assert!(matches!(daemon_liveness(runtime_dir, "live"), DaemonLiveness::Running(_)));
     }
 }

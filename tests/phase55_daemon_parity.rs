@@ -30,11 +30,27 @@ const AREA: Rect = Rect {
     height: 40,
 };
 
+/// Points the runtime dir at a throwaway directory for the duration of a test, so nothing here
+/// can lock, signal or unlink anything in the user's real `$XDG_RUNTIME_DIR/bilterm`.
+fn sandbox_runtime() -> (std::sync::MutexGuard<'static, ()>, tempfile::TempDir) {
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().expect("sandbox runtime dir");
+    // SAFETY: serialized by ENV_LOCK; every test in this file goes through this function.
+    unsafe {
+        std::env::set_var("XDG_RUNTIME_DIR", dir.path());
+        std::env::remove_var("BILTERM_RUNTIME_DIR");
+    }
+    (guard, dir)
+}
+
 #[test]
 fn test_daemon_surface_parity() {
-    let runtime_dir = bilterm::secure_fs::private_runtime_dir().expect("runtime dir");
+    // This test takes the "default" daemon lock and sends `daemon.stop`.
+    let (_env, _sandbox) = sandbox_runtime();
+    let runtime_dir = bilterm::daemon::supervisor::resolve_runtime_dir().expect("runtime dir");
     let sock_path = bilterm::daemon::process::session_daemon_socket_path_in(&runtime_dir, "default").unwrap();
-    let _lock = bilterm::daemon::supervisor::acquire_lock(&runtime_dir, "default", sock_path.clone()).unwrap();
+    let mut lock = Some(bilterm::daemon::supervisor::acquire_lock(&runtime_dir, "default", sock_path.clone()).unwrap());
     #[cfg(unix)]
     let _listener = std::os::unix::net::UnixListener::bind(&sock_path).ok();
 
@@ -94,6 +110,10 @@ fn test_daemon_surface_parity() {
     let mut cp = AutomationControlPlane::new_headless(24, 80);
 
     for (name, colon, chord_str, subchord_code, rpc_method, mcp_action, canonical_action) in matrix {
+        // A daemon refuses to stop its own process, so release the in-process lock first.
+        if name == "stop" {
+            lock.take();
+        }
         // 1. Colon command parsing parity
         let parsed = parse_colon_command(colon)
             .unwrap_or_else(|| panic!("failed to recognize {colon}"))
@@ -156,6 +176,7 @@ fn test_daemon_surface_parity() {
 
 #[test]
 fn test_cross_daemon_find_indexing() {
+    let (_env, _sandbox) = sandbox_runtime();
     let runtime_dir = bilterm::secure_fs::private_runtime_dir().expect("runtime dir");
 
     // Register 2 live peer daemons
