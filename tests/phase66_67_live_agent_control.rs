@@ -35,6 +35,13 @@ fn isolate() {
     });
 }
 
+/// `bilterm::pty::set_live_socket` is process-global: tests that set it (directly or through
+/// `LiveRpc::start`) hold this lock so a parallel test cannot swap the path under a spawning child.
+fn live_socket_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn runtime_dir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("bt66-{tag}-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
     bilterm::secure_fs::ensure_private_dir(&dir).unwrap();
@@ -80,6 +87,7 @@ fn live_child_env_has_all_four_variables() {
 #[test]
 fn spawned_child_pty_receives_bilterm_env() {
     isolate();
+    let _live = live_socket_lock();
     bilterm::pty::set_live_socket(Some(PathBuf::from("/tmp/bt66-env-test.sock")));
     let cfg = PtyConfig {
         program: "/bin/sh".to_string(),
@@ -161,6 +169,7 @@ fn registry_default_link_follows_newest_and_never_clobbers_daemon_socket() {
 
 #[test]
 fn client_socket_resolution_order() {
+    let _live = live_socket_lock();
     let rt = runtime_dir("res");
     assert_eq!(resolve_client_socket(&rt, Some("/x/y.sock")), Some(PathBuf::from("/x/y.sock")));
     assert_eq!(resolve_client_socket(&rt, Some("unix:/x/y.sock")), Some(PathBuf::from("/x/y.sock")));
