@@ -357,7 +357,6 @@ fn swarm_colon_and_rpc_produce_equivalent_state() {
 #[test]
 fn swarm_run_review_heal_remain_unwired() {
     for (colon_probe, rpc) in [
-        (":swarm run plan.toml", "swarm.run"),
         (":swarm review 2", "swarm.review"),
         (":swarm heal 2", "swarm.heal"),
     ] {

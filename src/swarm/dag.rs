@@ -13,6 +13,17 @@ pub enum NodeState {
 }
 
 impl NodeState {
+    /// Lowercase name used by every surface (colon, HUD, RPC).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NodeState::Pending => "pending",
+            NodeState::Running => "running",
+            NodeState::Verifying => "verifying",
+            NodeState::Passed => "passed",
+            NodeState::Failed => "failed",
+        }
+    }
+
     fn can_go(self, to: NodeState) -> bool {
         use NodeState::*;
         matches!(

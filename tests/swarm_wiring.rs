@@ -3,7 +3,7 @@ use bilterm::action::Action;
 use bilterm::colon_command::parse_colon_command;
 
 fn sw(wm: &mut WindowManager, op: SwarmOp) -> Result<bilterm::api::json::JsonValue, String> {
-    wm.apply(Action::Swarm(op)).map_err(|e| e.to_string())?;
+    wm.apply_automation(Action::Swarm(op), None)?;
     Ok(bilterm::api::json::JsonValue::parse(&wm.take_command_data().unwrap_or_default()).unwrap_or(bilterm::api::json::JsonValue::Null))
 }
 use bilterm::wm::WindowManager;

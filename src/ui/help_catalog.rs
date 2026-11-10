@@ -490,7 +490,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":agents hud close", "Esc (HUD)", "Close the Mission Control HUD"),
     (":agents hud approve", "a (HUD)", "HUD: approve the selected blocked agent (same path as agent.approve)"),
     (":agents hud prompt", "p (HUD)", "HUD: focus the selected agent pane to type a prompt into it"),
-    (":agents hud diff", "d (HUD)", "HUD: show the selected agent's worktree diff (no swarm review surface yet: reports a status line)"),
+    (":agents hud diff", "d (HUD)", "HUD: show the selected agent's worktree diff (swarm panes: diff stat of the node's worktree; other panes report a status line)"),
     (":agents hud zoom", "z / Enter (HUD)", "HUD: focus and zoom the selected agent pane"),
     (":agents hud select next", "Right / Tab / j (HUD)", "HUD: select the next tile"),
     (":agents hud select prev", "Left / BackTab / k (HUD)", "HUD: select the previous tile"),

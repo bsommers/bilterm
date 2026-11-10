@@ -219,6 +219,8 @@ impl WindowManager {
             .map(|s| (s.pane_id, (s.name, s.state)))
             .collect();
         let ids: Vec<PaneId> = self.panes.keys().copied().collect();
+        let swarm_infos: std::collections::BTreeMap<PaneId, _> =
+            ids.iter().filter_map(|id| self.swarm_node_info(*id).map(|n| (*id, n))).collect();
         let hud = &mut self.agents_hud;
         for gone in hud
             .hud
@@ -243,6 +245,7 @@ impl WindowManager {
             card.generation = hud.generations.get(&id).copied().unwrap_or(1);
             card.masked = pane.is_password_prompt();
             card.queue_depth = self.prompt_queue.len(id);
+            card.swarm = swarm_infos.get(&id).cloned();
             if sample_spark {
                 card.push_rate(u32::try_from(pane.traffic_rates().0).unwrap_or(u32::MAX));
             }

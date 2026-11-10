@@ -18,6 +18,18 @@ fn opt_num(v: Option<u64>) -> JsonValue {
     v.map_or(JsonValue::Null, num)
 }
 
+fn swarm_json(n: Option<&crate::wm::swarm_cmd::SwarmNodeInfo>) -> JsonValue {
+    n.map_or(JsonValue::Null, |n| {
+        JsonValue::obj([
+            ("node", s(&n.node)),
+            ("state", s(n.state)),
+            ("wave", opt_num(n.wave.map(|w| w as u64))),
+            ("retries", num(u64::from(n.retries))),
+            ("worktree", s(&n.slug)),
+        ])
+    })
+}
+
 /// Snapshot of every HUD tile (state, generation token, rate history, queue depth, preview).
 pub fn hud_snapshot(wm: &WindowManager) -> JsonValue {
     let st = wm.agents_hud();
@@ -34,6 +46,7 @@ pub fn hud_snapshot(wm: &WindowManager) -> JsonValue {
                 ("approve_enabled", JsonValue::Bool(c.approve_enabled())),
                 ("masked", JsonValue::Bool(c.masked)),
                 ("queue_depth", num(c.queue_depth as u64)),
+                ("swarm", swarm_json(c.swarm.as_ref())),
                 ("badge", c.badge.as_deref().map_or(JsonValue::Null, s)),
                 ("tool", c.tool.as_deref().map_or(JsonValue::Null, s)),
                 ("file", c.file.as_deref().map_or(JsonValue::Null, s)),

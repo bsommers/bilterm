@@ -20,7 +20,9 @@ use super::agents_hud_cmd::{HudOp, ReplayOp};
 use super::mission_control_hud::{AgentCardTelemetry, HudButtonKind, MissionControlHud};
 use super::traffic::{TrafficEndpoint, TrafficKind};
 use super::turn_replay::TurnReplayLog;
+use super::swarm_surface::SwarmOp;
 use crate::action::Action;
+use crate::api::json::JsonValue;
 use crate::pane::PaneId;
 
 /// Recent watchdog alerts kept for `agent.watchdog` / `:agents watchdog`.
@@ -302,9 +304,21 @@ impl WindowManager {
                 }
                 Ok(Some(format!("Zoomed pane #{id}")))
             }
-            HudButtonKind::Diff => Ok(Some(
-                "Diff: no swarm review surface is wired yet (Phase 69 review has no :swarm command)".to_string(),
-            )),
+            HudButtonKind::Diff => {
+                let Some(info) = self.swarm_node_info(id) else {
+                    return Ok(Some(format!("Diff: pane #{id} is not part of a swarm (no worktree to diff)")));
+                };
+                let v = self.swarm_apply(SwarmOp::Diff(info.slug.clone()))?;
+                let n = |k: &str| v.get(k).and_then(|x| x.as_i64()).unwrap_or(0);
+                let files: Vec<String> = match v.get("files") {
+                    Some(JsonValue::Array(a)) => a.iter().filter_map(|f| f.get("path").and_then(|p| p.as_str()).map(str::to_string)).take(5).collect(),
+                    _ => Vec::new(),
+                };
+                Ok(Some(format!(
+                    "Diff {} ({}): {} file(s) +{} -{} {}",
+                    info.node, info.slug, n("files_changed"), n("insertions"), n("deletions"), files.join(" ")
+                ).trim_end().to_string()))
+            }
         }
     }
 

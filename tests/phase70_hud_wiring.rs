@@ -309,7 +309,7 @@ fn prompt_zoom_and_diff_buttons() {
         wm.active_pane()
             .status_message()
             .unwrap()
-            .contains("no swarm review surface")
+            .contains("not part of a swarm")
     );
     run(&mut wm, ":agents hud prompt 2");
     assert!(!wm.agents_hud().active);
