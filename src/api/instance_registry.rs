@@ -85,6 +85,7 @@ pub fn resolve_client_socket(runtime: &Path, env_socket: Option<&str>) -> Option
 /// Owns this process's registered instance socket path; cleans up on drop.
 #[derive(Debug)]
 pub struct InstanceGuard {
+    #[cfg_attr(not(unix), allow(dead_code))] // only the Unix default-link publisher reads it
     runtime: PathBuf,
     socket: PathBuf,
 }

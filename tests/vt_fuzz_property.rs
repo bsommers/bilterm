@@ -10,14 +10,15 @@
 //!   * replaying the same bytes with the same chunking gives the identical screen (determinism).
 //!
 //! KNOWN PRODUCT BUG (found by this file, not fixed here because `src/vt` is owned by another
-//! branch): two byte-offset slices of lossily decoded text panic on non-ASCII input —
-//!   * `src/vt/scan.rs:29`  `&after_esc[1..]`   — ESC followed by any multi-byte character;
-//!   * `src/vt/codec.rs:77` `&hex[i..i + 2]`    — XTGETTCAP (`DCS + q`) with a non-ASCII payload.
-//! Any program that prints such bytes (e.g. `cat` of a binary file) aborts the terminal.
-//! Until they are fixed, [`guarded`] tolerates exactly that panic message (and nothing else),
-//! reports every hit visibly, and the two tests that cannot run meaningfully while the bug exists
-//! plus the minimal reproducers are `#[ignore]`d with the reason. After the fix: delete
-//! `KNOWN_BUG_PANIC`, `guarded`'s tolerance and the `#[ignore]` attributes.
+//! branch): two byte-offset slices of lossily decoded text panic on non-ASCII input:
+//!   * `src/vt/scan.rs:29` (`&after_esc[1..]`): ESC followed by any multi-byte character;
+//!   * `src/vt/codec.rs:77` (`&hex[i..i + 2]`): XTGETTCAP (`DCS + q`) with a non-ASCII payload.
+//!
+//! Any program that prints such bytes (e.g. `cat` of a binary file) aborts the terminal. Until
+//! they are fixed, [`guarded`] tolerates exactly that panic message (and nothing else) and reports
+//! every hit visibly; the two tests that cannot run meaningfully while the bug exists and the
+//! minimal reproducers are `#[ignore]`d with the reason. After the fix: delete `KNOWN_BUG_PANIC`,
+//! the tolerance in `guarded` and the `#[ignore]` attributes.
 //!
 //! The parser is fuzzed directly (not through a pane) on purpose: a pane forwards decoded OSC 52
 //! payloads to the system clipboard, which a fuzzer must never touch.
@@ -306,7 +307,7 @@ fn grammar_shaped_escape_sequences_never_panic_or_corrupt_the_screen() {
 
 #[test]
 fn mutated_real_sequences_never_panic_or_corrupt_the_screen() {
-    run_cases("mutated", &[21, 22, 23, 24, 25, 0xBADC_0DE], 150, |rng| {
+    run_cases("mutated", &[21, 22, 23, 24, 25, 0x0BAD_C0DE], 150, |rng| {
         let mut base = corpus(rng).to_vec();
         if rng.chance(3) {
             base.extend_from_slice(corpus(rng));
@@ -380,7 +381,7 @@ fn identical_input_and_chunking_give_an_identical_screen() {
 #[test]
 #[ignore = "product bug: src/vt/scan.rs:29 and src/vt/codec.rs:77 slice lossy text at a non-char boundary"]
 fn one_megabyte_of_hostile_input_is_processed_in_bounded_time() {
-    let mut rng = Rng::new(0x0B16_B00B5);
+    let mut rng = Rng::new(0x0B16_B00B);
     let mut input = Vec::with_capacity(1 << 20);
     while input.len() < (1 << 20) {
         let chunk = gen_structured(&mut rng, 4096);
