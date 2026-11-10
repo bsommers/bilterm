@@ -12,6 +12,52 @@ use serde::{Deserialize, Serialize};
 
 use crate::vt::tektronix::TektronixState;
 
+/// Largest accepted width or height (in pixels) of a canvas image or sprite. Pane output is untrusted
+/// and reaches `execute_command` in-band, so every size that drives an allocation is bounded.
+pub const MAX_CANVAS_DIM: u16 = 4096;
+/// Largest accepted pixel count of one canvas image, and of all sprites of a scene together.
+pub const MAX_CANVAS_PIXELS: usize = 16_000_000;
+/// Largest number of retained sprites per scene.
+pub const MAX_SCENE_SPRITES: usize = 1024;
+/// Largest number of retained vector primitives per scene.
+pub const MAX_SCENE_PRIMITIVES: usize = 4096;
+/// Largest number of retained declarative plots per scene.
+pub const MAX_SCENE_PLOTS: usize = 256;
+/// Largest number of plot data points per scene (all plots together).
+pub const MAX_SCENE_PLOT_POINTS: usize = 65_536;
+
+/// Clamps `(width, height)` into `1..=MAX_CANVAS_DIM` each and `MAX_CANVAS_PIXELS` in total.
+fn clamp_canvas_dims(width: u16, height: u16) -> (u16, u16) {
+    let w = width.clamp(1, MAX_CANVAS_DIM);
+    let h = height.clamp(1, MAX_CANVAS_DIM);
+    let max_h = (MAX_CANVAS_PIXELS / usize::from(w)).min(usize::from(MAX_CANVAS_DIM));
+    (w, h.min(max_h as u16))
+}
+
+/// Rejects a requested `width x height` that exceeds the canvas size limits.
+fn check_canvas_dims(what: &str, width: u16, height: u16) -> std::result::Result<(), String> {
+    if width > MAX_CANVAS_DIM
+        || height > MAX_CANVAS_DIM
+        || usize::from(width) * usize::from(height) > MAX_CANVAS_PIXELS
+    {
+        return Err(format!(
+            "CANVAS: {what} {width}x{height} exceeds the limit of {MAX_CANVAS_DIM}x{MAX_CANVAS_DIM} and {MAX_CANVAS_PIXELS} pixels"
+        ));
+    }
+    Ok(())
+}
+
+/// Parses the optional numeric argument `parts[idx]`: missing or unparsable yields `default`,
+/// a non-finite value (`nan`, `inf`, overflow) is rejected.
+fn finite_arg(parts: &[&str], idx: usize, default: f32) -> std::result::Result<f32, String> {
+    let v = parts.get(idx).and_then(|s| s.parse::<f32>().ok()).unwrap_or(default);
+    if v.is_finite() {
+        Ok(v)
+    } else {
+        Err(format!("CANVAS: argument {idx} must be a finite number"))
+    }
+}
+
 /// Sub-cell character rasterization mode for TUI rendering (`CANV-01`, `CANV-02`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CanvasSubcellMode {
@@ -210,6 +256,24 @@ pub enum VectorPrimitive {
     },
 }
 
+impl VectorPrimitive {
+    /// Whether every coordinate and size of this primitive is finite (rasterizers skip the rest).
+    pub fn is_finite(&self) -> bool {
+        let pts = |v: &[(f32, f32)]| v.iter().all(|p| p.0.is_finite() && p.1.is_finite());
+        match self {
+            Self::Line { x0, y0, x1, y1, .. } => [x0, y0, x1, y1].iter().all(|v| v.is_finite()),
+            Self::Polyline { points, .. } => pts(points),
+            Self::CubicBezier { p0, p1, p2, p3, .. } => pts(&[*p0, *p1, *p2, *p3]),
+            Self::Circle { cx, cy, radius, .. } => [cx, cy, radius].iter().all(|v| v.is_finite()),
+            Self::RectShape { x, y, width, height, .. } => {
+                [x, y, width, height].iter().all(|v| v.is_finite())
+            }
+            Self::Polygon { vertices, .. } => pts(vertices),
+            Self::TextLabel { x, y, .. } => x.is_finite() && y.is_finite(),
+        }
+    }
+}
+
 /// Retained 2D sprite with velocity, frame animation, z-index, and AABB collision detection (`CANV-01`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sprite2D {
@@ -239,8 +303,7 @@ impl Sprite2D {
         height: u16,
         rgb: (u8, u8, u8),
     ) -> Self {
-        let w = width.max(1);
-        let h = height.max(1);
+        let (w, h) = clamp_canvas_dims(width, height);
         Self {
             id,
             name: name.into(),
@@ -303,6 +366,18 @@ pub enum PlotKind {
     },
 }
 
+impl PlotKind {
+    /// Number of retained data values (counted against `MAX_SCENE_PLOT_POINTS`).
+    pub fn point_count(&self) -> usize {
+        match self {
+            Self::Line(v) | Self::Bar(v) => v.len(),
+            Self::Scatter(p) => p.len(),
+            Self::Candlestick(b) => b.len() * 4,
+            Self::Heatmap { values, .. } => values.len(),
+        }
+    }
+}
+
 /// Declarative live data plot rendered on the pane canvas (`CANV-01`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DeclarativePlot {
@@ -336,8 +411,7 @@ impl InteractiveImageView {
 
     /// Generates a deterministic procedural RGBA test pattern image (`width × height`).
     pub fn new_test_pattern(width: u16, height: u16) -> Self {
-        let w = width.max(1);
-        let h = height.max(1);
+        let (w, h) = clamp_canvas_dims(width, height);
         let mut rgba = Vec::with_capacity(usize::from(w) * usize::from(h) * 4);
         for y in 0..h {
             for x in 0..w {
@@ -398,6 +472,17 @@ impl PaneCanvasScene {
         self.sprites.clear();
         self.plots.clear();
         self.image_view = None;
+    }
+
+    /// Appends `prim`, or rejects it once the scene holds `MAX_SCENE_PRIMITIVES`.
+    pub fn push_primitive(&mut self, prim: VectorPrimitive) -> std::result::Result<(), String> {
+        if self.primitives.len() >= MAX_SCENE_PRIMITIVES {
+            return Err(format!(
+                "CANVAS: primitive limit ({MAX_SCENE_PRIMITIVES}) reached (:canvas clear to reset)"
+            ));
+        }
+        self.primitives.push(prim);
+        Ok(())
     }
 
     /// Steps all sprite physics by `dt` and returns pairs of colliding sprite `(id_a, id_b)` (`CANV-01`).
@@ -564,7 +649,8 @@ impl PaneCanvasScene {
                     kind: PlotKind::Line(vec![12.0, 28.0, 19.0, 45.0, 38.0, 64.0, 52.0, 84.0]),
                     rgb: (85, 255, 255),
                 });
-                self.primitives.push(VectorPrimitive::Circle {
+                // Repeated `demo` must not grow the scene without bound; a full scene keeps what it has.
+                let _ = self.push_primitive(VectorPrimitive::Circle {
                     cx: 24.0, cy: 20.0, radius: 10.0, rgb: (255, 255, 85), filled: false,
                 });
                 Ok("CANVAS DEMO: loaded Tektronix 4014 wireframe + Braille vector/plot scene (:canvas clear to reset)".to_string())
@@ -573,44 +659,65 @@ impl PaneCanvasScene {
                 if parts.len() < 5 {
                     return Err("Usage: :canvas line <x0> <y0> <x1> <y1>".to_string());
                 }
-                let (x0, y0) = (parts[1].parse().unwrap_or(0.0), parts[2].parse().unwrap_or(0.0));
-                let (x1, y1) = (parts[3].parse().unwrap_or(20.0), parts[4].parse().unwrap_or(10.0));
+                let (x0, y0) = (finite_arg(&parts, 1, 0.0)?, finite_arg(&parts, 2, 0.0)?);
+                let (x1, y1) = (finite_arg(&parts, 3, 20.0)?, finite_arg(&parts, 4, 10.0)?);
+                self.push_primitive(VectorPrimitive::Line { x0, y0, x1, y1, rgb: (85, 255, 255) })?;
                 self.active = true;
-                self.primitives.push(VectorPrimitive::Line { x0, y0, x1, y1, rgb: (85, 255, 255) });
                 Ok(format!("CANVAS: added line ({x0},{y0})->({x1},{y1})"))
             }
             "circle" => {
                 if parts.len() < 4 {
                     return Err("Usage: :canvas circle <cx> <cy> <radius>".to_string());
                 }
-                let cx = parts[1].parse::<f32>().unwrap_or(20.0);
-                let cy = parts[2].parse::<f32>().unwrap_or(20.0);
-                let radius = parts[3].parse::<f32>().unwrap_or(8.0);
+                let cx = finite_arg(&parts, 1, 20.0)?;
+                let cy = finite_arg(&parts, 2, 20.0)?;
+                let radius = finite_arg(&parts, 3, 8.0)?;
+                if radius < 0.0 {
+                    return Err("CANVAS: circle radius must not be negative".to_string());
+                }
                 let filled = parts.get(4).is_some_and(|&s| s == "fill" || s == "filled");
+                self.push_primitive(VectorPrimitive::Circle { cx, cy, radius, rgb: (255, 255, 85), filled })?;
                 self.active = true;
-                self.primitives.push(VectorPrimitive::Circle { cx, cy, radius, rgb: (255, 255, 85), filled });
                 Ok(format!("CANVAS: added circle r={radius} at ({cx},{cy})"))
             }
             "bezier" => {
                 if parts.len() < 9 {
                     return Err("Usage: :canvas bezier <x0> <y0> <x1> <y1> <x2> <y2> <x3> <y3>".to_string());
                 }
-                let p0 = (parts[1].parse().unwrap_or(0.0), parts[2].parse().unwrap_or(0.0));
-                let p1 = (parts[3].parse().unwrap_or(10.0), parts[4].parse().unwrap_or(0.0));
-                let p2 = (parts[5].parse().unwrap_or(20.0), parts[6].parse().unwrap_or(20.0));
-                let p3 = (parts[7].parse().unwrap_or(30.0), parts[8].parse().unwrap_or(20.0));
+                let p0 = (finite_arg(&parts, 1, 0.0)?, finite_arg(&parts, 2, 0.0)?);
+                let p1 = (finite_arg(&parts, 3, 10.0)?, finite_arg(&parts, 4, 0.0)?);
+                let p2 = (finite_arg(&parts, 5, 20.0)?, finite_arg(&parts, 6, 20.0)?);
+                let p3 = (finite_arg(&parts, 7, 30.0)?, finite_arg(&parts, 8, 20.0)?);
+                self.push_primitive(VectorPrimitive::CubicBezier { p0, p1, p2, p3, rgb: (85, 255, 85) })?;
                 self.active = true;
-                self.primitives.push(VectorPrimitive::CubicBezier { p0, p1, p2, p3, rgb: (85, 255, 85) });
                 Ok("CANVAS: added cubic Bezier curve".to_string())
             }
             "sprite" => {
                 let id = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
-                let x = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(4.0);
-                let y = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(4.0);
-                let vx = parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(1.0);
-                let vy = parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let w = parts.get(6).and_then(|s| s.parse().ok()).unwrap_or(4);
-                let h = parts.get(7).and_then(|s| s.parse().ok()).unwrap_or(4);
+                let x = finite_arg(&parts, 2, 4.0)?;
+                let y = finite_arg(&parts, 3, 4.0)?;
+                let vx = finite_arg(&parts, 4, 1.0)?;
+                let vy = finite_arg(&parts, 5, 0.0)?;
+                let w: u16 = parts.get(6).and_then(|s| s.parse().ok()).unwrap_or(4);
+                let h: u16 = parts.get(7).and_then(|s| s.parse().ok()).unwrap_or(4);
+                check_canvas_dims("sprite", w, h)?;
+                let replacing = self.sprites.iter().any(|s| s.id == id);
+                if !replacing && self.sprites.len() >= MAX_SCENE_SPRITES {
+                    return Err(format!(
+                        "CANVAS: sprite limit ({MAX_SCENE_SPRITES}) reached (:canvas clear to reset)"
+                    ));
+                }
+                let other_px: usize = self
+                    .sprites
+                    .iter()
+                    .filter(|s| s.id != id)
+                    .map(|s| usize::from(s.width) * usize::from(s.height))
+                    .sum();
+                if other_px + usize::from(w.max(1)) * usize::from(h.max(1)) > MAX_CANVAS_PIXELS {
+                    return Err(format!(
+                        "CANVAS: sprites would exceed {MAX_CANVAS_PIXELS} pixels in total (:canvas clear to reset)"
+                    ));
+                }
                 self.active = true;
                 let mut sp = Sprite2D::new_solid(id, format!("sprite-{id}"), x, y, w, h, (255, 176, 0));
                 sp.vx = vx;
@@ -623,7 +730,7 @@ impl PaneCanvasScene {
                 Ok(format!("CANVAS: spawned sprite #{id} at ({x},{y}) v=({vx},{vy})"))
             }
             "step" => {
-                let dt = parts.get(1).and_then(|s| s.parse::<f32>().ok()).unwrap_or(1.0);
+                let dt = finite_arg(&parts, 1, 1.0)?;
                 let collisions = self.step_sprites(dt);
                 Ok(format!(
                     "CANVAS: stepped {} sprite(s) by dt={dt} (collisions={})",
@@ -638,7 +745,19 @@ impl PaneCanvasScene {
                     .skip(2)
                     .flat_map(|s| s.split(','))
                     .filter_map(|v| v.parse::<f32>().ok())
+                    .take(MAX_SCENE_PLOT_POINTS + 1)
                     .collect();
+                if vals.iter().any(|v| !v.is_finite()) {
+                    return Err("CANVAS: plot values must be finite numbers".to_string());
+                }
+                let retained: usize = self.plots.iter().map(|p| p.kind.point_count()).sum();
+                if self.plots.len() >= MAX_SCENE_PLOTS
+                    || retained + vals.len().max(8) > MAX_SCENE_PLOT_POINTS
+                {
+                    return Err(format!(
+                        "CANVAS: plot limit ({MAX_SCENE_PLOTS} plots, {MAX_SCENE_PLOT_POINTS} points) reached (:canvas clear to reset)"
+                    ));
+                }
                 let data = if vals.is_empty() {
                     vec![10.0, 25.0, 18.0, 42.0, 35.0, 60.0, 52.0, 80.0]
                 } else {
@@ -684,8 +803,9 @@ impl PaneCanvasScene {
                 Ok(format!("CANVAS: added declarative {kind_name} plot"))
             }
             "image" => {
-                let w = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(24);
-                let h = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(16);
+                let w: u16 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(24);
+                let h: u16 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(16);
+                check_canvas_dims("image", w, h)?;
                 self.active = true;
                 self.image_view = Some(InteractiveImageView::new_test_pattern(w, h));
                 Ok(format!("CANVAS: loaded {w}x{h} interactive image viewer"))
@@ -694,15 +814,15 @@ impl PaneCanvasScene {
                 let dx = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
                 let dy = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
                 if let Some(img) = &mut self.image_view {
-                    img.pan_x += dx;
-                    img.pan_y += dy;
+                    img.pan_x = img.pan_x.saturating_add(dx);
+                    img.pan_y = img.pan_y.saturating_add(dy);
                     Ok(format!("CANVAS IMAGE PAN: ({}, {})", img.pan_x, img.pan_y))
                 } else {
                     Err("No active canvas image to pan".to_string())
                 }
             }
             "zoom" => {
-                let z = parts.get(1).and_then(|s| s.parse::<f32>().ok()).unwrap_or(1.0);
+                let z = finite_arg(&parts, 1, 1.0)?;
                 if let Some(img) = &mut self.image_view {
                     img.zoom = z.clamp(0.25, 8.0);
                     Ok(format!("CANVAS IMAGE ZOOM: {:.2}x", img.zoom))

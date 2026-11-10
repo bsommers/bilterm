@@ -30,9 +30,23 @@ use crate::ui::cursor::SpotlightMode;
 pub use crate::ui::hires_subcell::{
     QUADRANT_CHARS, braille_char_from_mask, sextant_char_from_mask,
 };
-use crate::ui::pixel_canvas::PixelCanvasBuffer;
+use crate::ui::pixel_canvas::{PixelCanvasBuffer, clip_segment, visible_span};
 use crate::ui::theme::ThemePreset;
 use crate::vt::{TEK_MAX_X, TEK_MAX_Y, TekLineStyle};
+
+/// Bound on sub-cell coordinates: far beyond any canvas, yet small enough that sums of a few
+/// coordinates cannot overflow `i32`. Scene coordinates come from untrusted pane output.
+const SUBCELL_COORD_LIMIT: f32 = 16_777_216.0;
+
+/// Rounds a scene coordinate to a sub-cell index clamped to `±SUBCELL_COORD_LIMIT` (non-finite -> 0).
+#[inline]
+fn sub_coord(v: f32) -> i32 {
+    if v.is_finite() {
+        v.round().clamp(-SUBCELL_COORD_LIMIT, SUBCELL_COORD_LIMIT) as i32
+    } else {
+        0
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RasterCacheKey {
@@ -197,6 +211,27 @@ impl SubcellBuffer {
         style: TekLineStyle,
         color: (u8, u8, u8),
     ) {
+        // 64-bit arithmetic: the full `i32` coordinate range can neither overflow nor wrap below.
+        let (mut x0, mut y0) = (i64::from(x0), i64::from(y0));
+        let (mut x1, mut y1) = (i64::from(x1), i64::from(y1));
+        let mut step_idx = 0usize;
+        // A segment longer than the canvas perimeter is clipped to the canvas first, so the walk is
+        // bounded by the canvas size; shorter segments take the unchanged pixel-exact path.
+        let budget = i64::try_from(2 * (self.sub_w + self.sub_h)).unwrap_or(i64::MAX);
+        if (x1 - x0).abs().max((y1 - y0).abs()) > budget {
+            let Some((a, b)) = clip_segment(
+                (x0 as f64, y0 as f64),
+                (x1 as f64, y1 as f64),
+                (-1.0, -1.0),
+                (self.sub_w as f64, self.sub_h as f64),
+            ) else {
+                return;
+            };
+            let (ax, ay) = (a.0.round() as i64, a.1.round() as i64);
+            // Keep the dash pattern in phase with the skipped lead-in.
+            step_idx = usize::try_from((ax - x0).abs().max((ay - y0).abs())).unwrap_or(0);
+            (x0, y0, x1, y1) = (ax, ay, b.0.round() as i64, b.1.round() as i64);
+        }
         let dx = (x1 - x0).abs();
         let sx = if x0 < x1 { 1 } else { -1 };
         let dy = -(y1 - y0).abs();
@@ -204,10 +239,10 @@ impl SubcellBuffer {
         let mut err = dx + dy;
         let mut cx = x0;
         let mut cy = y0;
-        let mut step_idx = 0usize;
         loop {
             if style.pattern_bit(step_idx) {
-                self.plot_raw(cx, cy, color);
+                // `cx`/`cy` stay between the endpoints, which fit `i32`.
+                self.plot_raw(cx as i32, cy as i32, color);
             }
             if cx == x1 && cy == y1 {
                 break;
@@ -235,13 +270,14 @@ impl SubcellBuffer {
         color: (u8, u8, u8),
     ) {
         if let Some(lens) = self.lens {
-            let span = (x1 - x0).abs().max((y1 - y0).abs()).max(1);
+            let (ddx, ddy) = (i64::from(x1) - i64::from(x0), i64::from(y1) - i64::from(y0));
+            let span = ddx.abs().max(ddy.abs()).max(1);
             let steps = (span * 2).clamp(1, 2048);
             let mut prev = lens.warp(x0 as f32, y0 as f32);
             for s in 1..=steps {
                 let t = (s as f32) / (steps as f32);
-                let lx = (x0 as f32) + ((x1 - x0) as f32) * t;
-                let ly = (y0 as f32) + ((y1 - y0) as f32) * t;
+                let lx = (x0 as f32) + (ddx as f32) * t;
+                let ly = (y0 as f32) + (ddy as f32) * t;
                 let cur = lens.warp(lx, ly);
                 if style.pattern_bit(s as usize) {
                     self.draw_line_raw(prev.0, prev.1, cur.0, cur.1, TekLineStyle::Solid, color);
@@ -253,13 +289,52 @@ impl SubcellBuffer {
         }
     }
 
+    /// Draws a solid scene segment given in float coordinates: non-finite input is skipped and a
+    /// far-away endpoint is clipped (slope preserved) instead of being cast blindly.
+    fn draw_segment(&mut self, a: (f32, f32), b: (f32, f32), color: (u8, u8, u8)) {
+        if ![a.0, a.1, b.0, b.1].iter().all(|v| v.is_finite()) {
+            return;
+        }
+        let (mut a, mut b) = (a, b);
+        if [a.0, a.1, b.0, b.1].iter().any(|v| v.abs() > SUBCELL_COORD_LIMIT) {
+            let lim = f64::from(SUBCELL_COORD_LIMIT);
+            let Some((ca, cb)) = clip_segment(
+                (f64::from(a.0), f64::from(a.1)),
+                (f64::from(b.0), f64::from(b.1)),
+                (-lim, -lim),
+                (lim, lim),
+            ) else {
+                return;
+            };
+            a = (ca.0 as f32, ca.1 as f32);
+            b = (cb.0 as f32, cb.1 as f32);
+        }
+        self.draw_line(
+            sub_coord(a.0),
+            sub_coord(a.1),
+            sub_coord(b.0),
+            sub_coord(b.1),
+            TekLineStyle::Solid,
+            color,
+        );
+    }
+
     fn draw_circle(&mut self, cx: i32, cy: i32, radius: i32, filled: bool, color: (u8, u8, u8)) {
-        let r = radius.max(1);
-        for dy in -r..=r {
-            for dx in -r..=r {
+        let r = i64::from(radius.clamp(1, 1 << 30));
+        let (cx, cy) = (i64::from(cx), i64::from(cy));
+        // Scan only the intersection of the bounding box and the canvas. Off-canvas points never
+        // become visible (the focal lens only pushes points away from an on-canvas focus), so
+        // on-canvas pixels are unchanged.
+        let x_hi = (cx + r).min(i64::try_from(self.sub_w).unwrap_or(i64::MAX) - 1);
+        let y_hi = (cy + r).min(i64::try_from(self.sub_h).unwrap_or(i64::MAX) - 1);
+        for y in (cy - r).max(0)..=y_hi {
+            let dy = y - cy;
+            for x in (cx - r).max(0)..=x_hi {
+                let dx = x - cx;
                 let d2 = dx * dx + dy * dy;
                 if (filled && d2 <= r * r) || (!filled && (d2 - r * r).abs() <= r) {
-                    self.plot(cx + dx, cy + dy, color);
+                    // `x`/`y` are on-canvas, so they fit `i32`.
+                    self.plot(x as i32, y as i32, color);
                 }
             }
         }
@@ -277,9 +352,9 @@ impl SubcellBuffer {
         let w = w.max(1);
         let h = h.max(1);
         if filled {
-            for py in y..(y + h) {
-                for px in x..(x + w) {
-                    self.plot(px, py, color);
+            for dy in visible_span(y, h, self.sub_h) {
+                for dx in visible_span(x, w, self.sub_w) {
+                    self.plot(x + dx, y + dy, color);
                 }
             }
         } else {
@@ -470,14 +545,18 @@ pub fn render_graphical_canvas(
             for prim in &scene.primitives {
                 render_primitive_to_subcells(&mut sub, prim);
             }
-            let mut sorted_sprites: Vec<_> = scene.sprites.iter().filter(|s| s.visible).collect();
+            let mut sorted_sprites: Vec<_> = scene
+                .sprites
+                .iter()
+                .filter(|s| s.visible && s.x.is_finite() && s.y.is_finite())
+                .collect();
             sorted_sprites.sort_by_key(|s| s.z_index);
             for sp in sorted_sprites {
-                let sx0 = sp.x.round() as i32;
-                let sy0 = sp.y.round() as i32;
+                let sx0 = sub_coord(sp.x);
+                let sy0 = sub_coord(sp.y);
                 let frame = sp.frames.get(sp.current_frame);
-                for dy in 0..i32::from(sp.height) {
-                    for dx in 0..i32::from(sp.width) {
+                for dy in visible_span(sy0, i32::from(sp.height), sub.sub_h) {
+                    for dx in visible_span(sx0, i32::from(sp.width), sub.sub_w) {
                         let opaque = frame
                             .and_then(|f| {
                                 f.get((dy as usize) * usize::from(sp.width) + (dx as usize))
@@ -548,6 +627,9 @@ fn draw_canvas_label(
 }
 
 fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive) {
+    if !prim.is_finite() {
+        return;
+    }
     match prim {
         VectorPrimitive::Line {
             x0,
@@ -556,14 +638,7 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
             y1,
             rgb,
         } => {
-            sub.draw_line(
-                x0.round() as i32,
-                y0.round() as i32,
-                x1.round() as i32,
-                y1.round() as i32,
-                TekLineStyle::Solid,
-                *rgb,
-            );
+            sub.draw_segment((*x0, *y0), (*x1, *y1), *rgb);
         }
         VectorPrimitive::Polyline {
             points,
@@ -571,26 +646,12 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
             closed,
         } => {
             for pair in points.windows(2) {
-                sub.draw_line(
-                    pair[0].0.round() as i32,
-                    pair[0].1.round() as i32,
-                    pair[1].0.round() as i32,
-                    pair[1].1.round() as i32,
-                    TekLineStyle::Solid,
-                    *rgb,
-                );
+                sub.draw_segment(pair[0], pair[1], *rgb);
             }
             if *closed
                 && let (Some(first), Some(last)) = (points.first(), points.last())
             {
-                sub.draw_line(
-                    last.0.round() as i32,
-                    last.1.round() as i32,
-                    first.0.round() as i32,
-                    first.1.round() as i32,
-                    TekLineStyle::Solid,
-                    *rgb,
-                );
+                sub.draw_segment(*last, *first, *rgb);
             }
         }
         VectorPrimitive::CubicBezier {
@@ -601,7 +662,7 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
             rgb,
         } => {
             let steps = 24;
-            let mut prev = (p0.0.round() as i32, p0.1.round() as i32);
+            let mut prev = *p0;
             for s in 1..=steps {
                 let t = (s as f32) / (steps as f32);
                 let u = 1.0 - t;
@@ -613,8 +674,8 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
                     + 3.0 * u * u * t * p1.1
                     + 3.0 * u * t * t * p2.1
                     + t * t * t * p3.1;
-                let cur = (bx.round() as i32, by.round() as i32);
-                sub.draw_line(prev.0, prev.1, cur.0, cur.1, TekLineStyle::Solid, *rgb);
+                let cur = (bx, by);
+                sub.draw_segment(prev, cur, *rgb);
                 prev = cur;
             }
         }
@@ -625,13 +686,7 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
             rgb,
             filled,
         } => {
-            sub.draw_circle(
-                cx.round() as i32,
-                cy.round() as i32,
-                radius.round() as i32,
-                *filled,
-                *rgb,
-            );
+            sub.draw_circle(sub_coord(*cx), sub_coord(*cy), sub_coord(*radius), *filled, *rgb);
         }
         VectorPrimitive::RectShape {
             x,
@@ -642,34 +697,20 @@ fn render_primitive_to_subcells(sub: &mut SubcellBuffer, prim: &VectorPrimitive)
             filled,
         } => {
             sub.draw_rect(
-                x.round() as i32,
-                y.round() as i32,
-                width.round() as i32,
-                height.round() as i32,
+                sub_coord(*x),
+                sub_coord(*y),
+                sub_coord(*width),
+                sub_coord(*height),
                 *filled,
                 *rgb,
             );
         }
         VectorPrimitive::Polygon { vertices, rgb } => {
             for pair in vertices.windows(2) {
-                sub.draw_line(
-                    pair[0].0.round() as i32,
-                    pair[0].1.round() as i32,
-                    pair[1].0.round() as i32,
-                    pair[1].1.round() as i32,
-                    TekLineStyle::Solid,
-                    *rgb,
-                );
+                sub.draw_segment(pair[0], pair[1], *rgb);
             }
             if let (Some(first), Some(last)) = (vertices.first(), vertices.last()) {
-                sub.draw_line(
-                    last.0.round() as i32,
-                    last.1.round() as i32,
-                    first.0.round() as i32,
-                    first.1.round() as i32,
-                    TekLineStyle::Solid,
-                    *rgb,
-                );
+                sub.draw_segment(*last, *first, *rgb);
             }
         }
         VectorPrimitive::TextLabel { .. } => {}
@@ -687,8 +728,8 @@ fn render_plot_to_subcells(sub: &mut SubcellBuffer, plot: &DeclarativePlot) {
             let n = (vals.len().saturating_sub(1)).max(1) as f32;
             let mut prev = None;
             for (i, &v) in vals.iter().enumerate() {
-                let x = 2 + ((i as f32 / n) * w).round() as i32;
-                let y = 2 + ((1.0 - (v - min_v) / span) * h).round() as i32;
+                let x = 2 + sub_coord((i as f32 / n) * w);
+                let y = 2 + sub_coord((1.0 - (v - min_v) / span) * h);
                 if let Some((px, py)) = prev {
                     sub.draw_line(px, py, x, y, TekLineStyle::Solid, plot.rgb);
                 } else {
@@ -699,15 +740,15 @@ fn render_plot_to_subcells(sub: &mut SubcellBuffer, plot: &DeclarativePlot) {
         }
         PlotKind::Scatter(pts) => {
             for &(x, y) in pts {
-                sub.plot(2 + (x.round() as i32), 2 + (y.round() as i32), plot.rgb);
+                sub.plot(2 + sub_coord(x), 2 + sub_coord(y), plot.rgb);
             }
         }
         PlotKind::Bar(vals) if !vals.is_empty() => {
             let max_v = vals.iter().copied().fold(1.0f32, f32::max);
             let bar_step = (w / (vals.len() as f32)).max(2.0);
             for (i, &v) in vals.iter().enumerate() {
-                let bx = 2 + ((i as f32) * bar_step).round() as i32;
-                let bh = ((v.max(0.0) / max_v) * h).round().max(1.0) as i32;
+                let bx = 2 + sub_coord((i as f32) * bar_step);
+                let bh = sub_coord((v.max(0.0) / max_v) * h).max(1);
                 let by = 2 + (h as i32) - bh;
                 sub.draw_rect(bx, by, (bar_step as i32 - 1).max(1), bh, true, plot.rgb);
             }
@@ -718,11 +759,11 @@ fn render_plot_to_subcells(sub: &mut SubcellBuffer, plot: &DeclarativePlot) {
             let span = (max_v - min_v).abs().max(1.0);
             let step = (w / (bars.len() as f32)).max(3.0);
             for (i, bar) in bars.iter().enumerate() {
-                let cx = 2 + ((i as f32 + 0.5) * step).round() as i32;
-                let y_hi = 2 + ((1.0 - (bar.high - min_v) / span) * h).round() as i32;
-                let y_lo = 2 + ((1.0 - (bar.low - min_v) / span) * h).round() as i32;
-                let y_op = 2 + ((1.0 - (bar.open - min_v) / span) * h).round() as i32;
-                let y_cl = 2 + ((1.0 - (bar.close - min_v) / span) * h).round() as i32;
+                let cx = 2 + sub_coord((i as f32 + 0.5) * step);
+                let y_hi = 2 + sub_coord((1.0 - (bar.high - min_v) / span) * h);
+                let y_lo = 2 + sub_coord((1.0 - (bar.low - min_v) / span) * h);
+                let y_op = 2 + sub_coord((1.0 - (bar.open - min_v) / span) * h);
+                let y_cl = 2 + sub_coord((1.0 - (bar.close - min_v) / span) * h);
                 let color = if bar.close >= bar.open {
                     (85, 255, 85)
                 } else {
@@ -736,8 +777,9 @@ fn render_plot_to_subcells(sub: &mut SubcellBuffer, plot: &DeclarativePlot) {
         }
         PlotKind::Heatmap { rows, cols, values } if *rows > 0 && *cols > 0 => {
             let max_v = values.iter().copied().fold(1.0f32, f32::max);
-            for r in 0..*rows {
-                for c in 0..*cols {
+            // One sub-pixel per cell: rows/cols beyond the canvas are never visible.
+            for r in 0..(*rows).min(sub.sub_h) {
+                for c in 0..(*cols).min(sub.sub_w) {
                     let v = values.get(r * cols + c).copied().unwrap_or(0.0);
                     let norm = (v / max_v).clamp(0.0, 1.0);
                     let color = (
@@ -754,14 +796,22 @@ fn render_plot_to_subcells(sub: &mut SubcellBuffer, plot: &DeclarativePlot) {
 }
 
 fn render_image_to_subcells(sub: &mut SubcellBuffer, img: &InteractiveImageView) {
+    if img.width == 0 || img.height == 0 {
+        return;
+    }
     let zoom = img.zoom.max(0.25);
-    let dst_w = ((f32::from(img.width) * zoom).round() as i32).max(1);
-    let dst_h = ((f32::from(img.height) * zoom).round() as i32).max(1);
-    for dy in 0..dst_h {
-        let sx = (((dy * i32::from(img.height)) / dst_h).clamp(0, i32::from(img.height) - 1)) as u16;
-        for dx in 0..dst_w {
-            let sy_col =
-                (((dx * i32::from(img.width)) / dst_w).clamp(0, i32::from(img.width) - 1)) as u16;
+    let dst_w = sub_coord(f32::from(img.width) * zoom).max(1);
+    let dst_h = sub_coord(f32::from(img.height) * zoom).max(1);
+    // Nearest source index for destination offset `d` (64-bit: `d * src` can exceed `i32`).
+    let src_index = |d: i32, src: u16, dst: i32| -> u16 {
+        let i = (i64::from(d) * i64::from(src)) / i64::from(dst);
+        u16::try_from(i.clamp(0, i64::from(src) - 1)).unwrap_or(0)
+    };
+    // Only destination sub-pixels that land on the canvas are visited (a zoomed image can be far larger).
+    for dy in visible_span(img.pan_y, dst_h, sub.sub_h) {
+        let sx = src_index(dy, img.height, dst_h);
+        for dx in visible_span(img.pan_x, dst_w, sub.sub_w) {
+            let sy_col = src_index(dx, img.width, dst_w);
             if let Some([r, g, b, a]) = img.inspect_pixel(sy_col, sx)
                 && a > 0
             {
