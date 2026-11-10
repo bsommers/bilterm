@@ -10,7 +10,7 @@
 Recent feature development across Phases 55 through 64 expanded Bilterm into persistent SSH/tmux remote multiplexing, daemon supervision, dynamic traffic monitoring, multi-mode windowing, and rich clipboard/browser canvases. While velocity was high, this phase boundary surfaced critical regressions:
 1. **Remote `:ssh-tmux` Panes:** Spawned redundant local shells, doubled keystrokes/commands, deadlocked or dropped input on idle session attach, and failed prefill if modals/copy mode were active.
 2. **Daemon Supervisor & PID 0:** Headless daemons failed to lock/register, `ensure_started` synthesized `PID 0` entries that were unsignalable, `stop_daemon` could kill unrelated processes on PID reuse or target process group 0, and runtime directory resolution drifted across execution contexts.
-3. **Input & Keybinding Regressions:** Key-repeat toggled modals uncontrollably, `Alt+M` collided with macOS compose characters and Claude Code chords, compose/AltGr was unconditionally rewritten into `ESC <letter>`, focus clicks inadvertently cycled prompt chrome, and zoomed pane state diverged from window focus.
+3. **Input & Keybinding Regressions:** Key-repeat toggled modals uncontrollably, the since-retired Meta+M menu chord collided with macOS compose characters and Claude Code chords, compose/AltGr was unconditionally rewritten into `ESC <letter>`, focus clicks inadvertently cycled prompt chrome, and zoomed pane state diverged from window focus.
 4. **CI & Cross-Platform Breaks:** Test harnesses and clipboard helpers broke on macOS and Windows due to ungated Linux POSIX PTY types and X11 MIME symbols, while hardcoded tool-count constants broke tests when new capabilities landed.
 
 ---
