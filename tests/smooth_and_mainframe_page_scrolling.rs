@@ -132,13 +132,16 @@ fn toggle_block_page_mode_via_colon_command_leader_key_and_oia_badge_click() {
     .unwrap();
     assert_eq!(wm.active_pane().scroll_mode(), PaneScrollMode::BlockPage);
 
-    // 3. Toggle by clicking the right-hand OIA status bar region
+    // 3. Toggle by clicking the OIA status bar region right of the PIN badge. The far-right
+    //    columns now hold the clickable `[COPY]` badge (62-01, `oia_copy_badge_rect`), so the
+    //    click lands on the plain-status area between the PIN badge and that badge.
     let status_row = viewport.height - 1;
+    let click_col = u16::try_from(bilterm::ui::oia::oia_layout(wm.active_pane()).pin_end).unwrap() + 3;
     handle_wm_mouse_event(
         &mut wm,
         MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: viewport.width - 4,
+            column: click_col,
             row: status_row,
             modifiers: KeyModifiers::NONE,
         },
@@ -148,7 +151,7 @@ fn toggle_block_page_mode_via_colon_command_leader_key_and_oia_badge_click() {
     assert_eq!(
         wm.active_pane().scroll_mode(),
         PaneScrollMode::Smooth,
-        "clicking right side of OIA bar should toggle BlockPage <-> Smooth"
+        "clicking the OIA status area should toggle BlockPage <-> Smooth"
     );
 }
 

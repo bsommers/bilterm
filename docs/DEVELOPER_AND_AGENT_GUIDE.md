@@ -176,7 +176,7 @@ src/
     ├── rpc_handlers.rs         # JSON-RPC 2.0 workspace/pane/session.save/session.restore/fleet handlers
     ├── rpc_agents.rs           # `agents.list` and `agents.demo` RPC methods; both lower to `:agents ...` colon commands (Phase 51)
     ├── rpc_link.rs             # remote.link RPC handler and honest connect result (Phase 51.1)
-    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (25 tools)
+    ├── mcp.rs                  # Model Context Protocol (MCP 2024-11-05) stdio server (26 tools)
     ├── playbook.rs             # AutomationEvent bus & declarative TOML Playbook runner
     ├── server.rs               # Async Unix domain socket (0600 + peer UID) & TCP bearer-token RPC server/client
     └── tests.rs                # Security & RPC unit tests
