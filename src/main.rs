@@ -531,6 +531,10 @@ async fn main() -> color_eyre::Result<()> {
     if cfg_error.is_none() {
         cfg_error = bilterm::input::keyconflict::load_time_status(app.wm.config(), &key_env);
     }
+    if cfg_error.is_none() {
+        let vte = std::env::var("VTE_VERSION").ok();
+        cfg_error = bilterm::input::keyconflict::vte_f10_hint(app.wm.config(), &key_env, vte.as_deref());
+    }
     if cfg_error.is_some() {
         app.wm.active_pane_mut().set_status_message(cfg_error);
     }
