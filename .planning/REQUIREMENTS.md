@@ -244,7 +244,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 ## GUI Chrome Engine Web Browser Canvas & 60fps Video Player Canvas (Phase 59)
 
 - [x] **WEB-01**: Embedded Chromium engine web browser canvas via CDP Screencast frame-sink (and optional CEF off-screen renderer) rendering 60fps RGBA frames into composite pane canvases under private profile isolation (`0700`).
+  - Note: Phase 59 shipped a placeholder (Chrome was launched with no debugging channel and every call went to the synthetic engine). The real CDP engine (DevTools pipe, screencast frames decoded off the UI thread, per-launch `0700` profile, process-group cleanup) landed with `feat/browser-real-cdp`. No CEF renderer exists. Frame rate is whatever the screencast delivers, not a fixed 60fps.
 - [x] **WEB-02**: Full interactive browser navigation (URL bar, mouse clicks/scrolls, keyboard input forwarded via CDP, history back/forward/reload, zoom, TUI sub-cell fallback).
+  - Note: real as of `feat/browser-real-cdp`: keys, paste, mouse, wheel, resize and zoom reach the page; history comes from `Page.getNavigationHistory`. The TUI view is a half-block preview (no kitty/sixel output yet); tabs, find-in-page, link hints and the agent surface (`browser.text|screenshot|click|type|eval`) are not built.
 - [x] **VID-01**: Embedded 60fps RGBA hardware-accelerated video player canvas powered by `ffmpeg` pipe / libavcodec with monotonic audio sync.
 - [x] **VID-02**: On-screen transport controls (play/pause, seek, volume, loop, speed), Borland/OIA status bar integration, TUI sub-cell fallback (Kitty/Sixel/HalfBlock), and surface parity (`UNI-R01`).
 

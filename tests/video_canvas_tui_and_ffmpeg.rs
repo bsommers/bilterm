@@ -130,13 +130,13 @@ fn browser_status_names_backend_and_surface() {
     let mut wm = WindowManager::new_headless(24, 80);
     run(&mut wm, ":browser open demo://page");
     let s = status(&wm);
-    assert!(s.contains("synthetic preview"), "{s}");
+    assert!(s.contains("(synthetic)"), "{s}");
     assert!(s.contains("[TUI half-block; run bilterm --gui for GPU canvas]"), "{s}");
 
+    // Under a test harness a real browser is never launched (needs BILTERM_BROWSER_CDP=1), and
+    // the status line says which engine is really running.
     run(&mut wm, ":browser open https://example.com");
     let s = status(&wm);
-    assert!(
-        s.contains("CDP") || s.contains("synthetic preview (Chrome not found)"),
-        "{s}"
-    );
+    assert!(s.contains("https://example.com (synthetic)"), "{s}");
+    assert!(!s.contains("cdp"), "{s}");
 }
