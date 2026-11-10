@@ -13,6 +13,7 @@ pub mod agents_list_geometry;
 pub mod command_window;
 pub mod clipboard_registry;
 pub mod clipboard_window;
+pub mod coordinates;
 pub mod daemon_window;
 pub mod fonts_window;
 pub mod script_studio;
@@ -215,6 +216,8 @@ pub struct WindowManager {
     pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
     /// Terminal traffic meter (`TMON-01`, Phase 64); one per window manager, no globals.
     traffic_meter: crate::traffic::TrafficMeter,
+    /// Title-bar `D:(W,S,Y,P)` coordinate badge style (`COORD-03`, Phase 71).
+    coord_style: coordinates::CoordDisplayStyle,
     /// Floating TRAFFIC MONITOR window state (`TMON-03`, Plan 64-03 fills the body).
     pub(crate) traffic_monitor: traffic_monitor::TrafficMonitorState,
     /// Floating SCRIPT STUDIO workbench window state (`WIN-03`, Plan 51.2-03).
@@ -343,6 +346,7 @@ impl WindowManager {
             clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
             traffic_meter: crate::traffic::TrafficMeter::new(),
+            coord_style: coordinates::CoordDisplayStyle::Off,
             traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
