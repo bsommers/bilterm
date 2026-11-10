@@ -97,6 +97,8 @@ pub struct CompositePaneWidget<'a> {
     pub config: Option<&'a BiltermConfig>,
     /// Optional per-window palette override (`:window theme <name>`).
     pub palette: Option<ThemePalette>,
+    /// `Some(is_gui)` draws the OIA `[TUI]`/`[GUI]` badge on non-Legacy profiles.
+    pub surface_badge: Option<bool>,
 }
 
 impl<'a> CompositePaneWidget<'a> {
@@ -106,6 +108,7 @@ impl<'a> CompositePaneWidget<'a> {
             active,
             config: None,
             palette: None,
+            surface_badge: None,
         }
     }
 
@@ -115,12 +118,19 @@ impl<'a> CompositePaneWidget<'a> {
         self
     }
 
+    /// Opts into the OIA surface badge; Legacy (Classic) profiles still render without it.
+    pub fn with_surface_badge(mut self, gui_surface: bool) -> Self {
+        self.surface_badge = Some(gui_surface);
+        self
+    }
+
     pub fn with_config(pane: &'a CompositePane, active: bool, config: &'a BiltermConfig) -> Self {
         Self {
             pane,
             active,
             config: Some(config),
             palette: None,
+            surface_badge: None,
         }
     }
 }
@@ -193,6 +203,10 @@ impl Widget for CompositePaneWidget<'_> {
         // Pass 3: Render bottom 1-row Operator Information Area (OIA) status bar
         if shell::effective_display_mode(cfg) == DisplayMode::Zen {
             shell::render_zen_row(self.pane, status_rect, &palette, buf);
+        } else if let Some(gui) = self.surface_badge
+            && design::AppearanceProfile::resolve(cfg) != design::AppearanceProfile::Legacy
+        {
+            oia::render_oia_status_bar_with_surface(self.pane, status_rect, &palette, &glyphs, gui, buf);
         } else {
             render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
         }
@@ -732,10 +746,12 @@ impl Widget for WorkspaceWidget<'_> {
                 let inner = inset_window_frame(outer);
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
+                    .with_surface_badge(self.wm.is_gui_surface())
                     .render(inner, buf);
             } else {
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
+                    .with_surface_badge(self.wm.is_gui_surface())
                     .render(outer, buf);
             }
         }
@@ -779,6 +795,7 @@ impl Widget for WorkspaceWidget<'_> {
             }
             let qt_inner = inset_window_frame(qt_outer);
             CompositePaneWidget::with_config(&self.wm.quick_terminal().pane, true, cfg)
+                .with_surface_badge(self.wm.is_gui_surface())
                 .render(qt_inner, buf);
         }
 

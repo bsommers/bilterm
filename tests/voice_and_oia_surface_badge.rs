@@ -162,3 +162,50 @@ fn mock_provider_skips_endpoint_probe() {
     assert!(pf.is_ready());
     assert!(pf.hints().is_empty());
 }
+
+// ---------- (c) live workspace renderer wiring ----------
+
+mod live_renderer {
+    use bilterm::ui::WorkspaceWidget;
+    use bilterm::ui::design::AppearanceProfile;
+    use bilterm::wm::WindowManager;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::widgets::Widget;
+
+    fn screen(profile: Option<AppearanceProfile>, gui: bool) -> String {
+        let mut wm = WindowManager::new_headless(20, 100);
+        wm.config_mut().appearance.profile = profile;
+        wm.set_gui_surface(gui);
+        let area = Rect::new(0, 0, 100, 20);
+        wm.resize_all(area).unwrap();
+        let mut buf = Buffer::empty(area);
+        WorkspaceWidget::new(&wm).render(area, &mut buf);
+        (0..area.height)
+            .map(|y| (0..area.width).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn non_classic_profile_shows_tui_badge() {
+        let s = screen(Some(AppearanceProfile::Obsidian), false);
+        assert!(s.contains("[TUI]"), "{s}");
+    }
+
+    #[test]
+    fn non_classic_profile_shows_gui_badge_on_gui_surface() {
+        let s = screen(Some(AppearanceProfile::Obsidian), true);
+        assert!(s.contains("[GUI]") && !s.contains("[TUI]"), "{s}");
+    }
+
+    #[test]
+    fn classic_profile_never_shows_surface_badge() {
+        for gui in [false, true] {
+            let s = screen(None, gui);
+            assert!(!s.contains("[TUI]") && !s.contains("[GUI]"), "{s}");
+            let s = screen(Some(AppearanceProfile::Legacy), gui);
+            assert!(!s.contains("[TUI]") && !s.contains("[GUI]"), "{s}");
+        }
+    }
+}

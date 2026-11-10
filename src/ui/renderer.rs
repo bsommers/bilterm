@@ -702,6 +702,7 @@ impl GuiWorkspaceRenderer {
             let (pane_cfg, pane_pal) = wm.pane_chrome(id).resolve_config_and_palette(wm.config());
             crate::ui::CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                 .with_palette(Some(pane_pal))
+                .with_surface_badge(wm.is_gui_surface())
                 .render(local_inner, &mut pane_buf);
             let pane_x0 = f32::from(inner.x.saturating_sub(viewport.x)) * cw;
             let pane_y0 = f32::from(inner.y.saturating_sub(viewport.y)) * ch;
