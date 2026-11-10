@@ -223,14 +223,7 @@ fn drop_reconnect_hydrate_scenario() {
     // 4. Hydrate after 300 ms settle (at 700 ms): refresh-client + two capture-pane commands
     wm.tick_tmux_link(700);
     assert_eq!(wm.link_hydrate_phase(), HydratePhase::Sent);
-    assert_eq!(
-        drain_cmds(&mut h1.cmd_rx),
-        vec![
-            "refresh-client -C 80x23\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %3\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %4\n".to_string(),
-        ]
-    );
+    assert_hydrate_batch(drain_cmds(&mut h1.cmd_rx), &[3, 4]);
     feed(
         &h1.line_tx,
         &[
@@ -264,9 +257,13 @@ fn drop_reconnect_hydrate_scenario() {
     // 5. `ls` typed in pane for %3 sent as `send-keys -t %3 -H 6c 73 0a`
     wm.pane_mut(p3).unwrap().submit_command("ls").unwrap();
     wm.tick_tmux_link(750);
+    // Flow control is requested once the hydrate is done (it precedes the first keystrokes).
     assert_eq!(
         drain_cmds(&mut h1.cmd_rx),
-        vec!["send-keys -t %3 -H 6c 73 0a\n".to_string()]
+        vec![
+            "refresh-client -f pause-after=2\n".to_string(),
+            "send-keys -t %3 -H 6c 73 0a\n".to_string(),
+        ]
     );
 
     // 6. EOF at 10 s (10_000 ms) -> LINK DOWN banners on both panes
@@ -321,14 +318,7 @@ fn drop_reconnect_hydrate_scenario() {
     // 8. Hydrate again on generation 2
     wm.tick_tmux_link(11_400);
     assert_eq!(wm.link_hydrate_phase(), HydratePhase::Sent);
-    assert_eq!(
-        drain_cmds(&mut h2.cmd_rx),
-        vec![
-            "refresh-client -C 80x23\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %3\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %4\n".to_string(),
-        ]
-    );
+    assert_hydrate_batch(drain_cmds(&mut h2.cmd_rx), &[3, 4]);
     feed(
         &h2.line_tx,
         &[
@@ -714,4 +704,16 @@ fn fake_connector_is_the_only_transport() {
     wm.tick_tmux_link(100);
     wm.tick_tmux_link(1100);
     assert_eq!(conn.calls(), 2);
+}
+
+/// The hydrate batch: the client size of the linked pane, one state query for all panes, then
+/// one capture per pane (sizes follow the pane, so only the command shapes are pinned here).
+#[allow(dead_code)]
+fn assert_hydrate_batch(cmds: Vec<String>, panes: &[usize]) {
+    assert_eq!(cmds.len(), panes.len() + 2, "{cmds:?}");
+    assert!(cmds[0].starts_with("refresh-client -C "), "{cmds:?}");
+    assert!(cmds[1].starts_with("display-message -p \"bilterm-state #{W:#{P:[#{pane_id} "), "{cmds:?}");
+    for (cmd, pane) in cmds[2..].iter().zip(panes) {
+        assert_eq!(*cmd, format!("capture-pane -p -e -J -S -2000 -t %{pane}\n"));
+    }
 }

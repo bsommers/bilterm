@@ -35,6 +35,20 @@ pub fn backoff_delay_ms(policy: &ReconnectPolicy, attempt: u32) -> u64 {
     delay.min(cap)
 }
 
+/// Jitter added to a production link's backoff (percent of each step).
+pub const LINK_JITTER_PCT: u32 = 25;
+
+/// `delay` plus up to `pct` percent, derived from the clock (no RNG dependency): many clients that
+/// lost the same host do not retry in lockstep.
+pub fn jittered(delay: u64, pct: u32, now_ms: u64) -> u64 {
+    let span = delay.saturating_mul(u64::from(pct)) / 100;
+    if span == 0 {
+        return delay;
+    }
+    let mix = now_ms.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 33;
+    delay.saturating_add(mix % (span + 1))
+}
+
 const FATAL_EVIDENCE: [&str; 5] = [
     "permission denied",
     "host key verification failed",
@@ -42,6 +56,21 @@ const FATAL_EVIDENCE: [&str; 5] = [
     "command not found",
     "no such file",
 ];
+
+/// Evidence that the remote has no usable tmux (shown instead of a bare exit code).
+const NO_TMUX_EVIDENCE: [&str; 3] = ["tmux: command not found", "tmux: not found", "exec: tmux"];
+const OLD_TMUX_EVIDENCE: [&str; 3] = ["unknown option -- c", "tmux: illegal option", "usage: tmux"];
+
+/// A plain-language cause when the diagnostic tail shows a known setup problem.
+fn setup_problem(tail: &[String]) -> Option<&'static str> {
+    if any_line_contains(tail, &NO_TMUX_EVIDENCE) {
+        Some("tmux is not installed on the remote host (install tmux 3.2 or newer)")
+    } else if any_line_contains(tail, &OLD_TMUX_EVIDENCE) {
+        Some("the remote tmux is too old for control mode (tmux 3.2 or newer is needed)")
+    } else {
+        None
+    }
+}
 
 const CONTROL_TRANSIENT: [&str; 4] = [
     "server exited unexpectedly",
@@ -126,9 +155,10 @@ pub fn disconnect_text(d: &TmuxDisconnect) -> String {
                 Some(c) => format!("ssh exited {c}"),
                 None => "ssh exited".to_string(),
             };
-            match first_tail() {
-                Some(t) => format!("{head}: {t}"),
-                None => head,
+            match (setup_problem(&d.tail), first_tail()) {
+                (Some(problem), _) => format!("{head}: {problem}"),
+                (None, Some(t)) => format!("{head}: {t}"),
+                (None, None) => head,
             }
         }
         DisconnectCause::SpawnFailed(err) => format!("spawn failed: {}", clip(err)),
@@ -205,6 +235,7 @@ impl LinkMachine {
             attempt: 0,
             connected_since: None,
             transport_live: false,
+            jitter_pct: 0,
         }
     }
 
@@ -246,7 +277,7 @@ impl LinkMachine {
                     };
                     return vec![LinkCmd::MarkFailed];
                 }
-                let delay = backoff_delay_ms(&self.policy, self.attempt);
+                let delay = jittered(backoff_delay_ms(&self.policy, self.attempt), self.jitter_pct, now_ms);
                 self.state = LinkState::Backoff {
                     attempt: self.attempt,
                     retry_at_ms: now_ms.saturating_add(delay),

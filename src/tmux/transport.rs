@@ -19,8 +19,10 @@ use crate::tmux::link::{
 use crate::tmux::splitter::{diag_lines, ControlLineSplitter, SplitOut};
 use crate::tmux::TmuxControlSubprocess;
 
-/// Time given to `try_wait` after the PTY stream ended, to learn the exit code.
-const EXIT_CODE_PATIENCE: Duration = Duration::from_millis(50);
+/// How long later pumps keep asking for the exit code after the PTY stream ended. Nothing waits:
+/// each pump asks once (`try_wait`) and the exit is reported as soon as the code is known or this
+/// time has passed, so the UI thread never sleeps on the link path.
+const EXIT_CODE_PATIENCE: Duration = Duration::from_millis(500);
 
 /// Driver over a PTY child.
 pub struct PtyLinkDriver {
@@ -29,6 +31,8 @@ pub struct PtyLinkDriver {
     line_tx: Option<UnboundedSender<String>>,
     cmd_rx: Option<UnboundedReceiver<String>>,
     exit_reported: bool,
+    /// The PTY stream ended at this instant; the exit code is still being collected.
+    exit_seen: Option<std::time::Instant>,
 }
 
 impl Default for PtyLinkDriver {
@@ -40,6 +44,7 @@ impl Default for PtyLinkDriver {
             line_tx: None,
             cmd_rx: None,
             exit_reported: false,
+            exit_seen: None,
         }
     }
 }
@@ -76,6 +81,7 @@ impl PtyLinkDriver {
             line_tx: Some(line_tx),
             cmd_rx: Some(cmd_rx),
             exit_reported: false,
+            exit_seen: None,
         };
         Ok((control, driver))
     }
@@ -96,6 +102,16 @@ impl PtyLinkDriver {
                 SplitOut::ControlEnd => {}
                 SplitOut::Dropped(_) => poll.diag.push("control line too long, dropped".into()),
             }
+        }
+    }
+
+    /// Reports the child's exit once its code is known, or without one after
+    /// `EXIT_CODE_PATIENCE`; never blocks.
+    fn report_exit_when_known(&mut self, since: std::time::Instant, poll: &mut DriverPoll) {
+        let code = self.pty.as_ref().and_then(|pty| pty.exit_code(Duration::ZERO));
+        if code.is_some() || since.elapsed() >= EXIT_CODE_PATIENCE {
+            self.exit_reported = true;
+            poll.exited = Some(DriverExit { code });
         }
     }
 
@@ -120,6 +136,10 @@ impl LinkDriver for PtyLinkDriver {
         if self.exit_reported {
             return poll;
         }
+        if let Some(since) = self.exit_seen {
+            self.report_exit_when_known(since, &mut poll);
+            return poll;
+        }
         let events = match self.pty.as_mut() {
             Some(pty) => pty.drain_events(),
             None => return poll,
@@ -140,12 +160,9 @@ impl LinkDriver for PtyLinkDriver {
         if exited {
             let pieces = self.splitter.flush_partial();
             self.absorb(pieces, &mut poll);
-            let code = self
-                .pty
-                .as_ref()
-                .and_then(|pty| pty.exit_code(EXIT_CODE_PATIENCE));
-            self.exit_reported = true;
-            poll.exited = Some(DriverExit { code });
+            let since = std::time::Instant::now();
+            self.exit_seen = Some(since);
+            self.report_exit_when_known(since, &mut poll);
         } else {
             self.write_queued_commands();
         }
@@ -178,7 +195,17 @@ impl LinkDriver for PtyLinkDriver {
 
 /// Connector that spawns the real `ssh -tt` PTY child.
 #[derive(Debug, Default)]
-pub struct PtyLinkConnector {}
+pub struct PtyLinkConnector {
+    /// Program started instead of `ssh` (tests point this at a local stand-in).
+    program: Option<String>,
+}
+
+impl PtyLinkConnector {
+    /// A connector that runs `program` with the ssh argv (same contract as `ssh`).
+    pub fn with_program(program: impl Into<String>) -> Self {
+        Self { program: Some(program.into()) }
+    }
+}
 
 impl LinkConnector for PtyLinkConnector {
     fn connect(&mut self, target: &LinkTarget, size: (u16, u16)) -> std::io::Result<LinkTransport> {
@@ -187,7 +214,7 @@ impl LinkConnector for PtyLinkConnector {
             .build_ssh_tmux_cc_args(&target.session, None)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let cfg = PtyConfig {
-            program: "ssh".into(),
+            program: self.program.clone().unwrap_or_else(|| "ssh".into()),
             args,
             rows: size.0,
             cols: size.1,

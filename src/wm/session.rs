@@ -347,6 +347,9 @@ impl WindowManager {
                     for pid in pane_ids {
                         let _ = self.remove_pane(pid);
                     }
+                    if self.tmux_link.fleet_node.as_deref() == Some(name) {
+                        self.tmux_link_forget();
+                    }
                 }
                 FleetNodeKind::HostProfile { .. } => {}
             }
