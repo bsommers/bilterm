@@ -175,3 +175,30 @@ fn inactive_border_drag_still_resizes() {
     fire(&mut wm, MouseEventKind::Up(MouseButton::Left), x + 10, y);
     assert_eq!(wm.wm_mouse_drag(), None);
 }
+
+#[test]
+fn click_on_top_pane_while_quick_terminal_has_focus_only_focuses() {
+    let (mut wm, _, right) = setup(false);
+    wm.pane_mut(right).unwrap().process_pty_output(SGR_SETUP);
+    wm.toggle_quick_terminal();
+    assert!(wm.is_quick_terminal_visible());
+    let qt = wm.quick_terminal().overlay_rect(AREA);
+    let o = rect_of(&wm, right);
+    // A canvas cell of the right pane outside the quick-terminal overlay.
+    let row = (qt.y + qt.height).max(o.y + 3).min(o.y + o.height - 3);
+    let (c, r) = (o.x + 6, row);
+    assert!(!(c >= qt.x && c < qt.x + qt.width && r >= qt.y && r < qt.y + qt.height));
+    down(&mut wm, c, r);
+    fire(&mut wm, MouseEventKind::Up(MouseButton::Left), c, r);
+    assert_pristine(&wm, right);
+}
+
+#[test]
+fn inactive_middle_click_only_focuses_and_sends_no_bytes() {
+    let (mut wm, left, _) = setup(true);
+    let (c, r) = left_canvas(&wm, left);
+    fire(&mut wm, MouseEventKind::Down(MouseButton::Middle), c, r);
+    fire(&mut wm, MouseEventKind::Up(MouseButton::Middle), c, r);
+    assert_eq!(wm.active_pane_id(), left);
+    assert_pristine(&wm, left);
+}

@@ -42,9 +42,14 @@ pub(super) fn resolve_hit(
     }
 }
 
-/// The quick terminal always counts as active; a pane is active when it holds focus.
+/// The quick terminal always counts as active; a pane is active only when it holds input focus.
+/// `active_pane_id()` is the z-stack top, which stays set while the visible quick terminal owns
+/// focus, so a click on that pane must still count as a focus change.
 pub(super) fn is_active_hit(wm: &WindowManager, hit: Focus) -> bool {
-    matches!(hit, Focus::Pane(id) if id == wm.active_pane_id()) || matches!(hit, Focus::Quick)
+    match hit {
+        Focus::Quick => true,
+        Focus::Pane(id) => id == wm.active_pane_id() && wm.focus() == Focus::Pane(id),
+    }
 }
 
 /// Any button press on a pane focuses and raises it.
@@ -56,10 +61,15 @@ pub(super) fn focus_on_down(wm: &mut WindowManager, kind: MouseEventKind, hit: F
     }
 }
 
-/// `true` when the event is a Left/Right press on a pane that was inactive before this click, so
-/// it must be swallowed after window-management controls (title buttons, borders) had their turn.
+/// `true` when the event is a button press on a pane that was inactive before this click, so it
+/// must be swallowed after window-management controls (title buttons, borders) had their turn.
+/// Middle is included: a focusing middle click must not paste or reach the child.
 pub(super) fn consumes_inactive_click(was_active: bool, kind: MouseEventKind) -> bool {
-    !was_active && matches!(kind, MouseEventKind::Down(MouseButton::Left | MouseButton::Right))
+    !was_active
+        && matches!(
+            kind,
+            MouseEventKind::Down(MouseButton::Left | MouseButton::Right | MouseButton::Middle)
+        )
 }
 
 /// Tracks the press/release pair of a focus-only click. A new press clears stale state; the Drag
