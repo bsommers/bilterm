@@ -21,7 +21,7 @@
 #   junit.xml         standard JUnit XML test report
 #   coverage.txt      cargo llvm-cov summary (when --coverage requested)
 #   skips.txt         every test that did not really run: `#[ignore]`d tests per stage + runtime `SKIPPED` lines
-#   <stage>/status    PASS|FAIL   <stage>/fail.txt  compact failure excerpt (<=40 lines)
+#   <stage>/status    PASS|FAIL   <stage>/fail.txt  compact failure excerpt (<=60 lines, with panic messages)
 #   <stage>/log       full output (read only if fail.txt is not enough)
 # Exit code: 0 all pass, 1 any fail, 2 usage.
 set -uo pipefail
@@ -464,8 +464,13 @@ for s in ${stages[@]+"${stages[@]}"}; do
   fi
   echo "$st" >"$d/status"
   if [ "$st" = FAIL ]; then
-    { grep -E '^(error|warning)(\[|:)|^---- |panicked at|^test .* FAILED|^failures:|^    [A-Za-z0-9_:]+$|^Diff in|^ *--> ' "$d/log" || tail -n 20 "$d/log"; } \
-      | awk '!seen[$0]++' | head -40 >"$d/fail.txt"
+    # Keep the panic MESSAGE (the lines after `panicked at`): without it a CI-only failure cannot
+    # be diagnosed from fail.txt. Long lines are clipped so one huge assertion cannot flood it.
+    { awk '/panicked at/ { print; keep = 4; hit = 1; next }
+           keep > 0 { keep--; if ($0 !~ /^note: run with/ && $0 != "") print; next }
+           /^(error|warning)(\[|:)|^---- |^test .* FAILED|^failures:|^    [A-Za-z0-9_:]+$|^Diff in|^ *--> / { print; hit = 1 }
+           END { exit !hit }' "$d/log" || tail -n 20 "$d/log"; } \
+      | cut -c1-600 | awk '!seen[$0]++' | head -60 >"$d/fail.txt"
   fi
   printf '%s\t%s\t%s\n' "$s" "$st" $((SECONDS-t0)) >>"$new"
 done
