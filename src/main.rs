@@ -58,6 +58,7 @@ async fn main() -> color_eyre::Result<()> {
                bilterm ls / bilterm sessions\n  \
                bilterm run <PLAYBOOK.toml>\n  \
                bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
+               bilterm agent|pane|workspace <SUBCOMMAND> ...   (live control; run `bilterm agent` for usage)\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
                -n, --new-session [SESSION]      Start a fresh named (or auto-named) 1-pane session\n  \
@@ -133,6 +134,30 @@ async fn main() -> color_eyre::Result<()> {
         }
         return Ok(());
     }
+    if bilterm::cli::is_cli_command(args.first().map(String::as_str)) {
+        let cli_env = bilterm::cli::CliEnv::from_process();
+        let call = match bilterm::cli::parse(&args, &cli_env) {
+            Ok(c) => c,
+            Err(msg) => {
+                eprintln!("{msg}");
+                std::process::exit(2);
+            }
+        };
+        let runtime = bilterm::secure_fs::private_runtime_dir().ok();
+        let endpoint = bilterm::cli::resolve_endpoint(&cli_env, runtime.as_deref())
+            .or_else(|| default_socket_path().ok().map(|p| format!("unix:{}", p.display())))
+            .unwrap_or_else(|| DEFAULT_TCP_LISTEN.to_string());
+        match bilterm::cli::run_call(&call, &endpoint, token.as_deref()).await {
+            Ok(resp) => {
+                println!("{resp}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("bilterm: cannot reach a running bilterm instance at {endpoint}: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     if args.first().map(String::as_str) == Some("ctl") {
         let mut rest = args[1..].to_vec();
         let mut ctl_token_path = None;
@@ -153,9 +178,11 @@ async fn main() -> color_eyre::Result<()> {
             None
         };
 
-        let default_ep = default_socket_path()
-            .map(|p| format!("unix:{}", p.display()))
-            .unwrap_or_else(|_| DEFAULT_TCP_LISTEN.to_string());
+        let ctl_env = bilterm::cli::CliEnv::from_process();
+        let ctl_runtime = bilterm::secure_fs::private_runtime_dir().ok();
+        let default_ep = bilterm::cli::resolve_endpoint(&ctl_env, ctl_runtime.as_deref())
+            .or_else(|| default_socket_path().ok().map(|p| format!("unix:{}", p.display())))
+            .unwrap_or_else(|| DEFAULT_TCP_LISTEN.to_string());
 
         let (endpoint, method, params) = bilterm::api::parse_ctl_args(&rest, &default_ep);
         let resp = match send_rpc_request_with_token(&endpoint, &method, params.clone(), ctl_token.as_deref()).await {
@@ -375,6 +402,8 @@ async fn main() -> color_eyre::Result<()> {
     } else {
         terminal::size().unwrap_or((80, 24))
     };
+    // Announce the live RPC socket first so the initial shell receives BILTERM_SOCKET.
+    let _ = bilterm::api::live::LiveRpc::announce();
     let mut app = App::spawn_default(rows, cols)?;
     let mut cfg = BiltermConfig::default();
     let mut cfg_error = None;

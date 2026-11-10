@@ -2,6 +2,7 @@ pub mod action;
 pub mod action_keys;
 pub mod api;
 pub mod app;
+pub mod cli;
 pub mod clipboard;
 pub mod colon_command;
 pub mod command_registry;

@@ -50,6 +50,27 @@ use crate::vt::VtParser;
 /// Unique identifier for a `CompositePane`.
 pub type PaneId = usize;
 
+/// Delivery path chosen by [`CompositePane::inject_prompt`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PromptInjectionKind {
+    /// Shell pane: submitted through the command prompt path.
+    ShellPrompt,
+    /// Raw TUI with DECSET 2004: `ESC[200~ text ESC[201~ CR`.
+    RawBracketedPaste,
+    /// Raw TUI without bracketed paste: text then CR.
+    RawPlain,
+}
+
+impl PromptInjectionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ShellPrompt => "shell_prompt",
+            Self::RawBracketedPaste => "raw_bracketed_paste",
+            Self::RawPlain => "raw_plain",
+        }
+    }
+}
+
 /// A single composite terminal pane combining:
 /// 1. Full-height `OutputCanvas` (`VtParser` + `PtySession`)
 /// 2. Overlaid `FloatingCommandPrompt` (`FloatingPromptState`)
@@ -215,6 +236,7 @@ impl CompositePane {
         let canvas_cols = pty_config.cols.max(1);
         pty_config.rows = canvas_rows;
         pty_config.cols = canvas_cols;
+        crate::pty::inject_live_env(&mut pty_config.env, id);
         let shell_program = pty_config.program.clone();
         let shell_args = pty_config.args.clone();
         let tracked_cwd = pty_config.cwd.clone();
@@ -293,6 +315,53 @@ impl CompositePane {
         }
         let payload = self.build_submission_payload(&cmd_str);
         self.write_to_pty(&payload)
+    }
+
+    /// How [`Self::inject_prompt`] delivered text (`HERDR-03`).
+    pub fn prompt_injection_kind(&self) -> PromptInjectionKind {
+        let raw_tui = !self.line_discipline.canonical_mode
+            && (self.line_discipline.has_foreground_subcommand()
+                || self.vt.is_bracketed_paste()
+                || self.vt.kitty_keyboard_flags() > 0);
+        if raw_tui || self.vt.is_alternate_screen() {
+            if self.vt.is_bracketed_paste() {
+                PromptInjectionKind::RawBracketedPaste
+            } else {
+                PromptInjectionKind::RawPlain
+            }
+        } else {
+            PromptInjectionKind::ShellPrompt
+        }
+    }
+
+    /// Smart prompt injection for an agent pane: a shell `FloatingPrompt` pane submits through
+    /// [`Self::submit_command`] (history, blocks, newline); a raw TUI (`claude`, `agy`) receives the
+    /// text as a bracketed paste when it enabled DECSET 2004, else as plain text, followed by CR.
+    pub fn inject_prompt(&mut self, text: &str) -> Result<PromptInjectionKind> {
+        let kind = self.prompt_injection_kind();
+        match kind {
+            PromptInjectionKind::ShellPrompt => self.submit_command(text)?,
+            PromptInjectionKind::RawBracketedPaste | PromptInjectionKind::RawPlain => {
+                if self.read_only {
+                    return Err(crate::error::BiltermError::Pty(format!(
+                        "pane #{} is locked read-only (PROT)",
+                        self.id
+                    )));
+                }
+                let clean = text.replace("\x1b[201~", "");
+                let mut bytes = Vec::with_capacity(clean.len() + 14);
+                if kind == PromptInjectionKind::RawBracketedPaste {
+                    bytes.extend_from_slice(b"\x1b[200~");
+                    bytes.extend_from_slice(clean.as_bytes());
+                    bytes.extend_from_slice(b"\x1b[201~");
+                } else {
+                    bytes.extend_from_slice(clean.replace("\r\n", "\r").replace('\n', "\r").as_bytes());
+                }
+                bytes.push(b'\r');
+                self.write_to_pty(&bytes)?;
+            }
+        }
+        Ok(kind)
     }
 
     fn build_submission_payload(&self, cmd_str: &str) -> Vec<u8> {
@@ -938,7 +1007,7 @@ impl CompositePane {
         self.reset_page_anchor();
         if !self.is_headless() {
             let (rows, cols) = self.vt.size();
-            let pty_cfg = PtyConfig {
+            let mut pty_cfg = PtyConfig {
                 rows: rows.max(1),
                 cols: cols.max(1),
                 program: self.shell_program.clone(),
@@ -946,6 +1015,7 @@ impl CompositePane {
                 cwd: Some(self.resolve_cwd()),
                 ..PtyConfig::default()
             };
+            crate::pty::inject_live_env(&mut pty_cfg.env, self.id);
             self.pty = Some(PtySession::spawn(pty_cfg)?);
         }
         self.status_message = Some("Shell respawned cleanly".to_string());

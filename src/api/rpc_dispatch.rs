@@ -86,10 +86,7 @@ impl AutomationControlPlane {
                 ]))
             }
             "pane.read" => {
-                let target_id = params
-                    .get("pane_id")
-                    .and_then(JsonValue::as_usize)
-                    .unwrap_or_else(|| self.wm.active_pane_id());
+                let target_id = self.target_pane(params)?;
                 let pane = self
                     .wm
                     .pane(target_id)
@@ -487,6 +484,18 @@ impl AutomationControlPlane {
             "agent.ack" => self.rpc_agent_ack(params),
             "agent.list" => self.rpc_agent_list(params),
             "agent.wait" => self.rpc_agent_wait(params),
+            "agent.prompt" => self.rpc_agent_prompt(params),
+            "agent.approve" => self.rpc_agent_approve(params),
+            "agent.last_turn" => self.rpc_agent_last_turn(params),
+            "pane.list" => self.rpc_pane_list(),
+            "pane.split" => self.rpc_pane_split(params),
+            "pane.focus" => self.rpc_pane_focus(params),
+            "pane.zoom" => self.rpc_pane_zoom(params),
+            "pane.send" => self.rpc_pane_send(params),
+            "workspace.list" => self.rpc_workspace_list(),
+            "workspace.select" => self.rpc_workspace_select(params),
+            "workspace.new" => self.rpc_workspace_new(params),
+            "workspace.rename" => self.rpc_workspace_rename(params),
             "daemon.list" => super::rpc_daemon::handle_daemon_list(),
             "daemon.status" => super::rpc_daemon::handle_daemon_status(params),
             "daemon.start" => super::rpc_daemon::handle_daemon_start(params),

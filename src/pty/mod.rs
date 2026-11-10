@@ -57,6 +57,53 @@ impl Default for PtyConfig {
     }
 }
 
+/// Process-wide path of this foreground instance's live RPC socket (`LIVE-02`).
+static LIVE_SOCKET: std::sync::RwLock<Option<std::path::PathBuf>> = std::sync::RwLock::new(None);
+
+/// Records (or clears) the live RPC socket path injected into child PTY environments.
+pub fn set_live_socket(path: Option<std::path::PathBuf>) {
+    if let Ok(mut g) = LIVE_SOCKET.write() {
+        *g = path;
+    }
+}
+
+/// The live RPC socket path children should receive as `BILTERM_SOCKET`, when one is announced.
+pub fn live_socket() -> Option<std::path::PathBuf> {
+    LIVE_SOCKET.read().ok().and_then(|g| g.clone())
+}
+
+/// Workspace id handed to children: a foreground instance has exactly one live workspace.
+pub const LIVE_WORKSPACE_ID: &str = "w1";
+
+/// Pure builder of the `BILTERM_*` child environment (`LIVE-02`).
+pub fn live_child_env(
+    socket: Option<&std::path::Path>,
+    instance_pid: u32,
+    workspace_id: &str,
+    pane_id: usize,
+) -> Vec<(String, String)> {
+    let mut v = Vec::with_capacity(4);
+    if let Some(s) = socket {
+        v.push(("BILTERM_SOCKET".to_string(), s.to_string_lossy().to_string()));
+    }
+    v.push(("BILTERM_INSTANCE_PID".to_string(), instance_pid.to_string()));
+    v.push(("BILTERM_WORKSPACE_ID".to_string(), workspace_id.to_string()));
+    v.push(("BILTERM_PANE_ID".to_string(), pane_id.to_string()));
+    v
+}
+
+/// Injects `BILTERM_SOCKET`, `BILTERM_INSTANCE_PID`, `BILTERM_WORKSPACE_ID` and
+/// `BILTERM_PANE_ID` into a child's environment map (overriding inherited stale values).
+pub fn inject_live_env(env: &mut BTreeMap<String, String>, pane_id: usize) {
+    let sock = live_socket();
+    if sock.is_none() {
+        env.remove("BILTERM_SOCKET");
+    }
+    for (k, v) in live_child_env(sock.as_deref(), std::process::id(), LIVE_WORKSPACE_ID, pane_id) {
+        env.insert(k, v);
+    }
+}
+
 /// Resolves the default interactive shell across Linux, macOS, and Windows (`PLAT-01`).
 pub fn default_shell_for_platform(
     os: &str,
