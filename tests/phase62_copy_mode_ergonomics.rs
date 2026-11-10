@@ -212,13 +212,14 @@ fn test_09_multi_click_word_and_line() {
     let mut wm = pane_100_lines();
     let area = Rect::new(0, 0, 80, 24);
 
-    // Double-click at (1, 1)
+    // Double-click at (1, 8): open canvas below the top-docked floating prompt (rows 0-2),
+    // whose border owns clicks for resize.
     handle_wm_mouse_event(
         &mut wm,
         MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 1,
-            row: 1,
+            row: 8,
             modifiers: KeyModifiers::NONE,
         },
         area,
@@ -228,7 +229,7 @@ fn test_09_multi_click_word_and_line() {
         MouseEvent {
             kind: MouseEventKind::Up(MouseButton::Left),
             column: 1,
-            row: 1,
+            row: 8,
             modifiers: KeyModifiers::NONE,
         },
         area,
@@ -238,7 +239,7 @@ fn test_09_multi_click_word_and_line() {
         MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 1,
-            row: 1,
+            row: 8,
             modifiers: KeyModifiers::NONE,
         },
         area,
@@ -248,7 +249,7 @@ fn test_09_multi_click_word_and_line() {
         MouseEvent {
             kind: MouseEventKind::Up(MouseButton::Left),
             column: 1,
-            row: 1,
+            row: 8,
             modifiers: KeyModifiers::NONE,
         },
         area,
