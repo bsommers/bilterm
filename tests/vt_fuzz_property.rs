@@ -9,24 +9,14 @@
 //!   * the cursor stays inside the screen;
 //!   * replaying the same bytes with the same chunking gives the identical screen (determinism).
 //!
-//! KNOWN PRODUCT BUG (found by this file, not fixed here because `src/vt` is owned by another
-//! branch): two byte-offset slices of lossily decoded text panic on non-ASCII input:
-//!   * `src/vt/scan.rs:29` (`&after_esc[1..]`): ESC followed by any multi-byte character;
-//!   * `src/vt/codec.rs:77` (`&hex[i..i + 2]`): XTGETTCAP (`DCS + q`) with a non-ASCII payload.
-//!
-//! Any program that prints such bytes (e.g. `cat` of a binary file) aborts the terminal. Until
-//! they are fixed, [`guarded`] tolerates exactly that panic message (and nothing else) and reports
-//! every hit visibly; the two tests that cannot run meaningfully while the bug exists and the
-//! minimal reproducers are `#[ignore]`d with the reason. After the fix: delete `KNOWN_BUG_PANIC`,
-//! the tolerance in `guarded` and the `#[ignore]` attributes.
+//! History: this file found two char-boundary panics (`src/vt/scan.rs`, `src/vt/codec.rs`), since
+//! fixed; the `repro_*` tests below keep them fixed.
 //!
 //! The parser is fuzzed directly (not through a pane) on purpose: a pane forwards decoded OSC 52
 //! payloads to the system clipboard, which a fuzzer must never touch.
 
 mod common;
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use bilterm::vt::VtParser;
@@ -35,36 +25,6 @@ use common::Rng;
 /// Whole-test budget. Debug builds on the slowest CI cell finish in a few seconds; this only
 /// trips on a genuine algorithmic blow-up (quadratic reflow, runaway allocation, livelock).
 const TIME_BUDGET: Duration = Duration::from_secs(120);
-
-/// The one panic message tolerated while the char-boundary bug (see module docs) is open.
-const KNOWN_BUG_PANIC: &str = "is not a char boundary";
-const KNOWN_BUG_IGNORE: &str = "product bug: src/vt/scan.rs:29 and src/vt/codec.rs:77 slice lossy text at a non-char boundary";
-static KNOWN_BUG_HITS: AtomicUsize = AtomicUsize::new(0);
-
-/// Runs one fuzz case. `true` = completed; `false` = it died on the known char-boundary panic
-/// (the caller must discard the parser). Any other panic is re-raised with the case description.
-fn guarded(what: &str, case: impl FnOnce()) -> bool {
-    match catch_unwind(AssertUnwindSafe(case)) {
-        Ok(()) => true,
-        Err(payload) => {
-            let msg = payload.downcast_ref::<String>().cloned().or_else(|| payload.downcast_ref::<&str>().map(ToString::to_string)).unwrap_or_default();
-            if msg.contains(KNOWN_BUG_PANIC) {
-                KNOWN_BUG_HITS.fetch_add(1, Ordering::Relaxed);
-                false
-            } else {
-                panic!("{what}: {msg}");
-            }
-        }
-    }
-}
-
-/// Makes tolerated hits visible in the log instead of letting them pass silently.
-fn report_known_bug_hits(test: &str) {
-    let hits = KNOWN_BUG_HITS.load(Ordering::Relaxed);
-    if hits > 0 {
-        common::skip(&format!("{test}: {hits} fuzz case(s) so far hit the known VT char-boundary panic ({KNOWN_BUG_IGNORE})"));
-    }
-}
 
 /// Real-world sequences the mutator starts from.
 const CORPUS: &[&[u8]] = &[
@@ -274,19 +234,15 @@ fn run_cases(kind: &str, seeds: &[u64], cases: usize, mut make: impl FnMut(&mut 
             let input = make(&mut rng);
             total_bytes += input.len();
             let what = describe(kind, seed, case, &input);
-            let completed = guarded(&what, || {
+            {
                 let replies = feed(&mut vt, &input, &mut rng);
                 // A terminal answers queries; it must not amplify input into unbounded output.
                 assert!(replies <= 64 * input.len() + 4096, "{what}: {replies} reply bytes for {} input bytes", input.len());
                 check_invariants(&vt, rows, cols, &what);
-            });
-            if !completed {
-                vt = VtParser::new(rows, cols, 200); // state after a panic is unspecified
             }
             assert!(started.elapsed() < TIME_BUDGET, "{what}: exceeded the {TIME_BUDGET:?} budget after {total_bytes} bytes");
         }
     }
-    report_known_bug_hits(kind);
 }
 
 #[test]
@@ -332,7 +288,7 @@ fn fuzzing_interleaved_with_resizes_keeps_the_grid_consistent() {
                 mutate(&mut rng, base)
             };
             let what = describe("resize", seed, case, &input);
-            let completed = guarded(&what, || {
+            {
                 feed(&mut vt, &input, &mut rng);
                 if rng.chance(3) {
                     // Ask for degenerate 1-cell grids too: the parser documents a 2x2 minimum.
@@ -351,19 +307,13 @@ fn fuzzing_interleaved_with_resizes_keeps_the_grid_consistent() {
                     vt.reset_scrollback();
                 }
                 check_invariants(&vt, rows, cols, &what);
-            });
-            if !completed {
-                (rows, cols) = (24, 80);
-                vt = VtParser::new(rows, cols, 500);
             }
             assert!(started.elapsed() < TIME_BUDGET, "{what}: exceeded the {TIME_BUDGET:?} budget");
         }
     }
-    report_known_bug_hits("resize");
 }
 
 #[test]
-#[ignore = "product bug: src/vt/scan.rs:29 and src/vt/codec.rs:77 slice lossy text at a non-char boundary"]
 fn identical_input_and_chunking_give_an_identical_screen() {
     for seed in [41u64, 42, 43, 44, 45, 46] {
         let mut gen_rng = Rng::new(seed);
@@ -379,7 +329,6 @@ fn identical_input_and_chunking_give_an_identical_screen() {
 }
 
 #[test]
-#[ignore = "product bug: src/vt/scan.rs:29 and src/vt/codec.rs:77 slice lossy text at a non-char boundary"]
 fn one_megabyte_of_hostile_input_is_processed_in_bounded_time() {
     let mut rng = Rng::new(0x0B16_B00B);
     let mut input = Vec::with_capacity(1 << 20);
@@ -402,7 +351,6 @@ fn one_megabyte_of_hostile_input_is_processed_in_bounded_time() {
 // ---------------------------------------------------------------- minimal reproducers (see module docs)
 
 #[test]
-#[ignore = "product bug: src/vt/scan.rs:29 slices `&after_esc[1..]` inside a multi-byte character"]
 fn repro_escape_followed_by_non_ascii_character_must_not_panic() {
     let mut vt = VtParser::new(24, 80, 0);
     vt.process("\x1b\u{e9}".as_bytes()); // ESC, then U+00E9
@@ -411,21 +359,8 @@ fn repro_escape_followed_by_non_ascii_character_must_not_panic() {
 }
 
 #[test]
-#[ignore = "product bug: src/vt/codec.rs:77 hex_decode_ascii slices `&hex[i..i + 2]` inside a multi-byte character"]
 fn repro_xtgettcap_with_non_ascii_payload_must_not_panic() {
     let mut vt = VtParser::new(24, 80, 0);
     vt.process("\x1bP+q5\u{e9}4\x1b\\".as_bytes()); // DCS + q <5, U+00E9, 4> ST: even byte length, odd boundary
     check_invariants(&vt, 24, 80, "XTGETTCAP + non-ASCII");
-}
-
-/// While the bug is open this proves the tolerance in [`guarded`] is still needed; it fails as soon
-/// as the parser is fixed, which is the signal to delete the tolerance and the `#[ignore]`s above.
-#[test]
-fn known_char_boundary_bug_is_still_present_remove_tolerance_when_this_fails() {
-    let esc = catch_unwind(|| VtParser::new(24, 80, 0).process("\x1b\u{e9}".as_bytes()));
-    let dcs = catch_unwind(|| VtParser::new(24, 80, 0).process("\x1bP+q5\u{e9}4\x1b\\".as_bytes()));
-    assert!(
-        esc.is_err() || dcs.is_err(),
-        "the VT char-boundary panics are fixed: remove KNOWN_BUG_PANIC / guarded tolerance and the #[ignore] attributes in this file"
-    );
 }
