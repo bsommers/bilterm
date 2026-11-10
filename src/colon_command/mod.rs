@@ -32,6 +32,7 @@ mod parse_coords;
 mod parse_context;
 mod parse_agent_queue;
 mod execute_context;
+mod execute_swarm;
 mod execute_coords;
 pub mod parse_session_map;
 pub mod parse_voice;

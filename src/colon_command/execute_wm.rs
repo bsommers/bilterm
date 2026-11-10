@@ -955,6 +955,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         }
         ColonCommand::Context(op) => super::execute_context::execute_context(wm, op),
         ColonCommand::AgentQueue(op) => super::execute_context::execute_agent_queue(wm, op),
+        ColonCommand::Swarm(op) => super::execute_swarm::execute_swarm(wm, op),
+        ColonCommand::AgentsHud(op) => super::execute_swarm::execute_hud(wm, op),
+        ColonCommand::AgentReplay(op) => super::execute_swarm::execute_replay(wm, op),
         ColonCommand::AgentGate(op) => super::execute_context::execute_agent_gate(wm, op),
         ColonCommand::Coords(op) => super::execute_coords::execute_coords(wm, op),
         ColonCommand::TrafficMonitor(op) => {

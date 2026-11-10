@@ -13,7 +13,7 @@ fn str_param<'a>(params: &'a JsonValue, name: &str) -> Result<&'a str, String> {
 
 impl AutomationControlPlane {
     /// Applies `action` and returns the executor's structured payload, or the status error.
-    fn apply_with_data(&mut self, action: Action) -> Result<JsonValue, String> {
+    pub(super) fn apply_with_data(&mut self, action: Action) -> Result<JsonValue, String> {
         self.apply_with_policy(action, SnapshotPolicy::Confined).map_err(|e| e.to_string())?;
         let data = self.wm.take_command_data().and_then(|d| JsonValue::parse(&d));
         Ok(data.unwrap_or(JsonValue::Null))

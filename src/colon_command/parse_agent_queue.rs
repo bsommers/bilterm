@@ -4,21 +4,59 @@
 use super::ColonCommand;
 use crate::action::Action;
 use crate::wm::context_queue_ops::{AgentGateOp, AgentQueueOp};
+use crate::wm::swarm_surface::{HudOp, ReplayOp, SwarmOp};
 
 pub const AGENT_QUEUE_USAGE: &str = "Usage: :agent queue [list|add <text>|clear|drop <n>]";
 
 /// Handles the Phase 68 `:agent` subverbs; `None` leaves everything else to the mail parser.
 pub(super) fn parse_agent_ops(head: &str, parts: &[&str]) -> Option<Result<ColonCommand, String>> {
-    if head != "agent" {
-        return None;
+    match head {
+        "agent" => {}
+        "swarm" => return Some(parse_swarm(&parts[1..])),
+        "agents" if parts.get(1) == Some(&"hud") => return Some(parse_hud(&parts[2..])),
+        _ => return None,
     }
     match parts.get(1).copied()? {
+        "replay" => Some(parse_replay(&parts[2..])),
         "queue" | "q" => Some(parse_queue(&parts[2..])),
         "approve" if parts.len() == 2 => Some(Ok(Action::AgentGate(AgentGateOp::Approve))),
         "deny" if parts.len() == 2 => Some(Ok(Action::AgentGate(AgentGateOp::Deny))),
         "approve" | "deny" => Some(Err("Usage: :agent approve|deny".to_string())),
         _ => None,
     }
+}
+
+fn parse_swarm(args: &[&str]) -> Result<ColonCommand, String> {
+    let op = match args {
+        [] | ["status"] => SwarmOp::Status,
+        ["clear"] => SwarmOp::Clear,
+        ["load"] => SwarmOp::Load(String::new()),
+        ["load", path @ ..] => SwarmOp::Load(path.join(" ")),
+        _ => return Err("Usage: :swarm [status|load <plan.toml>|clear]".to_string()),
+    };
+    Ok(Action::Swarm(op))
+}
+
+fn parse_hud(args: &[&str]) -> Result<ColonCommand, String> {
+    let op = match args {
+        [] | ["toggle"] => HudOp::Toggle,
+        ["open"] => HudOp::Open,
+        ["close"] => HudOp::Close,
+        _ => return Err("Usage: :agents hud [open|close|toggle]".to_string()),
+    };
+    Ok(Action::AgentsHud(op))
+}
+
+fn parse_replay(args: &[&str]) -> Result<ColonCommand, String> {
+    let op = match args {
+        [] | ["show"] => ReplayOp::Show,
+        ["prev"] => ReplayOp::Prev,
+        ["next"] => ReplayOp::Next,
+        ["first"] => ReplayOp::First,
+        ["last"] => ReplayOp::Last,
+        _ => return Err("Usage: :agent replay [show|prev|next|first|last]".to_string()),
+    };
+    Ok(Action::AgentReplay(op))
 }
 
 fn parse_queue(args: &[&str]) -> Result<ColonCommand, String> {
@@ -65,6 +103,17 @@ mod tests {
         assert!(p(":agent queue drop x").unwrap().is_err());
         assert_eq!(p(":agent queue add"), Some(Ok(Action::AgentQueue(AgentQueueOp::Add(String::new())))));
         assert!(p(":agent approve now").unwrap().is_err());
+    }
+
+    #[test]
+    fn parses_swarm_hud_replay() {
+        assert_eq!(p(":swarm"), Some(Ok(Action::Swarm(SwarmOp::Status))));
+        assert_eq!(p(":swarm load a b.toml"), Some(Ok(Action::Swarm(SwarmOp::Load("a b.toml".into())))));
+        assert!(p(":swarm bogus").unwrap().is_err());
+        assert_eq!(p(":agents hud"), Some(Ok(Action::AgentsHud(HudOp::Toggle))));
+        assert_eq!(p(":agents hud open"), Some(Ok(Action::AgentsHud(HudOp::Open))));
+        assert_eq!(p(":agent replay prev"), Some(Ok(Action::AgentReplay(ReplayOp::Prev))));
+        assert!(p(":agent replay x").unwrap().is_err());
     }
 
     #[test]

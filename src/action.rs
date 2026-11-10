@@ -212,6 +212,12 @@ pub enum Action {
     AgentQueue(crate::wm::context_queue_ops::AgentQueueOp),
     /// `:agent approve|deny` - answer the active pane's blocked prompt (`UNI-R01`, Phase 68).
     AgentGate(crate::wm::context_queue_ops::AgentGateOp),
+    /// `:swarm status|load|clear` - worktree swarm DAG orchestrator (`UNI-R01`, Phase 69).
+    Swarm(crate::wm::swarm_surface::SwarmOp),
+    /// `:agents hud [open|close|toggle]` - Mission Control HUD (`UNI-R01`, Phase 70).
+    AgentsHud(crate::wm::swarm_surface::HudOp),
+    /// `:agent replay ...` - read-only per-turn replay (`UNI-R01`, Phase 70).
+    AgentReplay(crate::wm::swarm_surface::ReplayOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
     ScriptStudio(crate::wm::script_studio::ScriptStudioOp),
     /// `:find agent|session|history [text]` and the `:finder` modal verbs (Phase 50.1, FND-R01).
@@ -417,6 +423,9 @@ impl Action {
             Self::Context(op) => op.colon_form(),
             Self::AgentQueue(op) => op.colon_form(),
             Self::AgentGate(op) => op.colon_form(),
+            Self::Swarm(op) => op.colon_form(),
+            Self::AgentsHud(op) => op.colon_form(),
+            Self::AgentReplay(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),
             Self::SessionMap(op) => op.colon_form(),
