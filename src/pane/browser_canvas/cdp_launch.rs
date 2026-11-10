@@ -194,9 +194,20 @@ impl Drop for ChromeProcess {
         self.kill_group();
         let Some(mut child) = self.child.take() else { return };
         let dir = std::mem::take(&mut self.profile_dir);
+        let pgid = self.pgid;
         // Reap and delete off the calling (UI) thread: wait() and remove_dir_all can take a while.
-        // The group is not signalled again after the reap: its id could have been reused by then.
         let reap = move || {
+            // A member that was in the middle of fork() when the first SIGKILL went out can miss
+            // it and outlive the group leader (seen on macOS). Signal again a few times BEFORE the
+            // reap: until `wait()` the leader's pid, and so the group id, cannot be reused. The
+            // group is never signalled after the reap.
+            for _ in 0..REKILL_ROUNDS {
+                std::thread::sleep(REKILL_PAUSE);
+                if pgid > 1 {
+                    // SAFETY: see above; the unreaped leader pins the group id to our child.
+                    unsafe { libc::kill(-pgid, libc::SIGKILL) };
+                }
+            }
             let _ = child.wait();
             for _ in 0..50 {
                 if std::fs::remove_dir_all(&dir).is_ok() || !dir.exists() {
@@ -216,6 +227,9 @@ impl Drop for ChromeProcess {
 /// behind, so an `atexit` hook gives them a short, bounded time to finish.
 static REAPERS: Mutex<Vec<JoinHandle<()>>> = Mutex::new(Vec::new());
 const EXIT_GRACE: Duration = Duration::from_secs(2);
+/// Extra SIGKILL rounds sent to the group before the leader is reaped (3 x 20 ms, off the UI thread).
+const REKILL_ROUNDS: u32 = 3;
+const REKILL_PAUSE: Duration = Duration::from_millis(20);
 
 fn track_reaper(handle: JoinHandle<()>) {
     static HOOK: Once = Once::new();
