@@ -953,6 +953,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.clipboard_window_apply(op);
             false
         }
+        ColonCommand::Context(op) => super::execute_context::execute_context(wm, op),
+        ColonCommand::AgentQueue(op) => super::execute_context::execute_agent_queue(wm, op),
+        ColonCommand::AgentGate(op) => super::execute_context::execute_agent_gate(wm, op),
         ColonCommand::Coords(op) => super::execute_coords::execute_coords(wm, op),
         ColonCommand::TrafficMonitor(op) => {
             if let Err(e) = wm.traffic_monitor_apply(op) {

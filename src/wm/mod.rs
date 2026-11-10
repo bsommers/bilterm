@@ -12,6 +12,7 @@ pub mod agents_geometry;
 pub mod agents_list_geometry;
 pub mod command_window;
 pub mod context_bus;
+pub mod context_queue_ops;
 pub mod prompt_queue;
 pub mod mission_control_hud;
 pub mod turn_replay;

@@ -23,13 +23,13 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Clipboard Viewer            Ctrl+X ;║        │║                       ║
 │                         ║  Traffic Monitor             Ctrl+X $║        │║                       ║
 │                         ║  Next Coordinate Badge Style         ║        │║                       ║
+│                         ║  Context Bus Quick List              ║        │║                       ║
+│                         ║  Agent Job Queue                     ║        │║                       ║
 │                         ║  Script Studio                       ║        │║                       ║
 │                         ║  Drawer Peek Preview         Ctrl+X P║        │║                       ║
 │                         ║  Drawer Rows: 1 line                 ║        │║                       ║
 │                         ║  Drawer Rows: 2 lines                ║        │║                       ║
 │                         ║  Voice Dictation Toggle      Ctrl+X ,║        │║                       ║
 │                         ║  Browser Canvas              Ctrl+X .║        │║                       ║
-│                         ║  Video Canvas                Ctrl+X '║        │║                       ║
-│                         ╚══════════════════════════════════════◢        │║                       ║
-│3270-OIA│ ● READY │ INPUT: CMD BOX │ PIN:TOP │ ⌖││3270-OIA│ ● READY │ INP│║3270-OIA│ ● READY │ INP║
-└────────────────────────────────────────────────◢└───────────────────────◢╚═══════════════════════◢
+│3270-OIA│ ● READY │ INPUT║  Video Canvas                Ctrl+X '║DY │ INP│║3270-OIA│ ● READY │ INP║
+└─────────────────────────╚══════════════════════════════════════◢────────◢╚═══════════════════════◢
