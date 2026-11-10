@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bilterm v3.2.0 — Retro-Futuristic Terminal Multiplexer & Agent Control Plane</title>
+<title>Bilterm v3.3.0 — Retro-Futuristic Terminal Multiplexer & Agent Control Plane</title>
 <meta name="description" content="Bilterm v3.0: Retro-futuristic terminal multiplexer, native desktop GUI, and AI agent control plane in Rust. IBM 3270 x Borland Turbo Vision x TRON.">
 <link rel="icon" href="assets/bilterm-64.png">
 <style>
@@ -148,7 +148,8 @@ a:hover{color:var(--white)}
 <nav class="menubar" aria-label="Primary">
   <span>&#9776;</span>
   <a href="#install"><b>I</b>nstall</a>
-  <a href="#v3-2"><b>N</b>ew in v3.2</a>
+  <a href="#v3-3"><b>N</b>ew in v3.3</a>
+  <a href="#v3-2">v3.2</a>
   <a href="#v3-highlights">v3.0</a>
   <a href="#screens"><b>S</b>creenshots</a>
   <a href="#features"><b>F</b>eatures</a>
@@ -156,7 +157,7 @@ a:hover{color:var(--white)}
   <a href="#api-mcp"><b>A</b>PI / MCP</a>
   <a href="https://github.com/bsommers/bilterm"><b>G</b>itHub</a>
   <span class="sp"></span>
-  <span class="badge">v3.2.0 &bull; 65 phases</span>
+  <span class="badge">v3.3.0 &bull; 71 phases</span>
 </nav>
 
 <main class="wrap">
@@ -165,8 +166,8 @@ a:hover{color:var(--white)}
     <p class="tag">IBM 3270 <em>&times;</em> Borland Turbo Vision <em>&times;</em> Autonomous AI Swarms</p>
     <p class="subtag">A retro-futuristic terminal multiplexer, native desktop GUI terminal, and AI agent coordination workspace in Rust. Zero <code>SIGWINCH</code> thrash, 2D rectangular block copy, and resilient remote SSH/tmux sessions.</p>
     <div>
-      <a class="v-pill" href="https://github.com/bsommers/bilterm/releases/tag/v3.2.0">
-        <span class="dot dot-done"></span><strong>Bilterm v3.2.0 Released</strong> &bull; Embedded Chrome Browser &bull; Voice-to-Text &bull; 60fps Video &bull; Traffic Monitor &bull; Daemon Supervisor
+      <a class="v-pill" href="https://github.com/bsommers/bilterm/releases/tag/v3.3.0">
+        <span class="dot dot-done"></span><strong>Bilterm v3.3.0 Released</strong> &bull; Beyond Herdr Live Control Plane &bull; Swarm DAG Runner &bull; Mission Control HUD &bull; D:(W,S,Y,P) Coordinates
       </a>
     </div>
   </header>
@@ -190,10 +191,44 @@ cargo build --release &amp;&amp; install -m 0755 target/release/bilterm ~/.local
 
       <div class="btns">
         <a class="btn" href="https://github.com/bsommers/bilterm">&#9658; GitHub Repository</a>
-        <a class="btn btn-amber" href="https://github.com/bsommers/bilterm/releases">&#9658; Download v3.2.0 Binaries</a>
-        <a class="btn" href="#v3-2">&#9658; Explore v3.2 Features</a>
+        <a class="btn btn-amber" href="https://github.com/bsommers/bilterm/releases">&#9658; Download v3.3.0 Binaries</a>
+        <a class="btn" href="#v3-3">&#9658; Explore v3.3 Features</a>
         <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/user-guide/README.md">&#9658; 12-Chapter User Guide</a>
         <a class="btn" href="https://github.com/bsommers/bilterm/blob/main/docs/API.md">&#9658; API &amp; RPC Reference</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- v3.3 Highlights Section -->
+  <section class="win amber" id="v3-3">
+    <h2>[&#9632;] What's New in Bilterm v3.3.0 (Phases 66&ndash;71)</h2>
+    <div class="body">
+      <p class="note" style="margin-top:0;">71 development phases &bull; Beyond Herdr live control plane &bull; every feature reachable from keyboard, colon command, JSON-RPC, CLI, and MCP.</p>
+    </div>
+    <div class="body grid">
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.66 &middot; Always-On Live Control Plane</h3>
+        <p>Foreground <code>0600</code> RPC socket in both TUI and GUI, child PTY env injection (<code>BILTERM_SOCKET</code>, <code>BILTERM_PANE_ID</code>), multi-instance registry with <code>--instance &lt;pid|all&gt;</code>, OIA <code>[RPC:LIVE]</code> and <code>:rpc</code>.</p>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.67 &middot; <code>bilterm agent|pane|workspace</code> CLI</h3>
+        <p>Herdr-style <code>w&lt;N&gt;:p&lt;M&gt;</code> and semantic selectors (<code>@claude</code>, <code>@idle</code>, <code>@blocked</code>), smart prompt injection, and zero-polling server-side <code>agent wait</code>.</p>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.68 &middot; Semantic Introspection &amp; Context Bus</h3>
+        <p><code>agent.last_turn</code> structured deltas, permission-gate approve/deny, per-pane FIFO prompt queue, and a cross-agent <code>bilterm context</code> bus.</p>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.69 &middot; Worktree Swarm &amp; DAG Runner</h3>
+        <p><code>:swarm run plan.toml</code> spawns atomic git-worktree agents in dependency waves with diff/merge and a self-healing <code>verify_cmd</code> retry loop.</p>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-done"></span> Ph.70 &middot; Mission Control HUD &amp; Time-Travel</h3>
+        <p><code>:agents hud</code> live mini viewports and sparklines, per-turn replay scrubber, and a stall/loop watchdog.</p>
+      </div>
+      <div class="cell">
+        <h3><span class="dot dot-working"></span> Ph.71 &middot; D:(W,S,Y,P) Hierarchical Coordinates</h3>
+        <p>Five-level Daemon/Workspace/Session/Window/Pane addressing with a universal parser, title-bar coordinate badge, <code>:coords</code>, <code>coords.resolve</code> RPC and MCP <code>bilterm_coords_resolve</code>.</p>
       </div>
     </div>
   </section>
