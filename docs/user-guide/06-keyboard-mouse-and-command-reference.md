@@ -97,7 +97,7 @@
 | `Alt+O` | `<L> L` | `:spotlight` | Cycle Focal Spotlight shader around active cursor (`Circle` -> `Ellipse` -> `Pixel` -> `Off`) |
 | `Alt+Shift+O` | — | `:focalzoom` | Cycle Focal Zoom Magnifying Lens (`1.25x` -> `1.5x` -> `2.0x` -> `Off`) |
 | `Alt+}` / `Alt+{` | `<L> }` / `<L> {` | `:spotlight +\|-` | Expand or shrink Focal Spotlight / Focal Zoom lens radius |
-| — | `Ctrl+X D` | `:detach [name]` | Detach client & spawn background daemon keeping full multi-pane layout intact |
+| — | `Ctrl+X D` | `:detach [name]` | Detach client & save the full multi-pane layout (programs are restarted on attach, not kept running) |
 | — | — | `:attach [name]` | Re-attach & restore saved/detached multi-pane window layout in-place |
 | — | — | `:mcp [status\|tree\|...]` | Open interactive Master Control Program Console (`↑`/`↓`/`j`/`k`/`Enter`/Click, `r`, `f`, `n`, `m`, `d`) |
 | **`Ctrl+Q`** | `<L> Ctrl+Q` | `:quit` / `:q` / `:quit!` | Exit Bilterm (`:quit` honors Exit Guard; `:quit!` forces immediate exit) |
@@ -442,7 +442,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 
 | `:command` | Aliases | Arguments | Description |
 |------------|---------|-----------|-------------|
-| `:detach` | — | `[name]` | Save full multi-pane layout (`SplitTree` + `ZStack` + prompts + screen lines), spawn background daemon (`daemon-<session>.sock`), and detach |
+| `:detach` | — | `[name]` | Save full multi-pane layout (`SplitTree` + `ZStack` + prompts + screen lines), spawn a headless daemon (`daemon-<session>.sock`) that re-launches the saved session, and detach. Running programs end with the client; a failed save cancels the detach |
 | `:attach` | — | `[name]` | Re-attach to live background daemon via JSON-RPC or restore saved `.toml` workspace layout |
 | `:mcp` | — | `[status \| tree \| float \| push [edge] \| attach <node> \| spawn <parent/child> \| graft <src> <dst> \| detach-subtree <node> \| broadcast <node> <cmd> \| freeze <node> \| thaw <node> \| derez <node> --confirm \| checkpoint \| shutdown --confirm]` | Master Control Program Root Console (`↑`/`↓`/`j`/`k`/`Enter`/Click to activate row, `r`=Refresh, `f`=Freeze/Thaw, `n`=Branch, `m`=Float↔Push, `d`=Edge, `Esc`=Close) |
 | `:exit-guard` | `:exitguard` | `[guard \| respawn \| detach \| off]` | Configure final/root shell exit protection (`[r]` Respawn, `[d]` Detach, `[q]` Quit) |
