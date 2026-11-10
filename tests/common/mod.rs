@@ -17,7 +17,8 @@ use std::time::{Duration, Instant};
 /// is known at compile time: libtest then prints `ignored, reason` itself.
 pub fn skip(reason: &str) {
     let name = std::thread::current().name().unwrap_or("<unnamed>").to_string();
-    let _ = writeln!(std::io::stderr(), "SKIPPED {name}: {reason}");
+    // Leading newline: libtest's progress dots share the line, and the collector matches line starts.
+    let _ = writeln!(std::io::stderr(), "\nSKIPPED {name}: {reason}");
 }
 
 /// Polls `cond` every 10 ms until it holds or `timeout` elapses. Returns whether it held.

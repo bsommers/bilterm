@@ -38,6 +38,7 @@ fn wait_for_frame(be: &mut FfmpegPipeBackend) -> Option<MediaRgbaFrame> {
 }
 
 #[test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 fn ffmpeg_pipe_backend_reads_real_rgba_frames_from_child_stdout() {
     let mut be = FfmpegPipeBackend::from_command(raw_rgba_child(4, 2, 3), 4, 2);
     let f = wait_for_frame(&mut be).expect("real frame from pipe");
@@ -49,6 +50,7 @@ fn ffmpeg_pipe_backend_reads_real_rgba_frames_from_child_stdout() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 fn ffmpeg_pipe_backend_frame_sequence_advances() {
     let mut be = FfmpegPipeBackend::from_command(raw_rgba_child(4, 2, 5), 4, 2);
     let first = wait_for_frame(&mut be).expect("first frame");
