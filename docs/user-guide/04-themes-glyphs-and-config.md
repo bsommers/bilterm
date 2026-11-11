@@ -178,6 +178,22 @@ Inside the **`:browse`** modal:
 
 ---
 
+### The TRON Look (`--tron`, `:tron`)
+
+TRON is a built-in look: black canvas, neon cyan light-cycle borders (thin, rounded), an orange accent for the prompt and badges, pale cyan text, and dim teal borders on unfocused panes.
+
+| Surface | How |
+|---------|-----|
+| Command line | `bilterm --tron` |
+| Colon command | `:tron on`, `:tron off`, `:tron toggle` (bare `:tron` toggles), `:style tron`, `:appearance tron` |
+| Keyboard | `F11` cycles `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> TRON -> Classic` |
+| RPC / MCP | `bilterm ctl wm.command '{"command":":tron on"}'` |
+| Config file | `[appearance]` then `profile = "tron"` (`:set appearance.profile tron`, `:appearance save`) |
+
+`:tron off` restores the look that was active when TRON was switched on in this session. When TRON came from `--tron`, the config file or `:appearance tron` there is nothing to restore, so `:tron off` lands on Classic. Pressing `F11` on TRON always goes to Classic. `:snazzy` and `:glass` can be layered on top of TRON; switching TRON on clears them first.
+
+A custom `:theme` still wins over the TRON palette, as it does for every look. (`:theme tron-grid` is a separate, older colour theme for the classic chrome.)
+
 ## 7. Declarative Configuration (`~/.config/bilterm/config.toml`) (`CFG-01`)
 
 Bilterm automatically creates `~/.config/bilterm/config.toml` and `~/.config/bilterm/themes/` on first launch (or via `:theme config`).
