@@ -161,6 +161,22 @@ the OS clipboard back ends in `src/clipboard.rs`) and interactive entry points (
 
 ## 8. CI Matrix, Per-OS Gate, Cross-Checks and the Coverage Ratchet
 
+### 8.0 Local CI is the merge gate
+
+Hosted GitHub Actions do not run automatically: `.github/workflows/ci.yml` is manual-only
+(`workflow_dispatch`). Before pushing or merging, run:
+
+```bash
+scripts/ci-local.sh              # build, full verify, classic goldens, cargo-deny
+scripts/ci-local.sh --quick      # build, clippy + unit, goldens, cargo-deny
+scripts/ci-local.sh --coverage   # the default gate plus the coverage floor ratchet
+```
+
+It prints one line per stage and ends with `CI-LOCAL PASS` or `CI-LOCAL FAIL: <stages>`; logs are in
+`target/ci-local/<stage>.log`. It covers the host platform only. For the macOS, Windows and ARM
+cells, start the hosted matrix by hand: `gh workflow run ci.yml --ref <branch>`. The tiers below
+describe what that manual run does (the pull-request and nightly columns no longer trigger).
+
 ### 8.1 What each CI tier runs (`.github/workflows/ci.yml`)
 
 Six native cells: `linux-x86_64` (`ubuntu-latest`), `linux-arm64` (`ubuntu-24.04-arm`), `macos-arm64`
