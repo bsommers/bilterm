@@ -354,13 +354,10 @@ fn swarm_colon_and_rpc_produce_equivalent_state() {
 }
 
 /// Genuinely missing Phase 69 surfaces (no colon form, no RPC method): these stay N/A until built.
+/// (`:swarm run` / `swarm.run` shipped with the swarm wiring; see `tests/swarm_wiring.rs`.)
 #[test]
-fn swarm_run_review_heal_remain_unwired() {
-    for (colon_probe, rpc) in [
-        (":swarm run plan.toml", "swarm.run"),
-        (":swarm review 2", "swarm.review"),
-        (":swarm heal 2", "swarm.heal"),
-    ] {
+fn swarm_review_heal_remain_unwired() {
+    for (colon_probe, rpc) in [(":swarm review 2", "swarm.review"), (":swarm heal 2", "swarm.heal")] {
         assert!(
             !matches!(parse_colon_command(colon_probe), Some(Ok(_))) && !RPC_METHODS.contains(&rpc),
             "{colon_probe} / {rpc} now exist: add rows for them to this suite"
@@ -368,20 +365,9 @@ fn swarm_run_review_heal_remain_unwired() {
     }
 }
 
-/// `:agents hud` / `:agent replay` forms parsed before the Phase 70 wiring still parse.
+/// `:swarm run` and `swarm.run` are both wired (colon form takes no plan argument: it runs the loaded plan).
 #[test]
-fn legacy_hud_and_replay_colon_forms_still_parse() {
-    use bilterm::wm::agents_hud_cmd::{HudOp, ReplayOp};
-    for (text, want) in [
-        (":agents hud open", Action::AgentsHud(HudOp::Open)),
-        (":agents hud close", Action::AgentsHud(HudOp::Close)),
-        (":agents hud toggle", Action::AgentsHud(HudOp::Toggle)),
-        (":agent replay show", Action::AgentsReplay(ReplayOp::Show)),
-        (":agent replay prev", Action::AgentsReplay(ReplayOp::Prev)),
-        (":agent replay next", Action::AgentsReplay(ReplayOp::Next)),
-        (":agent replay first", Action::AgentsReplay(ReplayOp::First)),
-        (":agent replay last", Action::AgentsReplay(ReplayOp::Last)),
-    ] {
-        assert_eq!(colon(text), want, "{text}");
-    }
+fn swarm_run_is_wired_on_colon_and_rpc() {
+    assert!(matches!(parse_colon_command(":swarm run"), Some(Ok(_))));
+    assert!(RPC_METHODS.contains(&"swarm.run"));
 }

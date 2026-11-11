@@ -7,6 +7,8 @@
 //! - Serde serialization and deserialization invariant enforcement.
 //! - Lock record integration via `DaemonLockRecord::signalable_pid()`.
 //! - Process signaling invariants via `kill_daemon_process` and `check_signalable_pid_alive`.
+// Daemon sockets and signals are Unix-only; the imports they need are unused on other targets.
+#![cfg_attr(not(unix), allow(unused_imports))]
 
 use std::convert::TryFrom;
 use std::process::Command;

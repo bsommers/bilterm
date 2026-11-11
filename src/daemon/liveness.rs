@@ -4,6 +4,9 @@
 //! a zombie or by a PID that was reused by an unrelated process. The lockfile is never unlinked:
 //! a clean exit truncates the record, so a record nobody holds means the daemon crashed.
 
+// The flock probe is Unix-only; elsewhere the helpers and their imports are unused.
+#![cfg_attr(not(unix), allow(unused_imports, dead_code))]
+
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;

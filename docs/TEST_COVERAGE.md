@@ -1,6 +1,6 @@
-# Test Suite & Coverage Report — `bilterm` (`v3.2.0`)
+# Test Suite & Coverage Report — `bilterm` (`v3.3.0`)
 
-**Date:** `2026-11-08`  
+**Date:** `2026-11-10`  
 **Tooling used:** `cargo llvm-cov 0.9.1`, `cargo test 1.90`, `insta 1.42`, `ratatui::backend::TestBackend`, `tokio::test`, `xvfb-run -a` (Linux X11 Headless Driver), `scripts/verify.sh` cross-platform composable runner.
 
 ---
@@ -96,12 +96,34 @@ Bilterm incorporates a unified 4-mode live test driver architecture (`tests/live
 
 ## 4. Coverage Metrics Summary
 
-| Metric | Measured Value | Standard Quality Gate |
-|---|---|---|
-| **Line Coverage** | **83.6%** (`9,850 / 11,780`) | `>= 80.0%` (Enforced) |
-| **Function Coverage** | **82.1%** (`665 / 810`) | `>= 75.0%` (Enforced) |
-| **Region Coverage** | **82.9%** (`16,050 / 19,360`) | `>= 75.0%` (Enforced) |
-| **Verification Stages Passing** | **120 / 120** | 100% |
+Measured with `scripts/coverage.sh` (`cargo llvm-cov`, unit + every `tests/*.rs`, Linux x86_64).
+The **Floor** column is the ratchet in `.github/coverage-floor.txt`: CI fails when a module drops below it.
+
+| Module (`src/<dir>`) | Covered lines | Lines | Line coverage | Floor |
+|---|---:|---:|---:|---:|
+| `api` | 6944 | 7984 | 87.0% | 85% |
+| `cli` | 279 | 288 | 96.9% | 94% |
+| `colon_command` | 5393 | 6398 | 84.3% | 82% |
+| `config` | 831 | 882 | 94.2% | 92% |
+| `(crate root)` | 1391 | 1996 | 69.7% | 67% |
+| `daemon` | 976 | 1278 | 76.4% | 74% |
+| `input` | 6120 | 7731 | 79.2% | 77% |
+| `mcp_console` | 494 | 574 | 86.1% | 84% |
+| `pane` | 6249 | 7496 | 83.4% | 81% |
+| `pty` | 524 | 555 | 94.4% | 92% |
+| `remote` | 347 | 374 | 92.8% | 90% |
+| `stt` | 927 | 1227 | 75.6% | 73% |
+| `swarm` | 675 | 711 | 94.9% | 92% |
+| `tmux` | 1423 | 1511 | 94.2% | 92% |
+| `traffic` | 1256 | 1338 | 93.9% | 91% |
+| `ui` | 14461 | 17910 | 80.7% | 78% |
+| `vt` | 4005 | 4454 | 89.9% | 87% |
+| `wm` | 18128 | 20918 | 86.7% | 84% |
+| **TOTAL** | **70423** | **83625** | **84.2%** | **82%** |
+
+The largest uncovered regions are platform FFI that cannot run headless (`src/ui/gui_font/linux_x11.rs`,
+the OS clipboard back ends in `src/clipboard.rs`) and interactive entry points (`src/main.rs`, `src/app.rs`);
+`scripts/coverage.sh --gaps 25` prints the current list.
 
 ---
 
@@ -134,3 +156,81 @@ Bilterm incorporates a unified 4-mode live test driver architecture (`tests/live
 2. **Unified Action Lowering:** Every surface (mouse clicks, leader chords, F-keys, colon commands, palette search, RPC, and MCP) lowers to the central `Action` enum, guaranteeing 100% functional parity.
 3. **Decoupled VT Worker Emulation:** PTY reads and ANSI parsing occur on dedicated background worker threads, preventing heavy terminal output from blocking UI rendering or input dispatch.
 4. **Resilient Daemon & Supervisor:** Multiplexed state persists seamlessly across frontend restarts and SSH reconnections.
+
+---
+
+## 8. CI Matrix, Per-OS Gate, Cross-Checks and the Coverage Ratchet
+
+### 8.1 What each CI tier runs (`.github/workflows/ci.yml`)
+
+Six native cells: `linux-x86_64` (`ubuntu-latest`), `linux-arm64` (`ubuntu-24.04-arm`), `macos-arm64`
+(`macos-latest`), `macos-x86_64` (`macos-15-intel`), `windows-x86_64` (`windows-latest`), `windows-arm64`
+(`windows-11-arm`). `fail-fast` is off: one red cell never hides the others.
+
+| Job | Runs | pull request | push to `main`, nightly, manual |
+|---|---|---|---|
+| `quick` | `cargo build --locked`, clippy, unit tests, `tests/smoke_binary_per_os.rs` | all six cells | all six cells |
+| `integration` | every `tests/*.rs`, 3 shards per cell (`verify.sh --integration --shard K/3`) | `linux-x86_64`, `macos-arm64` | all six cells |
+| `coverage` | `scripts/coverage.sh` + ratchet, lcov/HTML artifact, table in the job summary | `linux-x86_64` | `linux-x86_64` |
+| `deny` | `cargo deny check` | yes | yes |
+
+**WIN-TESTS (open):** both Windows targets build and pass clippy (hard gates). Their unit, smoke and
+integration steps are `continue-on-error` until they have been seen green on real Windows runners;
+the true outcome is always written to the job summary (`scripts/ci_report.sh`). Close the item by
+deleting `experimental: true` from the two Windows rows once they pass.
+
+Every job summary also lists the tests that did not really run (`target/verify/skips.txt`): tests
+marked `#[ignore = "reason"]` and runtime `SKIPPED <test>: <reason>` lines from `tests/common::skip`.
+
+### 8.2 Running the gate on each OS
+
+The contract is the same everywhere: one line (`PASS n/n <secs>s` or `FAIL k/n: <stages> -> ...`),
+exit code 0/1/2, details under `target/verify/`.
+
+| OS | Full gate | Quick gate | One suite |
+|---|---|---|---|
+| Linux, macOS | `scripts/verify.sh` | `scripts/verify.sh --quick` | `scripts/verify.sh --only t:<name>` |
+| Windows (PowerShell) | `pwsh scripts/verify.ps1` | `pwsh scripts/verify.ps1 --quick` | `pwsh scripts/verify.ps1 --only t:<name>` |
+| Windows (Git Bash) | `bash scripts/verify.sh` | `bash scripts/verify.sh --quick` | `bash scripts/verify.sh --only t:<name>` |
+
+`verify.ps1` only locates the bash that ships with Git for Windows and runs `verify.sh`; there is one
+implementation of the stage logic. To reproduce a CI shard: `scripts/verify.sh --integration --shard 2/3`.
+
+### 8.3 Cross-checking other targets from one machine
+
+Type-checking and linting need no linker or SDK, so every target can be checked from Linux:
+
+```bash
+rustup target add aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin \
+                  x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+for t in aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin \
+         x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+  CARGO_TARGET_DIR=target/cross cargo clippy -q --all-targets --target "$t" -- -D warnings \
+    && echo "OK   $t" || echo "FAIL $t"
+done
+```
+
+This proves a target compiles and lints; only the native runner proves it links and its tests pass.
+
+### 8.4 Writing portable tests (`tests/common/mod.rs`)
+
+- Spawn the binary through `IsolatedEnv` (throwaway HOME / XDG / runtime dir, no route to a live instance).
+- Never hard-code `/bin/sh`, `/tmp` or `sleep`: use `shell_command`, `tempfile`, and `wait_until(deadline, ...)`.
+- A platform-specific test is marked `#[cfg_attr(windows, ignore = "reason")]` (visible as `ignored, reason`);
+  a condition only known at run time calls `common::skip("reason")`. No test may pass by returning early silently.
+- Randomised tests use `common::Rng` with fixed seeds, so a failure reproduces on every OS.
+
+### 8.5 Reading and ratcheting coverage
+
+```bash
+cargo install cargo-llvm-cov --locked && rustup component add llvm-tools-preview   # once
+scripts/coverage.sh               # one line: PASS coverage N% | FAIL coverage N%: <module> X%<floor%
+scripts/coverage.sh --gaps 40     # largest uncovered regions (file:first-last, lines)
+scripts/coverage.sh --update-floor  # after raising coverage: record the new floor
+```
+
+Outputs under `target/coverage/`: `modules.tsv` / `summary.md` (per-module table), `gaps.txt`,
+`lcov.info`, `html/index.html` (open in a browser; red lines were never executed). In CI the same
+table is in the `coverage` job summary and the files are in the `coverage-report` artifact.
+The floor is the measurement minus 2 points of run-to-run slack; raise it with `--update-floor`,
+never lower it by hand. A `DROP` row means a change removed tests or added untested code to that module.
