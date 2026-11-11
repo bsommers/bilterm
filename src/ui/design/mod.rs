@@ -9,6 +9,7 @@ pub mod config;
 pub mod materials;
 pub mod profiles;
 pub mod tokens;
+pub mod tron;
 
 pub use config::{
     AppearanceConfig, BorderWeight, CustomAppearanceProfile, Density, DisplayMode, TitlePolicy,

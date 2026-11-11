@@ -275,6 +275,12 @@ pub fn render_oia_status_bar_themed(
             } else {
                 " 💧 Bilterm "
             }
+        } else if palette.is_tron() {
+            if pane.show_version_badge() {
+                concat!(" ◈ Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+            } else {
+                " ◈ Bilterm "
+            }
         } else if pane.show_version_badge() {
             concat!(" ◢ Bilterm v", env!("CARGO_PKG_VERSION"), " ")
         } else {

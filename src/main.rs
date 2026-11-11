@@ -70,6 +70,7 @@ async fn main() -> color_eyre::Result<()> {
                    --drawer-push                Set Slide-Out Drawer layout mode to Push-Out (reflows workspace)\n  \
                    --modern, --non-retro        Enable Modern Minimal UI mode (clean rounded chrome, obsidian palette)\n  \
                    --liquid-glass, --liquid     Enable Liquid Glass UI mode (refractive glass borders + ambient halo)\n  \
+                   --tron                       Enable TRON UI mode (black canvas, neon cyan light-cycle borders, orange accent)\n  \
                    --raw-fkeys <bilterm|app|auto> Configure F1..F12 behavior in RAW PTY mode\n  \
                -F, --font, --gui-font <FAMILY>  Set font family or preset (cascadia, consolas, jetbrains, firacode, iosevka, plex, hack, ibm3270, vga, or custom name)\n  \
                    --font-size, --gui-font-size <PT> Set base font size in points (6..72, default 14)\n  \
@@ -523,6 +524,7 @@ async fn main() -> color_eyre::Result<()> {
         cfg.glass_mode = true;
         cfg.liquid_glass = true;
     }
+    bilterm::ui::design::tron::apply_cli_tron_switch(&mut cfg, &args);
     if has_switch(&args, &["--drawer-push"]) {
         cfg.drawer.layout = bilterm::wm::DrawerLayoutMode::Push;
     }

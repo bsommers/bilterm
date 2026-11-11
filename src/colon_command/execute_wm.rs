@@ -915,7 +915,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 mode_opt.as_deref(),
             );
             wm.active_pane_mut().set_status_message(Some(format!(
-                "Visual Style: {label} (toggle via F11, :modern, :liquid, :snazzy, :glass, or :style)"
+                "Visual Style: {label} (toggle via F11, :modern, :liquid, :tron, :snazzy, :glass, or :style)"
             )));
             false
         }

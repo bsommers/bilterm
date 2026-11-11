@@ -221,7 +221,12 @@ impl ThemePalette {
     /// The single "modern look" predicate: `true` for palettes that render the clean modern chrome
     /// (shortcut strip, rounded frames, modern exit guard) instead of the classic 3270/Borland chrome.
     pub fn is_modern_look(&self) -> bool {
-        matches!(self.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC")
+        matches!(self.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC" | "TRON")
+    }
+
+    /// `true` for the TRON light-cycle palette (cyan/orange title lights).
+    pub fn is_tron(&self) -> bool {
+        self.name == "TRON"
     }
 
     /// `true` for the two original modern palettes (Obsidian slate and Liquid Glass), which keep

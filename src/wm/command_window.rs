@@ -18,7 +18,7 @@ pub fn category_for_cmd(cmd: &str) -> &'static str {
         "mcp" => "MCP",
         "agents" => "Agents",
         "drawer" | "navigator" => "Drawer",
-        "modern" | "liquid" | "snazzy" | "glass" | "retro" | "theme" | "font" | "appearance" | "style" | "shadows" | "outline" | "border" => "Appearance",
+        "modern" | "liquid" | "tron" | "snazzy" | "glass" | "retro" | "theme" | "font" | "appearance" | "style" | "shadows" | "outline" | "border" => "Appearance",
         "commands" | "palette" | "help" | "fkeys" => "System",
         "record" | "asciinema" | "rec" => "Record",
         "exit-guard" | "respawn-pane" | "quit" | "exit" => "Process",

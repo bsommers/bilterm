@@ -302,6 +302,7 @@ impl BiltermConfig {
                     | P::Amber
                     | P::Synthwave
                     | P::Solarized
+                    | P::Tron
             )
         )
     }

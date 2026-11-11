@@ -26,11 +26,13 @@ pub enum AppearanceProfile {
     Synthwave,
     /// Balanced studio slate solarized profile (`#002B36` canvas, `#2AA198` / `#B58900` accents).
     Solarized,
+    /// TRON light-cycle grid profile (`#000000` canvas, `#6FC3DF` / `#00F6FF` cyan, `#FF9F1C` orange accent).
+    Tron,
 }
 
 impl AppearanceProfile {
-    /// All 8 built-in appearance profiles (`UIM-02`).
-    pub const ALL: [Self; 8] = [
+    /// All 9 built-in appearance profiles (`UIM-02`).
+    pub const ALL: [Self; 9] = [
         Self::Legacy,
         Self::Obsidian,
         Self::Midnight,
@@ -39,6 +41,7 @@ impl AppearanceProfile {
         Self::Amber,
         Self::Synthwave,
         Self::Solarized,
+        Self::Tron,
     ];
 
     /// Explicit `[appearance].profile` wins; otherwise legacy flags map onto profiles:
@@ -66,6 +69,7 @@ impl AppearanceProfile {
             "amber" | "phosphor" | "retro-amber" => Some(Self::Amber),
             "synthwave" | "outrun" | "cyber" => Some(Self::Synthwave),
             "solarized" | "paper" => Some(Self::Solarized),
+            "tron" | "grid" | "light-cycle" | "lightcycle" => Some(Self::Tron),
             _ => None,
         }
     }
@@ -80,6 +84,7 @@ impl AppearanceProfile {
             Self::Amber => "amber",
             Self::Synthwave => "synthwave",
             Self::Solarized => "solarized",
+            Self::Tron => "tron",
         }
     }
 
@@ -99,6 +104,7 @@ impl AppearanceProfile {
             Self::Amber => build(88, 65, false, 20, 6),
             Self::Synthwave => build(82, 75, true, 35, 10),
             Self::Solarized => build(98, 65, false, 0, 4),
+            Self::Tron => build(100, 80, false, 30, 4),
         };
         if self == Self::Legacy {
             return m;

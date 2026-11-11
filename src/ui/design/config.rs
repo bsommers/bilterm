@@ -151,7 +151,7 @@ impl TitlePolicy {
     }
 }
 
-/// User-defined custom appearance profile built on top of one of the 8 built-in profiles.
+/// User-defined custom appearance profile built on top of one of the 9 built-in profiles.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CustomAppearanceProfile {
@@ -194,6 +194,9 @@ pub struct AppearanceConfig {
     /// Active custom profile name if a custom profile is currently selected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_custom: Option<String>,
+    /// Look to restore on `:tron off` (set by `:tron on` / `F11`; runtime only, never saved).
+    #[serde(skip)]
+    pub tron_restore: Option<super::tron::TronRestore>,
 }
 
 fn radius_px_from_token(token: &str) -> Option<(u8, String)> {
@@ -272,7 +275,7 @@ impl AppearanceConfig {
         }
     }
 
-    /// Selects one of the 8 built-in profiles (clearing `active_custom`) or an existing custom profile.
+    /// Selects one of the 9 built-in profiles (clearing `active_custom`) or an existing custom profile.
     pub fn select_by_name(&mut self, name: &str) -> Result<String, String> {
         let trimmed = name.trim();
         if let Some(p) = AppearanceProfile::from_name(trimmed) {
@@ -533,7 +536,7 @@ impl AppearanceConfig {
         Ok(format!("Imported appearance config from {}", path.display()))
     }
 
-    /// Human-readable summary of all 8 built-in profiles, any `custom_profiles`, and the active selection.
+    /// Human-readable summary of all 9 built-in profiles, any `custom_profiles`, and the active selection.
     pub fn list_profiles_text(&self) -> String {
         let active_builtin = self.profile.unwrap_or(AppearanceProfile::Legacy);
         let active_summary = match &self.active_custom {
