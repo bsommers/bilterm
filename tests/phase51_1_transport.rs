@@ -245,6 +245,8 @@ mod splitter {
 }
 
 mod transport {
+    // The PTY transport tests below are Unix-only; their imports and helper are unused elsewhere.
+    #![cfg_attr(not(unix), allow(unused_imports, dead_code))]
     use bilterm::pty::PtyConfig;
     use bilterm::remote::RemoteHostProfile;
     use bilterm::tmux::link::{DriverExit, LinkConnector, LinkDriver, LinkTarget};

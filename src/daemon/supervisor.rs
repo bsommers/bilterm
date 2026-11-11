@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
+#[cfg_attr(not(unix), allow(unused_imports))] // only the Unix paths use it
 use std::io::{self, ErrorKind, Read, Write};
 #[cfg(unix)]
 use std::io::{Seek, SeekFrom};
@@ -596,6 +597,7 @@ pub fn stop_daemon(runtime_dir: &Path, name: &str, force: bool) -> io::Result<bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg_attr(not(unix), allow(unused_imports))] // only the Unix paths use it
     use std::fs;
 
     fn record_json(pid: &str) -> String {

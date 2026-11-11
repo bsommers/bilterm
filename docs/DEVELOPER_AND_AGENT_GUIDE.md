@@ -484,7 +484,14 @@ on both a Wire and a Payload cell of the same view.
 
 ## 7. Verification & CI Conservation Gates
 
-Always run these 4 checks locally before committing or pushing:
+The default gate is one command with one output line on every OS: `scripts/verify.sh` (Linux, macOS,
+Git Bash) or `pwsh scripts/verify.ps1` (Windows). CI runs it on six cells
+({Linux, macOS, Windows} x {x86_64, ARM64}); the tiers, sharding (`--integration --shard K/N`),
+cross-target checks, portable-test rules (`tests/common/mod.rs`) and the coverage ratchet
+(`scripts/coverage.sh`, `.github/coverage-floor.txt`) are documented in
+[`TEST_COVERAGE.md` section 8](TEST_COVERAGE.md#8-ci-matrix-per-os-gate-cross-checks-and-the-coverage-ratchet).
+
+The underlying checks, for reference:
 
 ```bash
 # 1. Full unit, integration, snapshot, and security test suite
