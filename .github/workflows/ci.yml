@@ -2,25 +2,15 @@ name: ci
 
 # Six native cells: {Linux, macOS, Windows} x {x86_64, ARM64}.
 #
-# Tier        | quick (build, clippy, unit, binary smoke) | integration (every tests/*.rs, 3 shards) | coverage
-# ------------|-------------------------------------------|------------------------------------------|---------
-# pull_request| all six cells                             | linux-x86_64 + macos-arm64               | linux-x86_64
-# push to main| all six cells                             | all six cells                            | linux-x86_64
-# nightly     | all six cells                             | all six cells                            | linux-x86_64
-# manual      | all six cells                             | all six cells                            | linux-x86_64
+# A manual run does: quick (build, clippy, unit, binary smoke) on all six cells, integration
+# (every tests/*.rs, 3 shards) on all six cells, and coverage on linux-x86_64.
 #
 # Every job runs the same one-line gate (scripts/verify.sh -> "PASS n/n" | "FAIL k/n: <stages>");
 # docs/TEST_COVERAGE.md explains the tiers and how to reproduce each cell locally.
+# Manual only. The merge gate is local: `scripts/ci-local.sh` (see docs/TEST_COVERAGE.md).
+# Run this workflow by hand (`gh workflow run ci.yml --ref <branch>`) when a change needs the
+# macOS / Windows / ARM cells; a manual run uses the full matrix.
 on:
-  pull_request:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.planning/**'
-      - 'docs/**'
-  schedule:
-    - cron: '17 4 * * *' # nightly, off the hour
   workflow_dispatch:
 
 permissions:
