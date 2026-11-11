@@ -196,17 +196,8 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
             }
             Some("next" | "n") => Some(Ok(ColonCommand::DeckNext)),
             Some("prev" | "p") => Some(Ok(ColonCommand::DeckPrev)),
-            Some(s) => match s.parse::<usize>().ok() {
-                Some(id) => Some(Ok(ColonCommand::FocusPane(id))),
-                None => Some(Err(
-                    "Usage: :focus <pane_id|left|right|up|down|h|j|k|l|w|a|s|d|next|prev>"
-                        .to_string(),
-                )),
-            },
-            None => Some(Err(
-                "Usage: :focus <pane_id|left|right|up|down|h|j|k|l|w|a|s|d|next|prev>"
-                    .to_string(),
-            )),
+            Some(s) => Some(super::parse_focus::parse(s, &parts[2..])),
+            None => Some(Err(super::parse_focus::FOCUS_USAGE.to_string())),
         },
         "zoom" => Some(Ok(ColonCommand::ZoomToggle)),
         "close" => Some(Ok(ColonCommand::ClosePane)),

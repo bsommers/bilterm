@@ -131,14 +131,14 @@ fn e2e_keys_select_jump_pin_filter_scale() {
         assert!(wm.agents_list().active, "pinned list survives a jump");
         assert!(!wm.agents_list().focused, "jump hands the keyboard to the pane");
 
-        // Unpinned: jump closes the list.
+        // Unpinned: the same; the list stays open and the pane has the keyboard (FOCUS-01).
         wm.open_agents_list();
         key(&mut wm, KeyCode::Char('*'));
         assert!(!wm.agents_list().pinned);
         key(&mut wm, KeyCode::End);
         key(&mut wm, KeyCode::Enter);
         assert_eq!(wm.active_pane_id(), ids[2]);
-        assert!(!wm.agents_list().active);
+        assert!(wm.agents_list().active && !wm.agents_list().focused);
     });
 }
 
@@ -160,10 +160,16 @@ fn e2e_keys_dock_reflows_and_dismiss_releases() {
         assert!(!wm.agents_list().docked);
         assert_eq!(sizes(&wm), full, "releasing the dock reflows back");
 
-        // Esc (Dismiss, unpinned) closes a docked list and gives the strip back.
+        // Esc only releases the keyboard (FOCUS-01): the docked list keeps its strip. `q` closes it
+        // and gives the strip back.
         key(&mut wm, KeyCode::Char('d'));
-        assert_ne!(sizes(&wm), full);
+        let docked = sizes(&wm);
+        assert_ne!(docked, full);
         key(&mut wm, KeyCode::Esc);
+        assert!(wm.agents_list().active && wm.agents_list().docked && !wm.agents_list().focused);
+        assert_eq!(sizes(&wm), docked, "Esc does not reflow");
+        wm.open_agents_list();
+        key(&mut wm, KeyCode::Char('q'));
         assert!(!wm.agents_list().active && !wm.agents_list().docked);
         assert_eq!(sizes(&wm), full, "closing a docked list reflows the panes");
     });
@@ -181,12 +187,11 @@ fn e2e_mouse_select_jump_dock_close() {
     let active = wm.active_pane_id();
     let other = ids.iter().position(|&i| i != active).unwrap();
     let (c, r) = (l.rows_area.x + 2, l.rows_area.y + other as u16);
+    // FOCUS-01: one click selects and jumps; the pane has the keyboard and the list stays open.
     click(&mut wm, area, c, r);
-    assert_eq!(wm.agents_list().selected, Some(ids[other]), "first click selects");
-    assert!(wm.agents_list().active);
-    click(&mut wm, area, c, r);
-    assert_eq!(wm.active_pane_id(), ids[other], "second click jumps");
-    assert!(!wm.agents_list().active, "an unpinned list closes on jump");
+    assert_eq!(wm.agents_list().selected, Some(ids[other]), "the click selects");
+    assert_eq!(wm.active_pane_id(), ids[other], "and jumps");
+    assert!(wm.agents_list().active && !wm.agents_list().focused, "the list stays open, blurred");
 
     // Dock badge docks, close badge closes and releases the dock.
     let full = sizes(&wm);

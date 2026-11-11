@@ -117,7 +117,7 @@ pub fn render_session_map(
 
     // Footer hint bar
     let footer_y = rect.bottom().saturating_sub(1);
-    let footer = " Space/m:Pickup  Tab/Arrows:Target  Enter:Drop  Esc:Cancel  *:Pin ";
+    let footer = " Space/m:Pickup  Tab/Arrows:Target  Enter:Drop  Esc:Cancel/Back  *:Pin ";
     let footer_style = Style::default().fg(tokens.text_muted).bg(palette.window_frame_bg);
     put_str(buf, rect, rect.x + 2, footer_y, footer, footer_style);
 

@@ -32,6 +32,7 @@ pub mod drawer_preview;
 pub mod glyphs;
 pub mod graph_raster;
 pub mod hires_subcell;
+pub mod kbd_badge;
 pub mod mcp_ui;
 pub mod media_canvas_gui;
 pub mod menu_model;
@@ -103,6 +104,8 @@ pub struct CompositePaneWidget<'a> {
     pub palette: Option<ThemePalette>,
     /// `Some(is_gui)` draws the OIA `[TUI]`/`[GUI]` badge on non-Legacy profiles.
     pub surface_badge: Option<bool>,
+    /// Who holds the keyboard; anything but the pane draws the `KBD:<WINDOW>` status badge.
+    pub keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner,
 }
 
 impl<'a> CompositePaneWidget<'a> {
@@ -113,12 +116,19 @@ impl<'a> CompositePaneWidget<'a> {
             config: None,
             palette: None,
             surface_badge: None,
+            keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner::Pane,
         }
     }
 
     /// Applies a per-window palette override (`:window theme <name>`).
     pub fn with_palette(mut self, palette: Option<ThemePalette>) -> Self {
         self.palette = palette;
+        self
+    }
+
+    /// Names the keyboard owner so the status row can show `KBD:<WINDOW>` (`FOCUS-01`).
+    pub fn with_keyboard_owner(mut self, owner: crate::wm::keyboard_focus::KeyboardOwner) -> Self {
+        self.keyboard_owner = owner;
         self
     }
 
@@ -135,6 +145,7 @@ impl<'a> CompositePaneWidget<'a> {
             config: Some(config),
             palette: None,
             surface_badge: None,
+            keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner::Pane,
         }
     }
 }
@@ -215,6 +226,7 @@ impl Widget for CompositePaneWidget<'_> {
         } else {
             render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
         }
+        kbd_badge::render_keyboard_badge(self.keyboard_owner, status_rect, buf);
 
         // Pass 4: Render optional Borland-style Command History Pop-up Window if active on this pane
         if self.pane.is_prompt_visible()
@@ -533,6 +545,9 @@ impl Widget for WorkspaceWidget<'_> {
         let framed = self.wm.is_framed();
         let top_workspace_id = self.wm.z_stack().top();
         let qt_visible = self.wm.is_quick_terminal_visible();
+        // While a side window holds the keyboard the top pane is drawn like an inactive one
+        // (frame, cursor) and its status row names the owner (`FOCUS-01`).
+        let kbd_owner = self.wm.keyboard_owner_shown();
         if self.wm.layout_mode() == WorkspaceLayoutMode::Tiled {
             rects.sort_by_key(|(id, _)| !qt_visible && top_workspace_id == Some(*id));
         }
@@ -541,7 +556,9 @@ impl Widget for WorkspaceWidget<'_> {
             let Some(pane) = self.wm.pane(id) else {
                 continue;
             };
-            let is_active = !qt_visible && top_workspace_id == Some(id);
+            let is_top = !qt_visible && top_workspace_id == Some(id);
+            let is_active = is_top && kbd_owner.is_pane();
+            let pane_kbd = if is_top { kbd_owner } else { crate::wm::keyboard_focus::KeyboardOwner::Pane };
             // Per-window theme / outline / bold / cursor overrides (`:window`, `:theme`, `:cursor`)
             let chrome_style = self.wm.pane_chrome(id);
             let (pane_cfg, pane_palette) = chrome_style.resolve_config_and_palette(cfg);
@@ -598,11 +615,13 @@ impl Widget for WorkspaceWidget<'_> {
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .with_surface_badge(self.wm.is_gui_surface())
+                    .with_keyboard_owner(pane_kbd)
                     .render(inner, buf);
             } else {
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .with_surface_badge(self.wm.is_gui_surface())
+                    .with_keyboard_owner(pane_kbd)
                     .render(outer, buf);
             }
         }

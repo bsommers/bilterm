@@ -148,7 +148,7 @@ fn legacy_profile_matches_current_tables() {
     assert_eq!(pane, DEFAULT_PANE_BINDINGS.to_vec());
     assert_eq!(km.leader_rows(), DEFAULT_LEADER_BINDINGS.to_vec());
     // Sentinels against accidental edits of the shipped legacy tables.
-    assert_eq!(DEFAULT_GLOBAL_BINDINGS.len(), 105, "legacy global table row count");
+    assert_eq!(DEFAULT_GLOBAL_BINDINGS.len(), 107, "legacy global table row count");
     for env in all_envs() {
         let legacy = keymap(KeyProfileName::Legacy, env, LegacyAlt::Off);
         assert_eq!(legacy.global_rows().count(), DEFAULT_GLOBAL_BINDINGS.len(), "{env:?}");

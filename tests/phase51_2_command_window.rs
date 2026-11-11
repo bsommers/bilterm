@@ -323,7 +323,7 @@ fn test_12_rendering_command_palette_and_output_history() {
     assert!(text.contains("COMMAND PALETTE"), "title missing: {text}");
     assert!(text.contains("OUTPUT / HISTORY"), "output/history missing: {text}");
     assert!(
-        text.contains("Enter:Run  Alt+P:Pin  Ctrl+L:ClearLog  Esc:Close"),
+        text.contains("Enter:Run  Alt+P:Pin  Ctrl+L:ClearLog  Esc:Back"),
         "footer hint missing: {text}"
     );
     assert!(text.contains(":font vt323"), "log entry missing: {text}");
@@ -363,8 +363,9 @@ fn test_13_keyboard_navigation_and_query_editing() {
     handle_wm_key_event(&mut wm, key).unwrap();
     assert_eq!(wm.command_window().selected, 0);
 
-    // Esc dismisses (closes unpinned window)
+    // FOCUS-01: with no query typed, Esc hands the keyboard back and leaves the window open.
+    assert!(wm.command_window().query.is_empty());
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     handle_wm_key_event(&mut wm, key).unwrap();
-    assert!(!wm.command_window().active);
+    assert!(wm.command_window().active && !wm.command_window().captures_input());
 }

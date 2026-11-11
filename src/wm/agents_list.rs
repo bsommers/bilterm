@@ -20,6 +20,7 @@ use crate::wm::agent_state::AgentState;
 use crate::ui::typography::PanelTarget;
 use crate::wm::agents_list_cmd::{AgentsListOp, ListFilter};
 use crate::wm::agents_list_geometry::LIST_MIN_WINDOW;
+use crate::wm::keyboard_focus::KeyboardOwner;
 use crate::wm::panel_dock::DockPanel;
 
 /// Maximum characters of an agent name shown in a row.
@@ -39,7 +40,7 @@ pub enum ListDrag {
 pub struct AgentsListState {
     /// Window is open.
     pub active: bool,
-    /// Pinned open (Esc only releases the keyboard).
+    /// Pinned open (`dismiss` only releases the keyboard).
     pub pinned: bool,
     /// Window owns the keyboard.
     pub focused: bool,
@@ -122,12 +123,7 @@ impl WindowManager {
         }
         let was_active = self.agents_list.active;
         self.agents_list.active = true;
-        self.agents_list.focused = true;
-        self.agents_window.blur();
-        self.fonts_window.blur();
-        self.command_window.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.take_keyboard(KeyboardOwner::AgentsList);
         if was_active {
             self.normalize_selection();
         } else {
@@ -429,17 +425,15 @@ impl WindowManager {
         .to_string()
     }
 
-    /// `Jump`: focus and raise the pane (this releases both windows' keyboard), then close the
-    /// list unless it is pinned. Target: the explicit id, else the selected row, else the active pane.
+    /// `Jump`: focus and raise the pane, which hands it the keyboard; the list stays open, blurred
+    /// (FOCUS-01). Target: the explicit id, else the selected row, else the active pane.
     fn jump(&mut self, explicit: Option<PaneId>) -> Option<String> {
         let id = explicit.or(self.agents_list.selected).unwrap_or_else(|| self.active_pane_id());
         if !self.panes.contains_key(&id) {
             return Some(format!("No agent in pane {id}"));
         }
         self.focus_and_raise(id);
-        if !self.agents_list.pinned {
-            self.close_agents_list();
-        }
+        self.release_keyboard();
         Some(format!("Focused pane {id}"))
     }
 

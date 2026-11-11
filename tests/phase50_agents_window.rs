@@ -303,8 +303,11 @@ fn window_tracer_zoom_command_and_esc() {
     let text = lines(&render(&wm, area)).join("\n");
     assert!(text.contains("AGENT TRAFFIC"), "zoom renders the window");
 
+    // FOCUS-01: Esc hands the keyboard back to the pane and leaves the window open.
     press(&mut wm, KeyCode::Esc);
-    assert!(!wm.agents_window().active, "Esc closes the unpinned window");
+    assert!(wm.agents_window().active && !wm.agents_window().captures_input(), "Esc only releases the keyboard");
+    run_colon(&mut wm, ":agents close");
+    assert!(!wm.agents_window().active);
 
     run_colon(&mut wm, ":agents zoom");
     run_colon(&mut wm, ":agents dismiss");
@@ -1912,7 +1915,10 @@ fn snoop_keyword_entry_esc_cancels_only_entry() {
         assert!(wm.agents_window().active, "Esc only cancelled the entry");
         assert_eq!(win_rect(&wm, area), rect);
         press(&mut wm, KeyCode::Esc);
-        assert!(!wm.agents_window().active, "the next Esc closes the window");
+        assert!(
+            wm.agents_window().active && !wm.agents_window().captures_input(),
+            "the next Esc releases the keyboard; the window stays open (FOCUS-01)"
+        );
     });
 }
 

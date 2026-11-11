@@ -133,6 +133,9 @@ impl WindowManager {
     /// by the Exit Guard (`SAFE-01`). If intercepted, opens the Exit Guard modal (or executes policy)
     /// and returns `true`.
     pub fn intercept_prompt_exit_if_needed(&mut self, cmd: &str) -> bool {
+        // Callers read `is_client_detached()` as "this call detached": drop any earlier latch
+        // (for example a `:detach` sent over the live RPC socket, which cannot quit the TUI).
+        self.client_detached = false;
         let pane_count = self.panes.len();
         let is_root = self.config.is_root_session;
         let policy = self.config.exit_protection;
@@ -162,6 +165,7 @@ impl WindowManager {
 
     /// Checks if pressing `Ctrl+D` on an empty prompt should be intercepted by the Exit Guard (`SAFE-01`).
     pub fn intercept_ctrl_d_if_needed(&mut self) -> bool {
+        self.client_detached = false; // see `intercept_prompt_exit_if_needed`
         let prompt_is_empty = self.active_pane().prompt().text().is_empty();
         let pane_count = self.panes.len();
         let is_root = self.config.is_root_session;

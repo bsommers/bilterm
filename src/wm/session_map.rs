@@ -155,12 +155,7 @@ impl WindowManager {
 
     pub fn open_session_map(&mut self) {
         self.session_map.active = true;
-        self.session_map.focused = true;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.command_window.blur();
-        self.script_studio.blur();
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::SessionMap);
         if self.session_map.selected_pane_id.is_none() {
             self.session_map.selected_pane_id = Some(self.active_pane_id());
         }

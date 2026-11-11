@@ -174,7 +174,8 @@ fn key_table_maps_every_row() {
         (KeyModifiers::ALT, KeyCode::Up, AgentsListOp::Resize { dw: 0, dh: -1 }),
         (KeyModifiers::ALT, KeyCode::Down, AgentsListOp::Resize { dw: 0, dh: 1 }),
         (n, KeyCode::Char('d'), AgentsListOp::Dock(None)),
-        (n, KeyCode::Esc, AgentsListOp::Dismiss),
+        (n, KeyCode::Esc, AgentsListOp::Blur),
+        (n, KeyCode::Char('q'), AgentsListOp::Close),
     ];
     for (mods, code, want) in &expect {
         assert_eq!(key(*mods, *code), Some(list_action(op(want))), "row {mods:?} {code:?}");
@@ -192,7 +193,7 @@ fn key_focused_swallows_and_leader_passes() {
         assert!(wm.agents_list().captures_input());
         let before = prompts(&wm);
         press(&mut wm, KeyCode::Char('x'), KeyModifiers::NONE);
-        press(&mut wm, KeyCode::Char('q'), KeyModifiers::NONE);
+        press(&mut wm, KeyCode::Char('y'), KeyModifiers::NONE);
         press(&mut wm, KeyCode::F(12), KeyModifiers::NONE);
         assert_eq!(prompts(&wm), before, "unknown keys are swallowed, nothing reaches the pane");
         assert!(wm.agents_list().active);
@@ -216,7 +217,8 @@ fn key_esc_dismiss_semantics_plan() {
     with_temp_xdg(|| {
         assert_eq!(
             agents_list_action(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-            Some(list_action(AgentsListOp::Dismiss))
+            Some(list_action(AgentsListOp::Blur)),
+            "FOCUS-01: Esc releases the keyboard, it does not close"
         );
         // The toggle chord is handled before the table, so the focused window closes like Ctrl+Alt+A.
         let mut wm = fixture(2);
@@ -225,7 +227,10 @@ fn key_esc_dismiss_semantics_plan() {
         assert!(!wm.agents_list().active, "Ctrl+Alt+N while focused toggles (closes)");
         wm.open_agents_list();
         press(&mut wm, KeyCode::Esc, KeyModifiers::NONE);
-        assert!(!wm.agents_list().active, "Esc dismisses an unpinned window");
+        assert!(wm.agents_list().active && !wm.agents_list().focused, "Esc releases an unpinned window, open");
+        wm.open_agents_list();
+        press(&mut wm, KeyCode::Char('q'), KeyModifiers::NONE);
+        assert!(!wm.agents_list().active, "q closes it");
     });
 }
 
@@ -364,29 +369,31 @@ fn mouse_row_click_plans() {
     let other = (0..3).find(|&i| row_id(&wm, i) != active).expect("a row besides the active pane");
     let (c, r) = row_cell(&wm, other);
     let id = row_id(&wm, other);
-    // Focused, not selected: select.
+    // FOCUS-01: one click selects the row and jumps, whether the row was selected or not.
+    let select_and_jump = vec![list_action(AgentsListOp::SelectPane(id)), list_action(AgentsListOp::Jump(Some(id)))];
     let p = plan(&wm, down(c, r));
-    assert_eq!(actions(&p), vec![list_action(AgentsListOp::SelectPane(id))]);
+    assert_eq!(actions(&p), select_and_jump);
     assert!(p.swallow);
-    // Selected row again: jump.
     wm.agents_list_mut().selected = Some(id);
-    assert_eq!(actions(&plan(&wm, down(c, r))), vec![list_action(AgentsListOp::Jump(Some(id)))]);
-    // Unfocused: retake first, never jump, even on the selected row.
+    assert_eq!(actions(&plan(&wm, down(c, r))), select_and_jump);
+    // Unfocused: the same plan. The click hands the keyboard to the pane, so the list does not retake it.
     wm.agents_list_mut().blur();
+    assert_eq!(actions(&plan(&wm, down(c, r))), select_and_jump);
+    // Ctrl+click only selects, and an unfocused list takes the keyboard for it (the old plain click).
+    let ctrl = MouseEvent { modifiers: KeyModifiers::CONTROL, ..down(c, r) };
     assert_eq!(
-        actions(&plan(&wm, down(c, r))),
+        actions(&plan(&wm, ctrl)),
         vec![list_action(AgentsListOp::Open), list_action(AgentsListOp::SelectPane(id))]
     );
     // Right-click zooms that row.
     wm.open_agents_list();
     let right = ev(MouseEventKind::Down(MouseButton::Right), c, r);
     assert_eq!(actions(&plan(&wm, right)), vec![list_action(AgentsListOp::Zoom(Some(id)))]);
-    // The real handler swallows the click and lowers it through apply: the selected row jumps to
-    // its pane and (unpinned) the list closes (51-05 semantics).
-    wm.agents_list_mut().selected = Some(id);
+    // The real handler swallows the click and lowers it through apply: the row jumps to its pane,
+    // which gets the keyboard; the list stays open, blurred (FOCUS-01).
     mouse(&mut wm, down(c, r));
     assert_eq!(wm.active_pane_id(), id);
-    assert!(!wm.agents_list().active);
+    assert!(wm.agents_list().active && !wm.agents_list().focused);
 }
 
 #[test]
@@ -507,7 +514,8 @@ fn mouse_inside_is_swallowed() {
         let before = prompts(&wm);
         let active = wm.active_pane_id();
         let l = lay(&wm);
-        for (c, r) in [(l.inner.x + 1, l.inner.y + 1), (l.outer.x + 3, l.outer.y), (l.footer.x, l.footer.y)] {
+        // The column header, the title and the footer: a press on a row would jump (FOCUS-01).
+        for (c, r) in [(l.header.x + 1, l.header.y), (l.outer.x + 3, l.outer.y), (l.footer.x, l.footer.y)] {
             for kind in [
                 MouseEventKind::Down(MouseButton::Left),
                 MouseEventKind::Up(MouseButton::Left),
@@ -557,7 +565,11 @@ fn mouse_wheel_scroll_and_scale() {
     // The real cell for the virtual cell is `ws.x + v * 150 / 100` (the inverse of `panel_space`).
     let (rc, rr) = (ws.x + vc * 3 / 2, ws.y + vr * 3 / 2);
     let p = plan(&wm, down(rc, rr));
-    assert_eq!(actions(&p), vec![list_action(AgentsListOp::SelectPane(id))], "scaled click hits the same row");
+    assert_eq!(
+        actions(&p),
+        vec![list_action(AgentsListOp::SelectPane(id)), list_action(AgentsListOp::Jump(Some(id)))],
+        "scaled click hits the same row"
+    );
 }
 
 #[test]

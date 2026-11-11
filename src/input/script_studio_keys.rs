@@ -183,8 +183,11 @@ fn handle_nav_mode_key(wm: &mut WindowManager, key: KeyEvent) -> bool {
         (KeyModifiers::ALT, KeyCode::Down) => {
             let _ = wm.apply(act(ScriptStudioOp::Resize { dw: 0, dh: 1 }));
         }
-        // Dismiss
-        (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Char('q' | 'Q')) => {
+        // Esc releases the keyboard and leaves the studio open; `q` dismisses (FOCUS-01).
+        (KeyModifiers::NONE, KeyCode::Esc) => {
+            let _ = wm.apply(act(ScriptStudioOp::Blur));
+        }
+        (KeyModifiers::NONE, KeyCode::Char('q' | 'Q')) => {
             let _ = wm.apply(act(ScriptStudioOp::Dismiss));
         }
         _ => return false,

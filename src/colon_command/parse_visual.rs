@@ -795,7 +795,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
     }))
 }
 
-/// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
+/// Parses the navigator operations of `:drawer` (`next|prev|enter|raise|row|fold|scroll|widen|new-session|
 /// new-pane|rename|close-pane|menu|comms|comms-focus`); `None` for every other verb. `:drawer close` stays the classic minimize.
 fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     use crate::wm::drawer::DrawerNavOp as Op;
@@ -805,6 +805,7 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     let op = match parts.get(1).copied()? {
         "fold" => Op::Fold,
         "enter" | "activate" => Op::Activate,
+        "raise" => Op::Raise,
         "next" | "down" => Op::Next,
         "prev" | "up" => Op::Prev,
         "row" => match parts.get(2).and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {

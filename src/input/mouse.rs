@@ -560,7 +560,8 @@ fn handle_canvas_only_mouse_event(
 /// Routes a `MouseEvent` across the multi-pane `WindowManager`, hit-testing in reverse z-order,
 /// selectively raising clicked panes (`WM-02`), and translating global coordinates to local SGR 1006 (`WM-03`)
 /// or `DECSET ?1007` alternate scroll (`FND-02`).
-pub fn handle_wm_mouse_event(
+pub use super::focus_keys::handle_wm_mouse_event;
+pub(super) fn route_wm_mouse_event(
     wm: &mut WindowManager,
     mouse: MouseEvent,
     screen_area: Rect,
@@ -605,11 +606,11 @@ pub fn handle_wm_mouse_event(
         {
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.focus_and_raise(pid);
                 }
                 MouseEventKind::Down(MouseButton::Right) => {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.focus_and_raise(pid);
                     if let Some(idx) = wm
                         .drawer_rows()

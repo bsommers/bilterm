@@ -17,6 +17,7 @@ pub mod find_modal;
 pub mod daemon_window;
 pub mod fonts_window;
 pub mod fonts_window_keys;
+mod focus_keys;
 pub mod gui_route;
 pub mod keyconflict;
 pub mod keyconflict_data;

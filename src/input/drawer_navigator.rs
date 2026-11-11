@@ -18,6 +18,7 @@ use crate::ui::drawer::navigator::{
 };
 use crate::wm::agents_cmd::AgentsOp;
 use crate::wm::drawer::DrawerNavOp;
+use crate::wm::keyboard_focus::{FocusOp, KeyboardOwner};
 use crate::wm::{DrawerEdge, DrawerRowKind, DrawerVisibilityMode, WindowManager};
 
 /// Looks `key` up in the navigator key table; `None` lets the classic drawer handler run.
@@ -95,7 +96,7 @@ pub fn handle_navigator_drawer_key(wm: &mut WindowManager, key: KeyEvent) -> Opt
     }
     // m / M opens move prompt (SES-01).
     if key.modifiers.is_empty() && matches!(key.code, KeyCode::Char('m') | KeyCode::Char('M')) {
-        wm.drawer_mut().focused = false;
+        wm.release_keyboard();
         let prompt = wm.active_pane_mut().prompt_mut();
         prompt.manual_raw_override = false;
         prompt.force_command_prompt = true;
@@ -284,8 +285,12 @@ pub fn handle_navigator_drawer_mouse(
                     ));
                 }
             } else {
+                // One step: a pane/window/session row is switched to and gets the keyboard.
                 let _ = wm.apply(Action::DrawerNav(DrawerNavOp::Activate));
             }
+        } else {
+            // A press on the title or an empty part of the drawer takes the keyboard.
+            let _ = wm.apply(Action::KeyboardFocus(FocusOp::Window(KeyboardOwner::Drawer)));
         }
     }
     Some(AppAction::Handled)

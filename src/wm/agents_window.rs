@@ -607,11 +607,7 @@ impl WindowManager {
     pub fn open_agents_window(&mut self, focus: Option<PaneId>) {
         self.agents_window.active = true;
         self.agents_window.focused = true;
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.command_window.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::AgentsWindow);
         if let Some(id) = focus
             && self.panes.contains_key(&id)
         {

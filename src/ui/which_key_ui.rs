@@ -117,7 +117,7 @@ fn catalog_label(action: &Action) -> String {
 
 fn group_of(action: &Action) -> &'static str {
     match action {
-        Action::FocusPane(_) | Action::PaneFocusDirection { .. } | Action::DeckNext | Action::DeckPrev => "focus",
+        Action::FocusPane(_) | Action::PaneFocusDirection { .. } | Action::DeckNext | Action::DeckPrev | Action::KeyboardFocus(_) => "focus",
         Action::SplitHorizontal
         | Action::SplitVertical
         | Action::ZoomToggle

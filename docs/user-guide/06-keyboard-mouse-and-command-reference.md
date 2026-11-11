@@ -72,6 +72,7 @@
 | — | `<L> !` | `:drawer attention` | Focus the next pane needing attention (blocked, then errored, then done) |
 | `Ctrl+Alt+A` | — | `:agents toggle` | Open the Agent Traffic window, or close it when open (also menu View > Agent Traffic and the Navigator footer `@ agents` button; every `F` key is already taken) |
 | `Ctrl+Alt+N` | — | `:agents list toggle` | Open the AGENTS list window (one row per pane, with agent state), or close it when open. Also menu View > Agents List; works while a full-screen program owns the pane. See [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#agents-list-window) |
+| `Ctrl+Alt+O` | — | `:focus cycle` | Move the keyboard on: pane, each open side window from left to right, pane again (`:focus cycle prev` backwards, `:focus pane`, `:focus <window>`). `Esc` in a side window hands the keyboard back and leaves the window open; the status row shows `KBD:<WINDOW>` while a floating side window has it. Works while a full-screen program owns the pane (passed through to it when no side window is open). See [Chapter 11](11-navigator-sidebar-and-agent-traffic.md#keyboard-focus-of-the-side-windows) |
 | — | `<L> A` | `:agents list toggle` | The same toggle as a leader chord, for hosts that swallow `Ctrl+Alt+N` |
 | — | `<L> *` | `:agents hud toggle` | Open the Mission Control HUD (a tile per agent pane: state, bytes/s sparkline, queue depth, `[Approve]` `[Prompt]` `[Diff]` `[Zoom]`), or close it. In the HUD: arrows/Tab/`hjkl` select, PgUp/PgDn page, `a` `p` `d` `z` press the buttons, `r` (or right-click a tile) opens the replay, `Esc` closes. Also menu View > Mission Control Squad HUD. `<L> A` is the AGENTS list, so the HUD uses the free `*` |
 | — | — | `:agent replay <pane>` | Read-only per-turn replay of an agent pane (Left/Right turn, Up/Down scroll, Home/End first/last, `Esc` exits); also `prev\|next\|first\|last\|turn <id>\|up [n]\|down [n]\|close` |
@@ -111,7 +112,7 @@ The list takes the keyboard when it opens and when you click inside it. Table `A
 | `Up` / `k`, `Down` / `j` | Select previous / next row (`:agents list select up` / `down`) |
 | `PageUp` / `PageDown` | Select a page up / down (`:agents list select page-up` / `page-down`) |
 | `Home` / `End` | First / last row (`:agents list select first` / `last`) |
-| `Enter` | Focus the selected pane and leave the list (`:agents list jump`) |
+| `Enter` | Focus the selected pane and give it the keyboard; the list stays open (`:agents list jump`) |
 | `z` | Open the traffic window on the selected pane (`:agents list zoom`) |
 | `f` | Toggle the agents filter (`:agents list filter toggle`) |
 | `*` | Pin / unpin (`:agents list pin toggle`) |
@@ -119,7 +120,8 @@ The list takes the keyboard when it opens and when you click inside it. Table `A
 | `Shift`+arrows | Move the window one cell (`:agents list move <dx> <dy>`) |
 | `Alt`+arrows | Resize the window one cell (`:agents list resize <dw> <dh>`) |
 | `d` | Dock into the tiling strip, or float (`:agents list dock toggle`) |
-| `Esc` | Close, or release the keyboard when pinned (`:agents list dismiss`) |
+| `Esc` | Hand the keyboard back to the pane; the list stays open (`:agents list blur`) |
+| `q` | Close the list (`:agents list close`) |
 | `Ctrl+Alt+N` | Close the list (`:agents list toggle`) |
 
 ### Interactive Link Banner & Held Pane Keys
@@ -282,7 +284,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | **`Alt + LeftClick + Drag` over `OutputCanvas`** | **2D Rectangular Block Selection**: Drag-select a rectangular region on the canvas (even inside `RawPtyPassthrough` apps); keeps highlight visible on release and yanks the block to the system/OSC 52 clipboard (or plain `LeftDrag` when `:rect mode on` is active) |
 | **`Ctrl + LeftClick` on `OutputCanvas` URL / `OSC 8` link** | Copy URL to clipboard via `OSC 52` (`:links`) |
 | **Click Bottom DOS Function-Key Bar (`F1 Help` .. `F12 Raw`)** | Execute the clicked function-key action immediately |
-| **Navigator drawer: click a row** | Select and focus that row's pane (`:drawer row <n>` then `:drawer enter`) |
+| **Navigator drawer: click a row** | Switch to that row's pane and give it the keyboard; the drawer stays open (`:drawer row <n>` then `:drawer enter`) |
 | **Navigator drawer: click a fold marker (`▾` / `▸`, ASCII `-` / `+`)** | Fold or unfold that workspace or session (`:drawer fold`) |
 | **Navigator drawer: click `[+]` after a session or workspace name** | Add a window to that session (key `a`); the `[+]` beside the `WORKSPACES` title creates a session (key `N`) |
 | **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
@@ -296,7 +298,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | **Agent Traffic window: click an edge** | Select it; `Enter` or a second click filters the conversation to that pair (`:agents edge`, `:agents filter pair`) |
 | **Agent Traffic window: conversation line, wheel, `[copy]`, filter buttons, chips, follow marker** | Select / scroll / copy / filter / follow (`:agents line`, `scroll`, `copy`, `filter ...`, `follow`); `[send]` is disabled |
 | **`Ctrl` + wheel over the drawer, `:mcp` console or Agent Traffic window** | Scale that panel on the GUI surface (`:drawer scale`, `:agents scale`). Real GUI windows: Linux/X11 only; on Windows and macOS `Ctrl` + wheel over a panel still zooms the font (use `[` `]` or the scale commands) |
-| **AGENTS list: click a row** | Select it; click the selected row again (while the list has the keyboard) to jump to its pane (`:agents list select <id>`, `:agents list jump`). An unfocused list takes the keyboard and selects; it does not jump |
+| **AGENTS list: click a row** | Select it and jump to its pane in one click: the pane is raised and gets the keyboard, the list stays open (`:agents list select <id>`, `:agents list jump <id>`). `Ctrl` + click only selects |
 | **AGENTS list: right-click a row** | Open the Agent Traffic window on that pane (`:agents list zoom <id>`) |
 | **AGENTS list: title badges** | Pin / unpin, minimize (dismiss), dock / float, close (`:agents list pin toggle`, `dismiss`, `dock toggle`, `close`) |
 | **AGENTS list: footer chips `[filter]` `[dock]` `[zoom]`** | Toggle the filter; dock / float; open the traffic window on the selection (`:agents list filter toggle`, `dock toggle`, `zoom`) |
@@ -405,7 +407,8 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | Key | `:drawer` twin | Effect |
 |-----|----------------|--------|
 | `j` / `Down`, `k` / `Up` | `:drawer next`, `:drawer prev` | Move the selection |
-| `Enter` / `Space` | `:drawer enter` | Focus the selected row |
+| `Enter` | `:drawer enter` | Switch to the selected row's pane and give it the keyboard; the drawer stays open |
+| `Space` | `:drawer raise` | Raise the selected row's pane; the keyboard stays in the drawer |
 | `!` | `:drawer attention` | Jump to the next pane needing attention |
 | `e` | `:drawer fold` | Fold or unfold the selected session (a pane row folds its session) |
 | `E` | `:drawer expand all`, `:navigator expand all` | Unfold every workspace and session |
@@ -461,7 +464,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | `:command` | Arguments | Description |
 |------------|-----------|-------------|
 | `:agents` | `[list]` | Agent state per pane (working / blocked / idle / done / errored) with counts; structured data over RPC |
-| `:agents` | `zoom [pane-id] \| toggle [pane-id] \| close \| dismiss` | Open / toggle / close the Agent Traffic window; `dismiss` is `Esc` (releases the keyboard when pinned) |
+| `:agents` | `zoom [pane-id] \| toggle [pane-id] \| close \| dismiss` | Open / toggle / close the Agent Traffic window; `dismiss` closes an unpinned window (releases the keyboard when pinned); `Esc` is `:agents blur` |
 | `:agents` | `select <left\|right\|up\|down\|node-key> \| edge <next\|prev\|a b> \| enter` | Node and edge cursor |
 | `:agents` | `move <dx> <dy> \| resize <dw> <dh> \| rect <x> <y> <w> <h> \| size <cols>x<rows>\|auto \| max \| split <20..80\|+n\|-n>` | Window geometry and splitter |
 | `:agents` | `grab [on\|off] \| nudge <dir> \| node-pin <key> <x> <y> \| node-unpin [key]` | Node placement |

@@ -229,7 +229,7 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
             _ => {}
         }
         if drawer_was_focused && matches!(c.to_ascii_lowercase(), 'x' | 'b') {
-            wm.drawer_mut().focused = false;
+            wm.release_keyboard();
             return Ok(AppAction::Handled);
         }
         if wm.active_pane().effective_routing_mode() == InputRoutingMode::RawPtyPassthrough
@@ -242,7 +242,9 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
             return Ok(AppAction::Handled);
         }
         if c.eq_ignore_ascii_case(&'a') {
-            wm.drawer_mut().focused = false;
+            if drawer_was_focused {
+                wm.release_keyboard();
+            }
             wm.active_pane_mut().prompt_mut().move_cursor_home();
             return Ok(AppAction::Handled);
         }
@@ -257,7 +259,7 @@ pub(super) fn handle_wm_leader_key(wm: &mut WindowManager, key: KeyEvent) -> Res
 
     if let Some(action) = wm.keymap().leader_action(lookup_key) {
         if drawer_was_focused && !matches!(action, Action::DrawerToggle | Action::DrawerFocus) {
-            wm.drawer_mut().focused = false;
+            wm.release_keyboard();
         }
         return wm.apply(action);
     }

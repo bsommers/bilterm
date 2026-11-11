@@ -50,7 +50,9 @@ pub const AGENTS_LIST_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     row(AL, KeyCode::Up, AgentsListOp::Resize { dw: 0, dh: -1 }),
     row(AL, KeyCode::Down, AgentsListOp::Resize { dw: 0, dh: 1 }),
     row(N, KeyCode::Char('d'), AgentsListOp::Dock(None)),
-    row(N, KeyCode::Esc, AgentsListOp::Dismiss),
+    // Esc hands the keyboard back to the pane and leaves the list open; `q` closes it (FOCUS-01).
+    row(N, KeyCode::Esc, AgentsListOp::Blur),
+    row(N, KeyCode::Char('q'), AgentsListOp::Close),
 ];
 
 /// Looks up `key` in [`AGENTS_LIST_BINDINGS`].
