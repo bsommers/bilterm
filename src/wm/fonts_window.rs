@@ -137,12 +137,7 @@ impl WindowManager {
 
     pub fn open_fonts_window(&mut self) {
         self.fonts_window.active = true;
-        self.fonts_window.focused = true;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.command_window.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::Fonts);
         let rows = self.fonts_window_rows();
         if let Some(pos) = rows.iter().position(|r| r.active_on_focused) {
             self.fonts_window.selected = pos;

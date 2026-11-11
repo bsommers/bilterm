@@ -210,6 +210,8 @@ pub enum Action {
     ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp),
     /// `:traffic ...` - TRAFFIC MONITOR window (`TMON-03`, Phase 64).
     TrafficMonitor(crate::wm::traffic_monitor::TrafficMonitorOp),
+    /// `:focus cycle [prev]|pane|<window>` (`Ctrl+Alt+O`) - keyboard ownership of the side windows (`FOCUS-01`).
+    KeyboardFocus(crate::wm::keyboard_focus::FocusOp),
     /// `:coords ...` - hierarchical `D:(W,S,Y,P)` coordinates: show, badge style, locate, copy (`COORD-04`, Phase 71).
     Coords(crate::wm::coordinates::CoordsOp),
     /// `:context set|get|list|clear` - shared context bus (`UNI-R01`, Phase 68).
@@ -424,6 +426,7 @@ impl Action {
             Self::CommandWindow(op) => op.colon_form(),
             Self::ClipboardWindow(op) => op.colon_form(),
             Self::TrafficMonitor(op) => op.colon_form(),
+            Self::KeyboardFocus(op) => op.colon_form(),
             Self::Coords(op) => crate::colon_command::coords_colon_form(op),
             Self::Context(op) => op.colon_form(),
             Self::AgentQueue(op) => op.colon_form(),

@@ -200,7 +200,7 @@ fn jump_focuses_pane_and_releases_keyboard() {
     assert_eq!(apply(&mut wm, AgentsListOp::Jump(None)), Some("Focused pane 1".to_string()));
     assert_eq!(wm.active_pane_id(), 1);
     assert!(!wm.agents_list().captures_input());
-    assert!(!wm.agents_list().active, "unpinned list closes");
+    assert!(wm.agents_list().active, "the list stays open, blurred, pinned or not (FOCUS-01)");
     // Pinned: stays open, keyboard released; explicit id works without a selection.
     wm.open_agents_list();
     apply(&mut wm, AgentsListOp::Pin(Some(true)));

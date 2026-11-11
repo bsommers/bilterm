@@ -198,12 +198,7 @@ impl WindowManager {
 
     pub fn open_command_window(&mut self) {
         self.command_window.active = true;
-        self.command_window.focused = true;
-        self.agents_list.blur();
-        self.agents_window.blur();
-        self.fonts_window.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::CommandWindow);
     }
 
     pub fn close_command_window(&mut self) {

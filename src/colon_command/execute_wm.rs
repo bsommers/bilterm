@@ -55,20 +55,32 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
+        // An explicit pane-focus command hands the keyboard to the pane: the drawer and a pinned
+        // MCP console are released too (the floating windows already are, FOCUS-01).
         ColonCommand::DeckNext => {
             wm.shuffle_deck_next();
+            wm.release_keyboard();
             false
         }
         ColonCommand::DeckPrev => {
             wm.shuffle_deck_prev();
+            wm.release_keyboard();
             false
         }
         ColonCommand::FocusPane(id) => {
-            wm.focus_and_raise(id);
+            if wm.focus_and_raise(id) || wm.pane(id).is_some() {
+                wm.release_keyboard();
+            }
             false
         }
         ColonCommand::PaneFocusDirection { dx, dy } => {
             let _ = wm.focus_direction(dx, dy);
+            wm.release_keyboard();
+            false
+        }
+        ColonCommand::KeyboardFocus(op) => {
+            let msg = wm.keyboard_focus_apply(op);
+            wm.active_pane_mut().set_status_message(Some(msg));
             false
         }
         ColonCommand::SelectCommand(ref subcmd) => {

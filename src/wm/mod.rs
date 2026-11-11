@@ -34,6 +34,7 @@ pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
+pub mod keyboard_focus;
 pub mod key_mode;
 pub mod which_key_state;
 pub mod layout_profile;
@@ -219,6 +220,8 @@ pub struct WindowManager {
     pub(crate) agents_list: agents_list::AgentsListState,
     /// Mission Control HUD, turn replay and watchdog state (`HUD-01..03`, Phase 70).
     agents_hud: agents_hud::AgentsHudState,
+    /// Keyboard owner at the last settle (`keyboard_focus::settle_keyboard_owner`).
+    keyboard_owner_seen: keyboard_focus::KeyboardOwner,
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
@@ -362,6 +365,7 @@ impl WindowManager {
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
             agents_hud: agents_hud::AgentsHudState::default(),
+            keyboard_owner_seen: keyboard_focus::KeyboardOwner::Pane,
             session_map: session_map::SessionMapState::default(),
             daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
@@ -411,6 +415,7 @@ impl WindowManager {
         self.drawer.invalidate_saved_sessions();
         let quit = execute_wm_colon_command(self, action);
         self.drawer.invalidate_saved_sessions();
+        self.settle_keyboard_owner();
         if quit {
             Ok(AppAction::Quit)
         } else {

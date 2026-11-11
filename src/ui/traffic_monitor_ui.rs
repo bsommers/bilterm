@@ -280,6 +280,6 @@ fn draw_body(lay: &TrafficLayout, wm: &WindowManager, res: &crate::traffic::Grou
         put(buf, inner, *x, lay.footer_y, t, accent);
     }
     let fx = lay.footer.last().map_or(inner.x, |(_, x, w)| x + w + 2);
-    let hint = st.status.as_deref().unwrap_or("Tab:group s:sort /:filter l:locality P/D:pin/dock Esc:close");
+    let hint = st.status.as_deref().unwrap_or("Tab:group s:sort /:filter l:locality P/D:pin/dock Esc:pane q:close");
     put(buf, inner, fx, lay.footer_y, &sanitize_display(hint, 80), muted);
 }

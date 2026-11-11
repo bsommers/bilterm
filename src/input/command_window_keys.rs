@@ -59,7 +59,11 @@ pub fn command_window_action(key: KeyEvent) -> Option<Action> {
 
 /// Applies `key` to `wm` when the command window captures input.
 pub(super) fn handle_command_window_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
-    if let Some(action) = command_window_action(key) {
+    // Esc with nothing typed hands the keyboard back and leaves the window open (FOCUS-01); with a
+    // query being edited it keeps dismissing as before.
+    let idle_esc = key.code == KeyCode::Esc && key.modifiers.is_empty() && wm.command_window().query.is_empty();
+    let action = if idle_esc { Some(Action::CommandWindow(CommandWindowOp::Blur)) } else { command_window_action(key) };
+    if let Some(action) = action {
         match wm.apply(action) {
             Ok(app_action) => Some(app_action),
             Err(_) => Some(AppAction::Handled),

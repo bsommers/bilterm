@@ -131,63 +131,11 @@ pub(super) fn handle_wm_modal_key(
     let is_drawer_toggle_fkey = key.code == KeyCode::F(7)
         && (key.modifiers.is_empty() || key.modifiers == KeyModifiers::ALT);
     if matches!(wm.modal(), crate::wm::Modal::None) && !is_drawer_toggle_fkey {
-        if wm.agents_hud().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_hud::handle_agents_hud_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.command_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.clipboard_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::clipboard_window_keys::handle_clipboard_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.traffic_monitor().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::traffic_monitor_keys::handle_traffic_monitor_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.fonts_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.daemon_window().captures_input()
-            && !wm.is_leader_pending()
-            && wm.daemon_window_key(key)
-        {
-            return Ok(Some(AppAction::Handled));
-        }
-        if wm.script_studio().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.agents_list().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.session_map().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::session_map_keys::handle_session_map_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.agents_window_captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
+        // One keyboard owner (`WindowManager::keyboard_owner`): the focus-cycle chord first, then
+        // the side window that holds the keyboard.
+        wm.settle_keyboard_owner();
+        if let Some(action) = super::focus_keys::handle_focus_chord(wm, key)
+            .or_else(|| super::focus_keys::dispatch_side_window_key(wm, key))
         {
             return Ok(Some(action));
         }

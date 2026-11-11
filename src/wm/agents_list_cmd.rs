@@ -23,13 +23,13 @@ pub enum ListFilter {
 pub enum AgentsListOp {
     /// `:agents list open` - open the window (focused).
     Open,
-    /// `:agents list close` - close the window unconditionally.
+    /// `:agents list close` (`q`, close badge) - close the window unconditionally.
     Close,
     /// `:agents list toggle` (`Ctrl+Alt+N`, leader `A`, menu) - close when open, else open.
     Toggle,
-    /// `:agents list dismiss` (Esc) - close an unpinned window, or only release the keyboard of a pinned one.
+    /// `:agents list dismiss` (minimize badge) - close an unpinned window, or only release the keyboard of a pinned one.
     Dismiss,
-    /// `:agents list blur` - release the keyboard without closing.
+    /// `:agents list blur` (Esc) - release the keyboard without closing.
     Blur,
     /// `:agents list select up|down` (Up / Down, `k` / `j`) - move the row selection.
     Step(i16),
@@ -41,7 +41,7 @@ pub enum AgentsListOp {
     Page(i16),
     /// `:agents list select <pane-id>` (click) - select the row of a pane.
     SelectPane(PaneId),
-    /// `:agents list jump [pane-id]` (Enter, second click) - focus the (selected) pane.
+    /// `:agents list jump [pane-id]` (Enter, click) - focus the (selected) pane; the list stays open, blurred.
     Jump(Option<PaneId>),
     /// `:agents list zoom [pane-id]` (`z`, right-click, `[zoom]` chip) - open the traffic window on a pane.
     Zoom(Option<PaneId>),

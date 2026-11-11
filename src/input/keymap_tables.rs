@@ -7,6 +7,7 @@ use crate::wm::agents_list_cmd::AgentsListOp;
 use crate::wm::agents_window::GraphDir;
 use crate::wm::drawer::DrawerNavOp;
 use crate::wm::find_cmd::{FindKind, FindOp};
+use crate::wm::keyboard_focus::FocusOp;
 use crate::wm::link_cmd::RemoteLinkOp;
 use crate::wm::session_map::SessionMapOp;
 use crate::wm::clipboard_window::ClipboardWindowOp;
@@ -248,6 +249,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // TRAFFIC MONITOR toggle: Ctrl+Alt+T (Phase 64, TMON-04)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('t'), Action::TrafficMonitor(TrafficMonitorOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('T'), Action::TrafficMonitor(TrafficMonitorOp::Toggle)),
+    // Keyboard focus cycle: Ctrl+Alt+O, pane -> open side windows -> pane (FOCUS-01; answered early in input::focus_keys, also over raw passthrough while a side window is open)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('o'), Action::KeyboardFocus(FocusOp::Next)),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('O'), Action::KeyboardFocus(FocusOp::Next)),
     // Speech-to-Text Voice Dictation toggle: Ctrl+Alt+S (STT-03)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('s'), Action::Voice(VoiceOp::Toggle)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('S'), Action::Voice(VoiceOp::Toggle)),
@@ -450,7 +454,7 @@ pub enum AgentsKeyScope {
 /// an `:agents` colon twin. Keys the table does not claim are swallowed while the window has the
 /// keyboard; the leader key is never consumed.
 pub const AGENTS_WINDOW_BINDINGS: &[(AgentsKeyScope, KeyModifiers, KeyCode, Action)] = &[
-    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Dismiss)),
+    (AgentsKeyScope::Window, KeyModifiers::NONE, KeyCode::Esc, Action::Agents(AgentsOp::Blur)),
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Left, Action::Agents(AgentsOp::Select(GraphDir::Left))),
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Right, Action::Agents(AgentsOp::Select(GraphDir::Right))),
     (AgentsKeyScope::Graph, KeyModifiers::NONE, KeyCode::Up, Action::Agents(AgentsOp::Select(GraphDir::Up))),

@@ -95,7 +95,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
         ":vcanvas",
         &["open ", "play", "pause", "toggle", "seek ", "volume ", "mute", "loop", "speed ", "close"],
     ),
-    (":focus", &["1", "2", "3", "4"]),
+    (":focus", &["1", "2", "3", "4", "cycle", "cycle prev", "pane", "agents-list", "agents", "sessions", "clipboard", "traffic", "commands", "script", "fonts", "daemon", "hud", "drawer", "console"]),
     (":zoom", &[]),
     (":close", &[]),
     (

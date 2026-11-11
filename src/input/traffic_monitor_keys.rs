@@ -40,7 +40,7 @@ pub const TRAFFIC_MONITOR_BINDINGS: &[(KeyModifiers, KeyCode, Op)] = &[
     (N, KeyCode::PageDown, Op::Page(1)),
     (N, KeyCode::Home, Op::First),
     (N, KeyCode::End, Op::Last),
-    (N, KeyCode::Esc, Op::Dismiss),
+    (N, KeyCode::Esc, Op::Blur),
     (N, KeyCode::Char('q'), Op::Dismiss),
     (A, KeyCode::Left, Op::Resize { dw: -2, dh: 0 }),
     (A, KeyCode::Right, Op::Resize { dw: 2, dh: 0 }),

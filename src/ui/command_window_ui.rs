@@ -15,7 +15,7 @@ use crate::ui::visual_style::{apply_frosted_glass_surface, render_liquid_ambient
 use crate::wm::WindowManager;
 
 pub const COMMAND_WINDOW_TITLE: &str = " COMMAND PALETTE ";
-pub const FOOTER_HINT: &str = " Enter:Run  Alt+P:Pin  Ctrl+L:ClearLog  Esc:Close ";
+pub const FOOTER_HINT: &str = " Enter:Run  Alt+P:Pin  Ctrl+L:ClearLog  Esc:Back ";
 
 fn put(buf: &mut Buffer, clip: Rect, x: u16, y: u16, text: &str, style: Style) {
     let mut cur_x = x;

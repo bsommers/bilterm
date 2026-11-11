@@ -108,7 +108,11 @@ fn in_window_table_keys_drive_state() {
     assert_eq!(wm.traffic_monitor().filter.text, "s");
     key(&mut wm, KeyCode::Esc, KeyModifiers::NONE);
     assert!(!wm.traffic_monitor().filter_focused);
+    // FOCUS-01: Esc hands the keyboard back and leaves the window open; `q` closes it.
     key(&mut wm, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(wm.traffic_monitor().active() && !wm.traffic_monitor().captures_input());
+    let _ = wm.apply(bilterm::action::Action::TrafficMonitor(bilterm::wm::traffic_monitor::TrafficMonitorOp::Open));
+    key(&mut wm, KeyCode::Char('q'), KeyModifiers::NONE);
     assert!(!wm.traffic_monitor().active());
     for (_, _, op) in TRAFFIC_MONITOR_BINDINGS {
         let parsed = parse_colon_command(&op.colon_form()).unwrap().unwrap();

@@ -117,12 +117,7 @@ impl WindowManager {
 
     pub fn open_script_studio(&mut self) {
         self.script_studio.active = true;
-        self.script_studio.focused = true;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.command_window.blur();
-        self.session_map.blur();
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::ScriptStudio);
     }
 
     pub fn close_script_studio(&mut self) {
