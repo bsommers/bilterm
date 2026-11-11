@@ -270,6 +270,24 @@ impl TektronixState {
         vt_out
     }
 
+    /// Feeds `bytes` to the state machine while in-band stream capture is active and returns how
+    /// many it consumed; capture ends at `CSI ?38l` or `ESC ETX`, leaving the rest for the VT path.
+    pub(super) fn consume_captured(&mut self, bytes: &[u8]) -> usize {
+        let mut used = 0;
+        while used < bytes.len() && self.stream_capture {
+            self.process_byte(bytes[used]);
+            used += 1;
+        }
+        used
+    }
+
+    /// Enters in-band stream capture (`CSI ?38h`).
+    pub(super) fn enter_stream_capture(&mut self) {
+        self.active = true;
+        self.stream_capture = true;
+        self.mode = TekMode::Alpha;
+    }
+
     fn process_byte(&mut self, b: u8) {
         if self.csi_pending {
             if self.csi_buf.len() < MAX_TEK_CSI_BUF {
