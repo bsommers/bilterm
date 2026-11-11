@@ -305,6 +305,7 @@ fn tmux_control_subprocess_polls_into_window_manager() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 fn floating_prompt_submit_command_executes_in_live_shell_pty() {
     use bilterm::input::handle_key_event;
     use bilterm::pane::CompositePane;

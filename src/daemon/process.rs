@@ -59,7 +59,9 @@ pub fn probe_or_cleanup_stale_socket(sock_path: &Path) -> bool {
                 if matches!(
                     e.kind(),
                     ErrorKind::ConnectionRefused | ErrorKind::NotFound
-                ) =>
+                )
+                    // macOS reports a leftover non-socket file at the path as ENOTSOCK, Linux as ECONNREFUSED.
+                    || e.raw_os_error() == Some(libc::ENOTSOCK) =>
             {
                 let _ = fs::remove_file(sock_path);
                 false

@@ -35,8 +35,18 @@ fn isolate() {
     });
 }
 
+/// `bilterm::pty::set_live_socket` is process-global: tests that set it (directly or through
+/// `LiveRpc::start`) hold this lock so a parallel test cannot swap the path under a spawning child.
+fn live_socket_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn runtime_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bt66-{tag}-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
+    // Unix socket paths are limited to ~104 bytes (macOS); its per-user temp dir alone is ~50, so
+    // sockets live under a short root instead of `std::env::temp_dir()`.
+    let root = if cfg!(unix) { PathBuf::from("/tmp") } else { std::env::temp_dir() };
+    let dir = root.join(format!("bt66-{tag}-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
     bilterm::secure_fs::ensure_private_dir(&dir).unwrap();
     dir
 }
@@ -80,6 +90,7 @@ fn live_child_env_has_all_four_variables() {
 #[test]
 fn spawned_child_pty_receives_bilterm_env() {
     isolate();
+    let _live = live_socket_lock();
     bilterm::pty::set_live_socket(Some(PathBuf::from("/tmp/bt66-env-test.sock")));
     let cfg = PtyConfig {
         program: "/bin/sh".to_string(),
@@ -161,6 +172,7 @@ fn registry_default_link_follows_newest_and_never_clobbers_daemon_socket() {
 
 #[test]
 fn client_socket_resolution_order() {
+    let _live = live_socket_lock();
     let rt = runtime_dir("res");
     assert_eq!(resolve_client_socket(&rt, Some("/x/y.sock")), Some(PathBuf::from("/x/y.sock")));
     assert_eq!(resolve_client_socket(&rt, Some("unix:/x/y.sock")), Some(PathBuf::from("/x/y.sock")));
@@ -175,8 +187,11 @@ fn client_socket_resolution_order() {
 // ------------------------------------------------------------------ LIVE-01 live socket
 
 #[tokio::test]
+// The guard only serialises tests that set the process-global live socket; nothing else contends for it.
+#[allow(clippy::await_holding_lock)]
 async fn foreground_socket_executes_against_the_live_window_manager() {
     isolate();
+    let _live = live_socket_lock();
     let rt = runtime_dir("live");
     // SAFETY: this is the only test in this binary that reads XDG_RUNTIME_DIR.
     unsafe { std::env::set_var("XDG_RUNTIME_DIR", &rt) };
