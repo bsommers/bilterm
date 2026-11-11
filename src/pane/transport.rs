@@ -36,6 +36,15 @@ impl RemotePaneBridge {
     }
 }
 
+/// Sends one terminal query reply (DA, DSR, ...) and logs it when the PTY does not take it
+/// (input backlog full or the write side failed); replies are answers to the child, so there is
+/// nobody to show the error to.
+pub(crate) fn send_query_reply(pty: &PtySession, reply: &[u8]) {
+    if let Err(err) = pty.write_all(reply) {
+        tracing::warn!(error = %err, bytes = reply.len(), "terminal query reply not sent");
+    }
+}
+
 /// How a pane's input bytes leave the process.
 #[derive(Default)]
 pub enum PaneTransport {

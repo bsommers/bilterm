@@ -790,7 +790,7 @@ impl CompositePane {
     pub fn flush_query_responses(&mut self) {
         if let Some(pty) = self.transport.local_pty() {
             for resp in self.vt.take_query_responses() {
-                let _ = pty.write_all(&resp);
+                crate::pane::transport::send_query_reply(pty, &resp);
             }
         }
     }
