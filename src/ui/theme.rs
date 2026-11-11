@@ -218,6 +218,28 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
+    /// The single "modern look" predicate: `true` for palettes that render the clean modern chrome
+    /// (shortcut strip, rounded frames, modern exit guard) instead of the classic 3270/Borland chrome.
+    pub fn is_modern_look(&self) -> bool {
+        matches!(self.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC" | "TRON")
+    }
+
+    /// `true` for the TRON light-cycle palette (cyan/orange title lights).
+    pub fn is_tron(&self) -> bool {
+        self.name == "TRON"
+    }
+
+    /// `true` for the two original modern palettes (Obsidian slate and Liquid Glass), which keep
+    /// their pre-design-token colour literals in the OIA.
+    pub fn is_slate_family(&self) -> bool {
+        matches!(self.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
+    }
+
+    /// `true` for the Liquid Glass palette (refraction edge, droplet badges).
+    pub fn is_liquid_glass(&self) -> bool {
+        self.name == "LIQUID-GLASS"
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         name: String,
@@ -308,5 +330,33 @@ mod tests {
             assert!(!pal.name.is_empty());
         }
         assert_eq!(parse_hex_color("#00FF66"), Some(Color::Rgb(0, 255, 102)));
+    }
+
+    /// Part A equivalence: the predicates return exactly what the six former name-matching call
+    /// sites returned, for every palette name the app can produce.
+    #[test]
+    fn modern_look_predicates_match_former_name_lists_for_every_palette() {
+        use crate::ui::design::AppearanceProfile;
+        use crate::ui::visual_style::{modern_obsidian_palette, profile_palette};
+        let mut pals: Vec<ThemePalette> = ThemePreset::all().iter().map(|p| p.palette()).collect();
+        pals.push(modern_obsidian_palette(false));
+        pals.push(modern_obsidian_palette(true));
+        pals.extend(AppearanceProfile::ALL.iter().filter_map(|p| profile_palette(*p)));
+        let mut seen_modern = 0;
+        for pal in &pals {
+            let n = pal.name.as_str();
+            let former_four = matches!(n, "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC");
+            let former_two = matches!(n, "MODERN-SLATE" | "LIQUID-GLASS");
+            assert_eq!(pal.is_modern_look(), former_four || n == "TRON", "{n}");
+            assert_eq!(pal.is_slate_family(), former_two, "{n}");
+            assert_eq!(pal.is_liquid_glass(), n == "LIQUID-GLASS", "{n}");
+            seen_modern += usize::from(pal.is_modern_look());
+        }
+        assert!(seen_modern >= 4);
+        for classic in ["TURBO-BLUE", "TRON-GRID", "AMBER", "SYNTHWAVE", "SOLARIZED", ""] {
+            let mut p = ThemePreset::TurboBlue.palette();
+            p.name = classic.to_string();
+            assert!(!p.is_modern_look(), "{classic}");
+        }
     }
 }

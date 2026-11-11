@@ -71,6 +71,7 @@ Bilterm supports 5 high-level appearance profiles, 3 display modes, and composab
 | `:appearance midnight` | Deep midnight blue modern chrome |
 | `:appearance arctic` | High-clarity arctic slate chrome |
 | `:appearance liquid` | Refractive Liquid Glass borders with ambient halo |
+| `:appearance tron` | TRON: black canvas, neon cyan light-cycle borders, orange accent (same look as `:tron on`) |
 
 ### Display Modes (`:mode`) & Chrome Policies (`:chrome`)
 
@@ -84,8 +85,9 @@ bilterm ctl wm.command '{"command":":mode zen"}'
 bilterm ctl wm.command '{"command":":chrome title focused"}'   # all | focused | none | auto
 bilterm ctl wm.command '{"command":":chrome ring on"}'         # on | off
 
-# Configure visual style flags (:style, :snazzy, :glass, :modern, :liquid)
-bilterm ctl wm.command '{"command":":style snazzy-glass"}'     # classic | snazzy | glass | snazzy-glass | modern | liquid | cycle
+# Configure visual style flags (:style, :snazzy, :glass, :modern, :liquid, :tron)
+bilterm ctl wm.command '{"command":":style snazzy-glass"}'     # classic | snazzy | glass | snazzy-glass | modern | liquid | tron | cycle
+bilterm ctl wm.command '{"command":":tron on"}'                # on | off | toggle; off restores the previous look
 ```
 
 ---

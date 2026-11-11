@@ -33,7 +33,7 @@ pub fn render_dos_fkey_bar(rect: Rect, palette: &ThemePalette, buf: &mut Buffer)
         return;
     }
 
-    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC");
+    let is_modern = palette.is_modern_look();
     let items = if is_modern {
         [
             ("F1", "Help  ·"),

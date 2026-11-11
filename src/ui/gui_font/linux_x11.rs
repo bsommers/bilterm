@@ -698,7 +698,9 @@ pub fn run_x11_gui_window(mut app: App) -> Result<()> {
     let (mut win_w, mut win_h) = (1120u32, 720u32);
     let init_bg = if app.wm.config().is_modern() { 0x000A_101D } else { 0x0000_0084 };
     let win = unsafe { (api.x_create_simple_window)(dpy, root, 80, 60, win_w, win_h, 0, 0, init_bg) };
-    let title_str = if app.wm.config().liquid_glass {
+    let title_str = if crate::ui::design::tron::tron_active(app.wm.config()) {
+        "Bilterm — TRON"
+    } else if app.wm.config().liquid_glass {
         "Bilterm — Liquid Glass"
     } else if app.wm.config().is_modern() {
         "Bilterm"

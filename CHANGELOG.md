@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **TRON look.** Black canvas, neon cyan light-cycle borders (rounded, single line), orange accent, pale cyan text, dim teal inactive borders. Reach it with `--tron`, `:tron [on|off|toggle]`, `:style tron`, `:appearance tron`, `[appearance] profile = "tron"`, or `F11`, whose cycle is now `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> TRON -> Classic`. `:tron off` restores the look that was active when TRON was switched on (Classic when TRON came from `--tron`, the config file or `:appearance tron`).
+
+### Internal
+- One "modern look" predicate (`ThemePalette::is_modern_look`) replaces six palette-name matches in the status bar, mouse strip, exit guard, pane chrome and OIA. No visual change.
+
 ### Changed
 - **Browser canvas is now a real browser (`WEB-01..02`).** `:browser open <url>` drives headless Chrome over the DevTools pipe (`--remote-debugging-pipe`, no TCP debugging port) instead of painting a placeholder. Frames come from the screencast and are decoded off the UI thread; the window-manager tick redraws only when a frame or the page state changed. URL, title, loading state and back/forward follow the page, including navigations the page starts itself. See [user guide chapter 14](docs/user-guide/14-browser-canvas.md).
 - **Keyboard and mouse reach the page.** With the viewport focused (click the page, `Ctrl+]`, or `:browser focus on`) keys, bracketed paste, clicks, drags and the wheel are forwarded. `Ctrl+]` always returns the keyboard to bilterm. `Ctrl+L` edits the URL only while the page has focus; it is no longer taken from the shell otherwise. Mouse positions are derived from the frame and pane size, so clicks land correctly in the terminal and in `--gui`.

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::BiltermConfig;
 use crate::pane::{CompositePane, PaneId};
+use crate::ui::design::tron;
 use crate::ui::glyphs::GlyphSet;
 use crate::ui::theme::ThemePalette;
 use crate::wm::drawer::BRAILLE_SPINNER_FRAMES;
@@ -168,6 +169,7 @@ pub fn profile_palette(profile: crate::ui::design::AppearanceProfile) -> Option<
              c(12, 62, 76), c(42, 108, 116), c(0, 30, 38)],
             c(238, 232, 213), c(147, 161, 161),
         ),
+        P::Tron => return Some(crate::ui::design::tron::tron_palette()),
         _ => return None,
     };
     let [a, b, c1, d, e, f, g, h, i, j, k, l, m, n, o] = p;
@@ -252,9 +254,11 @@ pub const fn modern_glyph_set() -> GlyphSet {
     }
 }
 
-/// Formats the visual style status badge (`CLASSIC`, `✨ SNAZZY`, `💎 GLASS`, `◢ MODERN`, or `💧 LIQUID GLASS`).
+/// Formats the visual style status badge (`CLASSIC`, `✨ SNAZZY`, `💎 GLASS`, `◢ MODERN`, `💧 LIQUID GLASS`, or `◈ TRON`).
 pub fn visual_style_label(cfg: &BiltermConfig) -> &'static str {
-    if cfg.liquid_glass {
+    if tron::tron_active(cfg) {
+        tron::TRON_STYLE_LABEL
+    } else if cfg.liquid_glass {
         if cfg.snazzy_mode {
             "💧✨ LIQUID GLASS + SNAZZY (Modern Specular Refraction + Rich Glyphs)"
         } else {
@@ -278,16 +282,45 @@ pub fn visual_style_label(cfg: &BiltermConfig) -> &'static str {
     }
 }
 
-/// Cycles `BiltermConfig` through `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> Classic`
-/// or applies an explicit style token (`classic`, `snazzy`, `glass`, `both`, `modern`, `liquid`, `toggle`).
+/// Cycles `BiltermConfig` through
+/// `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> TRON -> Classic`
+/// or applies an explicit style token (`classic`, `snazzy`, `glass`, `both`, `modern`, `liquid`, `tron`, `toggle`).
+/// Picking Classic, Modern or Liquid (or cycling) while TRON is on leaves TRON first.
 pub fn apply_visual_style_mode(cfg: &mut BiltermConfig, mode_opt: Option<&str>) -> &'static str {
-    match mode_opt.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+    let token = mode_opt.map(|s| s.trim().to_ascii_lowercase());
+    match token.as_deref() {
+        Some("tron" | "tron-on" | "grid" | "light-cycle" | "lightcycle") => {
+            tron::tron_on(cfg);
+            return visual_style_label(cfg);
+        }
+        Some("tron-off") => {
+            tron::tron_off(cfg);
+            return visual_style_label(cfg);
+        }
+        Some("tron-toggle") => {
+            if tron::tron_active(cfg) {
+                tron::tron_off(cfg);
+            } else {
+                tron::tron_on(cfg);
+            }
+            return visual_style_label(cfg);
+        }
+        None | Some("" | "cycle" | "next" | "toggle") if tron::tron_active(cfg) => {
+            tron::tron_leave(cfg);
+            return visual_style_label(cfg);
+        }
+        Some(
+            "classic" | "off" | "reset" | "default" | "retro" | "borland" | "dos" | "modern" | "minimal"
+            | "non-retro" | "nonretro" | "clean" | "modern-only" | "modern-toggle" | "liquid"
+            | "liquid-glass" | "liquidglass" | "aqua" | "liquid-toggle" | "liquid-glass-toggle"
+            | "snazzy-only" | "glass-only",
+        ) => tron::tron_leave(cfg),
+        _ => {}
+    }
+    match token.as_deref() {
         None | Some("" | "cycle" | "next" | "toggle") => {
             if cfg.liquid_glass {
-                cfg.modern_mode = false;
-                cfg.liquid_glass = false;
-                cfg.snazzy_mode = false;
-                cfg.glass_mode = false;
+                tron::tron_on(cfg);
             } else if cfg.modern_mode {
                 cfg.modern_mode = true;
                 cfg.liquid_glass = true;
@@ -624,7 +657,7 @@ pub fn polish_glass_panel_rect(
                     cell.set_fg(Color::Rgb(hr, hg, hb));
                 } else if (y == bounds.y + bounds.height - 1 || x == bounds.x + bounds.width - 1)
                     && active
-                    && palette.name == "LIQUID-GLASS"
+                    && palette.is_liquid_glass()
                 {
                     // Bottom/right chromatic refraction edge (cool indigo/cyan dispersion)
                     cell.set_fg(Color::Rgb(96, 165, 250));

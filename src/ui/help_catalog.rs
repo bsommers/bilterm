@@ -17,6 +17,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":remote list", "—", "List active SSH / remote tmux -CC fleet nodes & profiles"),
     (":modern", "F11", "Toggle Non-Retro Modern Minimal UI mode (rounded chrome, obsidian slate)"),
     (":liquid", "F11", "Toggle Liquid Glass UI mode (refractive glass borders + ambient halo)"),
+    (":tron", "F11", "Toggle TRON UI mode (black canvas, neon cyan light-cycle borders, orange accent)"),
     (":mcp status", "—", "Open TRON Master Control Program (MCP) Root Console window"),
     (":mcp tree", "—", "Show hierarchical SessionTree in MCP floating/push-out window"),
     (":mcp float", "—", "Switch MCP console window to Floating Borland overlay mode"),
@@ -266,6 +267,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":appearance midnight", "—", "Look: Midnight"),
     (":appearance arctic", "—", "Look: Arctic (light)"),
     (":appearance liquid", "—", "Look: Liquid glass"),
+    (":appearance tron", "—", "Look: TRON (neon cyan grid on black, orange accent)"),
     (":appearance legacy", "—", "Look: Legacy retro style (the classic 3270/Borland look)"),
     (":mode standard", "—", "Display mode: standard chrome (non-Legacy looks)"),
     (":mode minimal", "—", "Display mode: minimal chrome, no pane titles (non-Legacy looks)"),
@@ -391,13 +393,16 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":modern off", "—", "Turn Non-Retro Modern Minimal UI mode off"),
     (":liquid on", "—", "Turn Liquid Glass UI mode on"),
     (":liquid off", "—", "Turn Liquid Glass UI mode off"),
-    (":style", "—", "Cycle the visual style (classic, snazzy, glass, modern, liquid)"),
+    (":tron on", "—", "Turn TRON UI mode on"),
+    (":tron off", "—", "Turn TRON UI mode off (restores the previous look, or Classic)"),
+    (":style", "—", "Cycle the visual style (classic, snazzy, glass, modern, liquid, tron)"),
     (":style classic", "—", "Pick the classic visual style"),
     (":style snazzy", "—", "Pick the snazzy visual style"),
     (":style glass", "—", "Pick the glass visual style"),
     (":style both", "—", "Pick the both visual style"),
     (":style modern", "—", "Pick the modern visual style"),
     (":style liquid", "—", "Pick the liquid visual style"),
+    (":style tron", "—", "Pick the TRON visual style"),
     (":style cycle", "—", "Cycle the visual style one step"),
     (":fkeys bilterm", "—", "F-key mode: F-keys act as Bilterm hotkeys"),
     (":fkeys app", "—", "F-key mode: F-keys pass through to the application"),
@@ -714,7 +719,7 @@ mod tests {
             assert!(!c.is_empty(), "no completion for {prefix}");
         }
         let (_, _, c) = compute_completions(":appearance ", 12, cwd);
-        assert_eq!(c.len(), 16);
+        assert_eq!(c.len(), 17);
         let (_, _, c) = compute_completions(":mode ", 6, cwd);
         assert!(["standard", "minimal", "zen"].iter().all(|m| c.iter().any(|x| x.display == *m)));
         for cmd in [":appearance obsidian", ":mode standard", ":mode minimal", ":mode zen", ":panel scale 125", ":chrome ring on"] {
