@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod codec;
 pub mod detect;
+mod framer;
 pub mod ghostty_backend;
 pub mod graphics;
 pub mod recording;
@@ -23,8 +24,7 @@ pub use tektronix::{
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::vt::codec::{is_binary_noise_chunk, sanitize_binary_noise_chunk};
-use crate::vt::scan::{normalize_extended_sgr_for_vt100, split_incomplete_utf8_tail};
+use crate::vt::scan::split_incomplete_utf8_tail;
 pub use crate::vt::scrollback::PaneScrollMode;
 pub use crate::vt::snapshot::{LineSizeAttr, scan_dec_line_size_escapes};
 use crate::vt::snapshot::{
@@ -138,8 +138,12 @@ pub struct VtParser {
     line_size_attrs: std::collections::BTreeMap<u16, LineSizeAttr>,
     tektronix: TektronixState,
     csi_count_clamp: codec::CsiCountClamp,
+    /// Incomplete trailing UTF-8 char of the recorded stream (recording only).
     utf8_carry: Vec<u8>,
-    osc52_carry: Vec<u8>,
+    framer: framer::SeqFramer,
+    framed: framer::FrameOutput,
+    /// Complete `OSC 1337;Canvas=` sequences awaiting [`VtParser::drain_canvas_osc`].
+    pending_canvas_osc: Vec<u8>,
     primary_stream_log: Vec<u8>,
     /// `false` once `primary_stream_log` has been truncated or invalidated by a rebuild, after
     /// which column changes reflow via [`VtParser::rebuild`] instead of replaying the log.
@@ -216,7 +220,9 @@ impl VtParser {
             tektronix: TektronixState::new(),
             csi_count_clamp: codec::CsiCountClamp::default(),
             utf8_carry: Vec::new(),
-            osc52_carry: Vec::new(),
+            framer: framer::SeqFramer::default(),
+            framed: framer::FrameOutput::default(),
+            pending_canvas_osc: Vec::new(),
             primary_stream_log: Vec::new(),
             primary_log_complete: true,
         }
@@ -225,6 +231,9 @@ impl VtParser {
     /// Processes a chunk of raw PTY output bytes, updating the VT100 grid, `DECSET 47/1047/1049`,
     /// `DECSET 2004`, `OSC 52`, and `OSC 133` semantic prompt markers.
     ///
+    /// Bytes pass through the stateful [`framer::SeqFramer`], so a control sequence split across
+    /// two calls is handled exactly as if it had arrived whole (see `framer.rs`).
+    ///
     /// When a raw binary noise stream (such as `tail -f /dev/random` or `cat /dev/urandom`) is
     /// detected while not in alternate screen mode, stray `0x1b` (`ESC`) and raw C0/C1 control
     /// bytes are sanitized into visible glyphs so random bytes cannot falsely trigger `DECSET`
@@ -232,66 +241,34 @@ impl VtParser {
     pub fn process(&mut self, raw_bytes: &[u8]) {
         self.generation = self.generation.wrapping_add(1);
         self.total_bytes_processed = self.total_bytes_processed.saturating_add(raw_bytes.len());
-        let combined: std::borrow::Cow<'_, [u8]> = if self.utf8_carry.is_empty() {
-            std::borrow::Cow::Borrowed(raw_bytes)
-        } else {
-            let mut v = std::mem::take(&mut self.utf8_carry);
-            v.extend_from_slice(raw_bytes);
-            std::borrow::Cow::Owned(v)
-        };
-        let (bytes, tail) = split_incomplete_utf8_tail(&combined);
-        if !tail.is_empty() {
-            self.utf8_carry.extend_from_slice(tail);
-        }
-        if bytes.is_empty() {
-            return;
-        }
         if let Some(t0) = self.recording_started_at {
-            let elapsed = t0.elapsed().as_secs_f64();
-            self.recording_events
-                .push((elapsed, String::from_utf8_lossy(bytes).into_owned()));
-        }
-        if !self.is_alternate_screen() && is_binary_noise_chunk(bytes) {
-            let sanitized = sanitize_binary_noise_chunk(bytes);
-            let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
-            self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
-            self.append_primary_stream_log(&sanitized);
-            self.csi_count_clamp.reset();
-            self.parser.process(&sanitized);
-            return;
-        }
-        let was_alt = self.is_alternate_screen();
-        let (start_row, _) = self.parser.screen().cursor_position();
-        let vt_bytes = self.tektronix.process_and_filter_vt100(bytes);
-        let newline_count = vt_bytes.iter().filter(|&&b| b == b'\n').count();
-        self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
-        if !vt_bytes.is_empty() {
-            let normalized = normalize_extended_sgr_for_vt100(&vt_bytes);
-            // vt100-ctt does not clamp ICH / IL / SD counts; bound them to the grid first.
-            let (grid_rows, grid_cols) = self.parser.screen().size();
-            let normalized = self.csi_count_clamp.filter(&normalized, grid_rows.max(grid_cols));
-            self.parser.process(&normalized);
-            scan_dec_line_size_escapes(
-                &vt_bytes,
-                start_row,
-                self.rows,
-                &mut self.line_size_attrs,
-            );
-            if !was_alt && !self.is_alternate_screen() {
-                self.append_primary_stream_log(&normalized);
+            let mut combined = std::mem::take(&mut self.utf8_carry);
+            combined.extend_from_slice(raw_bytes);
+            let (bytes, tail) = split_incomplete_utf8_tail(&combined);
+            self.utf8_carry.extend_from_slice(tail);
+            if !bytes.is_empty() {
+                let elapsed = t0.elapsed().as_secs_f64();
+                self.recording_events
+                    .push((elapsed, String::from_utf8_lossy(bytes).into_owned()));
             }
         }
-        let scan_bytes: std::borrow::Cow<'_, [u8]> = if self.osc52_carry.is_empty() {
-            std::borrow::Cow::Borrowed(bytes)
-        } else {
-            let mut combined = std::mem::take(&mut self.osc52_carry);
-            combined.extend_from_slice(bytes);
-            std::borrow::Cow::Owned(combined)
-        };
-        self.scan_control_sequences(&scan_bytes);
+        let mut framed = std::mem::take(&mut self.framed);
+        let mut rest = raw_bytes;
+        while !rest.is_empty() {
+            // In-band Tektronix capture (`CSI ?38h`) has its own grammar; it bypasses the framer.
+            let used = if self.tektronix.stream_capture {
+                self.tektronix.consume_captured(rest)
+            } else {
+                let used = self.framer.feed(rest, &mut framed);
+                self.process_framed(&framed);
+                used
+            };
+            rest = &rest[used..];
+        }
+        self.framed = framed;
     }
 
-    fn append_primary_stream_log(&mut self, bytes: &[u8]) {
+    pub(super) fn append_primary_stream_log(&mut self, bytes: &[u8]) {
         const MAX_PRIMARY_LOG: usize = 65_536;
         self.primary_stream_log.extend_from_slice(bytes);
         if self.primary_stream_log.len() > MAX_PRIMARY_LOG {
@@ -721,7 +698,19 @@ impl VtParser {
     pub fn is_report_color_scheme_2031(&self) -> bool { self.report_color_scheme_2031 }
     pub fn is_in_band_size_2048(&self) -> bool { self.in_band_size_2048 }
     pub fn is_backarrow_key_67(&self) -> bool { self.backarrow_key_67 }
-    pub fn osc52_carry_len(&self) -> usize { self.osc52_carry.len() }
+    /// Bytes of an incomplete control sequence currently withheld by the scanner (bounded).
+    pub fn osc52_carry_len(&self) -> usize { self.framer.carry_len() }
+    /// Input bytes the control-sequence scanner has consumed; each byte counts exactly once.
+    pub fn scanner_steps(&self) -> u64 { self.framer.steps() }
+    /// Control sequences dropped for exceeding the scanner's length limits.
+    pub fn scanner_dropped_sequences(&self) -> u64 { self.framer.dropped() }
+    /// Hands each complete, queued `OSC 1337;Canvas=` sequence to `apply` and clears the queue.
+    pub fn drain_canvas_osc(&mut self, mut apply: impl FnMut(&mut TektronixState, &[u8])) {
+        let queued = std::mem::take(&mut self.pending_canvas_osc);
+        if !queued.is_empty() {
+            apply(&mut self.tektronix, &queued);
+        }
+    }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
         let stack = if self.is_alternate_screen() {

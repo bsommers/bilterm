@@ -97,7 +97,8 @@ src/
 ├── vt/
 │   ├── mod.rs                  # VtParser state machine, CommandBlock tracking, scrollback & size management
 │   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
-│   ├── scan.rs                 # Single-pass ESC (\x1b) stream pre-scanner (DECSET traps, CSI DECRPM/DA1/DSR)
+│   ├── framer.rs               # Stateful control-sequence framer in front of the engine: split-safe, linear, bounded carry
+│   ├── scan.rs                 # Framed-chunk dispatch to the engine + CSI handlers (DECSET traps, DECRPM/DA1/DSR, SGR)
 │   ├── scan_osc_dcs.rs         # OSC 7/8/9/52/133/777/1337, DCS XTGETTCAP/Sixel & APC Kitty scanners
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
 │   ├── tektronix.rs            # Tektronix 4010/4014 10-bit/12-bit vector storage-tube state machine & phosphor decay

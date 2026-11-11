@@ -43,36 +43,6 @@ impl VtParser {
     }
 }
 
-pub(super) fn strip_apc_and_dcs_envelopes(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut rest = input;
-    while !rest.is_empty() {
-        let next_apc = rest.find("\x1b_");
-        let next_dcs = rest.find("\x1bP");
-        let next_env = match (next_apc, next_dcs) {
-            (Some(a), Some(d)) => Some(a.min(d)),
-            (Some(a), None) => Some(a),
-            (None, Some(d)) => Some(d),
-            (None, None) => None,
-        };
-        if let Some(pos) = next_env {
-            out.push_str(&rest[..pos]);
-            let after_start = &rest[pos + 2..];
-            if let Some(end_st) = after_start.find("\x1b\\") {
-                rest = &after_start[end_st + 2..];
-            } else if let Some(end_bel) = after_start.find('\x07') {
-                rest = &after_start[end_bel + 1..];
-            } else {
-                break;
-            }
-        } else {
-            out.push_str(rest);
-            break;
-        }
-    }
-    out
-}
-
 /// Expands a decoded Kitty payload into `w * h` RGBA pixels; `None` (nothing allocated) when
 /// either dimension exceeds [`MAX_GRAPHIC_DIM_PX`].
 pub(super) fn expand_kitty_payload_to_rgba(
