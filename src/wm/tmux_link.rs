@@ -175,13 +175,10 @@ impl WindowManager {
         self.tmux_control = None;
     }
 
-    /// Current link state (`Idle` when no link was ever started).
+    /// Current link state (`Idle` when no link was ever started). Always the machine's real
+    /// state: a link whose fleet node was removed is forgotten eagerly (`disconnect_fleet_node`)
+    /// or on the next tick, never reported as `Idle` while its transport is still running.
     pub fn tmux_link_state(&self) -> &LinkState {
-        if let Some(ref fname) = self.tmux_link.fleet_node
-            && !self.fleet.nodes.contains_key(fname)
-        {
-            return &LinkState::Idle;
-        }
         self.tmux_link.machine.state()
     }
 
@@ -268,6 +265,9 @@ impl WindowManager {
             "link.connect"
         );
 
+        if !self.headless_mode {
+            self.tmux_link.machine.jitter_pct = crate::tmux::reconnect::LINK_JITTER_PCT;
+        }
         let size = self.default_size;
         let res = if let Some(conn) = self.tmux_link.connector.as_mut() {
             conn.connect(&target, size)
@@ -562,6 +562,7 @@ impl WindowManager {
         }
 
         // 3. I/O pumps (plan 13):
+        self.pump_tmux_flow();
         self.pump_tmux_input(now_ms);
         self.discover_idle_panes();
         self.pump_tmux_outbound();

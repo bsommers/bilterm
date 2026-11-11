@@ -369,16 +369,9 @@ impl WindowManager {
     }
 
     fn traffic_open(&mut self) {
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.command_window.blur();
-        self.clipboard_window.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
         self.modal = Modal::None;
         self.traffic_monitor.visible = true;
-        self.traffic_monitor.focused = true;
+        self.take_keyboard(crate::wm::keyboard_focus::KeyboardOwner::TrafficMonitor);
         self.traffic_meter.set_classify(true);
     }
 

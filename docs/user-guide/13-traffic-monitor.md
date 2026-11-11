@@ -56,7 +56,8 @@ payload bytes, only counts and sanitised labels.
 
 `Tab`/`BackTab` group, `s` sort key, `S` direction, `1` `2` `3` rate column, `l` locality, `p` pause,
 `/` filter (type, `Enter`/`Esc` to leave), `Enter` drill, `Backspace` up, `x` reset, `o` OIA,
-`c` classify, `P` pin, `D` dock, `j k Up Down PgUp PgDn Home End` navigate, `Esc` or `q` close.
+`c` classify, `P` pin, `D` dock, `j k Up Down PgUp PgDn Home End` navigate, `q` closes, `Esc` hands the keyboard back to the pane and leaves the window open
+(`Ctrl+Alt+O` cycles the keyboard between the pane and the open side windows).
 `Shift+arrows` move and `Alt+arrows` resize.
 
 ## 5. Mouse
@@ -86,7 +87,7 @@ set `[traffic] label_hosts = false` to show `host-<n>` instead. No payload is ev
 
 | Capability | Mouse | Key | Command | API |
 |------------|-------|-----|---------|-----|
-| Open / close | menu, `[×]` | `Ctrl+Alt+T`, `Ctrl+X $`, `Esc` | `:traffic toggle` | `traffic.window` |
+| Open / close | menu, `[×]` | `Ctrl+Alt+T`, `Ctrl+X $`, `q` | `:traffic toggle` | `traffic.window` |
 | Pin / dock | `[o]` `[□]` | `P` `D` | `:traffic pin`, `:traffic dock` | `traffic.window` |
 | Group | tabs | `Tab` | `:traffic group` | `traffic.snapshot group_by` |
 | Sort | header click | `s` `S` | `:traffic sort` | `traffic.snapshot sort` |

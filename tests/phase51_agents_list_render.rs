@@ -208,6 +208,9 @@ fn render_footer_chips_at_geometry_rects() {
         render(&other, area)
     };
     wm.agents_list_mut().rect = Some(Rect::new(5, 3, 20, 8));
+    // FOCUS-01: a focused list changes the pane chrome (inactive frame, KBD badge); blurred, the
+    // window itself must leave everything outside its rect untouched.
+    wm.agents_list_mut().blur();
     let l = wm.agents_list_layout(area).unwrap();
     assert!(l.chips.is_empty());
     let buf = render(&wm, area);
@@ -271,6 +274,8 @@ fn render_tiny_workspaces_do_not_panic() {
         let (mut wm, area) = fixture_n(cols, rows, 3);
         let base = render(&wm, area);
         wm.open_agents_list();
+        // FOCUS-01: compare blurred; a focused list also changes the pane chrome outside its rect.
+        wm.agents_list_mut().blur();
         for rect in [None, Some(Rect::new(0, 0, 1, 1)), Some(Rect::new(1000, 1000, 500, 500))] {
             wm.agents_list_mut().rect = rect;
             let buf = render(&wm, area);

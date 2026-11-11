@@ -26,6 +26,13 @@ pub struct DaemonMenuEntry {
     pub current: bool,
 }
 
+impl DaemonMenuEntry {
+    /// A daemon that is not running but still has a recorded PID died without cleaning up.
+    pub fn is_crashed(&self) -> bool {
+        !self.running && self.pid.is_some()
+    }
+}
+
 /// Buttons in the action footer, in left-to-right render order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DaemonWindowButton {
@@ -160,24 +167,28 @@ impl WindowManager {
     }
 }
 
+fn crashed_entry(r: crate::daemon::supervisor::DaemonLockRecord) -> DaemonMenuEntry {
+    DaemonMenuEntry {
+        name: r.name,
+        running: false,
+        pid: Some(r.pid),
+        socket_path: r.socket_path.to_string_lossy().into_owned(),
+        ..Default::default()
+    }
+}
+
 fn default_entry(runtime_dir: &Path) -> DaemonMenuEntry {
-    use crate::daemon::supervisor::{DaemonLockRecord, check_pid_alive, daemon_lock_path_in};
-    let rec = daemon_lock_path_in(runtime_dir, "default")
-        .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| DaemonLockRecord::from_json(&s).ok());
-    match rec {
-        Some(r) => {
-            let alive = check_pid_alive(r.pid);
-            DaemonMenuEntry {
-                name: "default".into(),
-                running: alive,
-                pid: alive.then_some(r.pid),
-                socket_path: r.socket_path.to_string_lossy().into_owned(),
-                ..Default::default()
-            }
-        }
-        None => DaemonMenuEntry {
+    use crate::daemon::supervisor::{daemon_liveness, DaemonLiveness};
+    match daemon_liveness(runtime_dir, "default") {
+        DaemonLiveness::Running(r) => DaemonMenuEntry {
+            name: "default".into(),
+            running: true,
+            pid: Some(r.pid),
+            socket_path: r.socket_path.to_string_lossy().into_owned(),
+            ..Default::default()
+        },
+        DaemonLiveness::Crashed(r) => crashed_entry(r),
+        DaemonLiveness::Stopped => DaemonMenuEntry {
             name: "default".into(),
             socket_path: runtime_dir.join("daemon.sock").to_string_lossy().into_owned(),
             ..Default::default()
@@ -225,6 +236,11 @@ impl WindowManager {
                     socket_path: d.socket_path.to_string_lossy().into_owned(),
                 })
                 .collect();
+        for rec in crate::daemon::registry::DaemonRegistry::list_crashed(runtime_dir) {
+            if !entries.iter().any(|e| e.name == rec.name) {
+                entries.push(crashed_entry(rec));
+            }
+        }
         if !entries.iter().any(|e| e.name == "default") {
             entries.push(default_entry(runtime_dir));
         }
@@ -232,12 +248,14 @@ impl WindowManager {
             (a.name != "default", a.name.as_str()).cmp(&(b.name != "default", b.name.as_str()))
         });
         let running = entries.iter().filter(|e| e.running).count();
+        let crashed = entries.iter().filter(|e| e.is_crashed()).count();
         let w = &mut self.daemon_window;
         w.status_line = format!(
-            "{} daemon{}, {} running",
+            "{} daemon{}, {} running{}",
             entries.len(),
             if entries.len() == 1 { "" } else { "s" },
-            running
+            running,
+            if crashed > 0 { format!(", {crashed} crashed") } else { String::new() }
         );
         w.entries = entries;
         w.selected = w.selected.min(w.entries.len().saturating_sub(1));

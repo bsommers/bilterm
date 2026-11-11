@@ -101,7 +101,11 @@ impl Default for AgentsHudState {
 impl AgentsHudState {
     /// The HUD or the replay view owns the keyboard.
     pub fn captures_input(&self) -> bool {
-        self.replay.is_some() || (self.active && self.focused)
+        self.focused && (self.active || self.replay.is_some())
+    }
+    /// Releases the keyboard without closing the HUD or the replay view.
+    pub fn blur(&mut self) {
+        self.focused = false;
     }
     /// A window (HUD or replay) is on screen.
     pub fn visible(&self) -> bool {
@@ -406,6 +410,7 @@ impl WindowManager {
             }
             self.agents_hud.logs.entry(*id).or_default();
             self.agents_hud.replay = Some(*id);
+            self.agents_hud.focused = true;
             let n = self.agents_hud.logs.get(id).map_or(0, TurnReplayLog::len);
             return Ok(Some(format!("Replay pane #{id}: {n} turn(s)")));
         }

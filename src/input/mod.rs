@@ -2,6 +2,7 @@ pub mod agents_hud;
 pub mod agents_list;
 pub mod agents_list_keys;
 mod agents_window;
+pub mod browser_keys;
 pub mod chord;
 pub mod clipboard_window;
 pub mod clipboard_window_keys;
@@ -16,6 +17,7 @@ pub mod find_modal;
 pub mod daemon_window;
 pub mod fonts_window;
 pub mod fonts_window_keys;
+mod focus_keys;
 pub mod gui_route;
 pub mod keyconflict;
 pub mod keyconflict_data;
@@ -604,6 +606,9 @@ pub fn handle_wm_paste_event(wm: &mut WindowManager, pasted_text: &str) -> Resul
     if let Some(action) = agents_window::handle_agents_window_paste(wm, pasted_text) {
         return Ok(action);
     }
+    if let Some(action) = browser_keys::handle_browser_paste(wm, pasted_text) {
+        return Ok(action);
+    }
     if !pasted_text.is_empty() {
         wm.active_pane_mut().record_clipboard_event(
             crate::wm::clipboard_registry::ClipboardSource::SystemPaste,
@@ -709,7 +714,7 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
         return Ok(AppAction::Handled);
     }
 
-    if let Some(action) = handle_browser_url_edit_key(wm, key) {
+    if let Some(action) = browser_keys::handle_browser_chrome_key(wm, key) {
         return Ok(action);
     }
 
@@ -733,6 +738,9 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     let km = wm.keymap();
     if let Some(action) = keymap::reserved_global_action(&km, key).or_else(|| km.primary_action(key)) {
         return wm.apply(action);
+    }
+    if let Some(action) = browser_keys::forward_browser_viewport_key(wm, key) {
+        return Ok(action);
     }
 
     // Refresh active pane line discipline before deciding whether F1..F10 / Alt+<key> should pass through to Raw PTY
@@ -761,20 +769,6 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
     }
 
     dispatch_pane_key(wm, key)
-}
-
-/// Routes keys to the browser URL bar editor (active editing, or `Ctrl+L` to start it).
-fn handle_browser_url_edit_key(wm: &mut WindowManager, key: KeyEvent) -> Option<AppAction> {
-    let b = wm.active_pane_mut().browser_canvas_mut()?;
-    if b.is_editing_url() {
-        b.handle_url_edit_key(key);
-        return Some(AppAction::Handled);
-    }
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('l') {
-        b.begin_url_edit();
-        return Some(AppAction::Handled);
-    }
-    None
 }
 
 fn dispatch_pane_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {

@@ -1,8 +1,30 @@
-//! Single-pass VT control sequence scanner and CSI / extended SGR handlers (`ARCH-R04`, `P2.2`).
+//! Framed-chunk dispatch to the VT engine and the CSI / extended SGR side handlers (`ARCH-R04`, `P2.2`).
 
-use super::graphics::strip_apc_and_dcs_envelopes;
-use super::snapshot::{RgbTriplet, UnderlineKind};
+use super::codec::{is_binary_noise_chunk, sanitize_binary_noise_chunk};
+use super::framer::{FrameOutput, SeqKind, StringTerminator};
+use super::snapshot::{LineSizeAttr, RgbTriplet, UnderlineKind};
 use super::VtParser;
+
+const CANVAS_OSC_PREFIX: &[u8] = b"1337;Canvas=";
+/// Most bytes of `OSC 1337;Canvas=` sequences queued for the pane between drains.
+const MAX_PENDING_CANVAS_OSC_BYTES: usize = 1024 * 1024;
+
+/// `true` for sequences whose handler reads engine state, so the engine must be caught up first:
+/// cursor / mode reports (`CSI .. n`, `CSI .. $p`), alternate-screen switches (they select the
+/// Kitty keyboard stack), graphics placements (`DCS`, `APC`) and `ESC` line-size / reset.
+fn needs_engine_sync(kind: SeqKind, body: &[u8]) -> bool {
+    match kind {
+        SeqKind::Dcs | SeqKind::Apc | SeqKind::Esc => true,
+        SeqKind::Csi => match body.split_last() {
+            Some((b'n' | b'p', _)) => true,
+            Some((b'h' | b'l', params)) => params
+                .strip_prefix(b"?")
+                .is_some_and(|p| p.split(|&b| b == b';').any(|m| matches!(m, b"47" | b"1047" | b"1049"))),
+            _ => false,
+        },
+        SeqKind::Osc | SeqKind::TekEnter => false,
+    }
+}
 
 impl VtParser {
     pub(super) fn record_escape_sequence(&mut self, seq: impl Into<String>) {
@@ -12,28 +34,100 @@ impl VtParser {
         self.recent_escape_sequences.push(seq.into());
     }
 
-    /// Scans raw bytes in a single `ESC` (`\x1b`) pass for `CSI` (`\x1b[`), `OSC` (`\x1b]`),
-    /// `DCS` (`\x1bP`), and `APC` (`\x1b_`) control sequences (`P2.2`).
-    pub(super) fn scan_control_sequences(&mut self, bytes: &[u8]) {
-        if !bytes.contains(&0x1b) {
+    /// Runs one framed chunk: engine bytes go to the VT engine, completed sequences to their
+    /// side handler. A handler that reads engine state (cursor, alternate screen, modes) runs
+    /// only after the engine has consumed everything up to and including its sequence, so the
+    /// result does not depend on what else shared the chunk.
+    pub(super) fn process_framed(&mut self, framed: &FrameOutput) {
+        let engine = framed.engine.as_slice();
+        if !self.is_alternate_screen() && is_binary_noise_chunk(engine) {
+            // Random bytes must not trigger handlers; show them as visible glyphs instead.
+            let sanitized = sanitize_binary_noise_chunk(engine);
+            let newline_count = sanitized.iter().filter(|&&b| b == b'\n').count();
+            self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
+            self.append_primary_stream_log(&sanitized);
+            self.csi_count_clamp.reset();
+            self.parser.process(&sanitized);
             return;
         }
-        let text = String::from_utf8_lossy(bytes);
-        for (idx, _) in text.match_indices('\x1b') {
-            let after_esc = &text[idx + 1..];
-            let Some(&kind) = after_esc.as_bytes().first() else {
-                self.osc52_carry.clear();
-                self.osc52_carry.push(0x1b);
-                break;
-            };
-            let payload_rest = &after_esc[1..];
-            match kind {
-                b'[' => self.scan_csi_sequence(payload_rest),
-                b']' => self.scan_osc_sequence(payload_rest),
-                b'P' => self.scan_dcs_sequence(payload_rest),
-                b'_' => self.scan_apc_sequence(payload_rest),
-                _ => {}
+        let mut fed = 0;
+        for seq in &framed.seqs {
+            let body = framed.body(seq);
+            if needs_engine_sync(seq.kind, body) {
+                self.feed_engine(&engine[fed..seq.engine_end]);
+                fed = seq.engine_end;
             }
+            self.dispatch_sequence(seq.kind, seq.terminator, body);
+        }
+        self.feed_engine(&engine[fed..]);
+    }
+
+    fn feed_engine(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        let was_alt = self.is_alternate_screen();
+        let newline_count = bytes.iter().filter(|&&b| b == b'\n').count();
+        self.total_lines_scrolled = self.total_lines_scrolled.saturating_add(newline_count);
+        let normalized = normalize_extended_sgr_for_vt100(bytes);
+        // vt100-ctt does not clamp ICH / IL / SD counts; bound them to the grid first.
+        let (grid_rows, grid_cols) = self.parser.screen().size();
+        let normalized = self.csi_count_clamp.filter(&normalized, grid_rows.max(grid_cols));
+        self.parser.process(&normalized);
+        if !was_alt && !self.is_alternate_screen() {
+            self.append_primary_stream_log(&normalized);
+        }
+    }
+
+    fn dispatch_sequence(&mut self, kind: SeqKind, terminator: StringTerminator, body: &[u8]) {
+        match kind {
+            SeqKind::Csi => {
+                // Always ASCII: the framer drops non-ASCII bytes inside a CSI, as the engine does.
+                if let Ok(csi) = std::str::from_utf8(body) {
+                    self.scan_csi_sequence(csi);
+                }
+            }
+            SeqKind::Osc => {
+                if body.starts_with(CANVAS_OSC_PREFIX) {
+                    self.queue_canvas_osc(body);
+                } else {
+                    self.scan_osc_sequence(&String::from_utf8_lossy(body), terminator);
+                }
+            }
+            SeqKind::Dcs => self.scan_dcs_sequence(&String::from_utf8_lossy(body)),
+            SeqKind::Apc => self.scan_apc_sequence(&String::from_utf8_lossy(body)),
+            SeqKind::Esc => self.apply_esc_sequence(body),
+            SeqKind::TekEnter => self.tektronix.enter_stream_capture(),
+        }
+    }
+
+    /// `ESC # 3..6` (DEC line size, applied to the cursor row) and `ESC c` (RIS).
+    fn apply_esc_sequence(&mut self, body: &[u8]) {
+        let (row, _) = self.parser.screen().cursor_position();
+        match body {
+            b"#3" => {
+                self.line_size_attrs.insert(row, LineSizeAttr::DoubleHeightTop);
+            }
+            b"#4" => {
+                self.line_size_attrs.insert(row, LineSizeAttr::DoubleHeightBottom);
+            }
+            b"#5" => {
+                self.line_size_attrs.remove(&row);
+            }
+            b"#6" => {
+                self.line_size_attrs.insert(row, LineSizeAttr::DoubleWidth);
+            }
+            b"c" => self.line_size_attrs.clear(),
+            _ => {}
+        }
+    }
+
+    /// Queues a complete `OSC 1337;Canvas=` sequence for the pane; dropped once the queue is full.
+    fn queue_canvas_osc(&mut self, body: &[u8]) {
+        if self.pending_canvas_osc.len() + body.len() + 3 <= MAX_PENDING_CANVAS_OSC_BYTES {
+            self.pending_canvas_osc.extend_from_slice(b"\x1b]");
+            self.pending_canvas_osc.extend_from_slice(body);
+            self.pending_canvas_osc.push(0x07);
         }
     }
 
@@ -156,8 +250,12 @@ impl VtParser {
         }
     }
 
-    /// Dispatches a single `CSI` (`\x1b[...`) sequence starting at `csi_rest` (`&text[idx + 2..]`).
+    /// Dispatches one complete `CSI`; `csi_rest` is its parameter, intermediate and final bytes.
     fn scan_csi_sequence(&mut self, csi_rest: &str) {
+        if matches!(csi_rest, "2J" | "3J") {
+            self.line_size_attrs.clear();
+            return;
+        }
         if let Some(rest) = csi_rest.strip_prefix('?') {
             let param_len = rest
                 .chars()
@@ -241,7 +339,8 @@ impl VtParser {
             if after_lt[digits.len()..].starts_with('u') {
                 let count = digits.parse::<usize>().unwrap_or(1).max(1);
                 let stack = self.kitty_keyboard_stack_mut();
-                for _ in 0..count {
+                // Untrusted count: the stack is fully popped after `len` iterations.
+                for _ in 0..count.min(stack.len().max(1)) {
                     if stack.len() > 1 {
                         stack.pop();
                     } else if let Some(first) = stack.first_mut() {
@@ -433,19 +532,14 @@ pub(super) fn split_incomplete_utf8_tail(bytes: &[u8]) -> (&[u8], &[u8]) {
 }
 
 /// Rewrites extended SGR sub-parameters (`4:1..4:5` -> `4`, `4:0` -> `24`, and strips `58;2;r;g;b` / `58:2:...`)
-/// and strips APC (`\x1b_...`) / DCS (`\x1bP...`) envelopes so `vt100_ctt::Parser` applies standard attributes
-/// without dumping raw Kitty/Sixel graphics payloads onto the character grid.
+/// so `vt100_ctt::Parser` applies standard attributes. Input is whole sequences (the framer withholds
+/// partial ones and removes APC / DCS envelopes before this stage).
 pub(super) fn normalize_extended_sgr_for_vt100(bytes: &[u8]) -> Vec<u8> {
     let raw_cow = std::str::from_utf8(bytes)
         .map(std::borrow::Cow::Borrowed)
         .unwrap_or_else(|_| String::from_utf8_lossy(bytes));
     let raw_text = raw_cow.as_ref();
-    let stripped_cow = if raw_text.contains("\x1b_") || raw_text.contains("\x1bP") {
-        std::borrow::Cow::Owned(strip_apc_and_dcs_envelopes(raw_text))
-    } else {
-        std::borrow::Cow::Borrowed(raw_text)
-    };
-    let text = stripped_cow.as_ref();
+    let text = raw_text;
     if !text.contains("\x1b[")
         || (!text.contains("4:") && !text.contains("58") && !text.contains("38:") && !text.contains("48:"))
     {

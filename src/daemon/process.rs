@@ -59,7 +59,9 @@ pub fn probe_or_cleanup_stale_socket(sock_path: &Path) -> bool {
                 if matches!(
                     e.kind(),
                     ErrorKind::ConnectionRefused | ErrorKind::NotFound
-                ) =>
+                )
+                    // macOS reports a leftover non-socket file at the path as ENOTSOCK, Linux as ECONNREFUSED.
+                    || e.raw_os_error() == Some(libc::ENOTSOCK) =>
             {
                 let _ = fs::remove_file(sock_path);
                 false
@@ -96,7 +98,12 @@ pub fn spawn_background_daemon_for_session(session: &str) -> io::Result<PathBuf>
         cmd.process_group(0);
     }
 
-    let _child = cmd.spawn()?;
+    let mut child = cmd.spawn()?;
+    std::thread::Builder::new()
+        .name("daemon-reaper".to_string())
+        .spawn(move || {
+            let _ = child.wait();
+        })?;
     Ok(sock_path)
 }
 

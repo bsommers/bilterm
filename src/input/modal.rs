@@ -131,63 +131,11 @@ pub(super) fn handle_wm_modal_key(
     let is_drawer_toggle_fkey = key.code == KeyCode::F(7)
         && (key.modifiers.is_empty() || key.modifiers == KeyModifiers::ALT);
     if matches!(wm.modal(), crate::wm::Modal::None) && !is_drawer_toggle_fkey {
-        if wm.agents_hud().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_hud::handle_agents_hud_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.command_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::command_window_keys::handle_command_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.clipboard_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::clipboard_window_keys::handle_clipboard_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.traffic_monitor().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::traffic_monitor_keys::handle_traffic_monitor_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.fonts_window().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::fonts_window_keys::handle_fonts_window_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.daemon_window().captures_input()
-            && !wm.is_leader_pending()
-            && wm.daemon_window_key(key)
-        {
-            return Ok(Some(AppAction::Handled));
-        }
-        if wm.script_studio().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::script_studio_keys::handle_script_studio_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.agents_list().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_list_keys::handle_agents_list_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.session_map().captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::session_map_keys::handle_session_map_key(wm, key)
-        {
-            return Ok(Some(action));
-        }
-        if wm.agents_window_captures_input()
-            && !wm.is_leader_pending()
-            && let Some(action) = super::agents_window::handle_agents_window_key(wm, key)
+        // One keyboard owner (`WindowManager::keyboard_owner`): the focus-cycle chord first, then
+        // the side window that holds the keyboard.
+        wm.settle_keyboard_owner();
+        if let Some(action) = super::focus_keys::handle_focus_chord(wm, key)
+            .or_else(|| super::focus_keys::dispatch_side_window_key(wm, key))
         {
             return Ok(Some(action));
         }
@@ -274,11 +222,11 @@ pub(super) fn handle_wm_modal_key(
                         crate::action::DrawerPreviewOp::Off,
                     ));
                 } else {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                 }
             }
             KeyCode::Tab | KeyCode::Right => {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
             }
             KeyCode::Down
                 if key.modifiers.contains(KeyModifiers::SHIFT)
@@ -312,7 +260,7 @@ pub(super) fn handle_wm_modal_key(
             }
             KeyCode::Char('P') => {
                 let target = wm.selected_drawer_session_name();
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                 wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                 wm.active_pane_mut()
@@ -337,7 +285,7 @@ pub(super) fn handle_wm_modal_key(
                         _ => None,
                     });
                 if let Some(pid) = pane_target {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                     wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                     wm.active_pane_mut()
@@ -346,7 +294,7 @@ pub(super) fn handle_wm_modal_key(
                     wm.open_window_rename_dialog(Some(pid));
                 } else {
                     let target = wm.selected_drawer_session_name();
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                     wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                     wm.active_pane_mut()
@@ -356,7 +304,7 @@ pub(super) fn handle_wm_modal_key(
                 }
             }
             KeyCode::Char(':') => {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                 wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                 wm.active_pane_mut().prompt_mut().set_text(":");
@@ -378,10 +326,13 @@ pub(super) fn handle_wm_modal_key(
                         crate::action::DrawerPreviewOp::Commit,
                     ));
                 } else {
-                    wm.drawer_activate_selected(false);
+                    // Selecting hands the keyboard to the pane in one step; Space only peeks.
+                    wm.drawer_jump_to_selected();
                 }
             }
-            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Char(' ') => {
+                wm.drawer_activate_selected(false);
+            }
             KeyCode::Char('n') | KeyCode::Char('+') | KeyCode::Char('c') | KeyCode::Char('w') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
                     wm.sync_drawer_selection_to_active_pane();

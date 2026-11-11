@@ -55,20 +55,32 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             }
             false
         }
+        // An explicit pane-focus command hands the keyboard to the pane: the drawer and a pinned
+        // MCP console are released too (the floating windows already are, FOCUS-01).
         ColonCommand::DeckNext => {
             wm.shuffle_deck_next();
+            wm.release_keyboard();
             false
         }
         ColonCommand::DeckPrev => {
             wm.shuffle_deck_prev();
+            wm.release_keyboard();
             false
         }
         ColonCommand::FocusPane(id) => {
-            wm.focus_and_raise(id);
+            if wm.focus_and_raise(id) || wm.pane(id).is_some() {
+                wm.release_keyboard();
+            }
             false
         }
         ColonCommand::PaneFocusDirection { dx, dy } => {
             let _ = wm.focus_direction(dx, dy);
+            wm.release_keyboard();
+            false
+        }
+        ColonCommand::KeyboardFocus(op) => {
+            let msg = wm.keyboard_focus_apply(op);
+            wm.active_pane_mut().set_status_message(Some(msg));
             false
         }
         ColonCommand::SelectCommand(ref subcmd) => {
@@ -325,8 +337,9 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             };
             match wm.restore_session(&target) {
                 Ok(count) => {
+                    let note = wm.take_restore_note().map(|n| format!(" — {n}")).unwrap_or_default();
                     wm.active_pane_mut().set_status_message(
-                        Some(format!("Restored session '{target}' ({count} pane(s))")),
+                        Some(format!("Restored session '{target}' ({count} pane(s)){note}")),
                     );
                 }
                 Err(err) => {
@@ -914,7 +927,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
                 mode_opt.as_deref(),
             );
             wm.active_pane_mut().set_status_message(Some(format!(
-                "Visual Style: {label} (toggle via F11, :modern, :liquid, :snazzy, :glass, or :style)"
+                "Visual Style: {label} (toggle via F11, :modern, :liquid, :tron, :snazzy, :glass, or :style)"
             )));
             false
         }

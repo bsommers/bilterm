@@ -74,6 +74,9 @@ Use named persistent command-history session (overrides \fBhistory_session\fR).
 \fB\-c\fR, \fB\-\-config\fR \fIPATH.toml\fR
 Load configuration from custom TOML file path.
 .TP
+\fB\-\-tron\fR
+Start in the TRON look: black canvas, neon cyan light\-cycle borders, orange accent, pale cyan text. Same as \fB:tron on\fR or \fB[appearance] profile = "tron"\fR in the config file.
+.TP
 \fB\-C\fR, \fB\-\-completions\fR \fIbash|zsh|fish\fR
 Print shell completion script for the specified shell to standard output.
 .TP
@@ -128,6 +131,12 @@ Enter keyboard-driven Vi Copy Mode & rectangular block selection.
 .TP
 \fBAlt+L\fR / \fB:lock\fR
 Toggle Read-Only Protected 3270 Field Lock (\fBPROT\fR).
+.TP
+\fBF11\fR / \fB:style\fR
+Cycle the visual style: Classic, Snazzy, Glass, Snazzy+Glass, Modern, Liquid Glass, TRON, then Classic again. \fB:style tron\fR picks TRON directly.
+.TP
+\fB:tron\fR [\fBon\fR|\fBoff\fR|\fBtoggle\fR]
+Switch the TRON look on or off (bare \fB:tron\fR toggles). \fBoff\fR restores the look that was active when TRON was switched on, or Classic when TRON came from \fB\-\-tron\fR, the config file or \fB:appearance tron\fR.
 .TP
 \fBCtrl+Q\fR / \fB:quit\fR
 Cleanly exit Bilterm.

@@ -647,7 +647,8 @@ fn mcp_reparent_keys_graft_and_promote_nodes() {
         let mut w = mcp_tree();
         press(&mut w, ch('n')); // give 'main' a child to reparent against
         press(&mut w, key);
-        assert!(status(&w).starts_with("MCP: Grafted 'main' under"), "{key:?}: {}", status(&w));
+        // 'main' cannot go under its own child: the cycle is rejected and reported, not claimed.
+        assert!(status(&w).starts_with("MCP: cannot reparent 'main': cycle detected"), "{key:?}: {}", status(&w));
     }
     for key in [ch('<'), ch('u'), ch('U'), km(KeyCode::Left, KeyModifiers::ALT)] {
         let mut w = mcp_tree();

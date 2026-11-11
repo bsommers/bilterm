@@ -257,7 +257,7 @@ pub(super) fn parse_visual_colon_command(
                 }
             }
             _ => Some(Err(
-                "Usage: :appearance [legacy|obsidian|midnight|arctic|liquid|amber|synthwave|solarized|list|select <name>|duplicate <src> <new>|modify <k> <v>|reset|import <path>|export <path>|save]"
+                "Usage: :appearance [legacy|obsidian|midnight|arctic|liquid|amber|synthwave|solarized|tron|list|select <name>|duplicate <src> <new>|modify <k> <v>|reset|import <path>|export <path>|save]"
                     .to_string(),
             )),
         },
@@ -446,6 +446,9 @@ pub(super) fn parse_visual_colon_command(
             )),
             _ => Some(Err("Usage: :liquid [on | off | toggle]".to_string())),
         },
+        "tron" => Some(crate::ui::design::tron::parse_tron_arg(parts.get(1).copied()).map(|t| {
+            ColonCommand::VisualStyleCommand(Some(t.to_string()))
+        })),
         "style" | "visual" | "visual-style" => match parts.get(1).copied() {
             None | Some("cycle" | "next" | "toggle") => {
                 Some(Ok(ColonCommand::VisualStyleCommand(None)))
@@ -482,10 +485,12 @@ pub(super) fn parse_visual_colon_command(
                 | "liquid"
                 | "liquid-glass"
                 | "liquidglass"
-                | "liquid-off"),
+                | "liquid-off"
+                | "tron"
+                | "tron-off"),
             ) => Some(Ok(ColonCommand::VisualStyleCommand(Some(tok.to_string())))),
             _ => Some(Err(
-                "Usage: :style [classic | snazzy | glass | snazzy-glass | modern | liquid | cycle]".to_string(),
+                "Usage: :style [classic | snazzy | glass | snazzy-glass | modern | liquid | tron | cycle]".to_string(),
             )),
         },
         "fontsize" | "textsize" => match parts.get(1).copied() {
@@ -790,7 +795,7 @@ fn parse_focalzoom_command(parts: &[&str]) -> Option<Result<ColonCommand, String
     }))
 }
 
-/// Parses the navigator operations of `:drawer` (`next|prev|enter|row|fold|scroll|widen|new-session|
+/// Parses the navigator operations of `:drawer` (`next|prev|enter|raise|row|fold|scroll|widen|new-session|
 /// new-pane|rename|close-pane|menu|comms|comms-focus`); `None` for every other verb. `:drawer close` stays the classic minimize.
 fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     use crate::wm::drawer::DrawerNavOp as Op;
@@ -800,6 +805,7 @@ fn parse_drawer_nav(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     let op = match parts.get(1).copied()? {
         "fold" => Op::Fold,
         "enter" | "activate" => Op::Activate,
+        "raise" => Op::Raise,
         "next" | "down" => Op::Next,
         "prev" | "up" => Op::Prev,
         "row" => match parts.get(2).and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {

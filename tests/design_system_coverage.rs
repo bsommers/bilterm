@@ -153,7 +153,7 @@ fn sanitized_clamps_ranges() {
 #[test]
 fn profile_names_and_labels() {
     use AppearanceProfile::*;
-    assert_eq!(AppearanceProfile::ALL.len(), 8);
+    assert_eq!(AppearanceProfile::ALL.len(), 9);
     for (n, p) in [
         ("legacy", Legacy),
         ("classic", Legacy),

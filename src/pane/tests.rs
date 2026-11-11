@@ -153,7 +153,6 @@ fn remote_input_tap_collects_and_caps() {
 
     // Capped at REMOTE_INPUT_CAP between drains; the excess is dropped.
     let cap = crate::tmux::link::REMOTE_INPUT_CAP;
-    assert_eq!(cap, 4096);
     pane.write_to_pty(&b"a".repeat(cap - 10)).unwrap();
     pane.write_to_pty(&b"b".repeat(100)).unwrap();
     pane.write_to_pty(b"more").unwrap();

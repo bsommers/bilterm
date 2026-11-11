@@ -85,7 +85,7 @@ use HookStatus::Done;
 /// Plan 64-02 flipped entries to `Done`; MCP stdio (H26/H27) is `Deferred` to 64-03.
 pub const HOOK_MANIFEST: &[(&str, &str, &str, HookStatus)] = &[
     ("src/pty/mod.rs", "match reader.read(&mut buf) {", ".rx(", Done),
-    ("src/pty/mod.rs", "writer.write_all(bytes)?;", ".tx(", Done),
+    ("src/pty/writer.rs", "let written = sink.write_all(&chunk).and_then(|()| sink.flush());", ".tx(", Done),
     ("src/vt/worker.rs", "match pty_reader.read(&mut buf) {", ".rx(", Done),
     ("src/vt/worker.rs", "let _ = writer.write_all(&data);", ".tx(", Done),
     ("src/vt/worker.rs", "let _ = writer.write_all(&resp);", ".tx(", Done),
@@ -113,7 +113,7 @@ pub const HOOK_MANIFEST: &[(&str, &str, &str, HookStatus)] = &[
     ("src/api/mcp.rs", "stdout.write_all(format!(\"{resp}\\n\").as_bytes()).await?;", ".tx(", Done),
     ("src/app.rs", "out.write_all(wire.as_bytes())?;", ".tx(", Done),
     ("src/main.rs", "let backend = CrosstermBackend::new(bilterm::app::CountingStdout::new(", "Counting", Done),
-    ("src/app.rs", "let mut reader = EventStream::new();", "input_tap", Done),
+    ("src/app.rs", "let reader = EventStream::new();", "input_tap", Done),
     ("src/clipboard.rs", "let _ = stdin.write_all(text.as_bytes());", "traffic_tap()", Done),
     ("src/clipboard.rs", "let _ = out.read_to_end(&mut buf);", "traffic_tap()", Done),
     ("src/stt/provider.rs", ".write_all(&request)", ".tx(", Done),
@@ -132,6 +132,8 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/stt/audio.rs", "microphone capture child process, not terminal traffic"),
     ("src/stt/mod.rs", "connect-only reachability probe of the STT endpoint in VoicePreflight; no bytes are exchanged and the stream is dropped"),
     ("src/pane/video_canvas/ffmpeg.rs", "video decode child process pipes, not terminal traffic"),
+    ("src/pane/browser_canvas/cdp_launch.rs", "headless Chrome child process and its DevTools pipe (fd 3/4), not terminal traffic"),
+    ("src/pane/browser_canvas/cdp_session.rs", "reader/writer threads on the Chrome DevTools pipe, not terminal traffic"),
     ("src/swarm/heal.rs", "self-heal verify-command child process pipes, not terminal traffic"),
     ("src/daemon/mod.rs", "connect-only liveness probe of the daemon socket; no bytes are exchanged and the stream is dropped (64-02 Task 0 audit)"),
     ("src/swarm/heal.rs", "verify_cmd child-process stdout/stderr pipes for the Phase 69 self-heal loop, not terminal traffic"),

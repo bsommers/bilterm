@@ -172,7 +172,7 @@ fn vertical_navigation_keys_move_selection_with_wraparound_and_clamping() {
 }
 
 #[test]
-fn enter_and_space_activate_selected_pane_and_keep_drawer_focus() {
+fn enter_hands_the_keyboard_to_the_selected_pane_and_space_keeps_drawer_focus() {
     let mut wm = three_pane_focused();
     key(&mut wm, KeyCode::Char('g'));
     key(&mut wm, KeyCode::Down);
@@ -180,11 +180,14 @@ fn enter_and_space_activate_selected_pane_and_keep_drawer_focus() {
     assert_eq!(wm.selected_drawer_pane_id(), Some(1));
     key(&mut wm, KeyCode::Enter);
     assert_eq!(wm.active_pane_id(), 1);
-    assert!(wm.drawer().focused);
+    // FOCUS-01: Enter hands the keyboard to the pane; the drawer stays open.
+    assert!(!wm.drawer().focused && wm.drawer().open);
     assert!(status(&wm).contains("Selected Pane #1"));
+    wm.focus_drawer();
     key(&mut wm, KeyCode::Down);
     key(&mut wm, KeyCode::Char(' '));
     assert_eq!(wm.active_pane_id(), 2);
+    assert!(wm.drawer().focused, "Space raises and keeps browsing");
 }
 
 #[test]
@@ -804,8 +807,11 @@ fn click_in_list_selects_and_activates_row_and_click_outside_unfocuses() {
     mouse(&mut wm, MouseEventKind::Down(MouseButton::Left), 5, y, KeyModifiers::NONE, AREA);
     assert_eq!(wm.drawer().selected_index, 2);
     assert_eq!(wm.active_pane_id(), 1);
-    assert!(wm.drawer().focused);
+    // FOCUS-01: one click on a pane row hands that pane the keyboard; the drawer stays open.
+    assert!(!wm.drawer().focused && wm.drawer().open);
     // click outside drawer unfocuses
+    wm.focus_drawer();
+    assert!(wm.drawer().focused);
     mouse(&mut wm, MouseEventKind::Down(MouseButton::Left), 80, 10, KeyModifiers::NONE, AREA);
     assert!(!wm.drawer().focused);
 }

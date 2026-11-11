@@ -21,8 +21,16 @@ impl AutomationControlPlane {
         };
         crate::colon_command::execute_media::execute_browser_command(&mut self.wm, op);
 
+        // A URL refused by the policy opens nothing (or leaves a notice on an open canvas).
+        let refused = match self.wm.pane(target_id).and_then(|p| p.browser_canvas()) {
+            Some(b) => b.notice().map(str::to_string),
+            None => Some("browser canvas did not open (URL refused)".to_string()),
+        };
         let mut res = BTreeMap::new();
-        res.insert("ok".to_string(), JsonValue::Bool(true));
+        res.insert("ok".to_string(), JsonValue::Bool(refused.is_none()));
+        if let Some(why) = refused {
+            res.insert("error".to_string(), JsonValue::String(why));
+        }
         res.insert("url".to_string(), JsonValue::String(url.to_string()));
         res.insert("pane_id".to_string(), JsonValue::Number(target_id as i64));
         Ok(JsonValue::Object(res))

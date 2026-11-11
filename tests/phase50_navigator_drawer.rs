@@ -661,6 +661,9 @@ fn keys_enter_and_space_focus_selected_pane() {
         wm.drawer_mut().selected_index = 3;
         press(&mut wm, KeyCode::Enter);
         assert_eq!(wm.active_pane_id(), 3);
+        // Enter hands the keyboard to the pane (FOCUS-01); the drawer stays open.
+        assert!(!wm.drawer().focused && wm.drawer().open);
+        run_colon(&mut wm, ":drawer focus");
         wm.drawer_mut().selected_index = 2;
         press(&mut wm, KeyCode::Enter);
         assert_eq!(wm.active_pane_id(), 2);
@@ -873,6 +876,7 @@ fn drawer_nav_colon_form(op: &DrawerNavOp) -> String {
         DrawerNavOp::NextAttention => ":drawer attention".into(),
         DrawerNavOp::Fold => ":drawer fold".into(),
         DrawerNavOp::Activate => ":drawer enter".into(),
+        DrawerNavOp::Raise => ":drawer raise".into(),
         DrawerNavOp::Next => ":drawer next".into(),
         DrawerNavOp::Prev => ":drawer prev".into(),
         DrawerNavOp::Row(i) => format!(":drawer row {}", i + 1),
@@ -905,6 +909,7 @@ fn all_nav_ops() -> Vec<DrawerNavOp> {
         DrawerNavOp::NextAttention,
         DrawerNavOp::Fold,
         DrawerNavOp::Activate,
+        DrawerNavOp::Raise,
         DrawerNavOp::Next,
         DrawerNavOp::Prev,
         DrawerNavOp::Row(2),

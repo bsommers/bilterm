@@ -48,10 +48,10 @@ pub fn session_map_action(key: KeyEvent, holding: bool, pinned: bool) -> Option<
     if key.code == KeyCode::Esc {
         return if holding {
             Some(Action::SessionMap(SessionMapOp::CancelDrag))
-        } else if pinned {
-            Some(Action::SessionMap(SessionMapOp::Blur))
         } else {
-            Some(Action::SessionMap(SessionMapOp::Dismiss))
+            // Esc releases the keyboard and leaves the map open, pinned or not (FOCUS-01).
+            let _ = pinned;
+            Some(Action::SessionMap(SessionMapOp::Blur))
         };
     }
     if key.code == KeyCode::Enter {

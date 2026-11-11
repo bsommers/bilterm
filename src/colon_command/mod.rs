@@ -29,6 +29,7 @@ pub mod parse_keys;
 mod parse_link;
 pub mod parse_media;
 mod parse_script;
+mod parse_focus;
 mod parse_traffic;
 mod parse_coords;
 mod parse_context;

@@ -14,8 +14,11 @@
 ## 1. Building & Launching Bilterm (TUI & Native `--gui` Mode)
 
 ```bash
-# Option A: Plain binary installer (Linux / macOS)
-./scripts/install.sh            # installs to ~/.local/bin (or pass --cargo, --global, --prefix <DIR>)
+# Option A: Plain binary installer (Linux / macOS) — downloads a prebuilt release binary
+curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash
+./scripts/install.sh            # from a checkout: uses target/release/bilterm or builds; --binary-only downloads instead
+                                # installs to ~/.local/bin (or pass --cargo, --global, --prefix <DIR>)
+                                # --tag <TAG> pins a release; --from-source builds with cargo (needs Rust)
 bilterm -v
 
 # Option B: Fresh clone developer setup (installs C toolchain, rustup, Rust 1.90, builds & installs)

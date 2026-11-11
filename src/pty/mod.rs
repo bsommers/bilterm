@@ -1,10 +1,13 @@
+mod exit_report;
 pub mod line_discipline;
 pub mod shell_integration;
+pub mod wake;
+pub mod writer;
 
 pub use line_discipline::LineDisciplineState;
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -136,7 +139,10 @@ pub enum PtyEvent {
 
 /// Live cross-platform PTY session wrapping `portable-pty` with deduplicated `SIGWINCH` resizing.
 pub struct PtySession {
-    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    /// Input queue drained by this PTY's writer thread; writes never block the caller.
+    writer: Arc<writer::PtyWriter>,
+    /// `drain_events` has handed out a `PtyEvent::Exited` (the reader's or a synthesised one).
+    exit_reported: bool,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
     output_rx: mpsc::Receiver<PtyEvent>,
@@ -220,6 +226,8 @@ impl PtySession {
                             {
                                 break;
                             }
+                            // Wake the UI loop now; it must not wait for its next timer tick.
+                            wake::notify_output();
                         }
                         Err(_) => {
                             let _ = tx.blocking_send(PtyEvent::Exited(None));
@@ -227,12 +235,16 @@ impl PtySession {
                         }
                     }
                 }
+                wake::notify_output();
             })
             .map_err(BiltermError::Io)?;
 
+        let writer = writer::PtyWriter::spawn(writer, traffic.clone()).map_err(BiltermError::Io)?;
+
         Ok(Self {
             master: Mutex::new(Some(pair.master)),
-            writer: Mutex::new(Some(writer)),
+            writer: Arc::new(writer),
+            exit_reported: false,
             child: Mutex::new(Some(child)),
             output_rx: rx,
             current_size: Mutex::new((initial_rows, initial_cols)),
@@ -249,18 +261,31 @@ impl PtySession {
         &self.traffic
     }
 
-    /// Writes raw bytes to the PTY master input stream and flushes immediately.
+    /// Queues raw bytes for the PTY master and returns at once: the blocking write happens on
+    /// this PTY's writer thread, in call order (see [`writer`]).
+    ///
+    /// `Err` when the PTY write side has failed, or when the bytes would push the unwritten
+    /// backlog past [`writer::MAX_QUEUED_INPUT_BYTES`] (the child is not reading); the write is
+    /// then refused whole and the caller is expected to show the error.
     pub fn write_all(&self, bytes: &[u8]) -> Result<()> {
-        let mut guard = self
-            .writer
-            .lock()
-            .map_err(|_| BiltermError::Pty("PTY writer mutex poisoned".to_string()))?;
-        if let Some(writer) = guard.as_mut() {
-            writer.write_all(bytes)?;
-            self.traffic.tx(bytes.len());
-            writer.flush()?;
-        }
+        self.writer.enqueue(bytes)?;
+        wake::note_input();
         Ok(())
+    }
+
+    /// Bytes accepted by `write_all` that the child has not been given yet.
+    pub fn pending_input_bytes(&self) -> usize {
+        self.writer.pending_bytes()
+    }
+
+    /// Total bytes `write_all` refused because the backlog was full.
+    pub fn rejected_input_bytes(&self) -> u64 {
+        self.writer.rejected_bytes()
+    }
+
+    /// Observer for the writer thread's lifetime (it must end when the session is dropped).
+    pub fn writer_probe(&self) -> writer::WriterProbe {
+        self.writer.probe()
     }
 
     /// Resizes the PTY only if `(rows, cols)` changed, preventing `SIGWINCH` storms when
@@ -358,21 +383,32 @@ impl PtySession {
                 Err(_) => break,
             }
         }
+        let drained_all = events.len() < MAX_EVENTS_PER_POLL;
+        let failure = if drained_all && !self.exit_reported { self.writer.failure() } else { None };
+        if exit_report::settle(&mut events, &mut self.exit_reported, failure.as_deref()) {
+            tracing::warn!(error = ?failure, pid = ?self.child_pid, "PTY write failed; reporting the pane as exited");
+        }
         events
     }
 }
+
+/// How long the reaper lets already-accepted input reach the child before killing it.
+const CLOSE_FLUSH_PATIENCE: std::time::Duration = std::time::Duration::from_millis(250);
 
 impl Drop for PtySession {
     fn drop(&mut self) {
         self.output_rx.close();
         while self.output_rx.try_recv().is_ok() {}
-        let writer = self.writer.lock().ok().and_then(|mut g| g.take());
+        let writer = self.writer.clone();
         let child = self.child.lock().ok().and_then(|mut g| g.take());
         let master = self.master.lock().ok().and_then(|mut g| g.take());
         let _ = thread::Builder::new()
             .name("bilterm-pty-reaper".to_string())
             .spawn(move || {
-                drop(writer);
+                // Input written just before the drop (a final command) still reaches a child
+                // that is reading; a child that is not reading costs at most this wait.
+                writer.wait_drained(CLOSE_FLUSH_PATIENCE);
+                writer.close();
                 if let Some(mut c) = child {
                     let _ = c.kill();
                     let _ = c.wait();

@@ -99,7 +99,8 @@ pub fn clipboard_window_action(key: KeyEvent, search_focused: bool) -> Option<Ac
         KeyCode::Char('[') => act(ClipboardWindowOp::Scale(-10)),
         KeyCode::Char(']') => act(ClipboardWindowOp::Scale(10)),
         KeyCode::Backspace => act(ClipboardWindowOp::SearchBackspace),
-        KeyCode::Esc | KeyCode::Char('q') => act(ClipboardWindowOp::Dismiss),
+        KeyCode::Esc => act(ClipboardWindowOp::Blur),
+        KeyCode::Char('q') => act(ClipboardWindowOp::Dismiss),
         _ => None,
     }
 }

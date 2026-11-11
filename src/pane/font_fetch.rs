@@ -126,7 +126,7 @@ pub fn install_google_font(raw: &str) -> Result<String, String> {
     });
 
     let dest_dir = default_custom_fonts_dir().ok_or_else(|| "Cannot determine fonts directory".to_string())?;
-    crate::secure_fs::ensure_private_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
+    ensure_fonts_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
 
     let file_stem = family.replace(' ', "_");
     let dest_path = dest_dir.join(format!("{file_stem}.ttf"));
@@ -157,7 +157,7 @@ pub fn install_font_source(raw: &str) -> Result<String, String> {
     }
     if raw.starts_with("http://") || raw.starts_with("https://") {
         let dest_dir = default_custom_fonts_dir().ok_or_else(|| "Cannot determine fonts directory".to_string())?;
-        crate::secure_fs::ensure_private_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
+        ensure_fonts_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
 
         if raw.split('?').next().unwrap_or(raw).ends_with(".zip") {
             let temp_zip = dest_dir.join(format!(".download-{}.zip", std::process::id()));
@@ -197,11 +197,20 @@ pub fn install_font_source(raw: &str) -> Result<String, String> {
     let path = expand_tilde(raw);
     if path.extension().and_then(|e| e.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("zip")) {
         let dest_dir = default_custom_fonts_dir().ok_or_else(|| "Cannot determine fonts directory".to_string())?;
-        crate::secure_fs::ensure_private_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
+        ensure_fonts_dir(&dest_dir).map_err(|e| format!("Cannot create fonts directory: {e}"))?;
         return install_zip_archive(&path, &dest_dir);
     }
 
     register_custom_font_file(&path)
+}
+
+/// Creates the fonts directory on a fresh profile (its `bilterm/` parent may not exist yet), then
+/// applies the usual private-directory checks (owner, 0700, not a symlink) to the directory itself.
+fn ensure_fonts_dir(dir: &Path) -> std::io::Result<()> {
+    if let Some(parent) = dir.parent() {
+        crate::secure_fs::create_private_dir_all(parent)?;
+    }
+    crate::secure_fs::ensure_private_dir(dir)
 }
 
 /// Unzips a font archive into a private staging directory, moves valid font files to `dest_dir`,

@@ -3,6 +3,7 @@ use bilterm::action::Action;
 use bilterm::colon_command::parse_colon_command;
 
 fn sw(wm: &mut WindowManager, op: SwarmOp) -> Result<bilterm::api::json::JsonValue, String> {
+    // `apply` only reports failures on the status bar; `apply_automation` (the RPC path) returns them as `Err`.
     wm.apply_automation(Action::Swarm(op), None)?;
     Ok(bilterm::api::json::JsonValue::parse(&wm.take_command_data().unwrap_or_default()).unwrap_or(bilterm::api::json::JsonValue::Null))
 }

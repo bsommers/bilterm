@@ -66,6 +66,68 @@ pub fn wrap_tmux_dcs_passthrough(seq: &str) -> String {
     out
 }
 
+/// Cohen–Sutherland clip of segment `a -> b` to the axis-aligned box `min..=max`; `None` when the
+/// segment misses the box. A returned endpoint always lies inside the box (a clipped coordinate is
+/// set to the boundary exactly, so astronomically large inputs cannot leak through rounding).
+/// Rasterizers use it so scene coordinates (untrusted pane output) never drive a scan longer than
+/// the canvas.
+pub(crate) fn clip_segment(
+    mut a: (f64, f64),
+    mut b: (f64, f64),
+    min: (f64, f64),
+    max: (f64, f64),
+) -> Option<((f64, f64), (f64, f64))> {
+    // Non-finite input is never accepted (finite `f32`-range input keeps every step below finite).
+    if ![a.0, a.1, b.0, b.1].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let outcode = |p: (f64, f64)| -> u8 {
+        u8::from(p.0 < min.0)
+            | (u8::from(p.0 > max.0) << 1)
+            | (u8::from(p.1 < min.1) << 2)
+            | (u8::from(p.1 > max.1) << 3)
+    };
+    // Exact arithmetic needs at most four passes; the cap only guards against rounding ping-pong.
+    for _ in 0..8 {
+        let (ca, cb) = (outcode(a), outcode(b));
+        if ca | cb == 0 {
+            return Some((a, b));
+        }
+        if ca & cb != 0 {
+            return None;
+        }
+        let c = if ca != 0 { ca } else { cb };
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let p = if c & 1 != 0 {
+            (min.0, a.1 + dy * ((min.0 - a.0) / dx))
+        } else if c & 2 != 0 {
+            (max.0, a.1 + dy * ((max.0 - a.0) / dx))
+        } else if c & 4 != 0 {
+            (a.0 + dx * ((min.1 - a.1) / dy), min.1)
+        } else {
+            (a.0 + dx * ((max.1 - a.1) / dy), max.1)
+        };
+        if ca != 0 {
+            a = p;
+        } else {
+            b = p;
+        }
+    }
+    None
+}
+
+/// Sub-range of `0..len` whose offsets `i` put `origin + i` inside `0..extent`, so blit loops visit
+/// only on-canvas pixels however large `len` or far away `origin` is.
+pub(crate) fn visible_span(origin: i32, len: i32, extent: usize) -> std::ops::Range<i32> {
+    let origin = i64::from(origin);
+    let lo = (-origin).max(0);
+    let hi = (i64::try_from(extent).unwrap_or(i64::MAX) - origin).min(i64::from(len));
+    match (i32::try_from(lo), i32::try_from(hi)) {
+        (Ok(lo), Ok(hi)) if lo < hi => lo..hi,
+        _ => 0..0,
+    }
+}
+
 /// High-resolution anti-aliased RGBA pixel framebuffer (`CANV-02`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PixelCanvasBuffer {
@@ -140,6 +202,24 @@ impl PixelCanvasBuffer {
         rgb: (u8, u8, u8),
         alpha: f32,
     ) {
+        if !(x0.is_finite() && y0.is_finite() && x1.is_finite() && y1.is_finite()) {
+            return;
+        }
+        // A segment reaching more than one canvas extent outside the buffer is clipped first, so the
+        // scan below is bounded by the canvas size; nearer segments take the unchanged path.
+        let (w, h) = (f64::from(self.width), f64::from(self.height));
+        let far = |v: f32, extent: f64| f64::from(v) < -extent || f64::from(v) > 2.0 * extent;
+        if far(x0, w) || far(x1, w) || far(y0, h) || far(y1, h) {
+            let Some((a, b)) = clip_segment(
+                (f64::from(x0), f64::from(y0)),
+                (f64::from(x1), f64::from(y1)),
+                (-w, -h),
+                (2.0 * w, 2.0 * h),
+            ) else {
+                return;
+            };
+            (x0, y0, x1, y1) = (a.0 as f32, a.1 as f32, b.0 as f32, b.1 as f32);
+        }
         let steep = (y1 - y0).abs() > (x1 - x0).abs();
         if steep {
             std::mem::swap(&mut x0, &mut y0);
@@ -208,11 +288,16 @@ impl PixelCanvasBuffer {
         filled: bool,
         rgb: (u8, u8, u8),
     ) {
+        if !(cx.is_finite() && cy.is_finite() && radius.is_finite()) {
+            return;
+        }
         let r = radius.max(1.0);
-        let min_x = (cx - r - 2.0).floor().max(0.0) as i32;
-        let max_x = (cx + r + 2.0).ceil().min(self.width as f32 - 1.0) as i32;
-        let min_y = (cy - r - 2.0).floor().max(0.0) as i32;
-        let max_y = (cy + r + 2.0).ceil().min(self.height as f32 - 1.0) as i32;
+        // Scan only the intersection of the bounding box and the canvas (both ends clamped).
+        let (w_max, h_max) = (self.width as f32 - 1.0, self.height as f32 - 1.0);
+        let min_x = (cx - r - 2.0).floor().clamp(0.0, w_max + 1.0) as i32;
+        let max_x = (cx + r + 2.0).ceil().clamp(-1.0, w_max) as i32;
+        let min_y = (cy - r - 2.0).floor().clamp(0.0, h_max + 1.0) as i32;
+        let max_y = (cy + r + 2.0).ceil().clamp(-1.0, h_max) as i32;
 
         for y in min_y..=max_y {
             for x in min_x..=max_x {
@@ -241,6 +326,9 @@ impl PixelCanvasBuffer {
         rgb: (u8, u8, u8),
         alpha: f32,
     ) {
+        if !(x.is_finite() && y.is_finite() && w.is_finite() && h.is_finite()) {
+            return;
+        }
         if filled {
             let x0 = x.round().max(0.0) as i32;
             let y0 = y.round().max(0.0) as i32;
@@ -351,8 +439,9 @@ impl PixelCanvasBuffer {
                 let max_v = values.iter().copied().fold(1.0f32, f32::max);
                 let cell_w = (w / (*cols as f32)).max(1.0);
                 let cell_h = (h / (*rows as f32)).max(1.0);
-                for r in 0..*rows {
-                    for c in 0..*cols {
+                // Cells are at least 1 px, so rows/cols beyond the buffer size are off-canvas.
+                for r in 0..(*rows).min(self.height as usize) {
+                    for c in 0..(*cols).min(self.width as usize) {
                         let v = values.get(r * cols + c).copied().unwrap_or(0.0);
                         let norm = (v / max_v).clamp(0.0, 1.0);
                         let rgb = (
@@ -392,12 +481,13 @@ impl PixelCanvasBuffer {
         let ox = (img.pan_x as f32 * scale_x).round() as i32;
         let oy = (img.pan_y as f32 * scale_y).round() as i32;
 
-        for dy in 0..dst_h {
+        // Only destination pixels that land on the buffer are visited (a zoomed image can be far larger).
+        for dy in visible_span(oy, dst_h, self.height as usize) {
             let fy = ((dy as f32) / (dst_h as f32)) * f32::from(img.height.saturating_sub(1));
             let y0 = (fy.floor() as u16).min(img.height - 1);
             let y1 = (y0 + 1).min(img.height - 1);
             let wy = fy - f32::from(y0);
-            for dx in 0..dst_w {
+            for dx in visible_span(ox, dst_w, self.width as usize) {
                 let fx = ((dx as f32) / (dst_w as f32)) * f32::from(img.width.saturating_sub(1));
                 let x0 = (fx.floor() as u16).min(img.width - 1);
                 let x1 = (x0 + 1).min(img.width - 1);

@@ -1,12 +1,14 @@
-//! Single-pass OSC, DCS, and APC control sequence handlers (`ARCH-R04`, `P2.2`).
+//! OSC, DCS, and APC handlers; each receives one complete sequence body from the framer (`ARCH-R04`, `P2.2`).
 
 use std::path::PathBuf;
 use std::time::Instant;
 
 use super::codec::{
     base64_decode, hex_decode_ascii, hex_encode_ascii, is_forwardable_osc52_write,
+    truncate_on_char_boundary,
 };
 use super::detect::Osc8Hyperlink;
+use super::framer::StringTerminator;
 use super::graphics::{
     GraphicProtocol, MAX_GRAPHIC_PLACEMENTS, MAX_KITTY_PAYLOAD_B64_BYTES, TerminalGraphicPlacement,
     decode_sixel_placement, expand_kitty_payload_to_rgba,
@@ -15,16 +17,26 @@ use super::{
     MAX_NOTIFICATIONS, MAX_OSC8_LINKS, Osc9Progress, Osc133Phase, TerminalNotification, VtParser,
 };
 
+/// Longest `OSC 8` URI retained; longer links are ignored rather than truncated to a different target.
+const MAX_OSC8_URI_BYTES: usize = 2048;
+/// Longest `OSC 8` `id=` parameter retained.
+const MAX_OSC8_ID_BYTES: usize = 256;
+/// Longest `OSC 0` / `OSC 2` window title retained (truncated on a char boundary).
+const MAX_WINDOW_TITLE_BYTES: usize = 256;
+/// Longest notification title retained (truncated on a char boundary).
+const MAX_NOTIFICATION_TITLE_BYTES: usize = 256;
+/// Longest notification body retained (truncated on a char boundary).
+const MAX_NOTIFICATION_BODY_BYTES: usize = 1024;
+
 impl VtParser {
-    /// Dispatches a single `OSC` (`\x1b]...`) sequence starting at `osc_rest` (`&text[idx + 2..]`).
-    pub(super) fn scan_osc_sequence(&mut self, osc_rest: &str) {
+    /// Dispatches one complete `OSC`; `osc_rest` is its body (between `ESC ]` and the terminator).
+    pub(super) fn scan_osc_sequence(&mut self, osc_rest: &str, terminator: StringTerminator) {
         if let Some(rest) = osc_rest
             .strip_prefix("0;")
             .or_else(|| osc_rest.strip_prefix("2;"))
         {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                self.window_title = Some(rest[..end].to_string());
-            }
+            let title = truncate_on_char_boundary(rest, MAX_WINDOW_TITLE_BYTES);
+            self.window_title = Some(title.to_string());
             return;
         }
 
@@ -34,7 +46,7 @@ impl VtParser {
             ("12;?", 12u8, self.theme_cursor_rgb),
         ] {
             if let Some(rest) = osc_rest.strip_prefix(prefix) {
-                if rest.starts_with('\x07') || rest.starts_with("\x1b\\") {
+                if rest.is_empty() {
                     let reply = format_osc_color_reply(code, None, rgb);
                     self.pending_query_responses.push(reply.into_bytes());
                 }
@@ -42,165 +54,116 @@ impl VtParser {
             }
         }
 
-        if let Some(rest) = osc_rest.strip_prefix("4;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let body = &rest[..end];
-                if let Some((idx_str, spec)) = body.split_once(';')
-                    && spec.trim() == "?"
-                    && let Ok(palette_idx) = idx_str.trim().parse::<u8>()
-                {
-                    let rgb = ansi_256_index_to_rgb(palette_idx);
-                    let reply = format_osc_color_reply(4, Some(palette_idx), rgb);
-                    self.pending_query_responses.push(reply.into_bytes());
-                }
+        if let Some(body) = osc_rest.strip_prefix("4;") {
+            if let Some((idx_str, spec)) = body.split_once(';')
+                && spec.trim() == "?"
+                && let Ok(palette_idx) = idx_str.trim().parse::<u8>()
+            {
+                let rgb = ansi_256_index_to_rgb(palette_idx);
+                let reply = format_osc_color_reply(4, Some(palette_idx), rgb);
+                self.pending_query_responses.push(reply.into_bytes());
             }
             return;
         }
 
         if let Some(rest) = osc_rest.strip_prefix("7;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let raw_uri = rest[..end].trim();
-                let path_part = if let Some(after_scheme) = raw_uri.strip_prefix("file://") {
-                    if let Some(slash_idx) = after_scheme.find('/') {
-                        &after_scheme[slash_idx..]
-                    } else {
-                        after_scheme
-                    }
+            let raw_uri = rest.trim();
+            let path_part = if let Some(after_scheme) = raw_uri.strip_prefix("file://") {
+                if let Some(slash_idx) = after_scheme.find('/') {
+                    &after_scheme[slash_idx..]
                 } else {
-                    raw_uri
-                };
-                if !path_part.is_empty() {
-                    self.reported_cwd = Some(PathBuf::from(path_part));
+                    after_scheme
                 }
+            } else {
+                raw_uri
+            };
+            if !path_part.is_empty() {
+                self.reported_cwd = Some(PathBuf::from(path_part));
             }
             return;
         }
 
-        if let Some(rest) = osc_rest.strip_prefix("8;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let payload = &rest[..end];
-                if let Some((params, uri)) = payload.split_once(';')
-                    && !uri.is_empty()
-                {
-                    let id = params
-                        .split(':')
-                        .find_map(|kv| kv.strip_prefix("id="))
-                        .map(str::to_string);
-                    push_bounded(
-                        &mut self.osc8_links,
-                        Osc8Hyperlink {
-                            id,
-                            uri: uri.to_string(),
-                        },
-                        MAX_OSC8_LINKS,
-                    );
-                    self.record_escape_sequence(format!("OSC 8 {uri}"));
-                }
+        if let Some(payload) = osc_rest.strip_prefix("8;") {
+            if let Some((params, uri)) = payload.split_once(';')
+                && !uri.is_empty()
+                && uri.len() <= MAX_OSC8_URI_BYTES
+            {
+                let id = params
+                    .split(':')
+                    .find_map(|kv| kv.strip_prefix("id="))
+                    .map(|id| truncate_on_char_boundary(id, MAX_OSC8_ID_BYTES).to_string());
+                push_bounded(
+                    &mut self.osc8_links,
+                    Osc8Hyperlink {
+                        id,
+                        uri: uri.to_string(),
+                    },
+                    MAX_OSC8_LINKS,
+                );
+                self.record_escape_sequence(format!("OSC 8 {uri}"));
             }
             return;
         }
 
         if let Some(rest) = osc_rest.strip_prefix("9;4;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let payload = rest[..end].trim();
-                let mut parts = payload.split(';');
-                let state = parts
-                    .next()
-                    .and_then(|s| s.trim().parse::<u8>().ok())
-                    .unwrap_or(0);
-                let pct = parts
-                    .next()
-                    .and_then(|s| s.trim().parse::<u8>().ok())
-                    .unwrap_or(0)
-                    .min(100);
-                self.osc9_progress = match state {
-                    0 => None,
-                    1 => Some(Osc9Progress::Normal(pct)),
-                    2 => Some(Osc9Progress::Error(pct)),
-                    3 => Some(Osc9Progress::Indeterminate),
-                    4 => Some(Osc9Progress::Paused(pct)),
-                    _ => self.osc9_progress,
-                };
-                self.record_escape_sequence(format!("OSC 9;4;{payload}"));
-            }
+            let payload = rest.trim();
+            let mut parts = payload.split(';');
+            let state = parts
+                .next()
+                .and_then(|s| s.trim().parse::<u8>().ok())
+                .unwrap_or(0);
+            let pct = parts
+                .next()
+                .and_then(|s| s.trim().parse::<u8>().ok())
+                .unwrap_or(0)
+                .min(100);
+            self.osc9_progress = match state {
+                0 => None,
+                1 => Some(Osc9Progress::Normal(pct)),
+                2 => Some(Osc9Progress::Error(pct)),
+                3 => Some(Osc9Progress::Indeterminate),
+                4 => Some(Osc9Progress::Paused(pct)),
+                _ => self.osc9_progress,
+            };
+            self.record_escape_sequence(format!("OSC 9;4;{payload}"));
             return;
         }
 
         if let Some(rest) = osc_rest.strip_prefix("9;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let msg = rest[..end].trim();
-                if !msg.is_empty() {
-                    self.push_notification(TerminalNotification {
-                        title: "OSC 9".to_string(),
-                        body: msg.to_string(),
-                    });
-                    self.unread_bell = true;
-                    self.record_escape_sequence(format!("OSC 9 Notify: {msg}"));
-                }
-            }
-            return;
-        }
-
-        if let Some(rest) = osc_rest.strip_prefix("777;notify;") {
-            if let Some(end) = rest.find('\x07').or_else(|| rest.find("\x1b\\")) {
-                let payload = &rest[..end];
-                let (title, body) = payload.split_once(';').unwrap_or(("NOTIFY", payload));
+            let msg = truncate_on_char_boundary(rest.trim(), MAX_NOTIFICATION_BODY_BYTES);
+            if !msg.is_empty() {
                 self.push_notification(TerminalNotification {
-                    title: title.trim().to_string(),
-                    body: body.trim().to_string(),
+                    title: "OSC 9".to_string(),
+                    body: msg.to_string(),
                 });
                 self.unread_bell = true;
-                self.record_escape_sequence(format!("OSC 777 Notify: {title}"));
+                self.record_escape_sequence(format!("OSC 9 Notify: {msg}"));
             }
             return;
         }
 
-        if "52;".starts_with(osc_rest) && osc_rest.len() < 3 {
-            self.osc52_carry.clear();
-            self.osc52_carry.extend_from_slice(b"\x1b]");
-            self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
+        if let Some(payload) = osc_rest.strip_prefix("777;notify;") {
+            let (title, body) = payload.split_once(';').unwrap_or(("NOTIFY", payload));
+            let title = truncate_on_char_boundary(title.trim(), MAX_NOTIFICATION_TITLE_BYTES);
+            let body = truncate_on_char_boundary(body.trim(), MAX_NOTIFICATION_BODY_BYTES);
+            self.push_notification(TerminalNotification {
+                title: title.trim().to_string(),
+                body: body.trim().to_string(),
+            });
+            self.unread_bell = true;
+            self.record_escape_sequence(format!("OSC 777 Notify: {title}"));
             return;
         }
 
         if osc_rest.starts_with("52;") {
-            // Terminate at the first BEL or ESC of *this* OSC; an ESC that does not begin ST
-            // aborts the sequence so no foreign escapes can ride along to the host terminal.
-            if let Some(end) = osc_rest.find(['\x07', '\x1b']) {
-                let rest_from_end = &osc_rest[end..];
-                if rest_from_end == "\x1b" {
-                    self.osc52_carry.clear();
-                    self.osc52_carry.extend_from_slice(b"\x1b]");
-                    self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
-                    return;
-                }
-                let terminator = match rest_from_end {
-                    t if t.starts_with('\x07') => "\x07",
-                    t if t.starts_with("\x1b\\") => "\x1b\\",
-                    _ => {
-                        self.osc52_carry.clear();
-                        return;
-                    }
-                };
-                let body = &osc_rest[..end];
-                if is_forwardable_osc52_write(body) {
-                    self.pending_osc52.push(format!("\x1b]{body}{terminator}"));
-                    if let Some(decoded) = decode_osc52_payload(body) {
-                        self.pending_osc52_decoded.push(decoded);
-                    }
-                }
-                self.osc52_carry.clear();
-            } else {
-                const MAX_CARRY: usize = super::codec::MAX_OSC52_PAYLOAD_BYTES + 64;
-                if osc_rest.len() <= MAX_CARRY {
-                    if osc_rest.contains('\x1b') {
-                        self.osc52_carry.clear();
-                    } else {
-                        self.osc52_carry.clear();
-                        self.osc52_carry.extend_from_slice(b"\x1b]");
-                        self.osc52_carry.extend_from_slice(osc_rest.as_bytes());
-                    }
-                } else {
-                    self.osc52_carry.clear();
+            // The framer completes an OSC only at BEL or ST: an ESC that does not begin ST cancels
+            // it, so no foreign escape can ride along to the host terminal. The forwarded string
+            // is rebuilt from the validated body, never copied from the stream.
+            if is_forwardable_osc52_write(osc_rest) {
+                self.pending_osc52
+                    .push(format!("\x1b]{osc_rest}{}", terminator.as_str()));
+                if let Some(decoded) = decode_osc52_payload(osc_rest) {
+                    self.pending_osc52_decoded.push(decoded);
                 }
             }
             return;
@@ -249,12 +212,8 @@ impl VtParser {
         }
     }
 
-    /// Dispatches a single `DCS` (`\x1bP...`) sequence starting at `dcs_rest` (`&text[idx + 2..]`).
-    pub(super) fn scan_dcs_sequence(&mut self, dcs_rest: &str) {
-        let Some(end) = dcs_rest.find("\x1b\\").or_else(|| dcs_rest.find('\x07')) else {
-            return;
-        };
-        let dcs_body = &dcs_rest[..end];
+    /// Dispatches one complete `DCS`; `dcs_body` is its body (between `ESC P` and the terminator).
+    pub(super) fn scan_dcs_sequence(&mut self, dcs_body: &str) {
 
         if let Some(query_body) = dcs_body.strip_prefix("+q") {
             for hex_cap in query_body.split(';') {
@@ -285,7 +244,9 @@ impl VtParser {
                     format!("\x1bP1$r1;{rows}r\x1b\\")
                 }
                 " q" => "\x1bP1$r2 q\x1b\\".to_string(),
-                _ => format!("\x1bP0$r{pt}\x1b\\"),
+                // Never reflect the request: replies are written to the PTY as input, so
+                // echoing attacker text (newlines included) would inject commands.
+                _ => "\x1bP0$r\x1b\\".to_string(),
             };
             self.pending_query_responses.push(reply.into_bytes());
             return;
@@ -310,15 +271,11 @@ impl VtParser {
         }
     }
 
-    /// Dispatches a single `APC` (`\x1b_...`) sequence starting at `apc_rest` (`&text[idx + 2..]`).
-    pub(super) fn scan_apc_sequence(&mut self, apc_rest: &str) {
-        let Some(rest) = apc_rest.strip_prefix('G') else {
+    /// Dispatches one complete `APC`; `apc_body` is its body (between `ESC _` and the terminator).
+    pub(super) fn scan_apc_sequence(&mut self, apc_body: &str) {
+        let Some(body) = apc_body.strip_prefix('G') else {
             return;
         };
-        let Some(end) = rest.find("\x1b\\").or_else(|| rest.find('\x07')) else {
-            return;
-        };
-        let body = &rest[..end];
         let (ctrl_str, b64_payload) = body.split_once(';').unwrap_or((body, ""));
         let mut action = 'T';
         let mut image_id: Option<u32> = None;

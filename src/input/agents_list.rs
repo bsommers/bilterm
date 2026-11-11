@@ -8,13 +8,12 @@
 //! pointer state kept is the drag (`AgentsListState::drag`); every visible effect is an
 //! `Action::AgentsList`.
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 use super::AppAction;
 use super::mouse_wm::{apply_rect_edge_resize, ctrl_wheel_scale_delta};
 use crate::action::Action;
-use crate::pane::PaneId;
 use crate::ui::typography::PanelTarget;
 use crate::wm::WindowManager;
 use crate::wm::agents_list::ListDrag;
@@ -104,13 +103,24 @@ fn plan_drag(wm: &WindowManager, mouse: MouseEvent, ws: Rect) -> Option<ListMous
 /// A press inside the window. An unfocused window first retakes the keyboard (`Open`), except for
 /// the badges that leave the window anyway.
 fn plan_press(wm: &WindowManager, button: MouseButton, hit: ListHit, mouse: MouseEvent, ws: Rect, plan: &mut ListMousePlan) {
-    let leaves = matches!(hit, ListHit::Badge(ListBadge::Close | ListBadge::Minimize));
+    // A row click and the leaving badges hand the keyboard on, so they do not take it first.
+    // Ctrl+click only selects (the pointer twin of the arrow keys) and so takes the keyboard.
+    let select_only = mouse.modifiers.contains(KeyModifiers::CONTROL);
+    let leaves = matches!(hit, ListHit::Badge(ListBadge::Close | ListBadge::Minimize))
+        || (!select_only && matches!((button, &hit), (MouseButton::Left, ListHit::Row(_))));
     if !wm.agents_list().focused && !leaves {
         plan.actions.push(act(AgentsListOp::Open));
     }
     let Some(outer) = wm.agents_list_rect(ws) else { return };
     match (button, hit) {
-        (MouseButton::Left, ListHit::Row(id)) => plan.actions.push(act(row_click(wm, id))),
+        // One click selects the row and jumps: the pane is raised and gets the keyboard, the list
+        // stays open, blurred (FOCUS-01).
+        (MouseButton::Left, ListHit::Row(id)) => {
+            plan.actions.push(act(AgentsListOp::SelectPane(id)));
+            if !select_only {
+                plan.actions.push(act(AgentsListOp::Jump(Some(id))));
+            }
+        }
         (MouseButton::Right, ListHit::Row(id)) => plan.actions.push(act(AgentsListOp::Zoom(Some(id)))),
         (MouseButton::Left, ListHit::Badge(badge)) => plan.actions.push(act(match badge {
             ListBadge::Pin => AgentsListOp::Pin(None),
@@ -132,17 +142,6 @@ fn plan_press(wm: &WindowManager, button: MouseButton, hit: ListHit, mouse: Mous
             plan.drag = Some(Some(ListDrag::Resize { edge, initial: outer }));
         }
         _ => {}
-    }
-}
-
-/// First click on a row selects it; clicking the selected row again jumps to that pane. An
-/// unfocused window only retakes the keyboard and selects (never jumps).
-fn row_click(wm: &WindowManager, id: PaneId) -> AgentsListOp {
-    let state = wm.agents_list();
-    if state.focused && state.selected == Some(id) {
-        AgentsListOp::Jump(Some(id))
-    } else {
-        AgentsListOp::SelectPane(id)
     }
 }
 

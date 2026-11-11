@@ -18,11 +18,12 @@ The Navigator changes nothing about the classic drawer: with the default style t
 6. [Communication indicators](#communication-indicators)
 7. [Agent traffic window](#agent-traffic-window)
 8. [Agents list window](#agents-list-window)
-9. [Tiling floating panels](#tiling-floating-panels)
-10. [Command palette coverage](#command-palette-coverage)
-11. [Surface uniformity](#surface-uniformity)
-12. [GUI rendering](#gui-rendering)
-13. [Assumptions and limits](#assumptions-and-limits)
+9. [Keyboard focus of the side windows](#keyboard-focus-of-the-side-windows)
+10. [Tiling floating panels](#tiling-floating-panels)
+11. [Command palette coverage](#command-palette-coverage)
+12. [Surface uniformity](#surface-uniformity)
+13. [GUI rendering](#gui-rendering)
+14. [Assumptions and limits](#assumptions-and-limits)
 
 ---
 
@@ -125,7 +126,7 @@ The window is not modal. It takes the keyboard when it opens and whenever you cl
 
 | Scope | Keys | Operation |
 | :--- | :--- | :--- |
-| Any | `Esc` | Close the window (when pinned: release the keyboard only) |
+| Any | `Esc` | Hand the keyboard back to the pane; the window stays open (`:agents blur`). Close it with the title `[X]`, `Ctrl+Alt+A` or `:agents close` |
 | Any | `Shift+arrows` | Move the window one cell |
 | Any | `Alt+arrows` | Resize the window one cell |
 | Any | `*` | Pin / unpin |
@@ -203,7 +204,8 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | :--- | :--- | :--- | :--- |
 | `:drawer attention` | `!`, `<L> !` | footer `!` | Next pane needing attention |
 | `:drawer fold` | `e` | click fold marker | Fold / unfold the selected session |
-| `:drawer enter` | `Enter`, `Space` | click row | Focus the selected row |
+| `:drawer enter` | `Enter` | click row | Switch to the selected row's pane and give it the keyboard; the drawer stays open |
+| `:drawer raise` | `Space` | | Raise the selected row's pane and keep the keyboard in the drawer (on a pane row `Space` toggles the multi-selection instead) |
 | `:drawer next` | `j`, `Down` | wheel | Select next row |
 | `:drawer prev` | `k`, `Up` | wheel | Select previous row |
 | `:drawer row <n>` | | click row n | Select row n (1-based) |
@@ -246,12 +248,12 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | Command | Key | Mouse | Effect |
 | :--- | :--- | :--- | :--- |
 | `:agents list` | | | Agent state per pane (data over RPC, see [API](../API.md)). It also opens the AGENTS list window; bare `:agents`, `:agents ls` and `:agents status` do the same |
-| `:agents list open` / `close` / `toggle` | `Ctrl+Alt+N`, leader `A` | menu View > Agents List; title `[X]` | Open, close or toggle the AGENTS list window |
-| `:agents list dismiss` | `Esc` | title minimize badge | Close, or release the keyboard when pinned |
-| `:agents list blur` | | click outside the window | Release the keyboard without closing |
+| `:agents list open` / `close` / `toggle` | `Ctrl+Alt+N`, leader `A`; `q` closes | menu View > Agents List; title `[X]` | Open, close or toggle the AGENTS list window |
+| `:agents list dismiss` | | title minimize badge | Close, or release the keyboard when pinned |
+| `:agents list blur` | `Esc` | click outside the window | Release the keyboard without closing: typing goes to the pane again |
 | `:agents list select up` / `down` / `first` / `last` / `page-up` / `page-down` | `Up`/`k`, `Down`/`j`, `Home`, `End`, `PageUp`, `PageDown` | wheel (scrolls) | Move the row selection |
-| `:agents list select <pane-id>` | | click a row | Select a row by pane id (`#3` is accepted) |
-| `:agents list jump [pane-id]` | `Enter` | click the selected row again | Focus the pane and leave the list |
+| `:agents list select <pane-id>` | | `Ctrl` + click a row | Select a row by pane id (`#3` is accepted) |
+| `:agents list jump [pane-id]` | `Enter` | click a row | Focus the pane and give it the keyboard; the list stays open |
 | `:agents list zoom [pane-id]` | `z` | right-click a row, chip `[zoom]` | Open the traffic window on the pane |
 | `:agents list pin` / `:agents list unpin` / `:agents list pin toggle` | `*` (toggle) | title pin badge | Pin, unpin, or toggle the pin on the list window |
 | `:agents list scale +n` / `-n` | `]` / `[` (+10 / -10) | `Ctrl` + wheel (±10) | Step the window's GUI scale |
@@ -266,8 +268,8 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | `:agents zoom [pane-id]` | `<L> a` | footer `@`, comms glyph | Open the traffic window (optionally on a pane) |
 | `:agents toggle [pane-id]` | `Ctrl+Alt+A` | menu View > Agent Traffic, footer `@ agents` | Open the window (optionally on a pane), or close it when it is open |
 | `:agents close` | | title `[X]` | Close the window |
-| `:agents dismiss` | `Esc` | | Close, or release the keyboard when pinned |
-| `:agents blur` | | click a pane | Release the keyboard without closing (the window is not modal) |
+| `:agents dismiss` | | | Close, or release the keyboard when pinned |
+| `:agents blur` | `Esc` | click a pane | Release the keyboard without closing (the window is not modal) |
 | `:agents select <left\|right\|up\|down\|node-key>` | arrows | click node | Move the node cursor, or select a node such as `pane:2` |
 | `:agents edge <next\|prev\|a b>` | `Tab` / `Shift+Tab` | click edge | Cycle the node's edges, or select the edge between two nodes |
 | `:agents enter` | `Enter` | second click on a node | Focus the selected pane and leave the window |
@@ -329,7 +331,7 @@ Open it with `<L> a`, `Ctrl+Alt+A`, `:agents zoom`, `:agents toggle`, the top me
 
 **Compose line.** `send as me` is shown but **disabled**: nothing typed there is stored or sent, and no pane or bus event is produced. It becomes available only with the Phase 52 permission gate.
 
-**Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (`Esc` unless pinned), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`. Pinned or not, the window never blocks the panes: click one (or run `:agents blur`) and keys go to it again.
+**Window management.** Move (`Shift+arrows`, drag title), resize (`Alt+arrows`, drag edges and corners), maximize (`m`, badge), close (title `[X]`, `Ctrl+Alt+A`; `Esc` only hands the keyboard back to the pane), pin (`*`, the `◇` / `◆` badge), splitter (`<` / `>`, drag), panel scale (`[` / `]`, `Ctrl` + wheel, GUI surface). A **pinned** window stays open and keeps its place; `Esc` then only returns the keyboard to the panes, and `:agents unpin` restores close-on-`Esc`. Pinned or not, the window never blocks the panes: click one (or run `:agents blur`) and keys go to it again.
 
 ## Agents list window
 
@@ -337,7 +339,7 @@ The AGENTS list is a floating window with one row per tracked pane: its agent st
 
 **Rows.** By default every tracked pane is listed, in pane-id order. The agents filter (`f`, the `[filter]` chip, or `:agents list filter agents`) narrows the list to panes that match an `[agents.<name>]` profile or report their state explicitly. No profile ships built in (see [Assumptions and limits](#assumptions-and-limits)), so until you add one the agents filter can show no rows. The rows refresh as the agent states change.
 
-**Opening and closing.** Open it with `Ctrl+Alt+N`, leader `A`, View > Agents List in the menu, `:agents list` (also `:agents list open`, bare `:agents`, `:agents ls` or `:agents status`), or the `agents.list` API method. Opening it gives it the keyboard. The same toggle chord closes it, as do `:agents list close` and the title's close badge `[X]`. `Esc` closes it unless it is pinned.
+**Opening and closing.** Open it with `Ctrl+Alt+N`, leader `A`, View > Agents List in the menu, `:agents list` (also `:agents list open`, bare `:agents`, `:agents ls` or `:agents status`), or the `agents.list` API method. Opening it gives it the keyboard. The same toggle chord closes it, as do `:agents list close` and the title's close badge `[X]`. `q` closes it too. `Esc` does not close it: it hands the keyboard back to the pane and leaves the list open (see [Keyboard focus](#keyboard-focus-of-the-side-windows)).
 
 **Keys** (while the list has the keyboard; table `AGENTS_LIST_BINDINGS` in `src/input/agents_list_keys.rs`):
 
@@ -346,7 +348,7 @@ The AGENTS list is a floating window with one row per tracked pane: its agent st
 | `Up` / `k`, `Down` / `j` | Select the previous / next row |
 | `PageUp`, `PageDown` | Select a page up / down |
 | `Home`, `End` | Select the first / last row |
-| `Enter` | Focus the selected pane and leave the list (jump) |
+| `Enter` | Focus the selected pane and give it the keyboard (jump); the list stays open |
 | `z` | Open the traffic window on the selected pane (zoom) |
 | `f` | Toggle the agents filter |
 | `*` | Pin / unpin the window |
@@ -354,18 +356,21 @@ The AGENTS list is a floating window with one row per tracked pane: its agent st
 | `Shift`+arrows | Move the window one cell |
 | `Alt`+arrows | Resize the window one cell |
 | `d` | Dock into the tiling strip / float |
-| `Esc` | Close, or release the keyboard when pinned |
+| `Esc` | Hand the keyboard back to the pane; the list stays open |
+| `q` | Close the list |
 | `Ctrl+Alt+N` | Close (the same toggle as outside the list) |
+| `Ctrl+Alt+O` | Move the keyboard to the next side window, then back to the pane |
 
-The leader key is never consumed. Other keys are swallowed while the list has the keyboard, so typing does not reach the pane underneath. Click a pane, or run `:agents list blur`, to hand the keyboard back while the list stays open.
+The leader key is never consumed. Other keys are swallowed while the list has the keyboard, so typing does not reach the pane underneath. Press `Esc`, click a pane, or run `:agents list blur`, to hand the keyboard back while the list stays open.
 
 **Mouse** (table in `src/input/agents_list.rs`):
 
 | Gesture | Operation |
 | :--- | :--- |
-| Click a row | Select it. Clicking the selected row again, while the list has the keyboard, jumps to that pane. In an unfocused list the click takes the keyboard and selects; it never jumps |
+| Click a row | Select it and jump: that pane is raised and gets the keyboard at once, whether or not the list had the keyboard. The list stays open |
+| `Ctrl` + click a row | Select it without jumping; the list takes (or keeps) the keyboard |
 | Right-click a row | Open the traffic window on that pane (zoom) |
-| Title badges: pin, minimize, dock, close | Pin / unpin; dismiss (same as `Esc`); dock / float; close |
+| Title badges: pin, minimize, dock, close | Pin / unpin; dismiss (closes an unpinned list); dock / float; close |
 | Footer chips `[filter]`, `[dock]`, `[zoom]` | Toggle the filter; dock / float; open the traffic window on the selection |
 | Drag the title bar | Move the window (this releases any docking) |
 | Drag an edge or corner | Resize the window (this releases any docking) |
@@ -373,7 +378,7 @@ The leader key is never consumed. Other keys are swallowed while the list has th
 | `Ctrl` + wheel | Panel scale -10 / +10 (GUI surface only) |
 | Press outside the window while it has the keyboard | Release the keyboard; the press then goes on to whatever is underneath |
 
-**Pin.** A pinned list stays open, and `Esc` then only releases the keyboard. Closing the window clears the pin.
+**Pin.** A pinned list is not closed by the minimize badge or `:agents list dismiss`; they only release the keyboard. Closing the window clears the pin.
 
 **Scale and default placement.** The list has its own panel scale, 75 to 200 percent, on the GUI surface, set by `[` / `]`, `Ctrl` + wheel, `:agents list scale`, or `:agents list scale <75..200>`. Its default size is 36 columns wide (or the workspace width when that is narrower), tall enough for its rows and never more than 70 percent of the workspace height (at least 6 rows). It sits one column in from the right edge and one row below the top. Any move, resize, rectangle or size change releases the dock.
 
@@ -382,6 +387,24 @@ The leader key is never consumed. Other keys are swallowed while the list has th
 **Text and GUI.** In the terminal the window is drawn as cells: a frame with the pin badge and the title buttons, a `STATE NAME PANE SINCE` header, one row per pane with its state dot, the selected row in reverse video, the active pane marked, a scroll indicator when the rows overflow, and the footer chips. In GUI mode the same layout is drawn at the window's own scale. Pane names come from running commands and titles, so they are sanitised before they are shown.
 
 **Verbs.** Every key and gesture above has a colon twin, listed in [Commands](#commands) under `:agents list`. The window is also available over the API (`agents.list`, `bilterm_agents_list`); see [API](../API.md).
+
+## Keyboard focus of the side windows
+
+The side windows (AGENTS list, Agent Traffic, session map, clipboard viewer, traffic monitor, command window, script studio), the drawer and a pinned MCP console sit beside the panes. Exactly one thing has the keyboard at a time: the active pane or one of these windows.
+
+| You want to | Do this |
+| :--- | :--- |
+| Type in a side window | Click inside it, open it, or press `Ctrl+Alt+O` until it has the keyboard. `:focus <window>` names it: `agents-list`, `agents`, `sessions`, `clipboard`, `traffic`, `commands`, `script`, `fonts`, `daemon`, `hud`, `drawer`, `console` |
+| Go back to the shell | `Esc`, a click on a pane, or `:focus pane`. The window stays open (the drawer too, in every visibility mode; `q` or `F7` hides it) |
+| Jump to a pane from the AGENTS list | Click its row, or press `Enter` on it. The pane is raised and gets the keyboard in the same step; the list stays open. Arrow keys still browse without jumping |
+| Jump to a pane from the drawer | Click its row (a pane, window or session row), or press `Enter` on the selected row. The pane is raised and gets the keyboard in the same step; the drawer stays open, whether it is fixed, pinned or was opened on demand. Arrow keys still browse without jumping, and `Space` (`:drawer raise`) raises a pane while the drawer keeps the keyboard |
+| Give the drawer the keyboard with the mouse | Click its title or an empty part of it (in the Classic style also its header chips and footer; the Navigator footer buttons act without moving the keyboard). Fold markers, `Ctrl` + click and the classic layout-group header row also leave the keyboard in the drawer |
+| Walk through everything | `Ctrl+Alt+O` (`:focus cycle`): pane, each open side window from left to right, pane again. `:focus cycle prev` walks backwards. The chord also works while a full-screen program owns the pane; with no side window open it is passed to that program |
+| Close a side window | `q` (windows without a text field), its close badge, or `:<window> close` / `toggle` |
+
+Giving one window the keyboard takes it from every other window; nothing is closed. `:focus <pane-id>`, `:focus left|right|up|down` and `:deck next|prev` hand the keyboard to the pane as well. While a side window has the keyboard, the active pane is drawn with an inactive frame and cursor, and its status row shows `KBD:<WINDOW>` (for example `KBD:AGENT-LIST`, or `KBD:DRAWER` for the drawer). One exception: with the Classic drawer style in the Legacy, `:modern` and `:liquid` looks the pane's frame does not change and no badge is drawn; the drawer shows the active frame on itself while it has the keyboard. The Navigator drawer style, and the Classic style in any `[appearance]` profile look, show the badge.
+
+Exceptions: the fonts picker and the Mission Control HUD are modal and still close on `Esc`. In the command window `Esc` hands the keyboard back only when no query is typed. In the session map `Esc` first cancels a pickup or drag. `:focus <window>` never opens a window; a closed one is reported in the status line. An unpinned MCP console is modal and is not a stop of the cycle.
 
 ## Tiling floating panels
 
@@ -426,9 +449,9 @@ Every capability in this chapter must behave the same on every surface, the rule
 | Demo stop | menu View > Stop Agent Demo | leader `Y` | `:agents demo stop` | yes | `agents.demo` with `stop: true` | `bilterm_agents_demo` with `stop: true` |
 | Palette coverage | click an entry | `Ctrl+P`, `Alt+Space`, leader `Space` | `:palette`, `:commands` | the table itself | `bilterm://commands` (`palette_exclusions`) | resource |
 | Open, close, toggle the list | menu View > Agents List; `[X]` badge | `Ctrl+Alt+N`, leader `A` | `:agents list open`, `close`, `toggle` | yes | `agents.list` | `bilterm_agents_list` |
-| Dismiss, blur | minimize badge; click outside | `Esc` | `:agents list dismiss`, `blur` | yes | `agents.list` | `bilterm_agents_list` |
-| Select, step, page, first, last | click a row; wheel | `Up` / `k`, `Down` / `j`, `PageUp`, `PageDown`, `Home`, `End` | `:agents list select ...` | yes | `agents.list` | `bilterm_agents_list` |
-| Jump to the pane | click the selected row again | `Enter` | `:agents list jump [id]` | yes | `agents.list` | `bilterm_agents_list` |
+| Dismiss, blur | minimize badge; click outside | `Esc` (blur) | `:agents list dismiss`, `blur` | yes | `agents.list` | `bilterm_agents_list` |
+| Select, step, page, first, last | `Ctrl` + click a row; wheel | `Up` / `k`, `Down` / `j`, `PageUp`, `PageDown`, `Home`, `End` | `:agents list select ...` | yes | `agents.list` | `bilterm_agents_list` |
+| Jump to the pane | click a row | `Enter` | `:agents list jump [id]` | yes | `agents.list` | `bilterm_agents_list` |
 | Zoom to the traffic window | right-click a row; chip `[zoom]` | `z` | `:agents list zoom [id]` | yes | `agents.list` | `bilterm_agents_list` |
 | Pin | pin badge | `*` | `:agents list pin`, `unpin`, `pin toggle` | yes | `agents.list` | `bilterm_agents_list` |
 | Scale | `Ctrl` + wheel | `[`, `]` | `:agents list scale ...` | yes | `agents.list` | `bilterm_agents_list` |

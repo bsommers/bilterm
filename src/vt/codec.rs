@@ -69,15 +69,172 @@ pub(super) fn escape_json_string(s: &str) -> String {
 }
 
 pub(super) fn hex_decode_ascii(hex: &str) -> Option<String> {
+    // Untrusted input: work on bytes (a `str` slice panics on a char boundary) and accept
+    // only real hex digits (`from_str_radix` would also take a leading `+`).
+    let hex = hex.as_bytes();
     if !hex.len().is_multiple_of(2) || hex.is_empty() {
         return None;
     }
+    let nibble = |b: u8| (b as char).to_digit(16).filter(|_| b.is_ascii_hexdigit());
     let mut bytes = Vec::with_capacity(hex.len() / 2);
-    for i in (0..hex.len()).step_by(2) {
-        let b = u8::from_str_radix(&hex[i..i + 2], 16).ok()?;
-        bytes.push(b);
+    for pair in hex.chunks_exact(2) {
+        bytes.push((nibble(pair[0])? << 4 | nibble(pair[1])?) as u8);
     }
     String::from_utf8(bytes).ok()
+}
+
+/// Returns the longest prefix of `s` that is at most `max_bytes` long and ends on a char boundary.
+pub(super) fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
+/// Longest run of CSI parameter bytes (after the first parameter) held while waiting for the
+/// final byte; longer sequences are passed through (small count) or dropped (oversized count).
+const MAX_HELD_CSI_PARAM_BYTES: usize = 256;
+
+#[derive(Clone, Debug, Default)]
+enum CsiClampState {
+    #[default]
+    Ground,
+    /// `ESC` seen and withheld.
+    Esc,
+    /// `ESC [` seen; the whole sequence is withheld until its final byte.
+    Csi,
+    /// Inside a CSI whose remaining bytes are forwarded (`true`) or swallowed (`false`).
+    Pass(bool),
+}
+
+/// Streaming filter in front of `vt100-ctt`, which loops `count` times without clamping for
+/// ICH / IL / SD (`CSI 65535 @` costs tens of thousands of `Vec` inserts). Clamps the count of
+/// `CSI Pn @ L M P S T X` to the grid size. State survives chunk boundaries, and `ESC` / `ESC [`
+/// are withheld until resolved so a split or control-interleaved sequence cannot slip through.
+#[derive(Clone, Debug, Default)]
+pub(super) struct CsiCountClamp {
+    state: CsiClampState,
+    first_param: u16,
+    has_digits: bool,
+    rest: Vec<u8>,
+}
+
+impl CsiCountClamp {
+    /// Drops any withheld partial sequence (the backend parser was fed out-of-band bytes).
+    pub(super) fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn emit_held(&mut self, out: &mut Vec<u8>, first_param: u16) {
+        out.extend_from_slice(b"\x1b[");
+        if self.has_digits {
+            out.extend_from_slice(first_param.to_string().as_bytes());
+        }
+        out.append(&mut self.rest);
+    }
+
+    /// Returns `bytes` with oversized counts clamped to `limit` (the larger grid dimension).
+    pub(super) fn filter<'a>(&mut self, bytes: &'a [u8], limit: u16) -> std::borrow::Cow<'a, [u8]> {
+        if matches!(self.state, CsiClampState::Ground) && !bytes.contains(&0x1b) {
+            return std::borrow::Cow::Borrowed(bytes);
+        }
+        let mut out = Vec::with_capacity(bytes.len());
+        for &b in bytes {
+            match self.state {
+                CsiClampState::Ground => {
+                    if b == 0x1b {
+                        self.state = CsiClampState::Esc;
+                    } else {
+                        out.push(b);
+                    }
+                }
+                // The backend ignores DEL and non-ASCII bytes inside ESC / CSI states.
+                CsiClampState::Esc | CsiClampState::Csi if b >= 0x7f => {}
+                CsiClampState::Esc => match b {
+                    0x1b => {}
+                    0x18 | 0x1a => {
+                        out.push(b);
+                        self.state = CsiClampState::Ground;
+                    }
+                    0x00..=0x1f => out.push(b),
+                    b'[' => {
+                        self.first_param = 0;
+                        self.has_digits = false;
+                        self.rest.clear();
+                        self.state = CsiClampState::Csi;
+                    }
+                    _ => {
+                        out.extend_from_slice(&[0x1b, b]);
+                        self.state = CsiClampState::Ground;
+                    }
+                },
+                CsiClampState::Csi => match b {
+                    // An aborted sequence is discarded by the backend as well.
+                    0x1b => self.state = CsiClampState::Esc,
+                    0x18 | 0x1a => {
+                        out.push(b);
+                        self.state = CsiClampState::Ground;
+                    }
+                    0x00..=0x1f => out.push(b),
+                    b'0'..=b'9' if self.rest.is_empty() => {
+                        self.has_digits = true;
+                        self.first_param = self
+                            .first_param
+                            .saturating_mul(10)
+                            .saturating_add(u16::from(b - b'0'));
+                    }
+                    0x40..=0x7e => {
+                        let plain = !self
+                            .rest
+                            .iter()
+                            .any(|c| matches!(c, 0x20..=0x2f | 0x3c..=0x3f));
+                        let count = if plain && matches!(b, b'@' | b'L' | b'M' | b'P' | b'S' | b'T' | b'X') {
+                            self.first_param.min(limit)
+                        } else {
+                            self.first_param
+                        };
+                        self.emit_held(&mut out, count);
+                        out.push(b);
+                        self.state = CsiClampState::Ground;
+                    }
+                    _ => {
+                        let private = !self.has_digits && self.rest.is_empty() && b >= 0x3c;
+                        self.rest.push(b);
+                        if private || self.rest.len() > MAX_HELD_CSI_PARAM_BYTES {
+                            let forward = private || self.first_param <= limit;
+                            if forward {
+                                let first_param = self.first_param;
+                                self.emit_held(&mut out, first_param);
+                            }
+                            self.rest.clear();
+                            self.state = CsiClampState::Pass(forward);
+                        }
+                    }
+                },
+                CsiClampState::Pass(forward) => match b {
+                    0x1b => self.state = CsiClampState::Esc,
+                    0x18 | 0x1a => {
+                        out.push(b);
+                        self.state = CsiClampState::Ground;
+                    }
+                    0x00..=0x1f => out.push(b),
+                    _ => {
+                        if forward {
+                            out.push(b);
+                        }
+                        if (0x40..=0x7e).contains(&b) {
+                            self.state = CsiClampState::Ground;
+                        }
+                    }
+                },
+            }
+        }
+        std::borrow::Cow::Owned(out)
+    }
 }
 
 /// Encodes arbitrary UTF-8 text into a standard `OSC 52` clipboard escape sequence (`\x1b]52;c;<base64>\x07`, `PTY-04`).

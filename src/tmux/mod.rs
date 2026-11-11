@@ -1,7 +1,9 @@
+pub mod decode;
 pub mod hydrate;
 pub mod link;
 pub mod reconnect;
 pub mod list_panes;
+pub mod pane_state;
 pub mod splitter;
 pub mod transport;
 
@@ -74,6 +76,10 @@ pub enum TmuxControlEvent {
     SessionChanged { session_id: usize, name: String },
     /// `%exit [reason]`
     Exit { reason: Option<String> },
+    /// `%pause %<pane_id>`: tmux stopped sending this pane's output (client too far behind).
+    Pause { pane_id: usize },
+    /// `%continue %<pane_id>`
+    Continue { pane_id: usize },
     /// `%begin <timestamp> <cmd_num> <flags>`
     BeginBlock,
     /// `%end <timestamp> <cmd_num> <flags>`
@@ -87,6 +93,9 @@ pub enum TmuxControlEvent {
 /// Parses a single line emitted by `tmux -CC` Control Mode (`TMUX-02`).
 pub fn parse_tmux_control_line(line: &str) -> TmuxControlEvent {
     let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
+    if let Some(ev) = decode::parse_flow_line(trimmed) {
+        return ev;
+    }
 
     if let Some(rest) = trimmed.strip_prefix("%output ")
         && let Some((pane_tok, payload)) = rest.split_once(' ')
@@ -305,6 +314,12 @@ pub struct TmuxControlBridge {
     first_line_seen: bool,
     cap_noted: bool,
     diag: Vec<String>,
+    /// Incomplete trailing UTF-8 sequence of each pane's last `%output` chunk.
+    carry: BTreeMap<usize, decode::Utf8Carry>,
+    /// First word of pane-state replies (see `set_state_marker`).
+    state_marker: Option<String>,
+    /// tmux panes paused by the server (`%pause`), waiting for the WM to re-capture and continue.
+    paused: BTreeSet<usize>,
 }
 
 impl TmuxControlBridge {
@@ -334,6 +349,8 @@ impl TmuxControlBridge {
         self.blocks_closed = 0;
         self.first_line_seen = false;
         self.cap_noted = false;
+        self.carry.clear();
+        self.paused.clear();
     }
 
     /// `(tmux pane, bilterm pane)` pairs currently mapped, ordered by tmux pane id.
@@ -412,6 +429,23 @@ impl TmuxControlBridge {
     /// Resumes live output for `tmux_pane`.
     pub fn release_output(&mut self, tmux_pane: usize) {
         self.held.remove(&tmux_pane);
+        self.carry.remove(&tmux_pane);
+    }
+
+    /// Sets the first word of pane-state replies for this attach and returns it.
+    pub fn set_state_marker(&mut self, marker: String) {
+        self.replies.set_state_marker(marker.clone());
+        self.state_marker = Some(marker);
+    }
+
+    /// First word of pane-state replies (`bilterm-state` until a link sets a per-attach one).
+    pub fn state_marker(&self) -> &str {
+        self.state_marker.as_deref().unwrap_or(pane_state::STATE_MARKER)
+    }
+
+    /// Panes tmux paused since the last call (`%pause`), ascending.
+    pub fn take_paused(&mut self) -> Vec<usize> {
+        std::mem::take(&mut self.paused).into_iter().collect()
     }
 
     /// Reply blocks closed so far, greeting included.
@@ -523,6 +557,8 @@ impl TmuxControlBridge {
     fn drop_tmux_pane(&mut self, tmux_pane_id: usize) {
         self.window_of_pane.remove(&tmux_pane_id);
         self.held.remove(&tmux_pane_id);
+        self.carry.remove(&tmux_pane_id);
+        self.paused.remove(&tmux_pane_id);
         if let Some(pane) = self.tmux_to_bilterm.remove(&tmux_pane_id) {
             self.bilterm_to_tmux.remove(&pane);
             if !self.removed.contains(&pane) {
@@ -580,8 +616,14 @@ impl TmuxControlBridge {
                     && let Some(id) = self.ensure_tmux_pane(wm, *pane_id)
                     && let Some(pane) = wm.pane_mut(id)
                 {
+                    let data = &self.carry.entry(*pane_id).or_default().feed(data);
                     pane.count_payload_rx(data.len());
                     pane.process_pty_output(data);
+                }
+            }
+            TmuxControlEvent::Pause { pane_id } => {
+                if self.tmux_to_bilterm.contains_key(pane_id) {
+                    self.paused.insert(*pane_id);
                 }
             }
             TmuxControlEvent::LayoutChange { window_id, layout } => {
@@ -685,7 +727,10 @@ impl TmuxControlBridge {
                 .outbound_kinds
                 .pop_front()
                 .unwrap_or(hydrate::ReplyKind::Ignore);
-            self.replies.enqueue(kind);
+            // A state reply identifies itself by its marker; it has no FIFO position.
+            if kind != hydrate::ReplyKind::PaneStates {
+                self.replies.enqueue(kind);
+            }
         }
         self.outbound_kinds.clear();
         cmds

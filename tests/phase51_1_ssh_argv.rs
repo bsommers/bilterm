@@ -17,7 +17,7 @@ fn link_args_use_tt_keepalive_and_no_mux() {
     assert!(!args.iter().any(|a| a == "-T"));
 
     // Keepalive options
-    assert!(args.contains(&"ServerAliveInterval=15".to_string()));
+    assert!(args.contains(&"ServerAliveInterval=5".to_string()));
     assert!(args.contains(&"ServerAliveCountMax=3".to_string()));
     assert!(args.contains(&"TCPKeepAlive=yes".to_string()));
     assert!(args.contains(&"ConnectTimeout=15".to_string()));
@@ -211,5 +211,5 @@ fn redact_argv_keeps_remote_command_for_diagnosis() {
 
     assert!(redacted.contains("tmux -CC new-session -A -s main"));
     assert!(redacted.contains("ubuntu@10.0.0.42"));
-    assert!(redacted.contains("ServerAliveInterval=15"));
+    assert!(redacted.contains("ServerAliveInterval=5"));
 }

@@ -97,7 +97,8 @@ src/
 ├── vt/
 │   ├── mod.rs                  # VtParser state machine, CommandBlock tracking, scrollback & size management
 │   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
-│   ├── scan.rs                 # Single-pass ESC (\x1b) stream pre-scanner (DECSET traps, CSI DECRPM/DA1/DSR)
+│   ├── framer.rs               # Stateful control-sequence framer in front of the engine: split-safe, linear, bounded carry
+│   ├── scan.rs                 # Framed-chunk dispatch to the engine + CSI handlers (DECSET traps, DECRPM/DA1/DSR, SGR)
 │   ├── scan_osc_dcs.rs         # OSC 7/8/9/52/133/777/1337, DCS XTGETTCAP/Sixel & APC Kitty scanners
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
 │   ├── tektronix.rs            # Tektronix 4010/4014 10-bit/12-bit vector storage-tube state machine & phosphor decay
@@ -432,6 +433,21 @@ Surface Uniformity (`UNI-R01`):
 
 ---
 
+## 6e2. Keyboard ownership of the side windows (FOCUS-01)
+
+Exactly one of {active pane, one side window, drawer, MCP console} receives keys. `src/wm/keyboard_focus.rs` is the single
+place that knows every focusable window: `KeyboardOwner` (routing order in `KeyboardOwner::WINDOWS`),
+`WindowManager::keyboard_owner()` (the query `src/input/modal.rs` and the UI use), `take_keyboard(owner)` (blur the rest,
+focus one), `release_keyboard()` (back to the pane, nothing closes) and `settle_keyboard_owner()` (run after every
+`WindowManager::apply` and every pointer event: if several windows claim the keyboard, the newly focused one wins). A new
+side window adds a `KeyboardOwner` variant and its arms there; do not write per-window blur lists.
+`FocusOp` (`Action::KeyboardFocus`) is `:focus cycle [prev]`, `:focus pane`, `:focus <window>`; the cycle chord `Ctrl+Alt+O`
+is a reserved global (works in raw passthrough) answered in `src/input/focus_keys.rs` before any side window sees the key.
+Conventions: `Esc` in a non-modal side window lowers to that window's `Blur` op (the `Dismiss` ops keep their
+close-unless-pinned meaning for commands and badges); a row click or `Enter` in the AGENTS list raises the pane and
+releases the keyboard to it, and so does a row click / `Enter` / `:drawer enter` in the drawer (`drawer_jump_to_selected`; `Space` / `:drawer raise` raises without releasing, a press on a non-row part of the drawer is `take_keyboard_for_drawer_press`); the fonts picker and the HUD stay modal. While a side window owns the keyboard the top pane is
+rendered inactive and `src/ui/kbd_badge.rs` draws `KBD:<WINDOW>` on its status row. `keyboard_owner_shown` hides a focused drawer only where `drawer_focus_chrome_pinned()` holds (Classic drawer style without an `[appearance]` profile look): there the frame is byte-identical to before, because the classic drawer goldens are immutable. Tests: `tests/side_window_focus.rs`, `tests/drawer_keyboard_handover.rs`.
+
 ## 6f. The Traffic Monitor window (Phase 64-03)
 
 `src/traffic/**` is the std-only metrics leaf (64-01); `src/wm/traffic_monitor*.rs`, `src/ui/traffic_monitor_{ui,gui}.rs`,
@@ -483,7 +499,14 @@ on both a Wire and a Payload cell of the same view.
 
 ## 7. Verification & CI Conservation Gates
 
-Always run these 4 checks locally before committing or pushing:
+The default gate is one command with one output line on every OS: `scripts/verify.sh` (Linux, macOS,
+Git Bash) or `pwsh scripts/verify.ps1` (Windows). CI runs it on six cells
+({Linux, macOS, Windows} x {x86_64, ARM64}); the tiers, sharding (`--integration --shard K/N`),
+cross-target checks, portable-test rules (`tests/common/mod.rs`) and the coverage ratchet
+(`scripts/coverage.sh`, `.github/coverage-floor.txt`) are documented in
+[`TEST_COVERAGE.md` section 8](TEST_COVERAGE.md#8-ci-matrix-per-os-gate-cross-checks-and-the-coverage-ratchet).
+
+The underlying checks, for reference:
 
 ```bash
 # 1. Full unit, integration, snapshot, and security test suite

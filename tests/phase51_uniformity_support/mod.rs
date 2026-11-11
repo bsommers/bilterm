@@ -175,6 +175,13 @@ pub fn click_row(fx: &mut Fx, idx: u16) {
     click(fx, c, r);
 }
 
+/// Ctrl+click: selects the row without jumping (FOCUS-01: a plain click selects and jumps).
+pub fn ctrl_click_row(fx: &mut Fx, idx: u16) {
+    let (c, r) = row_cell(fx, idx);
+    mouse_ev(fx, MouseEventKind::Down(MouseButton::Left), c, r, KeyModifiers::CONTROL);
+    mouse_ev(fx, MouseEventKind::Up(MouseButton::Left), c, r, KeyModifiers::CONTROL);
+}
+
 /// A title cell that is neither a badge nor a border (what a drag grabs).
 pub fn title_cell(fx: &Fx) -> (u16, u16) {
     let l = fx.layout();
@@ -456,9 +463,10 @@ pub fn capabilities() -> Vec<Capability> {
         menu: Some(":agents list toggle"),
         ..row("list.toggle", s_closed, ":agents list toggle")
     });
-    // dismiss / blur (mouse of dismiss is the exception-5 twin; blur has the click outside).
+    // dismiss / blur. FOCUS-01: Esc is blur (it never closes), so dismiss has no key of its own (the
+    // exception-5 twin; `q` closes) and its mouse path is the Minimize badge; blur has the click outside.
     v.push(Capability {
-        key: Some(|fx| press(fx, KeyCode::Esc, N)),
+        mouse: Some(|fx| click_badge(fx, ListBadge::Minimize)),
         palette: Some(":agents list dismiss"),
         ..row("list.dismiss", s_open, ":agents list dismiss")
     });
@@ -471,25 +479,25 @@ pub fn capabilities() -> Vec<Capability> {
     // select / step / first / last / page / id.
     v.push(Capability {
         key: Some(|fx| press(fx, KeyCode::Down, N)),
-        mouse: Some(|fx| click_row(fx, 1)),
+        mouse: Some(|fx| ctrl_click_row(fx, 1)),
         palette: Some(":agents list select down"),
         ..row("select.down", s_open, ":agents list select down")
     });
     v.push(Capability {
         key: Some(|fx| press(fx, KeyCode::Char('k'), N)),
-        mouse: Some(|fx| click_row(fx, 1)),
+        mouse: Some(|fx| ctrl_click_row(fx, 1)),
         palette: Some(":agents list select up"),
         ..row("select.up", s_open_last, ":agents list select up")
     });
     v.push(Capability {
         key: Some(|fx| press(fx, KeyCode::Home, N)),
-        mouse: Some(|fx| click_row(fx, 0)),
+        mouse: Some(|fx| ctrl_click_row(fx, 0)),
         palette: Some(":agents list select first"),
         ..row("select.first", s_open_last, ":agents list select first")
     });
     v.push(Capability {
         key: Some(|fx| press(fx, KeyCode::End, N)),
-        mouse: Some(|fx| click_row(fx, 2)),
+        mouse: Some(|fx| ctrl_click_row(fx, 2)),
         palette: Some(":agents list select last"),
         ..row("select.last", s_open, ":agents list select last")
     });
@@ -498,7 +506,7 @@ pub fn capabilities() -> Vec<Capability> {
         ..row("select.page", s_open, ":agents list select page-down")
     });
     v.push(Capability {
-        mouse: Some(|fx| click_row(fx, 1)),
+        mouse: Some(|fx| ctrl_click_row(fx, 1)),
         ..row("select.id", s_open, ":agents list select #2")
     });
     // jump / zoom.
@@ -743,9 +751,10 @@ pub const EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("float", "mouse", "explicit-value"),
     // 4. `:arrange <pattern>` lowers to Action::LayoutProfileCommand(String): not const-constructible, so no key row.
     ("arrange", "key", "not-const-constructible"),
-    // 5. Dismiss mouse and Page mouse: the twins are other ops (Minimize badge / wheel Scroll); Scroll's key
-    //    twin is Page (PgUp/PgDn), the mirror image of the same pairing.
-    ("list.dismiss", "mouse", "twin-op"),
+    // 5. Dismiss key and Page mouse: the twins are other ops (Esc is Blur, `q` is Close / wheel Scroll); Scroll's
+    //    key twin is Page (PgUp/PgDn), the mirror image of the same pairing. (Until FOCUS-01 Esc was Dismiss and
+    //    the empty cell was Dismiss mouse.)
+    ("list.dismiss", "key", "twin-op"),
     ("select.page", "mouse", "twin-op"),
     ("scroll", "key", "twin-op"),
     // 6. `:agents status` (the data-only List): no key or mouse.

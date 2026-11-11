@@ -1,4 +1,5 @@
 pub mod agent_mail;
+pub mod resilience;
 pub mod swarm_cmd;
 mod agent_mail_apply;
 pub mod agent_state;
@@ -33,12 +34,14 @@ pub mod chrome_style;
 pub mod drawer;
 pub mod find_cmd;
 pub mod journal;
+pub mod keyboard_focus;
 pub mod key_mode;
 pub mod which_key_state;
 pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
 pub mod panel_dock;
+pub mod pty_drain;
 pub mod quick_terminal;
 pub mod registry;
 pub mod rename_dialog;
@@ -49,6 +52,7 @@ pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
 pub mod stt_ops;
+pub mod tmux_flow;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod tmux_remote;
@@ -57,6 +61,7 @@ pub mod traffic_monitor;
 pub mod traffic_monitor_geometry;
 mod traffic_view;
 pub mod v2_runtime;
+mod media_tick;
 pub mod window_manage;
 pub mod window_style;
 pub mod z_stack;
@@ -215,6 +220,8 @@ pub struct WindowManager {
     pub(crate) agents_list: agents_list::AgentsListState,
     /// Mission Control HUD, turn replay and watchdog state (`HUD-01..03`, Phase 70).
     agents_hud: agents_hud::AgentsHudState,
+    /// Keyboard owner at the last settle (`keyboard_focus::settle_keyboard_owner`).
+    keyboard_owner_seen: keyboard_focus::KeyboardOwner,
     /// Floating SESSION MAP packing viewer state (`VIEW-02`, Phase 54).
     pub(crate) session_map: session_map::SessionMapState,
     /// Floating FONTS window state (`WIN-01`, Phase 51.2).
@@ -272,6 +279,7 @@ pub struct WindowManager {
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
     pub(crate) client_detached: bool,
+    pub(crate) resilience: resilience::ResilienceState,
     /// In-memory cache of saved/autosaved named layout profiles for instant dynamic switching.
     pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
     /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
@@ -357,6 +365,7 @@ impl WindowManager {
             agents_window: agents_window::AgentsWindowState::default(),
             agents_list: agents_list::AgentsListState::default(),
             agents_hud: agents_hud::AgentsHudState::default(),
+            keyboard_owner_seen: keyboard_focus::KeyboardOwner::Pane,
             session_map: session_map::SessionMapState::default(),
             daemon_window: daemon_window::DaemonWindowState::default(),
             fonts_window: fonts_window::FontsWindowState::default(),
@@ -387,6 +396,7 @@ impl WindowManager {
             web_surface: crate::api::web_surface::WebSurfaceState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
+            resilience: Default::default(),
             layout_profiles_mem: BTreeMap::new(),
             last_blink_toggle: Instant::now(),
             pane_chrome: BTreeMap::new(),
@@ -405,6 +415,7 @@ impl WindowManager {
         self.drawer.invalidate_saved_sessions();
         let quit = execute_wm_colon_command(self, action);
         self.drawer.invalidate_saved_sessions();
+        self.settle_keyboard_owner();
         if quit {
             Ok(AppAction::Quit)
         } else {
@@ -965,9 +976,11 @@ impl WindowManager {
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
+        changed |= self.tick_media_canvases(tm_ms);
         registry::capture::tick(self, Instant::now());
         self.sync_clipboard_records();
         self.maybe_rebalance_scrollback(Instant::now());
+        changed |= self.resilience_tick(Instant::now());
         changed
     }
 
@@ -980,15 +993,7 @@ impl WindowManager {
     pub fn focus_and_raise(&mut self, pane_id: PaneId) -> bool {
         if self.panes.contains_key(&pane_id) {
             self.quick_terminal.visible = false;
-            self.agents_window.blur();
-            self.agents_list.blur();
-            self.fonts_window.blur();
-            self.daemon_window.focused = false;
-            self.command_window.blur();
-            self.clipboard_window.blur();
-            self.traffic_monitor.blur();
-            self.script_studio.blur();
-            self.session_map.blur();
+            self.blur_floating_windows();
             let changed = self.z_stack.raise(pane_id);
             // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
             self.sync_config_scale_from_active_pane();
@@ -1004,15 +1009,7 @@ impl WindowManager {
     /// Shuffles the pane deck top-to-bottom (`Alt+Tab` / `F6` / `:deck next`, `WM-02`).
     pub fn shuffle_deck_next(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.daemon_window.focused = false;
-        self.command_window.blur();
-        self.clipboard_window.blur();
-        self.traffic_monitor.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.blur_floating_windows();
         let top = self.z_stack.shuffle_top_to_bottom();
         // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();
@@ -1025,15 +1022,7 @@ impl WindowManager {
     /// Shuffles the pane deck bottom-to-top (`Alt+Shift+Tab` / `:deck prev`, `WM-02`).
     pub fn shuffle_deck_prev(&mut self) -> Option<PaneId> {
         self.quick_terminal.visible = false;
-        self.agents_window.blur();
-        self.agents_list.blur();
-        self.fonts_window.blur();
-        self.daemon_window.focused = false;
-        self.command_window.blur();
-        self.clipboard_window.blur();
-        self.traffic_monitor.blur();
-        self.script_studio.blur();
-        self.session_map.blur();
+        self.blur_floating_windows();
         let top = self.z_stack.shuffle_bottom_to_top();
         // NOTE(phase-61): preserve per-pane copy_mode across focus changes (tests/phase61_window_state_preserved.rs)
         self.sync_config_scale_from_active_pane();

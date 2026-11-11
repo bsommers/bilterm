@@ -17,8 +17,14 @@
 set -euo pipefail
 
 GITHUB_REPO="${BILTERM_GITHUB_REPO:-bsommers/bilterm}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd || pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd || pwd)"
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+    REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd)"
+else
+    # Piped (`curl | bash`): not a checkout; never guess a repo root from $PWD.
+    SCRIPT_DIR="$PWD"
+    REPO_ROOT="/nonexistent-bilterm-checkout"
+fi
 
 SCOPE="local"
 CUSTOM_PREFIX="${PREFIX:-}"
@@ -44,9 +50,10 @@ Install Scopes:
   -p, --prefix <DIR>      Install into custom prefix (<DIR>/bin & <DIR>/share)
 
 Source / Binary Selection:
-  -b, --binary-only       Download prebuilt release binary from GitHub Releases (no Rust needed)
-  -s, --from-source       Build from local repo (or cargo install --git) even if prebuilt exists
-  -t, --tag <TAG>         Release tag to download when fetching from GitHub (default: latest)
+  -b, --binary-only       Only download the prebuilt release binary (never build; implied when piped)
+  -s, --from-source       Build with cargo (local checkout, else cargo install --git); needs Rust
+  -t, --tag <TAG>         Release tag to download (default: latest; falls back to the newest
+                          release that has a binary for this platform, with a warning)
 
 Operations:
       --no-desktop        Skip Linux .desktop / macOS Bilterm.app launcher installation
@@ -243,47 +250,9 @@ detect_target_triple() {
     esac
 }
 
-try_download_prebuilt() {
-    local dest_bin="$1"
-    local triple
-    triple="$(detect_target_triple)"
-    if [[ "$triple" == "unknown" ]] || ! command -v curl >/dev/null 2>&1; then
-        return 1
-    fi
-
-    local url
-    if [[ "$RELEASE_TAG" == "latest" ]]; then
-        url="https://github.com/${GITHUB_REPO}/releases/latest/download/bilterm-${triple}.tar.gz"
-    else
-        url="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/bilterm-${triple}.tar.gz"
-    fi
-
-    log_info "Checking for prebuilt binary at ${url}..."
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        printf '  [dry-run] curl -fsSL "%s" | tar -xz -C "%s"\n' "$url" "$(dirname "$dest_bin")" >&2
-        return 0
-    fi
-
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
-    if curl -fsSL "$url" -o "${tmp_dir}/bilterm.tar.gz" 2>/dev/null; then
-        tar -xzf "${tmp_dir}/bilterm.tar.gz" -C "$tmp_dir"
-        local found_bin=""
-        if [[ -f "${tmp_dir}/bilterm" ]]; then
-            found_bin="${tmp_dir}/bilterm"
-        else
-            found_bin="$(find "$tmp_dir" -name "bilterm" -type f | head -n 1 || true)"
-        fi
-        if [[ -n "$found_bin" && -f "$found_bin" ]]; then
-            install_bin_file "$found_bin" "$dest_bin"
-            rm -rf "$tmp_dir"
-            log_ok "Downloaded prebuilt bilterm (${triple})"
-            return 0
-        fi
-    fi
-    rm -rf "$tmp_dir"
-    return 1
-}
+RELEASE_BASE_URL="${BILTERM_RELEASE_BASE_URL:-https://github.com/${GITHUB_REPO}/releases}"
+API_BASE_URL="${BILTERM_API_BASE_URL:-https://api.github.com/repos/${GITHUB_REPO}}"
+RELEASES_PAGE="https://github.com/${GITHUB_REPO}/releases"
 
 install_bin_file() {
     local src_bin="$1"
@@ -297,17 +266,163 @@ install_bin_file() {
     fi
 }
 
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# Verify archive $1 (published as asset name $2) against SHA256SUMS fetched from
+# $3. Mismatch is fatal; a missing sums file or hasher only warns.
+verify_checksum() {
+    local archive="$1" asset="$2" sums_url="$3"
+    local sums_file="${archive}.sums" expected actual
+    if ! curl -fsSL "$sums_url" -o "$sums_file" 2>/dev/null; then
+        log_warn "No SHA256SUMS found at ${sums_url}; skipping checksum verification."
+        return 0
+    fi
+    expected="$(awk -v n="$asset" '{f=$2; sub(/^\*/,"",f); if (f==n) {print $1; exit}}' "$sums_file")"
+    if [[ -z "$expected" ]]; then
+        log_warn "SHA256SUMS has no entry for ${asset}; skipping checksum verification."
+        return 0
+    fi
+    actual="$(sha256_of "$archive")"
+    if [[ -z "$actual" ]]; then
+        log_warn "Neither sha256sum nor shasum is available; skipping checksum verification."
+        return 0
+    fi
+    if [[ "$expected" != "$actual" ]]; then
+        log_err "SHA256 mismatch for ${asset}: expected ${expected}, got ${actual}. Refusing to install."
+        exit 1
+    fi
+    log_ok "SHA256 verified for ${asset}"
+}
+
+# Download $1 (asset name) from URL $2, verify, extract, install to $3.
+# Returns 0 on success, 1 when the asset could not be downloaded.
+fetch_and_install() {
+    local asset="$1" url="$2" dest_bin="$3"
+    local tmp_dir found_bin=""
+    tmp_dir="$(mktemp -d)"
+    if ! curl -fsSL "$url" -o "${tmp_dir}/${asset}" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    verify_checksum "${tmp_dir}/${asset}" "$asset" "${url%/*}/SHA256SUMS"
+    if ! tar -xzf "${tmp_dir}/${asset}" -C "$tmp_dir"; then
+        rm -rf "$tmp_dir"
+        log_err "Downloaded ${asset} is not a valid tar.gz archive."
+        exit 1
+    fi
+    if [[ -f "${tmp_dir}/bilterm" ]]; then
+        found_bin="${tmp_dir}/bilterm"
+    else
+        found_bin="$(find "$tmp_dir" -name "bilterm" -type f | head -n 1 || true)"
+    fi
+    if [[ -z "$found_bin" ]]; then
+        rm -rf "$tmp_dir"
+        log_err "Archive ${asset} does not contain a 'bilterm' binary."
+        exit 1
+    fi
+    install_bin_file "$found_bin" "$dest_bin"
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# Print "<prerelease> <tag> <url>" for the newest release carrying asset $1,
+# non-prereleases first. Parses the GitHub API JSON without jq.
+find_release_with_asset() {
+    local asset="$1" json rows
+    json="$(curl -fsSL "${API_BASE_URL}/releases?per_page=30" 2>/dev/null)" || return 1
+    rows="$(printf '%s' "$json" | tr ',{}' '\n\n\n' | awk -v n="$asset" '
+        /"tag_name"[[:space:]]*:/ { t=$0; sub(/.*"tag_name"[[:space:]]*:[[:space:]]*"/,"",t); sub(/".*/,"",t); tag=t }
+        /"prerelease"[[:space:]]*:/ { pre = ($0 ~ /true/) ? "true" : "false" }
+        /"browser_download_url"[[:space:]]*:/ {
+            u=$0; sub(/.*"browser_download_url"[[:space:]]*:[[:space:]]*"/,"",u); sub(/".*/,"",u)
+            if (u ~ ("/" n "$")) print pre, tag, u
+        }')"
+    [[ -n "$rows" ]] || return 1
+    printf '%s\n' "$rows" | awk '$1=="false"{print; found=1; exit} END{if(!found) exit 1}' && return 0
+    printf '%s\n' "$rows" | head -n 1
+}
+
+print_no_binary_help() {
+    log_err "No prebuilt bilterm binary is available for $1."
+    log_err "Options:"
+    log_err "  --tag <TAG>     install a specific release that has a binary (see ${RELEASES_PAGE})"
+    log_err "  --from-source   build from source (requires Rust: https://rustup.rs)"
+    log_err "  Releases page:  ${RELEASES_PAGE}"
+}
+
+try_download_prebuilt() {
+    local dest_bin="$1"
+    local triple asset url
+    triple="$(detect_target_triple)"
+    if [[ "$triple" == "unknown" ]]; then
+        log_err "Unsupported platform: $(uname -s)/$(uname -m)."
+        print_no_binary_help "this platform"
+        return 1
+    fi
+    if ! command -v curl >/dev/null 2>&1; then
+        log_err "curl is required to download the prebuilt binary."
+        return 1
+    fi
+    asset="bilterm-${triple}.tar.gz"
+
+    if [[ "$RELEASE_TAG" == "latest" ]]; then
+        url="${RELEASE_BASE_URL}/latest/download/${asset}"
+    else
+        url="${RELEASE_BASE_URL}/download/${RELEASE_TAG}/${asset}"
+    fi
+
+    log_info "Checking for prebuilt binary at ${url}..."
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf '  [dry-run] curl -fsSL "%s" | tar -xz -C "%s"\n' "$url" "$(dirname "$dest_bin")" >&2
+        return 0
+    fi
+
+    if fetch_and_install "$asset" "$url" "$dest_bin"; then
+        log_ok "Downloaded prebuilt bilterm (${triple}, ${RELEASE_TAG})"
+        return 0
+    fi
+
+    if [[ "$RELEASE_TAG" != "latest" ]]; then
+        log_err "Release '${RELEASE_TAG}' has no asset ${asset} (${url})."
+        log_err "Check ${RELEASES_PAGE}/tag/${RELEASE_TAG}, pick another --tag, or use --from-source (requires Rust)."
+        return 1
+    fi
+
+    log_info "Latest release has no ${asset}; looking for the newest release that does..."
+    local hit pre tag fb_url
+    if ! hit="$(find_release_with_asset "$asset")" || [[ -z "$hit" ]]; then
+        print_no_binary_help "$triple"
+        return 1
+    fi
+    pre="${hit%% *}"; hit="${hit#* }"
+    tag="${hit%% *}"; fb_url="${hit#* }"
+    log_warn "The latest release has no prebuilt binary for ${triple}; installing ${tag}$([[ "$pre" == "true" ]] && echo ' (pre-release)') instead."
+    if fetch_and_install "$asset" "$fb_url" "$dest_bin"; then
+        log_ok "Downloaded prebuilt bilterm (${triple}, ${tag})"
+        return 0
+    fi
+    log_err "Failed to download ${fb_url}."
+    print_no_binary_help "$triple"
+    return 1
+}
+
 acquire_binary() {
     local dest_bin="$1"
 
+    # Explicit binary-only: never touch cargo.
     if [[ "$BINARY_ONLY" -eq 1 ]]; then
-        if try_download_prebuilt "$dest_bin"; then
-            return 0
-        fi
-        log_err "Prebuilt release binary could not be downloaded for $(detect_target_triple)."
-        log_err "Remedy: omit --binary-only to compile from source, or run './scripts/setup.sh --yes --install'."
+        try_download_prebuilt "$dest_bin" && return 0
         exit 1
     fi
+
+    local in_checkout=0
+    [[ -f "${REPO_ROOT}/Cargo.toml" ]] && in_checkout=1
 
     if [[ "$FROM_SOURCE" -eq 0 && -f "${REPO_ROOT}/target/release/bilterm" ]]; then
         local stale=0
@@ -321,32 +436,29 @@ acquire_binary() {
         fi
     fi
 
-    if [[ "$FROM_SOURCE" -eq 0 ]] && [[ ! -f "${REPO_ROOT}/Cargo.toml" ]]; then
-        if try_download_prebuilt "$dest_bin"; then
-            return 0
-        fi
+    # Piped / standalone install without --from-source: prebuilt binary only.
+    if [[ "$FROM_SOURCE" -eq 0 && "$in_checkout" -eq 0 ]]; then
+        try_download_prebuilt "$dest_bin" && return 0
+        exit 1
     fi
 
+    # From here on a source build was requested (--from-source) or we are in a checkout.
     if [[ -f "$HOME/.cargo/env" ]]; then
         # shellcheck disable=SC1091
         source "$HOME/.cargo/env"
     fi
 
     if ! command -v cargo >/dev/null 2>&1; then
-        if [[ "$FROM_SOURCE" -eq 0 ]] && try_download_prebuilt "$dest_bin"; then
-            return 0
-        fi
-        log_err "Cargo is not installed and no prebuilt binary was found."
-        log_err "Remedy: run './scripts/setup.sh --yes --install' to install Rust and build Bilterm automatically."
+        log_err "Cargo is not installed. Install Rust (https://rustup.rs) or run './scripts/setup.sh --yes --install'."
         exit 1
     fi
 
-    if [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
+    if [[ "$in_checkout" -eq 1 ]]; then
         log_info "Building optimized release binary from ${REPO_ROOT}/Cargo.toml..."
         (cd "$REPO_ROOT" && run_cmd cargo build -q --release)
         install_bin_file "${REPO_ROOT}/target/release/bilterm" "$dest_bin"
     else
-        log_info "Building bilterm from https://github.com/${GITHUB_REPO}.git via cargo..."
+        log_info "Building bilterm from https://github.com/${GITHUB_REPO}.git via cargo (--from-source)..."
         local tmp_root
         tmp_root="$(mktemp -d)"
         run_cmd cargo install --git "https://github.com/${GITHUB_REPO}.git" --root "$tmp_root"

@@ -501,6 +501,14 @@ pub(super) fn render_top_menubar(
                 .bg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 176, 0)))
                 .add_modifier(Modifier::BOLD),
         ));
+    } else if palette.is_tron() {
+        spans.push(Span::styled(
+            "  ◈ TRON ",
+            Style::default()
+                .fg(palette.prompt_prefix_fg)
+                .bg(bar_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
     } else if wm.config().liquid_glass {
         spans.push(Span::styled(
             "  💧 LIQUID GLASS ",

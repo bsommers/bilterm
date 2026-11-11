@@ -9,6 +9,8 @@ pub mod traffic_monitor_gui;
 pub mod traffic_monitor_ui;
 pub mod command_window_ui;
 pub mod bitmap_font;
+pub mod canvas_cache;
+pub mod canvas_layer;
 pub mod canvas_raster;
 pub mod contrast;
 pub mod copy_hints;
@@ -30,6 +32,7 @@ pub mod drawer_preview;
 pub mod glyphs;
 pub mod graph_raster;
 pub mod hires_subcell;
+pub mod kbd_badge;
 pub mod mcp_ui;
 pub mod media_canvas_gui;
 pub mod menu_model;
@@ -101,6 +104,8 @@ pub struct CompositePaneWidget<'a> {
     pub palette: Option<ThemePalette>,
     /// `Some(is_gui)` draws the OIA `[TUI]`/`[GUI]` badge on non-Legacy profiles.
     pub surface_badge: Option<bool>,
+    /// Who holds the keyboard; anything but the pane draws the `KBD:<WINDOW>` status badge.
+    pub keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner,
 }
 
 impl<'a> CompositePaneWidget<'a> {
@@ -111,12 +116,19 @@ impl<'a> CompositePaneWidget<'a> {
             config: None,
             palette: None,
             surface_badge: None,
+            keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner::Pane,
         }
     }
 
     /// Applies a per-window palette override (`:window theme <name>`).
     pub fn with_palette(mut self, palette: Option<ThemePalette>) -> Self {
         self.palette = palette;
+        self
+    }
+
+    /// Names the keyboard owner so the status row can show `KBD:<WINDOW>` (`FOCUS-01`).
+    pub fn with_keyboard_owner(mut self, owner: crate::wm::keyboard_focus::KeyboardOwner) -> Self {
+        self.keyboard_owner = owner;
         self
     }
 
@@ -133,6 +145,7 @@ impl<'a> CompositePaneWidget<'a> {
             config: Some(config),
             palette: None,
             surface_badge: None,
+            keyboard_owner: crate::wm::keyboard_focus::KeyboardOwner::Pane,
         }
     }
 }
@@ -159,6 +172,7 @@ impl Widget for CompositePaneWidget<'_> {
         {
             let body = Rect::new(canvas.x, canvas.y + 1, canvas.width, canvas.height - 1);
             rasterize_frame_halfblocks(buf, body, browser.cached_frame());
+            crate::pane::browser_canvas::render_browser_status_overlay(buf, body, browser);
         }
         if let Some(video) = self.pane.video_canvas()
             && canvas.height > 1
@@ -212,6 +226,7 @@ impl Widget for CompositePaneWidget<'_> {
         } else {
             render_oia_status_bar_themed(self.pane, status_rect, &palette, &glyphs, buf);
         }
+        kbd_badge::render_keyboard_badge(self.keyboard_owner, status_rect, buf);
 
         // Pass 4: Render optional Borland-style Command History Pop-up Window if active on this pane
         if self.pane.is_prompt_visible()
@@ -229,39 +244,6 @@ impl Widget for CompositePaneWidget<'_> {
             render_unsafe_paste_modal(pending_paste, canvas, cfg, &palette, buf);
         }
     }
-}
-
-fn is_safe_terminal_cluster(s: &str, expected_width: usize, grapheme_mode_2027: bool) -> bool {
-    if s.is_empty() {
-        return false;
-    }
-    let w = unicode_width::UnicodeWidthStr::width(s);
-    if w != expected_width {
-        let first_ok = expected_width == 1
-            && s.chars().next().is_some_and(|ch| {
-                gui_font::geometric::is_private_use_area(ch)
-                    || gui_font::geometric::is_geometric_glyph(ch)
-                    || unicode_width::UnicodeWidthChar::width(ch) == Some(1)
-            });
-        if !first_ok {
-            return false;
-        }
-    }
-    for ch in s.chars() {
-        let code = ch as u32;
-        if matches!(code, 0xFE00..=0xFE0F) || (grapheme_mode_2027 && code == 0x200D) {
-            continue;
-        }
-        if ch.is_control()
-            || matches!(
-                code,
-                0x200B..=0x200F | 0x2028..=0x202F | 0x2060..=0x206F | 0xFEFF | 0xFFF9..=0xFFFB
-            )
-        {
-            return false;
-        }
-    }
-    true
 }
 
 /// Rasterizes an RGBA frame into `area` using TrueColor `▀` half-blocks (2 pixel rows per cell).
@@ -302,137 +284,11 @@ fn render_output_canvas(
     let (vt_rows, vt_cols) = vt.size();
     let render_rows = canvas.height.min(vt_rows);
     let render_cols = canvas.width.min(vt_cols);
-    let grapheme_2027 = vt.is_grapheme_cluster_2027();
-    let fill_style = Style::default()
-        .fg(palette.text_fg.unwrap_or(palette.title_fg))
-        .bg(palette.window_frame_bg);
-    for y in canvas.y..canvas.y + canvas.height {
-        for x in canvas.x..canvas.x + canvas.width {
-            if let Some(c) = buf.cell_mut((x, y)) {
-                c.set_symbol(" ");
-                c.set_style(fill_style);
-            }
-        }
-    }
 
-    let font_opts = pane.font_options();
-    for r in 0..render_rows {
-        let mut line_attr = vt.line_size_attr(r);
-        if !line_attr.is_double_width() && font_opts.double_width {
-            line_attr = LineSizeAttr::DoubleWidth;
-        }
-        if line_attr.is_double_width() {
-            typography::render_double_width_row(vt, r, canvas, render_cols, line_attr, buf);
-            continue;
-        }
-        let mut skip_next_wide_continuation = false;
-        for c in 0..render_cols {
-            let Some(vt_cell) = vt.cell_view(r, c) else {
-                skip_next_wide_continuation = false;
-                continue;
-            };
-            let dst_x = canvas.x + c;
-            let dst_y = canvas.y + r;
-            let mut style = contrast::readable_canvas_cell_style(&vt_cell, cfg.theme, palette);
-            if font_opts.bold {
-                style = style.add_modifier(Modifier::BOLD);
-            }
-            if font_opts.italic {
-                style = style.add_modifier(Modifier::ITALIC);
-            }
-
-            if skip_next_wide_continuation {
-                skip_next_wide_continuation = false;
-                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_style(style);
-                }
-                continue;
-            }
-
-            if vt_cell.is_wide_continuation() {
-                if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_symbol(" ");
-                    dst_cell.set_style(style);
-                }
-                continue;
-            }
-
-            let contents = vt_cell.grapheme;
-            if vt_cell.is_wide() {
-                // Prevent a 2-column wide glyph at the rightmost column from overflowing/wrapping the host terminal
-                if c + 1 < render_cols && is_safe_terminal_cluster(contents, 2, grapheme_2027) {
-                    if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                        dst_cell.set_symbol(contents);
-                        dst_cell.set_style(style);
-                    }
-                    skip_next_wide_continuation = true;
-                } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                    dst_cell.set_symbol(" ");
-                    dst_cell.set_style(style);
-                }
-            } else if let Some(dst_cell) = buf.cell_mut((dst_x, dst_y)) {
-                if contents.is_empty() {
-                    dst_cell.set_symbol(" ");
-                } else if is_safe_terminal_cluster(contents, 1, grapheme_2027) {
-                    if !grapheme_2027 && contents.contains(['\u{FE0E}', '\u{FE0F}'])
-                        && let Some(base) = contents.chars().next()
-                    {
-                        let mut sym = [0u8; 4];
-                        dst_cell.set_symbol(base.encode_utf8(&mut sym));
-                    } else {
-                        dst_cell.set_symbol(contents);
-                    }
-                } else {
-                    dst_cell.set_symbol("·");
-                }
-                dst_cell.set_style(style);
-            }
-        }
-    }
-
-    // Highlight detected URLs with underline + bright cyan tint (VAL-03)
-    for url in pane.vt().detect_visible_urls() {
-        if url.row < render_rows {
-            for c in url.start_col..=url.end_col.min(render_cols.saturating_sub(1)) {
-                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + url.row)) {
-                    cell.set_style(
-                        cell.style()
-                            .fg(Color::Rgb(85, 255, 255))
-                            .add_modifier(Modifier::UNDERLINED),
-                    );
-                }
-            }
-        }
-    }
-
-    // Highlight custom output triggers (v0.7.0)
-    for trigger in &cfg.triggers {
-        for m in pane.vt().search_canvas(trigger) {
-            if m.row < render_rows {
-                for c in m.start_col..=m.end_col.min(render_cols.saturating_sub(1)) {
-                    if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + m.row)) {
-                        cell.set_style(
-                            Style::default()
-                                .fg(Color::White)
-                                .bg(Color::Rgb(200, 0, 80))
-                                .add_modifier(Modifier::BOLD),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Apply CRT phosphor scanline effect on odd rows when enabled (v0.6.0)
-    if cfg.crt_scanlines {
-        for r in (1..render_rows).step_by(2) {
-            for c in 0..render_cols {
-                if let Some(cell) = buf.cell_mut((canvas.x + c, canvas.y + r)) {
-                    cell.set_style(cell.style().add_modifier(Modifier::DIM));
-                }
-            }
-        }
-    }
+    // Layer 1 (cached per pane): background fill, VT cells with contrast, URL and trigger
+    // highlights, CRT scanlines. Everything below is cheap or state-dependent and redrawn each frame.
+    let layer_inputs = canvas_layer::CanvasLayerInputs::gather(pane, canvas, cfg, palette);
+    canvas_cache::paint_canvas_layer_cached(vt, &layer_inputs, buf);
 
     // Render Kitty Graphics (APC G) and DEC Sixel (DCS q) placements using TrueColor half-blocks (GFX-01)
     for gfx in pane.vt().graphic_placements() {
@@ -689,6 +545,9 @@ impl Widget for WorkspaceWidget<'_> {
         let framed = self.wm.is_framed();
         let top_workspace_id = self.wm.z_stack().top();
         let qt_visible = self.wm.is_quick_terminal_visible();
+        // While a side window holds the keyboard the top pane is drawn like an inactive one
+        // (frame, cursor) and its status row names the owner (`FOCUS-01`).
+        let kbd_owner = self.wm.keyboard_owner_shown();
         if self.wm.layout_mode() == WorkspaceLayoutMode::Tiled {
             rects.sort_by_key(|(id, _)| !qt_visible && top_workspace_id == Some(*id));
         }
@@ -697,7 +556,9 @@ impl Widget for WorkspaceWidget<'_> {
             let Some(pane) = self.wm.pane(id) else {
                 continue;
             };
-            let is_active = !qt_visible && top_workspace_id == Some(id);
+            let is_top = !qt_visible && top_workspace_id == Some(id);
+            let is_active = is_top && kbd_owner.is_pane();
+            let pane_kbd = if is_top { kbd_owner } else { crate::wm::keyboard_focus::KeyboardOwner::Pane };
             // Per-window theme / outline / bold / cursor overrides (`:window`, `:theme`, `:cursor`)
             let chrome_style = self.wm.pane_chrome(id);
             let (pane_cfg, pane_palette) = chrome_style.resolve_config_and_palette(cfg);
@@ -754,11 +615,13 @@ impl Widget for WorkspaceWidget<'_> {
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .with_surface_badge(self.wm.is_gui_surface())
+                    .with_keyboard_owner(pane_kbd)
                     .render(inner, buf);
             } else {
                 CompositePaneWidget::with_config(pane, is_active, &pane_cfg)
                     .with_palette(Some(pane_palette))
                     .with_surface_badge(self.wm.is_gui_surface())
+                    .with_keyboard_owner(pane_kbd)
                     .render(outer, buf);
             }
         }

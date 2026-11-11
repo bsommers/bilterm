@@ -136,7 +136,9 @@ impl WindowManager {
                             .is_some()
                             || self.agent_state(target_pane_id)
                                 == Some(crate::wm::agent_state::AgentState::Working);
-                        let pane = self.panes.get_mut(&target_pane_id).unwrap();
+                        let Some(pane) = self.panes.get_mut(&target_pane_id) else {
+                            return Err(format!("Agent '{recipient_name}' pane #{target_pane_id} no longer exists"));
+                        };
                         let is_alt = pane.vt().is_alternate_screen();
                         let is_pw =
                             pane.is_password_prompt() || pane.is_active_canvas_password_prompt();
