@@ -91,12 +91,10 @@ async fn input_is_serviced_within_two_turns_during_a_flood_and_draws_are_coalesc
     let max_draws = (elapsed.as_micros() / FRAME_FLOOR.as_micros()) as u64 + 1;
     assert!(stats.draws.get() >= 2, "the flood was drawn");
     assert!(stats.draws.get() <= max_draws, "{} draws in {elapsed:?}", stats.draws.get());
-    assert!(
-        stats.pty_wakes.get() > stats.draws.get(),
-        "wake-driven drains ({}) were coalesced into fewer draws ({})",
-        stats.pty_wakes.get(),
-        stats.draws.get()
-    );
+    // Not asserted: `pty_wakes > draws`. On a loaded machine the 16 ms tick (first in the biased
+    // select) drains most of the output and input events cause redraws too, so draws can exceed
+    // wake-driven drains (CI saw 618 draws against 450 wakes). The floor bound above is the
+    // coalescing guarantee.
 }
 
 const RAW_ECHO_CHILD: &str = "stty raw -echo; printf '\\033[?1049hREADY'; exec cat";
