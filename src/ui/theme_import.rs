@@ -111,7 +111,7 @@ fn parse_flexible_hex(s: &str) -> Option<Color> {
         .or_else(|| s.trim().strip_prefix("0x"))
         .or_else(|| s.trim().strip_prefix("0X"))
         .unwrap_or_else(|| s.trim().trim_matches('"').trim_matches('\''));
-    if trimmed.len() != 6 {
+    if trimmed.len() != 6 || !trimmed.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let r = u8::from_str_radix(&trimmed[0..2], 16).ok()?;

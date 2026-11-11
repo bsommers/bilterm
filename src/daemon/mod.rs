@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 pub mod types;
 pub use types::*;
 
+pub mod liveness;
+
 pub mod process;
 pub use process::*;
 
@@ -245,7 +247,9 @@ impl DaemonServerState {
                     if matches!(
                         e.kind(),
                         ErrorKind::ConnectionRefused | ErrorKind::NotFound
-                    ) =>
+                    )
+                        // macOS reports a leftover non-socket file at the path as ENOTSOCK, Linux as ECONNREFUSED.
+                        || e.raw_os_error() == Some(libc::ENOTSOCK) =>
                 {
                     match fs::remove_file(sock_path) {
                         Ok(()) => Ok(false),

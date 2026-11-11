@@ -4,6 +4,7 @@ use bilterm::pty::{PtyConfig, PtyEvent, PtySession};
 use bilterm::vt::VtParser;
 
 #[tokio::test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 async fn pty_spawns_shell_executes_command_and_deduplicates_sigwinch() {
     let mut cfg = PtyConfig::default();
     if cfg!(windows) {

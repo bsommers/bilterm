@@ -7,7 +7,6 @@
 //! Enforces strict layout-mode geometry separation so restoring a `"tiled"` workspace never
 //! contaminates `ZStack` custom floating window coordinates.
 
-use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,8 +14,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::secure_fs::{
-    ensure_private_dir, private_dir_in, private_runtime_dir, validate_plain_file_name,
-    write_private_file,
+    ensure_private_dir, private_dir_in, private_runtime_dir, read_with_backup, validate_plain_file_name,
+    write_private_file_durable,
 };
 use crate::wm::session_tree::SessionTree;
 
@@ -141,11 +140,11 @@ impl WorkspaceJournal {
             format!("{slot_name}.toml")
         };
         let slot_path = journal_dir.join(file_name);
-        write_private_file(&slot_path, payload.as_bytes())?;
+        write_private_file_durable(&slot_path, payload.as_bytes())?;
 
         let latest_path = journal_dir.join("latest.toml");
         if latest_path != slot_path {
-            write_private_file(&latest_path, payload.as_bytes())?;
+            write_private_file_durable(&latest_path, payload.as_bytes())?;
         }
         Ok(slot_path)
     }
@@ -161,9 +160,16 @@ impl WorkspaceJournal {
             format!("{slot_name}.toml")
         };
         let slot_path = journal_dir.join(file_name);
-        let raw = fs::read_to_string(&slot_path)?;
+        // Falls back to `<slot>.toml.bak` when the newest checkpoint is truncated or corrupt.
+        let (raw, _source) = read_with_backup(&slot_path, &|t| toml::from_str::<Self>(t).is_ok())?;
         let mut journal: Self = toml::from_str(&raw)
             .map_err(|e| io::Error::new(ErrorKind::InvalidData, e.to_string()))?;
+        if journal.version > JOURNAL_SCHEMA_VERSION {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("journal schema v{} is newer than supported v{JOURNAL_SCHEMA_VERSION}", journal.version),
+            ));
+        }
 
         for session in &mut journal.sessions {
             session.z_stack_rects = Self::sanitized_z_stack_rects_for_mode(session);
@@ -371,6 +377,8 @@ impl super::WindowManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg_attr(not(unix), allow(unused_imports))] // only the Unix paths use it
+    use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 

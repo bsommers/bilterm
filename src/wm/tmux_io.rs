@@ -9,13 +9,14 @@ use crate::pane::{LinkBanner, PaneId};
 use crate::tmux::format_send_keys_hex;
 use crate::tmux::hydrate::{HydratePhase, ReplyKind, render_capture};
 use crate::tmux::link::{
-    HYDRATE_REPLY_LINES_CAP, LinkDriver, LinkEvent, LinkState, OUTBOUND_CAP, SEND_KEYS_CHUNK,
+    HYDRATE_REPLY_LINES_CAP, INPUT_BACKLOG_CAP, LinkDriver, LinkEvent, LinkState, OUTBOUND_CAP, SEND_KEYS_CHUNK,
 };
 use crate::wm::WindowManager;
 
 const ORPHAN_BANNER_TEXT: &str = "REMOTE PANE GONE | close with :close";
 const LINK_DOWN_INPUT_STATUS: &str = "Link down: input not delivered (Enter/r reconnects)";
 const OUTBOUND_OVERFLOW_STATUS: &str = "Tmux command queue full: oldest input was dropped";
+const INPUT_OVERFLOW_STATUS: &str = "Paste too large for the tmux link: input was not sent";
 const HYDRATE_SETTLE_MS: u64 = 300;
 
 impl WindowManager {
@@ -92,6 +93,9 @@ impl WindowManager {
             self.tmux_link.aux.last_new_pane_ms = 0;
             self.tmux_link.aux.hydrate_sent_ms = None;
             self.tmux_link.aux.notes.clear();
+            self.tmux_link.aux.pane_states.clear();
+            self.tmux_link.aux.input_backlog.clear();
+            self.tmux_link.aux.sent_sizes.clear();
         }
         self.tmux_link
             .aux
@@ -255,33 +259,6 @@ impl WindowManager {
         self.tmux_link.aux.last_mapped_count = self.tmux_bridge.mapped_panes().len();
     }
 
-    /// Propagates `default_size` changes while `Connected` to `refresh-client -C` and `driver.resize`.
-    fn pump_tmux_resize(&mut self) {
-        let is_connected = matches!(self.tmux_link.machine.state(), LinkState::Connected { .. });
-        let has_transport = self.tmux_control.is_some() || self.tmux_link.driver.is_some();
-        if !is_connected || !has_transport {
-            self.tmux_link.last_resize = Some(self.default_size);
-            return;
-        }
-        if self.tmux_link.last_resize.is_none() {
-            self.tmux_link.last_resize = Some(self.default_size);
-            return;
-        }
-        if self.tmux_link.last_resize != Some(self.default_size) {
-            self.tmux_link.last_resize = Some(self.default_size);
-            let cols = self.default_size.1.max(1);
-            let rows = self.default_size.0.saturating_sub(1).max(1);
-            let will_overflow = self.tmux_bridge.outbound_commands.len() >= OUTBOUND_CAP;
-            self.tmux_bridge.queue_resize_client(cols, rows);
-            if will_overflow {
-                self.note_outbound_overflow();
-            }
-            if let Some(driver) = self.tmux_link.driver.as_mut() {
-                driver.resize(rows, cols);
-            }
-        }
-    }
-
     /// Converts typed bytes of tapped panes into `send-keys` (or raw ssh input while connecting).
     pub(crate) fn pump_tmux_input(&mut self, now_ms: u64) {
         self.sync_io_generation();
@@ -313,7 +290,13 @@ impl WindowManager {
             if !pane.remote_input_tap() {
                 continue;
             }
-            let bytes = pane.take_remote_input();
+            let fresh = pane.take_remote_input();
+            let mut bytes = self.tmux_link.aux.input_backlog.remove(&pane_id).unwrap_or_default();
+            if bytes.len().saturating_add(fresh.len()) > INPUT_BACKLOG_CAP {
+                pane.set_status_message(Some(INPUT_OVERFLOW_STATUS.to_string()));
+            } else {
+                bytes.extend_from_slice(&fresh);
+            }
             if bytes.is_empty() {
                 continue;
             }
@@ -339,13 +322,16 @@ impl WindowManager {
                 && (matches!(state, LinkState::Connected { .. } | LinkState::Connecting { .. })
                     || (!has_target && matches!(state, LinkState::Idle)))
             {
-                for chunk in bytes.chunks(SEND_KEYS_CHUNK) {
-                    let will_overflow = self.tmux_bridge.outbound_commands.len() >= OUTBOUND_CAP;
+                // Never queue more than the command queue can hold (it drops its oldest entries
+                // when full, which would lose typed bytes); the rest waits for the next tick.
+                let room = (OUTBOUND_CAP / 2).saturating_sub(self.tmux_bridge.outbound_commands.len());
+                let take = room.saturating_mul(SEND_KEYS_CHUNK).min(bytes.len());
+                for chunk in bytes[..take].chunks(SEND_KEYS_CHUNK) {
                     let cmd = format_send_keys_hex(tmux_pane, chunk);
                     self.tmux_bridge.queue_command(cmd, ReplyKind::Ignore);
-                    if will_overflow {
-                        self.note_outbound_overflow();
-                    }
+                }
+                if take < bytes.len() {
+                    self.tmux_link.aux.input_backlog.insert(pane_id, bytes.split_off(take));
                 }
             } else if let Some(pane) = self.panes.get_mut(&pane_id)
                 && pane.status_message() != Some(LINK_DOWN_INPUT_STATUS)
@@ -398,9 +384,11 @@ impl WindowManager {
                     .saturating_add(HYDRATE_SETTLE_MS)
         {
             let tmux_ids: Vec<usize> = mapped.iter().map(|&(t, _)| t).collect();
-            let cols = self.default_size.1.max(1);
-            let rows = self.default_size.0.saturating_sub(1).max(1);
-            let planned = self.tmux_link.hydrate.plan(&tmux_ids, cols, rows);
+            let (rows, cols) = self.link_client_size();
+            let marker = self.link_state_marker();
+            let planned = self.tmux_link.hydrate.plan_with_state(&tmux_ids, cols, rows, &marker);
+            self.tmux_link.aux.sent_sizes.clear();
+            self.tmux_link.aux.sent_sizes.insert(None, (rows, cols));
             self.tmux_link
                 .aux
                 .notes
@@ -448,6 +436,10 @@ impl WindowManager {
                 }
                 continue;
             }
+            if reply.kind == ReplyKind::PaneStates {
+                self.note_pane_states_reply(reply.ok, &reply.lines);
+                continue;
+            }
             if let ReplyKind::CapturePane { tmux_pane } = reply.kind {
                 let capped = if reply.lines.len() > HYDRATE_REPLY_LINES_CAP {
                     &reply.lines[..HYDRATE_REPLY_LINES_CAP]
@@ -458,7 +450,10 @@ impl WindowManager {
                     if let Some(&pane_id) = self.tmux_bridge.tmux_to_bilterm.get(&tmux_pane)
                         && let Some(pane) = self.panes.get_mut(&pane_id)
                     {
-                        let rendered = render_capture(capped);
+                        let rendered = match self.tmux_link.aux.pane_states.remove(&tmux_pane) {
+                            Some(st) => crate::tmux::pane_state::render_capture_with_state(capped, &st),
+                            None => render_capture(capped),
+                        };
                         if !rendered.is_empty() {
                             pane.count_payload_rx(rendered.len());
                             pane.process_pty_output(&rendered);
@@ -499,6 +494,13 @@ impl WindowManager {
                 lines = hydrated_lines,
                 "link.hydrate"
             );
+            // Flow control starts once the screen is in place (tmux 3.2+; older servers answer
+            // `%error`, which is ignored).
+            self.tmux_bridge
+                .queue_command(crate::tmux::decode::pause_after_command(), ReplyKind::Ignore);
+            // The session must outlive the link whatever the remote tmux.conf says.
+            self.tmux_bridge
+                .queue_command(crate::tmux::decode::keep_session_command(), ReplyKind::Ignore);
         }
     }
 }

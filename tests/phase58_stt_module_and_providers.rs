@@ -260,6 +260,7 @@ async fn test_ollama_stt_transcription() {
 }
 
 #[tokio::test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 async fn test_local_cli_stt_provider() {
     // Invoke a shell echo command simulating a whisper CLI output
     let cli = LocalCliSttProvider::new(vec![

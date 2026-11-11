@@ -190,6 +190,18 @@ impl WindowManager {
         Ok(new_name)
     }
 
+    /// Per-pane cleanup for every current pane id, for sites that replace `panes` wholesale
+    /// (session new/switch, layout restore) instead of going through `remove_pane`: without it
+    /// agent names, queued prompts and fleet references keep ids that new panes then reuse.
+    pub(crate) fn forget_all_pane_ids_before_replace(&mut self) {
+        let dropped: Vec<crate::wm::PaneId> = self.panes.keys().copied().collect();
+        for id in dropped {
+            self.fleet.remove_pane_references(id);
+            self.agent_mail.remove_pane(id);
+            self.prompt_queue.remove_pane(id);
+        }
+    }
+
     /// Resets the workspace to a clean 1-pane session named `name` (or auto-generated if `None`).
     /// When `blank` is `true`, clears initial command history and scrollback without saving the outgoing session.
     pub fn create_new_session(&mut self, name_opt: Option<&str>, blank: bool) -> Result<String> {
@@ -226,6 +238,7 @@ impl WindowManager {
 
         let mut new_panes = BTreeMap::new();
         new_panes.insert(1, initial_pane);
+        self.forget_all_pane_ids_before_replace();
         self.panes = new_panes;
         self.split_tree = SplitTree::new(1);
         self.z_stack = ZStack::new(1);

@@ -211,16 +211,26 @@ impl WindowManager {
 
     /// Detaches the current UI client while preserving the complete multi-pane window layout & session (`SAFE-02`, `DAEM-02`).
     pub fn detach_client(&mut self) -> bool {
-        self.client_detached = true;
         let sess = self.config.history_session.clone();
         let pane_count = self.panes.len();
-        let _ = self.save_session(&sess);
-        let _ = self.save_journal_checkpoint(None, &sess);
+        self.client_detached = true; // recorded in the snapshot
+        if let Err(e) = self.save_session(&sess) {
+            // Without a saved session there is nothing to attach to: stay attached and say why.
+            self.client_detached = false;
+            self.active_pane_mut().set_status_message(Some(format!(
+                "Detach cancelled: session '{sess}' could not be saved ({e}); nothing was closed"
+            )));
+            return false;
+        }
+        let journal = match self.save_journal_checkpoint(None, &sess) {
+            Ok(_) => String::new(),
+            Err(e) => format!("; journal checkpoint failed: {e}"),
+        };
         self.daemon_state
             .session_panes
             .insert(sess.clone(), pane_count);
         self.active_pane_mut().set_status_message(Some(format!(
-            "Detached session '{sess}' ({pane_count} pane(s) window layout preserved — run 'bilterm' or ':attach {sess}' to resume)"
+            "Detached session '{sess}' ({pane_count} pane(s): layout, cwd and screen text saved{journal}; running programs end with this client and are restarted on attach — run 'bilterm attach {sess}')"
         )));
         true
     }
@@ -341,8 +351,7 @@ impl WindowManager {
     ) -> std::io::Result<PathBuf> {
         let dir = match journal_dir.or(self.daemon_state.journal_dir.as_deref()) {
             Some(d) => d.to_path_buf(),
-            None => crate::secure_fs::private_runtime_dir()
-                .and_then(|base| crate::secure_fs::private_dir_in(&base, "journal"))?,
+            None => WorkspaceJournal::default_journal_dir()?,
         };
         let journal = self.build_workspace_journal();
         journal.save_atomic(&dir, slot_name)
@@ -668,18 +677,27 @@ impl WindowManager {
             } else {
                 sess_nodes.get(pos + 1).cloned()
             };
-            if let Some(parent) = parent_cand
-                && parent != target
-            {
-                let _ = self
-                    .mcp_console
-                    .execute(&format!("graft {target} {parent}"), &mut self.daemon_state);
-                self.active_pane_mut().set_status_message(Some(format!(
-                    "MCP: Grafted '{target}' under '{parent}'"
-                )));
-                true
-            } else {
-                false
+            match parent_cand.filter(|p| p != &target) {
+                // Self, cycle and missing-session targets are rejected by `graft` with a reason.
+                Some(parent) => match self.daemon_state.session_tree.graft(&target, &parent) {
+                    Ok(()) => {
+                        self.active_pane_mut().set_status_message(Some(format!(
+                            "MCP: Grafted '{target}' under '{parent}'"
+                        )));
+                        true
+                    }
+                    Err(e) => {
+                        self.active_pane_mut()
+                            .set_status_message(Some(format!("MCP: cannot reparent '{target}': {e}")));
+                        false
+                    }
+                },
+                None => {
+                    self.active_pane_mut().set_status_message(Some(format!(
+                        "MCP: no other session to reparent '{target}' under"
+                    )));
+                    false
+                }
             }
         } else {
             let _ = self

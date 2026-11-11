@@ -317,27 +317,24 @@ mod input {
         assert!(drv_state.lock().unwrap().resizes.is_empty());
 
         // Changing default_size twice with the same value queues one refresh-client and one resize.
+        // The remote client is as large as the linked pane (not the whole window), so the
+        // expected sizes are read from the pane. Changing the size twice with the same value
+        // queues one refresh-client and one resize.
         wm.resize_all(Rect::new(0, 0, 100, 31)).unwrap();
         wm.tick_tmux_link(20);
         wm.resize_all(Rect::new(0, 0, 100, 31)).unwrap();
         wm.tick_tmux_link(30);
-        assert_eq!(
-            drain_cmds(&mut cmd_rx),
-            vec!["refresh-client -C 100x30\n".to_string()]
-        );
-        assert_eq!(drv_state.lock().unwrap().resizes, vec![(30, 100)]);
+        let (r1, c1) = wm.pane(_primary).unwrap().vt().size();
+        assert!(c1 < 100, "the linked pane is narrower than the window ({c1})");
+        assert_eq!(drain_cmds(&mut cmd_rx), vec![format!("refresh-client -C {c1}x{r1}\n")]);
+        assert_eq!(drv_state.lock().unwrap().resizes, vec![(r1, c1)]);
 
         // A different size queues another and calls driver.resize once more.
         wm.resize_all(Rect::new(0, 0, 120, 41)).unwrap();
         wm.tick_tmux_link(40);
-        assert_eq!(
-            drain_cmds(&mut cmd_rx),
-            vec!["refresh-client -C 120x40\n".to_string()]
-        );
-        assert_eq!(
-            drv_state.lock().unwrap().resizes,
-            vec![(30, 100), (40, 120)]
-        );
+        let (r2, c2) = wm.pane(_primary).unwrap().vt().size();
+        assert_eq!(drain_cmds(&mut cmd_rx), vec![format!("refresh-client -C {c2}x{r2}\n")]);
+        assert_eq!(drv_state.lock().unwrap().resizes, vec![(r1, c1), (r2, c2)]);
     }
 }
 
@@ -369,14 +366,7 @@ fn hydrate_sends_refresh_then_captures_after_settle() {
     // At +300 ms refresh-client then capture-pane %3 and %4 are sent.
     wm.tick_tmux_link(400);
     assert_eq!(wm.link_hydrate_phase(), HydratePhase::Sent);
-    assert_eq!(
-        drain_cmds(&mut cmd_rx),
-        vec![
-            "refresh-client -C 80x23\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %3\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %4\n".to_string(),
-        ]
-    );
+    assert_hydrate_batch(drain_cmds(&mut cmd_rx), &[3, 4]);
 }
 
 #[test]
@@ -607,13 +597,7 @@ fn generation_change_restarts_hydrate() {
     wm.tick_tmux_link(500);
     wm.tick_tmux_link(800);
     assert_eq!(wm.link_hydrate_phase(), HydratePhase::Sent);
-    assert_eq!(
-        drain_cmds(&mut cmd_rx2),
-        vec![
-            "refresh-client -C 80x23\n".to_string(),
-            "capture-pane -p -e -J -S -2000 -t %3\n".to_string(),
-        ]
-    );
+    assert_hydrate_batch(drain_cmds(&mut cmd_rx2), &[3]);
     send(
         &tx2,
         &[
@@ -988,4 +972,16 @@ fn removed_pane_does_not_receive_late_output() {
             .contents()
             .contains("resurrected")
     );
+}
+
+/// The hydrate batch: the client size of the linked pane, one state query for all panes, then
+/// one capture per pane (sizes follow the pane, so only the command shapes are pinned here).
+#[allow(dead_code)]
+fn assert_hydrate_batch(cmds: Vec<String>, panes: &[usize]) {
+    assert_eq!(cmds.len(), panes.len() + 2, "{cmds:?}");
+    assert!(cmds[0].starts_with("refresh-client -C "), "{cmds:?}");
+    assert!(cmds[1].starts_with("display-message -p \"bilterm-state #{W:#{P:[#{pane_id} "), "{cmds:?}");
+    for (cmd, pane) in cmds[2..].iter().zip(panes) {
+        assert_eq!(*cmd, format!("capture-pane -p -e -J -S -2000 -t %{pane}\n"));
+    }
 }

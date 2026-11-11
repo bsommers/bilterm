@@ -97,7 +97,8 @@ src/
 ├── vt/
 │   ├── mod.rs                  # VtParser state machine, CommandBlock tracking, scrollback & size management
 │   ├── backend.rs              # TerminalBackend port trait, MockTerminalBackend, and conformance suite (ARCH-R03)
-│   ├── scan.rs                 # Single-pass ESC (\x1b) stream pre-scanner (DECSET traps, CSI DECRPM/DA1/DSR)
+│   ├── framer.rs               # Stateful control-sequence framer in front of the engine: split-safe, linear, bounded carry
+│   ├── scan.rs                 # Framed-chunk dispatch to the engine + CSI handlers (DECSET traps, DECRPM/DA1/DSR, SGR)
 │   ├── scan_osc_dcs.rs         # OSC 7/8/9/52/133/777/1337, DCS XTGETTCAP/Sixel & APC Kitty scanners
 │   ├── graphics.rs             # Kitty Graphics (APC G) & DEC Sixel (DCS q) decoders and placements
 │   ├── tektronix.rs            # Tektronix 4010/4014 10-bit/12-bit vector storage-tube state machine & phosphor decay
@@ -483,7 +484,14 @@ on both a Wire and a Payload cell of the same view.
 
 ## 7. Verification & CI Conservation Gates
 
-Always run these 4 checks locally before committing or pushing:
+The default gate is one command with one output line on every OS: `scripts/verify.sh` (Linux, macOS,
+Git Bash) or `pwsh scripts/verify.ps1` (Windows). CI runs it on six cells
+({Linux, macOS, Windows} x {x86_64, ARM64}); the tiers, sharding (`--integration --shard K/N`),
+cross-target checks, portable-test rules (`tests/common/mod.rs`) and the coverage ratchet
+(`scripts/coverage.sh`, `.github/coverage-floor.txt`) are documented in
+[`TEST_COVERAGE.md` section 8](TEST_COVERAGE.md#8-ci-matrix-per-os-gate-cross-checks-and-the-coverage-ratchet).
+
+The underlying checks, for reference:
 
 ```bash
 # 1. Full unit, integration, snapshot, and security test suite

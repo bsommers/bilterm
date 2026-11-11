@@ -551,6 +551,7 @@ impl CompositePane {
         self.last_canvas_size = new_size;
         self.resize_events += 1;
         self.vt.set_size(new_size.0, new_size.1);
+        self.sync_browser_viewport();
         self.transport.resize(new_size.0, new_size.1)
     }
 
@@ -822,14 +823,14 @@ impl CompositePane {
         self.mirror_output_tap(bytes);
         self.vt.process(bytes);
         self.drain_osc52_decoded();
-        self.canvas_scene
-            .scan_osc_canvas_sequences(self.vt.tektronix_mut(), bytes);
+        self.vt
+            .drain_canvas_osc(|tek, seq| self.canvas_scene.scan_osc_canvas_sequences(tek, seq));
         if let Some(wt) = self.vt.window_title() {
             self.title = format!("{wt} [#{}]", self.id);
         }
         if let Some(pty) = self.transport.local_pty() {
             for resp in self.vt.take_query_responses() {
-                let _ = pty.write_all(&resp);
+                crate::pane::transport::send_query_reply(pty, &resp);
             }
         }
         self.sync_page_hold_after_output();
@@ -877,14 +878,14 @@ impl CompositePane {
             self.mirror_output_tap(&coalesced);
             self.vt.process(&coalesced);
             self.drain_osc52_decoded();
-            self.canvas_scene
-                .scan_osc_canvas_sequences(self.vt.tektronix_mut(), &coalesced);
+            self.vt
+                .drain_canvas_osc(|tek, seq| self.canvas_scene.scan_osc_canvas_sequences(tek, seq));
             if let Some(wt) = self.vt.window_title() {
                 self.title = format!("{wt} [#{}]", self.id);
             }
             if let Some(pty) = self.transport.local_pty() {
                 for resp in self.vt.take_query_responses() {
-                    let _ = pty.write_all(&resp);
+                    crate::pane::transport::send_query_reply(pty, &resp);
                 }
             }
             self.sync_page_hold_after_output();
@@ -1151,12 +1152,7 @@ impl CompositePane {
     }
 
     pub fn open_browser(&mut self, url: &str) {
-        let (cols, rows) = self.vt.size();
-        let width_px = cols.saturating_mul(10).max(320);
-        let height_px = rows.saturating_mul(18).max(240);
-        self.browser_canvas = Some(browser_canvas::BrowserCanvasState::new_cdp_or_synthetic(
-            url, width_px, height_px, self.id,
-        ));
+        self.open_browser_canvas(url);
     }
 
     pub fn close_browser(&mut self) {

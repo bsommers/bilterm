@@ -67,6 +67,10 @@ pub enum ReplyKind {
     CapturePane { tmux_pane: usize },
     /// `list-panes -s -F "#{window_id} #{pane_id} #{window_name}"` pane discovery.
     ListPanes,
+    /// `display-message -p` screen state of every pane, sent just before the captures. Its reply
+    /// identifies itself by its marker (see [`ReplyCorrelator::set_state_marker`]) and takes no
+    /// place in the FIFO.
+    PaneStates,
 }
 
 /// One correlated reply block.
@@ -107,6 +111,8 @@ pub struct ReplyCorrelator {
     open: Option<OpenReply>,
     failed: Vec<Reply>,
     overflowed: bool,
+    /// First word of a pane-state reply; such a block is recognised by content, not position.
+    state_marker: Option<String>,
 }
 
 impl ReplyCorrelator {
@@ -140,11 +146,26 @@ impl ReplyCorrelator {
         });
     }
 
+    /// Sets the first word that marks a pane-state reply (kept across `clear()`).
+    pub fn set_state_marker(&mut self, marker: impl Into<String>) {
+        self.state_marker = Some(marker.into());
+    }
+
     /// A body line inside the open block; ignored outside a block.
     pub fn on_line(&mut self, line: &str) {
         let Some(open) = self.open.as_mut() else {
             return;
         };
+        // A state reply was never queued in the FIFO: give back the entry this block claimed.
+        if open.lines.is_empty()
+            && open.kind != Some(ReplyKind::PaneStates)
+            && self.state_marker.as_deref().is_some_and(|m| {
+                line.strip_prefix(m).is_some_and(|r| r.is_empty() || r.starts_with(' '))
+            })
+            && let Some(claimed) = open.kind.replace(ReplyKind::PaneStates)
+        {
+            self.queue.push_front(claimed);
+        }
         if open.lines.len() >= HYDRATE_REPLY_LINES_CAP {
             open.truncated = true;
         } else {
@@ -187,6 +208,7 @@ impl ReplyCorrelator {
         self.open = None;
         self.failed.clear();
         self.overflowed = false;
+        // `state_marker` is kept: it belongs to the bridge, not to one attach's FIFO.
     }
 }
 
@@ -254,14 +276,29 @@ impl HydratePlanner {
         self.phase
     }
 
-    /// Commands to send once `Ready`: `refresh-client` (`Ignore`) then one capture per pane in
-    /// ascending order. Empty outside `Ready`. The phase moves on with `mark_sent()`.
+    /// Commands to send once `Ready`: `refresh-client` (`Ignore`), one state query for all panes
+    /// (`marker` is its reply's first word), then one capture per pane in ascending order. Empty outside `Ready`. The phase moves on with `mark_sent()`.
+    pub fn plan_with_state(
+        &mut self,
+        panes: &[usize],
+        cols: u16,
+        rows: u16,
+        marker: &str,
+    ) -> Vec<(String, ReplyKind)> {
+        let mut out = self.plan(panes, cols, rows);
+        if !out.is_empty() {
+            out.insert(1, (super::pane_state::pane_states_command(marker), ReplyKind::PaneStates));
+        }
+        out
+    }
+
+    /// `refresh-client` plus one capture per pane, without the state query (text only).
     pub fn plan(&mut self, panes: &[usize], cols: u16, rows: u16) -> Vec<(String, ReplyKind)> {
         if self.phase != HydratePhase::Ready {
             return Vec::new();
         }
         self.planned = panes.iter().copied().collect();
-        let mut out = Vec::with_capacity(self.planned.len() + 1);
+        let mut out = Vec::with_capacity(self.planned.len() + 2);
         out.push((format_refresh_client_size(cols, rows), ReplyKind::Ignore));
         for &n in &self.planned {
             out.push((

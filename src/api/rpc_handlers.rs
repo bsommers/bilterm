@@ -157,14 +157,12 @@ impl AutomationControlPlane {
         &mut self,
         params: &JsonValue,
     ) -> std::result::Result<JsonValue, String> {
-        let name = params
-            .get("name")
-            .and_then(JsonValue::as_str)
-            .unwrap_or("default");
-        let path = self.wm.save_session(name).map_err(|e| e.to_string())?;
+        // Same function and default (the active session) as `:session save [name]`.
+        let name = params.get("name").and_then(JsonValue::as_str);
+        let (name, path) = self.wm.save_and_activate_session(name).map_err(|e| e.to_string())?;
         Ok(JsonValue::obj([
             ("saved", JsonValue::Bool(true)),
-            ("session", JsonValue::String(name.to_string())),
+            ("session", JsonValue::String(name)),
             ("path", JsonValue::String(path.display().to_string())),
             ("panes", JsonValue::Number(self.wm.pane_count() as i64)),
         ]))
@@ -175,14 +173,19 @@ impl AutomationControlPlane {
         &mut self,
         params: &JsonValue,
     ) -> std::result::Result<JsonValue, String> {
+        // Same default (the active session) as `:session restore [name]`.
         let name = params
             .get("name")
             .and_then(JsonValue::as_str)
-            .unwrap_or("default");
-        let count = self.wm.restore_session(name).map_err(|e| e.to_string())?;
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map_or_else(|| self.wm.config().history_session.clone(), str::to_string);
+        let count = self.wm.restore_session(&name).map_err(|e| e.to_string())?;
+        let note = self.wm.take_restore_note().map_or(JsonValue::Null, JsonValue::String);
         Ok(JsonValue::obj([
             ("restored", JsonValue::Bool(true)),
-            ("session", JsonValue::String(name.to_string())),
+            ("note", note),
+            ("session", JsonValue::String(name)),
             ("panes", JsonValue::Number(count as i64)),
         ]))
     }

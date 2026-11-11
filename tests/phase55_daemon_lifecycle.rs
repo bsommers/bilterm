@@ -184,9 +184,10 @@ fn test_graceful_stop_and_cleanup() {
     let stopped = stop_daemon(runtime_dir, "test-stop", false).expect("stop daemon");
     assert!(!stopped); // dead PID, returns false for active process, but cleans resources
 
-    // Socket, lock, and registry file must be cleaned up
+    // Socket and registry file are removed; the lockfile is kept (never unlinked, another
+    // starter may hold it open) but its stale content is cleared.
     assert!(!entry.socket_path.exists());
-    assert!(!lock_path.exists());
+    assert_eq!(fs::read(&lock_path).unwrap().len(), 0);
     let reg_path = DaemonRegistry::entry_path_in(runtime_dir, "test-stop").unwrap();
     assert!(!reg_path.exists());
 }

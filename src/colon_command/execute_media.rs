@@ -1,7 +1,7 @@
 //! Execution for `:browser` (`BrowserOp`) and `:video` (`VideoOp`) actions (`WEB-01..02`, `VID-01..02`).
 
 use crate::action::{BrowserOp, VideoOp};
-use crate::pane::browser_canvas::{MediaMouseEvent, MediaMouseEventKind};
+use crate::pane::browser_canvas::{MediaMouseEvent, MediaMouseEventKind, browser_error_text};
 use crate::wm::WindowManager;
 use crossterm::event::{KeyModifiers, MouseButton};
 
@@ -11,13 +11,15 @@ fn surface_hint(wm: &WindowManager) -> &'static str {
     if wm.gui_surface { "" } else { TUI_SURFACE_HINT }
 }
 
-fn browser_backend_label(name: &str, url: &str) -> &'static str {
-    if name == "cdp-chromium" {
-        "CDP"
-    } else if url.starts_with("demo://") || url.starts_with("about:") || url.starts_with("test://") {
-        "synthetic preview"
-    } else {
-        "synthetic preview (Chrome not found)"
+/// Status-line label for what is really running, e.g. `cdp`, `cdp (starting)`,
+/// `synthetic (Chrome not found)`.
+fn browser_backend_label(pane: &crate::pane::CompositePane) -> Option<String> {
+    pane.browser_canvas().map(|b| b.backend_name())
+}
+
+fn report(pane: &mut crate::pane::CompositePane, result: crate::error::Result<()>) {
+    if let Err(e) = result {
+        pane.set_status_message(Some(format!("Browser: {}", browser_error_text(&e))));
     }
 }
 
@@ -52,43 +54,46 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
                 pane.set_status_message(Some("Closed browser canvas".to_string()));
             } else {
                 pane.open_browser("https://example.com");
-                let label = pane
-                    .browser_canvas()
-                    .map(|b| browser_backend_label(b.backend_name(), "https://example.com"))
-                    .unwrap_or("none");
-                pane.set_status_message(Some(format!("Opened browser canvas: {label}{hint}")));
+                if let Some(label) = browser_backend_label(pane) {
+                    pane.set_status_message(Some(format!("Opened browser canvas: {label}{hint}")));
+                }
             }
         }
         BrowserOp::Open { url, .. } => {
-            if let Some(b) = pane.browser_canvas_mut() {
-                let _ = b.navigate(&url);
-            } else {
-                pane.open_browser(&url);
+            let navigated = match pane.browser_canvas_mut() {
+                Some(b) => b.navigate(&url),
+                None => {
+                    pane.open_browser(&url);
+                    Ok(())
+                }
+            };
+            match (navigated, browser_backend_label(pane)) {
+                (Err(e), _) => pane.set_status_message(Some(format!("Browser: {}", browser_error_text(&e)))),
+                (Ok(()), Some(label)) => {
+                    pane.set_status_message(Some(format!("Browser opened: {url} ({label}){hint}")));
+                }
+                // `open_browser` refused the URL and already reported why.
+                (Ok(()), None) => {}
             }
-            let label = pane
-                .browser_canvas()
-                .map(|b| browser_backend_label(b.backend_name(), &url))
-                .unwrap_or("none");
-            pane.set_status_message(Some(format!("Browser opened: {url} ({label}){hint}")));
         }
         BrowserOp::Back { .. } => {
-            if let Some(b) = pane.browser_canvas_mut() {
-                let _ = b.go_back();
+            if let Some(r) = pane.browser_canvas_mut().map(|b| b.go_back()) {
+                report(pane, r);
             }
         }
         BrowserOp::Forward { .. } => {
-            if let Some(b) = pane.browser_canvas_mut() {
-                let _ = b.go_forward();
+            if let Some(r) = pane.browser_canvas_mut().map(|b| b.go_forward()) {
+                report(pane, r);
             }
         }
         BrowserOp::Reload { .. } => {
-            if let Some(b) = pane.browser_canvas_mut() {
-                let _ = b.reload();
+            if let Some(r) = pane.browser_canvas_mut().map(|b| b.reload()) {
+                report(pane, r);
             }
         }
         BrowserOp::Stop { .. } => {
-            if let Some(b) = pane.browser_canvas_mut() {
-                let _ = b.stop();
+            if let Some(r) = pane.browser_canvas_mut().map(|b| b.stop()) {
+                report(pane, r);
             }
         }
         BrowserOp::FocusViewport { focused, .. } => {
@@ -97,11 +102,16 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
                     Some(f) => b.set_focus(f),
                     None => b.toggle_focus(),
                 }
+                if b.viewport_focused {
+                    pane.set_status_message(Some(crate::input::browser_keys::FOCUS_HINT.to_string()));
+                }
             }
         }
         BrowserOp::Zoom { delta_pct, .. } => {
             if let Some(b) = pane.browser_canvas_mut() {
                 b.zoom_delta(delta_pct);
+                let zoom = b.zoom_pct;
+                pane.set_status_message(Some(format!("Browser zoom: {zoom}%")));
             }
         }
         BrowserOp::Click { x_px, y_px, button, .. } => {
@@ -111,20 +121,20 @@ pub fn execute_browser_command(wm: &mut WindowManager, op: BrowserOp) -> bool {
                     2 => MouseButton::Middle,
                     _ => MouseButton::Left,
                 };
-                let _ = b.dispatch_mouse(MediaMouseEvent {
-                    kind: MediaMouseEventKind::Down(mb),
-                    x_px,
-                    y_px,
-                    modifiers: KeyModifiers::NONE,
-                });
+                // A click is a press followed by a release.
+                for kind in [MediaMouseEventKind::Down(mb), MediaMouseEventKind::Up(mb)] {
+                    let _ = b.dispatch_mouse(MediaMouseEvent { kind, x_px, y_px, modifiers: KeyModifiers::NONE });
+                }
             }
         }
         BrowserOp::Scroll { delta_x, delta_y, .. } => {
             if let Some(b) = pane.browser_canvas_mut() {
+                // Scroll at the centre of the page so the wheel reaches the main scroller.
+                let (w, h) = b.cached_frame().map_or(b.viewport_px(), |f| (f.width_px, f.height_px));
                 let _ = b.dispatch_mouse(MediaMouseEvent {
                     kind: MediaMouseEventKind::Wheel { delta_x, delta_y },
-                    x_px: 0,
-                    y_px: 0,
+                    x_px: w / 2,
+                    y_px: h / 2,
                     modifiers: KeyModifiers::NONE,
                 });
             }

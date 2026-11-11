@@ -19,8 +19,10 @@ use crate::tmux::link::{
 use crate::tmux::splitter::{diag_lines, ControlLineSplitter, SplitOut};
 use crate::tmux::TmuxControlSubprocess;
 
-/// Time given to `try_wait` after the PTY stream ended, to learn the exit code.
-const EXIT_CODE_PATIENCE: Duration = Duration::from_millis(50);
+/// How long later pumps keep asking for the exit code after the PTY stream ended. Nothing waits:
+/// each pump asks once (`try_wait`) and the exit is reported as soon as the code is known or this
+/// time has passed, so the UI thread never sleeps on the link path.
+const EXIT_CODE_PATIENCE: Duration = Duration::from_millis(500);
 
 /// Driver over a PTY child.
 pub struct PtyLinkDriver {
@@ -29,6 +31,13 @@ pub struct PtyLinkDriver {
     line_tx: Option<UnboundedSender<String>>,
     cmd_rx: Option<UnboundedReceiver<String>>,
     exit_reported: bool,
+    /// The PTY stream ended at this instant; the exit code is still being collected.
+    exit_seen: Option<std::time::Instant>,
+    /// A command taken off `cmd_rx` that the PTY refused (input backlog full) or failed to
+    /// take; it is offered again, ahead of newer commands, on the next pump.
+    held_cmd: Option<String>,
+    /// The current refusal has been logged (one line per episode, not one per pump).
+    refusal_logged: bool,
 }
 
 impl Default for PtyLinkDriver {
@@ -40,6 +49,9 @@ impl Default for PtyLinkDriver {
             line_tx: None,
             cmd_rx: None,
             exit_reported: false,
+            exit_seen: None,
+            held_cmd: None,
+            refusal_logged: false,
         }
     }
 }
@@ -76,6 +88,9 @@ impl PtyLinkDriver {
             line_tx: Some(line_tx),
             cmd_rx: Some(cmd_rx),
             exit_reported: false,
+            exit_seen: None,
+            held_cmd: None,
+            refusal_logged: false,
         };
         Ok((control, driver))
     }
@@ -99,18 +114,50 @@ impl PtyLinkDriver {
         }
     }
 
+    /// Reports the child's exit once its code is known, or without one after
+    /// `EXIT_CODE_PATIENCE`; never blocks.
+    fn report_exit_when_known(&mut self, since: std::time::Instant, poll: &mut DriverPoll) {
+        let code = self.pty.as_ref().and_then(|pty| pty.exit_code(Duration::ZERO));
+        if code.is_some() || since.elapsed() >= EXIT_CODE_PATIENCE {
+            self.exit_reported = true;
+            poll.exited = Some(DriverExit { code });
+        }
+    }
+
     fn write_queued_commands(&mut self) {
         let (Some(rx), Some(pty)) = (self.cmd_rx.as_mut(), self.pty.as_ref()) else {
             return;
         };
-        while let Ok(mut cmd) = rx.try_recv() {
-            if !cmd.ends_with('\n') {
-                cmd.push('\n');
+        // Order is kept: the held command first, then the channel. A refused command is never
+        // dropped; it stays held until the PTY takes it or the driver is killed.
+        loop {
+            let cmd = match self.held_cmd.take() {
+                Some(c) => c,
+                None => match rx.try_recv() {
+                    Ok(mut c) => {
+                        if !c.ends_with('\n') {
+                            c.push('\n');
+                        }
+                        c
+                    }
+                    Err(_) => break,
+                },
+            };
+            if let Err(err) = pty.write_all(cmd.as_bytes()) {
+                if !self.refusal_logged {
+                    self.refusal_logged = true;
+                    tracing::warn!(target: "bilterm::link", error = %err, bytes = cmd.len(), "link command not written; held for retry");
+                }
+                self.held_cmd = Some(cmd);
+                return;
             }
-            if pty.write_all(cmd.as_bytes()).is_err() {
-                break;
-            }
+            self.refusal_logged = false;
         }
+    }
+
+    /// Bytes of the command held back by PTY backpressure (0 when none).
+    pub fn held_command_len(&self) -> usize {
+        self.held_cmd.as_ref().map_or(0, String::len)
     }
 }
 
@@ -118,6 +165,10 @@ impl LinkDriver for PtyLinkDriver {
     fn pump(&mut self) -> DriverPoll {
         let mut poll = DriverPoll::default();
         if self.exit_reported {
+            return poll;
+        }
+        if let Some(since) = self.exit_seen {
+            self.report_exit_when_known(since, &mut poll);
             return poll;
         }
         let events = match self.pty.as_mut() {
@@ -140,12 +191,9 @@ impl LinkDriver for PtyLinkDriver {
         if exited {
             let pieces = self.splitter.flush_partial();
             self.absorb(pieces, &mut poll);
-            let code = self
-                .pty
-                .as_ref()
-                .and_then(|pty| pty.exit_code(EXIT_CODE_PATIENCE));
-            self.exit_reported = true;
-            poll.exited = Some(DriverExit { code });
+            let since = std::time::Instant::now();
+            self.exit_seen = Some(since);
+            self.report_exit_when_known(since, &mut poll);
         } else {
             self.write_queued_commands();
         }
@@ -178,7 +226,17 @@ impl LinkDriver for PtyLinkDriver {
 
 /// Connector that spawns the real `ssh -tt` PTY child.
 #[derive(Debug, Default)]
-pub struct PtyLinkConnector {}
+pub struct PtyLinkConnector {
+    /// Program started instead of `ssh` (tests point this at a local stand-in).
+    program: Option<String>,
+}
+
+impl PtyLinkConnector {
+    /// A connector that runs `program` with the ssh argv (same contract as `ssh`).
+    pub fn with_program(program: impl Into<String>) -> Self {
+        Self { program: Some(program.into()) }
+    }
+}
 
 impl LinkConnector for PtyLinkConnector {
     fn connect(&mut self, target: &LinkTarget, size: (u16, u16)) -> std::io::Result<LinkTransport> {
@@ -187,7 +245,7 @@ impl LinkConnector for PtyLinkConnector {
             .build_ssh_tmux_cc_args(&target.session, None)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let cfg = PtyConfig {
-            program: "ssh".into(),
+            program: self.program.clone().unwrap_or_else(|| "ssh".into()),
             args,
             rows: size.0,
             cols: size.1,

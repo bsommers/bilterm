@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Browser canvas is now a real browser (`WEB-01..02`).** `:browser open <url>` drives headless Chrome over the DevTools pipe (`--remote-debugging-pipe`, no TCP debugging port) instead of painting a placeholder. Frames come from the screencast and are decoded off the UI thread; the window-manager tick redraws only when a frame or the page state changed. URL, title, loading state and back/forward follow the page, including navigations the page starts itself. See [user guide chapter 14](docs/user-guide/14-browser-canvas.md).
+- **Keyboard and mouse reach the page.** With the viewport focused (click the page, `Ctrl+]`, or `:browser focus on`) keys, bracketed paste, clicks, drags and the wheel are forwarded. `Ctrl+]` always returns the keyboard to bilterm. `Ctrl+L` edits the URL only while the page has focus; it is no longer taken from the shell otherwise. Mouse positions are derived from the frame and pane size, so clicks land correctly in the terminal and in `--gui`.
+- **Resize and zoom work.** The page follows the pane size, and `:browser zoom` reflows the page (25% to 500%).
+- **Honest status.** The status line and `browser.state` report `cdp` only after the DevTools handshake, `cdp (starting)` before it, `cdp (crashed)` with "press r to reload" after a crash, and `synthetic (Chrome not found)` or `synthetic (launch failed: …)` when the placeholder engine is used. The lock icon is shown only for `https://`. `browser.open` returns `ok: false` with an `error` when the URL is refused.
+- Nav-bar buttons are hit-tested by display column, so every click lands on the button drawn there.
+
+### Security
+- Browser URLs are validated before they reach Chrome: only `http://`, `https://` and `about:blank`; `file://` needs `BILTERM_BROWSER_ALLOW_FILE=1`; `javascript:`, `data:`, `chrome:` and anything starting with `-` are refused. The URL is never passed on Chrome's command line.
+- Each browser gets its own profile directory (pid, pane and random suffix) inside the private runtime dir (`0700`); a failure to create it aborts the launch. Closing the canvas kills Chrome's whole process group and removes the profile. Downloads are denied and the sandbox stays on.
+
+### Dependencies
+- Added `serde_json` (DevTools messages) and `zune-jpeg` (screencast frame decoding, pure Rust).
+
+### Requirements
+- A Chromium-family browser on Linux or macOS for the real engine (`BILTERM_CHROME_PATH` overrides discovery). Without one the placeholder engine is used and the status line says so.
+
+### Fixed
+- **Control sequences split across PTY reads**: the side scanner that handles what the VT engine does not (OSC 0/7/8/9/52/133/777/1337, DECSET flags, Kitty keyboard, DECRQSS/XTGETTCAP, Sixel, Kitty graphics, DEC line size, Tektronix entry) is now a stateful framer (`src/vt/framer.rs`). A sequence cut by a read boundary is handled exactly as if it arrived whole; previously only OSC 52 survived a split, and a split Sixel or Kitty image printed its payload on the grid.
+- **Scanner cost**: each output byte is consumed once. A long unterminated OSC 52 fed in small reads, and many unterminated OSCs in one read, were quadratic.
+- **Sequence boundaries**: a title or notification now ends at its own terminator instead of at a later `BEL`; `CSI 6n` and image placements use the cursor position at the sequence, not at the end of the read; `CSI ?38h` no longer swallows earlier sequences that shared its read.
+- **Bounded carry**: an unterminated `CSI` (256 bytes), `OSC` (1 MiB + 64), `APC` (Kitty payload limit + 4 KiB) or `DCS` (4 MiB) is dropped whole at its limit and the rest is skipped without being stored.
+- **Remote tmux link (`:ssh-tmux`) rendering**: the remote tmux client is now as large as the linked pane instead of the whole Bilterm window (full-screen programs and wrapped lines drew in the wrong place); a hydrate restores alternate screen, cursor position and visibility, application cursor keys and mouse modes (re-attaching while `vim` ran left the cursor in the wrong place and stale rows on the primary screen); a UTF-8 character split across two `%output` lines is no longer turned into replacement characters; `%extended-output` is understood.
+- **Remote tmux link flooding**: Bilterm asks tmux for `pause-after` flow control and re-captures a paused pane, so a flooding remote pane no longer starves input (Ctrl-C typed in Bilterm now arrives).
+- **Remote tmux link input**: a paste larger than 4096 bytes was silently truncated; pastes are now delivered complete and in order.
+- **Remote tmux link reconnect**: a stalled connection is noticed in about 15 to 20 seconds instead of about 55 (link keepalive 5 s); backoff has jitter; the UI thread no longer sleeps while collecting the transport's exit code; a missing or too-old remote tmux is named in the failure text.
+- `tmux_link_state()` / `:ssh-tmux info` no longer report `idle` while a removed link's transport is still attached.
+
+### Added
+- `:ssh-tmux -- <host> [session]` reaches hosts named `info`, `reconnect`, `disconnect` or `prefill`.
+- The link sets `destroy-unattached off` on the session it attaches to, so a remote `tmux.conf` cannot make a disconnect destroy the session.
+- `tests/tmux_link_transcripts.rs` (recorded control-mode transcripts through the real parser into a pane) and `tests/tmux_link_live.rs` (real tmux on a private socket, `BILTERM_TMUX_LIVE=1`).
+
 ## [3.3.0] - 2026-11-09
 
 Milestone v3.3.0 "Beyond Herdr": always-on foreground RPC, first-class agent/pane/workspace CLI, semantic agent introspection, worktree swarm DAG runner, Mission Control HUD, and hierarchical `D:(W,S,Y,P)` coordinates (Phases 65–71, 71 phases total).

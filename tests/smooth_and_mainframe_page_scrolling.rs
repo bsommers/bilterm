@@ -322,6 +322,7 @@ fn block_page_mode_underlying_vt_row0_and_pa1_or_c_cancel_to_live_tail() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 fn vt_worker_handle_tracks_block_page_hold_and_advances_across_thread_seam() {
     use bilterm::pty::PtyConfig;
     use bilterm::vt::worker::VtWorkerHandle;

@@ -7,6 +7,8 @@
 //!    while keeping a live `UnixListener` socket intact and discoverable via `list_active_daemon_sessions_in`.
 //! 3. `"session.save"` and `"session.restore"` JSON-RPC methods via `AutomationControlPlane` preserving
 //!    multi-pane `SplitTree`, `ZStack` custom window geometry, prompt input, and pane output across detach/restore.
+// Daemon sockets and signals are Unix-only; the imports they need are unused on other targets.
+#![cfg_attr(not(unix), allow(unused_imports))]
 
 use ratatui::layout::Rect;
 

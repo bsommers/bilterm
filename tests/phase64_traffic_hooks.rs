@@ -68,6 +68,8 @@ fn pty_read_and_write_are_counted_once() {
     }));
     assert!(cell.read().rx_msgs >= 1);
     s.write_all(b"x").unwrap();
+    // Counted by the PTY writer thread once the byte is really written (RESP-01).
+    assert!(wait_for(|| cell.read().tx_bytes == 1));
     assert_eq!(cell.read().tx_bytes, 1);
     assert_eq!(cell.read().tx_msgs, 1);
 }
@@ -142,6 +144,7 @@ fn pty_less_pane_counts_tx_once_and_events() {
 fn live_pty_pane_input_is_counted_at_the_pty_only() {
     let mut pane = CompositePane::spawn(2, sh("sleep 2")).unwrap();
     pane.write_to_pty(b"abc").unwrap();
+    assert!(wait_for(|| pane.traffic_cell().unwrap().read().tx_bytes == 3));
     assert_eq!(pane.traffic_cell().unwrap().read().tx_bytes, 3);
     assert!(pane.existing_payload_cell().is_none(), "no double count on a live PTY pane");
 }

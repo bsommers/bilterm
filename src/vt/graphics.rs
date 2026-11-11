@@ -43,36 +43,6 @@ impl VtParser {
     }
 }
 
-pub(super) fn strip_apc_and_dcs_envelopes(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut rest = input;
-    while !rest.is_empty() {
-        let next_apc = rest.find("\x1b_");
-        let next_dcs = rest.find("\x1bP");
-        let next_env = match (next_apc, next_dcs) {
-            (Some(a), Some(d)) => Some(a.min(d)),
-            (Some(a), None) => Some(a),
-            (None, Some(d)) => Some(d),
-            (None, None) => None,
-        };
-        if let Some(pos) = next_env {
-            out.push_str(&rest[..pos]);
-            let after_start = &rest[pos + 2..];
-            if let Some(end_st) = after_start.find("\x1b\\") {
-                rest = &after_start[end_st + 2..];
-            } else if let Some(end_bel) = after_start.find('\x07') {
-                rest = &after_start[end_bel + 1..];
-            } else {
-                break;
-            }
-        } else {
-            out.push_str(rest);
-            break;
-        }
-    }
-    out
-}
-
 /// Expands a decoded Kitty payload into `w * h` RGBA pixels; `None` (nothing allocated) when
 /// either dimension exceeds [`MAX_GRAPHIC_DIM_PX`].
 pub(super) fn expand_kitty_payload_to_rgba(
@@ -141,6 +111,7 @@ pub(super) fn decode_sixel_placement(
     let mut height_px: u16 = 6;
     let mut bands: Vec<Vec<(u8, u8, u8, u8)>> = vec![Vec::new()];
     let mut cur_x: usize = 0;
+    const MAX_SIXEL_COLS: usize = MAX_GRAPHIC_DIM_PX as usize;
 
     let bytes = payload.as_bytes();
     let mut i = 0usize;
@@ -201,6 +172,10 @@ pub(super) fn decode_sixel_placement(
                     let (r, g, b) = palette[active_reg];
                     let band = bands.last_mut().expect("band");
                     for _ in 0..count {
+                        // Columns past the maximum width are never rendered: do not store them.
+                        if cur_x >= MAX_SIXEL_COLS {
+                            break;
+                        }
                         if cur_x >= band.len() {
                             band.push((r, g, b, bits));
                         } else if bits != 0 {
@@ -217,6 +192,10 @@ pub(super) fn decode_sixel_placement(
                 i += 1;
             }
             b'-' => {
+                // Bands past the maximum height are never rendered: stop decoding.
+                if bands.len() * 6 >= MAX_SIXEL_COLS {
+                    break;
+                }
                 cur_x = 0;
                 bands.push(Vec::new());
                 height_px = height_px.max((bands.len() * 6) as u16);
@@ -226,12 +205,14 @@ pub(super) fn decode_sixel_placement(
                 let bits = bytes[i] - 0x3F;
                 let (r, g, b) = palette[active_reg];
                 let band = bands.last_mut().expect("band");
-                if cur_x >= band.len() {
-                    band.push((r, g, b, bits));
-                } else if bits != 0 {
-                    band[cur_x] = (r, g, b, bits);
+                if cur_x < MAX_SIXEL_COLS {
+                    if cur_x >= band.len() {
+                        band.push((r, g, b, bits));
+                    } else if bits != 0 {
+                        band[cur_x] = (r, g, b, bits);
+                    }
+                    cur_x += 1;
                 }
-                cur_x += 1;
                 width_px = width_px.max(cur_x as u16);
                 i += 1;
             }

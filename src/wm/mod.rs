@@ -1,4 +1,5 @@
 pub mod agent_mail;
+pub mod resilience;
 pub mod swarm_cmd;
 mod agent_mail_apply;
 pub mod agent_state;
@@ -39,6 +40,7 @@ pub mod layout_profile;
 pub mod link_cmd;
 pub mod pane_hold;
 pub mod panel_dock;
+pub mod pty_drain;
 pub mod quick_terminal;
 pub mod registry;
 pub mod rename_dialog;
@@ -49,6 +51,7 @@ pub mod session_pack_layout;
 pub mod session_tree;
 pub mod split_tree;
 pub mod stt_ops;
+pub mod tmux_flow;
 pub mod tmux_io;
 pub mod tmux_link;
 pub mod tmux_remote;
@@ -57,6 +60,7 @@ pub mod traffic_monitor;
 pub mod traffic_monitor_geometry;
 mod traffic_view;
 pub mod v2_runtime;
+mod media_tick;
 pub mod window_manage;
 pub mod window_style;
 pub mod z_stack;
@@ -272,6 +276,7 @@ pub struct WindowManager {
     pub(crate) mcp_console: crate::mcp_console::McpConsoleState,
     /// Whether this client detached cleanly without terminating the session (`SAFE-02`).
     pub(crate) client_detached: bool,
+    pub(crate) resilience: resilience::ResilienceState,
     /// In-memory cache of saved/autosaved named layout profiles for instant dynamic switching.
     pub(crate) layout_profiles_mem: BTreeMap<String, SavedWorkspaceSession>,
     /// Timestamp of the most recent software cursor blink toggle (`UI-05`).
@@ -387,6 +392,7 @@ impl WindowManager {
             web_surface: crate::api::web_surface::WebSurfaceState::new(),
             mcp_console: crate::mcp_console::McpConsoleState::new(),
             client_detached: false,
+            resilience: Default::default(),
             layout_profiles_mem: BTreeMap::new(),
             last_blink_toggle: Instant::now(),
             pane_chrome: BTreeMap::new(),
@@ -965,9 +971,11 @@ impl WindowManager {
         if self.tick_agent_ui(Instant::now()) {
             changed = true;
         }
+        changed |= self.tick_media_canvases(tm_ms);
         registry::capture::tick(self, Instant::now());
         self.sync_clipboard_records();
         self.maybe_rebalance_scrollback(Instant::now());
+        changed |= self.resilience_tick(Instant::now());
         changed
     }
 

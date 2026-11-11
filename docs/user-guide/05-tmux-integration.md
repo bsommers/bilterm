@@ -58,8 +58,8 @@ Persistent remote terminal sessions are managed via `:ssh-tmux` (`src/tmux/link.
 
 When `:ssh-tmux <user@host> [session]` is invoked, Bilterm spawns a dedicated PTY child running `ssh -tt` with frozen connection options (`src/remote/mod.rs`):
 - `-tt`: Allocates a pseudo-terminal on the remote host so `tmux -CC` has an underlying tty for ioctls.
-- `-o ServerAliveInterval=15`: Sends keepalive probes every 15 seconds to prevent NAT or stateful firewall timeouts.
-- `-o ServerAliveCountMax=3`: Drops dead connections after 3 unanswered keepalives (45 seconds).
+- `-o ServerAliveInterval=5`: Sends a keepalive probe every 5 seconds (an interactive `:ssh` pane uses 15).
+- `-o ServerAliveCountMax=3`: Drops a dead connection after 3 unanswered keepalives, so a stalled network is noticed in about 15 to 20 seconds and the link starts reconnecting.
 - `-o TCPKeepAlive=yes`: Enables kernel-level TCP keepalives.
 - `-o ConnectTimeout=15`: Fails connection attempts quickly when the remote host is unreachable.
 - `-o ControlMaster=no` and `-o ControlPath=none`: Bypasses OpenSSH socket multiplexing. Every connection and reconnection opens a completely fresh TCP connection, preventing corrupted or stale control sockets from stalling reconnection loops.
@@ -131,11 +131,28 @@ This applies both to a first `:ssh-tmux <user@host> <session>` that attaches to 
 1. **First pane immediately**: Bilterm maps the first remote pane to the local pane as soon as the control stream is up.
 2. **Pane discovery**: It discovers the remaining panes with `list-panes`.
 3. Bilterm waits 300 ms after attach greeting for pane layouts to settle.
-4. It sends `refresh-client -C <cols>x<rows>` followed by `capture-pane -p -e -J -S -2000 -t %N` for each mapped pane.
+4. It sends `refresh-client -C <cols>x<rows>` with the size of the **linked pane** (not the whole Bilterm window), one `display-message` that reports every pane's screen state (alternate screen, cursor position and visibility, application cursor keys, mouse modes), then `capture-pane -p -e -J -S -2000 -t %N` for each mapped pane. A remote window shown in a pane of its own gets that pane's size (`refresh-client -C @<window>:<cols>x<rows>`, tmux 3.4+).
 5. Live `%output` lines are held during capture to prevent interleaved text corruption.
-6. Screen lines and scrollback are parsed via `render_capture` and fed into each pane's `VtParser`.
+6. Screen lines and scrollback are fed into each pane's `VtParser` together with the reported state, so a re-attach while `vim` or `htop` runs lands on the alternate screen with the cursor where the remote has it.
 7. Normal output is released. Stale panes that no longer exist on the remote host are flagged with orphan banners rather than being abruptly removed.
 8. **Idle sessions**: Typed commands are delivered right away, even if the remote session has not produced any output yet (for example, an idle shell).
+
+### 4.6.1 What Survives a Disconnect
+
+The remote tmux session, and everything running in it, is left running in every case below. Bilterm never sends `kill-session`, `kill-server` or `kill-window`, and it sets `destroy-unattached off` on the session it attaches to.
+
+| Event | Remote session | Bilterm |
+|---|---|---|
+| ssh process dies, network drops | keeps running | reconnects by itself (backoff 1 s doubling to 30 s, plus up to 25 % jitter, 20 attempts), same session, same panes |
+| Network stalls without closing | keeps running | noticed after about 15 to 20 s, then as above |
+| `:ssh-tmux disconnect` (`x` on the banner, `Ctrl+X Q`) | keeps running | link stops; `Enter`/`r` or `:ssh-tmux reconnect` re-attaches |
+| `:quit`, `:detach`, terminal closed, crash or `kill -9` of Bilterm | keeps running | run `:ssh-tmux <host> [session]` again after the restart |
+
+`:ssh-tmux <host> [session]` is attach-or-create (`tmux new-session -A -s <session>`): the same host and session name always lead to the same remote session, never to a duplicate. The default session name is `bilterm`.
+
+While the link is down, typed input is not queued: the pane shows `Link down: input not delivered` and the bytes are dropped, so nothing unexpected runs in a remote shell after a reconnect. Pastes of any practical size (up to 1 MiB per paste) are sent complete and in order.
+
+A host that is literally named `info`, `reconnect`, `disconnect` or `prefill` is reached with `--`: `:ssh-tmux -- info [session]`.
 
 ### 4.7 Single Link Guard and Fresh TCP Policy
 
@@ -152,7 +169,10 @@ If your remote session terminates immediately upon disconnect, verify your remot
 ### 4.9 Known Limits
 
 - **`csh` / `tcsh` shells**: The remote wrapper relies on POSIX `sh`, `bash`, or `zsh` login shell syntax. C-shell variants are not supported.
-- **Raw-mode capture**: `capture-pane` captures terminal grid text and colors, but cannot capture internal TUI cursor states or alternate-screen state machines of running programs (`vim`, `htop`).
+- **Restored state**: A hydrate restores text, colours, alternate screen, cursor position and visibility, application cursor keys and mouse reporting. Other modes (bracketed paste, keypad mode, scroll regions, character sets) are not reported by tmux and come back when the program next sets them.
+- **Several panes in one remote window**: The remote client size follows the linked primary pane. Panes that share one remote window keep the sizes tmux gives them, which can differ from the local pane sizes.
+- **Detach and re-attach of Bilterm itself**: `:detach` / `bilterm attach` and a restart do not restore the link. The remote session keeps running; run `:ssh-tmux <host> [session]` again to re-attach to it.
+- **Floods**: When a remote pane prints faster than Bilterm can draw, tmux pauses that pane and Bilterm re-captures its screen and continues it (`pause-after`, tmux 3.2+). Lines that scrolled by during a pause are in tmux's history, not in Bilterm's scrollback.
 - **Multi-link**: Only one remote `tmux -CC` bridge is active at a time in this version.
 - **Window names**: Remote window names are hydrated when `%window-renamed` events arrive (gap G10 from Chapter 12).
 
