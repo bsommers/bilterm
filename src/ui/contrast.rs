@@ -122,18 +122,33 @@ pub fn resolve_ratatui_color_rgb(c: Color, theme: ThemePreset, default_rgb: (u8,
     }
 }
 
+/// sRGB channel linearisation exactly as WCAG 2.1 defines it (one `powf` per call).
+#[inline]
+fn linear_channel(v: u8) -> f32 {
+    let s = f32::from(v) / 255.0;
+    if s <= 0.03928 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// [`linear_channel`] for every possible channel value, computed once at first use with the same
+/// expression, so a lookup is bit-identical to the direct call. The canvas calls
+/// [`rgb_luminance`] several times per cell; the table keeps `powf` out of that path.
+static LINEAR_CHANNEL: std::sync::LazyLock<[f32; 256]> = std::sync::LazyLock::new(|| {
+    let mut table = [0.0f32; 256];
+    for (v, slot) in table.iter_mut().enumerate() {
+        *slot = linear_channel(v as u8);
+    }
+    table
+});
+
 /// WCAG 2.1 relative luminance (`0.0..=1.0`) for an `(r, g, b)` triplet.
 #[inline]
 pub fn rgb_luminance(rgb: (u8, u8, u8)) -> f32 {
-    fn chan(v: u8) -> f32 {
-        let s = f32::from(v) / 255.0;
-        if s <= 0.03928 {
-            s / 12.92
-        } else {
-            ((s + 0.055) / 1.055).powf(2.4)
-        }
-    }
-    0.2126 * chan(rgb.0) + 0.7152 * chan(rgb.1) + 0.0722 * chan(rgb.2)
+    let t = &*LINEAR_CHANNEL;
+    0.2126 * t[usize::from(rgb.0)] + 0.7152 * t[usize::from(rgb.1)] + 0.0722 * t[usize::from(rgb.2)]
 }
 
 /// WCAG 2.1 contrast ratio (`1.0..=21.0`) between two `(r, g, b)` colors.
@@ -177,6 +192,28 @@ pub fn boost_fg_contrast(fg: (u8, u8, u8), bg: (u8, u8, u8), min_ratio: f32) -> 
         }
     }
     pole
+}
+
+/// The cell attributes [`readable_canvas_cell_style`] reads. Two cells with equal keys get the
+/// same style for a given theme and palette, so a renderer may reuse the previous result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CellStyleKey {
+    fg: CellColor,
+    bg: CellColor,
+    bold: bool,
+    italic: bool,
+    underlined: bool,
+    inverse: bool,
+}
+
+impl CellStyleKey {
+    #[inline]
+    pub fn of(cell: &CellView<'_>) -> Self {
+        // Exhaustive on purpose: a new `CellView` field must be classified here as either part of
+        // the style key or irrelevant to the style (`grapheme`, `width`).
+        let CellView { grapheme: _, width: _, fg, bg, bold, italic, underline, inverse } = *cell;
+        Self { fg, bg, bold, italic, underlined: underline.is_underlined(), inverse }
+    }
 }
 
 /// Converts a [`CellView`] into a high-legibility `ratatui::style::Style` on the `OutputCanvas`:
@@ -302,6 +339,17 @@ mod tests {
             italic: false,
             underline: UnderlineKind::None,
             inverse,
+        }
+    }
+
+    #[test]
+    fn luminance_table_is_bit_identical_to_the_direct_formula() {
+        for v in 0..=255u8 {
+            assert_eq!(LINEAR_CHANNEL[usize::from(v)].to_bits(), linear_channel(v).to_bits(), "channel {v}");
+        }
+        for rgb in [(0, 0, 0), (255, 255, 255), (12, 16, 24), (248, 250, 252), (96, 165, 250), (1, 127, 254)] {
+            let direct = 0.2126 * linear_channel(rgb.0) + 0.7152 * linear_channel(rgb.1) + 0.0722 * linear_channel(rgb.2);
+            assert_eq!(rgb_luminance(rgb).to_bits(), direct.to_bits(), "{rgb:?}");
         }
     }
 

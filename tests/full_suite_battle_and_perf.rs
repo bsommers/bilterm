@@ -783,9 +783,13 @@ fn performance_and_stress_benchmark_verifies_sub_millisecond_frame_and_rpc_budge
     let mut ratatui_renderer = RatatuiWorkspaceRenderer;
     let mut buf = Buffer::empty(viewport);
     let render_start = Instant::now();
-    for _ in 0..100 {
-        ratatui_renderer.render_workspace(&plane.wm, viewport, &mut buf);
-    }
+    // Time the shipping path: debug builds default the render cache to `Verify`, which paints
+    // every canvas twice and compares, and would be measured against the budget instead.
+    bilterm::ui::canvas_cache::with_render_cache_mode(bilterm::ui::canvas_cache::RenderCacheMode::On, || {
+        for _ in 0..100 {
+            ratatui_renderer.render_workspace(&plane.wm, viewport, &mut buf);
+        }
+    });
     let avg_frame_us = render_start.elapsed().as_micros() as f64 / 100.0;
     assert!(
         avg_frame_us < 16_000.0,
