@@ -606,11 +606,11 @@ pub(super) fn route_wm_mouse_event(
         {
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.focus_and_raise(pid);
                 }
                 MouseEventKind::Down(MouseButton::Right) => {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.focus_and_raise(pid);
                     if let Some(idx) = wm
                         .drawer_rows()

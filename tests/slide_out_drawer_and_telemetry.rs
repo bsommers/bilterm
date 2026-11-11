@@ -300,7 +300,7 @@ fn drawer_keyboard_and_mouse_navigation_work_across_tui_and_gui_surfaces() {
 }
 
 #[test]
-fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_terminal() {
+fn drawer_stays_open_in_place_and_hands_over_the_keyboard_when_a_terminal_is_selected() {
     let mut wm = wm_new(24, 100);
     let area = Rect::new(0, 0, 100, 24);
     let p2 = wm.split_focused(SplitDirection::Vertical).unwrap();
@@ -314,15 +314,17 @@ fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_ter
     assert!(wm.drawer().focused);
 
     // Scroll up with Up arrow to select Pane #2 and press Enter:
-    // Drawer MUST remain visible and focused in place!
+    // Drawer MUST remain visible in place; the selected pane gets the keyboard (FOCUS-01).
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)).unwrap();
+    assert!(wm.drawer().focused, "arrows browse without leaving the drawer");
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
     assert_eq!(wm.active_pane_id(), p2);
     assert!(wm.is_drawer_effectively_visible(), "drawer must not disappear on Enter");
     assert!(wm.drawer().open);
-    assert!(wm.drawer().focused);
+    assert!(!wm.drawer().focused, "Enter hands the keyboard to the selected pane");
 
-    // Scroll up again to Pane #1 and press Enter:
+    // Back to the drawer, scroll up again to Pane #1 and press Enter:
+    wm.focus_drawer();
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)).unwrap();
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
     assert_eq!(wm.active_pane_id(), 1);
@@ -339,8 +341,10 @@ fn drawer_stays_in_place_when_scrolling_clicking_or_pressing_enter_to_select_ter
     handle_wm_mouse_event(&mut wm, click_p3, area).unwrap();
     assert_eq!(wm.active_pane_id(), p3);
     assert!(wm.is_drawer_effectively_visible(), "drawer must not disappear when clicking a row");
+    assert!(!wm.drawer().focused, "one click on a row hands the keyboard to that pane");
 
-    // Press Tab to move keyboard focus to the active terminal pane while keeping drawer open in place
+    // Tab from a focused drawer also moves the keyboard to the active pane, drawer open in place
+    wm.focus_drawer();
     handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
     assert!(!wm.drawer().focused);
     assert!(wm.is_drawer_effectively_visible(), "drawer must remain visible in place when typing in pane");

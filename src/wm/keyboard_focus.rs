@@ -261,13 +261,36 @@ impl WindowManager {
     }
 
     /// The owner the pane chrome shows (inactive frame and cursor, `KBD:<WINDOW>` badge): the
-    /// keyboard owner, except that a focused drawer leaves the pane chrome alone. The classic drawer
-    /// goldens (`tests/drawer_classic_parity.rs`, immutable since Phase 50) pin the frame with the
-    /// drawer focused; the drawer shows its focus on its own frame.
+    /// keyboard owner, the drawer included. The one exception is the classic-style drawer in the
+    /// retro looks ([`Self::drawer_focus_chrome_pinned`]), where the pane chrome is left alone and
+    /// the drawer shows its focus on its own frame only.
     pub fn keyboard_owner_shown(&self) -> KeyboardOwner {
         match self.keyboard_owner() {
-            KeyboardOwner::Drawer => KeyboardOwner::Pane,
+            KeyboardOwner::Drawer if self.drawer_focus_chrome_pinned() => KeyboardOwner::Pane,
             owner => owner,
+        }
+    }
+
+    /// `true` for the configurations whose frame is pinned with the drawer focused by the classic
+    /// drawer goldens (`tests/drawer_classic_parity.rs`, immutable since Phase 50): the Classic
+    /// drawer style in the Legacy, `:modern` and `:liquid` looks. The Navigator drawer style and
+    /// every `[appearance]` profile look show drawer ownership on the pane like any side window.
+    pub fn drawer_focus_chrome_pinned(&self) -> bool {
+        self.config.drawer.style == crate::wm::drawer::DrawerStyle::Classic && !self.config.explicit_new_look()
+    }
+
+    /// A pointer press inside the drawer that is not on a jump row (title, chips, footer, empty
+    /// body) gives the drawer the keyboard. Unlike `:focus drawer` the row selection is kept, so
+    /// a footer action still applies to the highlighted row.
+    pub fn take_keyboard_for_drawer_press(&mut self) {
+        if self.keyboard_owner() == KeyboardOwner::Drawer {
+            return;
+        }
+        let selected = self.drawer.selected_index;
+        if self.take_keyboard(KeyboardOwner::Drawer) {
+            self.drawer.selected_index = selected;
+            self.clamp_drawer_selection();
+            self.on_drawer_selection_changed(false);
         }
     }
 

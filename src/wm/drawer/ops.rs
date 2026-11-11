@@ -131,8 +131,13 @@ impl WindowManager {
         }
     }
 
-    pub fn drawer_activate_selected(&mut self, unfocus_after: bool) {
+    /// Activates the selected row without moving the keyboard unless `unfocus_after` (the peek of
+    /// classic `Space`). Returns `true` when the row was a jump target: a pane, the quick terminal,
+    /// a fleet node with a pane, or a session (workspace) that was switched to. A layout-group
+    /// header, a fleet node without a pane and a failed session switch are not.
+    pub fn drawer_activate_selected(&mut self, unfocus_after: bool) -> bool {
         let rows = self.drawer_rows();
+        let mut jumped = false;
         if let Some(row) = rows.get(self.drawer.selected_index) {
             match &row.kind {
                 DrawerRowKind::Pane(id) => {
@@ -148,11 +153,13 @@ impl WindowManager {
                     }
                     self.focus_and_raise(target_id);
                     self.active_pane_mut().set_status_message(Some(format!(
-                        "Selected Pane #{target_id} (Tab/Esc to type in pane, ↑/↓ to keep browsing drawer)"
+                        "Selected Pane #{target_id} (Enter/Tab to type in pane, ↑/↓ to keep browsing drawer)"
                     )));
+                    jumped = true;
                 }
                 DrawerRowKind::QuickTerminal => {
                     self.quick_terminal.visible = true;
+                    jumped = true;
                 }
                 DrawerRowKind::LayoutGroup(_) => {
                     self.toggle_layout_mode();
@@ -160,6 +167,7 @@ impl WindowManager {
                 DrawerRowKind::FleetNode(name) => {
                     if let Some(pid) = self.selected_drawer_pane_id() {
                         self.focus_and_raise(pid);
+                        jumped = true;
                     } else {
                         let name_clone = name.clone();
                         self.active_pane_mut()
@@ -173,17 +181,36 @@ impl WindowManager {
                             self.active_pane_mut().set_status_message(Some(format!(
                                 "Switched to session '{sess}' ({count} pane(s))"
                             )));
+                            jumped = true;
                         }
                     } else if let Some(top_id) = self.z_stack.top() {
                         self.focus_and_raise(top_id);
+                        jumped = true;
                     }
                 }
             }
         }
         if unfocus_after {
-            self.drawer.focused = false;
-            self.reflow_default_viewport();
+            self.release_keyboard();
         }
+        jumped
+    }
+
+    /// Selecting a row (`Enter`, a click, `:drawer enter`): activates it and, when it is a jump
+    /// target, hands the keyboard to that pane in the same step (`FOCUS-01`). The drawer is only
+    /// blurred, so it stays on screen; rows that are not a jump target leave the keyboard here.
+    pub fn drawer_jump_to_selected(&mut self) -> bool {
+        let jumped = self.drawer_activate_selected(false);
+        if jumped {
+            self.release_keyboard();
+            let id = self.active_pane_id();
+            if self.active_pane().status_message().is_some_and(|m| m.starts_with("Selected Pane #")) {
+                self.active_pane_mut().set_status_message(Some(format!(
+                    "Selected Pane #{id}: it has the keyboard (Ctrl+Alt+O returns to the drawer)"
+                )));
+            }
+        }
+        jumped
     }
 
     pub fn drawer_close_selected_pane(&mut self) -> bool {

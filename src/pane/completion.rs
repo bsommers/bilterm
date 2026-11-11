@@ -647,7 +647,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
     (":attach", &["default"]),
     (":exit-guard", &["guard", "respawn", "detach", "off"]),
     (":respawn-pane", &[]),
-    (":drawer", &["toggle", "focus", "preview", "preview on", "preview off", "preview toggle", "preview commit", "preview auto", "preview row ", "preview pane ", "preview session ", "left", "right", "top", "bottom", "fixed", "autohide", "ondemand", "float", "push", "attention", "fold", "enter", "next", "prev", "row ", "scroll ", "widen ", "new-session", "new-pane", "rename ", "close-pane", "expand all", "collapse all", "add window", "add pane", "menu", "menu close", "menu pick ", "comms", "comms-focus ", "style navigator", "style classic", "rows 1", "rows 2", "size ", "minimize", "maximize", "pin", "unpin", "scale ", "mode ", "edge "]),
+    (":drawer", &["toggle", "focus", "preview", "preview on", "preview off", "preview toggle", "preview commit", "preview auto", "preview row ", "preview pane ", "preview session ", "left", "right", "top", "bottom", "fixed", "autohide", "ondemand", "float", "push", "attention", "fold", "enter", "raise", "next", "prev", "row ", "scroll ", "widen ", "new-session", "new-pane", "rename ", "close-pane", "expand all", "collapse all", "add window", "add pane", "menu", "menu close", "menu pick ", "comms", "comms-focus ", "style navigator", "style classic", "rows 1", "rows 2", "size ", "minimize", "maximize", "pin", "unpin", "scale ", "mode ", "edge "]),
     (":peek", &["on", "off", "toggle", "commit", "auto", "row ", "pane ", "session "]),
     (":navigator", &["expand all", "collapse all", "add window", "add pane", "menu", "style navigator", "style classic"]),
     (":fontsize", &["+", "-", "reset", "14pt", "125%", "150%"]),

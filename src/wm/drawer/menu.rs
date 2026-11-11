@@ -99,7 +99,7 @@ impl NavigatorMenuEntry {
             Self::Close => wm.apply_drawer_nav(DrawerNavOp::Close),
             Self::MoveWindow => {
                 let target_pane = wm.selected_drawer_pane_id();
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 let prefill = match target_pane {
                     Some(id) => format!(":window move {id} "),
                     None => ":window move ".to_string(),
@@ -112,7 +112,7 @@ impl NavigatorMenuEntry {
                 true
             }
             Self::BulkMove => {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 let prompt = wm.active_pane_mut().prompt_mut();
                 prompt.manual_raw_override = false;
                 prompt.force_command_prompt = true;

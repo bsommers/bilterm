@@ -222,11 +222,11 @@ pub(super) fn handle_wm_modal_key(
                         crate::action::DrawerPreviewOp::Off,
                     ));
                 } else {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                 }
             }
             KeyCode::Tab | KeyCode::Right => {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
             }
             KeyCode::Down
                 if key.modifiers.contains(KeyModifiers::SHIFT)
@@ -260,7 +260,7 @@ pub(super) fn handle_wm_modal_key(
             }
             KeyCode::Char('P') => {
                 let target = wm.selected_drawer_session_name();
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                 wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                 wm.active_pane_mut()
@@ -285,7 +285,7 @@ pub(super) fn handle_wm_modal_key(
                         _ => None,
                     });
                 if let Some(pid) = pane_target {
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                     wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                     wm.active_pane_mut()
@@ -294,7 +294,7 @@ pub(super) fn handle_wm_modal_key(
                     wm.open_window_rename_dialog(Some(pid));
                 } else {
                     let target = wm.selected_drawer_session_name();
-                    wm.drawer_mut().focused = false;
+                    wm.release_keyboard();
                     wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                     wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                     wm.active_pane_mut()
@@ -304,7 +304,7 @@ pub(super) fn handle_wm_modal_key(
                 }
             }
             KeyCode::Char(':') => {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
                 wm.active_pane_mut().prompt_mut().manual_raw_override = false;
                 wm.active_pane_mut().prompt_mut().force_command_prompt = true;
                 wm.active_pane_mut().prompt_mut().set_text(":");
@@ -326,10 +326,13 @@ pub(super) fn handle_wm_modal_key(
                         crate::action::DrawerPreviewOp::Commit,
                     ));
                 } else {
-                    wm.drawer_activate_selected(false);
+                    // Selecting hands the keyboard to the pane in one step; Space only peeks.
+                    wm.drawer_jump_to_selected();
                 }
             }
-            KeyCode::Char(' ') => wm.drawer_activate_selected(false),
+            KeyCode::Char(' ') => {
+                wm.drawer_activate_selected(false);
+            }
             KeyCode::Char('n') | KeyCode::Char('+') | KeyCode::Char('c') | KeyCode::Char('w') => {
                 if let Ok(id) = wm.split_focused(crate::wm::split_tree::SplitDirection::Horizontal) {
                     wm.sync_drawer_selection_to_active_pane();

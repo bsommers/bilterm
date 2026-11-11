@@ -202,9 +202,9 @@ fn arrows_browse_the_list_and_enter_hands_over_the_keyboard() {
 }
 
 #[test]
-fn the_drawer_keeps_the_keyboard_after_enter_and_tab_hands_it_to_the_selected_pane() {
-    // The drawer's "stay focused in place" guarantee (tests/slide_out_drawer_and_telemetry.rs) is
-    // kept: Enter raises the pane and keeps browsing; Tab is the hand-over.
+fn enter_in_the_drawer_hands_the_keyboard_to_the_selected_pane_and_tab_releases_without_jumping() {
+    // The drawer follows the AGENTS list: Enter (or a click) on a row is the hand-over and the
+    // drawer stays open. More cases: tests/drawer_keyboard_handover.rs.
     with_temp_xdg(|| {
         let mut wm = fixture(3);
         colon(&mut wm, ":drawer focus");
@@ -220,12 +220,15 @@ fn the_drawer_keeps_the_keyboard_after_enter_and_tab_hands_it_to_the_selected_pa
         wm.apply(Action::DrawerNav(bilterm::wm::drawer::DrawerNavOp::Row(idx))).unwrap();
         press(&mut wm, KeyCode::Enter, NONE);
         assert_eq!(wm.active_pane_id(), target);
-        assert_eq!(wm.keyboard_owner(), KeyboardOwner::Drawer);
-        press(&mut wm, KeyCode::Tab, NONE);
         assert_eq!(wm.keyboard_owner(), KeyboardOwner::Pane);
         assert!(wm.drawer().open, "the drawer stays open");
         press(&mut wm, KeyCode::Char('x'), NONE);
         assert_eq!(wm.active_pane().prompt().text(), "x");
+        colon(&mut wm, ":drawer focus");
+        press(&mut wm, KeyCode::Tab, NONE);
+        assert_eq!(wm.keyboard_owner(), KeyboardOwner::Pane);
+        assert_eq!(wm.active_pane_id(), target, "Tab releases without jumping");
+        assert!(wm.drawer().open);
     });
 }
 
@@ -384,7 +387,8 @@ fn the_status_row_names_the_window_that_holds_the_keyboard() {
         assert!(wm.agents_list().active);
         let released = screen(&wm);
         assert!(!released.iter().any(|l| l.contains("KBD:")), "badge gone once the pane has the keyboard back");
-        // The drawer is the exception: the classic drawer goldens pin the pane chrome with it focused.
+        // The classic-style drawer in the retro looks is the exception: the classic drawer goldens
+        // pin the pane chrome with it focused (tests/drawer_keyboard_handover.rs covers the rest).
         colon(&mut wm, ":drawer focus");
         assert_eq!(wm.keyboard_owner(), KeyboardOwner::Drawer);
         assert_eq!(wm.keyboard_owner_shown(), KeyboardOwner::Pane);

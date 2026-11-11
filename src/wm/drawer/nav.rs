@@ -21,8 +21,12 @@ pub enum DrawerNavOp {
     NextAttention,
     /// Fold or unfold the selected session (a pane row folds its enclosing session).
     Fold,
-    /// Focus the selected row (the keyboard twin of a click).
+    /// Select the highlighted row (the keyboard twin of a click): a pane, window or session row is
+    /// switched to and that pane gets the keyboard; the drawer stays open.
     Activate,
+    /// Raise the highlighted row's pane (or switch to its session) and keep the keyboard in the
+    /// drawer, to look at it while browsing on (`Space`).
+    Raise,
     /// Move the selection to the next row (wraps).
     Next,
     /// Move the selection to the previous row (wraps).
@@ -125,6 +129,10 @@ impl WindowManager {
             DrawerNavOp::NextAttention => self.jump_next_attention().is_some(),
             DrawerNavOp::Fold => self.fold_selected_navigator_row(),
             DrawerNavOp::Activate => {
+                self.drawer_jump_to_selected();
+                true
+            }
+            DrawerNavOp::Raise => {
                 self.drawer_activate_selected(false);
                 true
             }
@@ -155,7 +163,7 @@ impl WindowManager {
             DrawerNavOp::NewSession => self.drawer_new_session(),
             DrawerNavOp::NewPane => self.drawer_new_pane(SplitDirection::Horizontal),
             DrawerNavOp::RenamePrompt => {
-                self.drawer.focused = false;
+                self.release_keyboard();
                 let prompt = self.active_pane_mut().prompt_mut();
                 prompt.manual_raw_override = false;
                 prompt.force_command_prompt = true;

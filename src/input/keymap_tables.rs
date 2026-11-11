@@ -375,7 +375,7 @@ pub const NAVIGATOR_DRAWER_BINDINGS: &[(DrawerKeyScope, KeyModifiers, KeyCode, A
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('k'), Action::DrawerNav(DrawerNavOp::Prev)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Up, Action::DrawerNav(DrawerNavOp::Prev)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Enter, Action::DrawerNav(DrawerNavOp::Activate)),
-    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char(' '), Action::DrawerNav(DrawerNavOp::Activate)),
+    (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char(' '), Action::DrawerNav(DrawerNavOp::Raise)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('!'), Action::DrawerNav(DrawerNavOp::NextAttention)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('e'), Action::DrawerNav(DrawerNavOp::Fold)),
     (DrawerKeyScope::Navigator, KeyModifiers::NONE, KeyCode::Char('E'), Action::DrawerNav(DrawerNavOp::ExpandAll)),

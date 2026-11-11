@@ -763,7 +763,7 @@ pub(super) fn handle_drawer_mouse_event(
                 ));
             }
             if wm.drawer().focused {
-                wm.drawer_mut().focused = false;
+                wm.release_keyboard();
             }
         }
         return None;
@@ -813,6 +813,7 @@ pub(super) fn handle_drawer_mouse_event(
                     .find(|(_, range, _)| range.contains(&rel_x))
                     .map(|(_, _, kind)| *kind)
                     .unwrap_or(crate::ui::drawer::ClassicHeaderChipKind::Visibility);
+                wm.take_keyboard_for_drawer_press();
                 match hit {
                     crate::ui::drawer::ClassicHeaderChipKind::RowLines(n) => {
                         let next = if n == 2 { 1 } else { 2 };
@@ -820,7 +821,6 @@ pub(super) fn handle_drawer_mouse_event(
                     }
                     crate::ui::drawer::ClassicHeaderChipKind::NewSession => {
                         if let Ok(name) = wm.create_new_session(None, false) {
-                            wm.drawer_mut().focused = true;
                             wm.sync_drawer_selection_to_active_pane();
                             wm.active_pane_mut()
                                 .set_status_message(Some(format!("Created new session '{name}'")));
@@ -828,7 +828,6 @@ pub(super) fn handle_drawer_mouse_event(
                     }
                     crate::ui::drawer::ClassicHeaderChipKind::NewWindow => {
                         if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
-                            wm.drawer_mut().focused = true;
                             wm.sync_drawer_selection_to_active_pane();
                             wm.active_pane_mut()
                                 .set_status_message(Some(format!("Created new window #{id}")));
@@ -860,7 +859,7 @@ pub(super) fn handle_drawer_mouse_event(
                 let sess_end = if is_mod { 15 } else { 13 };
                 let move_end = if is_mod { 24 } else { 21 };
                 let par_end = if is_mod { 32 } else { 28 };
-                wm.drawer_mut().focused = true;
+                wm.take_keyboard_for_drawer_press();
                 if rel_x < win_end {
                     if let Ok(id) = wm.split_focused(SplitDirection::Horizontal) {
                         wm.sync_drawer_selection_to_active_pane();
@@ -883,7 +882,8 @@ pub(super) fn handle_drawer_mouse_event(
                 return Some(AppAction::Handled);
             }
 
-            wm.drawer_mut().focused = true;
+            // A press on the body takes the keyboard; a press on a jump row hands it to that pane.
+            wm.take_keyboard_for_drawer_press();
             if edge.is_vertical() {
                 let inner_h = dr.height.saturating_sub(2);
                 let rows_len = wm.drawer_rows().len();
@@ -900,12 +900,12 @@ pub(super) fn handle_drawer_mouse_event(
                     if row_idx < rows_len {
                         wm.drawer_mut().selected_index = row_idx;
                         wm.drawer_mut().scroll_offset = scroll;
-                        wm.drawer_activate_selected(false);
+                        wm.drawer_jump_to_selected();
                     }
                 }
             } else {
                 wm.drawer_select_next();
-                wm.drawer_activate_selected(false);
+                wm.drawer_jump_to_selected();
             }
             Some(AppAction::Handled)
         }
