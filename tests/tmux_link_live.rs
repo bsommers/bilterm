@@ -15,6 +15,8 @@
 //! Scenario: connect, render check, size check, kill the transport, assert the remote session
 //! and its counter loop are alive, reconnect, assert continuity (same session, same pane, output
 //! produced while away is on screen, nothing duplicated).
+// A real tmux server behind a /bin/sh transport script: Unix only (does not compile elsewhere).
+#![cfg(unix)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

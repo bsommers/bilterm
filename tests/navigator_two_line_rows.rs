@@ -106,7 +106,10 @@ fn two_line_rows_stack_pane_text_over_detail() {
     assert_eq!(b, a + 2, "each pane row takes two lines");
     assert!(!ls[a + 1].contains("#2"), "line 2 is the detail line");
     let detail = wm.drawer_rows()[1].navigator.as_ref().unwrap().detail.clone().expect("detail");
-    assert!(ls[a + 1].contains(detail.split_whitespace().next().unwrap()), "detail line shows the prompt text");
+    // The drawer clips the detail to its width, and `user@host` is as long as the machine makes it
+    // (CI runners have long host names): the row must start the detail text, not fit all of it.
+    let shown: String = detail.chars().take(8).collect();
+    assert!(ls[a + 1].contains(&shown), "detail line shows the prompt text: {:?} lacks {shown:?}", ls[a + 1]);
 }
 
 #[test]

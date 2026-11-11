@@ -86,6 +86,7 @@ fn snapshot_password_no_echo_lock_hides_prompt_and_protects_input() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore = "drives a POSIX /bin/sh child; the Windows PTY path is covered by tests/smoke_binary_per_os.rs")]
 fn moving_and_hiding_prompt_on_live_pty_pane_emits_zero_sigwinch() {
     let mut cfg = PtyConfig::default();
     if !cfg!(windows) {
