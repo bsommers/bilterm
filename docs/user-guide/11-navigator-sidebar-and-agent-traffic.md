@@ -204,7 +204,8 @@ All of these lower to the same internal action as their key and mouse twin. `:na
 | :--- | :--- | :--- | :--- |
 | `:drawer attention` | `!`, `<L> !` | footer `!` | Next pane needing attention |
 | `:drawer fold` | `e` | click fold marker | Fold / unfold the selected session |
-| `:drawer enter` | `Enter`, `Space` | click row | Focus the selected row |
+| `:drawer enter` | `Enter` | click row | Switch to the selected row's pane and give it the keyboard; the drawer stays open |
+| `:drawer raise` | `Space` | | Raise the selected row's pane and keep the keyboard in the drawer (on a pane row `Space` toggles the multi-selection instead) |
 | `:drawer next` | `j`, `Down` | wheel | Select next row |
 | `:drawer prev` | `k`, `Up` | wheel | Select previous row |
 | `:drawer row <n>` | | click row n | Select row n (1-based) |
@@ -394,13 +395,14 @@ The side windows (AGENTS list, Agent Traffic, session map, clipboard viewer, tra
 | You want to | Do this |
 | :--- | :--- |
 | Type in a side window | Click inside it, open it, or press `Ctrl+Alt+O` until it has the keyboard. `:focus <window>` names it: `agents-list`, `agents`, `sessions`, `clipboard`, `traffic`, `commands`, `script`, `fonts`, `daemon`, `hud`, `drawer`, `console` |
-| Go back to the shell | `Esc`, a click on a pane, or `:focus pane`. The window stays open |
+| Go back to the shell | `Esc`, a click on a pane, or `:focus pane`. The window stays open (the drawer too, in every visibility mode; `q` or `F7` hides it) |
 | Jump to a pane from the AGENTS list | Click its row, or press `Enter` on it. The pane is raised and gets the keyboard in the same step; the list stays open. Arrow keys still browse without jumping |
-| Jump to a pane from the drawer | Click its row or press `Enter`: the pane is raised and the drawer keeps the keyboard so you can go on browsing; `Tab`, `Esc` or `Ctrl+Alt+O` then hands the keyboard to the pane |
+| Jump to a pane from the drawer | Click its row (a pane, window or session row), or press `Enter` on the selected row. The pane is raised and gets the keyboard in the same step; the drawer stays open, whether it is fixed, pinned or was opened on demand. Arrow keys still browse without jumping, and `Space` (`:drawer raise`) raises a pane while the drawer keeps the keyboard |
+| Give the drawer the keyboard with the mouse | Click its title or an empty part of it (in the Classic style also its header chips and footer; the Navigator footer buttons act without moving the keyboard). Fold markers, `Ctrl` + click and the classic layout-group header row also leave the keyboard in the drawer |
 | Walk through everything | `Ctrl+Alt+O` (`:focus cycle`): pane, each open side window from left to right, pane again. `:focus cycle prev` walks backwards. The chord also works while a full-screen program owns the pane; with no side window open it is passed to that program |
 | Close a side window | `q` (windows without a text field), its close badge, or `:<window> close` / `toggle` |
 
-Giving one window the keyboard takes it from every other window; nothing is closed. `:focus <pane-id>`, `:focus left|right|up|down` and `:deck next|prev` hand the keyboard to the pane as well. While a floating side window has the keyboard, the active pane is drawn with an inactive frame and cursor, and its status row shows `KBD:<WINDOW>` (for example `KBD:AGENT-LIST`). A focused drawer shows the active frame on itself; the pane's frame does not change.
+Giving one window the keyboard takes it from every other window; nothing is closed. `:focus <pane-id>`, `:focus left|right|up|down` and `:deck next|prev` hand the keyboard to the pane as well. While a side window has the keyboard, the active pane is drawn with an inactive frame and cursor, and its status row shows `KBD:<WINDOW>` (for example `KBD:AGENT-LIST`, or `KBD:DRAWER` for the drawer). One exception: with the Classic drawer style in the Legacy, `:modern` and `:liquid` looks the pane's frame does not change and no badge is drawn; the drawer shows the active frame on itself while it has the keyboard. The Navigator drawer style, and the Classic style in any `[appearance]` profile look, show the badge.
 
 Exceptions: the fonts picker and the Mission Control HUD are modal and still close on `Esc`. In the command window `Esc` hands the keyboard back only when no query is typed. In the session map `Esc` first cancels a pickup or drag. `:focus <window>` never opens a window; a closed one is reported in the status line. An unpinned MCP console is modal and is not a stop of the cycle.
 

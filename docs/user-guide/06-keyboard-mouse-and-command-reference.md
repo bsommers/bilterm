@@ -284,7 +284,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | **`Alt + LeftClick + Drag` over `OutputCanvas`** | **2D Rectangular Block Selection**: Drag-select a rectangular region on the canvas (even inside `RawPtyPassthrough` apps); keeps highlight visible on release and yanks the block to the system/OSC 52 clipboard (or plain `LeftDrag` when `:rect mode on` is active) |
 | **`Ctrl + LeftClick` on `OutputCanvas` URL / `OSC 8` link** | Copy URL to clipboard via `OSC 52` (`:links`) |
 | **Click Bottom DOS Function-Key Bar (`F1 Help` .. `F12 Raw`)** | Execute the clicked function-key action immediately |
-| **Navigator drawer: click a row** | Select and focus that row's pane (`:drawer row <n>` then `:drawer enter`) |
+| **Navigator drawer: click a row** | Switch to that row's pane and give it the keyboard; the drawer stays open (`:drawer row <n>` then `:drawer enter`) |
 | **Navigator drawer: click a fold marker (`▾` / `▸`, ASCII `-` / `+`)** | Fold or unfold that workspace or session (`:drawer fold`) |
 | **Navigator drawer: click `[+]` after a session or workspace name** | Add a window to that session (key `a`); the `[+]` beside the `WORKSPACES` title creates a session (key `N`) |
 | **Navigator drawer: right-click a row** | Select the row and open a menu at the pointer: New session, New window here, Split horizontal, Split vertical, Rename, Close (`:drawer menu`, `:drawer menu pick <n>`); `Esc`, any key or a click elsewhere dismisses it. Right-click outside the drawer still pastes |
@@ -407,7 +407,8 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 | Key | `:drawer` twin | Effect |
 |-----|----------------|--------|
 | `j` / `Down`, `k` / `Up` | `:drawer next`, `:drawer prev` | Move the selection |
-| `Enter` / `Space` | `:drawer enter` | Focus the selected row |
+| `Enter` | `:drawer enter` | Switch to the selected row's pane and give it the keyboard; the drawer stays open |
+| `Space` | `:drawer raise` | Raise the selected row's pane; the keyboard stays in the drawer |
 | `!` | `:drawer attention` | Jump to the next pane needing attention |
 | `e` | `:drawer fold` | Fold or unfold the selected session (a pane row folds its session) |
 | `E` | `:drawer expand all`, `:navigator expand all` | Unfold every workspace and session |

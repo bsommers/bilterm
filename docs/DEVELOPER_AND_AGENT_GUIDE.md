@@ -445,9 +445,8 @@ side window adds a `KeyboardOwner` variant and its arms there; do not write per-
 is a reserved global (works in raw passthrough) answered in `src/input/focus_keys.rs` before any side window sees the key.
 Conventions: `Esc` in a non-modal side window lowers to that window's `Blur` op (the `Dismiss` ops keep their
 close-unless-pinned meaning for commands and badges); a row click or `Enter` in the AGENTS list raises the pane and
-releases the keyboard to it (the drawer keeps the keyboard after Enter/click by design); the fonts picker and the HUD stay modal. While a side window owns the keyboard the top pane is
-rendered inactive and `src/ui/kbd_badge.rs` draws `KBD:<WINDOW>` on its status row; with the pane or the
-drawer as owner (`keyboard_owner_shown`) the frame is byte-identical to before: the classic drawer goldens are immutable. Tests: `tests/side_window_focus.rs`.
+releases the keyboard to it, and so does a row click / `Enter` / `:drawer enter` in the drawer (`drawer_jump_to_selected`; `Space` / `:drawer raise` raises without releasing, a press on a non-row part of the drawer is `take_keyboard_for_drawer_press`); the fonts picker and the HUD stay modal. While a side window owns the keyboard the top pane is
+rendered inactive and `src/ui/kbd_badge.rs` draws `KBD:<WINDOW>` on its status row. `keyboard_owner_shown` hides a focused drawer only where `drawer_focus_chrome_pinned()` holds (Classic drawer style without an `[appearance]` profile look): there the frame is byte-identical to before, because the classic drawer goldens are immutable. Tests: `tests/side_window_focus.rs`, `tests/drawer_keyboard_handover.rs`.
 
 ## 6f. The Traffic Monitor window (Phase 64-03)
 
