@@ -91,6 +91,8 @@ pub struct AgentCardTelemetry {
     pub queue_depth: usize,
     /// Optional swarm node / worktree badge.
     pub badge: Option<String>,
+    /// Swarm node owning this pane (Phase 69 wiring), refreshed with each HUD refresh.
+    pub swarm: Option<crate::wm::swarm_cmd::SwarmNodeInfo>,
     /// No-echo pane: the mini viewport must not show content (`T-HUD-02`).
     pub masked: bool,
     /// Pane generation token carried by Approve (`T-HUD-01`).
@@ -114,6 +116,7 @@ impl AgentCardTelemetry {
             file: None,
             queue_depth: 0,
             badge: None,
+            swarm: None,
             masked: false,
             generation: 0,
             preview: Vec::new(),
@@ -541,6 +544,10 @@ impl MissionControlHud {
         let mut head = format!("{} {}", card.glyph(), card.title);
         if let Some(b) = &card.badge {
             head.push_str(&format!(" <{b}>"));
+        }
+        if let Some(n) = &card.swarm {
+            let wave = n.wave.map_or(String::new(), |w| format!(" w{w}"));
+            head.push_str(&format!(" [{} {}{wave} r{}]", n.node, n.state, n.retries));
         }
         put(buf, inn.x, r.y + 1, &head, w, plain);
         let q = format!(" q:{}", card.queue_depth);

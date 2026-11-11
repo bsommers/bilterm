@@ -32,6 +32,21 @@ impl SwarmState {
         self.healers.clear();
         self.pending.clear();
     }
+
+    /// Swarm node id owning `pane`, if any.
+    pub fn node_for_pane(&self, pane: PaneId) -> Option<&str> {
+        self.panes.iter().find(|(_, p)| **p == pane).map(|(id, _)| id.as_str())
+    }
+
+    /// Pane running swarm node `id`.
+    pub fn pane_for(&self, id: &str) -> Option<PaneId> {
+        self.panes.get(id).copied()
+    }
+
+    /// Self-heal retries consumed so far by node `id`.
+    pub fn retries_for(&self, id: &str) -> u32 {
+        self.healers.get(id).map_or(0, HealLoop::retries_used)
+    }
 }
 
 impl std::fmt::Debug for SwarmState {
@@ -48,7 +63,34 @@ fn strs(v: impl IntoIterator<Item = String>) -> JsonValue {
     JsonValue::Array(v.into_iter().map(JsonValue::String).collect())
 }
 
+/// What a swarm node looks like to the HUD (and its JSON).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwarmNodeInfo {
+    pub node: String,
+    /// `pending|running|verifying|passed|failed`, or `adhoc` for `:swarm spawn` panes outside a plan.
+    pub state: &'static str,
+    pub wave: Option<usize>,
+    pub retries: u32,
+    pub slug: String,
+}
+
 impl WindowManager {
+    /// Swarm node info for `pane`, or `None` when the pane belongs to no swarm node.
+    pub fn swarm_node_info(&self, pane: PaneId) -> Option<SwarmNodeInfo> {
+        let rt = &self.swarm_surface.runtime;
+        let node = rt.node_for_pane(pane)?.to_string();
+        let retries = rt.retries_for(&node);
+        let Some(o) = self.swarm_surface.swarm.as_ref() else {
+            return Some(SwarmNodeInfo { slug: node.clone(), node, state: "adhoc", wave: None, retries });
+        };
+        let Some(task) = o.plan().node(&node) else {
+            return Some(SwarmNodeInfo { slug: node.clone(), node, state: "adhoc", wave: None, retries });
+        };
+        let state = o.scheduler().state(&node).map_or("unknown", |s| s.as_str());
+        let wave = o.plan().waves().iter().position(|w| w.contains(&node));
+        Some(SwarmNodeInfo { slug: task.worktree_slug().to_string(), node, state, wave, retries })
+    }
+
     /// Executes one swarm op; the JSON result is shared by every surface.
     pub fn swarm_apply(&mut self, op: SwarmOp) -> Result<JsonValue, String> {
         self.swarm_poll();

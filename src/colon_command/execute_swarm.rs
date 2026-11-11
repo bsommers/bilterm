@@ -20,14 +20,7 @@ fn emit(wm: &mut WindowManager, status: String, data: JsonValue) {
 }
 
 fn state_name(s: Option<NodeState>) -> &'static str {
-    match s {
-        Some(NodeState::Pending) => "pending",
-        Some(NodeState::Running) => "running",
-        Some(NodeState::Verifying) => "verifying",
-        Some(NodeState::Passed) => "passed",
-        Some(NodeState::Failed) => "failed",
-        None => "unknown",
-    }
+    s.map_or("unknown", NodeState::as_str)
 }
 
 fn load_plan(path: &str) -> Result<SwarmPlan, String> {
