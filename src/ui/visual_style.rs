@@ -624,7 +624,7 @@ pub fn polish_glass_panel_rect(
                     cell.set_fg(Color::Rgb(hr, hg, hb));
                 } else if (y == bounds.y + bounds.height - 1 || x == bounds.x + bounds.width - 1)
                     && active
-                    && palette.name == "LIQUID-GLASS"
+                    && palette.is_liquid_glass()
                 {
                     // Bottom/right chromatic refraction edge (cool indigo/cyan dispersion)
                     cell.set_fg(Color::Rgb(96, 165, 250));

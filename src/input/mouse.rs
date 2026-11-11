@@ -722,10 +722,7 @@ pub fn handle_wm_mouse_event(
     if bot_off > 0 && mouse.row == screen_area.y + screen_area.height.saturating_sub(1) {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let rel_col = mouse.column.saturating_sub(screen_area.x);
-            let is_modern = matches!(
-                wm.config().palette().name.as_str(),
-                "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC"
-            );
+            let is_modern = wm.config().palette().is_modern_look();
             if is_modern {
                 match rel_col {
                     0..=10 => wm.toggle_help(),

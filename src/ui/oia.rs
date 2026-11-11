@@ -99,11 +99,11 @@ pub fn render_oia_status_bar_themed(
     let sep = glyphs.oia_separator;
     // Tokens apply only to palettes that name a non-Legacy appearance profile.
     // Existing looks (incl. MODERN-SLATE / LIQUID-GLASS) keep their literals byte-identical.
-    let uses_tokens = !matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
+    let uses_tokens = !palette.is_slate_family()
         && AppearanceProfile::from_name(&palette.name)
             .is_some_and(|p| p != AppearanceProfile::Legacy);
     let is_modern = sep == "·"
-        || matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS")
+        || palette.is_slate_family()
         || uses_tokens;
     let is_legacy = !uses_tokens;
     let tokens = DesignTokens::from_palette(palette);
@@ -269,7 +269,7 @@ pub fn render_oia_status_bar_themed(
         out_str
     };
     let oia_title = if is_modern {
-        if palette.name == "LIQUID-GLASS" {
+        if palette.is_liquid_glass() {
             if pane.show_version_badge() {
                 concat!(" 💧 Bilterm v", env!("CARGO_PKG_VERSION"), " ")
             } else {

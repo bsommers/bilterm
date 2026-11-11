@@ -260,7 +260,7 @@ pub fn render_borland_frame_ext(
     if outer.width < 4 || outer.height < 3 {
         return;
     }
-    let is_modern = matches!(palette.name.as_str(), "MODERN-SLATE" | "LIQUID-GLASS" | "MIDNIGHT" | "ARCTIC");
+    let is_modern = palette.is_modern_look();
     let effective_outline = if is_modern && outline == OutlineStyle::Double {
         OutlineStyle::Rounded
     } else if !active && outline == OutlineStyle::Double {
