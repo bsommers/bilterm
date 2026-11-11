@@ -255,3 +255,9 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+## Release checklist (installer dependency)
+
+`scripts/install.sh` / `scripts/install.ps1` download prebuilt archives (`bilterm-<triple>.tar.gz` / `.zip` plus `SHA256SUMS`) from GitHub Releases and never fall back to a source build for piped installs. A release is **not done** until `gh release view <tag> --json assets` lists the platform archives (see `scripts/build-release-assets.sh`). If the latest release lacks an asset the installer falls back to the newest release that has one and warns.
+
+Installer behaviour test (no network, no cargo): `scripts/tests/install_prebuilt_test.sh`.

@@ -40,8 +40,8 @@ Options:
   -Local          Install to $HOME\.local\bin\bilterm.exe (default)
   -Cargo          Install to $HOME\.cargo\bin\bilterm.exe
   -Prefix <DIR>   Install to <DIR>\bin\bilterm.exe
-  -BinaryOnly     Download prebuilt binary from GitHub Releases (no Rust needed)
-  -FromSource     Compile from source using Cargo
+  -BinaryOnly     Only download the prebuilt binary (never build; implied outside a checkout)
+  -FromSource     Compile from source using Cargo (requires Rust)
   -Tag <TAG>      Release tag to download (default: latest)
   -Archive <ZIP>  Install from a local release archive (bilterm-<tag>-<triple>.zip)
   -NoDesktop      Skip Windows Run (App Paths) and Start Menu shortcut registration
@@ -129,35 +129,113 @@ function Install-FromZip($zip, $dest, $label) {
     }
 }
 
+$ReleaseBaseUrl = if ($env:BILTERM_RELEASE_BASE_URL) { $env:BILTERM_RELEASE_BASE_URL } else { "https://github.com/$GithubRepo/releases" }
+$ApiBaseUrl = if ($env:BILTERM_API_BASE_URL) { $env:BILTERM_API_BASE_URL } else { "https://api.github.com/repos/$GithubRepo" }
+$ReleasesPage = "https://github.com/$GithubRepo/releases"
+
+function Show-NoBinaryHelp($what) {
+    Write-Err "No prebuilt bilterm binary is available for $what."
+    Write-Err "Options:"
+    Write-Err "  -Tag <TAG>    install a specific release that has a binary (see $ReleasesPage)"
+    Write-Err "  -FromSource   build from source (requires Rust: https://rustup.rs)"
+    Write-Err "  Releases page: $ReleasesPage"
+}
+
+# Download $url (asset $asset), verify against SHA256SUMS next to it, install.
+# Returns $true on success, $false if the asset could not be downloaded.
+function Fetch-AndInstall($asset, $url, $dest, $label) {
+    $tmpZip = Join-Path $env:TEMP "bilterm-$PID-$asset"
+    try {
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $tmpZip -UseBasicParsing -ErrorAction Stop
+        } catch {
+            return $false
+        }
+        $sumsUrl = $url.Substring(0, $url.LastIndexOf('/')) + "/SHA256SUMS"
+        $sums = $null
+        try { $sums = (Invoke-WebRequest -Uri $sumsUrl -UseBasicParsing -ErrorAction Stop).Content } catch {}
+        if ($sums -is [byte[]]) { $sums = [System.Text.Encoding]::UTF8.GetString($sums) }
+        if ($sums) {
+            $expected = $null
+            foreach ($line in ($sums -split "`n")) {
+                $parts = $line.Trim() -split '\s+', 2
+                if ($parts.Count -eq 2 -and $parts[1].TrimStart('*') -eq $asset) { $expected = $parts[0]; break }
+            }
+            if ($expected) {
+                $actual = (Get-FileHash -Algorithm SHA256 -Path $tmpZip).Hash
+                if ($actual -ine $expected) {
+                    Write-Err "SHA256 mismatch for ${asset}: expected $expected, got $actual. Refusing to install."
+                    exit 1
+                }
+                Write-Ok "SHA256 verified for $asset"
+            } else {
+                Write-Warn "SHA256SUMS has no entry for $asset; skipping checksum verification."
+            }
+        } else {
+            Write-Warn "No SHA256SUMS found at $sumsUrl; skipping checksum verification."
+        }
+        if (-not (Install-FromZip $tmpZip $dest $label)) {
+            Write-Err "Archive $asset does not contain bilterm.exe."
+            exit 1
+        }
+        return $true
+    } finally {
+        Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+    }
+}
+
+# Newest release (stable first, then prerelease) carrying $asset; $null if none.
+function Find-ReleaseWithAsset($asset) {
+    try {
+        $rels = Invoke-RestMethod -Uri "$ApiBaseUrl/releases?per_page=30" -UseBasicParsing -ErrorAction Stop
+    } catch { return $null }
+    foreach ($wantPre in @($false, $true)) {
+        foreach ($r in $rels) {
+            if ([bool]$r.prerelease -ne $wantPre -or $r.draft) { continue }
+            foreach ($a in $r.assets) {
+                if ($a.name -eq $asset) {
+                    return [pscustomobject]@{ Tag = $r.tag_name; Url = $a.browser_download_url; Pre = $wantPre }
+                }
+            }
+        }
+    }
+    return $null
+}
+
 function Try-DownloadPrebuilt($dest) {
     $arch = Get-NativeArch
     # Windows on ARM runs x64 binaries under emulation: fall back if a release has no ARM64 build.
     $triples = @("$arch-pc-windows-msvc")
     if ($arch -eq "aarch64") { $triples += "x86_64-pc-windows-msvc" }
     foreach ($triple in $triples) {
+        $asset = "bilterm-$triple.zip"
         $url = if ($Tag -eq "latest") {
-            "https://github.com/$GithubRepo/releases/latest/download/bilterm-$triple.zip"
+            "$ReleaseBaseUrl/latest/download/$asset"
         } else {
-            "https://github.com/$GithubRepo/releases/download/$Tag/bilterm-$triple.zip"
+            "$ReleaseBaseUrl/download/$Tag/$asset"
         }
         Write-Info "Checking for prebuilt binary at $url..."
         if ($DryRun) {
             Write-Host "  [dry-run] Invoke-WebRequest -Uri $url"
             return $true
         }
-        $tmpZip = Join-Path $env:TEMP "bilterm-$triple.zip"
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $tmpZip -UseBasicParsing -ErrorAction Stop
-            if (Install-FromZip $tmpZip $dest "prebuilt release ($triple)") {
-                if ($triple -ne "$arch-pc-windows-msvc") { Write-Warn "No $arch build in this release; installed $triple (runs under emulation)" }
-                return $true
-            }
-        } catch {
+        if (Fetch-AndInstall $asset $url $dest "prebuilt release ($triple)") {
+            if ($triple -ne "$arch-pc-windows-msvc") { Write-Warn "No $arch build in this release; installed $triple (runs under emulation)" }
+            return $true
+        }
+        if ($Tag -ne "latest") {
+            Write-Err "Release '$Tag' has no asset $asset ($url)."
             continue
-        } finally {
-            Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+        }
+        Write-Info "Latest release has no $asset; looking for the newest release that does..."
+        $hit = Find-ReleaseWithAsset $asset
+        if ($hit) {
+            $kind = if ($hit.Pre) { " (pre-release)" } else { "" }
+            Write-Warn "The latest release has no prebuilt binary for $triple; installing $($hit.Tag)$kind instead."
+            if (Fetch-AndInstall $asset $hit.Url $dest "prebuilt release $($hit.Tag) ($triple)") { return $true }
         }
     }
+    Show-NoBinaryHelp ("Windows " + $arch)
     return $false
 }
 
@@ -180,8 +258,6 @@ if ($Archive) {
     }
 } elseif ($BinaryOnly) {
     if (-not (Try-DownloadPrebuilt $TargetBin)) {
-        Write-Err "Could not download prebuilt Windows binary."
-        Write-Err "Remedy: omit -BinaryOnly or run '.\scripts\setup.ps1 -Yes -Install' to build from source."
         exit 1
     }
 } elseif (-not $FromSource -and (Test-Path $localBuild)) {
@@ -191,14 +267,14 @@ if ($Archive) {
     } else {
         Copy-Item -Path $localBuild -Destination $TargetBin -Force
     }
-} elseif (-not $FromSource -and (Try-DownloadPrebuilt $TargetBin)) {
-    # Installed via prebuilt release
+} elseif (-not $FromSource -and -not (Test-Path $cargoToml)) {
+    # Standalone / piped install: prebuilt binary only, never an implicit source build.
+    if (-not (Try-DownloadPrebuilt $TargetBin)) { exit 1 }
 } else {
     $cargoBin = Join-Path $HOME ".cargo\bin"
     if (Test-Path $cargoBin) { $env:PATH = "$cargoBin;$env:PATH" }
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Err "Cargo is not installed and no prebuilt binary was found."
-        Write-Err "Remedy: run '.\scripts\setup.ps1 -Yes -Install' to install Rust and build Bilterm."
+        Write-Err "Cargo is not installed. Install Rust (https://rustup.rs) or run '.\scripts\setup.ps1 -Yes -Install'."
         exit 1
     }
     if (Test-Path $cargoToml) {

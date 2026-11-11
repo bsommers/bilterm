@@ -64,8 +64,10 @@
 ## Quick Start
 
 ```bash
-# One-line installer (Linux / macOS) — binary, manpage & completions
+# One-line installer (Linux / macOS) — downloads a prebuilt binary (no Rust needed), manpage & completions.
+# It never builds from source unless you pass --from-source (needs Rust).
 curl -fsSL https://raw.githubusercontent.com/bsommers/bilterm/main/scripts/install.sh | bash
+# Pin a release:  ... | bash -s -- --tag v3.1.0     Build instead: ... | bash -s -- --from-source
 
 # Or build & install from source (Rust 1.88+, Edition 2024)
 cargo build --release && install -m 0755 target/release/bilterm ~/.local/bin/bilterm
