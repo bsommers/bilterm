@@ -44,6 +44,15 @@ Run the Model Context Protocol (MCP \fB2024-11-05\fR) JSON-RPC 2.0 server over s
 \fB\-d\fR, \fB\-\-headless\fR, \fB\-\-daemon\fR [\fB\-l\fR, \fB\-\-listen\fR \fIIP:PORT|localhost:PORT|unix:PATH\fR]
 Run a headless Bilterm workspace daemon serving the JSON-RPC 2.0 automation control plane. Default endpoint is a private Unix domain socket ($XDG_RUNTIME_DIR/bilterm/bilterm.sock or /tmp/bilterm-<uid>/bilterm.sock, mode 0600). TCP listeners are restricted to loopback addresses unless \fB\-r\fR / \fB\-\-allow\-remote\fR is specified, and every TCP listener (loopback included) requires \fB\-t\fR / \fB\-\-token\-file\fR.
 .TP
+\fB\-\-name\fR \fINAME\fR
+With \fB\-\-headless\fR: name of the daemon (default \fBdefault\fR). Each named daemon has its own lock and, unless \fB\-l\fR is given, its own socket (daemons/daemon-NAME.sock in the runtime directory), so several run side by side.
+.TP
+\fB\-\-daemon\-name\fR \fINAME\fR
+With \fBctl\fR, \fBagent\fR, \fBpane\fR, \fBworkspace\fR, \fBcoords\fR and \fBdaemon\fR: talk to the named daemon. Same as the environment variable \fBBILTERM_DAEMON\fR. Fails if that daemon is not running.
+.TP
+\fBdaemon\fR \fBlist\fR [\fB\-\-json\fR] | \fBstart\fR [\fINAME\fR] | \fBstop\fR [\fINAME\fR] [\fB\-\-force\fR] | \fBstatus\fR [\fINAME\fR] [\fB\-\-json\fR]
+List, start, stop or inspect background daemons by name. \fBstatus\fR exits 0 when the daemon runs and 3 otherwise.
+.TP
 \fB\-l\fR, \fB\-\-listen\fR \fIADDR\fR
 Listen address (\fIIP:PORT\fR, \fIlocalhost:PORT\fR, or \fIunix:PATH\fR).
 .TP

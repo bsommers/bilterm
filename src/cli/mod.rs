@@ -8,6 +8,7 @@
 
 pub mod agent_cmd;
 mod coords_cmd;
+pub mod daemon_cmd;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -144,7 +145,8 @@ Usage:
   bilterm coords format [--pane N] [--style verbose|compact|daemon|off]
 
 SELECTOR: w<N>:p<M> | p<M> | <id> | @claude | @agy | @idle | @working | @blocked | @done | @errored | @focused
-Environment: BILTERM_SOCKET (endpoint), BILTERM_PANE_ID (caller pane, excluded from @selectors)"
+Options: --daemon-name NAME   talk to the named daemon (see `bilterm daemon list`)
+Environment: BILTERM_DAEMON (named daemon), BILTERM_SOCKET (endpoint), BILTERM_PANE_ID (caller pane, excluded from @selectors)"
         .to_string()
 }
 

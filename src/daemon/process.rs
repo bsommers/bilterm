@@ -42,6 +42,33 @@ pub fn session_daemon_socket_path(session: &str) -> io::Result<PathBuf> {
         .and_then(|d| session_daemon_socket_path_in(&d, session))
 }
 
+/// Default listen socket for daemon `name` when no `-l/--listen` is given: `default` keeps the
+/// legacy `<runtime>/bilterm.sock` (`legacy_default`), every other name gets its own
+/// `daemons/daemon-<name>.sock` so any number of named daemons coexist.
+pub fn default_listen_socket_in(
+    base_dir: &Path,
+    name: &str,
+    legacy_default: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if name == "default" {
+        return legacy_default;
+    }
+    session_daemon_socket_path_in(base_dir, name).ok().or(legacy_default)
+}
+
+/// Socket of the running daemon `name`: its held lock record (covers explicit `-l unix:PATH`
+/// and hand-started daemons), else a live registry entry, else `None` when it is not running.
+pub fn running_daemon_socket_in(base_dir: &Path, name: &str) -> Option<PathBuf> {
+    crate::secure_fs::validate_safe_name(name).ok()?;
+    if let super::liveness::DaemonLiveness::Running(rec) = super::liveness::daemon_liveness(base_dir, name) {
+        return Some(rec.socket_path);
+    }
+    super::registry::DaemonRegistry::list_active(base_dir)
+        .into_iter()
+        .find(|e| e.name == name)
+        .map(|e| e.socket_path)
+}
+
 /// Probes `sock_path` to check if a live daemon is listening (`true`), or unlinks a stale
 /// socket file when connection fails with `ConnectionRefused` or `NotFound` (`false`).
 ///

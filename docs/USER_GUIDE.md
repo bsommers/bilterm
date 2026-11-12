@@ -23,6 +23,24 @@ or configuring `[daemon] mode = "multi"` in `~/.config/bilterm/config.toml`. Eve
 
 Daemon names are strictly validated against `^[A-Za-z0-9_-]{1,64}$`, rejecting path traversals, whitespace, dots, and NUL bytes.
 
+Any number of named daemons run side by side. Without `-l/--listen`, each named daemon listens on its own `daemons/daemon-<name>.sock`; only the unnamed (`default`) daemon uses the legacy `bilterm.sock`. An explicit `-l unix:PATH` (or TCP address) always wins.
+
+Manage them from the shell (works with no daemon running, and for daemons started by hand):
+```bash
+bilterm daemon list [--json]            # NAME / STATUS / PID / VERSION / SOCKET of every daemon
+bilterm daemon start [NAME]             # start NAME in the background (no-op if already running)
+bilterm daemon status [NAME] [--json]   # exit 0 when running, 3 when stopped or crashed
+bilterm daemon stop [NAME] [--force]    # SIGTERM (SIGKILL with --force)
+```
+`NAME` defaults to `default`. `bilterm ls` lists the same live daemons next to the saved sessions.
+
+Client commands talk to one named daemon with `--daemon-name NAME` or `BILTERM_DAEMON=NAME`:
+```bash
+bilterm ctl --daemon-name alpha daemon.status     # -> {"name":"alpha", ... "is_current":true}
+BILTERM_DAEMON=beta bilterm pane list
+```
+This applies to `bilterm ctl`, `agent`, `pane`, `workspace`, `coords` and `daemon`. Order of precedence: an explicit `ctl` ENDPOINT, `--daemon-name`, `BILTERM_DAEMON`, `BILTERM_SOCKET`, then the default instance. A named target that is not running is an error (exit 1); it is never auto-started or replaced by another daemon. A daemon that listens on TCP only cannot be targeted by name; pass its `IP:PORT` as the `ctl` ENDPOINT.
+
 #### 3. Stale Lock & Dead Process Recovery
 If a daemon crashes or is killed abruptly (`kill -9`), the kernel immediately releases POSIX `flock` locks. On the subsequent startup or query, Bilterm verifies PID liveness using `kill(pid, 0)`. Dead PIDs (`ESRCH`) trigger automatic stale-socket and stale-lock recovery, reclaiming resources without requiring manual file deletion.
 

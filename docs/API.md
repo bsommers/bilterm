@@ -163,6 +163,17 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 
 ---
 
+### Daemon Management: `daemon.*`
+
+| Method | Params | Result |
+|--------|--------|--------|
+| `daemon.list` | none | `{"daemons":[{name, pid, version, started_at_ms, socket_path, sessions_count, panes_count, agents_count, is_current}]}` |
+| `daemon.status` | `name` (string, optional) | Running: the `daemon.list` fields plus `"status":"running"`; otherwise `{"name", "status":"crashed"|"stopped"}`. Without `name` it reports the daemon that answers the request (`default` when the answering process is not a registered daemon). |
+| `daemon.start` | `name` (string, default `default`) | `{"status":"started"|"already_running", name, pid, socket_path}` |
+| `daemon.stop` | `name` (string, default `default`), `force` (bool) | `{"status":"stopped"|"not_running", name}` |
+
+Named daemons listen on `daemons/daemon-<name>.sock` in the runtime directory. Pick one from the client with `bilterm ctl --daemon-name NAME <METHOD>` or `BILTERM_DAEMON=NAME`; the shell equivalents of these methods are `bilterm daemon list|start|stop|status`.
+
 ### Detailed Method Specifications & Examples
 
 #### `auth.login`
