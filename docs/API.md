@@ -1347,5 +1347,5 @@ Bilterm's automation plane enforces defence-in-depth isolation:
 - **File Permissions**: Snapshots are opened with exclusive private permissions (mode `0600`).
 
 ### PTY & Execution Safety
-- **Password Prompt Lock (`!ECHO LOCK`)**: Bilterm's line discipline monitors terminal echo states. When a program requests a password (terminal echo disabled), `pane.exec` rejects commands unless `allow_echo_lock: true` is explicitly provided.
+- **Password Prompt Lock (`!ECHO LOCK`)**: Bilterm's line discipline monitors terminal echo states. When a program requests a password (terminal echo disabled and the program has not declared itself a full-screen TUI, or a password line is on the canvas), `pane.exec` and `agent.approve` (like `agent.prompt`, mail nudges and `:agent guide`) reject commands unless `allow_echo_lock: true` is explicitly provided.
 - **Read-Only Protection (`🔒 PROT`)**: Panes set to read-only mode reject any command submission via `pane.exec`.

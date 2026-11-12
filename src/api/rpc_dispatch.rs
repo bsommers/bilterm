@@ -58,12 +58,12 @@ impl AutomationControlPlane {
                 if pane.is_read_only() {
                     return Err(format!("pane #{target_id} is locked read-only (🔒 PROT)"));
                 }
-                if pane.is_password_prompt() && !allow_echo_lock {
+                if pane.is_injection_password_locked() && !allow_echo_lock {
                     return Err(format!(
                         "pane #{target_id} is in !ECHO LOCK password prompt; set allow_echo_lock=true to override"
                     ));
                 }
-                let redact = pane.is_password_prompt();
+                let redact = pane.is_injection_password_locked();
                 pane.submit_command(cmd).map_err(|e| e.to_string())?;
                 self.wm.record_traffic_with(
                     source,
