@@ -71,6 +71,23 @@ fn unlock(file: &File) {
     }
 }
 
+/// Windows lock primitive: opens the lockfile for writing while sharing it for reading only.
+/// A second writer gets a sharing violation (`Ok(None)`), readers still see the record, and the
+/// kernel closes the handle when its holder dies — the same contract `flock` gives on Unix.
+#[cfg(windows)]
+pub(crate) fn open_exclusive_writer(lock_path: &Path, create: bool) -> io::Result<Option<File>> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 0x1;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.read(true).write(true).create(create).truncate(false).share_mode(FILE_SHARE_READ);
+    match opts.open(lock_path) {
+        Ok(f) => Ok(Some(f)),
+        Err(e) if e.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 fn read_record(lock_path: &Path) -> Option<DaemonLockRecord> {
     let mut s = String::new();
     File::open(lock_path).ok()?.read_to_string(&mut s).ok()?;
@@ -111,7 +128,26 @@ pub fn lock_liveness(lock_path: &Path) -> DaemonLiveness {
         }
         DaemonLiveness::Stopped
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        // A starting daemon holds the lock a moment before its record is written: retry briefly.
+        for _ in 0..10 {
+            match open_exclusive_writer(lock_path, false) {
+                Ok(Some(_probe)) => {
+                    return read_record(lock_path).map_or(DaemonLiveness::Stopped, DaemonLiveness::Crashed);
+                }
+                Ok(None) => {
+                    if let Some(rec) = read_record(lock_path) {
+                        return DaemonLiveness::Running(rec);
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(_) => return DaemonLiveness::Stopped,
+            }
+        }
+        DaemonLiveness::Stopped
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = lock_path;
         DaemonLiveness::Stopped
