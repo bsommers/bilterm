@@ -128,6 +128,21 @@ pub fn list_active_daemon_sessions_in(base_dir: &Path) -> Vec<(String, PathBuf)>
             active.push((session_name.to_string(), path));
         }
     }
+    // Daemons started with the default listener hold a lock record but no
+    // `daemon-<name>.sock`; list those that are genuinely running too.
+    if let Ok(entries) = fs::read_dir(base_dir.join("daemons")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("lock") {
+                continue;
+            }
+            if let super::liveness::DaemonLiveness::Running(rec) = super::liveness::lock_liveness(&path)
+                && !active.iter().any(|(n, _)| *n == rec.name)
+            {
+                active.push((rec.name, rec.socket_path));
+            }
+        }
+    }
     active.sort_by(|a, b| a.0.cmp(&b.0));
     active
 }
