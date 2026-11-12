@@ -39,7 +39,7 @@ Client commands talk to one named daemon with `--daemon-name NAME` or `BILTERM_D
 bilterm ctl --daemon-name alpha daemon.status     # -> {"name":"alpha", ... "is_current":true}
 BILTERM_DAEMON=beta bilterm pane list
 ```
-This applies to `bilterm ctl`, `agent`, `pane`, `workspace`, `coords` and `daemon`. Order of precedence: an explicit `ctl` ENDPOINT, `--daemon-name`, `BILTERM_DAEMON`, `BILTERM_SOCKET`, then the default instance. A named target that is not running is an error (exit 1); it is never auto-started or replaced by another daemon. A daemon that listens on TCP only cannot be targeted by name; pass its `IP:PORT` as the `ctl` ENDPOINT.
+This applies to `bilterm ctl`, `agent`, `pane`, `workspace`, `coords` and `daemon`. `--daemon-name` (and `-t/--token-file`) may come before or after the subcommand (`bilterm --daemon-name alpha pane read p1`); any other option placed before a client subcommand is rejected (exit 2) instead of launching the GUI/TUI. Order of precedence: an explicit `ctl` ENDPOINT, `--daemon-name`, `BILTERM_DAEMON`, `BILTERM_SOCKET`, then the default instance. A named target that is not running is an error (exit 1); it is never auto-started or replaced by another daemon. A daemon that listens on TCP only cannot be targeted by name; pass its `IP:PORT` as the `ctl` ENDPOINT.
 
 #### 3. Stale Lock & Dead Process Recovery
 If a daemon crashes or is killed abruptly (`kill -9`), the kernel immediately releases POSIX `flock` locks. On the subsequent startup or query, Bilterm verifies PID liveness using `kill(pid, 0)`. Dead PIDs (`ESRCH`) trigger automatic stale-socket and stale-lock recovery, reclaiming resources without requiring manual file deletion.

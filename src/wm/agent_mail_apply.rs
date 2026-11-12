@@ -140,8 +140,7 @@ impl WindowManager {
                             return Err(format!("Agent '{recipient_name}' pane #{target_pane_id} no longer exists"));
                         };
                         let is_alt = pane.vt().is_alternate_screen();
-                        let is_pw =
-                            pane.is_password_prompt() || pane.is_active_canvas_password_prompt();
+                        let is_pw = pane.is_injection_password_locked();
                         if !is_alt && !is_pw && !is_busy {
                             let preview = if *delivery == AgentDeliveryMode::File {
                                 format!("file {}", file_path.as_deref().unwrap_or(""))
@@ -149,7 +148,11 @@ impl WindowManager {
                                 sanitize_preview(body, NUDGE_PREVIEW_CAP)
                             };
                             let line = format!("# [mail from {sender_name} #{msg_id}]: {preview}\n");
-                            let _ = pane.write_to_pty(line.as_bytes());
+                            if pane.prompt_injection_kind() == crate::pane::PromptInjectionKind::ShellPrompt {
+                                let _ = pane.write_to_pty(line.as_bytes());
+                            } else {
+                                let _ = pane.inject_prompt(line.trim_end());
+                            }
                             if *delivery == AgentDeliveryMode::File {
                                 (
                                     format!("file delivered: {}", file_path.as_deref().unwrap_or("")),

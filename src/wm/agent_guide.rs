@@ -61,11 +61,7 @@ impl WindowManager {
         if pane.is_read_only() {
             return Err(format!("pane #{id} is locked read-only (PROT)"));
         }
-        // A raw agent TUI runs with ECHO off, which the termios signal alone reads as a password
-        // prompt. A program that declared itself a TUI (bracketed paste, kitty keyboard or the
-        // alternate screen) is not one; a password line on the canvas always is.
-        let declared_tui = pane.vt().is_bracketed_paste() || pane.vt().kitty_keyboard_flags() > 0 || pane.vt().is_alternate_screen();
-        if pane.is_active_canvas_password_prompt() || (pane.is_password_prompt() && !declared_tui) {
+        if pane.is_injection_password_locked() {
             return Err(format!("pane #{id} is in !ECHO LOCK password prompt; guide not injected"));
         }
         let kind = pane.prompt_injection_kind();
