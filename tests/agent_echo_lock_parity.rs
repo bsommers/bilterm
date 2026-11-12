@@ -93,3 +93,36 @@ fn canvas_password_line_is_refused_even_on_a_declared_tui() {
     cp.wm.pane_mut(2).unwrap().line_discipline_mut().echo_enabled = false;
     assert!(prompt(&mut cp).unwrap_err().contains("ECHO LOCK"));
 }
+
+fn approve(cp: &mut AutomationControlPlane) -> Result<JsonValue, String> {
+    cp.dispatch_method("agent.approve", &obj(&[("selector", js("p2")), ("answer", js("yes")), ("force", JsonValue::Bool(true))]))
+}
+
+fn exec(cp: &mut AutomationControlPlane) -> Result<JsonValue, String> {
+    cp.dispatch_method("pane.exec", &obj(&[("pane_id", JsonValue::Number(2)), ("command", js("echo hi"))]))
+}
+
+#[test]
+fn raw_tui_pane_accepts_approve_and_exec() {
+    let mut cp = plane(Kind::RawTui);
+    approve(&mut cp).expect("agent.approve accepts a raw TUI");
+    exec(&mut cp).expect("pane.exec accepts a raw TUI");
+}
+
+#[test]
+fn password_prompts_are_refused_by_approve_and_exec() {
+    for kind in [Kind::EchoOffShell, Kind::CanvasPassword] {
+        let mut cp = plane(kind);
+        assert!(approve(&mut cp).unwrap_err().contains("ECHO LOCK"));
+        assert!(exec(&mut cp).unwrap_err().contains("ECHO LOCK"));
+    }
+}
+
+#[test]
+fn canvas_password_on_declared_tui_is_refused_by_approve_and_exec() {
+    let mut cp = plane(Kind::CanvasPassword);
+    cp.wm.pane_mut(2).unwrap().process_pty_output(b"\x1b[?2004h");
+    cp.wm.pane_mut(2).unwrap().line_discipline_mut().echo_enabled = false;
+    assert!(approve(&mut cp).unwrap_err().contains("ECHO LOCK"));
+    assert!(exec(&mut cp).unwrap_err().contains("ECHO LOCK"));
+}

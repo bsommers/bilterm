@@ -346,7 +346,7 @@ impl WindowManager {
         if pane.is_read_only() {
             return Err(format!("pane #{id} is locked read-only (PROT)"));
         }
-        let redact = pane.is_password_prompt();
+        let redact = pane.is_injection_password_locked();
         if redact && !allow_echo {
             return Err(format!(
                 "pane #{id} is in !ECHO LOCK password prompt; set allow_echo_lock=true to override"
