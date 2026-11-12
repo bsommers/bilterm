@@ -308,7 +308,39 @@ pub fn acquire_lock(
         }
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        // A liveness probe holds the file for microseconds: retry before giving up.
+        let mut opened = crate::daemon::liveness::open_exclusive_writer(&lock_path, true)?;
+        for _ in 0..5 {
+            if opened.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+            opened = crate::daemon::liveness::open_exclusive_writer(&lock_path, true)?;
+        }
+        if let Some(mut file) = opened {
+            let record = DaemonLockRecord {
+                pid: std::process::id(),
+                name: name.to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                started_at_ms: now_ms(),
+                socket_path,
+            };
+            file.set_len(0)?;
+            file.write_all(record.to_json().as_bytes())?;
+            file.sync_all()?;
+            return Ok(DaemonLockResult::Acquired(DaemonLock { file: Some(file), record, lock_path }));
+        }
+        // Another process holds the write handle, and a held lock is a live daemon.
+        let mut content = String::new();
+        let _ = File::open(&lock_path).and_then(|mut f| f.read_to_string(&mut content));
+        if let Ok(rec) = DaemonLockRecord::from_json(&content) {
+            return Ok(DaemonLockResult::AlreadyHeld(rec));
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = &socket_path;
     }
