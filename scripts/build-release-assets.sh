@@ -72,7 +72,11 @@ if [[ $BUILD -eq 1 ]]; then
     TGT="${CARGO_TARGET_DIR:-$WT/target}"
 
     rustup target add "${TRIPLES[@]}"
-    rm -rf "$DIST"; mkdir -p "$DIST"
+    # Clear only our own (Linux) outputs: macOS/Windows archives built into the
+    # same dist dir by build-windows-vm.sh / build-release-mac-win.sh must survive.
+    mkdir -p "$DIST"
+    rm -rf "$DIST/prev" "$DIST/SHA256SUMS.linux"
+    rm -f "$DIST"/bilterm-*linux*.tar.gz
     for triple in "${TRIPLES[@]}"; do
         echo "[bilterm-release] Building ${triple}..."
         (cd "$WT" && cargo zigbuild --release --target "$(zig_target "$triple")")

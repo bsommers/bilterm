@@ -27,3 +27,5 @@ scp bill@bigmac.local:worktrees/bilterm-winarm/target/release-dist/v-local-arm/b
 Then delete the local tag (never push it) and `./vm.sh stop`. `build-windows-vm.sh` needs the tag to exist locally and builds the worktree's committed HEAD. macOS archives are built on the Mac with `cargo build --release --target <triple>` and packaged like `.github/workflows/release-binaries.yml`.
 
 Verified 2026-11-11 on main `79407bb`: Windows x64 and ARM64 each pass `scripts/windows-smoke-test.ps1` (headless daemon included).
+
+The Linux script clears only its own outputs, so archives from the Windows and macOS scripts can share one `target/release-dist/<tag>/` directory in any order.
