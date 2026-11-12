@@ -3,6 +3,7 @@
 
 use super::ColonCommand;
 use crate::action::Action;
+use crate::wm::agent_guide::{AgentGuideOp, GuideTarget};
 use crate::wm::context_queue_ops::{AgentGateOp, AgentQueueOp};
 use crate::wm::swarm_surface::SwarmOp;
 
@@ -20,6 +21,7 @@ pub(super) fn parse_agent_ops(head: &str, parts: &[&str]) -> Option<Result<Colon
         "approve" if parts.len() == 2 => Some(Ok(Action::AgentGate(AgentGateOp::Approve))),
         "deny" if parts.len() == 2 => Some(Ok(Action::AgentGate(AgentGateOp::Deny))),
         "approve" | "deny" => Some(Err("Usage: :agent approve|deny".to_string())),
+        "guide" => Some(parse_guide(&parts[2..])),
         _ => None,
     }
 }
@@ -51,6 +53,20 @@ fn parse_swarm(args: &[&str]) -> Result<ColonCommand, String> {
         _ => return Err(bad()),
     };
     Ok(Action::Swarm(op))
+}
+
+pub const AGENT_GUIDE_USAGE: &str = "Usage: :agent guide [<pane-id>|all|--print]";
+
+/// `:agent guide [<pane-id>|all|--print]`: no argument targets the focused pane.
+fn parse_guide(args: &[&str]) -> Result<ColonCommand, String> {
+    let op = match args {
+        [] | ["focused"] => AgentGuideOp::Inject(GuideTarget::Focused),
+        ["all"] => AgentGuideOp::Inject(GuideTarget::All),
+        ["--print" | "print" | "path"] => AgentGuideOp::Print,
+        [id] => AgentGuideOp::Inject(GuideTarget::Pane(id.trim_start_matches('#').parse().map_err(|_| AGENT_GUIDE_USAGE.to_string())?)),
+        _ => return Err(AGENT_GUIDE_USAGE.to_string()),
+    };
+    Ok(Action::AgentGuide(op))
 }
 
 fn parse_queue(args: &[&str]) -> Result<ColonCommand, String> {

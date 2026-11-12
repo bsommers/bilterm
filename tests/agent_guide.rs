@@ -1,0 +1,397 @@
+//! Agent guide surfaces (`AGUIDE-01`): `bilterm agents-md` (+ `--install`), MCP `initialize`
+//! instructions and the `bilterm://agents-md` resource, the `agent.guide` RPC, `:agent guide`
+//! injection into headless panes, surface parity, and guide/command drift.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+use bilterm::action::Action;
+use bilterm::agent_guide::{self, GUIDE};
+use bilterm::api::{AutomationControlPlane, JsonValue};
+use bilterm::cli::{CliEnv, parse};
+use bilterm::colon_command::parse_colon_command;
+use bilterm::wm::WindowManager;
+use bilterm::wm::agent_guide::{AgentGuideOp, GuideTarget};
+
+/// Points the runtime/state/config dirs at a throwaway root (once), so the guide file is never
+/// written into a real `$XDG_RUNTIME_DIR/bilterm`.
+fn isolate() -> PathBuf {
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = std::env::temp_dir().join(format!("btag-{}-{}", std::process::id(), bilterm::secure_fs::unique_suffix()));
+        std::fs::create_dir_all(root.join("home")).unwrap();
+        bilterm::secure_fs::ensure_private_dir(&root.join("rt")).unwrap();
+        // SAFETY: runs once, before any plane or pane of this test binary is created.
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", root.join("rt"));
+            std::env::set_var("XDG_STATE_HOME", root.join("state"));
+            std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+            std::env::set_var("XDG_DATA_HOME", root.join("data"));
+            std::env::set_var("HOME", root.join("home"));
+        }
+        root
+    })
+    .clone()
+}
+
+fn wm(panes: usize) -> WindowManager {
+    isolate();
+    let mut wm = WindowManager::new_headless(80, 24);
+    for _ in 1..panes {
+        wm.apply(Action::SplitVertical).unwrap();
+    }
+    wm
+}
+
+fn plane() -> AutomationControlPlane {
+    isolate();
+    AutomationControlPlane::new_headless(24, 80)
+}
+
+fn focused() -> Action {
+    Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::Focused))
+}
+
+/// Turns pane `id` into a raw agent TUI: bracketed paste on, ECHO off, a foreground child.
+fn make_raw_agent(wm: &mut WindowManager, id: usize) {
+    let pane = wm.pane_mut(id).unwrap();
+    pane.process_pty_output(b"\x1b[?2004h");
+    let ld = pane.line_discipline_mut();
+    ld.canonical_mode = false;
+    ld.echo_enabled = false;
+    ld.foreground_pgid = Some(200);
+    ld.shell_pgid = Some(100);
+}
+
+fn data(wm: &mut WindowManager) -> JsonValue {
+    JsonValue::parse(&wm.take_command_data().expect("command data")).expect("json")
+}
+
+fn write_str(wm: &WindowManager, id: usize) -> String {
+    String::from_utf8(wm.pane(id).unwrap().last_pty_write().to_vec()).unwrap()
+}
+
+fn status(wm: &mut WindowManager) -> String {
+    wm.active_pane_mut().status_message().unwrap_or_default().to_string()
+}
+
+// ---- CLI -------------------------------------------------------------------------------------
+
+fn bilterm(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
+    let root = isolate();
+    Command::new(env!("CARGO_BIN_EXE_bilterm"))
+        .args(args)
+        .current_dir(cwd)
+        .env("HOME", root.join("home"))
+        .env("XDG_RUNTIME_DIR", root.join("rt"))
+        .env("XDG_STATE_HOME", root.join("state"))
+        .env("XDG_CONFIG_HOME", root.join("config"))
+        .env_remove("BILTERM_SOCKET")
+        .env_remove("BILTERM_DAEMON")
+        .output()
+        .expect("run bilterm")
+}
+
+#[test]
+fn cli_agents_md_prints_the_embedded_guide_without_a_daemon() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = bilterm(&["agents-md"], dir.path());
+    assert!(out.status.success());
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), GUIDE);
+    let help = bilterm(&["--help"], dir.path());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("bilterm agents-md [--install [PATH]]"));
+    for sh in ["bash", "zsh", "fish"] {
+        let comp = bilterm(&["--completions", sh], dir.path());
+        assert!(String::from_utf8_lossy(&comp.stdout).contains("agents-md"), "{sh} completions");
+    }
+    let bad = bilterm(&["agents-md", "--nope"], dir.path());
+    assert_eq!(bad.status.code(), Some(2));
+}
+
+#[test]
+fn cli_install_is_idempotent_and_never_touches_text_outside_the_markers() {
+    let dir = tempfile::tempdir().unwrap();
+    // Default path ./AGENTS.md is created when missing.
+    assert!(bilterm(&["agents-md", "--install"], dir.path()).status.success());
+    let created = std::fs::read_to_string(dir.path().join("AGENTS.md")).unwrap();
+    assert_eq!(created, agent_guide::install_block());
+
+    // Existing file with user text before and (after a stale block) after.
+    let target = dir.path().join("CLAUDE.md");
+    let head = "# Project rules\n\n- keep me\n";
+    let tail = "\n## Later section\nkeep me too\n";
+    let stale = format!("{}\nold body\n{}\n", agent_guide::BEGIN_MARKER.replace("generated by", "made by"), agent_guide::END_MARKER);
+    std::fs::write(&target, format!("{head}{stale}{tail}")).unwrap();
+    assert!(bilterm(&["agents-md", "--install", "CLAUDE.md"], dir.path()).status.success());
+    let once = std::fs::read_to_string(&target).unwrap();
+    assert_eq!(once, format!("{head}{}{tail}", agent_guide::install_block()));
+    let second = bilterm(&["agents-md", "--install", "CLAUDE.md"], dir.path());
+    assert!(String::from_utf8_lossy(&second.stdout).contains("already has"));
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), once);
+
+    // Broken markers: refused, file untouched.
+    let broken = dir.path().join("BROKEN.md");
+    let text = format!("x\n{}\nno end\n", agent_guide::BEGIN_MARKER);
+    std::fs::write(&broken, &text).unwrap();
+    assert_eq!(bilterm(&["agents-md", "--install", "BROKEN.md"], dir.path()).status.code(), Some(1));
+    assert_eq!(std::fs::read_to_string(&broken).unwrap(), text);
+}
+
+// ---- MCP and RPC -----------------------------------------------------------------------------
+
+fn mcp(cp: &mut AutomationControlPlane, method: &str, params: &str) -> JsonValue {
+    let line = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":{params}}}"#);
+    let resp = JsonValue::parse(&cp.handle_mcp_line(&line).expect("response")).unwrap();
+    resp.get("result").cloned().unwrap_or_else(|| panic!("no result: {}", resp.to_json_string()))
+}
+
+#[test]
+fn mcp_initialize_has_instructions_and_the_resource_returns_the_guide() {
+    let mut cp = plane();
+    let init = mcp(&mut cp, "initialize", "{}");
+    let instr = init.get("instructions").and_then(JsonValue::as_str).expect("instructions");
+    assert_eq!(instr, agent_guide::MCP_INSTRUCTIONS);
+    assert!(instr.contains("bilterm://agents-md") && instr.contains("echo_lock") && instr.len() < 1500);
+
+    let list = mcp(&mut cp, "resources/list", "{}");
+    let entry = list
+        .get("resources")
+        .and_then(JsonValue::as_array)
+        .unwrap()
+        .iter()
+        .find(|r| r.get("uri").and_then(JsonValue::as_str) == Some("bilterm://agents-md"))
+        .expect("bilterm://agents-md listed")
+        .clone();
+    assert_eq!(entry.get("mimeType").and_then(JsonValue::as_str), Some("text/markdown"));
+
+    let read = mcp(&mut cp, "resources/read", r#"{"uri":"bilterm://agents-md"}"#);
+    let content = &read.get("contents").and_then(JsonValue::as_array).unwrap()[0];
+    assert_eq!(content.get("text").and_then(JsonValue::as_str), Some(GUIDE));
+    assert_eq!(content.get("mimeType").and_then(JsonValue::as_str), Some("text/markdown"));
+}
+
+#[test]
+fn rpc_agent_guide_reads_and_injects_with_mcp_and_cli_parity() {
+    let mut cp = plane();
+    let got = cp.dispatch_method("agent.guide", &JsonValue::obj([] as [(&str, JsonValue); 0])).unwrap();
+    assert_eq!(got.get("text").and_then(JsonValue::as_str), Some(GUIDE));
+    assert_eq!(got.get("uri").and_then(JsonValue::as_str), Some("bilterm://agents-md"));
+    assert!(cp.wm.pane(1).unwrap().last_pty_write().is_empty(), "get is a pure read");
+
+    // MCP tool -> same RPC method.
+    let args = JsonValue::obj([("action", JsonValue::String("guide".into()))]);
+    assert_eq!(AutomationControlPlane::agent_control_method(&args), Some("agent.guide"));
+    let tool = mcp(&mut cp, "tools/call", r#"{"name":"bilterm_agent_control","arguments":{"action":"guide"}}"#);
+    assert!(tool.to_json_string().contains("Bilterm control rules for AI agents"));
+
+    // CLI lowers to the same method and params.
+    let env = CliEnv::default();
+    let a = |v: &[&str]| v.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let get = parse(&a(&["agent", "guide"]), &env).unwrap();
+    assert_eq!((get.method.as_str(), get.params.get("op").and_then(JsonValue::as_str)), ("agent.guide", Some("get")));
+    let inj = parse(&a(&["agent", "guide", "p1"]), &env).unwrap();
+    assert_eq!(inj.params.get("selector").and_then(JsonValue::as_str), Some("p1"));
+    let all = parse(&a(&["agent", "guide", "all"]), &env).unwrap();
+    assert_eq!(all.params.get("target").and_then(JsonValue::as_str), Some("all"));
+    assert!(parse(&a(&["agent", "guide", "p1", "--print"]), &env).is_err());
+
+    // inject over RPC reaches the pane and returns the structured result.
+    let res = cp.dispatch_method(&inj.method, &inj.params).unwrap();
+    assert_eq!(res.get("status").and_then(JsonValue::as_str), Some("injected"));
+    let path = res.get("path").and_then(JsonValue::as_str).unwrap().to_string();
+    assert!(write_str(&cp.wm, 1).contains(&path));
+    assert!(cp.dispatch_method("agent.guide", &JsonValue::obj([("op", JsonValue::String("bogus".into()))])).is_err());
+    // Read-only pane: refused over RPC as an error.
+    cp.wm.pane_mut(1).unwrap().set_read_only(true);
+    assert!(cp.dispatch_method(&inj.method, &inj.params).unwrap_err().contains("read-only"));
+}
+
+// ---- Injection against headless panes ----------------------------------------------------------
+
+#[test]
+fn injection_writes_a_private_file_and_a_one_line_pointer_to_a_raw_agent_pane() {
+    let mut wm = wm(2);
+    make_raw_agent(&mut wm, 2);
+    wm.apply(Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::Pane(2)))).unwrap();
+    let d = data(&mut wm);
+    let path = PathBuf::from(d.get("path").and_then(JsonValue::as_str).unwrap());
+    assert_eq!(path, bilterm::secure_fs::private_runtime_dir().unwrap().join("agent-guide.md"));
+    assert!(path.starts_with(isolate()), "guide file must live in the isolated runtime dir");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), GUIDE);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    // Exactly the pointer line, as one bracketed paste followed by Enter; never the guide body.
+    let expected = format!("\x1b[200~{}\x1b[201~\r", agent_guide::pointer_line(&path));
+    assert_eq!(write_str(&wm, 2), expected);
+    assert!(!write_str(&wm, 2).contains("Pick an interface"));
+    assert!(expected.len() < 512, "pointer stays small");
+    assert!(wm.pane(1).unwrap().last_pty_write().is_empty(), "other panes are untouched");
+    let inj = d.get("injected").and_then(JsonValue::as_array).unwrap();
+    assert_eq!(inj[0].get("mode").and_then(JsonValue::as_str), Some("raw_bracketed_paste"));
+}
+
+#[test]
+fn injection_into_a_shell_pane_is_a_comment_line_not_a_command() {
+    let mut wm = wm(1);
+    wm.apply(focused()).unwrap();
+    let w = write_str(&wm, 1);
+    assert!(w.starts_with("# [bilterm] Read ") && w.ends_with('\n') && w.matches('\n').count() == 1, "{w:?}");
+    assert!(wm.pane(1).unwrap().vt().command_blocks().is_empty(), "nothing was submitted as a command");
+    assert!(status(&mut wm).starts_with("Agent guide sent to 1 pane(s)"));
+}
+
+#[test]
+fn echo_lock_and_read_only_panes_are_refused() {
+    // Password prompt: ECHO off in canonical mode, no TUI declared.
+    let mut wm = wm(1);
+    wm.pane_mut(1).unwrap().line_discipline_mut().echo_enabled = false;
+    assert!(wm.pane(1).unwrap().is_password_prompt());
+    wm.apply(focused()).unwrap();
+    assert!(wm.pane(1).unwrap().last_pty_write().is_empty(), "nothing may reach a password prompt");
+    assert!(status(&mut wm).contains("!ECHO LOCK"), "{}", status(&mut wm));
+
+    // A password line on the canvas of a raw TUI pane is refused too.
+    let mut wm2 = self::wm(1);
+    make_raw_agent(&mut wm2, 1);
+    wm2.pane_mut(1).unwrap().process_pty_output(b"\r\n[sudo] password for bill: ");
+    wm2.pane_mut(1).unwrap().line_discipline_mut().echo_enabled = false;
+    wm2.apply(focused()).unwrap();
+    assert!(wm2.pane(1).unwrap().last_pty_write().is_empty());
+    assert!(status(&mut wm2).contains("!ECHO LOCK"));
+
+    // Read-only pane.
+    let mut wm3 = self::wm(1);
+    wm3.pane_mut(1).unwrap().set_read_only(true);
+    wm3.apply(focused()).unwrap();
+    assert!(wm3.pane(1).unwrap().last_pty_write().is_empty());
+    assert!(status(&mut wm3).contains("read-only"));
+}
+
+#[test]
+fn print_touches_no_pane_and_all_needs_detected_agents() {
+    let mut wm = wm(2);
+    wm.apply(Action::AgentGuide(AgentGuideOp::Print)).unwrap();
+    let d = data(&mut wm);
+    assert_eq!(d.get("text").and_then(JsonValue::as_str), Some(GUIDE));
+    assert!(wm.panes().values().all(|p| p.last_pty_write().is_empty()));
+
+    wm.apply(Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::All))).unwrap();
+    assert!(status(&mut wm).contains("no agent panes detected"));
+    assert!(wm.panes().values().all(|p| p.last_pty_write().is_empty()));
+
+    wm.apply(Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::Pane(99)))).unwrap();
+    assert!(status(&mut wm).contains("pane #99 not found"));
+}
+
+// ---- Surface parity (UNI-R01) ----------------------------------------------------------------
+
+#[test]
+fn colon_key_menu_and_palette_reach_the_same_action() {
+    let parsed = |c: &str| parse_colon_command(c).unwrap().unwrap();
+    assert_eq!(parsed(":agent guide"), focused());
+    assert_eq!(parsed(":agent guide 3"), Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::Pane(3))));
+    assert_eq!(parsed(":agent guide all"), Action::AgentGuide(AgentGuideOp::Inject(GuideTarget::All)));
+    assert_eq!(parsed(":agent guide --print"), Action::AgentGuide(AgentGuideOp::Print));
+    assert!(parse_colon_command(":agent guide a b").unwrap().is_err());
+    for op in [AgentGuideOp::Print, AgentGuideOp::Inject(GuideTarget::All), AgentGuideOp::Inject(GuideTarget::Pane(7)), AgentGuideOp::Inject(GuideTarget::Focused)] {
+        assert_eq!(parsed(&op.colon_form()), Action::AgentGuide(op), "colon form round-trips");
+    }
+
+    // Keys: Ctrl+Alt+G (global, reserved over raw passthrough) and leader ^.
+    let chord = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL | KeyModifiers::ALT);
+    assert_eq!(bilterm::input::default_global_action(chord, false), Some(focused()));
+    assert_eq!(bilterm::input::default_leader_action(KeyEvent::new(KeyCode::Char('^'), KeyModifiers::NONE)), Some(focused()));
+
+    // Menu: Help > Inject Agent Guide.
+    let help = bilterm::ui::menu_model::MENUBAR_CATEGORIES.iter().find(|c| c.title == "Help").unwrap();
+    let item = help.items.iter().find(|i| i.label == "Inject Agent Guide").expect("menu item");
+    assert_eq!(bilterm::ui::menu_model::menu_action(item.command), Some(focused()));
+
+    // Catalog: Tab completion and a described palette entry.
+    let info = bilterm::command_registry::lookup(":agent").unwrap();
+    assert!(info.subargs.contains(&"guide") && info.examples.contains(&":agent guide"));
+}
+
+#[test]
+fn ctrl_alt_g_injects_into_a_focused_raw_agent_pane() {
+    let mut wm = wm(1);
+    make_raw_agent(&mut wm, 1);
+    let chord = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL | KeyModifiers::ALT);
+    bilterm::input::handle_wm_key_event(&mut wm, chord).unwrap();
+    let w = write_str(&wm, 1);
+    assert!(w.starts_with("\x1b[200~Read ") && w.ends_with("\x1b[201~\r"), "chord must reach the WM, not the child: {w:?}");
+}
+
+// ---- Drift: the guide only names things that exist -------------------------------------------
+
+/// Every backticked snippet of the guide.
+fn snippets() -> Vec<&'static str> {
+    GUIDE.split('`').skip(1).step_by(2).collect()
+}
+
+#[test]
+fn every_colon_command_named_in_the_guide_exists_and_parses() {
+    let names: Vec<&str> = bilterm::command_registry::catalog().iter().map(|c| c.name).collect();
+    let mut seen = 0;
+    for snip in snippets().into_iter().filter(|s| s.starts_with(':') && s.len() > 1 && !s.starts_with(":<")) {
+        let head = snip.split_whitespace().next().unwrap();
+        assert!(names.contains(&head), "guide names unknown colon command `{snip}`");
+        // Concrete snippets (no `<a|b>` alternation) must parse; UPPERCASE placeholders are free text.
+        if !snip.contains('<') {
+            let concrete = snip.replace("PANE", "2");
+            assert!(matches!(parse_colon_command(&concrete), Some(Ok(_))), "guide command does not parse: `{snip}`");
+        }
+        seen += 1;
+    }
+    assert!(seen >= 25, "expected the guide to name colon commands, found {seen}");
+    for must in [":agent guide", ":agent send NAME TEXT", ":agent inbox", ":daemon list", ":split h"] {
+        assert!(snippets().contains(&must), "guide lost `{must}`");
+    }
+}
+
+#[test]
+fn every_cli_subcommand_named_in_the_guide_exists() {
+    let env = CliEnv::default();
+    let (mut daemon, mut live) = (0, 0);
+    for snip in snippets().into_iter().filter(|s| s.starts_with("bilterm ")) {
+        let words: Vec<String> = snip.split_whitespace().skip(1).map(ToString::to_string).collect();
+        match words.first().map(String::as_str) {
+            Some("daemon") => {
+                bilterm::cli::daemon_cmd::parse_daemon_args(&words[1..], None).unwrap_or_else(|e| panic!("`{snip}`: {e}"));
+                daemon += 1;
+            }
+            Some("agent" | "pane" | "workspace") if words.len() > 1 => {
+                parse(&words, &env).unwrap_or_else(|e| panic!("`{snip}`: {e}"));
+                live += 1;
+            }
+            Some("ctl") => {
+                let method = words.get(1).expect("ctl METHOD");
+                assert!(method == "<METHOD>" || bilterm::api::RPC_METHODS.contains(&method.as_str()), "`{snip}`: unknown RPC method");
+            }
+            Some("agents-md") => assert_eq!(agent_guide::run_cli(&words[1..]).1, 0),
+            _ => {}
+        }
+    }
+    assert!(daemon >= 4, "guide must name bilterm daemon list|start|stop|status, found {daemon}");
+    assert!(live >= 10, "guide must name the live agent/pane/workspace commands, found {live}");
+    // RPC methods, MCP tools and resources named in the guide exist.
+    let mut cp = plane();
+    let tools = mcp(&mut cp, "tools/list", "{}").to_json_string();
+    let resources = mcp(&mut cp, "resources/list", "{}").to_json_string();
+    for snip in snippets() {
+        if snip.starts_with("bilterm_") {
+            assert!(tools.contains(&format!("\"{snip}\"")), "guide names unknown MCP tool `{snip}`");
+        } else if snip.starts_with("bilterm://") && !snip.contains('<') {
+            assert!(resources.contains(snip), "guide names unknown MCP resource `{snip}`");
+        } else if snip.starts_with("agent.") {
+            assert!(bilterm::api::RPC_METHODS.contains(&snip), "guide names unknown RPC method `{snip}`");
+        }
+    }
+    assert!(GUIDE.contains("--daemon-name NAME") && GUIDE.contains("BILTERM_DAEMON=NAME"));
+    assert!(GUIDE.len() < 6 * 1024, "keep the guide token-cheap ({} bytes)", GUIDE.len());
+}

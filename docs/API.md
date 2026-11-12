@@ -172,6 +172,8 @@ bilterm ctl -t ~/.bilterm.token 127.0.0.1:7370 workspace.status
 | `daemon.start` | `name` (string, default `default`) | `{"status":"started"|"already_running", name, pid, socket_path}` |
 | `daemon.stop` | `name` (string, default `default`), `force` (bool) | `{"status":"stopped"|"not_running", name}` |
 
+| `agent.guide` | `op` (`get` default, `inject`, `print`), `selector` or `pane_id`, `target` (`"all"`) | `get`: `{"text", "bytes", "uri":"bilterm://agents-md"}`, the agent control guide (a pure read). `inject`: hands the guide to the selected pane (default: the focused pane) or, with `target:"all"`, to every detected agent pane; returns `{"status":"injected", "path", "bytes", "injected":[{pane_id, mode}], "refused":[{pane_id, reason}]}`. `mode` is `raw_bracketed_paste`, `raw_plain` or `shell_comment`. `print`: writes the guide file only, returns `{"status":"written", "path", "bytes", "text"}`. `inject` and `print` run `:agent guide` (`Action::AgentGuide`); read-only and `!ECHO LOCK` panes are an error. CLI: `bilterm agent guide [SELECTOR\|all] [--print]`; without a daemon, `bilterm agents-md`. |
+
 Named daemons listen on `daemons/daemon-<name>.sock` in the runtime directory. Pick one from the client with `bilterm ctl --daemon-name NAME <METHOD>` or `BILTERM_DAEMON=NAME`; the shell equivalents of these methods are `bilterm daemon list|start|stop|status`.
 
 ### Detailed Method Specifications & Examples
@@ -908,6 +910,8 @@ When started with `bilterm --mcp`, Bilterm provides a native Model Context Proto
 - Protocol Version: `2024-11-05`
 - Server Name: `bilterm-mcp`
 - Standard Capabilities: `tools` (`listChanged: false`), `resources` (`subscribe: false`, `listChanged: false`)
+- `instructions` (in the `initialize` result): a short pointer to `bilterm://agents-md` plus the key rules (inspect before acting, no blind sleeps, `echo_lock` / `read_only` refusals, named-daemon targeting). Clients that show server instructions to the model get them without any setup.
+- `bilterm_agent_control` accepts `action: "guide"` (RPC `agent.guide`): `op` `get` returns the guide text, `inject` hands it to an agent pane.
 
 ### Master Table of MCP Tools
 
@@ -973,13 +977,14 @@ Successful replies return MCP content blocks:
 
 ## 5. MCP Resources (`resources/list` & `resources/read`)
 
-Bilterm implements dynamic read-only MCP resources providing structured state and catalogs. All resources use MIME type `application/json`.
+Bilterm implements dynamic read-only MCP resources providing structured state and catalogs. Resources use MIME type `application/json`, except `bilterm://agents-md`, which is `text/markdown`.
 
 | URI | Name | Description |
 | :--- | :--- | :--- |
 | `bilterm://state` | Workspace state | Full workspace status plus resolved appearance profile, display mode, and drawer state. |
 | `bilterm://config` | Effective config | Non-secret effective configuration values (theme, snazzy mode, glass mode, etc.). |
 | `bilterm://commands` | Colon command catalog | Complete catalog of every available `:colon` command with summaries, aliases, and examples. |
+| `bilterm://agents-md` | Agent control guide | The instructions for AI agents driving Bilterm (interfaces, daemons, panes, other agents, hard rules) as Markdown. Same text as `bilterm agents-md` and RPC `agent.guide`. |
 | `bilterm://pane/{id}` | Pane #{id} | Dynamic resource per pane: visible lines, cursor, command blocks, field hints, and notifications. |
 
 ### Reading Resources

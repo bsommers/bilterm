@@ -54,6 +54,7 @@ impl AutomationControlPlane {
                         ),
                     ]),
                 ),
+                ("instructions", JsonValue::String(crate::agent_guide::MCP_INSTRUCTIONS.to_string())),
             ])),
             "ping" => Ok(JsonValue::Object(BTreeMap::new())),
             "tools/list" => Ok(Self::mcp_tools_list()),
@@ -120,7 +121,7 @@ impl AutomationControlPlane {
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
                         } else if tool_name == "bilterm_agent_control" {
-                            Err("missing or invalid 'action' parameter: hud, replay, watchdog, approve, prompt, last_turn, wait, pane_list, pane_split, pane_focus, pane_zoom, pane_send, workspace_list, workspace_select, workspace_new or workspace_rename".to_string())
+                            Err("missing or invalid 'action' parameter: hud, replay, watchdog, approve, prompt, last_turn, wait, guide, pane_list, pane_split, pane_focus, pane_zoom, pane_send, workspace_list, workspace_select, workspace_new or workspace_rename".to_string())
                         } else if tool_name == "bilterm_keys" {
                             Err("invalid 'action' parameter: list, check, explain, profile, window_mode or menu_open".to_string())
                         } else if tool_name == "bilterm_traffic" {
@@ -422,10 +423,11 @@ impl AutomationControlPlane {
                 "bilterm_agent_control",
                 "Live agent control: the Mission Control HUD snapshot (hud), per-turn replay (replay), the stall/loop watchdog (watchdog), answer or prompt an agent pane (approve, prompt), read its last turn, and pane/workspace control. Each action is the RPC method of the same name (agent.hud, agent.replay, agent.approve, pane.split, ...).",
                 &[
-                    ("action", "string", "Operation: hud | replay | watchdog | approve | prompt | last_turn | wait | pane_list | pane_split | pane_focus | pane_zoom | pane_send | workspace_list | workspace_select | workspace_new | workspace_rename (required)"),
+                    ("action", "string", "Operation: hud | replay | watchdog | approve | prompt | last_turn | wait | guide | pane_list | pane_split | pane_focus | pane_zoom | pane_send | workspace_list | workspace_select | workspace_new | workspace_rename (required)"),
                     ("selector", "string", "Pane selector (p3, @blocked, @focused, ...)"),
                     ("pane_id", "integer", "Pane id (alternative to selector)"),
-                    ("op", "string", "Sub-operation for hud (open|close|toggle|next|prev|select|approve|prompt|diff|zoom) and replay (open|close|prev|next|first|last|turn|scroll)"),
+                    ("op", "string", "Sub-operation for hud (open|close|toggle|next|prev|select|approve|prompt|diff|zoom) and replay (open|close|prev|next|first|last|turn|scroll); guide: get (default, returns the agent guide text) | inject (hand it to the selected pane, or target=all) | print"),
+                    ("target", "string", "guide inject: 'all' = every detected agent pane"),
                     ("turn_id", "integer", "Replay: return this turn with its output"),
                     ("text", "string", "Text for prompt / pane_send"),
                     ("answer", "string", "approve answer: yes | y | n | no | esc"),
@@ -486,6 +488,7 @@ impl AutomationControlPlane {
             "prompt" => "agent.prompt",
             "last_turn" => "agent.last_turn",
             "wait" => "agent.wait",
+            "guide" => "agent.guide",
             "pane_list" => "pane.list",
             "pane_split" => "pane.split",
             "pane_focus" => "pane.focus",

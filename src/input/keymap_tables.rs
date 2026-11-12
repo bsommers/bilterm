@@ -33,6 +33,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('A'), Action::AgentsList(AgentsListOp::Toggle)),
     // Mission Control HUD toggle (`Ctrl+X *`, Phase 70; every letter is taken, `A` is the AGENTS list)
     (KeyCode::Char('*'), Action::AgentsHud(crate::wm::agents_hud_cmd::HudOp::Toggle)),
+    // Hand the bilterm control guide to the focused agent pane (`Ctrl+X ^`; every letter is taken; AGUIDE-01)
+    (KeyCode::Char('^'), Action::AgentGuide(crate::wm::agent_guide::AgentGuideOp::Inject(crate::wm::agent_guide::GuideTarget::Focused))),
     (KeyCode::Char('S'), Action::SessionMap(SessionMapOp::Toggle)),
     (KeyCode::Char('y'), Action::Agents(AgentsOp::Demo)),
     (KeyCode::Char('Y'), Action::Agents(AgentsOp::DemoStop)),
@@ -234,6 +236,9 @@ pub const DEFAULT_GLOBAL_BINDINGS: &[(KeyModifiers, KeyCode, Action)] = &[
     // Agent traffic window toggle (every F1..F12 is taken, so a Ctrl+Alt chord; also menu View, drawer footer `@`)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('a'), Action::Agents(AgentsOp::Toggle(None))),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('A'), Action::Agents(AgentsOp::Toggle(None))),
+    // Agent guide injection into the focused pane: Ctrl+Alt+G (verified free; reserved over raw passthrough because agent TUIs are raw; AGUIDE-01)
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('g'), Action::AgentGuide(crate::wm::agent_guide::AgentGuideOp::Inject(crate::wm::agent_guide::GuideTarget::Focused))),
+    (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('G'), Action::AgentGuide(crate::wm::agent_guide::AgentGuideOp::Inject(crate::wm::agent_guide::GuideTarget::Focused))),
     // Web UI surface status: Ctrl+Alt+W (leader w/W stay ClosePane; Phase 60 UNI-R01)
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('w'), Action::Web(WebOp::Status)),
     (KeyModifiers::CONTROL.union(KeyModifiers::ALT), KeyCode::Char('W'), Action::Web(WebOp::Status)),

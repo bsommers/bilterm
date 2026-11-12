@@ -17,7 +17,7 @@ pub(super) fn parse_agent_colon_command(
         Some(s) => *s,
         None => {
             return Some(Err(
-                "Usage: :agent <name|send|broadcast|inbox|ack|list|enable>".to_string(),
+                "Usage: :agent <name|send|broadcast|inbox|ack|list|enable|guide>".to_string(),
             ));
         }
     };
@@ -176,7 +176,7 @@ pub(super) fn parse_agent_colon_command(
             Some(Ok(Action::AgentMail(AgentMailOp::Enable(opt))))
         }
         _ => Some(Err(
-            "Usage: :agent <name|send|broadcast|inbox|ack|list|enable>".to_string(),
+            "Usage: :agent <name|send|broadcast|inbox|ack|list|enable|guide>".to_string(),
         )),
     }
 }

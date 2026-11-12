@@ -18,6 +18,9 @@ bilterm \- IBM 3270 Mainframe & DOS Borland Turbo Vision inspired TUI multiplexe
 \fBctl\fR [\fB\-t\fR \fIPATH\fR] [\fIENDPOINT\fR] \fIMETHOD\fR [\fIPARAMS_JSON\fR]
 .br
 .B bilterm
+\fBagents\-md\fR [\fB\-\-install\fR [\fIPATH\fR]]
+.br
+.B bilterm
 \fBplot\fR [\fIKIND\fR] [\fICSV\fR] [\fB\-o\fR \fIFILE\fR] [\fB\-b\fR \fIMODE\fR]
 .SH DESCRIPTION
 \fBbilterm\fR is a terminal user interface (TUI) multiplexer, native desktop GUI terminal (\fB\-\-gui\fR), shell wrapper, and terminal emulator written in Rust + Ratatui. Each terminal pane is a \fBComposite Window Pane\fR pairing a movable, resizable \fBFloatingCommandPrompt\fR (\fB==> \fR) and an \fBIBM 3270 Operator Information Area (OIA)\fR status bar over a full-height scrolling PTY \fBOutputCanvas\fR with zero \fBSIGWINCH\fR geometry thrashing, independent per-pane font scaling (\fBCtrl++\fR / \fBCtrl+\-\fR / \fBCtrl+0\fR / \fBCtrl+Wheel\fR), and all-border/corner mouse frame drag resizing.
@@ -52,6 +55,9 @@ With \fBctl\fR, \fBagent\fR, \fBpane\fR, \fBworkspace\fR, \fBcoords\fR and \fBda
 .TP
 \fBdaemon\fR \fBlist\fR [\fB\-\-json\fR] | \fBstart\fR [\fINAME\fR] | \fBstop\fR [\fINAME\fR] [\fB\-\-force\fR] | \fBstatus\fR [\fINAME\fR] [\fB\-\-json\fR]
 List, start, stop or inspect background daemons by name. \fBstatus\fR exits 0 when the daemon runs and 3 otherwise.
+.TP
+\fBagents\-md\fR [\fB\-\-install\fR [\fIPATH\fR]]
+Print the control guide for AI agents (Markdown) to standard output; no daemon is needed. With \fB\-\-install\fR, add or refresh the guide as a block between \fBBILTERM:AGENTS\-MD\fR marker comments in \fIPATH\fR (default \fI./AGENTS.md\fR). Text outside the markers is never changed and a second run changes nothing. The same text is the MCP resource \fBbilterm://agents\-md\fR and the RPC method \fBagent.guide\fR. Inside Bilterm, \fB:agent guide\fR [\fIPANE\fR|\fBall\fR|\fB\-\-print\fR] (\fBCtrl+Alt+G\fR, leader \fB^\fR, menu Help) hands the guide to an agent pane; \fBbilterm agent guide\fR \fISELECTOR\fR|\fBall\fR does the same from a shell.
 .TP
 \fB\-l\fR, \fB\-\-listen\fR \fIADDR\fR
 Listen address (\fIIP:PORT\fR, \fIlocalhost:PORT\fR, or \fIunix:PATH\fR).

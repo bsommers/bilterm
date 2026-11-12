@@ -1,4 +1,5 @@
-//! MCP read-only resources (`resources/list`, `resources/read`): state, config, commands, panes.
+//! MCP read-only resources (`resources/list`, `resources/read`): state, config, commands, the
+//! agent guide (`bilterm://agents-md`, Markdown), panes.
 
 use super::json::JsonValue;
 use super::rpc::AutomationControlPlane;
@@ -36,6 +37,12 @@ impl AutomationControlPlane {
                 "Colon command catalog",
                 "All colon commands accepted by bilterm_colon_command.",
             ),
+            JsonValue::obj([
+                ("uri", s(crate::agent_guide::RESOURCE_URI)),
+                ("name", s("Agent control guide")),
+                ("description", s("How an AI agent should drive bilterm: interfaces, daemons, panes, other agents (same text as `bilterm agents-md`).")),
+                ("mimeType", s("text/markdown")),
+            ]),
         ];
         for &id in self.wm.panes().keys() {
             list.push(resource(
@@ -59,6 +66,16 @@ impl AutomationControlPlane {
             .get("uri")
             .and_then(JsonValue::as_str)
             .ok_or_else(|| (-32602, "Invalid params: missing 'uri'".to_string()))?;
+        if uri == crate::agent_guide::RESOURCE_URI {
+            return Ok(JsonValue::obj([(
+                "contents",
+                JsonValue::Array(vec![JsonValue::obj([
+                    ("uri", s(uri)),
+                    ("mimeType", s("text/markdown")),
+                    ("text", s(crate::agent_guide::GUIDE)),
+                ])]),
+            )]));
+        }
         let body = match uri {
             "bilterm://state" => self.mcp_state_resource(),
             "bilterm://config" => self.mcp_config_resource(),

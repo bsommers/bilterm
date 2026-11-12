@@ -61,7 +61,7 @@ pub(crate) struct Parsed {
 }
 
 const VALUE_FLAGS: &[&str] = &["timeout-ms", "until", "answer", "direction", "max-bytes", "name", "op", "turn", "lines", "pane", "style"];
-const BOOL_FLAGS: &[&str] = &["force", "enter", "allow-echo-lock", "blank"];
+const BOOL_FLAGS: &[&str] = &["force", "enter", "allow-echo-lock", "blank", "print"];
 
 pub(crate) fn split_args(args: &[String]) -> Result<Parsed, String> {
     let mut pos = Vec::new();
@@ -131,6 +131,7 @@ Usage:
   bilterm agent hud [open|close|toggle|next|prev|page-next|page-prev|select|approve|prompt|diff|zoom [SELECTOR]]
   bilterm agent replay <SELECTOR> [--turn ID] [--op open|close|prev|next|first|last|turn|scroll] [--lines N]
   bilterm agent watchdog
+  bilterm agent guide [SELECTOR|all] [--print]   (no SELECTOR: return the agent guide; SELECTOR/all: inject it; `bilterm agents-md` prints it without a daemon)
   bilterm pane list
   bilterm pane read [SELECTOR]
   bilterm pane split [h|v] [SELECTOR]

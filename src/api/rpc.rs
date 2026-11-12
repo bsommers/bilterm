@@ -93,6 +93,7 @@ pub const RPC_METHODS: &[&str] = &[
     "context.get",
     "context.list",
     "agent.queue",
+    "agent.guide",
     "swarm.status",
     "swarm.load",
     "swarm.clear",

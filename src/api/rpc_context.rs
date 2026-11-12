@@ -55,6 +55,30 @@ impl AutomationControlPlane {
         };
         self.apply_with_data(action)
     }
+
+    /// `agent.guide` `{op: get|inject|print, selector?|pane_id?, target?: "all"}`. `get` (default)
+    /// is a pure read: `{text, bytes, uri}`. `inject` hands the guide to the selected pane (default:
+    /// the focused one) or, with `target: "all"`, to every detected agent pane; `print` only writes
+    /// the private guide file. Both lower to `Action::AgentGuide`.
+    pub(super) fn rpc_agent_guide(&mut self, params: &JsonValue) -> Result<JsonValue, String> {
+        use crate::wm::agent_guide::{AgentGuideOp, GuideTarget};
+        let explicit = params.get("selector").is_some() || params.get("pane_id").is_some();
+        let op = match params.get("op").and_then(JsonValue::as_str).unwrap_or("get") {
+            "get" => {
+                return Ok(JsonValue::obj([
+                    ("text", JsonValue::String(crate::agent_guide::GUIDE.to_string())),
+                    ("bytes", JsonValue::Number(crate::agent_guide::GUIDE.len() as i64)),
+                    ("uri", JsonValue::String(crate::agent_guide::RESOURCE_URI.to_string())),
+                ]));
+            }
+            "print" => AgentGuideOp::Print,
+            "inject" if params.get("target").and_then(JsonValue::as_str) == Some("all") => AgentGuideOp::Inject(GuideTarget::All),
+            "inject" if explicit => AgentGuideOp::Inject(GuideTarget::Pane(self.target_pane(params)?)),
+            "inject" => AgentGuideOp::Inject(GuideTarget::Focused),
+            other => return Err(format!("unknown agent.guide op: {other}")),
+        };
+        self.apply_with_data(Action::AgentGuide(op))
+    }
 }
 
 #[cfg(test)]

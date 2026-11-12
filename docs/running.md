@@ -43,6 +43,9 @@ bilterm daemon list                             # List daemons (name, status, PI
 bilterm daemon start alpha                      # Start named daemon in the background (no-op if running)
 bilterm daemon status alpha                     # Exit 0 running, 3 stopped/crashed
 bilterm daemon stop alpha [--force]             # Stop a daemon by name
+bilterm agents-md                               # Print the control guide for AI agents (Markdown; no daemon needed)
+bilterm agents-md --install [PATH]              # Add or refresh that guide as a marked block in ./AGENTS.md (or PATH, e.g. CLAUDE.md)
+bilterm agent guide @claude                     # Hand the guide to a running agent pane (same as :agent guide)
 bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
 bilterm ctl --daemon-name alpha daemon.status   # Query the named daemon (or BILTERM_DAEMON=alpha)
 bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP

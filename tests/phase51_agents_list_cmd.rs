@@ -367,8 +367,8 @@ fn menu_existing_entries_unchanged() {
         &[":broadcast", ":lock", ":quake", ":raw"],
         &[":help", ":inspector", ":session list", ":help"],
     ];
-    // Phase 61-01 appended Drawer Rows 1/2 (View); Phase 63-02 appended Tile Windows, Toggle Stack/Tile and Window Mode (Window) and Keyboard Conflicts (Help); Phase 64-03 appended Traffic Monitor (View); Phase 71 appended Copy Coordinate (Window) and Next Coordinate Badge Style (View); Phase 68 UNI-R01 appended Context Bus Quick List and Agent Job Queue (View); Phase 69/70 UNI-R01 appended Mission Control Squad HUD, Swarm Status and Agent Turn Replay (View).
-    let appended = [0usize, 5, 0, 20, 0, 4, 1];
+    // Phase 61-01 appended Drawer Rows 1/2 (View); Phase 63-02 appended Tile Windows, Toggle Stack/Tile and Window Mode (Window) and Keyboard Conflicts (Help); Phase 64-03 appended Traffic Monitor (View); Phase 71 appended Copy Coordinate (Window) and Next Coordinate Badge Style (View); Phase 68 UNI-R01 appended Context Bus Quick List and Agent Job Queue (View); Phase 69/70 UNI-R01 appended Mission Control Squad HUD, Swarm Status and Agent Turn Replay (View); AGUIDE-01 appended Inject Agent Guide (Help).
+    let appended = [0usize, 5, 0, 20, 0, 4, 2];
     for (cat, cmds) in table.iter().enumerate() {
         assert_eq!(menubar_category_item_count(cat), cmds.len() + appended[cat], "category {cat} count");
         for (i, cmd) in cmds.iter().enumerate() {

@@ -32,7 +32,7 @@ pub struct CommandInfo {
 /// Commands whose text exists in neither the palette nor the help lines:
 /// `(name, alias_of or "", summary)`.
 pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
-    (":agent", "", "Agent-to-agent messaging and coordination (:agent name|send|broadcast|inbox|ack|list|enable|queue|approve|deny|replay)."),
+    (":agent", "", "Agent-to-agent messaging and coordination (:agent name|send|broadcast|inbox|ack|list|enable|queue|approve|deny|guide|replay)."),
     (":aero", ":glass", "Alias of :glass."),
     (":auto-arrange", ":arrange", "Alias of :arrange."),
     (":asciinema", ":record", "Alias of :record."),
