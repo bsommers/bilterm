@@ -77,6 +77,17 @@ pub(super) fn parse_agent(p: &Parsed, env: &CliEnv) -> Result<RpcCall, String> {
             Ok(call("agent.replay", base_params(env, e)))
         }
         "watchdog" => Ok(call("agent.watchdog", base_params(env, vec![]))),
+        // `agent guide` reads the text; `agent guide SELECTOR|all` injects it; `--print` writes the file.
+        "guide" => {
+            let e = match (rest.first().map(String::as_str), p.has("print")) {
+                (None, true) => vec![("op", str_val("print"))],
+                (None, false) => vec![("op", str_val("get"))],
+                (Some("all"), false) => vec![("op", str_val("inject")), ("target", str_val("all"))],
+                (Some(sel), false) => vec![("op", str_val("inject")), ("selector", str_val(sel))],
+                (Some(_), true) => return Err("agent guide: --print takes no SELECTOR".to_string()),
+            };
+            Ok(call("agent.guide", base_params(env, e)))
+        }
         "interrupt" => Ok(call(
             "pane.send",
             base_params(env, vec![selector()?, ("text", str_val("\u{3}"))]),

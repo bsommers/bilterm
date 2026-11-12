@@ -973,6 +973,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
         ColonCommand::AgentQueue(op) => super::execute_context::execute_agent_queue(wm, op),
         ColonCommand::Swarm(op) => super::execute_swarm::execute_swarm(wm, op),
         ColonCommand::AgentGate(op) => super::execute_context::execute_agent_gate(wm, op),
+        ColonCommand::AgentGuide(op) => super::execute_agent_mail::execute_agent_guide(wm, op),
         ColonCommand::Coords(op) => super::execute_coords::execute_coords(wm, op),
         ColonCommand::TrafficMonitor(op) => {
             if let Err(e) = wm.traffic_monitor_apply(op) {

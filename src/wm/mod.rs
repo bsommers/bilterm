@@ -1,3 +1,4 @@
+pub mod agent_guide;
 pub mod agent_mail;
 pub mod resilience;
 pub mod swarm_cmd;

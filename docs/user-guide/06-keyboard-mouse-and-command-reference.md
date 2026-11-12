@@ -91,6 +91,7 @@
 | `Alt+L` | `<L> l` | `:lock [on\|off]` | Toggle Read-Only Protected 3270 Field Lock (`🔒 PROT`) on focused pane |
 | `Alt+P` | `<L> P` / `<L> H` | `:history` / `:hist` | Toggle Borland Command History Pop-up Window |
 | — | `<L> R` | `:record workspace` | Start or stop whole-workspace Asciicast v2 (`.cast`) recording (`⏺ REC`) |
+| `Ctrl+Alt+G` | `<L> ^` | `:agent guide` | Hand Bilterm's agent instructions to the focused agent pane: writes the guide to a private file and injects a one-line pointer (reserved in raw passthrough; refused on read-only panes and password prompts; menu Help > Inject Agent Guide) |
 | `Ctrl+Alt+R` | `<L> U` | `:ssh-tmux reconnect` | Reconnect persistent remote tmux link now (skips retry timer; reserved in raw passthrough; menu Tmux > Reconnect link) |
 | — | `<L> u` | `:ssh-tmux prefill` | Open prompt prefilled with `:ssh-tmux ` and the hint `Type <user@host> [session] and press Enter`. Works from any state: closes open modals, leaves copy mode, and works while a link waits for a password (menu Tmux > SSH tmux link...) |
 | — | `<L> Q` | `:ssh-tmux disconnect` | Stop persistent remote tmux link; remote tmux session keeps running (menu Tmux > Disconnect link) |
@@ -149,6 +150,7 @@ Non-interactive banners (`Connecting`) pass keystrokes directly to the remote `s
 | Window > Toggle Stack/Tile | `:layout cycle` |
 | Window > Window Mode | `:wmode` |
 | Help > Keyboard Conflicts... | `:keys check` |
+| Help > Inject Agent Guide (Ctrl+Alt+G) | `:agent guide` |
 | Tmux > SSH tmux link... (Ctrl+X u) | `:ssh-tmux prefill` |
 | Tmux > Reconnect link (Ctrl+Alt+R) | `:ssh-tmux reconnect` |
 | Tmux > Disconnect link (Ctrl+X Q) | `:ssh-tmux disconnect` |
@@ -463,6 +465,7 @@ The previous defaults stay available on the `legacy` profile and, for one releas
 
 | `:command` | Arguments | Description |
 |------------|-----------|-------------|
+| `:agent` | `guide [<pane-id>\|all\|--print]` | Hand Bilterm's agent instructions (`bilterm agents-md`) to the focused pane, a pane by id, or every detected agent pane; `--print` only writes the guide file and shows its path (`Ctrl+Alt+G` / `Ctrl+X ^`; menu Help > Inject Agent Guide; RPC `agent.guide`) |
 | `:agents` | `[list]` | Agent state per pane (working / blocked / idle / done / errored) with counts; structured data over RPC |
 | `:agents` | `zoom [pane-id] \| toggle [pane-id] \| close \| dismiss` | Open / toggle / close the Agent Traffic window; `dismiss` closes an unpinned window (releases the keyboard when pinned); `Esc` is `:agents blur` |
 | `:agents` | `select <left\|right\|up\|down\|node-key> \| edge <next\|prev\|a b> \| enter` | Node and edge cursor |

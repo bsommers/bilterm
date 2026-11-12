@@ -522,6 +522,7 @@ impl AutomationControlPlane {
             "context.get" => self.rpc_context_get(params),
             "context.list" => self.rpc_context_list(params),
             "agent.queue" => self.rpc_agent_queue(params),
+            "agent.guide" => self.rpc_agent_guide(params),
             "swarm.status" => self.rpc_swarm_status(params),
             "swarm.load" => self.rpc_swarm_load(params),
             "swarm.clear" => self.rpc_swarm_clear(params),

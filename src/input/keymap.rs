@@ -44,11 +44,12 @@ pub fn default_global_action(key: KeyEvent, fuzzy_search_active: bool) -> Option
 /// The global chords that must reach the window manager even while the active pane is in raw PTY
 /// passthrough (an alternate-screen app such as an agent TUI, `vim` or `less`), where every other
 /// global shortcut is forwarded to the child. Today that is the agent-traffic toggle (`Ctrl+Alt+A`)
-/// the Find window (`Ctrl+Alt+F`) and the tmux link reconnect (`Ctrl+Alt+R`): the launchers the user needs
+/// the Find window (`Ctrl+Alt+F`), the tmux link reconnect (`Ctrl+Alt+R`) and the agent guide injection
+/// (`Ctrl+Alt+G`): the launchers the user needs
 /// while an agent or a remote ssh prompt owns the pane.
 pub(super) fn reserved_global_action(km: &EffectiveKeymap, key: KeyEvent) -> Option<Action> {
     match km.global_action(key, false) {
-        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::TrafficMonitor(TrafficMonitorOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect))) => Some(a),
+        Some(a @ (Action::Agents(AgentsOp::Toggle(_)) | Action::AgentsList(AgentsListOp::Toggle) | Action::SessionMap(SessionMapOp::Toggle) | Action::ClipboardWindow(ClipboardWindowOp::Toggle) | Action::TrafficMonitor(TrafficMonitorOp::Toggle) | Action::Find(FindOp::Open { .. }) | Action::RemoteLink(RemoteLinkOp::Reconnect) | Action::AgentGuide(_))) => Some(a),
         _ => None,
     }
 }

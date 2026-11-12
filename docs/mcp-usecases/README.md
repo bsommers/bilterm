@@ -8,7 +8,8 @@ Bilterm exposes 100% of its `WindowManager`, `CompositePane`, `VtParser`, and `:
 
 | Document | Scope |
 |----------|-------|
-| [`AGENTS_MD_SNIPPET.md`](AGENTS_MD_SNIPPET.md) | Ready-to-paste `AGENTS.md` / `CLAUDE.md` rules block for zero-waste Bilterm MCP & `bilterm ctl` execution |
+| [`../agent-guide.md`](../agent-guide.md) | The agent control guide Bilterm serves itself: `bilterm agents-md` prints it, `bilterm agents-md --install` adds it to your `AGENTS.md` / `CLAUDE.md`, MCP serves it as `bilterm://agents-md`, and `:agent guide` hands it to a running agent pane |
+| [`AGENTS_MD_SNIPPET.md`](AGENTS_MD_SNIPPET.md) | How to install that guide into a project (replaces the old copy-paste block) |
 | [`01-agent-orchestration-and-herding.md`](01-agent-orchestration-and-herding.md) | Multi-agent "herder" patterns: spawning worker panes, fan-out (`bilterm_fleet_exec` / `:broadcast`), OSC 133 completion tracking, and Z-order management |
 | [`02-operating-interactive-tuis-and-shells.md`](02-operating-interactive-tuis-and-shells.md) | Driving `vim`, `htop`, `git rebase -i`, `gdb`, `ssh`, and `sudo` prompts (`!ECHO LOCK`, `DECSET 1049`, `bilterm_send_keys`, Vi copy mode, and 3270 field hints) |
 | [`03-configuration-themes-and-layouts.md`](03-configuration-themes-and-layouts.md) | Live workspace introspection and runtime styling: `[appearance]` profiles, 14 themes, shaders, fonts, layout profiles, and the write-gate security model |

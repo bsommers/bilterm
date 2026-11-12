@@ -62,3 +62,29 @@ Every daemon operation is fully accessible across:
 - **Command Palette**: `:daemon list`, `:daemon status`, `:daemon start`, `:daemon stop`
 - **JSON-RPC 2.0**: `daemon.list`, `daemon.status`, `daemon.start`, `daemon.stop`, `daemon.switch`
 - **MCP Tool**: `bilterm_daemon` with `action="list" | "status" | "start" | "stop" | "switch"`
+
+## Agent instructions: `bilterm agents-md` and `:agent guide` (`AGUIDE-01`)
+
+Bilterm ships its own instructions for AI coding agents: how to inspect panes, run commands and wait for them, target a named daemon, prompt and message other agents, and which writes are refused. The text is one file, [`docs/agent-guide.md`](agent-guide.md), built into the binary, so every surface returns the same words.
+
+| Where | How |
+| :--- | :--- |
+| Shell | `bilterm agents-md` prints the guide (no daemon needed). |
+| Project file | `bilterm agents-md --install [PATH]` adds the guide to `./AGENTS.md` (or `PATH`, for example `CLAUDE.md`) between `<!-- BILTERM:AGENTS-MD:BEGIN ... -->` and `<!-- BILTERM:AGENTS-MD:END -->`. Run it again after an upgrade to refresh the block. Text outside the markers is never changed, a second run changes nothing, and a file with broken markers is left alone with an error. |
+| MCP | `initialize` returns short `instructions`; the resource `bilterm://agents-md` returns the full guide; `bilterm_agent_control` with `action: "guide"`. |
+| RPC / HTTP / `bilterm ctl` | `agent.guide` (`op`: `get`, `inject`, `print`). |
+| Running agent pane | `:agent guide` (see below). |
+
+### Handing the guide to an agent pane
+
+```text
+:agent guide            focused pane
+:agent guide 3          pane #3
+:agent guide all        every detected agent pane
+:agent guide --print    only write the guide file and show its path
+```
+
+- Keys: `Ctrl+Alt+G`, or `Ctrl+X ^` on hosts that swallow `Ctrl+Alt` chords. `Ctrl+Alt+G` also works while an agent's full-screen program owns the pane.
+- Menu: **Help > Inject Agent Guide**. Palette: `:agent guide`. Shell: `bilterm agent guide SELECTOR` or `bilterm agent guide all`.
+- What reaches the pane is one line, not the guide. Bilterm writes the guide to `agent-guide.md` (mode `0600`) in its private runtime directory and sends `Read <path> for bilterm control instructions ...`. An agent program receives the line as a prompt (pasted, then Enter), the same way `bilterm agent prompt` delivers text. A pane at a shell prompt receives it as a `#` comment line, so nothing is executed.
+- Refused, with a status message and nothing written to the pane: a read-only pane (`:lock on`), a password prompt (`!ECHO LOCK`), and a shell pane that is busy running a command. With `all`, refused panes are listed in the result and the others still get the line.

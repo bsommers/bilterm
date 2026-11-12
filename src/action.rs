@@ -220,6 +220,8 @@ pub enum Action {
     AgentQueue(crate::wm::context_queue_ops::AgentQueueOp),
     /// `:agent approve|deny` - answer the active pane's blocked prompt (`UNI-R01`, Phase 68).
     AgentGate(crate::wm::context_queue_ops::AgentGateOp),
+    /// `:agent guide [PANE|all|--print]` - hand the bilterm control guide to agent panes (`AGUIDE-01`).
+    AgentGuide(crate::wm::agent_guide::AgentGuideOp),
     /// `:swarm status|load|clear` - worktree swarm DAG orchestrator (`UNI-R01`, Phase 69).
     Swarm(crate::wm::swarm_surface::SwarmOp),
     /// `:script <verb>` / `:studio <verb>` - SCRIPT STUDIO floating window (Plan 51.2-03, WIN-03).
@@ -431,6 +433,7 @@ impl Action {
             Self::Context(op) => op.colon_form(),
             Self::AgentQueue(op) => op.colon_form(),
             Self::AgentGate(op) => op.colon_form(),
+            Self::AgentGuide(op) => op.colon_form(),
             Self::Swarm(op) => op.colon_form(),
             Self::PaneFontCommand(sub) => format!(":font {sub}"),
             Self::AgentsList(op) => op.colon_form(),

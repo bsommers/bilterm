@@ -149,6 +149,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("List Sessions", ":session list", 'L'),
             mi("Close Help", ":help", 'C'),
             mi("Keyboard Conflicts...", ":keys check", 'K'),
+            mi("Inject Agent Guide", ":agent guide", 'G'),
         ],
     },
     MenuCategory {
