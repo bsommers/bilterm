@@ -92,7 +92,7 @@ async fn main() -> color_eyre::Result<()> {
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT -t PATH)\n  \
                    --name <NAME>                With --headless: daemon name (default: 'default'); each named daemon gets its own lock and socket (daemons/daemon-<NAME>.sock) so several run side by side\n  \
-                   --daemon-name <NAME>         With ctl/agent/pane/workspace/coords/daemon: talk to the named daemon (or BILTERM_DAEMON)\n  \
+                   --daemon-name <NAME>         With ctl/agent/pane/workspace/coords/daemon: talk to the named daemon (or BILTERM_DAEMON); before or after the subcommand\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH); TCP requires -t/--token-file\n  \
                --http <ADDR>                    With --headless: also serve loopback-only HTTP+SSE (POST /rpc, GET /events, GET /health); random bearer token written 0600 to the private runtime dir\n  \
                --web-dir <DIR>                  With --http: serve a built SPA (index.html fallback) from DIR, confined under DIR\n  \
@@ -149,6 +149,12 @@ async fn main() -> color_eyre::Result<()> {
             }
         }
         return Ok(());
+    }
+    // `bilterm --daemon-name X pane ...`: global client options may precede the subcommand; an
+    // unsupported leading option must never silently launch the GUI/TUI.
+    if let Err(msg) = bilterm::cli::leading_opts::normalize_leading_options(&mut args) {
+        eprintln!("{msg}");
+        std::process::exit(2);
     }
     // Client commands may target one named daemon (`--daemon-name NAME` / `BILTERM_DAEMON`).
     let is_client_cmd = args.first().is_some_and(|a| a == "ctl" || a == "daemon")

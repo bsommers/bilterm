@@ -520,6 +520,19 @@ impl CompositePane {
         self.line_discipline.is_password_prompt() || self.is_active_canvas_password_prompt()
     }
 
+    /// True when the program declared itself a TUI (bracketed paste, kitty keyboard or alternate screen).
+    pub fn declared_tui(&self) -> bool {
+        self.vt.is_bracketed_paste() || self.vt.kitty_keyboard_flags() > 0 || self.vt.is_alternate_screen()
+    }
+
+    /// Shared `!ECHO LOCK` rule for programmatic text injection (`agent.prompt`, mail nudge,
+    /// `:agent guide`, `:agent send`). ECHO-off alone is a password prompt only when the program has
+    /// not declared itself a TUI (a raw agent TUI runs with ECHO off); a password line on the canvas
+    /// is always one.
+    pub fn is_injection_password_locked(&self) -> bool {
+        self.is_active_canvas_password_prompt() || (self.line_discipline.is_password_prompt() && !self.declared_tui())
+    }
+
     pub fn has_foreground_subcommand(&self) -> bool {
         self.line_discipline.has_foreground_subcommand()
     }
