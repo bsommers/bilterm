@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Several daemons at once.** `bilterm --headless --name alpha` and `--name beta` now run side by side: a named daemon listens on its own `daemons/daemon-<name>.sock` when no `-l` is given (before, both tried the default socket and the second one failed). The unnamed `default` daemon keeps `bilterm.sock`, and `-l` still wins. New `bilterm daemon list|start [NAME]|stop [NAME] [--force]|status [NAME]` manages them from the shell, and `--daemon-name NAME` / `BILTERM_DAEMON` points `bilterm ctl`, `agent`, `pane`, `workspace` and `coords` at one of them. `daemon.status` without `name` now reports the daemon that answers.
 - **TRON look.** Black canvas, neon cyan light-cycle borders (rounded, single line), orange accent, pale cyan text, dim teal inactive borders. Reach it with `--tron`, `:tron [on|off|toggle]`, `:style tron`, `:appearance tron`, `[appearance] profile = "tron"`, or `F11`, whose cycle is now `Classic -> Snazzy -> Glass -> Snazzy+Glass -> Modern -> Liquid Glass -> TRON -> Classic`. `:tron off` restores the look that was active when TRON was switched on (Classic when TRON came from `--tron`, the config file or `:appearance tron`).
 
 ### Internal

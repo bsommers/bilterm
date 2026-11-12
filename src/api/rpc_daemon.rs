@@ -36,12 +36,18 @@ pub fn handle_daemon_list() -> Result<JsonValue, String> {
 /// Handles `daemon.status`.
 pub fn handle_daemon_status(params: &JsonValue) -> Result<JsonValue, String> {
     let runtime_dir = resolve_runtime_dir().map_err(|e| format!("runtime directory error: {e}"))?;
+    let active = DaemonRegistry::list_active(&runtime_dir);
+    // No `name`: report the daemon answering this request (else `default`), so a client that
+    // targeted a named daemon sees that daemon.
+    let own = active.iter().find(|d| d.is_current()).map(|d| d.name.clone());
     let name = params
         .get("name")
         .and_then(JsonValue::as_str)
-        .unwrap_or("default");
+        .map(str::to_string)
+        .or(own)
+        .unwrap_or_else(|| "default".to_string());
+    let name = name.as_str();
 
-    let active = DaemonRegistry::list_active(&runtime_dir);
     if let Some(d) = active.into_iter().find(|item| item.name == name) {
         let is_cur = d.is_current();
         return Ok(JsonValue::obj([

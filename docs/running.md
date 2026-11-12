@@ -38,7 +38,13 @@ bilterm -m / --mcp                              # Run Model Context Protocol (MC
 bilterm -d / --headless                         # Run headless JSON-RPC 2.0 daemon (default: private 0600 Unix socket)
 bilterm -d -l 127.0.0.1:7370 -t ~/.config/bilterm/token # Run headless daemon on loopback TCP (requires 0600 token file)
 bilterm -d -l 0.0.0.0:7370 -r -t ~/.config/bilterm/token # Listen on remote TCP (requires -r and 0600 token file)
+bilterm -d --name alpha                         # Named daemon on its own socket (daemons/daemon-alpha.sock); run as many as you like
+bilterm daemon list                             # List daemons (name, status, PID, version, socket); --json for scripts
+bilterm daemon start alpha                      # Start named daemon in the background (no-op if running)
+bilterm daemon status alpha                     # Exit 0 running, 3 stopped/crashed
+bilterm daemon stop alpha [--force]             # Stop a daemon by name
 bilterm ctl workspace.status                    # Query running Bilterm instance over default Unix domain socket
+bilterm ctl --daemon-name alpha daemon.status   # Query the named daemon (or BILTERM_DAEMON=alpha)
 bilterm ctl 127.0.0.1:7370 workspace.status     # Query running Bilterm instance over TCP
 bilterm ctl -t ~/.config/bilterm/token 10.0.0.1:7370 workspace.status # Query authenticated instance
 bilterm -S ~/.local/state/bilterm/snapshots     # Set directory for confined workspace snapshots

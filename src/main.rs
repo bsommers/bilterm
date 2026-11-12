@@ -42,7 +42,7 @@ fn switch_value<'a>(args: &'a [String], switches: &[&str]) -> Option<&'a str> {
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
     if has_switch(&args, &["-v", "-V", "--version"]) {
         println!("bilterm {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
@@ -56,8 +56,9 @@ async fn main() -> color_eyre::Result<()> {
                bilterm blank [SESSION] / bilterm -B\n  \
                bilterm attach [SESSION] / bilterm -a [SESSION]\n  \
                bilterm ls / bilterm sessions\n  \
+               bilterm daemon list|start [NAME]|stop [NAME] [--force]|status [NAME]   (manage named background daemons)\n  \
                bilterm run <PLAYBOOK.toml>\n  \
-               bilterm ctl [-t|--token-file <PATH>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
+               bilterm ctl [-t|--token-file <PATH>] [--daemon-name <NAME>] [ENDPOINT] <METHOD> [JSON_PARAMS]\n  \
                bilterm agent|pane|workspace|coords <SUBCOMMAND> ...   (live control; run `bilterm agent` for usage)\n  \
                bilterm plot [hires|line|bar|scatter|candlestick|heatmap] [CSV_VALUES] [-o <FILE.ppm|FILE.svg>] [-b <auto|kitty|sixel|iterm2|halfblock>]\n\
              Options:\n  \
@@ -78,6 +79,8 @@ async fn main() -> color_eyre::Result<()> {
                -T, --theme <THEME>              Set color theme preset (borland, green, amber,mono, solarized, dracula, cyberpunk)\n  \
                -m, --mcp                        Run Model Context Protocol (MCP) JSON-RPC 2.0 server over stdio\n  \
                -d, --headless, --daemon         Run headless JSON-RPC 2.0 daemon (default: private Unix socket; TCP loopback via -l 127.0.0.1:PORT -t PATH)\n  \
+                   --name <NAME>                With --headless: daemon name (default: 'default'); each named daemon gets its own lock and socket (daemons/daemon-<NAME>.sock) so several run side by side\n  \
+                   --daemon-name <NAME>         With ctl/agent/pane/workspace/coords/daemon: talk to the named daemon (or BILTERM_DAEMON)\n  \
                -l, --listen <ADDR>              Listen address (IP:PORT, localhost:PORT, or unix:PATH); TCP requires -t/--token-file\n  \
                --http <ADDR>                    With --headless: also serve loopback-only HTTP+SSE (POST /rpc, GET /events, GET /health); random bearer token written 0600 to the private runtime dir\n  \
                --web-dir <DIR>                  With --http: serve a built SPA (index.html fallback) from DIR, confined under DIR\n  \
@@ -135,6 +138,52 @@ async fn main() -> color_eyre::Result<()> {
         }
         return Ok(());
     }
+    // Client commands may target one named daemon (`--daemon-name NAME` / `BILTERM_DAEMON`).
+    let is_client_cmd = args.first().is_some_and(|a| a == "ctl" || a == "daemon")
+        || bilterm::cli::is_cli_command(args.first().map(String::as_str));
+    let daemon_target = if is_client_cmd {
+        let env_name = std::env::var(bilterm::cli::daemon_cmd::DAEMON_NAME_ENV).ok();
+        match bilterm::cli::daemon_cmd::take_daemon_target(&mut args, env_name.as_deref()) {
+            Ok(t) => t,
+            Err(msg) => {
+                eprintln!("bilterm: {msg}");
+                std::process::exit(2);
+            }
+        }
+    } else {
+        None
+    };
+    // `Some(endpoint)` when a named daemon is targeted; exits when that daemon is not running.
+    let target_endpoint = || -> Option<String> {
+        let name = daemon_target.as_deref()?;
+        let resolved = bilterm::daemon::supervisor::resolve_runtime_dir()
+            .map_err(|e| format!("runtime directory error: {e}"))
+            .and_then(|dir| bilterm::cli::daemon_cmd::resolve_daemon_endpoint(&dir, name));
+        match resolved {
+            Ok(ep) => Some(ep),
+            Err(msg) => {
+                eprintln!("bilterm: {msg}");
+                std::process::exit(1);
+            }
+        }
+    };
+    if args.first().map(String::as_str) == Some("daemon") {
+        let cmd = match bilterm::cli::daemon_cmd::parse_daemon_args(&args[1..], daemon_target.as_deref()) {
+            Ok(c) => c,
+            Err(msg) => {
+                eprintln!("{msg}");
+                std::process::exit(2);
+            }
+        };
+        let runtime_dir = bilterm::daemon::supervisor::resolve_runtime_dir()?;
+        let (text, code) = bilterm::cli::daemon_cmd::run(&cmd, &runtime_dir);
+        if code == 0 || text.starts_with("daemon ") || text.starts_with('{') {
+            println!("{text}");
+        } else {
+            eprintln!("{text}");
+        }
+        std::process::exit(code);
+    }
     if bilterm::cli::is_cli_command(args.first().map(String::as_str)) {
         let cli_env = bilterm::cli::CliEnv::from_process();
         let call = match bilterm::cli::parse(&args, &cli_env) {
@@ -145,7 +194,8 @@ async fn main() -> color_eyre::Result<()> {
             }
         };
         let runtime = bilterm::secure_fs::private_runtime_dir().ok();
-        let endpoint = bilterm::cli::resolve_endpoint(&cli_env, runtime.as_deref())
+        let endpoint = target_endpoint()
+            .or_else(|| bilterm::cli::resolve_endpoint(&cli_env, runtime.as_deref()))
             .or_else(|| default_socket_path().ok().map(|p| format!("unix:{}", p.display())))
             .unwrap_or_else(|| DEFAULT_TCP_LISTEN.to_string());
         match bilterm::cli::run_call(&call, &endpoint, token.as_deref()).await {
@@ -181,14 +231,16 @@ async fn main() -> color_eyre::Result<()> {
 
         let ctl_env = bilterm::cli::CliEnv::from_process();
         let ctl_runtime = bilterm::secure_fs::private_runtime_dir().ok();
-        let default_ep = bilterm::cli::resolve_endpoint(&ctl_env, ctl_runtime.as_deref())
+        let default_ep = target_endpoint()
+            .or_else(|| bilterm::cli::resolve_endpoint(&ctl_env, ctl_runtime.as_deref()))
             .or_else(|| default_socket_path().ok().map(|p| format!("unix:{}", p.display())))
             .unwrap_or_else(|| DEFAULT_TCP_LISTEN.to_string());
 
         let (endpoint, method, params) = bilterm::api::parse_ctl_args(&rest, &default_ep);
         let resp = match send_rpc_request_with_token(&endpoint, &method, params.clone(), ctl_token.as_deref()).await {
             Ok(r) => r,
-            Err(_) if endpoint.starts_with("unix:") => {
+            // A named target is never auto-started or swapped for the default daemon.
+            Err(_) if endpoint.starts_with("unix:") && daemon_target.is_none() => {
                 use bilterm::daemon::supervisor::{ensure_started, DaemonStartResult};
                 // Nothing answered: start the default daemon and, when no endpoint was given,
                 // talk to the socket it actually listens on.
@@ -289,10 +341,14 @@ async fn main() -> color_eyre::Result<()> {
     if has_switch(&args, &["-d", "--headless", "--daemon"]) {
         let listen = switch_value(&args, &["-l", "--listen"]);
         let allow_remote = has_switch(&args, &["-r", "--allow-remote"]);
-        let default_unix = default_socket_path().ok();
-        let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
         let daemon_name = switch_value(&args, &["--name", "-s", "--session"]).unwrap_or("default");
+        bilterm::secure_fs::validate_safe_name(daemon_name)
+            .map_err(|e| bilterm::error::BiltermError::Config(format!("invalid daemon name '{daemon_name}': {e}")))?;
         let runtime_dir = bilterm::daemon::supervisor::resolve_runtime_dir()?;
+        // Without `-l`, `default` keeps the legacy socket and every other name gets its own.
+        let default_unix =
+            bilterm::daemon::process::default_listen_socket_in(&runtime_dir, daemon_name, default_socket_path().ok());
+        let cfg = validate_listen_config(listen, allow_remote, token, default_unix)?;
         let sock_path = match &cfg.endpoint {
             ListenEndpoint::Unix(p) => p.clone(),
             _ => bilterm::daemon::process::session_daemon_socket_path_in(&runtime_dir, daemon_name)?,
@@ -356,13 +412,13 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
         match shell {
             "bash" => println!(
-                "complete -W \"ctl plot -G --gui -m --mcp -d --headless --daemon -l --listen --http --web-dir --cors-origin -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
+                "complete -W \"ctl daemon ls plot --name --daemon-name -G --gui -m --mcp -d --headless --daemon -l --listen --http --web-dir --cors-origin -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
-                "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '--web-dir[Serve SPA from dir (with --http)]:dir:_files -/' '--cors-origin[Allowed CORS origin (with --http)]:origin:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
+                "#compdef bilterm\n_arguments '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '--name[Daemon name (with --headless)]:name:' '--daemon-name[Target named daemon (ctl/agent/pane/workspace/coords/daemon)]:name:' '--web-dir[Serve SPA from dir (with --http)]:dir:_files -/' '--cors-origin[Allowed CORS origin (with --http)]:origin:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
             ),
             "fish" => println!(
-                "complete -c bilterm -s G -l gui -d 'Launch standalone native GUI window'\ncomplete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -l web-dir -r -d 'Serve SPA from dir (with --http)'\ncomplete -c bilterm -l cors-origin -r -d 'Allowed CORS origin (with --http)'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -l desktop-file -d 'Print .desktop launcher entry'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
+                "complete -c bilterm -s G -l gui -d 'Launch standalone native GUI window'\ncomplete -c bilterm -s m -l mcp -d 'Run MCP server'\ncomplete -c bilterm -s d -l headless -d 'Headless daemon'\ncomplete -c bilterm -s l -l listen -r -d 'Listen address'\ncomplete -c bilterm -l name -r -d 'Daemon name (with --headless)'\ncomplete -c bilterm -l daemon-name -r -d 'Target named daemon (client commands)'\ncomplete -c bilterm -l web-dir -r -d 'Serve SPA from dir (with --http)'\ncomplete -c bilterm -l cors-origin -r -d 'Allowed CORS origin (with --http)'\ncomplete -c bilterm -s r -l allow-remote -d 'Allow remote TCP'\ncomplete -c bilterm -s t -l token-file -r -d 'Bearer token file'\ncomplete -c bilterm -s S -l snapshot-dir -r -d 'Snapshot directory'\ncomplete -c bilterm -s p -l playbook -r -d 'Run TOML playbook'\ncomplete -c bilterm -s h -l help -d 'Print help'\ncomplete -c bilterm -s v -s V -l version -d 'Print version'\ncomplete -c bilterm -s g -l gui-dump -r -d 'Dump GPU PPM'\ncomplete -c bilterm -s C -l completions -x -a 'bash zsh fish' -d 'Shell completions'\ncomplete -c bilterm -s M -l man -d 'Print manpage'\ncomplete -c bilterm -l desktop-file -d 'Print .desktop launcher entry'\ncomplete -c bilterm -s s -l session -r -d 'History session name'\ncomplete -c bilterm -s c -l config -r -d 'Config TOML file'"
             ),
             _ => eprintln!("Supported shells: bash, zsh, fish"),
         }
