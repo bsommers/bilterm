@@ -473,7 +473,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":select line", "—", "Copy mode: select line at cursor"),
     (":select block", "—", "Copy mode: select rectangular block at cursor"),
     (":copy yank", "—", "Copy mode: yank the selection to the clipboard"),
-    (":copy off", "—", "Leave copy mode"),
+    (":copy off", "—", "Leave copy mode and clear every highlight (also :copy exit|clear|stop|close)"),
     (":rect select", "—", "Rectangular select: start block selection"),
     (":rect mode on", "—", "Turn persistent rectangular mouse-drag mode on"),
     (":rect mode off", "—", "Turn persistent rectangular mouse-drag mode off"),
