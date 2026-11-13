@@ -732,7 +732,10 @@ impl CompositePane {
 
     pub fn set_status_message(&mut self, msg: Option<String>) {
         self.status_message = msg;
-        self.toast_expires_at = None;
+        if self.toast_expires_at.take().is_some() {
+            // The toast TTL was the only thing that would have cleared a yank flash.
+            self.copy_mode.flash_region = None;
+        }
     }
 
     pub fn set_status_toast(&mut self, msg: String, ttl_ms: u64) {

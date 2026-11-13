@@ -178,6 +178,7 @@ impl CopyModeState {
         self.origin = CopyOrigin::Keyboard;
         self.pending_g = false;
         self.search_state = None;
+        self.flash_region = None;
     }
 
     /// Returns `true` if cell `(row, col)` lies inside the current selection (`Char`, `Line`, or `Block`).
@@ -574,8 +575,10 @@ impl CompositePane {
                         "prompt" | "cut" | "insert" => {
                             let _ = self.cut_copy_selection_to_prompt();
                         }
-                        "clear" | "exit" => {
+                        "clear" | "exit" | "stop" | "close" | "quit" => {
+                            self.copy_mode.rect_mode = false;
                             self.exit_copy_mode();
+                            self.clear_canvas_search();
                         }
                         _ => self.enter_rect_copy_mode(),
                     }
@@ -607,9 +610,10 @@ impl CompositePane {
                 self.toggle_rect_select_mode();
             }
             "on" | "enable" => self.set_rect_select_mode(true),
-            "off" | "disable" | "clear" | "none" | "exit" => {
+            "off" | "disable" | "clear" | "none" | "exit" | "stop" | "close" | "quit" => {
                 self.copy_mode.rect_mode = false;
                 self.copy_mode.clear_selection();
+                self.clear_canvas_search();
                 self.status_message = Some("Cleared canvas selection".to_string());
             }
             "char" | "stream" => {
@@ -653,11 +657,7 @@ impl CompositePane {
 
     /// Exits Vi Copy Mode (`VAL-04`).
     pub fn exit_copy_mode(&mut self) {
-        self.copy_mode.active = false;
-        self.copy_mode.anchor = None;
-        self.copy_mode.selection_kind = CopySelectionKind::None;
-        self.copy_mode.visual_lock = false;
-        self.copy_mode.origin = CopyOrigin::Keyboard;
+        self.copy_mode.clear_selection();
         self.status_message = Some(if self.is_prompt_visible() {
             "Returned focus to Command Prompt".to_string()
         } else {
