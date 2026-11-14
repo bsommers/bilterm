@@ -186,6 +186,76 @@ fn shell_quote_command(exe: &str, args: &[String]) -> String {
     parts.join(" ")
 }
 
+/// Facts that decide whether a bare `bilterm` should open the native GUI window instead of the TUI.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LaunchContext {
+    /// stdin and stdout are both attached to a terminal.
+    pub has_tty: bool,
+    /// A graphical session is reachable (Linux: `DISPLAY` set; macOS/Windows: always).
+    pub display: bool,
+    /// Windows only: this process is the sole owner of its console (started from Run/Explorer, not a shell).
+    pub private_console: bool,
+    /// `--tui` or `BILTERM_GUI=0`.
+    pub force_tui: bool,
+    /// Already relaunched inside a terminal emulator by [`ensure_terminal_or_relaunch`].
+    pub relaunched: bool,
+}
+
+/// `true` when a bare `bilterm` was started by the desktop (GNOME/KDE launcher, Windows Run, Finder)
+/// rather than by a shell, so the native GUI window is the right default. Pure; see [`LaunchContext::detect`].
+pub fn should_default_to_gui(ctx: LaunchContext) -> bool {
+    if ctx.force_tui || ctx.relaunched {
+        return false;
+    }
+    (!ctx.has_tty && ctx.display) || ctx.private_console
+}
+
+impl LaunchContext {
+    /// Reads the live process environment. `args` are the CLI arguments after the program name.
+    pub fn detect(args: &[String]) -> Self {
+        let force_tui = args.iter().any(|a| a == "--tui")
+            || std::env::var("BILTERM_GUI").as_deref() == Ok("0");
+        Self {
+            has_tty: has_controlling_tty(),
+            display: display_available(),
+            private_console: owns_private_console(),
+            force_tui,
+            relaunched: std::env::var(RELAUNCH_GUARD_ENV).as_deref() == Ok("1"),
+        }
+    }
+}
+
+fn display_available() -> bool {
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        true
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        std::env::var_os("DISPLAY").is_some_and(|v| !v.is_empty())
+    }
+}
+
+/// Windows: a console exe started from `Win+R`/Explorer gets a fresh console that only it uses; one started
+/// from `cmd`/PowerShell/Windows Terminal shares the console with the shell (process list >= 2).
+fn owns_private_console() -> bool {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetConsoleProcessList(list: *mut u32, count: u32) -> u32;
+        }
+        let mut pids = [0u32; 4];
+        // SAFETY: `pids` is a valid writable buffer of `count` u32s.
+        let n = unsafe { GetConsoleProcessList(pids.as_mut_ptr(), pids.len() as u32) };
+        n == 1
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Checks whether the current process has a controlling TTY; if not, attempts to relaunch `bilterm`
 /// inside an available host terminal emulator.
 ///
@@ -225,24 +295,24 @@ pub fn desktop_entry_contents(exec_path: &str, icon_path: &str) -> String {
          Name=Bilterm\n\
          GenericName=Composite Terminal Multiplexer\n\
          Comment=IBM 3270 Mainframe & Borland Turbo Vision Composite Terminal Multiplexer\n\
-         Exec={exec_path}\n\
+         Exec={exec_path} --gui\n\
          TryExec={exec_path}\n\
          Icon={icon_path}\n\
-         Terminal=true\n\
+         Terminal=false\n\
          Categories=System;TerminalEmulator;Utility;\n\
          Keywords=terminal;tmux;3270;borland;multiplexer;shell;ssh;\n\
          StartupNotify=true\n\
          StartupWMClass=bilterm\n\
-         Actions=NativeGui;QuickSession;\n\
+         Actions=Terminal;QuickSession;\n\
          \n\
-         [Desktop Action NativeGui]\n\
-         Name=Launch Native GUI Window (--gui)\n\
-         Exec={exec_path} --gui\n\
-         Terminal=false\n\
+         [Desktop Action Terminal]\n\
+         Name=Open in a Terminal (TUI)\n\
+         Exec={exec_path} --tui\n\
+         Terminal=true\n\
          \n\
          [Desktop Action QuickSession]\n\
          Name=New Persistent Session\n\
-         Exec={exec_path} -s main\n\
+         Exec={exec_path} --tui -s main\n\
          Terminal=true\n"
     )
 }
@@ -313,11 +383,24 @@ mod tests {
     }
 
     #[test]
+    fn desktop_launch_defaults_to_gui_but_shell_and_opt_out_do_not() {
+        let base = LaunchContext { display: true, ..Default::default() };
+        assert!(should_default_to_gui(base), "no tty + display = desktop launcher");
+        assert!(!should_default_to_gui(LaunchContext { has_tty: true, ..base }), "shell keeps the TUI");
+        assert!(!should_default_to_gui(LaunchContext { display: false, ..base }), "no display: terminal relaunch");
+        assert!(!should_default_to_gui(LaunchContext { force_tui: true, ..base }), "--tui / BILTERM_GUI=0");
+        assert!(!should_default_to_gui(LaunchContext { relaunched: true, ..base }));
+        assert!(should_default_to_gui(LaunchContext { has_tty: true, private_console: true, display: true, ..Default::default() }));
+        assert!(!should_default_to_gui(LaunchContext { private_console: true, force_tui: true, ..base }));
+    }
+
+    #[test]
     fn generates_valid_xdg_desktop_entry_and_macos_plist() {
         let desktop = desktop_entry_contents("/home/user/.local/bin/bilterm", "bilterm");
         assert!(desktop.contains("[Desktop Entry]"));
-        assert!(desktop.contains("Terminal=true"));
-        assert!(desktop.contains("Exec=/home/user/.local/bin/bilterm --gui"));
+        assert!(desktop.contains("Exec=/home/user/.local/bin/bilterm --gui\n"));
+        assert!(desktop.contains("Terminal=false"));
+        assert!(desktop.contains("Exec=/home/user/.local/bin/bilterm --tui\n"));
 
         let plist = macos_info_plist_contents("1.10.2");
         assert!(plist.contains("<string>dev.bilterm.app</string>"));

@@ -529,20 +529,20 @@ Type=Application
 Name=Bilterm
 GenericName=Composite Terminal Multiplexer
 Comment=IBM 3270 Mainframe & Borland Turbo Vision Composite Terminal Multiplexer
-Exec=${TARGET_BIN}
+Exec=${TARGET_BIN} --gui
 TryExec=${TARGET_BIN}
 Icon=bilterm
-Terminal=true
+Terminal=false
 Categories=System;TerminalEmulator;Utility;
 Keywords=terminal;tmux;3270;borland;multiplexer;shell;ssh;
 StartupNotify=true
 StartupWMClass=bilterm
-Actions=NativeGui;
+Actions=Terminal;
 
-[Desktop Action NativeGui]
-Name=Launch Native GUI Window (--gui)
-Exec=${TARGET_BIN} --gui
-Terminal=false
+[Desktop Action Terminal]
+Name=Open in a Terminal (TUI)
+Exec=${TARGET_BIN} --tui
+Terminal=true
 DESK_EOF
             fi
             chmod 0644 "$TARGET_DESKTOP"

@@ -77,7 +77,8 @@ async fn main() -> color_eyre::Result<()> {
                -n, --new-session [SESSION]      Start a fresh named (or auto-named) 1-pane session\n  \
                -B, --blank, --blank-session     Start a clean blank 1-pane session (no layout/history restore)\n  \
                -a, --attach [SESSION]           Re-attach & restore saved/detached multi-pane window layout\n  \
-               -G, --gui                        Launch standalone native desktop GUI window (no terminal required)\n  \
+               -G, --gui                        Launch standalone native desktop GUI window (no terminal required; the default when started from an app launcher or Win+R)\n  \
+                   --tui                        Force the terminal UI (also BILTERM_GUI=0) even when started from a desktop launcher\n  \
                    --snazzy                     Enable Snazzy rich process-icon glyphs mode\n  \
                    --glass, --gui-glass         Enable translucent frosted Glass + Snazzy visual style\n  \
                    --drawer-push                Set Slide-Out Drawer layout mode to Push-Out (reflows workspace)\n  \
@@ -430,7 +431,7 @@ async fn main() -> color_eyre::Result<()> {
     if let Some(shell) = switch_value(&args, &["-C", "--completions"]) {
         match shell {
             "bash" => println!(
-                "complete -W \"ctl daemon agent pane workspace coords agents-md --install ls plot --name --daemon-name -G --gui -m --mcp -d --headless --daemon -l --listen --http --web-dir --cors-origin -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
+                "complete -W \"ctl daemon agent pane workspace coords agents-md --install ls plot --name --daemon-name -G --gui --tui -m --mcp -d --headless --daemon -l --listen --http --web-dir --cors-origin -r --allow-remote -t --token-file -S --snapshot-dir -p --playbook -h --help -v -V --version -g --gui-dump -C --completions -M --man --desktop-file -s --session -c --config\" bilterm"
             ),
             "zsh" => println!(
                 "#compdef bilterm\n_arguments '1:command:(ctl daemon agent pane workspace coords agents-md ls plot)' '--install[With agents-md: add the guide block to a file]:file:_files' '(-G --gui)'{{-G,--gui}}'[Launch standalone native GUI window]' '(-m --mcp)'{{-m,--mcp}}'[Run MCP server]' '(-d --headless --daemon)'{{-d,--headless,--daemon}}'[Headless daemon]' '(-l --listen)'{{-l,--listen}}'[Listen address]:addr:' '--name[Daemon name (with --headless)]:name:' '--daemon-name[Target named daemon (ctl/agent/pane/workspace/coords/daemon)]:name:' '--web-dir[Serve SPA from dir (with --http)]:dir:_files -/' '--cors-origin[Allowed CORS origin (with --http)]:origin:' '(-r --allow-remote)'{{-r,--allow-remote}}'[Allow remote TCP]' '(-t --token-file)'{{-t,--token-file}}'[Bearer token file]:file:_files' '(-S --snapshot-dir)'{{-S,--snapshot-dir}}'[Snapshot directory]:dir:_files -/' '(-p --playbook)'{{-p,--playbook}}'[Run TOML playbook]:file:_files' '(-h --help)'{{-h,--help}}'[Print help]' '(-v -V --version)'{{-v,-V,--version}}'[Print version]' '(-g --gui-dump)'{{-g,--gui-dump}}'[Dump GPU PPM]:file:_files' '(-C --completions)'{{-C,--completions}}'[Shell completions]:shell:(bash zsh fish)' '(-M --man)'{{-M,--man}}'[Print manpage]' '--desktop-file[Print .desktop launcher entry]' '(-s --session)'{{-s,--session}}'[History session name]:name:' '(-c --config)'{{-c,--config}}'[Config TOML file]:file:_files'"
@@ -463,8 +464,10 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     let _ = bilterm::launcher::normalize_desktop_working_dir();
-    let gui_mode =
-        has_switch(&args, &["-G", "--gui"]) || std::env::var("BILTERM_GUI").as_deref() == Ok("1");
+    // A bare `bilterm` started by the desktop (app launcher, Win+R) opens the GUI; `--tui` / BILTERM_GUI=0 opt out.
+    let gui_mode = has_switch(&args, &["-G", "--gui"])
+        || std::env::var("BILTERM_GUI").as_deref() == Ok("1")
+        || bilterm::launcher::should_default_to_gui(bilterm::launcher::LaunchContext::detect(&args));
     if !gui_mode && bilterm::launcher::ensure_terminal_or_relaunch(&args)? {
         return Ok(());
     }
