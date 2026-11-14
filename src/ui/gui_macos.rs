@@ -402,7 +402,7 @@ pub fn run_macos_gui_window(mut app: App) -> Result<()> {
 
     let title = format!(
         "Bilterm v{} — IBM 3270 x Borland Turbo Vision [Native CoreText GUI]",
-        env!("CARGO_PKG_VERSION")
+        env!("BILTERM_VERSION")
     );
     let cf_title = create_cfstring(&title);
     unsafe {

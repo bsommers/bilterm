@@ -334,9 +334,9 @@ pub(super) fn render_help_modal(
     });
 
     let help_title = if cfg.is_modern() {
-        concat!("● ● ●  Bilterm v", env!("CARGO_PKG_VERSION"), " · Help · ↑↓ Scroll · Esc Close")
+        concat!("● ● ●  Bilterm v", env!("BILTERM_VERSION"), " · Help · ↑↓ Scroll · Esc Close")
     } else {
-        concat!("[F1] BILTERM v", env!("CARGO_PKG_VERSION"), " — 3270 // TURBO VISION HELP (Up/Down/PgUp/PgDn, Esc/F1=Close)")
+        concat!("[F1] BILTERM v", env!("BILTERM_VERSION"), " — 3270 // TURBO VISION HELP (Up/Down/PgUp/PgDn, Esc/F1=Close)")
     };
     render_modal_surface_and_frame(modal, workspace_area, help_title, cfg, palette, glyphs, buf);
     let inner = inset_window_frame(modal);
@@ -789,6 +789,56 @@ pub(super) fn render_inspector_modal(
         ]));
     }
 
+    Block::default()
+        .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
+        .render(inner, buf);
+    Paragraph::new(lines).render(inner, buf);
+}
+
+pub(super) fn render_version_modal(
+    wm: &WindowManager,
+    workspace_area: Rect,
+    cfg: &BiltermConfig,
+    palette: &ThemePalette,
+    glyphs: &GlyphSet,
+    buf: &mut Buffer,
+) {
+    let modal = wm.active_modal_rect(workspace_area).unwrap_or(workspace_area);
+    let title = if cfg.is_modern() {
+        "● ● ●  Bilterm Version · ↑↓ Scroll · Esc Close"
+    } else {
+        "BILTERM VERSION (Up/Down Scroll, Esc=Close)"
+    };
+    render_modal_surface_and_frame(modal, workspace_area, title, cfg, palette, glyphs, buf);
+    let inner = inset_window_frame(modal);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+    let rows = crate::version_info::details();
+    let max_scroll = rows.len().saturating_sub(usize::from(inner.height));
+    let start = wm.version_info_scroll().min(max_scroll);
+    let lines: Vec<Line> = rows
+        .into_iter()
+        .skip(start)
+        .take(usize::from(inner.height))
+        .map(|(k, v)| {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {k:<14} "),
+                    Style::default()
+                        .fg(role(cfg, palette, ColorRole::Accent, Color::Rgb(255, 255, 85)))
+                        .bg(palette.window_frame_bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    v,
+                    Style::default()
+                        .fg(role(cfg, palette, ColorRole::TextPrimary, Color::Rgb(85, 255, 255)))
+                        .bg(palette.window_frame_bg),
+                ),
+            ])
+        })
+        .collect();
     Block::default()
         .style(Style::default().fg(Color::White).bg(palette.window_frame_bg))
         .render(inner, buf);

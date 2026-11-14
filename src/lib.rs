@@ -22,5 +22,6 @@ pub mod swarm;
 pub mod tmux;
 pub mod traffic;
 pub mod ui;
+pub mod version_info;
 pub mod vt;
 pub mod wm;

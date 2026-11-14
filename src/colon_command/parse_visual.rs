@@ -381,6 +381,9 @@ pub(super) fn parse_visual_colon_command(
         }
         "version" | "ver" => {
             let arg = match parts.get(1).copied() {
+                None | Some("info" | "details" | "about") => {
+                    return Some(Ok(ColonCommand::VersionInfo));
+                }
                 Some("on" | "true" | "show") => Some(true),
                 Some("off" | "false" | "hide") => Some(false),
                 _ => None,

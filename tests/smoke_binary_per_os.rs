@@ -21,7 +21,7 @@ use std::time::Duration;
 use bilterm::api::JsonValue;
 use common::{IsolatedEnv, KillOnDrop, PROCESS_DEADLINE, stderr_of, stdout_of};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("BILTERM_VERSION");
 
 fn result_of(resp: &str) -> JsonValue {
     let v = JsonValue::parse(resp.trim()).unwrap_or_else(|| panic!("response is not JSON: {resp}"));

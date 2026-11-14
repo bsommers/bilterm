@@ -280,7 +280,7 @@ pub fn execute_colon_command(pane: &mut CompositePane, cmd: ColonCommand) -> boo
             pane.set_show_version_badge(next);
             pane.set_status_message(Some(format!(
                 "Bilterm v{} — status bar version badge: {}",
-                env!("CARGO_PKG_VERSION"),
+                crate::version_info::VERSION,
                 if next { "ON" } else { "OFF" }
             )));
             false

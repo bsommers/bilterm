@@ -242,7 +242,7 @@ impl WsBridge {
         self.out.push(msg("hello_ack", vec![
             ("contract", JsonValue::Number(CONTRACT_VERSION)),
             ("epoch", s(&epoch)),
-            ("server", JsonValue::obj([("name", s("bilterm")), ("version", s(env!("CARGO_PKG_VERSION")))])),
+            ("server", JsonValue::obj([("name", s("bilterm")), ("version", s(crate::version_info::VERSION))])),
             ("auth", JsonValue::obj([("required", JsonValue::Bool(true))])),
             ("limits", JsonValue::obj([
                 ("maxFrameBytes", JsonValue::Number(MAX_FRAME_BYTES as i64)),

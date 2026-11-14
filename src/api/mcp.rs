@@ -50,7 +50,7 @@ impl AutomationControlPlane {
                         ("name", JsonValue::String("bilterm-mcp".to_string())),
                         (
                             "version",
-                            JsonValue::String(env!("CARGO_PKG_VERSION").to_string()),
+                            JsonValue::String(crate::version_info::VERSION.to_string()),
                         ),
                     ]),
                 ),

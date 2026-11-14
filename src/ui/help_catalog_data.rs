@@ -259,7 +259,7 @@ pub const HELP_LINES: &[(&str, &str)] = &[
     (":state", "Show appearance, mode, layout, active pane, pane count and drawer state"),
     (":crt [on|off]", "Toggle retro CRT phosphor scanline shader effect"),
     (":menubar [on|off] / :fkeybar [on|off]", "Toggle top Borland Menu Bar or bottom DOS F-Key Bar"),
-    (":version [on|off] / :inspector [on|off]", "Toggle OIA version badge or F9 3270 Terminal Inspector"),
+    (":version / :version [on|off|toggle] / :inspector [on|off]", "Version details window; OIA version badge; F9 3270 Terminal Inspector"),
     (":tek [on|off|demo|erase|clear]", "Tektronix 4010/4014 vector storage-tube mode & demo"),
     (":canvas [hires|demo|mode|plot|image|clear]", "High-resolution Braille/Sextant/Kitty/Sixel/iTerm2 canvas"),
     (":find <text> | :find next|prev|off", "Search the active pane's scrollback. Reserved first words open the Find window: agent, session, history (other text still searches scrollback; use :search <word> for a word that collides)"),

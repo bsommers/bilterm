@@ -327,7 +327,7 @@ impl VtParser {
                 self.record_escape_sequence("CSI >c -> >62;260;0c".to_string());
             } else if tail.starts_with('q') && (digits.is_empty() || digits == "0") {
                 self.pending_query_responses.push(
-                    format!("\x1bP>|bilterm({})\x1b\\", env!("CARGO_PKG_VERSION")).into_bytes(),
+                    format!("\x1bP>|bilterm({})\x1b\\", env!("BILTERM_VERSION")).into_bytes(),
                 );
                 self.record_escape_sequence("CSI >q -> XTVERSION".to_string());
             }

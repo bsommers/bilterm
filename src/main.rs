@@ -55,7 +55,10 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     if has_switch(&args, &["-v", "-V", "--version"]) {
-        println!("bilterm {}", env!("CARGO_PKG_VERSION"));
+        println!("{}", bilterm::version_info::short());
+        if has_switch(&args, &["--verbose"]) {
+            print!("{}", bilterm::version_info::details_text());
+        }
         return Ok(());
     }
     if has_switch(&args, &["-h", "--help"]) {
@@ -110,7 +113,7 @@ async fn main() -> color_eyre::Result<()> {
                    --desktop-file               Print freedesktop.org .desktop launcher entry to stdout\n  \
                -v, -V, --version                Print version information\n  \
                -h, --help                       Print this help message",
-            env!("CARGO_PKG_VERSION")
+            env!("BILTERM_VERSION")
         );
         return Ok(());
     }
