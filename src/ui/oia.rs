@@ -271,23 +271,23 @@ pub fn render_oia_status_bar_themed(
     let oia_title = if is_modern {
         if palette.is_liquid_glass() {
             if pane.show_version_badge() {
-                concat!(" 💧 Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+                concat!(" 💧 Bilterm v", env!("BILTERM_VERSION"), " ")
             } else {
                 " 💧 Bilterm "
             }
         } else if palette.is_tron() {
             if pane.show_version_badge() {
-                concat!(" ◈ Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+                concat!(" ◈ Bilterm v", env!("BILTERM_VERSION"), " ")
             } else {
                 " ◈ Bilterm "
             }
         } else if pane.show_version_badge() {
-            concat!(" ◢ Bilterm v", env!("CARGO_PKG_VERSION"), " ")
+            concat!(" ◢ Bilterm v", env!("BILTERM_VERSION"), " ")
         } else {
             " ◢ Bilterm "
         }
     } else if pane.show_version_badge() {
-        concat!("3270-OIA v", env!("CARGO_PKG_VERSION"))
+        concat!("3270-OIA v", env!("BILTERM_VERSION"))
     } else {
         "3270-OIA"
     };
@@ -663,7 +663,7 @@ pub struct OiaLayout {
 
 pub fn oia_layout(pane: &CompositePane) -> OiaLayout {
     let title_w = if pane.show_version_badge() {
-        concat!("3270-OIA v", env!("CARGO_PKG_VERSION")).chars().count()
+        concat!("3270-OIA v", env!("BILTERM_VERSION")).chars().count()
     } else {
         "3270-OIA".chars().count()
     };

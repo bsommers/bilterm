@@ -142,6 +142,8 @@ pub enum Modal {
     None,
     /// Interactive `<F1>` Borland Turbo Vision Help modal.
     Help { scroll: usize },
+    /// `:version` build/platform details window.
+    Version { scroll: usize },
     /// Interactive `<F9>` / `:inspector` Live 3270 Terminal Inspector modal (`BEL-01`).
     Inspector { scroll: usize },
     /// Interactive Fuzzy Command Palette modal (`Ctrl+P` / `:palette`, `v0.6.0`).
@@ -735,6 +737,22 @@ impl WindowManager {
             self.modal = Modal::None;
         } else {
             self.modal = Modal::Help { scroll: 0 };
+        }
+    }
+
+    /// Toggles the `:version` details window.
+    pub fn toggle_version_info(&mut self) {
+        self.modal = if matches!(self.modal, Modal::Version { .. }) { Modal::None } else { Modal::Version { scroll: 0 } };
+    }
+
+    pub fn is_version_info_visible(&self) -> bool {
+        matches!(self.modal, Modal::Version { .. })
+    }
+
+    pub fn version_info_scroll(&self) -> usize {
+        match self.modal {
+            Modal::Version { scroll } => scroll,
+            _ => 0,
         }
     }
 

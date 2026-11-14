@@ -210,7 +210,7 @@ impl WorkspaceViewModelDto {
 pub fn health_json(agents: usize) -> JsonValue {
     JsonValue::obj([
         ("ok", JsonValue::Bool(true)),
-        ("version", JsonValue::String(env!("CARGO_PKG_VERSION").to_string())),
+        ("version", JsonValue::String(crate::version_info::VERSION.to_string())),
         ("contract", JsonValue::Number(CONTRACT_VERSION)),
         ("epoch", JsonValue::String(server_epoch())),
         (

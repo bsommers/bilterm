@@ -457,7 +457,7 @@ pub fn run_native_gui_window(mut app: App) -> Result<()> {
     let class_name: Vec<u16> = "BiltermGuiWindowClass\0".encode_utf16().collect();
     let title_str = format!(
         "Bilterm v{} — IBM 3270 x Borland Turbo Vision [Native ClearType GUI]\0",
-        env!("CARGO_PKG_VERSION")
+        env!("BILTERM_VERSION")
     );
     let window_title: Vec<u16> = title_str.encode_utf16().collect();
 

@@ -266,3 +266,26 @@ fn z_stack_and_tiled_windows_support_mouse_and_keyboard_move_and_resize() {
     wm.toggle_minimize_pane(2);
     assert!(!wm.z_stack().is_minimized(2));
 }
+
+#[test]
+fn version_command_opens_and_closes_details_window() {
+    use crate::colon_command::parse_colon_command;
+    let mut wm = WindowManager::new_headless(25, 80);
+    let open = parse_colon_command(":version").unwrap().unwrap();
+    assert_eq!(open, crate::action::Action::VersionInfo);
+    let _ = wm.apply(open.clone());
+    assert!(wm.is_version_info_visible());
+    let _ = wm.apply(open);
+    assert!(!wm.is_version_info_visible());
+}
+
+#[test]
+fn version_with_argument_still_toggles_the_badge() {
+    use crate::action::Action;
+    use crate::colon_command::parse_colon_command;
+    let p = |s: &str| parse_colon_command(s).unwrap().unwrap();
+    assert_eq!(p(":version on"), Action::VersionToggle(Some(true)));
+    assert_eq!(p(":version off"), Action::VersionToggle(Some(false)));
+    assert_eq!(p(":version toggle"), Action::VersionToggle(None));
+    assert_eq!(p(":ver"), Action::VersionInfo);
+}

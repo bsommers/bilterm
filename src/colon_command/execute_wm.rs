@@ -224,6 +224,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.toggle_help();
             false
         }
+        ColonCommand::VersionInfo => {
+            wm.toggle_version_info();
+            false
+        }
         ColonCommand::HistoryToggle(val) => {
             let next = val.unwrap_or(!wm.config().history_enabled);
             wm.config_mut().history_enabled = next;
@@ -310,7 +314,7 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             wm.quick_terminal_mut().pane.set_show_version_badge(next);
             wm.active_pane_mut().set_status_message(Some(format!(
                 "Bilterm v{} — status bar version badge: {}",
-                env!("CARGO_PKG_VERSION"),
+                crate::version_info::VERSION,
                 if next { "ON" } else { "OFF" }
             )));
             false

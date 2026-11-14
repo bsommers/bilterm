@@ -717,7 +717,7 @@ const COLON_COMMANDS: &[(&str, &[&str])] = &[
             "open", "close", "toggle", "dismiss", "blur", "pin", "unpin", "dock", "float", "clear",
         ],
     ),
-    (":version", &["on", "off"]),
+    (":version", &["on", "off", "toggle", "info"]),
     (":crt", &["on", "off"]),
     (":scroll", &["smooth", "page", "instant", "toggle", "next", "prev"]),
     (":more", &[]),

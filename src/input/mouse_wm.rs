@@ -272,7 +272,7 @@ pub(super) fn handle_modal_mouse_event(
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
             match wm.modal_mut() {
-                crate::wm::Modal::Help { scroll } | crate::wm::Modal::Inspector { scroll } => {
+                crate::wm::Modal::Help { scroll } | crate::wm::Modal::Inspector { scroll } | crate::wm::Modal::Version { scroll } => {
                     *scroll = if up { scroll.saturating_sub(2) } else { scroll.saturating_add(2) };
                 }
                 crate::wm::Modal::Palette { selected, .. } => {

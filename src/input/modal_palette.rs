@@ -368,6 +368,17 @@ pub(super) fn handle_active_modal_overlay_key(
             }
             Ok(Some(AppAction::Handled))
         }
+        Modal::Version { scroll } => {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => wm.close_modal(),
+                KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => *scroll = scroll.saturating_add(1),
+                KeyCode::PageUp => *scroll = scroll.saturating_sub(6),
+                KeyCode::PageDown => *scroll = scroll.saturating_add(6),
+                _ => {}
+            }
+            Ok(Some(AppAction::Handled))
+        }
         Modal::Inspector { scroll } => {
             match key.code {
                 KeyCode::F(9) | KeyCode::Esc | KeyCode::Char('q') => wm.close_modal(),

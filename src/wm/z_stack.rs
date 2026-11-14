@@ -428,7 +428,7 @@ impl WindowManager {
                     .clamp(6, 22)
                     .min(workspace_area.height),
             ),
-            super::Modal::Inspector { .. } => (
+            super::Modal::Inspector { .. } | super::Modal::Version { .. } => (
                 workspace_area
                     .width
                     .saturating_sub(4)

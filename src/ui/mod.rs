@@ -82,7 +82,7 @@ use crate::ui::cursor::{
     render_spotlight_cursor,
 };
 use crate::ui::modals::{
-    render_help_modal, render_history_popup, render_inspector_modal, render_menubar_dropdown,
+    render_help_modal, render_history_popup, render_inspector_modal, render_menubar_dropdown, render_version_modal,
     render_palette_modal, render_top_menubar, render_unsafe_paste_modal,
 };
 use crate::ui::occlusion::occlude_rect;
@@ -715,6 +715,10 @@ impl Widget for WorkspaceWidget<'_> {
 
         if self.wm.is_inspector_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
             render_inspector_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
+        }
+
+        if self.wm.is_version_info_visible() && workspace_area.width >= 24 && workspace_area.height >= 6 {
+            render_version_modal(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
 
         if self.wm.is_help_visible() && workspace_area.width >= 20 && workspace_area.height >= 6 {
