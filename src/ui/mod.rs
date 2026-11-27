@@ -1,4 +1,5 @@
 pub mod agents_gui;
+pub mod attention_ui;
 pub mod drag_zones;
 pub mod find_flash;
 pub mod pane_mail_ui;
@@ -715,6 +716,7 @@ impl Widget for WorkspaceWidget<'_> {
         if self.wm.scale_pct(crate::ui::typography::PanelTarget::Drawer) == 100 {
             render_workspace_drawer(self.wm, workspace_area, cfg, &palette, &glyphs, buf);
         }
+        attention_ui::render_left_attention_beacon(self.wm, workspace_area, cfg, buf);
         drag_zones::render_window_drag(self.wm, workspace_area, &palette, &glyphs, buf);
         drawer_preview::render_drawer_preview_overlay(
             self.wm,

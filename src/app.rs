@@ -288,7 +288,12 @@ impl App {
                         handler.poll_waiters(&mut self.wm);
                     }
                     self.wm.drain_stt_events();
-                    if self.wm.find_flash_tick() | self.wm.pane_mail_tick(Instant::now()) | self.wm.sync_origin_badges() {
+                    let tick_now = Instant::now();
+                    if self.wm.find_flash_tick()
+                        | self.wm.pane_mail_tick(tick_now)
+                        | self.wm.attention_tick(tick_now)
+                        | self.wm.sync_origin_badges()
+                    {
                         self.needs_redraw = true;
                     }
                     if self.poll_all_ptys() {
@@ -372,6 +377,9 @@ impl App {
         if self.wm.take_host_bell() {
             out.write_all(b"\x07")?;
             wrote = true;
+        }
+        if self.wm.take_pending_tron_beep() {
+            crate::wm::attention::play_tron_beep_async();
         }
         if wrote {
             out.flush()?;

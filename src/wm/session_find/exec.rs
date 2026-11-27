@@ -152,6 +152,7 @@ impl WindowManager {
                     }
                 }
                 self.session_find.host_bell = true;
+                self.trigger_tron_beep();
                 (ids.clone(), format!("Find: bell on {} pane(s)", ids.len()))
             }
             FindAct::Flash => {

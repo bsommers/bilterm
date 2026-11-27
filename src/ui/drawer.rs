@@ -484,6 +484,16 @@ pub fn render_workspace_drawer(
                 };
                 write_clipped_line(buf, inner.x, y, row_text_w, &h_clip(&line, drawer.h_scroll), row_style);
             }
+            if !row.is_focused_pane && wm.drawer_row_needs_attention(row) {
+                crate::ui::attention_ui::paint_drawer_row_left_attention(
+                    buf,
+                    drawer_rect.x,
+                    inner.x,
+                    y,
+                    cfg,
+                    wm.attention_pulse_lit(std::time::Instant::now()),
+                );
+            }
         }
 
         if show_scrollbar {

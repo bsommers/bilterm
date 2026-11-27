@@ -1,5 +1,6 @@
 pub mod agent_guide;
 pub mod agent_mail;
+pub mod attention;
 pub mod resilience;
 pub mod swarm_cmd;
 mod agent_mail_apply;
@@ -292,6 +293,8 @@ pub struct WindowManager {
     pub(crate) agent_mail: agent_mail::AgentMailRegistry,
     /// Pane-mail envelope state (unread/sender per pane); private per `ARCH-R02`.
     pane_mail: pane_mail::PaneMailTracker,
+    /// Left-side attention pulse and rising-edge 1970s TRON synthesizer chime tracker.
+    attention: attention::AttentionTracker,
     /// Shared artifact scratchpad (`BEYOND-02`, Phase 68).
     context_bus: context_bus::ContextBus,
     /// Per-pane prompt queues (`BEYOND-03`, Phase 68).
@@ -443,6 +446,7 @@ impl WindowManager {
             script_studio: script_studio::ScriptStudioState::default(),
             agent_mail: agent_mail::AgentMailRegistry::new(false),
             pane_mail: pane_mail::PaneMailTracker::default(),
+            attention: attention::AttentionTracker::default(),
             context_bus: context_bus::ContextBus::new(),
             prompt_queue: prompt_queue::PromptQueue::new(),
             swarm_surface: swarm_surface::SwarmSurface::default(),
