@@ -247,7 +247,7 @@ impl WindowManager {
 
                 for (id, final_name) in planned {
                     if let Some(pane) = self.panes.get_mut(&id) {
-                        pane.set_title(final_name);
+                        pane.set_custom_title(final_name);
                     }
                 }
                 self.drawer.invalidate_saved_sessions();

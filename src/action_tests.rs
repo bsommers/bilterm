@@ -512,6 +512,7 @@ fn every_action_is_reachable_from_keymap_colon_or_rpc() {
         Action::FkeyModeCommand(None),
         Action::VisualStyleCommand(None),
         Action::AgentMail(crate::wm::agent_mail::AgentMailOp::List),
+        Action::WindowManage(crate::wm::window_manage::WindowManageOp::List),
         Action::WindowManage(crate::wm::window_manage::WindowManageOp::Undo),
         Action::SessionManage(crate::wm::window_manage::SessionManageOp::Undo),
         Action::DaemonSupervisor(DaemonSupervisorOp::List),

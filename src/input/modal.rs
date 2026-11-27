@@ -111,13 +111,9 @@ pub(super) fn handle_wm_modal_key(
     wm: &mut WindowManager,
     key: KeyEvent,
 ) -> Result<Option<AppAction>> {
-    if wm.rename_dialog_open() {
-        if wm.drawer().focused {
-            wm.cancel_rename_dialog();
-        } else if !wm.is_leader_pending() {
-            wm.handle_rename_dialog_key(key);
-            return Ok(Some(AppAction::Handled));
-        }
+    if wm.rename_dialog_open() && !wm.is_leader_pending() {
+        wm.handle_rename_dialog_key(key);
+        return Ok(Some(AppAction::Handled));
     }
 
     // Sticky Window mode owns every key until it ends, even over raw PTY passthrough (`KEY-01`).

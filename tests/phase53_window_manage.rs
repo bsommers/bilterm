@@ -519,3 +519,157 @@ fn test_session_toml_and_persistence_round_trip() {
     assert_eq!(wm2.pane(p2).unwrap().title(), "log-stream");
     assert!(wm2.is_window_selected(p2));
 }
+
+#[test]
+fn custom_pane_rename_survives_osc_title_and_ignores_unfocused_drawer_selection() {
+    use bilterm::colon_command::{execute_wm_colon_command, parse_colon_command};
+
+    let mut wm = WindowManager::new_headless(24, 80);
+    let p1 = wm.active_pane_id();
+    let p2 = wm.split_focused(bilterm::wm::split_tree::SplitDirection::Vertical).unwrap();
+    wm.focus_and_raise(p2);
+
+    // Point unfocused drawer selection at p1; active pane is p2.
+    let rows = wm.drawer_rows();
+    let p1_row = rows
+        .iter()
+        .position(|r| r.kind == bilterm::wm::DrawerRowKind::Pane(p1))
+        .expect("p1 row");
+    wm.drawer_mut().selected_index = p1_row;
+    assert!(!wm.drawer().focused);
+
+    let cmd = parse_colon_command(":pane renname newname")
+        .expect("typo alias parses")
+        .expect("ok");
+    execute_wm_colon_command(&mut wm, cmd);
+    assert_eq!(wm.pane(p2).unwrap().title(), "newname");
+    assert!(wm.pane(p2).unwrap().is_title_locked());
+    assert_ne!(wm.pane(p1).unwrap().title(), "newname");
+
+    // Subsequent shell OSC 2 title sequence must NOT overwrite user-assigned name.
+    wm.pane_mut(p2).unwrap().process_pty_output(b"\x1b]2;zsh:~/src\x07");
+    assert_eq!(wm.pane(p2).unwrap().title(), "newname");
+}
+
+#[test]
+fn classic_drawer_right_click_rename_selects_row_and_commits() {
+    use bilterm::input::{handle_wm_key_event, handle_wm_mouse_event};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use ratatui::layout::Rect;
+
+    let mut wm = WindowManager::new_headless(24, 80);
+    let p1 = wm.active_pane_id();
+    let p2 = wm.split_focused(bilterm::wm::split_tree::SplitDirection::Vertical).unwrap();
+    wm.focus_and_raise(p1);
+    wm.toggle_drawer();
+    wm.drawer_mut().selected_index = 0;
+
+    let area = Rect::new(0, 0, 80, 24);
+    let shell = bilterm::ui::shell::ShellLayout::compute(area, wm.config(), wm.pane_count());
+    let dr = wm.drawer_rect(shell.workspace).expect("drawer rect");
+    let rows = wm.drawer_rows();
+    let p2_row = rows
+        .iter()
+        .position(|r| r.kind == bilterm::wm::DrawerRowKind::Pane(p2))
+        .expect("p2 row");
+    let (hdr_h, _, row_step) = bilterm::ui::drawer::drawer_vertical_layout_metrics(
+        wm.config(),
+        dr.height.saturating_sub(2),
+        rows.len(),
+    );
+    let click_y = dr.y + 1 + hdr_h + (p2_row * row_step) as u16;
+    let click_x = dr.x + 2;
+
+    // Right-click on p2's row in Classic drawer
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column: click_x,
+            row: click_y,
+            modifiers: KeyModifiers::NONE,
+        },
+        area,
+    )
+    .unwrap();
+    assert_eq!(wm.drawer().selected_index, p2_row);
+
+    let menu = bilterm::ui::drawer::navigator::standalone_context_menu_layout(&wm, area)
+        .expect("context menu open");
+    let (_, rename_y) = menu
+        .entries
+        .iter()
+        .find(|&&(e, _)| e == bilterm::wm::drawer::NavigatorMenuEntry::Rename)
+        .copied()
+        .expect("Rename entry");
+
+    // Left-click "Rename"
+    handle_wm_mouse_event(
+        &mut wm,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: menu.rect.x + 1,
+            row: rename_y,
+            modifiers: KeyModifiers::NONE,
+        },
+        area,
+    )
+    .unwrap();
+    assert!(wm.rename_dialog_open(), "rename dialog should open");
+
+    // Clear input (Ctrl+U) and type "renamed-p2" + Enter
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL)).unwrap();
+    for ch in "renamed-p2".chars() {
+        handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)).unwrap();
+    }
+    handle_wm_key_event(&mut wm, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    assert!(!wm.rename_dialog_open());
+    assert_eq!(wm.pane(p2).unwrap().title(), "renamed-p2");
+}
+
+#[test]
+fn pane_list_and_window_list_work_across_colon_rpc_mcp_and_cli() {
+    use bilterm::api::rpc::AutomationControlPlane;
+    use bilterm::api::JsonValue;
+    use bilterm::cli::{CliEnv, parse as cli_parse};
+    use bilterm::colon_command::{execute_wm_colon_command, parse_colon_command};
+    use ratatui::layout::Rect;
+
+    let mut wm = WindowManager::new_headless(24, 80);
+    let p1 = wm.active_pane_id();
+    let p2 = wm.split_focused(bilterm::wm::split_tree::SplitDirection::Vertical).unwrap();
+    wm.rename_window(Some(p1), "alpha").unwrap();
+    wm.rename_window(Some(p2), "beta").unwrap();
+
+    for cmd_str in [":window list", ":window ls", ":pane list", ":pane ls"] {
+        let cmd = parse_colon_command(cmd_str).expect("parses").expect("ok");
+        execute_wm_colon_command(&mut wm, cmd);
+        let status = wm.active_pane().status_message().unwrap_or("");
+        assert!(status.contains("Windows (2):"), "{cmd_str} -> {status}");
+        assert!(status.contains("alpha"), "{cmd_str} -> {status}");
+        assert!(status.contains("beta"), "{cmd_str} -> {status}");
+    }
+
+    // RPC window.list + pane.list
+    let mut plane = AutomationControlPlane::new(wm, Rect::new(0, 0, 80, 24));
+    let win_list = plane.dispatch_method("window.list", &JsonValue::Null).unwrap();
+    assert_eq!(win_list.get("count").and_then(JsonValue::as_i64), Some(2));
+    let pane_list = plane.dispatch_method("pane.list", &JsonValue::Null).unwrap();
+    assert_eq!(pane_list.get("panes").and_then(|v| v.as_array().map(|a| a.len())), Some(2));
+
+    // MCP bilterm_window_manage(list) & bilterm_agent_control(window_list / pane_list)
+    let mcp_win = plane
+        .handle_mcp_line(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bilterm_window_manage","arguments":{"action":"list"}}}"#)
+        .unwrap();
+    assert!(mcp_win.contains("alpha") && mcp_win.contains("beta"));
+    let mcp_ctrl = plane
+        .handle_mcp_line(r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"bilterm_agent_control","arguments":{"action":"window_list"}}}"#)
+        .unwrap();
+    assert!(mcp_ctrl.contains("alpha") && mcp_ctrl.contains("beta"));
+
+    // CLI bilterm window list & bilterm pane list
+    let cli_win = cli_parse(&["window".into(), "list".into()], &CliEnv::default()).unwrap();
+    assert_eq!(cli_win.method, "window.list");
+    let cli_pane = cli_parse(&["pane".into(), "list".into()], &CliEnv::default()).unwrap();
+    assert_eq!(cli_pane.method, "pane.list");
+}

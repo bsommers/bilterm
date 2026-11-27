@@ -20,6 +20,8 @@ mod bulk;
 /// Core operations for window management (`SES-01..04`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WindowManageOp {
+    /// Lists all windows/panes in the active workspace (`:window list` / `:pane list` / `window.list`).
+    List,
     /// Moves a window (default: active window) to target_session.
     Move {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -335,6 +337,7 @@ impl WindowManager {
     /// Internal handler for window management operations (`SES-01..04`).
     pub fn window_manage_apply(&mut self, op: &WindowManageOp) -> Result<String, String> {
         match op {
+            WindowManageOp::List => self.list_windows_with_data(),
             WindowManageOp::Move {
                 window_id,
                 target_session,
@@ -667,7 +670,7 @@ impl WindowManager {
         let clean = new_name.trim();
         validate_window_name(clean)?;
         let target_id = window_id
-            .or_else(|| self.selected_drawer_pane_id())
+            .or_else(|| self.drawer.focused.then(|| self.selected_drawer_pane_id()).flatten())
             .unwrap_or_else(|| self.active_pane_id());
         let cur_session = self.config.history_session.clone();
 
@@ -685,7 +688,7 @@ impl WindowManager {
                 vec![cur_session],
             );
             if let Some(pane) = self.panes.get_mut(&target_id) {
-                pane.set_title(final_name.clone());
+                pane.set_custom_title(final_name.clone());
             }
             self.drawer.invalidate_saved_sessions();
             return Ok(format!("Renamed window {target_id} to '{final_name}'"));
@@ -728,7 +731,7 @@ impl WindowManager {
             if let Some(bg) = self.window_manage.background_sessions.get_mut(&sess_name)
                 && let Some(pane) = bg.panes.get_mut(&target_id)
             {
-                pane.set_title(final_name.clone());
+                pane.set_custom_title(final_name.clone());
             }
             if let Some(mut snap) = self.load_session_snapshot_any(&sess_name) {
                 if let Some(sp) = snap.panes.iter_mut().find(|p| p.id == target_id) {
@@ -794,12 +797,60 @@ impl WindowManager {
                 vec![cur_session],
             );
             if let Some(pane) = self.panes.get_mut(&target_id) {
-                pane.set_title(final_name.clone());
+                pane.set_custom_title(final_name.clone());
             }
             self.drawer.invalidate_saved_sessions();
             return Ok(format!("Renamed window {target_id} to '{final_name}'"));
         }
 
         Err(format!("Window {target_id} not found"))
+    }
+
+    /// Builds structured JSON for `:window list` / `:pane list` / `window.list` RPC.
+    pub fn list_windows_json(&self) -> crate::api::JsonValue {
+        use crate::api::JsonValue;
+        let active = self.active_pane_id();
+        let zoomed = self.effective_zoomed();
+        let cur_session = self.config.history_session.clone();
+        let mut windows = Vec::new();
+        for (&id, pane) in &self.panes {
+            let (rows, cols) = pane.vt().size();
+            windows.push(JsonValue::obj([
+                ("id", JsonValue::Number(id as i64)),
+                ("ref", JsonValue::String(format!("w1:p{id}"))),
+                ("title", JsonValue::String(pane.title().to_string())),
+                ("title_locked", JsonValue::Bool(pane.is_title_locked())),
+                ("focused", JsonValue::Bool(id == active)),
+                ("zoomed", JsonValue::Bool(zoomed == Some(id))),
+                ("session", JsonValue::String(cur_session.clone())),
+                ("rows", JsonValue::Number(i64::from(rows))),
+                ("cols", JsonValue::Number(i64::from(cols))),
+                ("remote", self.pane_origin(id).to_json()),
+            ]));
+        }
+        JsonValue::obj([
+            ("workspace", JsonValue::String("w1".to_string())),
+            ("session", JsonValue::String(cur_session)),
+            ("active_pane_id", JsonValue::Number(active as i64)),
+            ("count", JsonValue::Number(windows.len() as i64)),
+            ("windows", JsonValue::Array(windows)),
+        ])
+    }
+
+    /// Lists all windows/panes in the active session, recording structured JSON into `command_data`.
+    pub fn list_windows_with_data(&mut self) -> Result<String, String> {
+        let json = self.list_windows_json();
+        self.set_command_data(json.to_json_string());
+        let active = self.active_pane_id();
+        let items: Vec<String> = self
+            .panes
+            .iter()
+            .map(|(&id, pane)| {
+                let marker = if id == active { "*" } else { "" };
+                let (rows, cols) = pane.vt().size();
+                format!("#{id}{marker} {} [{cols}x{rows}]", pane.title())
+            })
+            .collect();
+        Ok(format!("Windows ({}): {}", self.panes.len(), items.join(", ")))
     }
 }

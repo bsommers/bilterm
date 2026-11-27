@@ -117,7 +117,7 @@ impl AutomationControlPlane {
                         if tool_name == "bilterm_agent_mail" {
                             Err("missing or invalid 'action' parameter: send, broadcast, inbox, ack, list, name or wait".to_string())
                         } else if tool_name == "bilterm_window_manage" {
-                            Err("missing or invalid 'action' parameter: move, reorder, place, session_move, session_reorder, rename, rename_session, select, bulk, or undo".to_string())
+                            Err("missing or invalid 'action' parameter: list, move, reorder, place, session_move, session_reorder, rename, rename_session, select, bulk, or undo".to_string())
                         } else if tool_name == "bilterm_daemon" {
                             Err("missing or invalid 'action' parameter: list, status, start, new, stop, switch, host_state, attach_clients, attach_kick, session_transfer, restart".to_string())
                         } else if tool_name == "bilterm_dos" {
@@ -129,7 +129,7 @@ impl AutomationControlPlane {
                         } else if tool_name == "bilterm_clipboard" {
                             Err("missing or invalid 'action' parameter: list, get, copy, paste, pin, delete, clear, or window".to_string())
                         } else if tool_name == "bilterm_agent_control" {
-                            Err("missing or invalid 'action' parameter: hud, replay, watchdog, approve, prompt, last_turn, wait, guide, pane_list, pane_split, pane_focus, pane_zoom, pane_send, pane_mail_state, pane_mail_ack, remote_status, workspace_list, workspace_select, workspace_new or workspace_rename".to_string())
+                            Err("missing or invalid 'action' parameter: hud, replay, watchdog, approve, prompt, last_turn, wait, guide, pane_list, window_list, pane_split, pane_focus, pane_zoom, pane_send, pane_mail_state, pane_mail_ack, remote_status, workspace_list, workspace_select, workspace_new or workspace_rename".to_string())
                         } else if tool_name == "bilterm_keys" {
                             Err("invalid 'action' parameter: list, check, explain, profile, window_mode or menu_open".to_string())
                         } else if tool_name == "bilterm_traffic" {
@@ -302,7 +302,7 @@ impl AutomationControlPlane {
                 "bilterm_window_manage",
                 "Manage Bilterm windows and sessions: move, rename, select, bulk operations (close, move, rename-prefix, tile, pin), and undo.",
                 &[
-                    ("action", "string", "Operation: move | reorder | place | session_move | session_reorder | rename | rename_session | select | bulk | undo (required)"),
+                    ("action", "string", "Operation: list | move | reorder | place | session_move | session_reorder | rename | rename_session | select | bulk | undo (required)"),
                     ("window_id", "integer", "Optional window (pane) ID (defaults to active window)"),
                     ("target_session", "string", "Target session for move or bulk move"),
                     ("new_name", "string", "New window or session name"),
@@ -486,7 +486,7 @@ impl AutomationControlPlane {
                 "bilterm_agent_control",
                 "Live agent control: the Mission Control HUD snapshot (hud), per-turn replay (replay), the stall/loop watchdog (watchdog), answer or prompt an agent pane (approve, prompt), read its last turn, and pane/workspace control. Each action is the RPC method of the same name (agent.hud, agent.replay, agent.approve, pane.split, ...).",
                 &[
-                    ("action", "string", "Operation: hud | replay | watchdog | approve | prompt | last_turn | wait | guide | pane_list | pane_split | pane_focus | pane_zoom | pane_send | pane_mail_state | pane_mail_ack | remote_status | workspace_list | workspace_select | workspace_new | workspace_rename (required)"),
+                    ("action", "string", "Operation: hud | replay | watchdog | approve | prompt | last_turn | wait | guide | pane_list | window_list | pane_split | pane_focus | pane_zoom | pane_send | pane_mail_state | pane_mail_ack | remote_status | workspace_list | workspace_select | workspace_new | workspace_rename (required)"),
                     ("selector", "string", "Pane selector (p3, @blocked, @focused, ...)"),
                     ("pane_id", "integer", "Pane id (alternative to selector)"),
                     ("op", "string", "Sub-operation for hud (open|close|toggle|next|prev|select|approve|prompt|diff|zoom) and replay (open|close|prev|next|first|last|turn|scroll); guide: get (default, returns the agent guide text) | inject (hand it to the selected pane, or target=all) | print"),
@@ -583,6 +583,7 @@ impl AutomationControlPlane {
             "wait" => "agent.wait",
             "guide" => "agent.guide",
             "pane_list" => "pane.list",
+            "window_list" => "window.list",
             "pane_split" => "pane.split",
             "pane_focus" => "pane.focus",
             "pane_zoom" => "pane.zoom",
@@ -733,6 +734,7 @@ impl AutomationControlPlane {
     fn window_manage_method(args: &JsonValue) -> Option<&'static str> {
         let action = args.get("action").and_then(JsonValue::as_str)?;
         match action {
+            "list" => Some("window.list"),
             "move" => Some("window.move"),
             "rename" => Some("window.rename"),
             "reorder" => Some("window.reorder"),

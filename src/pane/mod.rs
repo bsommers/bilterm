@@ -85,6 +85,9 @@ impl PromptInjectionKind {
 pub struct CompositePane {
     id: PaneId,
     title: String,
+    /// When true, user explicitly renamed this pane/window (`:window rename`, `:pane rename`, drawer Rename),
+    /// so automatic shell OSC 0/2 `TitleChanged` sequences must not overwrite `title`.
+    title_locked: bool,
     pub(crate) vt: VtParser,
     /// Local PTY / remote link bridge / nothing (`GUARD-02`).
     transport: PaneTransport,
@@ -183,6 +186,7 @@ impl CompositePane {
         Self {
             id,
             title,
+            title_locked: false,
             vt: VtParser::new(canvas_rows, canvas_cols, scrollback_lines),
             transport,
             payload_traffic: std::sync::OnceLock::new(),
@@ -840,7 +844,9 @@ impl CompositePane {
         self.drain_osc52_decoded();
         self.vt
             .drain_canvas_osc(|tek, seq| self.canvas_scene.scan_osc_canvas_sequences(tek, seq));
-        if let Some(wt) = self.vt.window_title() {
+        if !self.title_locked
+            && let Some(wt) = self.vt.window_title()
+        {
             self.title = format!("{wt} [#{}]", self.id);
         }
         if let Some(pty) = self.transport.local_pty() {

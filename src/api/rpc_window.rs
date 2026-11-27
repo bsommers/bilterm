@@ -303,6 +303,20 @@ impl AutomationControlPlane {
         ]))
     }
 
+    /// Handles `window.list` JSON-RPC requests (`SES-01..05`).
+    pub fn handle_window_list(&mut self) -> Result<JsonValue, String> {
+        self.apply_with_policy(
+            Action::WindowManage(WindowManageOp::List),
+            SnapshotPolicy::Trusted,
+        )?;
+        let data = self
+            .wm
+            .take_command_data()
+            .and_then(|d| JsonValue::parse(&d))
+            .unwrap_or_else(|| self.wm.list_windows_json());
+        Ok(data)
+    }
+
     /// Handles `window.undo` JSON-RPC requests (`SES-04`, `SES-05`).
     pub fn handle_window_undo(&mut self, _params: &JsonValue) -> Result<JsonValue, String> {
         let desc = self

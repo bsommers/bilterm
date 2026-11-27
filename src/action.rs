@@ -525,6 +525,7 @@ impl Action {
                 let to = target.map(|t| format!(" {t}")).unwrap_or_default();
                 format!(":window place{id} {}{to}", how.name())
             }
+            Self::WindowManage(crate::wm::window_manage::WindowManageOp::List) => ":window list".to_string(),
             Self::WindowManage(_) => ":window undo".to_string(),
             Self::SessionManage(crate::wm::window_manage::SessionManageOp::MoveOrder { name, target_pos }) => match name {
                 Some(n) => format!(":session move {n} {target_pos}"),

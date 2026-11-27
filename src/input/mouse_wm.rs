@@ -909,6 +909,25 @@ pub(super) fn handle_drawer_mouse_event(
             Some(AppAction::Handled)
         }
         MouseEventKind::Down(MouseButton::Right) => {
+            if wm.drawer_config().edge.is_vertical() {
+                let inner_h = dr.height.saturating_sub(2);
+                let rows_len = wm.drawer_rows().len();
+                let (hdr_h, ftr_h, row_step) =
+                    crate::ui::drawer::drawer_vertical_layout_metrics(wm.config(), inner_h, rows_len);
+                let list_start_y = dr.y + 1 + hdr_h;
+                let list_end_y = dr.y + dr.height.saturating_sub(1 + ftr_h);
+                if mouse.row >= list_start_y && mouse.row < list_end_y {
+                    let list_rows_px = usize::from(inner_h.saturating_sub(hdr_h + ftr_h)).max(1);
+                    let list_items_cap = (list_rows_px / row_step).max(1);
+                    let selected = wm.drawer().selected_index.min(rows_len.saturating_sub(1));
+                    let scroll = wm.drawer().effective_scroll(selected, list_items_cap, rows_len);
+                    let row_idx = scroll + (usize::from(mouse.row.saturating_sub(list_start_y)) / row_step);
+                    if row_idx < rows_len {
+                        wm.drawer_mut().selected_index = row_idx;
+                        wm.drawer_mut().scroll_offset = scroll;
+                    }
+                }
+            }
             wm.open_context_menu_at(mouse.column, mouse.row);
             Some(AppAction::Handled)
         }

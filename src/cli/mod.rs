@@ -19,7 +19,7 @@ use std::path::Path;
 use crate::api::JsonValue;
 
 /// Subcommand words owned by this module.
-pub const CLI_COMMANDS: &[&str] = &["agent", "pane", "workspace", "coords", "editor", "find", "repaint"];
+pub const CLI_COMMANDS: &[&str] = &["agent", "pane", "window", "workspace", "coords", "editor", "find", "repaint"];
 
 /// True when `first` is one of [`CLI_COMMANDS`].
 pub fn is_cli_command(first: Option<&str>) -> bool {
@@ -144,6 +144,8 @@ Usage:
   bilterm pane mail [SELECTOR]
   bilterm pane mail-ack [SELECTOR | --all]
   bilterm pane remote [SELECTOR]
+  bilterm window list
+  bilterm window rename [ID] <NEW_NAME>
   bilterm workspace list
   bilterm workspace select <NAME|wN>
   bilterm workspace new <NAME>
@@ -168,6 +170,7 @@ pub fn parse(args: &[String], env: &CliEnv) -> Result<RpcCall, String> {
     match cmd.as_str() {
         "agent" => agent_cmd::parse_agent(&p, env),
         "pane" => parse_pane(&p, env),
+        "window" => parse_window(&p, env),
         "workspace" => parse_workspace(&p),
         "coords" => coords_cmd::parse_coords(&p, env),
         "editor" => editor_cmd::parse_editor(&p, env),
@@ -220,6 +223,33 @@ fn parse_pane(p: &Parsed, env: &CliEnv) -> Result<RpcCall, String> {
             Ok(call("pane.send", base_params(env, e)))
         }
         other => Err(format!("unknown pane subcommand '{other}'\n{}", usage())),
+    }
+}
+
+fn parse_window(p: &Parsed, env: &CliEnv) -> Result<RpcCall, String> {
+    let (sub, rest) = p.pos.split_first().ok_or_else(usage)?;
+    match sub.as_str() {
+        "list" | "ls" => Ok(call("window.list", base_params(env, vec![]))),
+        "rename" | "renname" | "name" => {
+            if rest.is_empty() {
+                return Err("window rename needs NEW_NAME (or ID NEW_NAME)".to_string());
+            }
+            let (window_id, new_name) = if rest.len() >= 2 && rest[0].parse::<usize>().is_ok() {
+                (
+                    rest[0].parse::<i64>().ok().map(JsonValue::Number),
+                    rest[1..].join(" "),
+                )
+            } else {
+                (None, rest.join(" "))
+            };
+            let mut e = vec![("new_name", str_val(&new_name))];
+            if let Some(id) = window_id {
+                e.push(("window_id", id));
+            }
+            Ok(call("window.rename", base_params(env, e)))
+        }
+        "undo" => Ok(call("window.undo", base_params(env, vec![]))),
+        other => Err(format!("unknown window subcommand '{other}'\n{}", usage())),
     }
 }
 
