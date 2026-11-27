@@ -488,8 +488,10 @@ impl WindowManager {
     /// Focuses the next pane needing attention and returns its id (`None` plus a status message
     /// when no pane needs attention).
     ///
-    /// Picks the highest non-empty tier (Blocked > Errored > Done); inside the tier the search
-    /// cycles in [`WindowManager::ordered_pane_ids`] order starting after the active pane and wraps.
+    /// Picks the highest non-empty tier (Blocked > Errored > Done) in the active session; inside
+    /// the tier the search cycles in [`WindowManager::ordered_pane_ids`] order starting after the
+    /// active pane and wraps. Falls back to any active-session pane with unread mail/bell/prompt
+    /// (`pane_needs_attention`), and finally to any parked background session needing attention.
     pub fn jump_next_attention(&mut self) -> Option<PaneId> {
         let ids = self.ordered_pane_ids();
         let active = self.active_pane_id();
@@ -498,16 +500,40 @@ impl WindowManager {
             (0..ids.len())
                 .map(|off| ids[(start + off) % ids.len()])
                 .find(|&id| self.agent_state(id) == Some(tier))
-                .map(|id| (id, tier))
+                .map(|id| (id, tier.as_str()))
+        }).or_else(|| {
+            (0..ids.len())
+                .map(|off| ids[(start + off) % ids.len()])
+                .find(|&id| id != active && self.pane_needs_attention(id))
+                .map(|id| (id, "attention"))
         });
-        let Some((id, tier)) = target else {
-            self.active_pane_mut().set_status_message(Some("No pane needs attention".to_string()));
-            return None;
-        };
-        self.focus_and_raise(id);
-        self.sync_drawer_selection_to_active_pane();
-        self.active_pane_mut().set_status_message(Some(format!("Attention: #{id} {}", tier.as_str())));
-        Some(id)
+        if let Some((id, label)) = target {
+            self.focus_and_raise(id);
+            self.sync_drawer_selection_to_active_pane();
+            self.active_pane_mut().set_status_message(Some(format!("Attention: #{id} {label}")));
+            return Some(id);
+        }
+        let bg_target = self
+            .window_manage
+            .background_sessions
+            .iter()
+            .find_map(|(name, bg)| {
+                bg.ordered_window_ids()
+                    .into_iter()
+                    .find(|id| bg.panes.get(id).is_some_and(Self::background_pane_needs_attention))
+                    .map(|id| (name.clone(), id))
+            });
+        if let Some((sess_name, id)) = bg_target
+            && self.switch_or_create_session(&sess_name).is_ok()
+        {
+            self.focus_and_raise(id);
+            self.sync_drawer_selection_to_active_pane();
+            self.active_pane_mut()
+                .set_status_message(Some(format!("Attention: session '{sess_name}' #{id}")));
+            return Some(id);
+        }
+        self.active_pane_mut().set_status_message(Some("No pane needs attention".to_string()));
+        None
     }
 
     /// Sets the lines per drawer row for the active style (`drawer.row_lines` in Navigator,

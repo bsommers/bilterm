@@ -898,6 +898,16 @@ pub fn render_navigator_drawer(
             let line = format!("{}{text}", " ".repeat(indent));
             write_clipped_line(buf, inner.x, y + 1, inner.width, &line, style.remove_modifier(Modifier::BOLD));
         }
+        if !row.is_focused_pane && wm.drawer_row_needs_attention(row) {
+            crate::ui::attention_ui::paint_drawer_row_left_attention(
+                buf,
+                drawer_rect.x,
+                inner.x,
+                y,
+                cfg,
+                wm.attention_pulse_lit(std::time::Instant::now()),
+            );
+        }
     }
 
     for cell in navigator_dot_cells(wm, workspace_area) {

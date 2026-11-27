@@ -76,6 +76,10 @@ impl PaneMailTracker {
     pub(crate) fn remove(&mut self, id: PaneId) {
         self.map.remove(&id);
     }
+
+    pub(crate) fn has_unread(&self, id: PaneId) -> bool {
+        self.map.get(&id).is_some_and(|e| e.unread > 0)
+    }
 }
 
 fn phase_on(since: Instant, now: Instant) -> bool {

@@ -752,6 +752,17 @@ pub(super) fn handle_drawer_mouse_event(
         _ => {}
     }
 
+    if !wm.is_drawer_effectively_visible()
+        && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+        && crate::ui::attention_ui::left_attention_beacon_rect(wm, workspace_area)
+            .is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
+    {
+        wm.toggle_drawer();
+        let _ = wm.jump_next_attention();
+        let _ = wm.resize_all(workspace_area);
+        return Some(AppAction::Handled);
+    }
+
     let dr = wm.drawer_rect(workspace_area)?;
     super::drawer_navigator::navigator_menu_click_away(wm, &mouse, dr);
     if !rect_contains(dr, mouse.column, mouse.row) {
