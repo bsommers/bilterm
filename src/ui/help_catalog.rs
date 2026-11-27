@@ -740,6 +740,8 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":window bulk pin", "—", "Toggle pinned status for selected windows"),
     (":window undo", "u", "Undo last window or session management operation"),
     (":session undo", "—", "Undo last session or window management operation"),
+    (":window list", "—", "List all windows/panes in the active workspace"),
+    (":pane list", "—", "List all panes/windows in the active workspace (alias of :window list)"),
     (":window rename", "r (drawer)", "Rename the active or selected window (opens the interactive rename popup)"),
     (":pane rename", "—", "Rename the active window/pane (alias of :window rename)"),
     (":title", "—", "Set or edit the active window title (alias of :window rename)"),
@@ -929,6 +931,8 @@ mod tests {
     fn phase45_appearance_lifecycle_and_bare_window_tab_mcp_commands_parse_and_execute() {
         let mut wm = WindowManager::new_headless(24, 80);
         for cmd in [
+            ":window list",
+            ":pane list",
             ":window rename",
             ":pane rename",
             ":title",

@@ -203,7 +203,11 @@ impl WindowManager {
     /// Opens the interactive Window Rename dialog for `pane_id` (defaulting to selected drawer pane or active pane).
     pub fn open_window_rename_dialog(&mut self, pane_id: Option<PaneId>) {
         let rows = self.drawer_rows();
-        let drawer_pane = self.selected_drawer_pane_id();
+        let drawer_pane = if self.drawer.focused || pane_id.is_some() {
+            self.selected_drawer_pane_id()
+        } else {
+            None
+        };
         let target_id = pane_id
             .or(drawer_pane)
             .unwrap_or_else(|| self.active_pane_id());
@@ -301,6 +305,7 @@ impl WindowManager {
 
     /// Opens either the Window Rename dialog or Session Rename dialog depending on the selected Drawer row.
     pub fn open_drawer_rename_dialog(&mut self) {
+        self.release_keyboard();
         let rows = self.drawer_rows();
         match rows.get(self.drawer.selected_index) {
             Some(DrawerRow {

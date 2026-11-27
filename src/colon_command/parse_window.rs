@@ -13,8 +13,13 @@ use crate::wm::window_manage::{
 pub fn parse_window_manage_command(parts: &[&str]) -> Option<Result<ColonCommand, String>> {
     let sub = parts.first().copied()?;
     match sub {
+        "list" | "ls" => Some(Ok(if parts.len() == 1 {
+            ColonCommand::WindowManage(WindowManageOp::List)
+        } else {
+            return Some(Err("Usage: :window list | :pane list".to_string()));
+        })),
         "move" => Some(parse_window_move(&parts[1..])),
-        "rename" => Some(parse_window_rename(&parts[1..])),
+        "rename" | "renname" | "name" => Some(parse_window_rename(&parts[1..])),
         "reorder" | "order" => Some(parse_window_reorder(&parts[1..])),
         "place" => Some(parse_window_place(&parts[1..])),
         "select" => Some(parse_window_select(&parts[1..])),

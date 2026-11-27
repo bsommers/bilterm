@@ -474,6 +474,16 @@ impl CompositePane {
         self.title = title.into();
     }
 
+    /// Sets an explicit user-chosen window/pane title and locks it against automatic shell OSC 0/2 overwrites.
+    pub fn set_custom_title(&mut self, title: impl Into<String>) {
+        self.title = title.into();
+        self.title_locked = true;
+    }
+
+    pub fn is_title_locked(&self) -> bool {
+        self.title_locked
+    }
+
     pub fn vt(&self) -> &VtParser {
         &self.vt
     }
