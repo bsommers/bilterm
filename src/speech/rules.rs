@@ -211,7 +211,7 @@ pub fn word_to_phonemes(word: &str) -> Vec<Ph> {
         let mut matched = false;
         for r in rules {
             let end = i + r.mat.len();
-            if end <= w.len() - 1
+            if end < w.len()
                 && w[i..end] == r.mat[..]
                 && match_left(&w, i, &r.left)
                 && match_right(&w, end, &r.right)

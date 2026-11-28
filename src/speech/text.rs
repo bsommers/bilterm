@@ -64,7 +64,7 @@ pub fn number_words(digits: &str) -> Vec<String> {
             out.push(name.to_string());
         }
     }
-    if n % 1000 > 0 {
+    if !n.is_multiple_of(1000) {
         push_below_1000(n % 1000, &mut out);
     }
     out
