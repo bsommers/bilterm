@@ -151,6 +151,7 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/dos/backend/textbuf_tests.rs", "test code: in-process fake QMP server on loopback"),
     ("src/dos/launch/tests.rs", "D2a #[ignore] smoke test reads QEMU curses output from a test-owned PTY; no production I/O"),
     ("src/dos/backend/qmp.rs", "D1b QMP control socket to the emulator (loopback/0700 unix socket); JSON commands only, guest screen is read via pmemsave files, not terminal traffic"),
+    ("src/editor/preview.rs", "loopback-only Artifact Studio and HTML preview HTTP server; local browser UI traffic, not terminal traffic"),
 ];
 
 /// Taps implemented by a wrapper or accessor type rather than an adjacent call.

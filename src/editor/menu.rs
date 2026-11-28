@@ -29,6 +29,7 @@ pub enum MenuCmd {
     Goto,
     Wrap,
     Render,
+    Preview,
     Keys,
 }
 
@@ -53,6 +54,7 @@ impl MenuCmd {
         (Self::Goto, "goto"),
         (Self::Wrap, "wrap"),
         (Self::Render, "render"),
+        (Self::Preview, "preview"),
         (Self::Keys, "keys"),
     ];
 
@@ -135,6 +137,7 @@ pub const MENUS: &[Menu] = &[
         items: &[
             it("Soft wrap", 'w', "Ctrl+L", Some(MenuCmd::Wrap), "Toggle soft wrapping of long lines"),
             it("Rendered view", 'r', "", Some(MenuCmd::Render), "Toggle rendered Markdown / interactive checklist reading view"),
+            it("Browser preview", 'p', "", Some(MenuCmd::Preview), "Open or refresh live HTML/JS/Markdown preview in a browser pane"),
             it("Line numbers", 'l', "", None, "Not available yet"),
         ],
     },

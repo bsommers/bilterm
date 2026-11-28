@@ -366,6 +366,55 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     acc == 0
 }
 
+/// Generates a 256-bit lowercase hex token from the OS CSPRNG
+/// (`/dev/urandom` on Unix, `BCryptGenRandom` on Windows).
+pub fn random_token_hex() -> io::Result<String> {
+    #[cfg(unix)]
+    {
+        use std::io::Read;
+        let mut buf = [0u8; 32];
+        fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+        Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "bcrypt")]
+        unsafe extern "system" {
+            fn BCryptGenRandom(
+                h_algorithm: *mut std::ffi::c_void,
+                pb_buffer: *mut u8,
+                cb_buffer: u32,
+                dw_flags: u32,
+            ) -> i32;
+        }
+        const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+        let mut buf = [0u8; 32];
+        // Validated invariants for BCryptGenRandom:
+        // 1. Null algorithm handle is valid when BCRYPT_USE_SYSTEM_PREFERRED_RNG is set.
+        // 2. Returned NTSTATUS (0 == STATUS_SUCCESS) is checked before reading `buf`.
+        // SAFETY: `buf` is a uniquely owned 32-byte writable buffer matching `buf.len() as u32`.
+        let status = unsafe {
+            BCryptGenRandom(
+                std::ptr::null_mut(),
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+            )
+        };
+        if status != 0 {
+            return Err(io::Error::other(format!("BCryptGenRandom failed: {status:#x}")));
+        }
+        Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "OS CSPRNG unavailable on this platform",
+        ))
+    }
+}
+
 /// Generates a process-unique, time-monotonic suffix string (`<pid>-<nanos>-<seq>`).
 pub fn unique_suffix() -> String {
     format!(
@@ -448,6 +497,16 @@ pub(crate) fn short_tempdir() -> tempfile::TempDir {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn random_token_hex_is_64_hex_chars_and_unique() {
+        let a = random_token_hex().unwrap();
+        let b = random_token_hex().unwrap();
+        assert_eq!(a.len(), 64, "{a}");
+        assert!(a.bytes().all(|c| c.is_ascii_hexdigit()), "{a}");
+        assert_ne!(a, b);
+        assert_ne!(a, "0".repeat(64));
+    }
+
     use super::*;
     #[cfg(unix)]
     use std::fs::Permissions;

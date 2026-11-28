@@ -124,7 +124,7 @@ impl AutomationControlPlane {
                         } else if tool_name == "bilterm_dos" {
                             Err("missing or invalid 'action' parameter: run, setup, doctor, remove, status, reset, snapshot, restore".to_string())
                         } else if tool_name == "bilterm_editor" {
-                            Err("missing or invalid 'action' parameter: open, scratch, artifact, save, save_as, wrap, render, check, broadcast, find, undo, redo, goto, revert, insert, text, status, close or menu".to_string())
+                            Err("missing or invalid 'action' parameter: open, scratch, artifact, board, save, save_as, wrap, render, check, broadcast, preview, find, undo, redo, goto, revert, insert, text, status, close or menu".to_string())
                         } else if tool_name == "bilterm_web_surface" {
                             Err("invalid 'action' parameter: status, open, external, port or stop".to_string())
                         } else if tool_name == "bilterm_clipboard" {
@@ -371,11 +371,11 @@ impl AutomationControlPlane {
             ),
             Self::mcp_tool_schema(
                 "bilterm_editor",
-                "Built-in text/markdown editor window, scratchpad, and live ContextBus-backed shared artifact editor. Same verbs as `:edit`, `:scratch`, `:artifact`, and `:editor ...`. open (with path), save, save_as and revert touch host files, need [api] allow_config_write and must stay under the editor working directory; artifact and broadcast need [api] allow_artifact_write (or allow_config_write); overwriting needs force=true. Plain UTF-8 text only, regular files only, 4 MiB max.",
+                "Built-in text/markdown editor window, scratchpad, and live ContextBus-backed shared artifact editor. Same verbs as `:edit`, `:scratch`, `:artifact`, `:board`, and `:editor ...`. open (with path), save, save_as and revert touch host files, need [api] allow_config_write and must stay under the editor working directory; artifact, board and broadcast need [api] allow_artifact_write (or allow_config_write); overwriting needs force=true. Plain UTF-8 text only, regular files only, 4 MiB max.",
                 &[
-                    ("action", "string", "Operation: open | scratch | artifact | save | save_as | wrap | render | check | broadcast | find | undo | redo | goto | revert | insert | text | status | close | menu"),
+                    ("action", "string", "Operation: open | scratch | artifact | board | save | save_as | wrap | render | check | broadcast | preview | find | undo | redo | goto | revert | insert | text | status | close | menu"),
                     ("path", "string", "With open (optional; omitted = new unnamed buffer) or save_as"),
-                    ("name", "string", "With scratch or artifact: buffer name (default 'scratch' / 'shared')"),
+                    ("name", "string", "With scratch, artifact, or board: buffer name (default 'scratch' / 'shared')"),
                     ("note", "string", "With broadcast: optional summary note sent to agents"),
                     ("force", "boolean", "With save|save_as|close: overwrite an existing/changed file, or discard unsaved changes"),
                     ("enabled", "boolean", "With wrap or render: on/off (omitted = toggle)"),
@@ -385,7 +385,7 @@ impl AutomationControlPlane {
                     ("text", "string", "With insert: text inserted at the cursor"),
                     ("op", "string", "With menu: open (default) | close | do"),
                     ("menu", "string", "With menu open: file | edit | search | view | help"),
-                    ("item", "string", "With menu do: item name (new save save-as revert broadcast close undo redo cut copy paste select-all toggle-check find find-next find-prev goto wrap render keys)"),
+                    ("item", "string", "With menu do: item name (new save save-as revert broadcast close undo redo cut copy paste select-all toggle-check find find-next find-prev goto wrap render preview keys)"),
                 ],
             ),
             Self::mcp_tool_schema(

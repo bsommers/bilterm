@@ -54,12 +54,14 @@ const VERBS: &[(&str, &str, &str)] = &[
     ("open", ":edit /tmp/x.md", ":edit"),
     ("scratch", ":scratch", ":scratch"),
     ("artifact", ":artifact plan", ":artifact"),
+    ("board", ":board plan", ":board"),
     ("save", ":editor save", ":editor save"),
     ("save_as", ":editor saveas /tmp/x.md", ":editor saveas <path>"),
     ("wrap", ":editor wrap on", ":editor wrap"),
     ("render", ":editor render on", ":editor render"),
     ("check", ":editor check", ":editor check"),
     ("broadcast", ":editor broadcast ready", ":editor broadcast [note]"),
+    ("preview", ":editor preview", ":editor preview"),
     ("find", ":editor find abc", ":editor find <text>"),
     ("undo", ":editor undo", ":editor undo"),
     ("redo", ":editor redo", ":editor redo"),
@@ -88,12 +90,14 @@ fn every_editor_verb_has_colon_palette_rpc_mcp_and_cli() {
         (vec!["editor", "open", "/tmp/a.md"], "editor.open"),
         (vec!["editor", "scratch"], "editor.scratch"),
         (vec!["editor", "artifact", "plan"], "editor.artifact"),
+        (vec!["editor", "board", "plan"], "editor.board"),
         (vec!["editor", "save", "--force"], "editor.save"),
         (vec!["editor", "saveas", "/tmp/b.md"], "editor.save_as"),
         (vec!["editor", "wrap", "off"], "editor.wrap"),
         (vec!["editor", "render", "on"], "editor.render"),
         (vec!["editor", "check"], "editor.check"),
         (vec!["editor", "broadcast", "ready"], "editor.broadcast"),
+        (vec!["editor", "preview"], "editor.preview"),
         (vec!["editor", "find", "x"], "editor.find"),
         (vec!["editor", "findprev", "x"], "editor.find"),
         (vec!["editor", "goto", "4"], "editor.goto"),
@@ -395,4 +399,59 @@ fn editor_broadcast_notifies_named_agents_and_refuses_file_buffers() {
     let e = cp.dispatch_method("editor.broadcast", &json("{}")).unwrap_err();
     assert!(e.contains("shared artifact"), "{e}");
     assert!(cp.wm.context_bus().list(Some("artifact:")).iter().all(|e| e.key == "artifact:spec"));
+}
+
+#[test]
+fn editor_board_and_preview_redact_tokens_and_studio_html_has_csp() {
+    let (_g, d) = sandbox();
+    // SAFETY: serialized by sandbox() mutex across tests in this binary.
+    unsafe { std::env::set_var("BILTERM_BROWSER_SYNTHETIC", "1") };
+    let mut cp = AutomationControlPlane::new_headless(30, 100);
+    // API callers need allow_config_write for board and preview (touches_files).
+    assert!(cp.dispatch_method("editor.board", &json(r#"{"name":"plan"}"#)).is_err());
+    assert!(cp.dispatch_method("editor.preview", &json("{}")).is_err());
+    cp.wm.config_mut().api.allow_config_write = true;
+
+    // `:board` reply url and message must be redacted (never expose the 64-char secret token).
+    let board = cp.dispatch_method("editor.board", &json(r#"{"name":"plan"}"#)).unwrap();
+    let board_url = board.get("url").and_then(JsonValue::as_str).unwrap();
+    let board_msg = board.get("message").and_then(JsonValue::as_str).unwrap();
+    assert!(board_url.ends_with(".../"), "expected redacted board url: {board_url}");
+    assert!(board_msg.contains(".../"), "expected redacted board message: {board_msg}");
+    let board_seg = board_url.trim_end_matches('/').rsplit('/').next().unwrap();
+    assert!(board_seg.len() <= 10, "token must not appear in board url: {board_url}");
+
+    // `:editor preview` reply url and message must likewise be redacted.
+    cp.dispatch_method("editor.artifact", &json(r#"{"name":"spec"}"#)).unwrap();
+    let prev = cp.dispatch_method("editor.preview", &json("{}")).unwrap();
+    let prev_url = prev.get("url").and_then(JsonValue::as_str).unwrap();
+    let prev_msg = prev.get("message").and_then(JsonValue::as_str).unwrap();
+    assert!(prev_url.ends_with(".../"), "expected redacted preview url: {prev_url}");
+    assert!(prev_msg.contains(".../"), "expected redacted preview message: {prev_msg}");
+    let prev_seg = prev_url.trim_end_matches('/').rsplit('/').next().unwrap();
+    assert!(prev_seg.len() <= 10, "token must not appear in preview url: {prev_url}");
+
+    // Studio HTML escapes `</script>` breakouts and injects `connect-src 'none'` into iframe srcdoc.
+    let html = bilterm::editor::studio_web::studio_app_html("/tok__INIT__", "a</script><script>alert(1)");
+    assert!(!html.contains("a</script><script>"), "unencoded </script> breakout in studio HTML");
+    assert!(html.contains("\\u003c/script\\u003e"), "expected unicode-escaped script tag");
+    assert!(html.contains("connect-src 'none'"), "Studio iframe srcdoc must enforce connect-src 'none'");
+
+    // Same-basename files in different directories get distinct, validate_safe_name-compliant studio keys.
+    let dir_a = d.path().join("a");
+    let dir_b = d.path().join("b");
+    std::fs::create_dir_all(&dir_a).unwrap();
+    std::fs::create_dir_all(&dir_b).unwrap();
+    let file_a = dir_a.join("README.md");
+    let file_b = dir_b.join("README.md");
+    std::fs::write(&file_a, "# A").unwrap();
+    std::fs::write(&file_b, "# B").unwrap();
+    let key_a = bilterm::editor::EditorState::open_file(&file_a).unwrap().studio_artifact_name();
+    let key_b = bilterm::editor::EditorState::open_file(&file_b).unwrap().studio_artifact_name();
+    assert_ne!(key_a, key_b, "same-basename files must not collide: {key_a} vs {key_b}");
+    assert!(key_a.starts_with("file-readme-md-"), "{key_a}");
+    assert!(bilterm::secure_fs::validate_safe_name(&key_a).is_ok());
+    assert!(bilterm::secure_fs::validate_safe_name(&key_b).is_ok());
+    assert!(bilterm::editor::preview::is_raw_html_path(Some(std::path::Path::new("demo.html"))));
+    assert!(bilterm::editor::preview::is_raw_html_path(Some(std::path::Path::new("chart.svg"))));
 }

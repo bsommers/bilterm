@@ -282,6 +282,9 @@ pub struct WindowManager {
     pub(crate) clipboard_registry: clipboard_registry::ClipboardRegistry,
     /// Floating, pinnable, dockable `CLIPBOARD` viewer window (`CLIP-03`, Phase 57).
     pub(crate) clipboard_window: clipboard_window::ClipboardWindowState,
+    /// Shared Artifact Studio loopback server & pane id (`:board`, `EDIT-07`).
+    pub(crate) artifact_studio_server: Option<crate::editor::preview::PreviewServer>,
+    pub(crate) artifact_studio_pane: Option<PaneId>,
     /// Terminal traffic meter (`TMON-01`, Phase 64); one per window manager, no globals.
     traffic_meter: crate::traffic::TrafficMeter,
     /// Title-bar `D:(W,S,Y,P)` coordinate badge style (`COORD-03`, Phase 71).
@@ -441,6 +444,8 @@ impl WindowManager {
             command_window: command_window::CommandWindowState::default(),
             clipboard_registry: clipboard_registry::ClipboardRegistry::new(),
             clipboard_window: clipboard_window::ClipboardWindowState::default(),
+            artifact_studio_server: None,
+            artifact_studio_pane: None,
             traffic_meter: crate::traffic::TrafficMeter::new(),
             coord_style: coordinates::CoordDisplayStyle::Off,
             traffic_monitor: traffic_monitor::TrafficMonitorState::default(),
@@ -798,6 +803,18 @@ impl WindowManager {
         self.z_stack.remove(target_id);
         if self.zoomed_pane == Some(target_id) {
             self.zoomed_pane = None;
+        }
+        if self.artifact_studio_pane == Some(target_id) {
+            self.artifact_studio_pane = None;
+            self.artifact_studio_server = None;
+        }
+        for pane in self.panes.values_mut() {
+            if let Some(ed) = pane.editor_mut()
+                && ed.preview_pane == Some(target_id)
+            {
+                ed.preview_pane = None;
+                ed.preview_server = None;
+            }
         }
         self.fleet.remove_pane_references(target_id);
         self.agent_mail.remove_pane(target_id);

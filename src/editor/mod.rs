@@ -13,7 +13,9 @@ mod keys;
 pub mod menu;
 mod menu_render;
 pub mod op;
+pub mod preview;
 mod render;
+pub mod studio_web;
 
 use std::path::{Path, PathBuf};
 
@@ -97,6 +99,11 @@ pub struct EditorState {
     /// `(buffer version, text width, rows)` of the last rendered-view pass.
     pub(crate) rows_cache: Option<RowsCache>,
     last_disk_check: Option<std::time::Instant>,
+    /// Optional live loopback preview server and linked browser pane id (`:editor preview`).
+    pub(crate) preview_server: Option<preview::PreviewServer>,
+    pub(crate) preview_pane: Option<usize>,
+    /// Buffer revision last pushed to `preview_server` (avoids redundant raw-HTML reloads).
+    pub(crate) preview_pushed_rev: u64,
     /// Row-to-source-line map from the latest rendered view pass (used for click-to-toggle).
     pub(crate) rendered_rows: Vec<(usize, bool)>,
     top: usize,
@@ -142,6 +149,9 @@ impl EditorState {
             progress_cache: None,
             rows_cache: None,
             last_disk_check: None,
+            preview_server: None,
+            preview_pane: None,
+            preview_pushed_rev: u64::MAX,
             rendered_rows: Vec::new(),
             top: 0,
             left: 0,
@@ -261,6 +271,7 @@ impl EditorState {
         self.stamp = Some(stamp);
         self.external_change = false;
         self.buf.mark_saved();
+        self.refresh_preview_body();
         Ok(format!("saved {}", path.display()))
     }
 
@@ -282,6 +293,7 @@ impl EditorState {
             self.markdown = is_markdown_path(path);
             self.path = Some(path.to_path_buf());
         }
+        self.refresh_preview_body();
         Ok(format!("saved {}", path.display()))
     }
 
@@ -316,6 +328,7 @@ impl EditorState {
         self.trailing_newline = l.trailing_newline;
         self.stamp = l.stamp;
         self.external_change = false;
+        self.refresh_preview_body();
         Ok(format!("reverted {}", path.display()))
     }
 
@@ -346,6 +359,7 @@ impl EditorState {
                 self.stamp = l.stamp;
                 self.external_change = false;
                 self.message = Some("reloaded from disk".into());
+                self.refresh_preview_body();
                 return true;
             }
             return false;
@@ -389,6 +403,7 @@ impl EditorState {
         self.autosaved_rev = u64::MAX;
         self.external_change = false;
         self.message = Some(format!("synced from shared bus (rev {rev})"));
+        self.refresh_preview_body();
         true
     }
 
@@ -444,6 +459,7 @@ impl EditorState {
                     "{} ({done}/{total} done)",
                     if checked { "checked" } else { "unchecked" }
                 ));
+                self.refresh_preview_body();
                 Ok(checked)
             }
             None => Err("no Markdown checkbox (- [ ] / - [x]) on current line".into()),
@@ -457,6 +473,93 @@ impl EditorState {
         self.render_mode
     }
 
+    /// Returns raw `(body, content_type)` when previewing an `.html`/`.htm`/`.svg` file directly,
+    /// or `None` when using the interactive Shared Artifact Studio web app.
+    pub fn raw_preview_body(&self) -> Option<(String, &'static str)> {
+        if !preview::is_raw_html_path(self.path.as_deref()) {
+            return None;
+        }
+        let is_svg = self
+            .path
+            .as_deref()
+            .and_then(|p| p.extension())
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("svg"));
+        let ct = if is_svg { "image/svg+xml; charset=utf-8" } else { "text/html; charset=utf-8" };
+        Some((self.buf.text(), ct))
+    }
+
+    /// Safe, collision-resistant artifact name (`validate_safe_name`-compliant, lowercase) used
+    /// when publishing this buffer to Artifact Studio.
+    ///
+    /// Shared artifacts use their canonical lowercase name. File buffers are namespaced with a
+    /// short path hash (`file-<slug>-<hash8>`) so two files with the same basename or a file
+    /// named `plan.md` never collide with `:artifact plan`.
+    pub fn studio_artifact_name(&self) -> String {
+        if let Some(n) = self.artifact_name() {
+            return n.to_ascii_lowercase();
+        }
+        let slug = preview::slugify_artifact_name(&self.display_name());
+        let base = if slug.is_empty() { DEFAULT_ARTIFACT.to_string() } else { slug };
+        if let Some(p) = &self.path {
+            let mut h: u32 = 0x811c_9dc5;
+            for b in p.to_string_lossy().as_bytes() {
+                h ^= u32::from(*b);
+                h = h.wrapping_mul(0x0100_0193);
+            }
+            let prefix_max = 64 - "file-".len() - "-00000000".len();
+            let short: String = base.chars().take(prefix_max).collect();
+            let short = short.trim_end_matches('-');
+            let stem = if short.is_empty() { "doc" } else { short };
+            return format!("file-{stem}-{h:08x}");
+        }
+        if let EditorKind::Scratch(n) = &self.kind {
+            let s = preview::slugify_artifact_name(n);
+            let stem = if s.is_empty() { "scratch" } else { &s };
+            let capped: String = format!("scratch-{stem}").chars().take(64).collect();
+            return capped.trim_end_matches('-').to_string();
+        }
+        let capped: String = format!("preview-{base}").chars().take(64).collect();
+        capped.trim_end_matches('-').to_string()
+    }
+
+    /// Starts (if needed) and updates the loopback Artifact Studio / preview server.
+    /// Returns `(full_url_for_opener, redacted_url_for_display)`.
+    pub fn ensure_preview_server(
+        &mut self,
+        bus: crate::wm::context_bus::ContextBus,
+        persist_dir: Option<PathBuf>,
+    ) -> Result<(String, String), String> {
+        let name = self.studio_artifact_name();
+        let raw = self.raw_preview_body();
+        if raw.is_none() && !self.is_artifact() {
+            bus.set(&artifact_bus_key(&name), &self.buf.text(), None)
+                .map_err(|e| format!("artifact sync: {e}"))?;
+        }
+        self.preview_pushed_rev = self.buf.revision();
+        if let Some(srv) = &self.preview_server {
+            srv.update(name, raw);
+            return Ok((srv.url().to_string(), srv.redacted_url().to_string()));
+        }
+        let srv = preview::PreviewServer::start(bus, name, raw, persist_dir)
+            .map_err(|e| format!("preview server: {e}"))?;
+        let urls = (srv.url().to_string(), srv.redacted_url().to_string());
+        self.preview_server = Some(srv);
+        Ok(urls)
+    }
+
+    /// Pushes current buffer content to an already-running preview server (no-op if none).
+    pub fn refresh_preview_body(&mut self) {
+        if let Some(srv) = &self.preview_server {
+            srv.update(self.studio_artifact_name(), self.raw_preview_body());
+            self.preview_pushed_rev = self.buf.revision();
+        }
+    }
+
+    /// Drains pending `(artifact_name, note)` broadcast clicks from the web Artifact Studio.
+    pub fn take_preview_broadcasts(&self) -> Vec<(String, String)> {
+        self.preview_server.as_ref().map_or_else(Vec::new, preview::PreviewServer::take_pending_broadcasts)
+    }
     pub fn set_wrap(&mut self, on: Option<bool>) -> bool {
         self.wrap = on.unwrap_or(!self.wrap);
         self.left = 0;

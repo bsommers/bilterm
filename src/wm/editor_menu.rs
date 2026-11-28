@@ -66,6 +66,7 @@ impl WindowManager {
             MenuCmd::ToggleCheck => Some(EditorOp::Check),
             MenuCmd::Wrap => Some(EditorOp::Wrap(None)),
             MenuCmd::Render => Some(EditorOp::Render(None)),
+            MenuCmd::Preview => Some(EditorOp::Preview),
             _ => None,
         };
         if let Some(op) = delegated {
