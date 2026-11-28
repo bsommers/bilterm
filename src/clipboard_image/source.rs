@@ -381,7 +381,7 @@ mod tests {
             return;
         }
         let bytes = r.expect("clipboard image read");
-        let info = super::detect::sniff(&bytes).expect("sniff");
+        let info = crate::clipboard_image::detect::sniff(&bytes).expect("sniff");
         eprintln!("host clipboard image: {:?} {}x{} {} bytes", info.kind, info.width, info.height, bytes.len());
     }
 }
