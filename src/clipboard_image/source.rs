@@ -368,4 +368,20 @@ mod tests {
         let r = SystemRunner.run(&RunSpec { prog: "sh", args: &ok, max_bytes: 10, timeout: Duration::from_secs(2) });
         assert_eq!(r, RunOutcome::Output(b"abc".to_vec()));
     }
+
+    /// Manual platform check: put an image on the host clipboard first, then run
+    /// `cargo test -p bilterm --lib real_host_clipboard_image -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "needs a real clipboard image (set BILTERM_EXPECT_CLIPBOARD_IMAGE=1)"]
+    fn real_host_clipboard_image() {
+        let src = ShellImageSource::system();
+        let r = src.read(&ImageLimits::default());
+        if std::env::var_os("BILTERM_EXPECT_CLIPBOARD_IMAGE").is_none() {
+            eprintln!("no expectation set, result: {:?}", r.as_ref().map(|b| b.len()));
+            return;
+        }
+        let bytes = r.expect("clipboard image read");
+        let info = super::detect::sniff(&bytes).expect("sniff");
+        eprintln!("host clipboard image: {:?} {}x{} {} bytes", info.kind, info.width, info.height, bytes.len());
+    }
 }
