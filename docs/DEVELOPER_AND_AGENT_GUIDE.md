@@ -483,6 +483,26 @@ rendered inactive and `src/ui/kbd_badge.rs` draws `KBD:<WINDOW>` on its status r
 
 **Drawer row highlight.** Both drawer styles mark rows through `src/ui/drawer/highlight.rs` (`RowMark`, `mark_style`), using only `ThemePalette` roles. *Selected* (keyboard cursor or clicked row) is the strong mark: a `window_frame_bg`->`active_border_fg` bar with bold `title_fg` in modern looks, reverse video in classic looks or when the palette colours cannot be blended. *Hover* (mouse pointer) is the light mark: a faint tint plus underline, never reverse video. Policy: last input wins. A pointer move lowers to `Action::DrawerNav(DrawerNavOp::Hover(row))` (row resolved by `src/input/drawer_hover.rs`, a pointer-only gesture with no colon/RPC twin by design since it is transient view state), and any selection change (`on_drawer_selection_changed`) clears `WorkspaceDrawer::hover_row`; a hovered row that is also selected shows the selected mark. Tests: `src/ui/drawer/highlight_tests.rs`, `src/input/drawer_hover_tests.rs`.
 
+## 6f0. Retro speech (`TTS-01`)
+
+`src/speech/` is a self-contained text-to-speech engine; `src/colon_command/{parse,execute}_speech.rs`, `src/api/rpc_speech.rs`,
+`src/wm/speech_ops.rs` and the `bilterm_speech` MCP tool are the thin surfaces over it.
+
+| File | Role |
+|------|------|
+| `text.rs`, `rules.rs`, `rules_data.rs` | normalisation, exception lexicon, NRL-style letter-to-sound rules (add a rule line, keep specific before general) |
+| `phoneme.rs`, `prosody.rs`, `track.rs` | phoneme formant table, stress/duration/pauses, parameter segments and intonation |
+| `klatt.rs`, `fx.rs`, `voice.rs`, `detmath.rs` | synthesis core, voice colouring, presets and bounds, deterministic sin/exp |
+| `render.rs` | pure `render_text(text, opts) -> PCM` (the golden-hash tests live here) |
+| `player.rs`, `service.rs` | shell-out players (mockable `Player` trait), worker thread with bounded queue and cancel |
+| `cli.rs` | `bilterm say` and the option grammar shared with `:say` |
+
+Rules: never use `f64::sin/exp` in the synth path (platform libm differs; use `detmath`), so the PCM stays byte-identical on every OS.
+After an intentional DSP change copy the new hashes printed by `golden_pcm_hashes` into `GOLDEN`. Bounds live in `voice.rs`
+(`MAX_TEXT_CHARS`, `MAX_AUDIO_SECONDS`, speed/pitch ranges) and `service.rs` (`QUEUE_DEPTH`); every surface re-validates through
+`SpeechOp::say` / `SpeechOp::options`. Tests inject a `RecordingPlayer` with `WindowManager::install_speech_service`; never let a test
+call a real player.
+
 ## 6f. The Traffic Monitor window (Phase 64-03)
 
 `src/traffic/**` is the std-only metrics leaf (64-01); `src/wm/traffic_monitor*.rs`, `src/ui/traffic_monitor_{ui,gui}.rs`,

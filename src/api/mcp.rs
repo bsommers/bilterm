@@ -103,6 +103,7 @@ impl AutomationControlPlane {
                     "bilterm_clipboard" => Some(Self::clipboard_method(&args).unwrap_or("")),
                     "bilterm_traffic" => Some(Self::traffic_method(&args).unwrap_or("")),
                     "bilterm_voice" => Some(Self::voice_method(&args).unwrap_or("")),
+                    "bilterm_speech" => Some(Self::speech_method(&args).unwrap_or("")),
                     "bilterm_browser" => Some(Self::browser_method(&args).unwrap_or("")),
                     "bilterm_video" => Some(Self::video_method(&args).unwrap_or("")),
                     "bilterm_keys" => Some(Self::keys_method(&args).unwrap_or("")),
@@ -136,6 +137,8 @@ impl AutomationControlPlane {
                             Err("missing or invalid 'action' parameter: snapshot, history, window, reset, or config".to_string())
                         } else if tool_name == "bilterm_session_find" {
                             Err("invalid 'action' parameter: locate, focus, send, beep, flash or select".to_string())
+                        } else if tool_name == "bilterm_speech" {
+                            Err("invalid 'action' parameter: say, stop, status or voices".to_string())
                         } else if tool_name == "bilterm_voice" {
                             Err("missing or invalid 'action' parameter: toggle, start, stop, cancel, status, provider, or inject_wav".to_string())
                         } else {
@@ -449,6 +452,18 @@ impl AutomationControlPlane {
                 ],
             ),
             Self::mcp_tool_schema(
+                "bilterm_speech",
+                "Speak text aloud with the offline retro text-to-speech synthesizer (1980s SAM/Votrax/DECtalk/Tron style formant speech: rule-based, no models or network). Non-blocking: audio is rendered and played on a background worker. Use action=stop to cancel.",
+                &[
+                    ("action", "string", "Operation: say | stop | status | voices (default 'say')"),
+                    ("text", "string", "Text to speak (action=say; max 2000 characters, 30 seconds of audio)"),
+                    ("voice", "string", "Voice preset: robot | tron | votrax | sam | dectalk (default robot)"),
+                    ("speed", "number", "Speaking rate multiplier 0.5..3.0 (default 1.0)"),
+                    ("pitch", "number", "Base pitch in Hz 50..300 (default per voice)"),
+                    ("wav", "string", "Write <runtime>/speech/<name>.wav (letters, digits, - _) instead of playing"),
+                ],
+            ),
+            Self::mcp_tool_schema(
                 "bilterm_browser",
                 "Open, navigate, or control the Chrome Engine Web Browser Canvas in the active or target pane.",
                 &[
@@ -558,6 +573,17 @@ impl AutomationControlPlane {
             "status" => Some("voice.status"),
             "provider" => Some("voice.provider"),
             "inject_wav" => Some("voice.inject_wav"),
+            _ => None,
+        }
+    }
+
+    /// `bilterm_speech` `action` argument -> the `speech.*` RPC method; `None` when unknown.
+    fn speech_method(args: &JsonValue) -> Option<&'static str> {
+        match args.get("action").and_then(JsonValue::as_str).unwrap_or("say") {
+            "say" | "speak" => Some("speech.say"),
+            "stop" | "cancel" => Some("speech.stop"),
+            "status" => Some("speech.status"),
+            "voices" => Some("speech.voices"),
             _ => None,
         }
     }

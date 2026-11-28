@@ -145,6 +145,9 @@ pub(crate) const EXTRA: &[(&str, &str, &str)] = &[
     (":tabclose", ":tab", "Alias of :tab close (close active terminal window)."),
     (":voice", "", "Speech-to-text dictation control (:voice toggle|start|stop|cancel|status|provider <kind>)."),
     (":stt", ":voice", "Alias of :voice."),
+    (":say", "", "Speak text with the offline retro formant synthesizer (:say [--voice robot|tron|votrax|sam|dectalk] [--speed X] [--pitch HZ] [--wav NAME] <text> | stop | status | voices)."),
+    (":speak", ":say", "Alias of :say."),
+    (":tts", ":say", "Alias of :say."),
 ];
 
 /// Reason for the `:finder` rows (Phase 50.1 exception E1): they drive the open Find modal.
@@ -385,6 +388,8 @@ pub(crate) const PALETTE_EXCLUSIONS: &[(&str, &str)] = &[
     (":clipboard copy", "free-text"),
     (":clipboard pin-entry", "reachable-via-picker"),
     (":clipboard delete", "reachable-via-picker"),
+    (":speak", "short-alias"),
+    (":tts", "short-alias"),
     (":voice start", "entity-id"),
     (":voice stop", "reachable-via-picker"),
     (":voice cancel", "reachable-via-picker"),

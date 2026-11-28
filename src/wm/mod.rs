@@ -81,6 +81,7 @@ pub mod session_tree;
 pub mod split_tree;
 pub mod window_drag;
 pub mod window_drag_place;
+pub mod speech_ops;
 pub mod stt_ops;
 pub mod tmux_flow;
 pub mod tmux_io;
@@ -350,6 +351,8 @@ pub struct WindowManager {
     pub(crate) stt_status: crate::stt::SttUiStatus,
     /// Handle to the background speech-to-text worker thread.
     pub(crate) stt_handle: Option<crate::stt::worker::SttHandle>,
+    /// Retro text-to-speech worker, created on first `:say` (`TTS-01`).
+    speech: Option<crate::speech::SpeechService>,
 }
 
 impl WindowManager {
@@ -474,6 +477,7 @@ impl WindowManager {
             mouse_pixel_hint: None,
             stt_status: crate::stt::SttUiStatus::default(),
             stt_handle: None,
+            speech: None,
         }
     }
 
@@ -532,6 +536,11 @@ impl WindowManager {
     pub fn stt_status_mut(&mut self) -> &mut crate::stt::SttUiStatus { &mut self.stt_status }
     pub fn drain_stt_events(&mut self) { stt_ops::drain_stt_events(self); }
     pub fn sync_stt_badges(&mut self) { stt_ops::sync_stt_badges(self); }
+    pub fn speech_service(&mut self) -> &crate::speech::SpeechService { speech_ops::ensure_speech(self) }
+    /// Replaces the speech service (tests inject a recording player).
+    pub fn install_speech_service(&mut self, svc: crate::speech::SpeechService) { self.speech = Some(svc); }
+    /// Speech status without starting the worker.
+    pub fn speech_status(&self) -> crate::speech::SpeechStatus { self.speech.as_ref().map(|s| s.status()).unwrap_or_default() }
     pub fn ensure_stt_worker(&mut self) -> Option<&mut crate::stt::worker::SttHandle> { stt_ops::ensure_stt_worker(self) }
     pub fn layout_mode(&self) -> WorkspaceLayoutMode { self.layout_mode }
     pub fn set_layout_mode(&mut self, mode: WorkspaceLayoutMode) {
