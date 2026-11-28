@@ -129,6 +129,12 @@ pub fn probe_system_clipboard_mime() -> ClipboardMimeProbe {
 
 #[cfg(not(test))]
 fn is_automated_test_process() -> bool {
+    automated_test_process()
+}
+
+/// `true` inside `cargo test` / nextest processes (integration tests are not `cfg(test)`), where
+/// host-clipboard access must never run.
+pub fn automated_test_process() -> bool {
     if std::env::var_os("RUST_TEST_THREADS").is_some()
         || std::env::var_os("NEXTEST").is_some()
         || std::env::var_os("CARGO_TARGET_TMPDIR").is_some()

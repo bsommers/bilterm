@@ -8,6 +8,7 @@ pub mod keys;
 pub mod coords;
 pub mod session_empty;
 pub use session_empty::SessionOnEmpty;
+pub mod clipboard;
 pub mod traffic;
 pub use dotted::ApiConfig;
 pub use crate::stt::SttConfig;
@@ -142,6 +143,8 @@ pub struct BiltermConfig {
     pub agents_window: agents::AgentsWindowConfig,
     /// Terminal traffic monitor settings (`[traffic]`, Phase 64).
     pub traffic: traffic::TrafficConfig,
+    /// Clipboard image paste settings (`[clipboard.images]`).
+    pub clipboard: clipboard::ClipboardConfig,
     /// Hierarchical coordinate badge settings (`[coords]`, Phase 71).
     pub coords: coords::CoordsConfig,
     /// Dynamic, memory-aware scrollback sizing (`[scrollback]`).
@@ -266,6 +269,7 @@ impl Default for BiltermConfig {
             agents: agents::AgentsSection::default(),
             agents_window: agents::AgentsWindowConfig::default(),
             traffic: traffic::TrafficConfig::default(),
+            clipboard: clipboard::ClipboardConfig::default(),
             coords: coords::CoordsConfig::default(),
             scrollback: ScrollbackConfig::default(),
             recording: Default::default(),

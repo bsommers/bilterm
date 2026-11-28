@@ -56,6 +56,8 @@ pub const DEFAULT_LEADER_BINDINGS: &[(KeyCode, Action)] = &[
     (KeyCode::Char('p'), Action::PasteClipboard),
     (KeyCode::Char('v'), Action::PasteClipboard),
     (KeyCode::Char(']'), Action::PasteClipboard),
+    // Clipboard image: store privately and paste the file path (`Ctrl+X (`; no global chord: smart `Ctrl+V` covers it)
+    (KeyCode::Char('('), Action::ClipboardWindow(ClipboardWindowOp::PasteImage)),
     // Speech-to-Text Voice Dictation toggle (`Ctrl+X ,`, STT-03)
     (KeyCode::Char(','), Action::Voice(VoiceOp::Toggle)),
     // Filterable CLIPBOARD viewer window toggle (`Ctrl+X ;`, Phase 57)

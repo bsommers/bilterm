@@ -204,10 +204,13 @@ impl WindowManager {
     pub fn sync_history_config(&mut self) {
         let settings = self.config.history_settings();
         let smart_ctrl_v = self.config.smart_ctrl_v_paste;
+        let images = self.config.clipboard.images.settings();
         for pane in self.panes.values_mut() {
             Self::attach_history(pane, &settings);
             pane.set_smart_ctrl_v_paste(smart_ctrl_v);
+            pane.set_image_paste(images);
         }
+        self.quick_terminal.pane.set_image_paste(images);
         Self::attach_history(&mut self.quick_terminal.pane, &settings);
         self.quick_terminal.pane.set_smart_ctrl_v_paste(smart_ctrl_v);
     }

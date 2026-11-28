@@ -666,6 +666,7 @@ pub fn parse_colon_command(input: &str) -> Option<Result<ColonCommand, String>> 
         }
         "paste" | "p" => match parts.get(1).copied() {
             None => Some(Ok(ColonCommand::PasteClipboard)),
+            Some("image" | "img") => Some(super::parse_clipboard::parse(&parts[1..])),
             Some("raw-ctrl-v" | "raw") => Some(Ok(ColonCommand::SelectCommand(Some(
                 "clipboard raw-ctrl-v".to_string(),
             )))),

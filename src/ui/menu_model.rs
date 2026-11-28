@@ -100,6 +100,7 @@ pub const MENUBAR_CATEGORIES: &[MenuCategory] = &[
             mi("Fonts Window", ":fonts toggle", 'N'),
             mi("Command Palette Window", ":commands toggle", 'W'),
             mi("Clipboard Viewer", ":clipboard toggle", 'B'),
+            mi("Paste Clipboard Image", ":paste image", '3'),
             mi("Traffic Monitor", ":traffic toggle", 'T'),
             mi("Next Coordinate Badge Style", ":coords cycle", 'X'),
             mi("Context Bus Quick List", ":context list", 'Q'),

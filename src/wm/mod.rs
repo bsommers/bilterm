@@ -41,6 +41,7 @@ pub mod mission_control_hud;
 pub mod turn_replay;
 pub mod agent_watchdog;
 pub mod clipboard_registry;
+pub mod clipboard_image_ops;
 pub mod clipboard_window;
 pub mod coordinates;
 pub mod daemon_window;

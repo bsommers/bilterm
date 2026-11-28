@@ -80,6 +80,8 @@ pub enum ClipboardWindowOp {
     PreviewScroll(i32),
     PasteSelected,
     PasteIndex(usize),
+    /// `:paste image`: store the host clipboard image privately and paste its path.
+    PasteImage,
     YankSelected,
     CopyText(String),
     PopYankRing,
@@ -154,6 +156,7 @@ impl ClipboardWindowOp {
             Self::Scroll(n) => format!(":clipboard scroll {n:+}"),
             Self::PreviewScroll(n) => format!(":clipboard preview-scroll {n:+}"),
             Self::PasteSelected => ":clipboard paste".to_string(),
+            Self::PasteImage => ":paste image".to_string(),
             Self::PasteIndex(i) => format!(":clipboard paste {i}"),
             Self::YankSelected => ":clipboard yank".to_string(),
             Self::CopyText(t) => format!(":clipboard copy {t}"),
@@ -677,6 +680,7 @@ impl WindowManager {
                 let next = (self.clipboard_window.preview_scroll as i32 + delta).max(0) as usize;
                 self.clipboard_window.preview_scroll = next;
             }
+            ClipboardWindowOp::PasteImage => self.paste_clipboard_image(),
             ClipboardWindowOp::PasteSelected => {
                 let selected_idx = self.clipboard_window.selected;
                 let entry_opt = self
