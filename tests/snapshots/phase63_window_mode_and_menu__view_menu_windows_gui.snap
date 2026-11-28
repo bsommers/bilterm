@@ -20,6 +20,7 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Fonts Window                        ║        │║                       ║
 │                         ║  Command Palette Window              ║        │║                       ║
 │                         ║  Clipboard Viewer            Ctrl+X ;║        │║                       ║
+│                         ║  Paste Clipboard Image [3]   Ctrl+X (║        │║                       ║
 │                         ║  Traffic Monitor             Ctrl+X $║        │║                       ║
 │                         ║  Next Coordinate Badge Style         ║        │║                       ║
 │                         ║  Context Bus Quick List              ║        │║                       ║
@@ -29,6 +30,5 @@ expression: "menu_overlay(KeyEnv::new(HostOs::Windows, Surface::Gui), \"View\")"
 │                         ║  Agent Turn Replay [8]               ║        │║                       ║
 │                         ║  Script Studio                       ║        │║                       ║
 │                         ║  Drawer Peek Preview         Ctrl+X P║        │║                       ║
-│                         ║  Drawer Rows: 1 line                 ║        │║                       ║
-│3270-OIA│ ● READY │ INPUT║  Drawer Rows: 2 lines                ║DY │ INP│║3270-OIA│ ● READY │ INP║
+│3270-OIA│ ● READY │ INPUT║  Drawer Rows: 1 line                 ║DY │ INP│║3270-OIA│ ● READY │ INP║
 └─────────────────────────╚══════════════════════════════════════◢────────◢╚═══════════════════════◢

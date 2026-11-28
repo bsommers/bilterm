@@ -241,6 +241,7 @@ pub const PALETTE_CATALOG: &[(&str, &str, &str)] = &[
     (":cursor custom ◆ solid #00ff66", "—", "Set cursor to Solid Custom Character (◆) in Phosphor Green"),
     (":cursor reset", "—", "Reset cursor shape, blink mode, and color to theme defaults"),
     (":paste", "Ctrl+Shift+V / Ctrl+X p", "Paste OS clipboard directly into active pane or Raw PTY"),
+    (":paste image", "Ctrl+V (image) / Ctrl+X (", "Save the clipboard image to a private file and paste its path (limits: [clipboard.images])"),
     (":window menu", "—", "Open interactive Per-Window Style, Theme & Element Color Customizer"),
     (":window theme list", "—", "Open Per-Window Theme Browser (14 presets + .itermcolors) for focused window"),
     (":window theme browse", "—", "Open interactive File & .itermcolors Browser for focused window"),

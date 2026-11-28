@@ -6,6 +6,7 @@ pub mod attach;
 pub mod app;
 pub mod cli;
 pub mod clipboard;
+pub mod clipboard_image;
 pub mod colon_command;
 pub mod command_registry;
 pub mod config;

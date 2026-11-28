@@ -530,6 +530,17 @@ Adding a metered boundary (Plan 64-02 hooks): open a `TrafficTap` cell with the 
 single byte boundary, register the hook in `HOOK_MANIFEST` in `tests/phase64_layer_dag.rs`, and never count the same bytes
 on both a Wire and a Payload cell of the same view.
 
+## 6g. Clipboard image paste (`src/clipboard_image/`)
+
+One implementation behind every surface: `ClipboardWindowOp::PasteImage` (`:paste image`, leader `Ctrl+X (`, palette, View menu, `clipboard.paste {image:true}`, MCP `bilterm_clipboard`) and the smart `Ctrl+V` path (`input::image_paste::smart_ctrl_v_image`) both call `input::paste_image_into_pane`.
+
+- `detect.rs`: magic-byte sniff and header-only dimension parse (no pixel decode).
+- `source.rs`: `ImageSource` trait plus `ShellImageSource` over the mockable `CommandRunner`; `candidates(platform, wayland, x11)` is the pure tool table. The real runner reads at most `max+1` bytes on a detached reader thread, kills the child on overflow or timeout, and never blocks on a grandchild holding the pipe.
+- `store.rs`: private dir (`secure_fs`), content-addressed names `img-<pid>-<hash>.<ext>`, LRU to the disk budget, startup orphan sweep (own pid, dead pid, or older than 24 h).
+- `mod.rs`: `acquire(limits)` reserves the read buffer against `max_memory_bytes` before reading, then sniffs, checks dimensions, stores. Test hooks: `set_test_image_source`, `set_test_store_dir`.
+- Tests: unit tests in each file; `tests/clipboard_image_paste.rs` drives smart `Ctrl+V`, colon, leader, RPC and MCP headlessly with a fake source (no real clipboard is touched in automated test processes).
+- Uniformity exception: no dedicated global chord (smart `Ctrl+V` and the leader chord cover keyboard use); the CLIPBOARD window has no image chip because media entries hold no bytes (the registry keeps references only).
+
 ---
 
 ## 7. Verification & CI Conservation Gates

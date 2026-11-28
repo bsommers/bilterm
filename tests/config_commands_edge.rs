@@ -94,11 +94,11 @@ fn get_returns_toml_text_for_each_value_kind() {
     run(&mut wm, ":get api");
     assert_eq!(
         s_of(&data(&mut wm).unwrap(), "value"),
-        "allow_agent_messaging = false\nallow_artifact_write = false\nallow_config_write = false"
+        "allow_agent_messaging = false\nallow_artifact_write = false\nallow_clipboard_image = false\nallow_config_write = false"
     );
     assert_eq!(
         status(&wm),
-        "api = allow_agent_messaging = false\nallow_artifact_write = false\nallow_config_write = false"
+        "api = allow_agent_messaging = false\nallow_artifact_write = false\nallow_clipboard_image = false\nallow_config_write = false"
     );
 }
 

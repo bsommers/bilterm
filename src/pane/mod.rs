@@ -12,6 +12,7 @@ pub mod completion;
 pub mod exit_guard;
 pub mod fuzzy_history;
 pub mod highlight;
+mod image_paste;
 #[cfg(unix)]
 pub mod handover;
 pub mod history_store;
@@ -148,6 +149,8 @@ pub struct CompositePane {
     exit_code: Option<i32>,
     /// Intercepts `Ctrl+V` in `RawPtyPassthrough` / `ALT_SCREEN` to paste text unless media is on the clipboard (`CLIP-01`).
     smart_ctrl_v_paste: bool,
+    /// Image paste delivery and budgets (`[clipboard.images]`).
+    image_paste: crate::clipboard_image::ImagePasteSettings,
     /// Effective key bindings pushed by the owning workspace before each key (Phase 63); `legacy` standalone.
     keymap: crate::input::keyprofile::EffectiveKeymap,
     /// Pending clipboard/yank events waiting to be drained into `ClipboardRegistry`.
@@ -218,6 +221,7 @@ impl CompositePane {
             link_banner: None,
             exit_code: None,
             smart_ctrl_v_paste: true,
+            image_paste: crate::clipboard_image::ImagePasteSettings::on(),
             keymap: crate::input::keyprofile::EffectiveKeymap::legacy_default(),
             pending_clipboard_records: Vec::new(),
             pending_media_records: Vec::new(),

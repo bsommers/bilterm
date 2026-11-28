@@ -449,6 +449,7 @@ fn every_action_is_reachable_from_keymap_colon_or_rpc() {
         Action::FontsWindow(crate::wm::fonts_window::FontsWindowOp::Toggle),
         Action::CommandWindow(crate::wm::command_window::CommandWindowOp::Toggle),
         Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::Toggle),
+        Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::PasteImage),
         Action::TrafficMonitor(crate::wm::traffic_monitor::TrafficMonitorOp::Toggle),
         Action::KeyboardFocus(crate::wm::keyboard_focus::FocusOp::Next),
         Action::KeyboardFocus(crate::wm::keyboard_focus::FocusOp::Window(crate::wm::keyboard_focus::KeyboardOwner::AgentsList)),

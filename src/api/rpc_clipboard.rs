@@ -148,6 +148,9 @@ impl AutomationControlPlane {
 
     pub(super) fn rpc_clipboard_paste(&mut self, params: &JsonValue) -> Result<JsonValue, String> {
         self.wm.ensure_clipboard_registry_seeded();
+        if params.get("image").and_then(JsonValue::as_bool).unwrap_or(false) {
+            return self.rpc_clipboard_paste_image();
+        }
         let op = if let Some(id) = params
             .get("id")
             .and_then(JsonValue::as_i64)
@@ -177,6 +180,21 @@ impl AutomationControlPlane {
                 JsonValue::Number(self.wm.active_pane_id() as i64),
             ),
         ]))
+    }
+
+    /// `clipboard.paste {"image": true}`: image path paste into the active pane (gated, see
+    /// `[api] allow_clipboard_image`).
+    fn rpc_clipboard_paste_image(&mut self) -> Result<JsonValue, String> {
+        self.wm.take_command_data();
+        self.apply_with_policy(
+            Action::ClipboardWindow(ClipboardWindowOp::PasteImage),
+            super::rpc::SnapshotPolicy::Confined,
+        )?;
+        let data = self.wm.take_command_data().unwrap_or_default();
+        let mut out = vec![("status", JsonValue::String("pasted_image".to_string()))];
+        out.push(("active_pane_id", JsonValue::Number(self.wm.active_pane_id() as i64)));
+        out.push(("image", crate::api::json::JsonValue::parse(&data).unwrap_or(JsonValue::Null)));
+        Ok(JsonValue::obj(out))
     }
 
     pub(super) fn rpc_clipboard_pin(&mut self, params: &JsonValue) -> Result<JsonValue, String> {

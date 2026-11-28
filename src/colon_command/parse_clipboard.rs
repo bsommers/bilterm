@@ -5,7 +5,7 @@ use crate::pane::PaneId;
 use crate::wm::clipboard_registry::ClipboardFilterScope;
 use crate::wm::clipboard_window::ClipboardWindowOp;
 
-pub const CLIPBOARD_USAGE: &str = "Usage: :clipboard [open|close|toggle|dismiss|blur|pin [toggle]|unpin|dock [toggle]|float|all|session [<name>|cycle]|window [<id>|cycle]|pinned|media|tab <next|prev>|filter [<query>]|clear|paste [<idx>]|yank|copy <text>|pop|pin-entry [<id>]|delete [<id>]|persist [on|off]|up|down|page-up|page-down|first|last|select <idx>|scroll <delta>|preview-scroll <delta>|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size auto|scale <+|-|delta>]";
+pub const CLIPBOARD_USAGE: &str = "Usage: :clipboard [open|close|toggle|dismiss|blur|pin [toggle]|unpin|dock [toggle]|float|all|session [<name>|cycle]|window [<id>|cycle]|pinned|media|tab <next|prev>|filter [<query>]|clear|paste [<idx>|image]|yank|copy <text>|pop|pin-entry [<id>]|delete [<id>]|persist [on|off]|up|down|page-up|page-down|first|last|select <idx>|scroll <delta>|preview-scroll <delta>|move <dx> <dy>|resize <dw> <dh>|rect <x> <y> <w> <h>|size auto|scale <+|-|delta>]";
 
 fn usage<T>() -> Result<T, String> {
     Err(CLIPBOARD_USAGE.to_string())
@@ -62,6 +62,7 @@ pub(super) fn parse(args: &[&str]) -> Result<ColonCommand, String> {
         }
         ["clear" | "reset"] => Op::ClearUnpinned,
         ["paste"] => Op::PasteSelected,
+        ["paste", "image" | "img"] | ["paste-image" | "image" | "img"] => Op::PasteImage,
         ["paste", idx_str] => {
             let idx = idx_str
                 .trim_start_matches('#')

@@ -24,6 +24,9 @@ pub struct ApiConfig {
     pub allow_artifact_write: bool,
     /// Allows agent-to-agent messaging and coordination (`AGT-01..03`, Phase 52).
     pub allow_agent_messaging: bool,
+    /// Allows `clipboard.paste image` / `:paste image` over the API (default `false`): it reads the
+    /// host clipboard image and pastes a file path into the active pane.
+    pub allow_clipboard_image: bool,
 }
 
 fn to_value(cfg: &BiltermConfig) -> Result<toml::Value, String> {

@@ -22,6 +22,8 @@ pub mod fonts_window;
 pub mod fonts_window_keys;
 mod focus_keys;
 pub mod gui_route;
+pub mod image_paste;
+pub use image_paste::paste_image_into_pane;
 pub mod keyconflict;
 pub mod keyconflict_data;
 pub mod keyenv;
@@ -226,6 +228,9 @@ pub fn handle_key_event(pane: &mut CompositePane, raw_key: KeyEvent) -> Result<A
         if is_plain_ctrl_v && pane.smart_ctrl_v_paste() {
             match crate::clipboard::probe_system_clipboard_mime() {
                 crate::clipboard::ClipboardMimeProbe::Media { mime, bytes_len } => {
+                    if image_paste::smart_ctrl_v_image(pane, &mime) {
+                        return Ok(AppAction::Handled);
+                    }
                     pane.record_media_passthrough(mime, bytes_len);
                 }
                 crate::clipboard::ClipboardMimeProbe::Text => {
@@ -779,8 +784,10 @@ pub fn handle_wm_key_event(wm: &mut WindowManager, raw_key: KeyEvent) -> Result<
 
 fn dispatch_pane_key(wm: &mut WindowManager, key: KeyEvent) -> Result<AppAction> {
     let smart = wm.config().smart_ctrl_v_paste;
+    let images = wm.config().clipboard.images.settings();
     let km = wm.keymap();
     wm.active_pane_mut().set_smart_ctrl_v_paste(smart);
+    wm.active_pane_mut().set_image_paste(images);
     wm.active_pane_mut().set_keymap(km);
     let res = handle_key_event(wm.active_pane_mut(), key);
     wm.sync_clipboard_records();

@@ -413,6 +413,7 @@ impl AutomationControlPlane {
                     ("window", "integer", "Optional pane/window ID filter for list"),
                     ("query", "string", "Optional substring filter for list or window search"),
                     ("id", "integer", "Optional entry ID for get, paste, pin, or delete"),
+                    ("image", "boolean", "For action='paste': paste the host clipboard image as a stored file path (needs [api] allow_clipboard_image)"),
                     ("index", "integer", "Optional 1-based entry index for paste"),
                     ("text", "string", "Text to copy into the clipboard registry (for copy)"),
                     ("pinned", "boolean", "Pin state for pin"),

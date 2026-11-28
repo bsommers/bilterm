@@ -99,6 +99,11 @@ impl WindowManager {
             return (!self.config.api.allow_config_write)
                 .then(|| "opening the system browser over the API is disabled; set [api] allow_config_write = true in config.toml".to_string());
         }
+        // Reading the host clipboard image and pasting a file path into a pane is a host-side effect.
+        if matches!(action, Action::ClipboardWindow(crate::wm::clipboard_window::ClipboardWindowOp::PasteImage)) {
+            return (!self.config.api.allow_clipboard_image)
+                .then(|| "image paste over the API is disabled; set [api] allow_clipboard_image = true in config.toml".to_string());
+        }
         let writes = matches!(action, Action::ConfigSet(..) | Action::ConfigSave | Action::AppearanceSave);
         if !writes {
             return None;

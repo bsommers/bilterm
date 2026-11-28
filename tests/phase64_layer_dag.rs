@@ -131,6 +131,7 @@ pub const BOUNDARY_EXEMPT: &[(&str, &str)] = &[
     ("src/daemon/restart_live.rs", "live restart orchestration: spawns the new daemon and one control RPC; no terminal bytes"),
     ("src/daemon/transfer/mod.rs", "session-transfer control socket (fds + framing); PTY streams never pass through it"),
     ("src/daemon/transfer/wire.rs", "session-transfer wire format: master fds and a one-shot terminal-state snapshot, not live traffic"),
+    ("src/clipboard_image/source.rs", "host clipboard tool child process (image bytes for a file), not terminal traffic"),
     ("src/stt/wav.rs", "file I/O, not terminal traffic"),
     ("src/stt/audio.rs", "microphone capture child process, not terminal traffic"),
     ("src/stt/mod.rs", "connect-only reachability probe of the STT endpoint in VoicePreflight; no bytes are exchanged and the stream is dropped"),
