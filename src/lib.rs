@@ -24,6 +24,7 @@ pub mod pane;
 pub mod pty;
 pub mod remote;
 pub mod secure_fs;
+pub mod speech;
 pub mod stt;
 pub mod swarm;
 pub mod tmux;

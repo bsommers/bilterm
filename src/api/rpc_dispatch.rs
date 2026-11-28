@@ -569,6 +569,7 @@ impl AutomationControlPlane {
             "voice.status" => self.rpc_voice_status(params),
             "voice.provider" => self.rpc_voice_provider(params),
             "voice.inject_wav" => self.rpc_voice_inject_wav(params),
+            "speech.say" | "speech.stop" | "speech.status" | "speech.voices" => self.rpc_speech(method, params),
             "browser.open" => self.rpc_browser_open(params),
             "browser.control" => self.rpc_browser_control(params),
             "browser.state" => self.rpc_browser_state(params),

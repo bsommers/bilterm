@@ -14,6 +14,7 @@ use crate::wm::{DrawerEdge, DrawerLayoutMode, DrawerVisibilityMode, WorkspaceLay
 use serde::{Deserialize, Serialize};
 
 pub use crate::action_keys::{KeysOp, WinSub, WindowModeOp};
+pub use crate::speech::SpeechOp;
 pub use crate::stt::VoiceOp;
 
 /// Canonical workspace and pane action (`ARCH-R01`, `PANE-03..05`, `WM-01..05`, `UI-01..05`, `REC-02`).
@@ -339,6 +340,8 @@ pub enum Action {
     DrawerPreview(DrawerPreviewOp),
     /// Speech-to-text dictation operations (`STT-01..03`).
     Voice(VoiceOp),
+    /// `:say <text>` / `:say stop|status|voices`: offline retro text-to-speech (`TTS-01`).
+    Speech(SpeechOp),
     /// `:browser [open|back|forward|reload|stop|focus|zoom|close]` - Chrome Engine Web Browser Canvas (`WEB-01..02`).
     Browser(BrowserOp),
     /// `:video [open|play|pause|toggle|seek|volume|mute|loop|speed|close]` - Video Player Canvas (`VID-01..02`).

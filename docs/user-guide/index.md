@@ -42,6 +42,8 @@ Welcome to the official User Guide for **Bilterm (`v3.2.0`)** — the Rust + Rat
     - A real web page in a pane (`:browser open <url>`, `Ctrl+Alt+B`): headless Chrome over a private DevTools pipe, keyboard focus and the `Ctrl+]` escape hatch, mouse, resize and zoom, what the status line says about the running engine, allowed URLs, profile isolation, environment switches and known limits.
 15. **[Chapter 15: Attaching to a Session Host](15-attaching-to-a-session-host.md)**
     - `--headless --host-ptys --attach`, `bilterm attach <host|sock> [--ro]`, detach/pane keys, exit codes, limits, security model and known gaps.
+16. **[Chapter 16: Retro Speech](16-retro-speech.md)**
+    - `:say` and `bilterm say`: an offline 1980s-style formant speech synthesizer (robot, tron, votrax, sam, dectalk voices), speed and pitch, WAV output, limits, `speech.*` RPC and `bilterm_speech` MCP.
 
 ---
 

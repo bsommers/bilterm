@@ -1066,6 +1066,10 @@ pub fn execute_wm_colon_command(wm: &mut WindowManager, cmd: ColonCommand) -> bo
             super::execute_voice::execute_voice_command(wm, op);
             false
         }
+        ColonCommand::Speech(ref op) => {
+            super::execute_speech::execute_speech_command(wm, op);
+            false
+        }
         ColonCommand::Browser(op) => super::execute_media::execute_browser_command(wm, op),
         ColonCommand::Video(op) => super::execute_media::execute_video_command(wm, op),
         ColonCommand::Web(ref op) => super::execute_web::execute_web_action(wm, op),
